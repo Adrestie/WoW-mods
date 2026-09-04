@@ -1,0 +1,515 @@
+{
+ "_format": "attriboost-dbc-1",
+ "spell_fields": 234,
+ "item_fields": 8,
+ "spells": [
+  {
+   "id": 890000,
+   "champs": {
+    "0": 890000,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 4,
+    "86": 1,
+    "95": 29,
+    "110": 1,
+    "133": 2003,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased Agility 5",
+    "frFR": "Bonus : Agilité",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "+$s1 Agility.",
+    "frFR": "Augmente définitivement l'Agilité de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "+$s1 Agility.",
+    "frFR": "Augmente définitivement l'Agilité de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890001,
+   "champs": {
+    "0": 890001,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 4,
+    "86": 1,
+    "95": 29,
+    "110": 3,
+    "133": 1694,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased Intellect 5",
+    "frFR": "Bonus : Intelligence",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "+$s1 Intellect.",
+    "frFR": "Augmente définitivement l'Intelligence de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "+$s1 Intellect.",
+    "frFR": "Augmente définitivement l'Intelligence de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890002,
+   "champs": {
+    "0": 890002,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 4,
+    "86": 1,
+    "95": 29,
+    "133": 1802,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased Strength 5",
+    "frFR": "Bonus : Force",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "+$s1 Strength.",
+    "frFR": "Augmente définitivement la Force de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "+$s1 Strength.",
+    "frFR": "Augmente définitivement la Force de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890003,
+   "champs": {
+    "0": 890003,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 4,
+    "86": 1,
+    "95": 29,
+    "110": 4,
+    "133": 2894,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased Spirit 5",
+    "frFR": "Bonus : Esprit",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "+$s1 Spirit.",
+    "frFR": "Augmente définitivement l'Esprit de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "+$s1 Spirit.",
+    "frFR": "Augmente définitivement l'Esprit de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890004,
+   "champs": {
+    "0": 890004,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "86": 1,
+    "87": 1,
+    "95": 163,
+    "110": 895,
+    "125": 2048,
+    "133": 2957,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increase Critical Damage 1%",
+    "frFR": "Bonus : Dégâts des Coups Critiques",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "Increases your critical strike damage by $s1%.",
+    "frFR": "Augmente de $s1% dégâts des coups critiques.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "Increases your critical strike damage by $s1%.",
+    "frFR": "Augmente de $s1% dégâts des coups critiques.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890005,
+   "champs": {
+    "0": 890005,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 9,
+    "86": 1,
+    "95": 135,
+    "110": 126,
+    "133": 1646,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increase Healing 10",
+    "frFR": "Bonus : Puissance des Soins",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "Increases healing done by $s1.",
+    "frFR": "Augmente définitivement la Puissance des Soins de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "Increases healing done by $s1.",
+    "frFR": "Augmente définitivement la Puissance des Soins de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890006,
+   "champs": {
+    "0": 890006,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 4,
+    "86": 1,
+    "95": 13,
+    "110": 126,
+    "133": 2047,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 8,
+    "230": 1065353216
+   },
+   "name": {
+    "enUS": "Increased Spell Damage 5",
+    "frFR": "Bonus : Dégâts des sorts",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "Increases spell damage by $s1.",
+    "frFR": "Augmente définitivement les dégâts des sorts de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "Increases spell damage by $s1.",
+    "frFR": "Augmente définitivement les dégâts des sorts de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890007,
+   "champs": {
+    "0": 890007,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": 4,
+    "86": 1,
+    "95": 29,
+    "110": 2,
+    "133": 685,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased Stamina 5",
+    "frFR": "Bonus : Endurance",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "+$s1 Stamina.",
+    "frFR": "Augmente définitivement l'Endurance de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "+$s1 Stamina.",
+    "frFR": "Augmente définitivement l'Endurance de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890008,
+   "champs": {
+    "0": 890008,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "86": 1,
+    "95": 22,
+    "110": 126,
+    "133": 2384,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased All Resist 1",
+    "frFR": "Bonus : Résistances",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712190
+   },
+   "description": {
+    "enUS": "+$s1 All Resistances.",
+    "frFR": "Augmente définitivement les résistances magiques de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "+$s1 All Resistances.",
+    "frFR": "Augmente définitivement les résistances magiques de $s1.",
+    "masque": 16712190
+   }
+  },
+  {
+   "id": 890009,
+   "champs": {
+    "0": 890009,
+    "4": -2147483648,
+    "5": 8388608,
+    "6": 1,
+    "7": 1048576,
+    "8": 4160,
+    "28": 1,
+    "35": 101,
+    "40": 21,
+    "46": 1,
+    "49": 250,
+    "68": -1,
+    "71": 6,
+    "74": 1,
+    "80": -2,
+    "86": 1,
+    "95": 123,
+    "110": 124,
+    "133": 3261,
+    "216": 1065353216,
+    "217": 1065353216,
+    "218": 1065353216,
+    "225": 1
+   },
+   "name": {
+    "enUS": "Increased Spell Penetration 1",
+    "frFR": "Bonus : Pénétration des sorts",
+    "masque": 16712190
+   },
+   "rank": {
+    "enUS": "",
+    "frFR": "",
+    "masque": 16712188
+   },
+   "description": {
+    "enUS": "Increases your spell penetration by $s1.",
+    "frFR": "Augmente la pénétration de vos sorts de $s1.",
+    "masque": 16712190
+   },
+   "tooltip": {
+    "enUS": "Increases your spell penetration by $s1.",
+    "frFR": "Augmente définitivement la Pénétration des sorts de $s1.",
+    "masque": 16712188
+   }
+  }
+ ],
+ "items": [
+  {
+   "id": 890010,
+   "champs": [
+    890010,
+    9,
+    5,
+    -1,
+    -1,
+    1134,
+    0,
+    0
+   ]
+  },
+  {
+   "id": 890011,
+   "champs": [
+    890011,
+    9,
+    0,
+    -1,
+    -1,
+    1317,
+    0,
+    0
+   ]
+  }
+ ]
+}

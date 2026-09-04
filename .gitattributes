@@ -1,0 +1,7 @@
+# Les fichiers de commandes Windows CASSENT avec des fins de ligne Unix :
+# cmd.exe decoupe mal les blocs if(...) et n'execute plus rien.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Les DBC produits par l'outil sont binaires (jamais versionnes ici, garde-fou).
+*.dbc binary

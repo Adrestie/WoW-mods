@@ -1,0 +1,51 @@
+#
+# Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
+#
+
+[worldserver]
+
+########################################
+# Attriboost Configuration
+########################################
+#
+#    Attriboost.Enable
+#        Description: Enable/Disable the librarian/bonus attributes.
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+Attriboost.Enable = 0
+
+#
+#    Attriboost.ResetCost
+#        Description: The cost of resetting attributes in copper.
+#        Default:     2500000 (250 gold)
+#
+
+Attriboost.ResetCost = 2500000
+
+#
+#    Attriboost.DisablePvP
+#        Description: Enable/Disable the attributes in PvP combat.
+#                     0 - Disabled
+#        Default:     1 - Enabled
+#
+
+Attriboost.DisablePvP = 1
+
+#
+#    Attriboost.Max.*
+#        Description: The max value each attribute can be allocated.
+#        Default:     100
+#
+
+Attriboost.Max.Stamina = 100
+Attriboost.Max.Strength = 50
+Attriboost.Max.Agility = 50
+Attriboost.Max.Intellect = 50
+Attriboost.Max.Spirit = 50
+Attriboost.Max.SpellPower = 100
+Attriboost.Max.CriticalStrikeDamage = 50
+Attriboost.Max.AllResists = 50
+Attriboost.Max.SpellPenetration = 100
+Attriboost.Max.HealingPower = 100
