@@ -10,5 +10,8 @@ needed, the tooling to patch the client. Follow the README inside the folder.
 | [mod-attriboost](mod-attriboost/) | Attribute and talent points players earn from tradeable books and spend across ten statistics, through an NPC or a dedicated interface. Extended fork of [AnchyDev/Attriboost](https://github.com/AnchyDev/Attriboost). |
 | [mod-item-upgrade](mod-item-upgrade/) | Rank-by-rank stat upgrades on gear, bought with gold and tokens, plus separate tracks for weapon damage and swing speed and a chance for looted items to arrive already upgraded. Extended fork of [silviu20092/mod-item-upgrade](https://github.com/silviu20092/mod-item-upgrade). |
 
-Each module keeps the licence of the project it forks; see the `LICENSE` file in
-its folder. Both are MIT at the time of writing. AzerothCore itself is AGPL v3.
+| [mod-papota-spherier](mod-papota-spherier/) | A sphere grid shared by every class, bought node by node with Spherite earned from bosses, dungeons and Mythic+; stat stones, runes and spell nodes unlocking 96 custom class spells with backported visuals; an in-game grid editor and a player interface over AIO; client patch builder included. Original module. |
+
+Each module keeps the licence of the project it forks, or MIT when original; see
+the `LICENSE` file in its folder. All three are MIT at the time of writing.
+AzerothCore itself is AGPL v3.

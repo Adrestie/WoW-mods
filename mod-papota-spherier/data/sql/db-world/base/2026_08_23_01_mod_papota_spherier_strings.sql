@@ -1,0 +1,80 @@
+-- mod-papota-spherier : chaines des messages (module_string / module_string_locale).
+-- Defaut = anglais ; locale frFR servie selon la langue du client, repli anglais sinon.
+-- Vocabulaire anglais retenu : emplacement = cell, noeud = node, slot = socket,
+-- sphèrier = sphere grid. La monnaie s'appelle la SPHERITE, et les objets qui en
+-- octroient sont des NEXUS (decision du 2026-08-24).
+-- Les identifiants sont dans src\SpherierStrings.h.
+
+-- Les chaines 34 a 43 sont livrees par le fichier du jalon 3 : on ne touche
+-- ici qu'a la plage 1-33 pour que les deux fichiers restent independants.
+DELETE FROM `module_string` WHERE `module` = 'mod-papota-spherier' AND `id` BETWEEN 1 AND 33;
+INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
+('mod-papota-spherier',  1, 'Sphere grid: {} cells, {} links, {} class(es) defined.'),
+('mod-papota-spherier',  2, '  Class {}: {} node(s), {} socket(s), {} spell(s), start {}.'),
+('mod-papota-spherier',  3, 'Cost scale: {} bracket(s).'),
+('mod-papota-spherier',  4, '  From {} cell(s) bought: {} Spherite.'),
+('mod-papota-spherier',  5, 'Nexus items: {}. Content hooks: {}.'),
+('mod-papota-spherier',  6, '  {} ({}): {} Spherite.'),
+('mod-papota-spherier',  7, 'Sphere grid: definition reloaded - {} cells, {} links.'),
+('mod-papota-spherier',  8, 'Sphere grid: player not found or offline.'),
+('mod-papota-spherier',  9, '{}''s sphere grid: {} Spherite available ({} earned, {} spent).'),
+('mod-papota-spherier', 10, 'Active: {} cell(s) out of {} (class {}). Next cost: {} Spherite.'),
+('mod-papota-spherier', 11, 'Sphere grid: no state loaded for {} (playerbot?).'),
+('mod-papota-spherier', 12, 'Usage: .spherier points {} <amount> [player]'),
+('mod-papota-spherier', 13, 'Target: the named player, else your target, else yourself.'),
+('mod-papota-spherier', 14, 'Adds <amount> Spherite.'),
+('mod-papota-spherier', 15, 'Removes <amount> Spherite, capped at the available amount.'),
+('mod-papota-spherier', 16, 'Sets AVAILABLE Spherite to <amount> (0 allowed).'),
+('mod-papota-spherier', 17, 'Sphere grid: {} credited {} Spherite, available: {}.'),
+('mod-papota-spherier', 18, 'Sphere grid: {} debited {} Spherite (requested: {}), available: {}.'),
+('mod-papota-spherier', 19, 'Sphere grid: {}''s available Spherite set to {}.'),
+('mod-papota-spherier', 20, 'Sphere grid: cell {} activated ({} active, {} Spherite left).'),
+('mod-papota-spherier', 21, 'Sphere grid: no state loaded for this character.'),
+('mod-papota-spherier', 22, 'Sphere grid: cell {} does not exist.'),
+('mod-papota-spherier', 23, 'Sphere grid: cell {} does not belong to your class grid.'),
+('mod-papota-spherier', 24, 'Sphere grid: cell {} is already active.'),
+('mod-papota-spherier', 25, 'Sphere grid: cell {} is neither the start nor adjacent to an active cell.'),
+('mod-papota-spherier', 26, 'Sphere grid: not enough Spherite.'),
+('mod-papota-spherier', 27, 'Sphere grid: {}''s state wiped (Spherite and activations).'),
+('mod-papota-spherier', 28, 'Sphere grid: interface unavailable (Lua script not loaded).'),
+('mod-papota-spherier', 29, 'Sphere grid: editor unavailable (Lua script not loaded).'),
+('mod-papota-spherier', 30, 'You gain {} Spherite.'),
+('mod-papota-spherier', 31, 'You lose {} Spherite.'),
+('mod-papota-spherier', 32, 'Your available Spherite is now {}.'),
+('mod-papota-spherier', 33, 'Sphere grid: no Spherite configured for source {} ({}).');
+
+DELETE FROM `module_string_locale` WHERE `module` = 'mod-papota-spherier' AND `id` BETWEEN 1 AND 33;
+INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
+('mod-papota-spherier',  1, 'frFR', 'Sphèrier : {} emplacements, {} liaisons, {} classe(s) définies.'),
+('mod-papota-spherier',  2, 'frFR', '  Classe {} : {} nœud(s), {} slot(s), {} sort(s), départ {}.'),
+('mod-papota-spherier',  3, 'frFR', 'Barème de coût : {} tranche(s).'),
+('mod-papota-spherier',  4, 'frFR', '  À partir de {} emplacement(s) acheté(s) : {} Spherites.'),
+('mod-papota-spherier',  5, 'frFR', 'Nexus : {}. Sources d''accroche : {}.'),
+('mod-papota-spherier',  6, 'frFR', '  {} ({}) : {} Spherites.'),
+('mod-papota-spherier',  7, 'frFR', 'Sphèrier : définition rechargée - {} emplacements, {} liaisons.'),
+('mod-papota-spherier',  8, 'frFR', 'Sphèrier : joueur introuvable ou hors ligne.'),
+('mod-papota-spherier',  9, 'frFR', 'Sphèrier de {} : {} Spherites disponibles ({} gagnées, {} dépensées).'),
+('mod-papota-spherier', 10, 'frFR', 'Actifs : {} emplacement(s) sur {} (classe {}). Prochain coût : {} Spherites.'),
+('mod-papota-spherier', 11, 'frFR', 'Sphèrier : pas d''état chargé pour {} (playerbot ?).'),
+('mod-papota-spherier', 12, 'frFR', 'Usage : .spherier points {} <montant> [joueur]'),
+('mod-papota-spherier', 13, 'frFR', 'Cible : le joueur nommé, sinon la cible, sinon soi-même.'),
+('mod-papota-spherier', 14, 'frFR', 'Ajoute <montant> Spherites.'),
+('mod-papota-spherier', 15, 'frFR', 'Retire <montant> Spherites, plafonné à ce qui est disponible.'),
+('mod-papota-spherier', 16, 'frFR', 'Fixe les Spherites DISPONIBLES à <montant> (0 permis).'),
+('mod-papota-spherier', 17, 'frFR', 'Sphèrier : {} crédité de {} Spherites, disponibles : {}.'),
+('mod-papota-spherier', 18, 'frFR', 'Sphèrier : {} débité de {} Spherites (demandé : {}), disponibles : {}.'),
+('mod-papota-spherier', 19, 'frFR', 'Sphèrier : Spherites disponibles de {} fixées à {}.'),
+('mod-papota-spherier', 20, 'frFR', 'Sphèrier : emplacement {} activé ({} actifs, {} Spherites restantes).'),
+('mod-papota-spherier', 21, 'frFR', 'Sphèrier : pas d''état chargé pour ce personnage.'),
+('mod-papota-spherier', 22, 'frFR', 'Sphèrier : l''emplacement {} n''existe pas.'),
+('mod-papota-spherier', 23, 'frFR', 'Sphèrier : l''emplacement {} n''appartient pas à la grille de votre classe.'),
+('mod-papota-spherier', 24, 'frFR', 'Sphèrier : l''emplacement {} est déjà activé.'),
+('mod-papota-spherier', 25, 'frFR', 'Sphèrier : l''emplacement {} n''est ni le départ ni voisin d''un emplacement actif.'),
+('mod-papota-spherier', 26, 'frFR', 'Sphèrier : Spherite insuffisante.'),
+('mod-papota-spherier', 27, 'frFR', 'Sphèrier : état de {} remis à zéro (Spherites et activations).'),
+('mod-papota-spherier', 28, 'frFR', 'Sphèrier : interface indisponible (script Lua non chargé).'),
+('mod-papota-spherier', 29, 'frFR', 'Sphèrier : éditeur indisponible (script Lua non chargé).'),
+('mod-papota-spherier', 30, 'frFR', 'Vous gagnez {} Spherites.'),
+('mod-papota-spherier', 31, 'frFR', 'Vous perdez {} Spherites.'),
+('mod-papota-spherier', 32, 'frFR', 'Vos Spherites disponibles sont désormais {}.'),
+('mod-papota-spherier', 33, 'frFR', 'Sphèrier : aucune Spherite configurée pour la source {} ({}).');

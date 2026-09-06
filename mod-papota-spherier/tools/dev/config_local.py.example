@@ -1,0 +1,10 @@
+# -*- coding: utf-8 -*-
+"""Copiez ce fichier en config_local.py et décrivez votre poste : les outils qui
+interrogent la base ou lisent un export de wow.export l'importent."""
+MYSQL_HOTE = "127.0.0.1"
+MYSQL_PORT = "3306"
+MYSQL_UTILISATEUR = "utilisateur MySQL"
+MYSQL_MDP = "mot de passe MySQL"
+BASE_WORLD = "acore_world"
+BASE_CHARACTERS = "acore_characters"
+DOSSIER_EXPORT_WOW = r"C:\chemin\vers\wow.export\spells"

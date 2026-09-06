@@ -1,0 +1,48 @@
+diff --git a/src/server/game/Spells/Auras/SpellAuraEffects.cpp b/src/server/game/Spells/Auras/SpellAuraEffects.cpp
+index 8a4b34da5..0d3184f1c 100644
+--- a/src/server/game/Spells/Auras/SpellAuraEffects.cpp
++++ b/src/server/game/Spells/Auras/SpellAuraEffects.cpp
+@@ -1077,23 +1077,30 @@ float AuraEffect::CalcPeriodicCritChance(Unit const* caster, Unit const* target)
+     {
+         if (Player* modOwner = caster->GetSpellModOwner())
+         {
+-            Unit::AuraEffectList const& mPeriodicCritAuras = modOwner->GetAuraEffectsByType(SPELL_AURA_ABILITY_PERIODIC_CRIT);
+-            for (Unit::AuraEffectList::const_iterator itr = mPeriodicCritAuras.begin(); itr != mPeriodicCritAuras.end(); ++itr)
++            // Papota : les effets periodiques de DEGATS des classes jouables (joueurs et
++            // leurs familiers) peuvent toujours critiquer, avec la chance de critique
++            // reelle du sort. Remplace la restriction d'origine (aura 286 + Rupture).
++            switch (GetAuraType())
+             {
+-                if ((*itr)->IsAffectedOnSpell(GetSpellInfo()))
+-                {
++                case SPELL_AURA_PERIODIC_DAMAGE:
++                case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
++                case SPELL_AURA_PERIODIC_LEECH:
+                     critChance = modOwner->SpellDoneCritChance(nullptr, GetSpellInfo(), GetSpellInfo()->GetSchoolMask(), (GetSpellInfo()->DmgClass == SPELL_DAMAGE_CLASS_RANGED ? RANGED_ATTACK : BASE_ATTACK), true);
+                     break;
+-                }
+-            }
+-
+-            switch (GetSpellInfo()->SpellFamilyName)
+-            {
+-                // Rupture - since 3.3.3 can crit
+-                case SPELLFAMILY_ROGUE:
+-                    if (GetSpellInfo()->SpellFamilyFlags[0] & 0x100000)
+-                        critChance = modOwner->SpellDoneCritChance(nullptr, GetSpellInfo(), GetSpellInfo()->GetSchoolMask(), BASE_ATTACK, true);
++                default:
++                {
++                    // Comportement d'origine pour les autres effets periodiques (soins...)
++                    Unit::AuraEffectList const& mPeriodicCritAuras = modOwner->GetAuraEffectsByType(SPELL_AURA_ABILITY_PERIODIC_CRIT);
++                    for (Unit::AuraEffectList::const_iterator itr = mPeriodicCritAuras.begin(); itr != mPeriodicCritAuras.end(); ++itr)
++                    {
++                        if ((*itr)->IsAffectedOnSpell(GetSpellInfo()))
++                        {
++                            critChance = modOwner->SpellDoneCritChance(nullptr, GetSpellInfo(), GetSpellInfo()->GetSchoolMask(), (GetSpellInfo()->DmgClass == SPELL_DAMAGE_CLASS_RANGED ? RANGED_ATTACK : BASE_ATTACK), true);
++                            break;
++                        }
++                    }
+                     break;
++                }
+             }
+         }
+     }

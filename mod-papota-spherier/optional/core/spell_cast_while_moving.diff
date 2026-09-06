@@ -1,0 +1,59 @@
+diff --git a/src/server/game/Spells/Spell.cpp b/src/server/game/Spells/Spell.cpp
+index 399e76617..41e55c7e3 100644
+--- a/src/server/game/Spells/Spell.cpp
++++ b/src/server/game/Spells/Spell.cpp
+@@ -3449,6 +3449,36 @@ bool Spell::UpdateChanneledTargetList()
+     return channelTargetEffectMask == 0;
+ }
+ 
++// PAPOTA (2026-09-02) : l'Ascendance du chaman (8600062) laisse lancer en
++// marchant l'Eclair, la Chaine d'eclairs et l'Explosion de lave. Rien dans
++// le DBC ne sait le dire POUR UN SEUL JOUEUR : le refus tient aux deux
++// controles de mouvement ci-dessous, qui ne regardent que le sort. Les
++// sorts sont nommes par leur FAMILLE et leur masque, pas par leur rang :
++// tous les rangs en beneficient sans liste a tenir.
++static bool PapotaCasteEnMarchant(Unit const* lanceur, SpellInfo const* info)
++{
++    if (!lanceur || !info)
++        return false;
++
++    // LE CHAMAN sous Ascendance (8600062). Releve 2026-09-02 : Eclair 0x1,
++    // Chaine d'eclairs 0x2 (mot 0) et Explosion de lave 0x1000 (mot 1).
++    if (info->SpellFamilyName == SPELLFAMILY_SHAMAN)
++        return lanceur->HasAura(8600062)
++            && ((info->SpellFamilyFlags[0] & 0x3)
++                || (info->SpellFamilyFlags[1] & 0x1000));
++
++    // LE DEMONISTE sous Cataclysme (8610012, l'aura a deux charges). Ses deux
++    // prochains Feu de l'ame (0x80) et Trait du Chaos (0x20000, mot 1) sont
++    // INSTANTANES — le modificateur ramene leur incantation a zero — mais le
++    // client refuse quand meme de les ouvrir en marchant : il lit le bit
++    // d'InterruptFlags, pas la duree reelle. Releve en jeu le 2026-09-03.
++    if (info->SpellFamilyName == SPELLFAMILY_WARLOCK)
++        return lanceur->HasAura(8610012)
++            && (info->SpellFamilyFlags[1] & 0x20080);
++
++    return false;
++}
++
+ SpellCastResult Spell::prepare(SpellCastTargets const* targets, AuraEffect const* triggeredByAura)
+ {
+     if (m_CastItem)
+@@ -3562,7 +3592,8 @@ SpellCastResult Spell::prepare(SpellCastTargets const* targets, AuraEffect const
+ 
+     // don't allow channeled spells / spells with cast time to be casted while moving
+     // (even if they are interrupted on moving, spells with almost immediate effect get to have their effect processed before movement interrupter kicks in)
+-    if ((m_spellInfo->IsChanneled() || m_casttime) && m_caster->IsPlayer() && m_caster->isMoving() && m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT && !IsTriggered())
++    if ((m_spellInfo->IsChanneled() || m_casttime) && m_caster->IsPlayer() && m_caster->isMoving() && m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT && !IsTriggered()
++        && !PapotaCasteEnMarchant(m_caster, m_spellInfo))
+     {
+         // 1. Has casttime, 2. Or doesn't have flag to allow action during channel
+         if (m_casttime || !m_spellInfo->IsActionAllowedChannel())
+@@ -4410,6 +4441,7 @@ void Spell::update(uint32 difftime)
+     // xinef: added preparing state (real cast, skip channels as they have other flags for this)
+     if ((m_caster->IsPlayer() && m_timer != 0) &&
+             m_caster->isMoving() && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT) && m_spellState == SPELL_STATE_PREPARING &&
++            !PapotaCasteEnMarchant(m_caster, m_spellInfo) &&
+             (m_spellInfo->Effects[0].Effect != SPELL_EFFECT_STUCK || !m_caster->HasUnitMovementFlag(MOVEMENTFLAG_FALLING_FAR)))
+     {
+         // don't cancel for melee, autorepeat, triggered and instant spells

@@ -1,2 +1,8 @@
 # Sortie du patcheur de DBC client
 mod-attriboost/tools/out/
+# Caches Python de l'outillage du sphérier
+mod-papota-spherier/tools/dev/__pycache__/
+mod-papota-spherier/tools/__pycache__/
+# Ce qui décrit le poste de l'auteur (accès MySQL, dossiers) : jamais dans le dépôt
+mod-papota-spherier/tools/dev/config_local.py
+mod-papota-spherier/tools/dev/identifiants_local.py
