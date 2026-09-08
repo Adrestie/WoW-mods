@@ -1,0 +1,189 @@
+#
+# mod-spheregrid — configuration
+#
+# What a server operator tunes: what the content awards, and what a stone or a
+# statistic rune grants. Nothing else — the identifiers the module allocates are
+# not settings, they are part of the module and the installer is what adapts
+# them to a server.
+#
+# Every value below is also the built-in default, so a setting left out changes
+# nothing. Reloaded by `.spheregrid reload`, like the rest of the definition.
+#
+# Copy this file to your configs/modules directory and drop the .dist extension.
+#
+
+[worldserver]
+
+###############################################################################
+#
+#    WHAT A STONE GRANTS
+#
+#    One value per quality — the same five qualities the game itself uses, and
+#    the ones the player reads in the colour of the item. Which statistic a
+#    stone carries is not a setting: it is written in the stone.
+#
+
+SphereGrid.Stone.StatBonus.Common     = 5
+SphereGrid.Stone.StatBonus.Uncommon   = 7
+SphereGrid.Stone.StatBonus.Rare       = 10
+SphereGrid.Stone.StatBonus.Epic       = 15
+SphereGrid.Stone.StatBonus.Legendary  = 30
+
+#
+#    A cell that comes pre-filled grants less than a stone the player socketed
+#    himself: he did nothing to earn it. Same five qualities.
+#
+
+SphereGrid.NodeStone.StatBonus.Common     = 1
+SphereGrid.NodeStone.StatBonus.Uncommon   = 2
+SphereGrid.NodeStone.StatBonus.Rare       = 3
+SphereGrid.NodeStone.StatBonus.Epic       = 5
+SphereGrid.NodeStone.StatBonus.Legendary  = 7
+
+#
+#    How much a statistic rune adds, as a percentage of what the GRID already
+#    grants in that statistic. It stacks up to SphereGrid.Runes.PerSpell times.
+#
+
+SphereGrid.StatRune.Percent = 10
+
+###############################################################################
+#
+#    WHAT THE CONTENT AWARDS
+#
+#    Every number below is Spherite, and every one of them is multiplied by the
+#    prismatic Nexuses the account has absorbed.
+#
+
+# A quest handed in. Only the player handing it in is credited.
+SphereGrid.Points.Quest = 25
+
+# A level gained: this value TIMES the new level, so 20 at level 2. Every level
+# crossed at once is counted.
+SphereGrid.Points.Level = 10
+
+# An achievement: this value TIMES the achievement's own score, so Blizzard's
+# difficulty hierarchy decides and nothing has to be entered by hand.
+SphereGrid.Points.Achievement = 10
+
+#
+#    The workbench, grinding an item back into Spherite. A rune has no quality,
+#    so it has a single price; a stone is priced by its own.
+#
+
+SphereGrid.Points.Grind.Rune             = 750
+SphereGrid.Points.Grind.Stone.Common     = 100
+SphereGrid.Points.Grind.Stone.Uncommon   = 250
+SphereGrid.Points.Grind.Stone.Rare       = 500
+SphereGrid.Points.Grind.Stone.Epic       = 1000
+SphereGrid.Points.Grind.Stone.Legendary  = 2500
+
+###############################################################################
+#
+#    DUNGEONS
+#
+#    The tier of a dungeon is computed from its map — its expansion and its
+#    difficulty — so nothing has to be listed here: only what each tier is
+#    worth.
+#
+
+SphereGrid.Points.DungeonBoss.Vanilla      = 75
+SphereGrid.Points.DungeonBoss.Bc           = 100
+SphereGrid.Points.DungeonBoss.BcHeroic     = 125
+SphereGrid.Points.DungeonBoss.Wotlk        = 125
+SphereGrid.Points.DungeonBoss.WotlkHeroic  = 150
+
+SphereGrid.Points.DungeonClear.Vanilla     = 50
+SphereGrid.Points.DungeonClear.Bc          = 75
+SphereGrid.Points.DungeonClear.BcHeroic    = 100
+SphereGrid.Points.DungeonClear.Wotlk       = 125
+SphereGrid.Points.DungeonClear.WotlkHeroic = 150
+
+# What a dungeon of no known tier awards. Left at a deliberately odd value:
+# seeing it in game means a tier is missing above.
+SphereGrid.Points.DungeonBoss.Unknown      = 1234
+SphereGrid.Points.DungeonClear.Unknown     = 1234
+
+###############################################################################
+#
+#    RAIDS
+#
+#    Raids are not tiered by expansion — a vanilla raid and the last raid of an
+#    expansion are worlds apart. So each CONTENT TIER is worth what it says
+#    below, and lists the maps that belong to it.
+#
+#    A map is written as its map id x 10. When a raid awards differently by
+#    difficulty, add the difficulty index + 1: 6311 is map 631 at difficulty 0,
+#    6314 the same map at difficulty 3.
+#
+#    A server with content of its own adds its maps to a tier: only the pairs
+#    below are read, so a tier with no map costs nothing.
+#
+
+SphereGrid.Points.Raid.Vanilla   = 250
+SphereGrid.Raid.Vanilla.Maps     = 3090,4090,4690,5090,5310
+
+SphereGrid.Points.Raid.Bc        = 450
+SphereGrid.Raid.Bc.Maps          = 5320,5340,5440,5480,5500,5640,5650,5680,5800
+
+SphereGrid.Points.Raid.Tier7     = 650
+SphereGrid.Raid.Tier7.Maps       = 5330,6150
+
+SphereGrid.Points.Raid.Tier8     = 750
+SphereGrid.Raid.Tier8.Maps       = 2490,6030,6240
+
+SphereGrid.Points.Raid.Tier9     = 850
+SphereGrid.Raid.Tier9.Maps       = 6490
+
+SphereGrid.Points.Raid.Tier10    = 1000
+SphereGrid.Raid.Tier10.Maps      = 6311
+
+SphereGrid.Points.Raid.Tier10Hc  = 1100
+SphereGrid.Raid.Tier10Hc.Maps    = 6312,7240
+
+SphereGrid.Points.Raid.Tier25    = 1500
+SphereGrid.Raid.Tier25.Maps      = 6313
+
+SphereGrid.Points.Raid.Tier25Hc  = 2000
+SphereGrid.Raid.Tier25Hc.Maps    = 6314
+
+# A raid boss on a map listed nowhere. Same deliberately odd value: it is meant
+# to be noticed.
+SphereGrid.Points.Raid.Unknown   = 1234
+
+###############################################################################
+#
+#    MYTHIC+ DUNGEONS
+#
+#    REQUIRES AN EXTERNAL SYSTEM: https://github.com/huptiq/MythicPlus
+#
+#    The sphere grid has no keystone of its own and knows nothing of mythic
+#    dungeons. It only offers the door: an outside system credits a key level by
+#    calling `.spheregrid points source mythic_plus <level>`, and the settings
+#    below say what that is worth.
+#
+#    WITHOUT THAT SYSTEM INSTALLED, NOTHING EVER CALLS IT and this whole section
+#    is inert. It costs nothing to leave it as it is.
+#
+#    A scale rather than a list: points = Base + Step x the key level. Set Step
+#    to 0 to award a flat amount whatever the key, and Max to the highest level
+#    worth rewarding.
+#
+
+SphereGrid.Points.MythicPlus.Base = 150
+SphereGrid.Points.MythicPlus.Step = 50
+SphereGrid.Points.MythicPlus.Max  = 50
+
+###############################################################################
+#
+#    RULES
+#
+
+# The price of a cell is its distance in edges from the class start, times this
+# step, capped. The start itself is free.
+SphereGrid.Cost.PerStep = 75
+SphereGrid.Cost.Cap = 2500
+
+# How many identical runes may be socketed in one grid. Beyond that, the extra
+# rune grants nothing.
+SphereGrid.Runes.PerSpell = 3
