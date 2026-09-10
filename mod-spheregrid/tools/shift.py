@@ -391,6 +391,38 @@ def files():
         yield readme
 
 
+def leftovers(family):
+    """What still names a number of the family's range, once it has moved.
+
+    A POSITIONAL FAMILY CANNOT BE MOVED BY SIGHT: a visual kit's number is an
+    integer like any other -- a duration in milliseconds looks exactly the same
+    -- so the shift moves only the places it is TOLD hold one. Where it was
+    never told, it leaves the old number where it stands and says nothing. That
+    is how the heroic leap lost its dressing: its kits sat in a braced table
+    and the rule read single values only.
+
+    So once the move is done, every TEXT file of the module is read again and
+    every line still falling in the old range is listed. Most of what comes
+    back is innocent -- this check can tell a kit from a duration no better
+    than the shift could -- but a human reads ten lines in ten seconds, and the
+    tool no longer keeps that doubt to itself. The DBC files are out of reach
+    here: a record is numbers all the way down, and every one of them would
+    answer.
+    """
+    low, high = FAMILIES[family]["low"], FAMILIES[family]["high"]
+    pattern = re.compile(r"(?<![\w.])\d{%d,%d}(?![\w.])"
+                         % (len(str(low)), len(str(high))))
+    out = []
+    for path in files():
+        if not path.endswith(TEXT):
+            continue
+        for number, line in enumerate(
+                io.open(path, encoding="utf-8", newline="").read().splitlines(), 1):
+            if any(low <= int(m.group(0)) <= high for m in pattern.finditer(line)):
+                out.append((path, number, line.strip()))
+    return out
+
+
 def shift(family, by, dry_run):
     if family not in FAMILIES:
         raise SystemExit("no family called %r; try --list" % family)
@@ -430,6 +462,17 @@ def shift(family, by, dry_run):
     # The family's range moves with it: the next shift must know where it is.
     if not dry_run and total:
         record_shift(family, by)
+        rest = leftovers(family)
+        if rest:
+            print("  %d line(s) still name a number between %d and %d. What the "
+                  "shift knows to hold one has moved; READ THESE and make sure "
+                  "none of them is one of ours:"
+                  % (len(rest), FAMILIES[family]["low"], FAMILIES[family]["high"]))
+            for path, number, line in rest[:40]:
+                print("    %s:%d  %s"
+                      % (os.path.relpath(path, MODULE), number, line[:88]))
+            if len(rest) > 40:
+                print("    ... and %d more" % (len(rest) - 40))
     return total
 
 

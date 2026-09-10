@@ -3131,10 +3131,12 @@ SlashCmdList["SPHEREGRIDPLAYER"] = Toggle
 -- ---------------------------------------------------------------------------
 -- The game calls UseContainerItem on every right-click of an item in a bag
 -- (ContainerFrame.lua, the « else » branch of ContainerFrameItemButton_OnClick).
--- Our items having no use spell, that click does nothing server-side: we may
--- therefore give it a meaning here without diverting anything. The window opens
--- and the item goes « in hand » -- the next gesture is the interface's own,
--- unchanged.
+-- We hook it rather than replace it, so the click keeps whatever meaning the
+-- game gives it and gains ours. Since the green line our items DO carry a use
+-- spell -- one that does nothing whatever, and exists only so the client draws
+-- its description in the colour of an effect -- so the click casts that too,
+-- and nothing comes of it. The window opens and the item goes « in hand »; the
+-- next gesture is the interface's own, unchanged.
 hooksecurefunc("UseContainerItem", function(bag, slotName)
     -- When one of these windows is open, a right-click does NOT mean « use »: it
     -- sells, it attaches to a letter, it puts up for auction. We keep out of it.
