@@ -1,0 +1,392 @@
+#
+# mod-spheregrid — configuration
+#
+# What a server operator tunes: what the content awards, what a stone or a
+# statistic rune grants, and how often each object drops. Nothing else — the
+# identifiers the module allocates are not settings, they are part of the
+# module and the installer is what adapts them to a server.
+#
+# Every value below is also the built-in default, so a setting left out changes
+# nothing. Reloaded by `.spheregrid reload`, like the rest of the definition.
+#
+# Copy this file to your configs/modules directory and drop the .dist extension.
+#
+
+[worldserver]
+
+###############################################################################
+#
+#    WHAT A STONE GRANTS
+#
+#    One value per quality — the same five qualities the game itself uses, and
+#    the ones the player reads in the colour of the item. Which statistic a
+#    stone carries is not a setting: it is written in the stone.
+#
+
+SphereGrid.Stone.StatBonus.Common     = 5
+SphereGrid.Stone.StatBonus.Uncommon   = 7
+SphereGrid.Stone.StatBonus.Rare       = 10
+SphereGrid.Stone.StatBonus.Epic       = 15
+SphereGrid.Stone.StatBonus.Legendary  = 30
+
+#
+#    A cell that comes pre-filled grants less than a stone the player socketed
+#    himself: he did nothing to earn it. Same five qualities.
+#
+
+SphereGrid.NodeStone.StatBonus.Common     = 1
+SphereGrid.NodeStone.StatBonus.Uncommon   = 2
+SphereGrid.NodeStone.StatBonus.Rare       = 3
+SphereGrid.NodeStone.StatBonus.Epic       = 5
+SphereGrid.NodeStone.StatBonus.Legendary  = 7
+
+#
+#    How much a statistic rune adds, as a percentage of what the GRID already
+#    grants in that statistic. It stacks up to SphereGrid.Runes.PerSpell times.
+#
+
+SphereGrid.StatRune.Percent = 10
+
+###############################################################################
+#
+#    WHAT THE CONTENT AWARDS
+#
+#    Every number below is Spherite, and every one of them is multiplied by the
+#    prismatic Nexuses the account has absorbed.
+#
+
+# A quest handed in. Only the player handing it in is credited.
+SphereGrid.Points.Quest = 25
+
+# A level gained: this value TIMES the new level, so 20 at level 2. Every level
+# crossed at once is counted.
+SphereGrid.Points.Level = 10
+
+# An achievement: this value TIMES the achievement's own score, so Blizzard's
+# difficulty hierarchy decides and nothing has to be entered by hand.
+SphereGrid.Points.Achievement = 10
+
+#
+#    The workbench, grinding an item back into Spherite. A rune has no quality,
+#    so it has a single price; a stone is priced by its own.
+#
+
+SphereGrid.Points.Grind.Rune             = 750
+SphereGrid.Points.Grind.Stone.Common     = 100
+SphereGrid.Points.Grind.Stone.Uncommon   = 250
+SphereGrid.Points.Grind.Stone.Rare       = 500
+SphereGrid.Points.Grind.Stone.Epic       = 1000
+SphereGrid.Points.Grind.Stone.Legendary  = 2500
+
+###############################################################################
+#
+#    DUNGEONS
+#
+#    The tier of a dungeon is computed from its map — its expansion and its
+#    difficulty — so nothing has to be listed here: only what each tier is
+#    worth.
+#
+
+SphereGrid.Points.DungeonBoss.Vanilla      = 75
+SphereGrid.Points.DungeonBoss.Bc           = 100
+SphereGrid.Points.DungeonBoss.BcHeroic     = 125
+SphereGrid.Points.DungeonBoss.Wotlk        = 125
+SphereGrid.Points.DungeonBoss.WotlkHeroic  = 150
+
+SphereGrid.Points.DungeonClear.Vanilla     = 50
+SphereGrid.Points.DungeonClear.Bc          = 75
+SphereGrid.Points.DungeonClear.BcHeroic    = 100
+SphereGrid.Points.DungeonClear.Wotlk       = 125
+SphereGrid.Points.DungeonClear.WotlkHeroic = 150
+
+# What a dungeon of no known tier awards. Left at a deliberately odd value:
+# seeing it in game means a tier is missing above.
+SphereGrid.Points.DungeonBoss.Unknown      = 1234
+SphereGrid.Points.DungeonClear.Unknown     = 1234
+
+###############################################################################
+#
+#    RAIDS
+#
+#    Raids are not tiered by expansion — a vanilla raid and the last raid of an
+#    expansion are worlds apart. So each CONTENT TIER is worth what it says
+#    below, and lists the maps that belong to it.
+#
+#    A map is written as its map id x 10. When a raid awards differently by
+#    difficulty, add the difficulty index + 1: 6311 is map 631 at difficulty 0,
+#    6314 the same map at difficulty 3.
+#
+#    A server with content of its own adds its maps to a tier: only the pairs
+#    below are read, so a tier with no map costs nothing.
+#
+
+SphereGrid.Points.Raid.Vanilla   = 250
+SphereGrid.Raid.Vanilla.Maps     = 3090,4090,4690,5090,5310
+
+SphereGrid.Points.Raid.Bc        = 450
+SphereGrid.Raid.Bc.Maps          = 5320,5340,5440,5480,5500,5640,5650,5680,5800
+
+SphereGrid.Points.Raid.Tier7     = 650
+SphereGrid.Raid.Tier7.Maps       = 5330,6150
+
+SphereGrid.Points.Raid.Tier8     = 750
+SphereGrid.Raid.Tier8.Maps       = 2490,6030,6240
+
+SphereGrid.Points.Raid.Tier9     = 850
+SphereGrid.Raid.Tier9.Maps       = 6490
+
+SphereGrid.Points.Raid.Tier10    = 1000
+SphereGrid.Raid.Tier10.Maps      = 6311
+
+SphereGrid.Points.Raid.Tier10Hc  = 1100
+SphereGrid.Raid.Tier10Hc.Maps    = 6312,7240
+
+SphereGrid.Points.Raid.Tier25    = 1500
+SphereGrid.Raid.Tier25.Maps      = 6313
+
+SphereGrid.Points.Raid.Tier25Hc  = 2000
+SphereGrid.Raid.Tier25Hc.Maps    = 6314
+
+# A raid boss on a map listed nowhere. Same deliberately odd value: it is meant
+# to be noticed.
+SphereGrid.Points.Raid.Unknown   = 1234
+
+###############################################################################
+#
+#    MYTHIC+ DUNGEONS
+#
+#    REQUIRES AN EXTERNAL SYSTEM: https://github.com/huptiq/MythicPlus
+#
+#    The sphere grid has no keystone of its own and knows nothing of mythic
+#    dungeons. It only offers the door: an outside system credits a key level by
+#    calling `.spheregrid points source mythic_plus <level>`, and the settings
+#    below say what that is worth.
+#
+#    WITHOUT THAT SYSTEM INSTALLED, NOTHING EVER CALLS IT and this whole section
+#    is inert. It costs nothing to leave it as it is.
+#
+#    A scale rather than a list: points = Base + Step x the key level. Set Step
+#    to 0 to award a flat amount whatever the key, and Max to the highest level
+#    worth rewarding.
+#
+
+SphereGrid.Points.MythicPlus.Base = 150
+SphereGrid.Points.MythicPlus.Step = 50
+SphereGrid.Points.MythicPlus.Max  = 50
+
+###############################################################################
+#
+#    WHAT EACH SOURCE DROPS
+#
+#    1. WHERE THINGS DROP. What can yield the module's items is cut up by
+#       EXPANSION -- vanilla, Burning Crusade, Wrath of the Lich King -- and
+#       inside each expansion by kind:
+#
+#         raids           the bosses on one side, everything else on the other
+#         dungeons        the same, heroic ones counted apart in Wrath
+#         the world map   everything killed outside an instance
+#         gathering       each kind of vein and each herb, each skinning
+#                         bracket, and each kind of chest
+#
+#       Each of those is one setting below, and one only. WHICH monsters or
+#       which veins make one is not a setting: that is written in the module.
+#
+#    2. WHAT A SOURCE DROPS is written  object:quantity:chance
+#
+#         Luminous:1:5      one Luminous Nexus, five times in a hundred
+#         EpicStone:2:50    two epic stones, one time in two
+#
+#    3. A FALLBACK is two of those or more, separated by a comma:
+#
+#         Solar:1:25, Irradiant:1:100
+#
+#    4. HOW THE FALLBACK IS DECIDED. They are tried IN ORDER, and the first
+#       one whose roll wins takes it -- whatever follows is not tried at all.
+#       Above: a Solar Nexus one time in four; the three other times an
+#       Irradiant one, which at 100 never fails. An object turned off at the
+#       end of this section is not tried either, and the next one takes its
+#       place.
+#
+#    5. SEVERAL ROLLS in one source are separated by a semicolon. Every one
+#       of them is played, each with its own dice:
+#
+#         SphereGrid.Loot.IcecrownRaidBoss = Prismatic:1:2 ; Solar:1:25, Irradiant:1:100 ; Rune:1:33
+#
+#       an Icecrown boss rolls for a Prismatic Nexus, then for a Solar one --
+#       failing which an Irradiant one -- then for a rune: it may well give
+#       all three at once.
+#
+#    THE OBJECTS. Depleted, Flickering, Luminous, Irradiant, Solar,
+#    Prismatic are the six Nexuses. CommonStone, UncommonStone, RareStone,
+#    EpicStone, LegendaryStone are a stone of that quality, its statistic
+#    drawn among the sixteen -- a quantity above 1 draws that many different
+#    stones. Rune is one of the whole catalogue, all classes together. Names
+#    are not case-sensitive, and spaces are free.
+#
+#    A setting LEFT OUT is the module's own table, which is what every value
+#    below shows. A setting left EMPTY is a source that yields nothing. A
+#    setting that cannot be read is reported at start-up, with the piece at
+#    fault, and the module's own table is used instead.
+#
+
+#
+#    MONSTERS
+#
+#    The first source that matches a kill takes it, from the most precise to
+#    the most general: a boss of Icecrown is also a Wrath raid boss, and the
+#    first line takes it alone. "Trash" is every monster of the place that is
+#    not a boss; "World" is everything outside an instance. A grey boss --
+#    below the level at which the game stops giving experience -- yields a
+#    fifth of the rate written for it.
+#
+
+# Icecrown raid bosses
+SphereGrid.Loot.IcecrownRaidBoss = Prismatic:1:2 ; Solar:1:25, Irradiant:1:100 ; LegendaryStone:1:25, EpicStone:2:50, EpicStone:1:100 ; Rune:1:33
+# Wrath raid bosses, Icecrown aside
+SphereGrid.Loot.WrathRaidBoss = Prismatic:1:2 ; Irradiant:1:100 ; EpicStone:1:100 ; Rune:1:10
+# Wrath raid monsters, Icecrown included
+SphereGrid.Loot.WrathRaidTrash = Luminous:1:5 ; EpicStone:1:2 ; Rune:1:2
+# Wrath heroic dungeon bosses
+SphereGrid.Loot.WrathHeroicBoss = Luminous:1:25 ; RareStone:1:25
+# Wrath heroic dungeon monsters
+SphereGrid.Loot.WrathHeroicTrash = Luminous:1:6 ; RareStone:1:6
+# Wrath dungeon bosses
+SphereGrid.Loot.WrathDungeonBoss = Luminous:2:20 ; RareStone:1:15
+# Wrath dungeon monsters
+SphereGrid.Loot.WrathDungeonTrash = Luminous:1:5 ; UncommonStone:1:4
+# Wrath ordinary monsters
+SphereGrid.Loot.WrathWorld = Luminous:1:5 ; UncommonStone:1:3
+# Burning Crusade raid bosses
+SphereGrid.Loot.BcRaidBoss = Flickering:2:7 ; UncommonStone:1:15
+# Burning Crusade raid monsters
+SphereGrid.Loot.BcRaidTrash = Flickering:1:8 ; UncommonStone:1:5
+# Burning Crusade dungeon bosses
+SphereGrid.Loot.BcDungeonBoss = Flickering:1:5 ; CommonStone:1:5
+# Burning Crusade dungeon monsters
+SphereGrid.Loot.BcDungeonTrash = Flickering:1:5.5 ; CommonStone:1:5
+# Burning Crusade ordinary monsters
+SphereGrid.Loot.BcWorld = Flickering:1:5 ; CommonStone:1:3
+# Vanilla raid bosses
+SphereGrid.Loot.VanillaRaidBoss = Flickering:2:7
+# Vanilla raid monsters
+SphereGrid.Loot.VanillaRaidTrash = Depleted:1:8
+# Vanilla dungeon bosses
+SphereGrid.Loot.VanillaDungeonBoss = Depleted:1:5
+# Vanilla dungeon monsters
+SphereGrid.Loot.VanillaDungeonTrash = Depleted:1:5.5
+# Vanilla ordinary monsters
+SphereGrid.Loot.VanillaWorld = Depleted:1:5
+
+#
+#    VEINS AND HERBS
+#
+#    A vein or a herb is known by the skill it demands and the expansion of
+#    its map. The pure saronite deposit yields nothing, by design: it shares
+#    its lock with titanium and would otherwise be its equal.
+#
+
+# Pure Saronite Deposit
+SphereGrid.Loot.PureSaronite =
+# Titanium Vein
+SphereGrid.Loot.Titanium = Irradiant:1:5, Luminous:1:12
+# Rich Saronite Deposit
+SphereGrid.Loot.RichSaronite = Luminous:1:10
+# Saronite Deposit
+SphereGrid.Loot.Saronite = Luminous:1:9
+# Rich Cobalt Deposit
+SphereGrid.Loot.RichCobalt = Luminous:1:7
+# Cobalt Deposit
+SphereGrid.Loot.Cobalt = Luminous:1:5
+# Burning Crusade ores
+SphereGrid.Loot.BcOres = Flickering:1:5
+# Vanilla ores
+SphereGrid.Loot.VanillaOres = Depleted:1:5
+# Frost Lotus
+SphereGrid.Loot.FrostLotus = Irradiant:1:12
+# Icethorn
+SphereGrid.Loot.Icethorn = Luminous:1:9
+# Lichbloom
+SphereGrid.Loot.Lichbloom = Luminous:1:9
+# Adder's Tongue
+SphereGrid.Loot.AddersTongue = Luminous:1:7
+# Talandra's Rose
+SphereGrid.Loot.TalandrasRose = Luminous:1:7
+# Tiger Lily
+SphereGrid.Loot.TigerLily = Luminous:1:7
+# Fire Leaf
+SphereGrid.Loot.FireLeaf = Luminous:1:5
+# Goldclover
+SphereGrid.Loot.Goldclover = Luminous:1:5
+# Frozen Herb
+SphereGrid.Loot.FrozenHerb = Luminous:1:5
+# Burning Crusade herbs
+SphereGrid.Loot.BcHerbs = Flickering:1:5
+# Vanilla herbs
+SphereGrid.Loot.VanillaHerbs = Depleted:1:5
+
+#
+#    SKINNING
+#
+#    By the level of the beast.
+#
+
+# Skinning 80-83
+SphereGrid.Loot.Skinning80 = Irradiant:1:9
+# Skinning 71-79
+SphereGrid.Loot.Skinning71 = Luminous:1:5
+# Skinning 61-70
+SphereGrid.Loot.Skinning61 = Flickering:1:5
+# Skinning 1-60
+SphereGrid.Loot.Skinning1 = Depleted:1:5
+
+#
+#    CHESTS
+#
+#    By where the chest stands.
+#
+
+# Raid chest
+SphereGrid.Loot.RaidChest = Flickering:2:10
+# Heroic dungeon chest
+SphereGrid.Loot.HeroicDungeonChest = Depleted:5:10
+# Dungeon chest
+SphereGrid.Loot.DungeonChest = Depleted:3:10
+# World chest
+SphereGrid.Loot.WorldChest = Depleted:1:12
+
+#
+#    ON TOP OF THAT, HOW OFTEN EACH OBJECT DROPS, wherever it appears above:
+#    a percentage of the rate written. 100 leaves it as written, 50 halves it
+#    everywhere, 200 doubles it (a roll never goes above 100 %), 0 turns the
+#    object off -- it is then not rolled at all, the fallback written after it
+#    takes its place, and the bad-luck protection never brings it back.
+#
+
+SphereGrid.Drop.Nexus.Depleted    = 100
+SphereGrid.Drop.Nexus.Flickering  = 100
+SphereGrid.Drop.Nexus.Luminous    = 100
+SphereGrid.Drop.Nexus.Irradiant   = 100
+SphereGrid.Drop.Nexus.Solar       = 100
+SphereGrid.Drop.Nexus.Prismatic   = 100
+
+SphereGrid.Drop.Stone.Common      = 100
+SphereGrid.Drop.Stone.Uncommon    = 100
+SphereGrid.Drop.Stone.Rare        = 100
+SphereGrid.Drop.Stone.Epic        = 100
+SphereGrid.Drop.Stone.Legendary   = 100
+
+SphereGrid.Drop.Rune              = 100
+
+###############################################################################
+#
+#    RULES
+#
+
+# The price of a cell is its distance in edges from the class start, times this
+# step, capped. The start itself is free.
+SphereGrid.Cost.PerStep = 75
+SphereGrid.Cost.Cap = 2500
+
+# How many identical runes may be socketed in one grid. Beyond that, the extra
+# rune grants nothing.
+SphereGrid.Runes.PerSpell = 3

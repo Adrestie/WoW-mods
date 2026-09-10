@@ -1,0 +1,13 @@
+# Line endings that survive a clone on any system: text files normalised,
+# the shell script always LF (a CRLF shebang does not run), the batch file
+# always CRLF (cmd's `set /p` needs it), and binaries left alone.
+* text=auto
+*.sh text eol=lf
+*.bat text eol=crlf
+*.dbc -text
+*.blp -text
+*.m2 -text
+*.skin -text
+*.wav -text
+*.ogg -text
+*.mpq -text
