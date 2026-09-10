@@ -295,8 +295,14 @@ CORRECTIONS = {
 # and fell into "General".
 #
 # AND WHAT BELONGS IN "General" HAS NO ROW AT ALL: it is the absence of a skill
-# line that puts a spell in the general tab. Light Stride 9000090 is the only
-# one.
+# line that puts a spell in the general tab. Light Stride is the only one.
+#
+# THE FILE IS WRITTEN ONCE. The module's spells are fixed -- forty-one cells,
+# five form spells, and the ranks the runes grant -- so there is no generator
+# in the tree: `spheregrid_SkillLineAbility.dbc` is a shipped asset like the
+# others. Everything needed to rebuild it by hand is above: the tree of each
+# spell, the default of each class, and the rule for a rank (the line of its
+# own base spell). Adding a spell cell means adding one row.
 DERIVED = {
     "Spell.dbc": [
         (8610038, "module", 8600062, {40: 29, 71: 6, 95: 57, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 678, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
