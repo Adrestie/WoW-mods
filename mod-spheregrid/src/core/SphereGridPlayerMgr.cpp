@@ -1117,7 +1117,7 @@ void SphereGridPlayerMgr::Reset(Player* player)
 
     // Recomputation on an empty state: removes everything the grid had applied.
     Recompute(player);
-    player->PlayDirectSound(SPHEREGRID_SOUND_UNDONE, player);
+    player->PlayDirectSound(SPHEREGRID_SOUND_RESET, player);
 }
 
 // PLAYER-TRIGGERED RESET — the interface button, through `.spheregrid respec`.

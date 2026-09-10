@@ -433,8 +433,13 @@ public:
     {
         switch (r)
         {
+            // SOCKETING SAYS NOTHING. The stone or the rune is in the cell,
+            // the window shows it and a sound answers the gesture; a line
+            // naming an entry and a cell number was one more thing to read.
+            // Emptying still speaks: what came out went back to the bags.
             case SphereGridSocketing::Ok:
-                Say(handler, okString, arg1, arg2);
+                if (okString != SPHEREGRID_STR_SOCKETED)
+                    Say(handler, okString, arg1, arg2);
                 break;
             case SphereGridSocketing::NoState:
                 SayError(handler, SPHEREGRID_STR_NO_STATE_SELF);

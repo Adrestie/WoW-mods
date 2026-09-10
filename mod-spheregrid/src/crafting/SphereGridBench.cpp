@@ -154,7 +154,10 @@ SphereGridBenchResult ReforgeRunes(Player* player, uint32 a, uint32 b, uint32 c,
     if (!crafted)
         return SphereGridBenchResult::NothingToDraw;
 
-    return Exchange(player, { a, b, c }, crafted);
+    SphereGridBenchResult const r = Exchange(player, { a, b, c }, crafted);
+    if (r == SphereGridBenchResult::Ok)
+        player->PlayDirectSound(SPHEREGRID_SOUND_REFORGE, player);
+    return r;
 }
 
 // AN ITEM'S QUALITY IS THE ONE IN item_template, and nothing else — the same

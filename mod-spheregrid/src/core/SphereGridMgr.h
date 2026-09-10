@@ -61,12 +61,14 @@ constexpr uint32 SPHEREGRID_PIN_ENTRY = 803300;
 // client's SoundEntries, and what a gesture sounds like is taken from what the
 // game already does with the same gesture -- a player recognises it without
 // being taught. They are played to the one who acted, and to nobody else.
-constexpr uint32 SPHEREGRID_SOUND_GRIND  = 27;     // what disenchanting hums
-constexpr uint32 SPHEREGRID_SOUND_CRAFT  = 10590;  // JewelcraftingFinalize: a gem is made
-constexpr uint32 SPHEREGRID_SOUND_UNDONE = 4874;   // the impact of a talent wipe
-constexpr uint32 SPHEREGRID_SOUND_RUNE   = 11562;  // TradeskillLearnRecipe: a thing is learned
-constexpr uint32 SPHEREGRID_SOUND_STONE  = 1204;   // PutDownGems: a gem is set down
-constexpr uint32 SPHEREGRID_SOUND_FORGET = 846;    // a quest given up
+constexpr uint32 SPHEREGRID_SOUND_GRIND   = 13828;  // Glyph_MajorDestroy: a thing you had is gone
+constexpr uint32 SPHEREGRID_SOUND_CRAFT   = 10590;  // JewelcraftingFinalize: a gem is made
+constexpr uint32 SPHEREGRID_SOUND_REFORGE = 1166;   // TradeSkill - Smelt: three go in, one comes out
+constexpr uint32 SPHEREGRID_SOUND_STONE   = 1204;   // PutDownGems: a gem is set down
+constexpr uint32 SPHEREGRID_SOUND_RUNE    = 13827;  // Glyph_MajorCreate: a spell is given something
+constexpr uint32 SPHEREGRID_SOUND_UNDONE  = 4874;   // the impact of a talent wipe: the pin
+constexpr uint32 SPHEREGRID_SOUND_RESET   = 1435;   // Dispel Magic: everything applied, swept away
+constexpr uint32 SPHEREGRID_SOUND_FORGET  = 846;    // a quest given up
 
 // The Nexuses, the items that grant Spherite. Five qualities, plus the
 // prismatic one, which boosts every gain instead of granting any.
