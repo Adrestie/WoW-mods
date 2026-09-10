@@ -35,7 +35,8 @@ grid and gets every point back; the account keeps what it earned.
 | [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) | 3.3.5a, built with the module in `modules/` |
 | [ALE](https://github.com/azerothcore/mod-ale) or Eluna | the Lua engine that runs the interface |
 | [AIO](https://github.com/Rochet2/AIO) | server AND client — the interface is sent over it |
-| Python 3 and the `mysql` client | for the installer only |
+| Python 3 and the `mysql` client | for the installer, and for the layout editor |
+| Pillow and numpy | for the layout editor only: `pip install pillow numpy` |
 | a patched client | the installer does it; see [The client](#the-client) |
 
 Optional: [MythicPlus](https://github.com/huptiq/MythicPlus). Without it the
@@ -351,14 +352,44 @@ data can be rebuilt, not because installing needs it.
 
 ## The grid is data
 
-The layout editor (`.spheregrid editor`) composes a grid in game and saves it as
-XML; the importer turns that into the SQL this module ships. A server that wants
-its own grid replaces `data/sql/world/08_grid.sql` and nothing else.
-
 A cell says where it sits, which statistic and quality it comes pre-filled with,
 and whether it is a node, a socket or a spell cell. It carries no name and no
 icon: a name is a language and an icon is art the client already owns, so both
 belong to the interface. See `docs/PRESENTATION.md`.
+
+A server that wants its own grid replaces `data/sql/world/08_grid.sql` and
+nothing else. Two editors write it, and they share one file.
+
+### In game
+
+`.spheregrid editor`, for administrators. It lays clusters down, joins cells,
+sets what each one grants and marks the door each class comes in by, and saves
+the whole as a readable XML under `lua_scripts/SphereGrid/editor/layouts`.
+
+### Out of game
+
+`layout.cmd` opens the same layouts in a window of its own, and does what the
+game cannot:
+
+* **Generate** a grid from the bank of cluster shapes -- a seed, how many
+  clusters, how big they may be, and it says about how many cells that makes.
+  The drawing only: what the cells grant comes after.
+* **Paint** what they grant. One layer per statistic, several at once, an eye
+  to hide one; the brush softens the DENSITY and never the value, so nothing
+  outside the palette is ever written. The map lives beside the layout, same
+  name with `.png`, and carries the quality rings inside itself.
+* **Rarity**: five bands from a centre you can move, each in the colour of its
+  quality.
+* **Edit**: make and unmake links, change what a cell is, give a spell cell its
+  spell class by class, set the starts, and see the shortest path from every
+  door at once. It says when the grid is cut in two, when links lie over one
+  another, and when a class has no door yet.
+* **Export**: the SQL written beside the layout AND applied to the world
+  database of the server the layout belongs to. One thing is then left to do in
+  game: `.spheregrid reload`.
+
+WHAT THE GAME WRITES, THE WINDOW READS. Save a layout in game with the window
+open and it reloads by itself; it asks first if there is unsaved work in it.
 
 ## Reporting a problem
 
