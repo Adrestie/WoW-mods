@@ -993,6 +993,8 @@ SphereGridSocketing SphereGridPlayerMgr::Socket(Player* player, uint32 nodeId, u
     }
 
     Recompute(player);
+    player->PlayDirectSound(def->kind == SPHEREGRID_NODE ? SPHEREGRID_SOUND_STONE
+                                                         : SPHEREGRID_SOUND_RUNE, player);
     return SphereGridSocketing::Ok;
 }
 
@@ -1045,6 +1047,8 @@ SphereGridSocketing SphereGridPlayerMgr::Unsocket(Player* player, uint32 nodeId,
     }
 
     Recompute(player);
+    player->PlayDirectSound(def->kind == SPHEREGRID_SPELL ? SPHEREGRID_SOUND_FORGET
+                                                          : SPHEREGRID_SOUND_UNDONE, player);
     return SphereGridSocketing::Ok;
 }
 
@@ -1113,6 +1117,7 @@ void SphereGridPlayerMgr::Reset(Player* player)
 
     // Recomputation on an empty state: removes everything the grid had applied.
     Recompute(player);
+    player->PlayDirectSound(SPHEREGRID_SOUND_UNDONE, player);
 }
 
 // PLAYER-TRIGGERED RESET — the interface button, through `.spheregrid respec`.

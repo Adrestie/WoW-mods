@@ -57,6 +57,17 @@ constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 803310;
 constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 803600;
 constexpr uint32 SPHEREGRID_PIN_ENTRY = 803300;
 
+// THE SOUNDS ARE THE GAME'S OWN. Not one is shipped: each is a row of the
+// client's SoundEntries, and what a gesture sounds like is taken from what the
+// game already does with the same gesture -- a player recognises it without
+// being taught. They are played to the one who acted, and to nobody else.
+constexpr uint32 SPHEREGRID_SOUND_GRIND  = 27;     // what disenchanting hums
+constexpr uint32 SPHEREGRID_SOUND_CRAFT  = 10590;  // JewelcraftingFinalize: a gem is made
+constexpr uint32 SPHEREGRID_SOUND_UNDONE = 4874;   // the impact of a talent wipe
+constexpr uint32 SPHEREGRID_SOUND_RUNE   = 11562;  // TradeskillLearnRecipe: a thing is learned
+constexpr uint32 SPHEREGRID_SOUND_STONE  = 1204;   // PutDownGems: a gem is set down
+constexpr uint32 SPHEREGRID_SOUND_FORGET = 846;    // a quest given up
+
 // The Nexuses, the items that grant Spherite. Five qualities, plus the
 // prismatic one, which boosts every gain instead of granting any.
 constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 803200;

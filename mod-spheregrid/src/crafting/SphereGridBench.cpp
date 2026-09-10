@@ -101,7 +101,10 @@ SphereGridBenchResult Fuse(Player* player, uint32 entry, uint32& crafted)
         return SphereGridBenchResult::MaxQuality;
 
     crafted = best;
-    return Exchange(player, { entry, entry, entry }, crafted);
+    SphereGridBenchResult const r = Exchange(player, { entry, entry, entry }, crafted);
+    if (r == SphereGridBenchResult::Ok)
+        player->PlayDirectSound(SPHEREGRID_SOUND_CRAFT, player);
+    return r;
 }
 
 SphereGridBenchResult RerollStone(Player* player, uint32 a, uint32 b, uint32& crafted)
@@ -126,7 +129,10 @@ SphereGridBenchResult RerollStone(Player* player, uint32 a, uint32 b, uint32& cr
     if (!crafted)
         return SphereGridBenchResult::NothingToDraw;
 
-    return Exchange(player, { a, b }, crafted);
+    SphereGridBenchResult const r = Exchange(player, { a, b }, crafted);
+    if (r == SphereGridBenchResult::Ok)
+        player->PlayDirectSound(SPHEREGRID_SOUND_CRAFT, player);
+    return r;
 }
 
 SphereGridBenchResult ReforgeRunes(Player* player, uint32 a, uint32 b, uint32 c,
@@ -204,6 +210,7 @@ SphereGridBenchResult Grind(Player* player, uint32 entry, uint32& earned)
         return SphereGridBenchResult::NothingToDraw;
 
     player->DestroyItemCount(entry, 1, true);
+    player->PlayDirectSound(SPHEREGRID_SOUND_GRIND, player);
     return SphereGridBenchResult::Ok;
 }
 
