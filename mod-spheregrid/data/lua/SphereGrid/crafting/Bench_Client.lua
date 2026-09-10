@@ -123,10 +123,25 @@ local EC = {
     -- A rune, and no more than that: reforging can return either kind, so no
     -- particular icon would be honest.
     ANY_RUNE = "Interface\\Icons\\INV_Misc_Rune_06",
+    -- SPHERITE HAS A FACE: the mage's Arcane Explosion, a burst of raw
+    -- magic. It is what grinding gives back, so it is what the result slot
+    -- shows -- the icon of the item about to be destroyed said the
+    -- opposite of what becomes of it.
+    SPHERITE = "Interface\\Icons\\Spell_Nature_WispSplode",
 }
 
 local CAT = { stones = {}, runes = {}, statRunes = {} }
 local UI = nil
+
+-- AN ITEM THE CLIENT HAS NEVER SEEN HAS NEITHER NAME NOR ICON. `GetItemInfo`
+-- answers nothing for it and asks the server on the spot; the answer lands a
+-- moment later, long after the drawing that asked for it -- which is why the
+-- first fusion showed a red question mark where the stone to come belongs, and
+-- every one after it showed the stone. The unknown ones are asked for here,
+-- and the window redraws itself when the answers arrive. Defined once `Update`
+-- exists, which is what they wake.
+local WAITING = {}
+local Prime, TakeFromCursor
 
 -- ---------------------------------------------------------------------------
 -- Bags and catalogue
@@ -217,6 +232,7 @@ end
 local function ItemName(entry)
     local name = GetItemInfo(entry)
     if name then return name end
+    Prime(entry)
     local p = CAT.stones[entry]
     if p then return fmt("%s (%s +%d)", L.stone, STAT_LABELS[p.stat] or "?", p.amount or 0) end
     local r = CAT.statRunes[entry]
@@ -266,6 +282,7 @@ end
 
 local function ItemIcon(entry)
     local _, _, _, _, _, _, _, _, _, texture = GetItemInfo(entry)
+    if not texture then Prime(entry) end
     return texture or EC.UNKNOWN
 end
 
@@ -334,7 +351,7 @@ local function Detect()
     if #placed == 1 then
         local amount = GrindAmount(placed[1])
         if amount > 0 then
-            return "grind", placed, ItemIcon(placed[1]), fmt(L.p_grind, amount),
+            return "grind", placed, EC.SPHERITE, fmt(L.p_grind, amount),
                    L.r_grind, ItemQuality(placed[1])
         end
     end
@@ -428,6 +445,66 @@ local function Update()
     end
 end
 
+-- The client is asked for an item by naming it to a tooltip nobody sees: that
+-- is the one gesture that makes it fetch what it lacks. It answers when it
+-- answers, so the answers are watched for rather than waited on, and the
+-- window is redrawn the moment one lands.
+function Prime(entry)
+    -- Nothing to redraw before the window exists, and nothing asks for an
+    -- item before then either.
+    if not UI then return end
+    if not entry or GetItemInfo(entry) or WAITING[entry] then return end
+    WAITING[entry] = true
+    if not UI.probe then
+        UI.probe = CreateFrame("GameTooltip", "SphereGridWorkbenchProbe", nil,
+                               "GameTooltipTemplate")
+        UI.waiter = CreateFrame("Frame")
+        UI.waiter.elapsed = 0
+        UI.waiter:SetScript("OnUpdate", function(self, delta)
+            self.elapsed = self.elapsed + (delta or 0)
+            if self.elapsed < 0.2 then return end
+            self.elapsed = 0
+            local left, arrived = false, false
+            for e in pairs(WAITING) do
+                if GetItemInfo(e) then
+                    WAITING[e] = nil
+                    arrived = true
+                else
+                    left = true
+                end
+            end
+            if arrived and UI.frame and UI.frame:IsShown() then
+                Update()
+                if UI.pick and UI.pick:IsShown() then FillPicker() end
+            end
+            if not left then self:Hide() end
+        end)
+    end
+    UI.probe:SetOwner(UIParent, "ANCHOR_NONE")
+    UI.probe:SetHyperlink("item:" .. entry)
+    UI.probe:Hide()
+    UI.waiter.elapsed = 0
+    UI.waiter:Show()
+end
+
+-- WHAT THE CURSOR CARRIES GOES INTO THE SLOT. Dragging a stone out of a bag is
+-- the first gesture a player tries, and the click that ends it used to open the
+-- list instead -- the item stayed on the cursor and the gesture was lost. The
+-- slot takes it when the recipe still allows it, and leaves it on the cursor
+-- when it does not, so that nothing is silently swallowed.
+function TakeFromCursor(cell)
+    if not CursorHasItem() then return end
+    local kind, entry, link = GetCursorInfo()
+    if kind ~= "item" then return end
+    entry = tonumber(entry) or (link and tonumber(tostring(link):match("item:(%d+)")))
+    if not entry or not OfSphereGrid(entry) then return end
+    if not Compatible(entry, cell) or Available(entry, cell) <= 0 then return end
+    UI.picker[cell] = entry
+    ClearCursor()
+    ClosePicker()
+    Update()
+end
+
 local function Craft()
     local recipe, placed = Detect()
     if not recipe then return end
@@ -466,10 +543,12 @@ local function Build()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:Hide()
 
-    -- The whole window, edge to edge: the dialog outline draws over it, its
-    -- border living in a layer above.
+    -- INSIDE the outline, not under it. The dialog border is drawn with
+    -- margins of its own -- the insets above -- and an opaque texture stretched
+    -- to the frame's own edge shows past the border on all four sides.
     local background = f:CreateTexture(nil, "BACKGROUND")
-    background:SetAllPoints()
+    background:SetPoint("TOPLEFT", 11, -12)
+    background:SetPoint("BOTTOMRIGHT", -12, 11)
     background:SetTexture(EC.BACKGROUND[1], EC.BACKGROUND[2], EC.BACKGROUND[3], 1)
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameTooltipHeaderText")
@@ -538,6 +617,13 @@ local function Build()
                 Update()
                 return
             end
+            -- A HELD ITEM IS AN ANSWER, not a request for the list: the click
+            -- that ends a drag arrives here too, and opening the list would
+            -- throw away the gesture the player just made.
+            if CursorHasItem() then
+                TakeFromCursor(i)
+                return
+            end
             local frame = UI.pick
             frame.cell, frame.offset = i, 0
             frame:ClearAllPoints()
@@ -552,6 +638,7 @@ local function Build()
             GameTooltip:Show()
         end)
         cell:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        cell:SetScript("OnReceiveDrag", function() TakeFromCursor(i) end)
         UI.cells[i] = cell
     end
 
@@ -700,6 +787,18 @@ function WorkbenchHandlers.Catalogue(_, cat)
     CAT.stones   = (cat and cat.stones) or {}
     CAT.runes     = (cat and cat.runes) or {}
     CAT.statRunes = (cat and cat.statRunes) or {}
+    -- WITHOUT THE PRICES, NOTHING IS GROUND. `GrindAmount` reads them here, and
+    -- they were the one part of the catalogue this handler forgot: no price
+    -- meant no amount, no amount meant no recipe, and a single rune in a slot
+    -- lit nothing at all.
+    CAT.grind     = (cat and cat.grind) or nil
+end
+
+-- The server says the player has walked away from the workbench.
+function WorkbenchHandlers.Close()
+    if not UI then return end
+    ClosePicker()
+    if UI.frame then UI.frame:Hide() end
 end
 
 function WorkbenchHandlers.Show(_, cat)

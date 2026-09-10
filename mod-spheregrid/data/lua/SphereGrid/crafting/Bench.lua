@@ -188,10 +188,46 @@ function WorkbenchHandlers.Grind(player, entry)
     player:RunCommand(fmt("spheregrid grind %d", entry))
 end
 
+-- THE WINDOW CLOSES WHEN THE PLAYER WALKS AWAY, as a bank's does, or a
+-- gossip's. The client cannot see a world object and has no way of knowing how
+-- far it stands, so the watching is done here: where the workbench stands is
+-- remembered when the window opens, and a timer carried BY THE PLAYER -- the
+-- engine drops it when he leaves the world -- shuts the window as soon as he
+-- is out of reach. The place is remembered as three numbers rather than as the
+-- object: nothing then outlives the object itself.
+local WATCH_DELAY = 500                     -- ms between two looks
+local WATCH_RANGE = 10                      -- yards. The game lets an object be
+                                            -- used at five; a step back must not
+                                            -- slam the door in the player's face
+local watching = {}                         -- player guid -> event id
+
+local function Unwatch(player)
+    local guid = player:GetGUIDLow()
+    if watching[guid] then
+        player:RemoveEventById(watching[guid])
+        watching[guid] = nil
+    end
+end
+
+local function Watch(player, mapId, x, y, z)
+    Unwatch(player)
+    watching[player:GetGUIDLow()] = player:RegisterEvent(function(_, _, _, who)
+        if not who then return end
+        if who:GetMapId() ~= mapId or who:GetDistance(x, y, z) > WATCH_RANGE then
+            Unwatch(who)
+            AIO.Handle(who, "SphereGridWorkbench", "Close")
+        end
+    end, WATCH_DELAY, 0)
+end
+
 -- The world object opens the window.
-local function OnUseWorkbench(_, _, player)
+local function OnUseWorkbench(_, object, player)
     if not player then return end
     AIO.Handle(player, "SphereGridWorkbench", "Show", Catalogue())
+    if object then
+        local x, y, z = object:GetLocation()
+        Watch(player, object:GetMapId(), x, y, z)
+    end
     return true                             -- and nothing else happens
 end
 

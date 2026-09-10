@@ -176,12 +176,10 @@ INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 
 DELETE FROM `module_string` WHERE `module` = 'mod-spheregrid' AND `id` IN (62, 63);
 INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
-('mod-spheregrid', 62, 'Ground down: +{} Spherite.'),
 ('mod-spheregrid', 63, 'Only a stone or a rune can be ground down.');
 
 DELETE FROM `module_string_locale` WHERE `module` = 'mod-spheregrid' AND `id` IN (62, 63);
 INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
-('mod-spheregrid', 62, 'frFR', 'Broyé : +{} Spherite.'),
 ('mod-spheregrid', 63, 'frFR', 'Seule une pierre ou une rune peut être broyée.');
 
 -- ------------------------------------------------------------------
@@ -236,7 +234,6 @@ INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 
 DELETE FROM `module_string` WHERE `module` = 'mod-spheregrid' AND `id` BETWEEN 45 AND 53;
 INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
-('mod-spheregrid', 45, 'Workbench: item {} crafted.'),
 ('mod-spheregrid', 46, 'Workbench: that is not a sphere grid stone.'),
 ('mod-spheregrid', 47, 'Workbench: that is not a sphere grid rune.'),
 ('mod-spheregrid', 48, 'Workbench: merging takes three times the same stone.'),
@@ -248,7 +245,6 @@ INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
 
 DELETE FROM `module_string_locale` WHERE `module` = 'mod-spheregrid' AND `id` BETWEEN 45 AND 53;
 INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
-('mod-spheregrid', 45, 'frFR', 'Établi : objet {} fabriqué.'),
 ('mod-spheregrid', 46, 'frFR', 'Établi : ceci n''est pas une pierre du sphèrier.'),
 ('mod-spheregrid', 47, 'frFR', 'Établi : ceci n''est pas une rune du sphèrier.'),
 ('mod-spheregrid', 48, 'frFR', 'Établi : la fusion demande trois fois la même pierre.'),

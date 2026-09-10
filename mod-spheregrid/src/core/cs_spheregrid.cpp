@@ -466,13 +466,15 @@ public:
 
     // A single place to report what the workbench answered, the recipes sharing
     // the same set of refusals.
-    static void ReportBench(ChatHandler* handler, SphereGridBenchResult r,
-                                   uint32 crafted)
+    static void ReportBench(ChatHandler* handler, SphereGridBenchResult r)
     {
         switch (r)
         {
+            // A SUCCESS SAYS NOTHING. What was crafted lands in the bag,
+            // where the player sees it and where the window redraws itself on
+            // the bag's own event. The line that named the entry crafted was a
+            // developer's receipt, and the player read it after every recipe.
             case SphereGridBenchResult::Ok:
-                Say(handler, SPHEREGRID_STR_BENCH_OK, crafted);
                 break;
             case SphereGridBenchResult::NotAStone:
                 SayError(handler, SPHEREGRID_STR_BENCH_NOT_STONE);
@@ -504,10 +506,10 @@ public:
         }
     }
 
-    // GRINDING: the only recipe that returns no item, hence its own report —
-    // the shared "Ok" announces a crafted entry, here it is an amount of
-    // Spherite. Earn has already shown the gain; this message says what was
-    // destroyed to get it.
+    // GRINDING: the only recipe that returns no item, and it says nothing of
+    // its own either. Earn has already announced the gain, in the words of the
+    // source it came from; a second line carrying the same amount said the
+    // same thing twice.
     static bool HandleGrindCommand(ChatHandler* handler, uint32 entry)
     {
         Player* player = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
@@ -515,11 +517,7 @@ public:
             return true;
 
         uint32 earned = 0;
-        SphereGridBenchResult const r = SphereGridBench::Grind(player, entry, earned);
-        if (r == SphereGridBenchResult::Ok)
-            Say(handler, SPHEREGRID_STR_BENCH_GROUND, earned);
-        else
-            ReportBench(handler, r, 0);
+        ReportBench(handler, SphereGridBench::Grind(player, entry, earned));
         return true;
     }
 
@@ -531,8 +529,7 @@ public:
             return true;
 
         uint32 crafted = 0;
-        ReportBench(handler,
-            SphereGridBench::Fuse(player, entry, crafted), crafted);
+        ReportBench(handler, SphereGridBench::Fuse(player, entry, crafted));
         return true;
     }
 
@@ -543,8 +540,7 @@ public:
             return true;
 
         uint32 crafted = 0;
-        ReportBench(handler,
-            SphereGridBench::RerollStone(player, a, b, crafted), crafted);
+        ReportBench(handler, SphereGridBench::RerollStone(player, a, b, crafted));
         return true;
     }
 
@@ -555,8 +551,7 @@ public:
             return true;
 
         uint32 crafted = 0;
-        ReportBench(handler,
-            SphereGridBench::ReforgeRunes(player, a, b, c, crafted), crafted);
+        ReportBench(handler, SphereGridBench::ReforgeRunes(player, a, b, c, crafted));
         return true;
     }
 

@@ -80,8 +80,9 @@ enum SphereGridStrings : uint32
     SPHEREGRID_STR_STATS_LINE        = 42,
     SPHEREGRID_STR_STATS_EMPTY         = 43,
     SPHEREGRID_STR_SOCKET_TOO_MANY_RUNES    = 44,   // three identical runes at most
-    // The workbench recipes.
-    SPHEREGRID_STR_BENCH_OK          = 45,
+    // The workbench recipes. 45 was the line a success used to print; a
+    // recipe that works says nothing now, and the number is left where it was
+    // rather than sliding every string after it.
     SPHEREGRID_STR_BENCH_NOT_STONE  = 46,
     SPHEREGRID_STR_BENCH_NOT_RUNE    = 47,
     SPHEREGRID_STR_BENCH_EFFECTS      = 48,   // fuse: three times the SAME stone
@@ -104,7 +105,6 @@ enum SphereGridStrings : uint32
 
     // Grinding: the fourth workbench recipe, the one that returns Spherite
     // instead of an item.
-    SPHEREGRID_STR_BENCH_GROUND       = 62,   // "Ground: +N Spherite."
     SPHEREGRID_STR_BENCH_NOT_GRINDABLE = 63,  // neither a stone nor a rune
 
     // EVERY GAIN SAYS WHERE IT COMES FROM: no single generic message, each
