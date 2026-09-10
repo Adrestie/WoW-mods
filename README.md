@@ -327,7 +327,7 @@ data/art/                 the art a client has no copy of
 data/dbc/                 the module's own DBC rows, and what was borrowed
 data/lua/                 the interface: editor, player window, workbench, spells
 data/sql/                 world and characters
-docs/                     what the interface draws, what the grid says, where things stand
+docs/                     what the interface draws, and what the grid says
 src/                      the C++ — core, crafting, loot, spells
 tools/                    install.py, uninstall.py, shift.py, and the collector
 ```
@@ -353,8 +353,7 @@ belong to the interface. See `docs/PRESENTATION.md`.
 Open an issue with the server's start-up log (the lines mentioning
 `SphereGrid` or `spell_ranks`), the output of the installer's **Look only**
 run, and — for anything about a spell's look or sound — the spell's name and the
-client's locale. `docs/STATUS.md` says what has been verified in game and what
-has not.
+client's locale.
 
 ## Licence
 
