@@ -1817,10 +1817,13 @@ function UpdateInspector()
         UI.inspQuality:SetText("—")
     end
 
-    local slots, bought = 0, 0
+    -- THE COUNTER MUST NOT BE CALLED `bought`: that is the table above,
+    -- holding the cells marked as bought in the preview, and a local of
+    -- the same name hid it -- the next line then indexed a number.
+    local slots, marked = 0, 0
     for _, nn in ipairs(doc.nodes) do
         if nn.kind == RC.KIND_SLOT then slots = slots + 1 end
-        if bought[nn.id] then bought = bought + 1 end
+        if bought[nn.id] then marked = marked + 1 end
     end
 
     local text = fmt("|cffffd100%d|r clusters · |cffffd100%d|r cells (%d sockets) · |cffffd100%d|r links",
@@ -1829,8 +1832,8 @@ function UpdateInspector()
     for _ in pairs(doc.starts) do startCount = startCount + 1 end
     text = text .. (startCount > 0 and fmt(" - |cffffd100%d start(s)|r", startCount)
         or " - |cffff5555no start set|r")
-    if bought > 0 then
-        text = text .. fmt(" - |cff33e0f5%d bought|r", bought)
+    if marked > 0 then
+        text = text .. fmt(" - |cff33e0f5%d bought|r", marked)
     end
     UI.counts:SetText(text)
 end
