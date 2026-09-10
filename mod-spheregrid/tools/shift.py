@@ -464,15 +464,20 @@ def shift(family, by, dry_run):
         record_shift(family, by)
         rest = leftovers(family)
         if rest:
-            print("  %d line(s) still name a number between %d and %d. What the "
-                  "shift knows to hold one has moved; READ THESE and make sure "
-                  "none of them is one of ours:"
-                  % (len(rest), FAMILIES[family]["low"], FAMILIES[family]["high"]))
-            for path, number, line in rest[:40]:
-                print("    %s:%d  %s"
-                      % (os.path.relpath(path, MODULE), number, line[:88]))
-            if len(rest) > 40:
-                print("    ... and %d more" % (len(rest) - 40))
+            # BY FILE, not line by line. The first run of this check printed six
+            # hundred lines an operator would never read: the layout's cells are
+            # numbered like chains, a game spell can wear an icon's number. What
+            # is worth knowing is WHERE to look.
+            per_file = {}
+            for path, number, _ in rest:
+                seen = per_file.setdefault(os.path.relpath(path, MODULE), [0, number])
+                seen[0] += 1
+            print("  numbers still between %d and %d. What the shift knows to hold "
+                  "one has moved; check that none of these is ours:"
+                  % (FAMILIES[family]["low"], FAMILIES[family]["high"]))
+            for name, (count, first) in sorted(per_file.items(),
+                                               key=lambda kv: -kv[1][0]):
+                print("    %-58s %4d line(s), first at %d" % (name, count, first))
     return total
 
 
