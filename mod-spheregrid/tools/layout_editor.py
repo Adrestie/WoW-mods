@@ -480,7 +480,7 @@ class Editor(object):
             self.kind_buttons.append(button)
 
         self.spell_label = tk.Label(frame, text="Spell taught, class by class",
-                                    anchor="w", fg="#666666")
+                                    anchor="w", fg="#888888")
         self.spell_label.pack(fill="x", pady=(10, 0))
         self.spell_choice = ttk.Combobox(frame, state="disabled", width=26)
         self.spell_choice.pack(fill="x")
@@ -500,7 +500,7 @@ class Editor(object):
         tk.Button(frame, text="Check the grid",
                   command=self.check).pack(fill="x", pady=(14, 0))
         self.report = tk.Label(frame, text="", anchor="w", justify="left",
-                               wraplength=230, fg="#cccccc")
+                               wraplength=230, fg="#333333")
         self.report.pack(fill="x", pady=(6, 0))
         # They appear only when there is something to go and see.
         self.stray_button = tk.Button(frame, text="Show the stray island",
@@ -686,7 +686,7 @@ class Editor(object):
         self.preview_button.config(state=holding)
         for button in self.kind_buttons:
             button.config(state=holding)
-        self.spell_label.config(fg="#dddddd" if teaching == "normal" else "#666666")
+        self.spell_label.config(fg="#000000" if teaching == "normal" else "#888888")
         self.spell_choice.config(state="readonly" if teaching == "normal"
                                  else "disabled")
         self.teach_button.config(state=teaching)
@@ -810,7 +810,7 @@ class Editor(object):
             else:
                 lines.append("%s: no way there" % xmlio.CLASS_NAMES[klass])
         self.report.config(text=chr(10).join(lines) or "No class has a start.",
-                           fg="#cccccc")
+                           fg="#333333")
         self.schedule()
 
     def check(self):
@@ -858,8 +858,8 @@ class Editor(object):
         if missing:
             lines.append("WITHOUT A START: " + ", ".join(missing))
         self.report.config(text="\n".join(lines),
-                           fg="#ff6060" if (missing or len(islands) > 1
-                                           or self.tangles) else "#60ff60")
+                           fg="#b00000" if (missing or len(islands) > 1
+                                           or self.tangles) else "#0a7000")
         self.warn(missing, islands)
 
     def warn(self, missing, islands):

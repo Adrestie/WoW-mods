@@ -5,6 +5,10 @@ through, buying what it passes with a currency the content awards. Cells grant
 statistics, hold sockets for stones and runes, or teach a spell. It sits beside
 Blizzard's talent tree without touching it.
 
+**[docs/HOWTO.md](docs/HOWTO.md)** answers "I want to ..." -- install it, draw a
+grid of my own, change what a stone grants, put a workbench down -- and says
+what to do when something is wrong.
+
 Earned Spherite and the content of stone cells belong to the ACCOUNT; what is
 spent and which cells are lit belong to the CHARACTER. A character resets its own
 grid and gets every point back; the account keeps what it earned.
