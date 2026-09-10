@@ -694,7 +694,7 @@ static void ApplyStat(Player* p, uint8 stat, int32 v, bool put)
 namespace
 {
     // Our ranks live above this bound; below it, everything is Blizzard's.
-    constexpr uint32 SPHEREGRID_CUSTOM_RANK_MIN = 8900000;
+    constexpr uint32 SPHEREGRID_CUSTOM_RANK_MIN = 8500000;
 
     // The last Blizzard rank of a family, walking the chain up from any of ours.
     // Used when the LAST rune of a family has just been removed: there is nothing

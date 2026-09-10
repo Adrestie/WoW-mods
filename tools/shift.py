@@ -52,6 +52,21 @@ from spheregrid import dbc  # noqa: E402
 
 DBCS = os.path.join(MODULE, "data", "dbc")
 
+
+def use(root):
+    """Point the tool at a COPY of the module rather than at this checkout.
+
+    An installation must never rewrite the source it was launched from. The
+    installer copies the module into the core's `modules/` folder first, and
+    the shift applies there; what stays here keeps the numbers the module was
+    written with. Called with no copy in sight, the tool works where it lives,
+    which is what `--family ... --by ...` by hand is for.
+    """
+    global MODULE, DBCS, SHIFTS
+    MODULE = os.path.abspath(root)
+    DBCS = os.path.join(MODULE, "data", "dbc")
+    SHIFTS = os.path.join(DBCS, "shifts.json")
+
 # THE FAMILIES. `low`..`high` is the range a number must fall into to be one of
 # ours; `size` is how far a shift must at least go so the whole block moves off
 # itself. Every number of the module in that range moves -- in DBC fields, in

@@ -46,8 +46,8 @@ local GAMEOBJECT_EVENT_ON_USE = 14
 -- The identifiers the module allocates (SphereGridMgr.h): a stone is
 -- STONE_BASE + (statistic - 1) x qualities + (quality - 1), a statistic rune
 -- STAT_RUNE_BASE + (statistic - 1).
-local STONE_BASE = 804300
-local STAT_RUNE_BASE = 804800
+local STONE_BASE = 803100
+local STAT_RUNE_BASE = 803600
 local QUALITY_COUNT = 5
 local QUALITIES = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
 

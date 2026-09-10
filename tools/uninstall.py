@@ -60,8 +60,20 @@ from install import (Target, ARCHIVE, MODULE, OWN, SHARED,   # noqa: E402
                      dbc_from_bytes, dbc_to_bytes)
 from spheregrid import dbc, mpq, backup as backup_lib   # noqa: E402
 
-WORLD_SQL = os.path.join(MODULE, "data", "sql", "world")
-CHARACTERS_SQL = os.path.join(MODULE, "data", "sql", "characters")
+def installed_root(target):
+    """The module AS IT WAS INSTALLED, under the core's `modules/`.
+
+    That copy is what carries the identifiers actually written: a shift moves
+    them there, never in the source the installer was launched from. Reading
+    the source instead would delete rows that do not exist and leave the ones
+    that do. With no copy left, the source answers, and it is said.
+    """
+    copy = getattr(target, "module_dir", None)
+    if copy and os.path.isdir(os.path.join(copy, "data", "sql", "world")):
+        return copy
+    print("  the installed copy is gone: reading %s instead, which may name "
+          "other identifiers" % MODULE)
+    return MODULE
 
 DELETE = re.compile(r"^\s*DELETE\s+FROM\s+`?(\w+)`?\b", re.I)
 OWN_TABLE = re.compile(
@@ -149,20 +161,20 @@ CHARACTER_SPELL_TABLES = (
 CHARACTER_ACTIONS = ("character_action", "action")
 
 
-def taught_spells():
+def taught_spells(root):
     """The spells the module can have taught: its own rows, exactly.
 
     Read from the file the client is given, which is the same source the
     server's rows come from -- and by identifier rather than by range, so
     that a neighbour's spell in the same block is never touched.
     """
-    path = os.path.join(MODULE, "data", "dbc", "spheregrid_Spell.dbc")
+    path = os.path.join(root, "data", "dbc", "spheregrid_Spell.dbc")
     return sorted(dbc.read(path).ids()) if os.path.isfile(path) else []
 
 
-def undo_characters(target, dry_run):
+def undo_characters(target, root, dry_run):
     """Takes back what the module taught, from the core's own tables."""
-    spells = taught_spells()
+    spells = taught_spells(root)
     if not spells:
         print("  %-11s no spell file to read: nothing taken back" % "characters")
         return
@@ -281,15 +293,21 @@ def main():
 def remove_module(target, client_dir, drop_characters, dry_run):
     """The removal itself: the installer calls this when it finds the module
     already there, and `main` when this file is run on its own."""
+    # WHAT WAS INSTALLED, not what the source says today: a shift moves the
+    # identifiers in the copy, and the copy is what the database and the
+    # client were given.
+    root = installed_root(target)
     print("DATABASE")
-    undo_database(target, "world", WORLD_SQL, dry_run)
+    undo_database(target, "world", os.path.join(root, "data", "sql", "world"),
+                  dry_run)
     # WHATEVER BECOMES OF WHAT PLAYERS EARNED, the spells the module taught go
     # back: they live in the core's tables, they name rows that are being
     # removed, and the core complains at every login until they are gone. A
     # reinstall teaches them again, from the cells the player still owns.
-    undo_characters(target, dry_run)
+    undo_characters(target, root, dry_run)
     if drop_characters:
-        undo_database(target, "characters", CHARACTERS_SQL, dry_run)
+        undo_database(target, "characters",
+                      os.path.join(root, "data", "sql", "characters"), dry_run)
     else:
         print("  %-11s kept: the Spherite and the cells players bought stay"
               % "characters")

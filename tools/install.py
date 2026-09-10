@@ -267,12 +267,16 @@ DB_KEYS = {
 }
 
 
-def module_ids(family):
-    """The identifiers the module ships for that family, from its own DBC."""
+def module_ids(family, root=None):
+    """The identifiers the module ships for that family, from its own DBC.
+
+    `root` is the copy being installed once there is one: after a shift its
+    rows carry the new numbers, and the checkout still carries the old.
+    """
     import shift as shifting
     low, high = shifting.current_ranges()[family]
     out = set()
-    folder = os.path.join(MODULE, "data", "dbc")
+    folder = os.path.join(root or MODULE, "data", "dbc")
     for mine, theirs in OURS.items():
         path = os.path.join(folder, mine)
         if theirs in shifting.FAMILIES[family]["tables"] and os.path.isfile(path):
@@ -507,11 +511,11 @@ def read_client(client_dir, locale):
     return ClientView(client_dir, locale)
 
 
-def survey(target, client_dir, locale):
+def survey(target, client_dir, locale, root=None):
     """What the target already uses, against what the module needs."""
     print("SURVEY")
     ours = {}
-    folder = os.path.join(MODULE, "data", "dbc")
+    folder = os.path.join(root or MODULE, "data", "dbc")
     for mine, theirs in sorted(OURS.items()):
         path = os.path.join(folder, mine)
         if os.path.isfile(path):
@@ -537,7 +541,7 @@ def survey(target, client_dir, locale):
     import shift as shifting
     print("  the world database:")
     for family in sorted(DB_KEYS):
-        mine = module_ids(family)
+        mine = module_ids(family, root)
         for table, found in sorted(taken_in_database(target, family).items()):
             taken_by.setdefault(table, set()).update(found)
             hit = found & mine
@@ -608,14 +612,14 @@ def families_in_clash(clashes):
     return out
 
 
-def free_offset(family, taken_by):
+def free_offset(family, taken_by, root=None):
     """The smallest shift that puts the whole family on identifiers nobody
     holds -- in any DBC of the family and in any table of the world database.
     """
     import shift as shifting
     spec = shifting.FAMILIES[family]
     low, high = shifting.current_ranges()[family]
-    mine = module_ids(family) or set(range(low, high + 1))
+    mine = module_ids(family, root) or set(range(low, high + 1))
     busy = set()
     for table in spec["tables"]:
         busy |= taken_by.get(table, set())
@@ -629,13 +633,20 @@ def free_offset(family, taken_by):
     raise SystemExit("no free block found for %s" % family)
 
 
-def shift_module(clashes, dry_run):
-    """Moves every family in clash, then says where things now are."""
+def shift_module(clashes, dry_run, root):
+    """Moves every family in clash, IN THE COPY, then says where things are.
+
+    `root` is the module as it was just laid in the core's `modules/` folder.
+    Nothing here touches the checkout the installer was launched from: it
+    keeps the numbers the module was written with, whatever a server demands.
+    """
     import shift as shifting
+    shifting.use(root)
     taken_by = getattr(survey, "taken_by", {})
     print("SHIFT")
+    print("  in %s" % root)
     for family in sorted(families_in_clash(clashes)):
-        by = free_offset(family, taken_by)
+        by = free_offset(family, taken_by, root)
         low, high = shifting.current_ranges()[family]
         print("  %-10s %d..%d is taken: moving by %+d"
               % (family, low, high, by))
@@ -643,8 +654,9 @@ def shift_module(clashes, dry_run):
             shifting.FAMILIES[family]["low"], shifting.FAMILIES[family]["high"] = low, high
             shifting.shift(family, by, dry_run=False)
     if not dry_run:
-        print("  the module's sources now carry the new identifiers: rebuild "
-              "the core when the installer is done.")
+        print("  the copy now carries the new identifiers, and the module you "
+              "installed from is untouched: rebuild the core when the "
+              "installer is done.")
 
 
 # --------------------------------------------------------------- presence
@@ -710,31 +722,25 @@ def report_presence(found, earned, target):
 
 # ----------------------------------------------------------------- the steps
 
-def place(target, keeper, dry_run):
-    """The sources, the interface and the configuration."""
-    print("PLACE")
-    jobs = [
-        ("sources", MODULE, target.module_dir,
-         {".git", "Backups", "__pycache__"}),
-        ("interface", os.path.join(MODULE, "data", "lua", "SphereGrid"),
-         target.lua_dir, set()),
-    ]
-    for what, source, destination, skip in jobs:
-        count = 0
-        for base, folders, names in os.walk(source):
-            folders[:] = [d for d in folders if d not in skip]
-            for name in names:
-                origin = os.path.join(base, name)
-                landing = os.path.join(destination,
-                                       os.path.relpath(origin, source))
-                if not dry_run:
-                    keeper.keep(landing)
-                    os.makedirs(os.path.dirname(landing), exist_ok=True)
-                    shutil.copy2(origin, landing)
-                count += 1
-        print("  %-10s %4d file(s) -> %s" % (what, count, destination))
+def place_sources(target, keeper, dry_run):
+    """The module, copied into the core's `modules/` folder.
 
-    source = os.path.join(MODULE, "conf", "mod-spheregrid.conf.dist")
+    THIS COMES FIRST, and what follows works on the copy: a shift rewrites
+    identifiers in the module's own files, and it must never rewrite the ones
+    the installer was launched from. Returns the folder everything else reads.
+    """
+    print("PLACE")
+    return copy_tree(
+        "sources", MODULE, target.module_dir,
+        {".git", "Backups", "__pycache__"}, keeper, dry_run)
+
+
+def place_interface(root, target, keeper, dry_run):
+    """The interface and the configuration, taken FROM THE COPY."""
+    copy_tree("interface", os.path.join(root, "data", "lua", "SphereGrid"),
+              target.lua_dir, set(), keeper, dry_run)
+
+    source = os.path.join(root, "conf", "mod-spheregrid.conf.dist")
     landing = os.path.join(target.conf_dir, "mod-spheregrid.conf")
     print("  %-10s %4d file(s) -> %s" % ("config", 1, landing))
     if not dry_run:
@@ -748,7 +754,24 @@ def place(target, keeper, dry_run):
             print("             (kept: a configuration was already there)")
 
 
-def patch_client(client_dir, locale, keeper, dry_run):
+def copy_tree(what, source, destination, skip, keeper, dry_run):
+    """One folder onto another, every file kept aside before it is replaced."""
+    count = 0
+    for base, folders, names in os.walk(source):
+        folders[:] = [d for d in folders if d not in skip]
+        for name in names:
+            origin = os.path.join(base, name)
+            landing = os.path.join(destination, os.path.relpath(origin, source))
+            if not dry_run:
+                keeper.keep(landing)
+                os.makedirs(os.path.dirname(landing), exist_ok=True)
+                shutil.copy2(origin, landing)
+            count += 1
+    print("  %-10s %4d file(s) -> %s" % (what, count, destination))
+    return destination
+
+
+def patch_client(client_dir, locale, keeper, dry_run, root=None):
     """Writes the module into the client: its DBC rows merged into the
     client's own files, and its art.
 
@@ -781,7 +804,7 @@ def patch_client(client_dir, locale, keeper, dry_run):
 
     contents, merged_icons, known_icons = {}, None, None
     written_dbc = {}
-    folder = os.path.join(MODULE, "data", "dbc")
+    folder = os.path.join(root or MODULE, "data", "dbc")
     for mine, theirs in sorted(OURS.items()):
         path = os.path.join(folder, mine)
         if not os.path.isfile(path):
@@ -844,7 +867,7 @@ def patch_client(client_dir, locale, keeper, dry_run):
             print("    SpellIcon.dbc              every icon the module's "
                   "spells name is accounted for")
 
-    art = os.path.join(MODULE, "data", "art")
+    art = os.path.join(root or MODULE, "data", "art")
     if os.path.isdir(art):
         for base, _, names in os.walk(art):
             for name in names:
@@ -859,7 +882,7 @@ def patch_client(client_dir, locale, keeper, dry_run):
     # The mark and the record, so that the next run and the uninstaller know
     # this archive, and what in it is the module's.
     version = "unknown"
-    changelog = os.path.join(MODULE, "CHANGELOG.md")
+    changelog = os.path.join(root or MODULE, "CHANGELOG.md")
     if os.path.isfile(changelog):
         for line in io.open(changelog, encoding="utf-8", errors="replace"):
             if line.startswith("## "):
@@ -986,10 +1009,10 @@ def too_wide(target, which, folder):
                                     table, column, room, len(value)))
     return out
 
-def apply_sql(target, dry_run):
+def apply_sql(target, dry_run, root=None):
     print("SQL")
     for which in ("world", "characters"):
-        folder = os.path.join(MODULE, "data", "sql", which)
+        folder = os.path.join(root or MODULE, "data", "sql", which)
         if not os.path.isdir(folder):
             continue
         # BEFORE ANYTHING IS WRITTEN: a value that will not fit its column
@@ -1139,31 +1162,40 @@ def main():
     print()
 
     clashes = survey(target, args.client, args.locale)
-    if any(clashes.values()):
-        if not args.shift:
-            print("  Stopping. Run again with --shift to move the module's own "
-                  "identifiers out of the way, or free them on this server.")
-            return 2
-        shift_module(clashes, args.dry_run)
-        if not args.dry_run:
-            clashes = survey(target, args.client, args.locale)
-            if any(clashes.values()):
-                print("  Still taken after the shift: stopping.")
-                return 2
+    if any(clashes.values()) and not args.shift:
+        print("  Stopping. Run again with --shift to move the module's own "
+              "identifiers out of the way, or free them on this server.")
+        return 2
     if args.survey:
         return 0
-    if any(clashes.values()):
-        raise SystemExit(1)
 
     print()
     keeper = take_backup(target, args.backup, args.dry_run)
     print()
-    place(target, keeper, args.dry_run)
+    # THE COPY COMES FIRST, and everything after it works on the copy. A shift
+    # rewrites identifiers in the module's own DBC, SQL, C++ and Lua; the
+    # module the installer was launched from must come out of this untouched,
+    # still carrying the numbers it was written with.
+    root = place_sources(target, keeper, args.dry_run)
+    if args.dry_run:
+        root = MODULE                   # nothing was copied: read the source
+    if any(clashes.values()):
+        print()
+        shift_module(clashes, args.dry_run, root)
+        if not args.dry_run:
+            print()
+            clashes = survey(target, args.client, args.locale, root)
+            if any(clashes.values()):
+                print("  Still taken after the shift: stopping.")
+                return 2
+        print()
+        print("PLACE")
+    place_interface(root, target, keeper, args.dry_run)
     print()
-    apply_sql(target, args.dry_run)
+    apply_sql(target, args.dry_run, root)
     if args.client:
         print()
-        patch_client(args.client, args.locale, keeper, args.dry_run)
+        patch_client(args.client, args.locale, keeper, args.dry_run, root)
 
     if not args.dry_run:
         receipt = keeper.write_receipt("install")

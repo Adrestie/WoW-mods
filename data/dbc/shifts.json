@@ -1,11 +1,11 @@
 {
-  "chains": 100,
-  "displays": 400,
-  "durations": 100,
-  "effects": 200,
-  "icons": 200,
-  "items": 1200,
-  "kits": 600,
-  "sounds": 200,
-  "spells": 400000
+  "chains": 0,
+  "displays": 0,
+  "durations": 0,
+  "effects": 0,
+  "icons": 0,
+  "items": 0,
+  "kits": 0,
+  "sounds": 0,
+  "spells": 0
 }

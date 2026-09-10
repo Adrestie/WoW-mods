@@ -40,7 +40,7 @@ end
 -- The aura whose stack is the number of feathers left. Written as a plain
 -- number, like every other identifier the interface names: the installer
 -- moves it with the rest when a server already uses this block.
-local RESERVE = 9000099
+local RESERVE = 8600099
 
 local original = AuraButton_Update
 

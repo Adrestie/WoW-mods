@@ -52,19 +52,19 @@ constexpr uint8 SPHEREGRID_QUALITY_COUNT = 5;
 //   a stone         = STONE_BASE + (statistic - 1) x qualities + (quality - 1)
 //   a node stone    = NODE_STONE_BASE, laid out the same way
 //   a statistic rune = STAT_RUNE_BASE + (statistic - 1)
-constexpr uint32 SPHEREGRID_STONE_BASE = 804300;
-constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 804510;
-constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 804800;
-constexpr uint32 SPHEREGRID_PIN_ENTRY = 804500;
+constexpr uint32 SPHEREGRID_STONE_BASE = 803100;
+constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 803310;
+constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 803600;
+constexpr uint32 SPHEREGRID_PIN_ENTRY = 803300;
 
 // The Nexuses, the items that grant Spherite. Five qualities, plus the
 // prismatic one, which boosts every gain instead of granting any.
-constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 804400;
-constexpr uint32 SPHEREGRID_NEXUS_FLICKERING = 804401;
-constexpr uint32 SPHEREGRID_NEXUS_LUMINOUS = 804402;
-constexpr uint32 SPHEREGRID_NEXUS_IRRADIANT = 804403;
-constexpr uint32 SPHEREGRID_NEXUS_SOLAR = 804404;
-constexpr uint32 SPHEREGRID_NEXUS_PRISMATIC = 804405;
+constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 803200;
+constexpr uint32 SPHEREGRID_NEXUS_FLICKERING = 803201;
+constexpr uint32 SPHEREGRID_NEXUS_LUMINOUS = 803202;
+constexpr uint32 SPHEREGRID_NEXUS_IRRADIANT = 803203;
+constexpr uint32 SPHEREGRID_NEXUS_SOLAR = 803204;
+constexpr uint32 SPHEREGRID_NEXUS_PRISMATIC = 803205;
 
 enum SphereGridCellType : uint8
 {

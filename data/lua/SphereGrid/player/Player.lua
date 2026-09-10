@@ -36,13 +36,13 @@ local PlayerHandlers = AIO.AddHandlers("SphereGridPlayer", {})
 
 local fmt = string.format
 
-local STONE_BASE = 804300
+local STONE_BASE = 803100
 -- NODE STONES. A pre-filled cell carries its own family of entries; a stone
 -- the player socketed keeps another. Same arithmetic, a different base.
-local NODE_STONE_BASE = 804510
+local NODE_STONE_BASE = 803310
 -- A statistic rune, one per statistic; and the pin, which empties a cell.
-local STAT_RUNE_BASE = 804800
-local PIN_ENTRY = 804500
+local STAT_RUNE_BASE = 803600
+local PIN_ENTRY = 803300
 
 -- HOW MANY QUALITIES, and the names the settings give them. Both belong to the
 -- module (SphereGridMgr.h, SPHEREGRID_QUALITY_COUNT; SphereGridMgr.cpp,
