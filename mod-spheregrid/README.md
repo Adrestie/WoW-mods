@@ -8,6 +8,9 @@ Blizzard's talent tree without touching it.
 The grid, the currency, the items and the interface are all data or Lua — a
 server changes them without recompiling.
 
+Published at <https://github.com/Adrestie/WoW-mods/tree/main/mod-spheregrid>,
+one folder of the WoW-mods repository. Issues and questions go there.
+
 ## What it is made of
 
 | | |
