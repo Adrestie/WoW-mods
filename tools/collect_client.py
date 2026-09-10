@@ -258,51 +258,11 @@ CORRECTIONS = {
 #                            itself: an aura of their own, no second effect,
 #                            no cost, no visual, the icons of Flame Shock and
 #                            Lightning Bolt, their own names and texts.
-# SkillLineAbility.dbc IS NOT COLLECTED. The origin never had it, and its rows
-# are not copied from anywhere: they are BUILT, one per spell the module can
-# teach, from two things the module already ships -- the class of a spell cell
-# (mod_spheregrid_node_spell) and the base spell of a rank (spell_ranks). Each
-# row is derived from a row of the game: a rank takes the line of ITS base
-# spell, a cell the line written for it below. Identifiers 25001 and up, above
-# the game's highest (21980).
-#
-# THE TREE IS A DECISION PER SPELL, and nothing in the data says it: a cell
-# only knows its class. So it is written here. What is not named takes its
-# class's default, itself written rather than counted -- a majority worked out
-# from the game's own rows falls differently from one run to the next when two
-# lines tie, and a shipped file must not move on its own.
-#
-#   default by class  1 Fury 256   2 Holy 594   3 Survival 51   4 Assassination 253
-#                     5 Holy 56    6 Unholy 772 7 Elemental Combat 375
-#                     8 Arcane 237 9 Affliction 355   11 Feral Combat 134
-#
-#   Sweeping Strikes 9000001 Arms 26          Spartan Shield 9000003 Protection 257
-#   Final Reckoning 9000011 Retribution 184   Shield of the Inquisition 9000012 Protection 267
-#   Roll the Bones 9000032 Combat 38          Symbols of Death 9000033 Subtlety 39
-#   Shadow Word: Despair 9000041 Shadow Magic 78
-#   Power Word: Barrier 9000042 Discipline 613
-#   Bonestorm 9000052 Blood 770               Breath of Sindragosa 9000053 Frost 771
-#   Meteor 9000056 Fire 8                     Ascendance 9000062 Elemental Combat 375
-#   Earthquake 9000061 Enhancement 373       Spirit Link Totem 9000063 Restoration 374
-#   Ray of Frost 9000073 Frost 6
-#   Phantom Singularity 9000081 Affliction 355   Cataclysm 9000083 Destruction 593
-#   Solstice and Equinox 9000092 Balance 574  Flourish 9000093 Restoration 573
-#   Bear Leap 9010016, Shadow Prowler 9010017, Traveler's Bound 9010018 Feral Combat 134
-#   Grove's Call 9010019 Restoration 573      Stellar Return 9010020 Balance 574
-#
-# THE FIVE FORM SPELLS (9010016 to 9010020) have no cell at all: the script
-# teaches them alongside Light Stride. Nothing named them, so they had no line
-# and fell into "General".
-#
-# AND WHAT BELONGS IN "General" HAS NO ROW AT ALL: it is the absence of a skill
-# line that puts a spell in the general tab. Light Stride is the only one.
-#
-# THE FILE IS WRITTEN ONCE. The module's spells are fixed -- forty-one cells,
-# five form spells, and the ranks the runes grant -- so there is no generator
-# in the tree: `spheregrid_SkillLineAbility.dbc` is a shipped asset like the
-# others. Everything needed to rebuild it by hand is above: the tree of each
-# spell, the default of each class, and the rule for a rank (the line of its
-# own base spell). Adding a spell cell means adding one row.
+# SkillLineAbility.dbc IS NOT COLLECTED, and not built here either. Which
+# tab a spell sits in is a decision per spell, taken once; the module's
+# spells are fixed, so the file is a shipped asset like the art, and each
+# of its rows already says the skill line it gives its spell. Identifiers
+# 25001 and up, above the game's highest (21980).
 DERIVED = {
     "Spell.dbc": [
         (8610038, "module", 8600062, {40: 29, 71: 6, 95: 57, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 678, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
