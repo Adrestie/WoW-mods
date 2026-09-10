@@ -556,16 +556,7 @@ public:
             return true;
 
         uint32 crafted = 0;
-        SphereGridBenchResult const r =
-            SphereGridBench::ReforgeRunes(player, a, b, c, crafted);
-        // THE ONE RECIPE THAT DRAWS LOTS. The others hand back what the player
-        // asked for and the bag shows it; here he has no idea what came out of
-        // the crucible until he is told.
-        if (r == SphereGridBenchResult::Ok)
-            Say(handler, SPHEREGRID_STR_BENCH_REFORGED,
-                SphereGridItemName(player, crafted));
-        else
-            ReportBench(handler, r);
+        ReportBench(handler, SphereGridBench::ReforgeRunes(player, a, b, c, crafted));
         return true;
     }
 

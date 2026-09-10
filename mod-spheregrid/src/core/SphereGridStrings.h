@@ -80,10 +80,9 @@ enum SphereGridStrings : uint32
     SPHEREGRID_STR_STATS_LINE        = 42,
     SPHEREGRID_STR_STATS_EMPTY         = 43,
     SPHEREGRID_STR_SOCKET_TOO_MANY_RUNES    = 44,   // three identical runes at most
-    // The workbench recipes. They say nothing when they work -- the item is
-    // in the bag and a sound has answered -- with one exception: reforging is
-    // the only one that draws lots, so it names what came out.
-    SPHEREGRID_STR_BENCH_REFORGED   = 45,
+    // The workbench recipes. 45 was the line a success used to print; a
+    // recipe that works says nothing now, and the number is left where it was
+    // rather than sliding every string after it.
     SPHEREGRID_STR_BENCH_NOT_STONE  = 46,
     SPHEREGRID_STR_BENCH_NOT_RUNE    = 47,
     SPHEREGRID_STR_BENCH_EFFECTS      = 48,   // fuse: three times the SAME stone
