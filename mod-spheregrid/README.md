@@ -5,25 +5,6 @@ through, buying what it passes with a currency the content awards. Cells grant
 statistics, hold sockets for stones and runes, or teach a spell. It sits beside
 Blizzard's talent tree without touching it.
 
-The grid, the currency, the items and the interface are all data or Lua — a
-server changes them without recompiling.
-
-Published at <https://github.com/Adrestie/WoW-mods/tree/main/mod-spheregrid>,
-one folder of the WoW-mods repository. Issues and questions go there.
-
-## What it is made of
-
-| | |
-|---|---|
-| **the grid** | 2 451 cells, 2 493 links, one entry per class into a single shared layout |
-| **the currency** | Spherite, awarded by quests, levels, achievements, dungeons and raids |
-| **the price of a cell** | its distance in links from the class entry, times a step, capped |
-| **stones** | 16 statistics × 5 qualities, socketed into a cell |
-| **runes** | rank runes that push a spell past its last rank, and statistic runes |
-| **the workbench** | fuse, reroll, reforge and grind, for stones and runes |
-| **41 class spells** | taught by the grid, with their own visuals, sounds and scripts |
-| **the interface** | 8 200 lines of Lua, sent to the client by AIO — nothing for players to install |
-
 Earned Spherite and the content of stone cells belong to the ACCOUNT; what is
 spent and which cells are lit belong to the CHARACTER. A character resets its own
 grid and gets every point back; the account keeps what it earned.
