@@ -33,7 +33,7 @@ observed in play. **Missing** is missing.
 - Tables `mod_spheregrid_*`; settings in the conf; the Lua reads the shipped
   schema and the conf (20 keys, fallbacks equal to the C++'s), replayed
   against an installed database.
-- 13 DBC files, 322 art files; every skin, texture, model and icon the rows
+- 14 DBC files (58 visual kits since Despair's ground kit), 372 art files; every skin, texture, model and icon the rows
   name is served by a stock client plus the module's archive.
 - Server side: 621 spells in `spell_dbc`, creature displays and models in the
   `*_dbc` tables — the two gaps the start-up log revealed.
@@ -45,10 +45,95 @@ observed in play. **Missing** is missing.
   and the SQL (`data/dbc/borrowed.json`).
 - Installer: `install.bat` and `install.sh`; survey of DBC files, world tables
   and client archives, telling the module's own earlier rows from a clash;
-  `--shift` moves a family in clash and surveys again; refuses to write over a
-  `patch-Z` that is not the module's (a mark inside the archive says which);
-  says whether AIO was found; safe to run twice. Full cycle place / analyse /
-  revert at 0 differences on 27 tables and every watched file.
+  `--shift` moves a family in clash and surveys again; says whether AIO was
+  found; safe to run twice. Full cycle place / analyse / revert at 0
+  differences on 27 tables and every watched file.
+- A client that already has a `patch-Z` of its own: the module is written INTO
+  it, in place (`mpq.patch_archive`: data appended, tables rewritten, nothing
+  moved), each replaced file copied aside first, a record inside the archive
+  saying what is the module's. Verified against a 3.6 GB server patch that
+  held the module's whole ranges: survey finds 1 227 taken, `--shift` moves
+  eight families (icons included), the archive goes 3 635 → 3 681 MB, StormLib
+  reads it back with the same bytes as the module's own reader, 4 000
+  untouched files byte-identical to the original; a second run takes the
+  earlier rows out first; the uninstaller leaves every one of the thirteen DBC
+  files row-identical to the original, the 203 art files it had written over
+  byte-identical, the 121 it had added gone, and the archive unmarked.
+- The interface's statistic icons: found in play by the author (no icon
+  shown), the files were still `rond_<french>.blp` while the interface asks
+  `stat_<key>`; renamed. To verify in play after a reinstall.
+- Angelic Feather's charge count (2026-09-09): the reserve aura is kept at
+  0..3 instead of being removed at both ends, applied at login, marked
+  uncancellable, and `Feather_Client.lua` wraps the game's own
+  `AuraButton_Update` so the figure shows at one and zero. TO VERIFY IN PLAY:
+  three feathers shown on login, the number falling to zero and climbing back,
+  and the buff refusing a right click.
+- Spell fixes of 2026-09-09 (see CHANGELOG), all TO VERIFY IN PLAY after a
+  reinstall: Meteor's cast animation and sound (kits 30/38 on visual 30154);
+  Divine Steed +150 %; the Arcane Orb's model (display 802158); the Death
+  Tunnel's gate (11fx_phaseportal01 shipped); Light of Dawn without green
+  squares; Ray of Frost's beam (SpellChainEffects 2001 -- the number the
+  kit's CharParamZero holds -- derived from Mind Flay's straight beam with
+  the frost texture and a width of 0.5); the Moon/Sun bar dragging and
+  remembering.
+  Verified offline: every skin and texture the two new models name is
+  shipped or in the stock client; the collector's dry run reproduces every
+  correction, derived row and shipped file.
+- Validated in play by the author on 2026-09-09: Death Tunnel, Meteor,
+  Divine Steed, Light of Dawn, the Moon/Sun bar, the grid's icons. Then
+  changed and TO VERIFY again: Ray of Frost's beam at full intensity. It was
+  drawn dark and see-through because the row it was derived from, Mind Flay's,
+  carries an alpha of 51 out of 255 -- the beam was painted at a fifth of
+  itself; it is 255 and white now, still blended additively, which is what a
+  texture with a bright core and black edges is drawn with. The texture is
+  the source's own, untouched. Validated on
+  the same day, second pass: the Arcane Orb at half size (display 802158,
+  scale 0.5); the beam under 2001 shows; Ascendance's two stacks
+  (8610038 Fire: +3 % critical strike per stack; 8610039 Nature: +3 % haste
+  per stack; fed by the shaman's own casts, triggered casts excluded; removed
+  with Ascendance) and its rewritten tooltips. Casting while moving was
+  dropped by the author's decision: on the server the module came from it
+  was a core patch plus the game's rows rewritten in the client, neither of
+  which a module can ship.
+- Loot per source in the configuration (`SphereGrid.Loot.<source>`, 45
+  sources) with a grammar of its own, and per-object factors on top
+  (`SphereGrid.Drop.*`). The grammar is compiled on its own and tried against
+  every default (each reads back as itself) and the mistakes it must refuse;
+  the C++ compiles. NOT yet seen in play -- to verify: a changed source drops
+  what it says, an unreadable one is reported at start-up and falls back,
+  a Nexus at 0 never drops and its fallback takes over, `.spheregrid reload`
+  picks up a change.
+- `--shift` exercised END TO END against a client that holds every one of the
+  module's identifiers (a fixture: the reference client's DBC files with the
+  module's rows added at its own numbers, and for five families one block
+  further as well). The survey found 1 303 taken; the nine families moved --
+  spells +400 000, items +1 200, displays +400, kits +600, icons/effects/
+  sounds +200, durations/chains +100 -- the survey then found everything
+  free, and the module's two faces agree: 623 spells in the DBC and in the
+  SQL, the display SQL equal to the display DBC, 257 items with no orphan,
+  no old number left in the C++, the Lua or the XML. Three defects were found
+  and fixed in the doing (see the changelog): the unaligned table, the shift
+  that was not atomic, and the hash table that could not grow.
+- The removal takes the module's spells out of `character_spell`,
+  `character_spell_cooldown`, `character_aura` and the action bars: found in
+  play by the author (`Player::addSpell: Non-existed in SpellStore spell
+  #9000060`), fixed, and run against 42 rows left by an earlier removal --
+  0 remain. Removing BEFORE renumbering stays the rule: the tool takes back
+  what the module currently declares.
+- The client half can be run on its own (`--client-only`), and a run without a
+  client has to say so (`--no-client`): tried both ways, and `install.bat`
+  driven with no client, which asks for a spoken yes before going on. That
+  change first broke the removal menu -- the new question jumped over the
+  presence check when a client WAS given -- found by the author and fixed;
+  `install.bat` is now driven both ways at every change, with a client and
+  without.
+- The installer detects the module already there (sources, interface, config,
+  world tables, client archive) and removes it instead; verified: install,
+  `--presence` 3, plain run refuses without a characters flag, `--dry-run`
+  removal, removal, `--presence` 0, from `install.py` and from `install.bat`.
+- The `icons` family (SpellIcon 8 002–8 076), moved by position like the kits;
+  the kits' positions in `Spell.dbc` and in every `spell_dbc` INSERT of the SQL,
+  found by column name whatever the INSERT's shape.
 - `tools/uninstall.py`: the module's own DELETEs replayed in reverse, its
   tables dropped, characters kept or dropped on request, files and archive
   removed.
@@ -80,6 +165,18 @@ observed in play. **Missing** is missing.
 - The C++ is compiled by the operator; the module's own check is syntactic.
 - `install.sh` on an actual Linux server (written POSIX, run only under
   Git Bash on Windows).
+
+## Decided, and waiting
+
+- `tools/collect_client.py` and the author's `tools/local/origin.py` ARE ON
+  THEIR WAY OUT. `data/` is the module: every fix since it became a module of
+  its own was written there by hand, never collected. The collector has one
+  purpose left -- bringing something new across from the server the module
+  grew up in -- and the day nothing more is to come, it leaves the published
+  repository, `origin.py` with it. Kept for now, and kept faithful: each
+  hand-made row and file is named in its tables (7 derived rows, 6
+  corrections, 3 extra files, 1 of the module's own) so that a collection
+  reproduces what is shipped instead of undoing it.
 
 ## Missing
 

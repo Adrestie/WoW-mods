@@ -29,8 +29,8 @@ table of numbers the format generates from a single seed. A file is found by
 hashing its path three times: once to pick a slot, twice more to confirm the
 name, because the archive does not store names at all.
 
-This module READS. Writing an archive is another matter, and the installer does
-not need it: what it adds to a client goes into a patch archive of its own.
+This module reads, writes a new archive, and writes INTO an existing one -- the
+last for a client that already carries a patch of its own in the top slot.
 """
 import os
 import struct
@@ -428,3 +428,182 @@ def write_archive(path, files, compress=True):
         out.write(encrypt(raw_hash, hash_string(HASH_TABLE_KEY, 3)))
         out.write(encrypt(raw_block, hash_string(BLOCK_TABLE_KEY, 3)))
     return path
+
+
+# ------------------------------------------------------ writing into one
+
+def patch_archive(path, files, remove=(), compress=True, keep_free=8):
+    """Adds, replaces or removes files IN an existing archive, in place.
+
+    `files` maps a path inside the archive to its bytes: a path already there
+    is replaced, a new one added. `remove` names paths to take out. The
+    listfile is kept in step, so the archive can still be enumerated.
+
+    HOW. New data is appended after everything the archive holds, the block
+    of a replaced file is pointed at the new data, a new file takes a free
+    hash slot and a new block, and the two tables are written again after the
+    data. Nothing existing moves, so the archive is never in a half-written
+    state for longer than the tables take to write -- and it is the caller's
+    job to have kept a copy of what it replaces.
+
+    A HASH TABLE TOO SMALL FOR WHAT IS BEING ADDED IS REBUILT BIGGER. That
+    needs the name of every file already there -- a slot keeps a name's
+    fingerprints, never the name, and where a name belongs depends on the
+    table's size -- so the names are read from the `(listfile)`. An archive
+    whose listfile does not account for every occupied slot cannot be grown,
+    and is left alone.
+
+    WHAT IT WILL NOT DO. Cross the 4 GB line: positions are thirty-two bits,
+    and the high-word table of larger archives is not handled here. Fill the
+    hash table: a table with no free slot cannot say "not here", so at least
+    one slot in `keep_free` is left empty. Either refusal is a ValueError,
+    raised before a byte is written.
+    """
+    archive = Archive(path)
+    try:
+        base = archive.base
+        version = archive.version
+        hash_table = [list(row) for row in archive.hash_table]
+        block_table = [list(row) for row in archive.block_table]
+        listed = set()
+        if archive.has("(listfile)"):
+            text = archive.read("(listfile)").decode("utf-8", "replace")
+            listed = {n.strip() for n in text.splitlines() if n.strip()}
+    finally:
+        archive.close()
+
+    # --- room in the hash table, grown if need be ---------------------------
+    def occupied(table):
+        return [row for row in table
+                if row[4] not in (EMPTY_NEVER_USED, EMPTY_DELETED)]
+
+    def grown(table, wanted):
+        """The same entries in a bigger table, placed from their names."""
+        # The files an archive keeps for itself are never in its own
+        # listfile, and their names are known: they are named here so that a
+        # rebuild does not lose them.
+        known = set(listed) | {"(listfile)", "(attributes)", "(signature)"}
+        by_pair = {(hash_string(n, 1), hash_string(n, 2)): n for n in known}
+        staying = occupied(table)
+        unknown = [row for row in staying if (row[0], row[1]) not in by_pair]
+        if unknown:
+            raise ValueError(
+                "%s: the hash table has no room for %d more file(s), and it "
+                "cannot be rebuilt bigger: %d of the %d file(s) it holds are "
+                "not named by its (listfile)"
+                % (path, wanted, len(unknown), len(staying)))
+        size = len(table)
+        while size < (len(staying) + wanted) * 2:
+            size *= 2
+        out = [[EMPTY_NEVER_USED, EMPTY_NEVER_USED, 0xFFFF, 0xFFFF,
+                EMPTY_NEVER_USED] for _ in range(size)]
+        for row in staying:
+            name = by_pair[(row[0], row[1])]
+            start = hash_string(name, 0) & (size - 1)
+            for step in range(size):
+                at = (start + step) % size
+                if out[at][4] == EMPTY_NEVER_USED:
+                    out[at] = list(row)
+                    break
+            else:
+                raise ValueError("%s: the rebuilt hash table filled up" % path)
+        return out
+
+    slots = len(hash_table)
+
+    def find(name):
+        start = hash_string(name, 0) & (slots - 1)
+        a, b = hash_string(name, 1), hash_string(name, 2)
+        for step in range(slots):
+            at = (start + step) % slots
+            row = hash_table[at]
+            if row[4] == EMPTY_NEVER_USED:
+                return None
+            if row[0] == a and row[1] == b and row[4] != EMPTY_DELETED:
+                return at
+        return None
+
+    def free_slot(name):
+        start = hash_string(name, 0) & (slots - 1)
+        for step in range(slots):
+            at = (start + step) % slots
+            if hash_table[at][4] in (EMPTY_NEVER_USED, EMPTY_DELETED):
+                return at
+        return None
+
+    # --- removals: the slot is marked deleted, the block marked gone ---------
+    for name in remove:
+        at = find(name)
+        if at is None:
+            continue
+        index = hash_table[at][4]
+        block_table[index][3] &= ~FILE_EXISTS & 0xFFFFFFFF
+        hash_table[at][4] = EMPTY_DELETED
+        listed.discard(name)
+
+    # --- the listfile travels with the change --------------------------------
+    for name in files:
+        listed.add(name)
+    files = dict(files)
+    files["(listfile)"] = "\r\n".join(sorted(listed)).encode("utf-8")
+
+    # --- room ----------------------------------------------------------------
+    free = sum(1 for row in hash_table
+               if row[4] in (EMPTY_NEVER_USED, EMPTY_DELETED))
+    new_names = [n for n in files if find(n) is None]
+    if free - len(new_names) < slots // keep_free:
+        was = slots
+        hash_table = grown(hash_table, len(new_names))
+        slots = len(hash_table)
+        print("    the archive's hash table grew from %d slots to %d"
+              % (was, slots))
+
+    end = os.path.getsize(path)
+    blob = bytearray()
+    for name, raw in files.items():
+        stored, flags = raw, FILE_EXISTS | FILE_SINGLE_UNIT
+        if compress:
+            packed = b"\x02" + zlib.compress(raw, 9)
+            if len(packed) < len(raw):
+                stored, flags = packed, flags | FILE_COMPRESS
+        position = end + len(blob) - base
+        block = [position, len(stored), len(raw), flags]
+        at = find(name)
+        if at is not None:
+            block_table[hash_table[at][4]] = block
+        else:
+            slot = free_slot(name)
+            hash_table[slot] = [hash_string(name, 1), hash_string(name, 2),
+                                0, 0, len(block_table)]
+            block_table.append(block)
+        blob += stored
+
+    raw_hash = b"".join(struct.pack("<IIHHI", *row) for row in hash_table)
+    raw_block = b"".join(struct.pack("<IIII", *row) for row in block_table)
+    hash_at = end + len(blob) - base
+    block_at = hash_at + len(raw_hash)
+    total = block_at + len(raw_block)
+    if total >= 1 << 32:
+        raise ValueError("%s: the result would cross 4 GB, which this writer "
+                         "does not handle" % path)
+
+    with open(path, "r+b") as out:
+        out.seek(end)
+        out.write(blob)
+        out.write(encrypt(raw_hash, hash_string(HASH_TABLE_KEY, 3)))
+        out.write(encrypt(raw_block, hash_string(BLOCK_TABLE_KEY, 3)))
+        # The header: where the tables now are, how many blocks, how big.
+        out.seek(base)
+        head = bytearray(out.read(HEADER.size))
+        struct.pack_into("<I", head, 8, total)             # archive size
+        struct.pack_into("<I", head, 16, hash_at)
+        struct.pack_into("<I", head, 20, block_at)
+        struct.pack_into("<I", head, 24, len(hash_table))
+        struct.pack_into("<I", head, 28, len(block_table))
+        out.seek(base)
+        out.write(bytes(head))
+        if version >= 1:
+            # no high-word table, and the high halves of both positions are 0
+            out.seek(base + 32)
+            out.write(struct.pack("<QHH", 0, 0, 0))
+    return len(files), len(remove)

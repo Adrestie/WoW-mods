@@ -1,10 +1,10 @@
 #
 # mod-spheregrid — configuration
 #
-# What a server operator tunes: what the content awards, and what a stone or a
-# statistic rune grants. Nothing else — the identifiers the module allocates are
-# not settings, they are part of the module and the installer is what adapts
-# them to a server.
+# What a server operator tunes: what the content awards, what a stone or a
+# statistic rune grants, and how often each object drops. Nothing else — the
+# identifiers the module allocates are not settings, they are part of the
+# module and the installer is what adapts them to a server.
 #
 # Every value below is also the built-in default, so a setting left out changes
 # nothing. Reloaded by `.spheregrid reload`, like the rest of the definition.
@@ -173,6 +173,209 @@ SphereGrid.Points.Raid.Unknown   = 1234
 SphereGrid.Points.MythicPlus.Base = 150
 SphereGrid.Points.MythicPlus.Step = 50
 SphereGrid.Points.MythicPlus.Max  = 50
+
+###############################################################################
+#
+#    WHAT EACH SOURCE DROPS
+#
+#    1. WHERE THINGS DROP. What can yield the module's items is cut up by
+#       EXPANSION -- vanilla, Burning Crusade, Wrath of the Lich King -- and
+#       inside each expansion by kind:
+#
+#         raids           the bosses on one side, everything else on the other
+#         dungeons        the same, heroic ones counted apart in Wrath
+#         the world map   everything killed outside an instance
+#         gathering       each kind of vein and each herb, each skinning
+#                         bracket, and each kind of chest
+#
+#       Each of those is one setting below, and one only. WHICH monsters or
+#       which veins make one is not a setting: that is written in the module.
+#
+#    2. WHAT A SOURCE DROPS is written  object:quantity:chance
+#
+#         Luminous:1:5      one Luminous Nexus, five times in a hundred
+#         EpicStone:2:50    two epic stones, one time in two
+#
+#    3. A FALLBACK is two of those or more, separated by a comma:
+#
+#         Solar:1:25, Irradiant:1:100
+#
+#    4. HOW THE FALLBACK IS DECIDED. They are tried IN ORDER, and the first
+#       one whose roll wins takes it -- whatever follows is not tried at all.
+#       Above: a Solar Nexus one time in four; the three other times an
+#       Irradiant one, which at 100 never fails. An object turned off at the
+#       end of this section is not tried either, and the next one takes its
+#       place.
+#
+#    5. SEVERAL ROLLS in one source are separated by a semicolon. Every one
+#       of them is played, each with its own dice:
+#
+#         SphereGrid.Loot.IcecrownRaidBoss = Prismatic:1:2 ; Solar:1:25, Irradiant:1:100 ; Rune:1:33
+#
+#       an Icecrown boss rolls for a Prismatic Nexus, then for a Solar one --
+#       failing which an Irradiant one -- then for a rune: it may well give
+#       all three at once.
+#
+#    THE OBJECTS. Depleted, Flickering, Luminous, Irradiant, Solar,
+#    Prismatic are the six Nexuses. CommonStone, UncommonStone, RareStone,
+#    EpicStone, LegendaryStone are a stone of that quality, its statistic
+#    drawn among the sixteen -- a quantity above 1 draws that many different
+#    stones. Rune is one of the whole catalogue, all classes together. Names
+#    are not case-sensitive, and spaces are free.
+#
+#    A setting LEFT OUT is the module's own table, which is what every value
+#    below shows. A setting left EMPTY is a source that yields nothing. A
+#    setting that cannot be read is reported at start-up, with the piece at
+#    fault, and the module's own table is used instead.
+#
+
+#
+#    MONSTERS
+#
+#    The first source that matches a kill takes it, from the most precise to
+#    the most general: a boss of Icecrown is also a Wrath raid boss, and the
+#    first line takes it alone. "Trash" is every monster of the place that is
+#    not a boss; "World" is everything outside an instance. A grey boss --
+#    below the level at which the game stops giving experience -- yields a
+#    fifth of the rate written for it.
+#
+
+# Icecrown raid bosses
+SphereGrid.Loot.IcecrownRaidBoss = Prismatic:1:2 ; Solar:1:25, Irradiant:1:100 ; LegendaryStone:1:25, EpicStone:2:50, EpicStone:1:100 ; Rune:1:33
+# Wrath raid bosses, Icecrown aside
+SphereGrid.Loot.WrathRaidBoss = Prismatic:1:2 ; Irradiant:1:100 ; EpicStone:1:100 ; Rune:1:10
+# Wrath raid monsters, Icecrown included
+SphereGrid.Loot.WrathRaidTrash = Luminous:1:5 ; EpicStone:1:2 ; Rune:1:2
+# Wrath heroic dungeon bosses
+SphereGrid.Loot.WrathHeroicBoss = Luminous:1:25 ; RareStone:1:25
+# Wrath heroic dungeon monsters
+SphereGrid.Loot.WrathHeroicTrash = Luminous:1:6 ; RareStone:1:6
+# Wrath dungeon bosses
+SphereGrid.Loot.WrathDungeonBoss = Luminous:2:20 ; RareStone:1:15
+# Wrath dungeon monsters
+SphereGrid.Loot.WrathDungeonTrash = Luminous:1:5 ; UncommonStone:1:4
+# Wrath ordinary monsters
+SphereGrid.Loot.WrathWorld = Luminous:1:5 ; UncommonStone:1:3
+# Burning Crusade raid bosses
+SphereGrid.Loot.BcRaidBoss = Flickering:2:7 ; UncommonStone:1:15
+# Burning Crusade raid monsters
+SphereGrid.Loot.BcRaidTrash = Flickering:1:8 ; UncommonStone:1:5
+# Burning Crusade dungeon bosses
+SphereGrid.Loot.BcDungeonBoss = Flickering:1:5 ; CommonStone:1:5
+# Burning Crusade dungeon monsters
+SphereGrid.Loot.BcDungeonTrash = Flickering:1:5.5 ; CommonStone:1:5
+# Burning Crusade ordinary monsters
+SphereGrid.Loot.BcWorld = Flickering:1:5 ; CommonStone:1:3
+# Vanilla raid bosses
+SphereGrid.Loot.VanillaRaidBoss = Flickering:2:7
+# Vanilla raid monsters
+SphereGrid.Loot.VanillaRaidTrash = Depleted:1:8
+# Vanilla dungeon bosses
+SphereGrid.Loot.VanillaDungeonBoss = Depleted:1:5
+# Vanilla dungeon monsters
+SphereGrid.Loot.VanillaDungeonTrash = Depleted:1:5.5
+# Vanilla ordinary monsters
+SphereGrid.Loot.VanillaWorld = Depleted:1:5
+
+#
+#    VEINS AND HERBS
+#
+#    A vein or a herb is known by the skill it demands and the expansion of
+#    its map. The pure saronite deposit yields nothing, by design: it shares
+#    its lock with titanium and would otherwise be its equal.
+#
+
+# Pure Saronite Deposit
+SphereGrid.Loot.PureSaronite =
+# Titanium Vein
+SphereGrid.Loot.Titanium = Irradiant:1:5, Luminous:1:12
+# Rich Saronite Deposit
+SphereGrid.Loot.RichSaronite = Luminous:1:10
+# Saronite Deposit
+SphereGrid.Loot.Saronite = Luminous:1:9
+# Rich Cobalt Deposit
+SphereGrid.Loot.RichCobalt = Luminous:1:7
+# Cobalt Deposit
+SphereGrid.Loot.Cobalt = Luminous:1:5
+# Burning Crusade ores
+SphereGrid.Loot.BcOres = Flickering:1:5
+# Vanilla ores
+SphereGrid.Loot.VanillaOres = Depleted:1:5
+# Frost Lotus
+SphereGrid.Loot.FrostLotus = Irradiant:1:12
+# Icethorn
+SphereGrid.Loot.Icethorn = Luminous:1:9
+# Lichbloom
+SphereGrid.Loot.Lichbloom = Luminous:1:9
+# Adder's Tongue
+SphereGrid.Loot.AddersTongue = Luminous:1:7
+# Talandra's Rose
+SphereGrid.Loot.TalandrasRose = Luminous:1:7
+# Tiger Lily
+SphereGrid.Loot.TigerLily = Luminous:1:7
+# Fire Leaf
+SphereGrid.Loot.FireLeaf = Luminous:1:5
+# Goldclover
+SphereGrid.Loot.Goldclover = Luminous:1:5
+# Frozen Herb
+SphereGrid.Loot.FrozenHerb = Luminous:1:5
+# Burning Crusade herbs
+SphereGrid.Loot.BcHerbs = Flickering:1:5
+# Vanilla herbs
+SphereGrid.Loot.VanillaHerbs = Depleted:1:5
+
+#
+#    SKINNING
+#
+#    By the level of the beast.
+#
+
+# Skinning 80-83
+SphereGrid.Loot.Skinning80 = Irradiant:1:9
+# Skinning 71-79
+SphereGrid.Loot.Skinning71 = Luminous:1:5
+# Skinning 61-70
+SphereGrid.Loot.Skinning61 = Flickering:1:5
+# Skinning 1-60
+SphereGrid.Loot.Skinning1 = Depleted:1:5
+
+#
+#    CHESTS
+#
+#    By where the chest stands.
+#
+
+# Raid chest
+SphereGrid.Loot.RaidChest = Flickering:2:10
+# Heroic dungeon chest
+SphereGrid.Loot.HeroicDungeonChest = Depleted:5:10
+# Dungeon chest
+SphereGrid.Loot.DungeonChest = Depleted:3:10
+# World chest
+SphereGrid.Loot.WorldChest = Depleted:1:12
+
+#
+#    ON TOP OF THAT, HOW OFTEN EACH OBJECT DROPS, wherever it appears above:
+#    a percentage of the rate written. 100 leaves it as written, 50 halves it
+#    everywhere, 200 doubles it (a roll never goes above 100 %), 0 turns the
+#    object off -- it is then not rolled at all, the fallback written after it
+#    takes its place, and the bad-luck protection never brings it back.
+#
+
+SphereGrid.Drop.Nexus.Depleted    = 100
+SphereGrid.Drop.Nexus.Flickering  = 100
+SphereGrid.Drop.Nexus.Luminous    = 100
+SphereGrid.Drop.Nexus.Irradiant   = 100
+SphereGrid.Drop.Nexus.Solar       = 100
+SphereGrid.Drop.Nexus.Prismatic   = 100
+
+SphereGrid.Drop.Stone.Common      = 100
+SphereGrid.Drop.Stone.Uncommon    = 100
+SphereGrid.Drop.Stone.Rare        = 100
+SphereGrid.Drop.Stone.Epic        = 100
+SphereGrid.Drop.Stone.Legendary   = 100
+
+SphereGrid.Drop.Rune              = 100
 
 ###############################################################################
 #

@@ -29,7 +29,8 @@ echo   A sphere grid for AzerothCore 3.3.5a.
 echo.
 echo   This looks at your server, keeps a copy of everything it is about to
 echo   touch, then places the module and applies its SQL. Nothing is written
-echo   before the copies exist.
+echo   before the copies exist. Run on a server that already has the module,
+echo   it removes it instead.
 echo.
 
 rem --- Python ---------------------------------------------------------------
@@ -60,15 +61,49 @@ if not exist "%CORE%\modules" goto :no_modules
 rem --- 3. the client --------------------------------------------------------
 echo.
 echo   3. The CLIENT's Data directory, the one holding the .MPQ archives.
-echo      Leave blank to skip the client; the server half is installed anyway.
+echo      THE MODULE NEEDS ONE. Its spells exist in no client: without its
+echo      rows they have no name, no icon and no effect.
+echo      If this machine has no client -- a Linux server usually has none --
+echo      leave it blank, and patch one where it lives afterwards.
 set CLIENT=
-set /p CLIENT=      path (optional):
+set /p CLIENT=      path:
 set LOCALE=enUS
-if not defined CLIENT goto :backup_choice
+if not defined CLIENT goto :no_client_asked
 echo.
 echo      Which locale is that client? enUS, frFR, deDE...
 set /p LOCALE=      locale [enUS]:
 if not defined LOCALE set LOCALE=enUS
+goto :presence_check
+
+:no_client_asked
+echo.
+echo      NO CLIENT. The server half will be installed and the module's
+echo      spells will do NOTHING for a player until a client is patched:
+echo         %PY% "tools\install.py" --client-only --client ^<Data dir^>
+echo      run on the machine where the client is.
+set GOON=
+set /p GOON=      Type yes to install the server half alone:
+if /i not "%GOON%"=="yes" goto :nothing_entered
+set NOCLIENT=1
+
+:presence_check
+rem --- is the module already there? -----------------------------------------
+rem install.py answers 3 when it is, 0 when it is not, and prints what it
+rem found either way. That decides which questions come next.
+echo.
+echo   ------------------------------------------------------------------
+if defined CLIENT goto :presence_with_client
+%PY% "tools\install.py" --server "%SERVER%" --core "%CORE%" --no-client --presence
+goto :presence_known
+
+:presence_with_client
+%PY% "tools\install.py" --server "%SERVER%" --core "%CORE%" --client "%CLIENT%" --locale %LOCALE% --presence
+
+:presence_known
+set RESULT=%ERRORLEVEL%
+echo   ------------------------------------------------------------------
+if "%RESULT%"=="3" goto :removal
+if not "%RESULT%"=="0" goto :it_stopped
 
 rem --- 4. where the copies go -----------------------------------------------
 :backup_choice
@@ -119,7 +154,54 @@ echo     %CORE%\modules\mod-spheregrid
 echo     %SERVER%\lua_scripts\SphereGrid
 echo     %SERVER%\configs\modules\mod-spheregrid.conf
 echo     the world and characters databases
-if defined CLIENT echo     %CLIENT%\patch-Z.MPQ
+if defined CLIENT echo     %CLIENT%\patch-Z.MPQ  (created, or written into if it is the client's)
+if not defined CLIENT echo     NO CLIENT: the spells will do nothing until one is patched
+echo.
+set GO=
+set /p GO=  Type yes to go ahead:
+if /i "%GO%"=="yes" goto :run
+echo   Nothing was done.
+goto :stop
+
+rem --- removal --------------------------------------------------------------
+:removal
+set BACKUP=vault
+echo.
+echo   The module is ALREADY INSTALLED here. This run REMOVES it; to install
+echo   it again, run this once more afterwards.
+echo.
+echo   4. WHAT PLAYERS EARNED: the Spherite and the cells they bought, in the
+echo      characters database.
+echo.
+echo      [1] Keep it. A later install finds it again.
+echo      [2] Drop it too.
+echo.
+set EARNED=1
+set /p EARNED=      choice [1]:
+set FLAGS=--keep-characters
+if "%EARNED%"=="2" set FLAGS=--drop-characters
+echo.
+echo   5. WHAT TO DO NOW.
+echo.
+echo      [1] Rehearse. Prints every statement and every path, removes nothing.
+echo      [2] Remove.
+echo.
+set MODE=1
+set /p MODE=      choice [1]:
+if "%MODE%"=="2" goto :confirm_removal
+set FLAGS=%FLAGS% --dry-run
+goto :run
+
+:confirm_removal
+set MODE=R
+echo.
+echo   About to remove:
+echo     %CORE%\modules\mod-spheregrid
+echo     %SERVER%\lua_scripts\SphereGrid
+echo     %SERVER%\configs\modules\mod-spheregrid.conf
+echo     the module's rows and tables in the world database
+if "%EARNED%"=="2" echo     the module's tables in the characters database
+if defined CLIENT echo     the module from %CLIENT%\patch-Z.MPQ
 echo.
 set GO=
 set /p GO=  Type yes to go ahead:
@@ -132,7 +214,7 @@ rem --- run ------------------------------------------------------------------
 echo.
 echo   ------------------------------------------------------------------
 if defined CLIENT goto :run_with_client
-%PY% "tools\install.py" --server "%SERVER%" --core "%CORE%" --backup %BACKUP% %FLAGS%
+%PY% "tools\install.py" --server "%SERVER%" --core "%CORE%" --no-client --backup %BACKUP% %FLAGS%
 goto :ran
 
 :run_with_client
@@ -143,11 +225,16 @@ set RESULT=%ERRORLEVEL%
 echo   ------------------------------------------------------------------
 echo.
 if not "%RESULT%"=="0" goto :it_stopped
+if "%MODE%"=="R" goto :removed
 if not "%MODE%"=="3" goto :stop
 echo   Done. Two things are left to you:
 echo     - rebuild the core, so the module is compiled in;
 echo     - AIO must be installed, server side and client side, or no window
 echo       ever opens. See the README.
+goto :stop
+
+:removed
+echo   Removed. Rebuild the core so the module is compiled out.
 goto :stop
 
 rem --- ways out -------------------------------------------------------------

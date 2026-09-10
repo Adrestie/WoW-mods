@@ -48,6 +48,19 @@ where the server is, where the core sources are, where the client is, where to
 keep the copies, what to do, and whether to move the module's identifiers if
 one is already taken — then do the rest and print every step.
 
+**A client is not optional.** The module's spells exist in no client: without
+its rows a player sees no name, no icon and no effect, and cannot cast them.
+The installer asks for one, and lets you go on without it only if you say so —
+for a server that has no client on it, which is most Linux ones. Patch a client
+where it lives, afterwards:
+
+```
+python tools/install.py --client-only --client <client Data dir>
+```
+
+That mode needs no server and touches no database: it reads the module's own
+rows, merges them into that client's DBC files, and writes the archive.
+
 Three ways to run:
 
 | | |
@@ -78,16 +91,20 @@ What the installer does, in order:
    `<server>/configs/modules`.
 5. **SQL** — the world files, then the characters files, in order.
 6. **Client** — merges the module's rows into the client's own DBC files and
-   writes them, with the module's art, into a new `patch-Z.MPQ`. Nothing
-   existing is rewritten; the archive is read after every other, and deleting
-   it undoes the whole client half.
+   writes them, with the module's art, into `patch-Z.MPQ`: a new archive when
+   the client has none, the client's own when it already has one — see
+   [below](#a-client-that-already-has-a-patch-z).
 
 Two things are left to you afterwards: **rebuild the core**, so the module is
 compiled in, and install **AIO** on both sides — the survey says whether it
 found it, and without it no window ever opens.
 
-Running the installer again is safe: it sets its own archive aside before
-reading the client, and every SQL file deletes what it is about to write.
+Run again on a server that already has the module, the installer does not
+install: it becomes the remover — see [Removing](#removing). To update the
+module, remove it, then install it again. Everything it writes is nonetheless
+written to be run twice: every SQL file deletes what it inserts, the module's
+own archive is set aside before the client is read, and in a shared one the
+module's earlier rows are taken out before its current ones go in.
 
 ### When an identifier is taken
 
@@ -110,31 +127,81 @@ python tools/shift.py --list
 python tools/shift.py --family spells --by 200000
 ```
 
-One family is moved by position rather than by sight: the visual kits, whose
-numbers are the size of a duration in milliseconds. They are moved only where a
-kit is known to be — the DBC fields that hold one and the C++ constants named
-for one — and never guessed at.
+Two families are moved by position rather than by sight: the visual kits,
+whose numbers are the size of a duration in milliseconds, and the spell icons,
+whose numbers are the size of anything. They are moved only where one is known
+to be — the DBC fields that hold one, the columns of a `spell_dbc` row, the C++
+constants named for one — and never guessed at.
 
 ### A client that already has a `patch-Z`
 
-`patch-Z.MPQ` and `patch-z.MPQ` are the same file on Windows. If the client
-already holds an archive of that name that is **not** the module's — another
-server's whole patch, perhaps gigabytes of it — the survey says so and stops.
-The module's own archive carries a mark inside it and is always recognised,
-whatever identifiers the module was installed with.
+`patch-Z.MPQ` and `patch-z.MPQ` are the same file on Windows, and a server
+that ships its own patch usually ships it under that name. The installer tells
+three cases apart, and says which one it is in:
+
+| | |
+|---|---|
+| **no `patch-Z`** | a new archive is created holding only what the module adds — the module's **own**. The next run sets it aside and writes it again; the uninstaller deletes it whole. |
+| **the module's own**, from an earlier run | recognised by a mark inside it, whatever identifiers the module carried then. |
+| **the client's own** — another server's patch, perhaps gigabytes of it | the module is written **into** it. |
+
+Written into means: the survey reads the DBC files that archive holds, as it
+reads any other, and a taken identifier is a clash like any other — moved with
+`--shift`, or you stop. Then each file the module is about to replace is copied
+aside (the receipt says where), the module's rows are merged into the archive's
+own DBC files, and those files, with the module's art, are written into the
+archive **in place**: the new data goes at the end, the archive's tables are
+updated to point at it, and nothing else in the archive moves. A DBC in the
+archive holds the server's rows AND the module's. The archive stays the
+client's; it is now **shared**, and a record inside it lists exactly which rows
+and which files are the module's.
+
+That record is what the next run and the uninstaller read. Running the
+installer again takes the module's earlier rows out of each DBC before merging
+its current ones in — so a module updated, or shifted, between two runs leaves
+nothing behind. Uninstalling takes those rows out and puts nothing in, removes
+every file the module added, and puts back from the copies every file of the
+client's it wrote over: the archive is the client's again.
+
+Two things to know. An archive written into never shrinks: what a replaced file
+used to occupy stays in it, unreadable, as with every MPQ tool — a run adds
+about 45 MB, and a compaction tool reclaims it if it matters. And a checksum
+file some tools keep in an archive, `(attributes)`, is removed the first time,
+because its entries could no longer match; the game never reads it, and its
+copy is in the backups.
+
+This writer stops at 4 GB: an archive larger than that keeps a second table
+this module does not handle, and the installer says so before writing a byte.
 
 ### Removing
 
+Run the installer. `install.bat` and `install.sh` look first — the module's
+sources under `modules/`, its interface, its configuration, its tables in the
+world database, its rows in the client's archive — and when any of it is there
+they say so and switch to removing: they ask what becomes of what players
+earned, whether to rehearse first, and go. So does `tools/install.py`, told
+what to do with the characters tables:
+
 ```
-python tools/uninstall.py --server <dir> --core <dir> [--client <Data dir>]
-                          --keep-characters | --drop-characters [--dry-run]
+python tools/install.py --server <dir> --core <dir> [--client <Data dir>]
+                        --keep-characters | --drop-characters [--dry-run]
+python tools/install.py --server <dir> --core <dir> [--client <Data dir>] --presence
 ```
+
+`--presence` only answers the question — exit code 3 when the module is there,
+0 when it is not — and writes nothing. `tools/uninstall.py`, with the same
+flags, is the removal without the detection.
 
 The database is undone by the module's own SQL: every file deletes what it
 inserts, and those statements replayed in reverse are the uninstaller. The
-module's own tables are dropped. What players earned — the characters tables —
-is kept unless you say otherwise. The placed files and the client's archive are
-removed, and the core is yours to rebuild.
+module's own tables are dropped, and the spells it TAUGHT are taken back from
+the core's own tables — a learnt spell lands in `character_spell`, not in
+anything the module owns, and left behind it names a spell that no longer
+exists. A reinstall teaches them again at the next login, from the cells the
+player still owns. What players earned — the characters tables —
+is kept unless you say otherwise. The placed files are removed. So is the
+client's archive when it is the module's own; when it is the client's, written
+into, the module is taken out of it — see above. The core is yours to rebuild.
 
 ### By hand
 
@@ -144,7 +211,7 @@ something you can do yourself: copy the module into `modules/`, apply
 `data/sql/world/` then `data/sql/characters/` in order, copy
 `conf/mod-spheregrid.conf.dist` to `configs/modules/mod-spheregrid.conf`, and
 copy `data/lua/SphereGrid/` into `lua_scripts/`. The client half — merging
-thirteen DBC files and packing an archive — is what the tools are for.
+fourteen DBC files and packing an archive — is what the tools are for.
 
 ## Configuring
 
@@ -154,6 +221,10 @@ Everything an operator tunes is in `mod-spheregrid.conf`, and nothing else is:
 * what a statistic rune adds, as a percentage of what the grid already gives
 * what every kind of content awards — quests, levels, achievements, dungeon
   bosses and clears by tier, raid bosses by content tier, the workbench
+* what every source drops — each kind of monster, each vein and herb, each
+  skinning bracket, each kind of chest: its rolls, their fallbacks, quantities
+  and rates, one setting per source; and on top of it how often each object
+  drops wherever it appears. What makes a source is not a setting
 * the price of a step, its cap, and how many identical runes stack
 
 The interface reads the same file, so what it announces is what the module
@@ -199,15 +270,16 @@ and no visual.
 | `spheregrid_Item.dbc` | 257 | stones, runes, Nexuses, the pin |
 | `spheregrid_ItemDisplayInfo.dbc` | 154 | |
 | `spheregrid_SpellIcon.dbc` | 32 | |
-| `spheregrid_SpellVisual.dbc` | 89 | |
-| `spheregrid_SpellVisualKit.dbc` | 57 | |
+| `spheregrid_SpellVisual.dbc` | 90 | |
+| `spheregrid_SpellVisualKit.dbc` | 58 | |
 | `spheregrid_SpellVisualEffectName.dbc` | 28 | |
 | `spheregrid_SoundEntries.dbc` | 22 | |
 | `spheregrid_SpellDuration.dbc` | 1 | |
-| `spheregrid_CreatureDisplayInfo.dbc` | 19 | the summons, and the shapes a spell turns a player into |
-| `spheregrid_CreatureModelData.dbc` | 13 | |
+| `spheregrid_CreatureDisplayInfo.dbc` | 20 | the summons, and the shapes a spell turns a player into |
+| `spheregrid_CreatureModelData.dbc` | 14 | |
 | `spheregrid_GameObjectDisplayInfo.dbc` | 1 | the gate |
 | `spheregrid_Emotes.dbc` | 3 | animations the module's scripts play |
+| `spheregrid_SpellChainEffects.dbc` | 1 | the beam of Ray of Frost |
 
 **These are not files to drop into an archive.** Each holds only what the module
 adds, so that their CONTENT can be read, checked against the identifiers a
@@ -222,7 +294,7 @@ the module's own, and the module's rows point at the copy. `data/dbc/borrowed.js
 lists them: 54 visuals, 12 kits, 3 effects and one display. The game keeps its
 own.
 
-`data/art/` holds the 322 files a stock client has no copy of — models, skins,
+`data/art/` holds the 372 files a stock client has no copy of — models, skins,
 textures, sounds and icons — laid out exactly as they must sit inside an
 archive. Everything else the interface draws is borrowed from the game.
 
@@ -234,7 +306,9 @@ archive. Everything else the interface draws is borrowed from the game.
 | items | 803 100 – 803 615 | stones, Nexuses, the pin, runes |
 | creatures and objects | 803 800 – 803 821 | summons, props, the gate |
 | displays | 802 001 – 802 157 | item, creature and object displays |
-| visuals and kits | 30 014 – 30 211 | |
+| visuals and kits | 30 014 – 30 211 | moved by position, never by sight |
+| spell icons | 8 002 – 8 076 | moved by position, never by sight |
+| beams | 2 001 | named by a kit as a float; moved by position |
 | effect names | 8 200 206 – 8 200 302 | |
 | sounds and emotes | 990 001 – 990 125 | |
 | module strings | 1 – 73 | keyed by the module's name, never in clash |

@@ -1949,7 +1949,7 @@ local function BuildUI()
         return v
     end
 
-    section("OUTILS")
+    section("TOOLS")
     local tools = {
         { "select",  "Select" },
         { "cluster", "Cluster" },
@@ -2149,7 +2149,7 @@ local function BuildUI()
     bDel:SetPoint("TOPLEFT", 10, y)
     y = y - 28
 
-    section("FICHIER")
+    section("FILE")
     local nameBox = CreateFrame("EditBox", nil, panel)
     nameBox:SetPoint("TOPLEFT", 10, y)
     nameBox:SetWidth(RC.PANEL_W - 20)
@@ -2159,7 +2159,7 @@ local function BuildUI()
     nameBox:SetBackdrop(backdrop)
     nameBox:SetBackdropColor(0.03, 0.03, 0.03, 1)
     nameBox:SetTextInsets(6, 6, 0, 0)
-    nameBox:SetText("essai")
+    nameBox:SetText("draft")
     nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     nameBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     UI.nameBox = nameBox

@@ -20,6 +20,7 @@
  */
 
 #include "SphereGridMgr.h"
+#include "SphereGridLoot.h"
 #include "Config.h"
 #include "Tokenize.h"
 #include "DatabaseEnv.h"
@@ -209,6 +210,18 @@ namespace
         { "Wotlk", 7 }, { "WotlkHeroic", 8 }
     };
 
+    // THE SIX NEXUSES, by the name the player reads on the item. Each has a
+    // drop-rate setting of its own, under that name.
+    struct NexusName { char const* name; uint32 entry; };
+    constexpr NexusName NEXUSES[] = {
+        { "Depleted",   SPHEREGRID_NEXUS_DEPLETED },
+        { "Flickering", SPHEREGRID_NEXUS_FLICKERING },
+        { "Luminous",   SPHEREGRID_NEXUS_LUMINOUS },
+        { "Irradiant",  SPHEREGRID_NEXUS_IRRADIANT },
+        { "Solar",      SPHEREGRID_NEXUS_SOLAR },
+        { "Prismatic",  SPHEREGRID_NEXUS_PRISMATIC },
+    };
+
     // The raid tiers, in the order the configuration declares them. A server
     // with content of its own adds its maps to one of them.
     constexpr char const* RAID_TIERS[] = {
@@ -317,6 +330,21 @@ void SphereGridMgr::LoadFromConfig()
             _pointSources[{ "mythic_plus", level }] = base + step * level;
     }
 
+    // --- how often each object drops ----------------------------------------
+    // Percentages of the rate the loot brackets write, kept as factors. A
+    // setting left out is 100: the rate as written.
+    _nexusDropFactors.clear();
+    for (NexusName const& nexus : NEXUSES)
+        _nexusDropFactors[nexus.entry] =
+            float(Number(std::string("SphereGrid.Drop.Nexus.") + nexus.name, 100)) / 100.0f;
+    for (uint8 q = 0; q < SPHEREGRID_QUALITY_COUNT; ++q)
+        _stoneDropFactors[q] =
+            float(Number(std::string("SphereGrid.Drop.Stone.") + QUALITIES[q], 100)) / 100.0f;
+    _runeDropFactor = float(Number("SphereGrid.Drop.Rune", 100)) / 100.0f;
+
+    // --- what every source drops --------------------------------------------
+    SphereGridLoadLootConfig();
+
     // --- the rules ----------------------------------------------------------
     COST_PER_STEP = Number("SphereGrid.Cost.PerStep", 75);
     COST_CAP = Number("SphereGrid.Cost.Cap", 2500);
@@ -324,6 +352,19 @@ void SphereGridMgr::LoadFromConfig()
 
     LOG_INFO("module", "SphereGrid: configuration read - {} stone(s), {} statistic rune(s), "
         "{} award(s).", _stones.size(), _statRunes.size(), _pointSources.size());
+}
+
+float SphereGridMgr::NexusDropFactor(uint32 itemEntry) const
+{
+    auto it = _nexusDropFactors.find(itemEntry);
+    return it == _nexusDropFactors.end() ? 1.0f : it->second;
+}
+
+float SphereGridMgr::StoneDropFactor(uint8 quality) const
+{
+    if (!quality || quality > SPHEREGRID_QUALITY_COUNT)
+        return 1.0f;
+    return _stoneDropFactors[quality - 1];
 }
 
 void SphereGridMgr::ComputeDistances()

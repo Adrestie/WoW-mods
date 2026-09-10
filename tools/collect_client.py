@@ -103,8 +103,29 @@ SOUND_DIR_AT = 23                      # and the folder holding them
 # from a client that named its files after that server; the maps that turn
 # those names into the module's own are the author's, and they live OUTSIDE
 # the repository, in tools/local/origin.py (ignored by git). Without them the
-# collector works at identity: fine for a client that already carries the
-# module's own names, which is every client the module was ever installed in.
+# collector works at identity, which is right for anyone else: a clone has no
+# such names to translate.
+#
+# HOW LONG THIS FILE IS MEANT TO LIVE. Not for ever. `data/` is what the
+# module IS: its rows and its files are written by hand now, and everything
+# fixed since it became a module of its own -- a beam, a display, two stacking
+# auras, a ground kit, four model-info rows -- was written there directly and
+# never collected. This file has ONE purpose left: bringing something NEW
+# across from the server the module grew up in. The day nothing more is to
+# come across, it leaves the published repository with tools/local/origin.py,
+# and `data/` stands alone.
+#
+# Until then it is kept faithful: every row and file made by hand is named
+# again below, in CORRECTIONS, DERIVED, EXTRA_FILES or MODULE_OWN, so that a
+# collection reproduces exactly what the module ships rather than quietly
+# undoing it. That is the price of keeping it, and it is paid on purpose.
+
+# WHICH CLIENT TO COLLECT FROM. Only the one the module grew up in. A client
+# the module's own installer patched carries the right names and needs no
+# map -- but it is NOT a faithful source: the rows it BORROWS (54 visuals, 12
+# kits, 3 effects, one display) are found by comparing the source against a
+# stock client, and in a self-patched client no row of the game is altered.
+# Collecting from one would leave borrowed.json empty and lose the copies.
 try:
     from local.origin import NAMES, PREFIX, COLOURS, SOUNDS, FIXES, FOLDERS, UI_FOLDER
     ORIGIN = "tools/local/origin.py"
@@ -137,13 +158,206 @@ BORROWED = (
 # the ones the client itself got wrong, and the correction belongs HERE, not in
 # the file, or the next collection would quietly undo it. The field is given by
 # its index, and the comment says which column that is.
+# THE LANGUAGE SLOT. A text block of 3.3.5 holds SIXTEEN slots, and Britain has
+# none of its own -- it shares the United States'. The real order is 0 enUS,
+# 1 koKR, 2 frFR, 3 deDE, 4 zhCN, 5 zhTW, 6 esES, 7 esMX, 8 ruRU... The columns
+# of AzerothCore's `spell_dbc` name one more, `_Lang_enGB` at 1, and slide by
+# one from there: the column that really holds the FRENCH is called
+# `_Lang_koKR`, and the one called `_Lang_frFR` is the German. Writing to the
+# field named after the language puts the French where nobody reads it.
+#
+# And a block is filled WHOLE. A derived row keeps its source's text in every
+# slot left unsaid, so a row that only says its English and its French would
+# still answer with its ancestor's words in the fourteen others.
+def block(base, english, french=None):
+    """Every slot of one text block: the English, and the French at slot 2."""
+    out = {base + k: english for k in range(16)}
+    if french:
+        out[base + 2] = french
+    return out
+
+
+def texts(*blocks):
+    """Several blocks of one row, merged into the map `derive` expects."""
+    out = {}
+    for one in blocks:
+        out.update(one)
+    return out
+
+
 CORRECTIONS = {
     "Spell.dbc": {
         # Shunpo: RangeIndex (field 46) said 11, "Fifteen yards", where the
         # spell's own text and its use want thirty metres -- index 4.
         8600030: {46: 4},
+        # Divine Steed: EffectBasePoints_1 (field 80) is the speed bonus less
+        # one; 149 is the +150 % the spell is meant to give.
+        8600010: {80: 149},
+        # Meteor: SpellVisualID_1/_2 (fields 131, 132) said 7479, the game's
+        # meteor, which has no cast in front of it. 30154 is that visual with
+        # the fire cast kits -- a DERIVED row below.
+        8600056: {131: 30154, 132: 30154},
+        # The feather reserve: the aura whose stack is the number of
+        # feathers left is an INDICATOR, kept on the priest at all times by
+        # the module's own code. A player dismissing it with a right click
+        # would be left blind until his next cast, so the row is given the
+        # attribute that refuses a cancellation (0x80000000).
+        8600099: {4: 0x80000000},
+        # Ascendance: its texts, once "cast while moving" left it for the two
+        # stacks. A correction that is a STRING goes to the string block.
+        8600062: texts(
+            block(170,
+                  'Your magic damage is increased by $s1% for $d. Each Fire spell you cast raises your critical strike chance by 3% and each Nature spell your haste by 3%, stacking until Ascendance ends. In addition, five foes before you are struck by Flame Shock followed by a Lava Burst.',
+                  "Vos dégâts magiques augmentent de $s1% pendant $d. Chaque sort de Feu que vous lancez augmente vos chances de coup critique de 3% et chaque sort de Nature votre hâte de 3%, cumulables jusqu'à la fin de l'Ascendance. De plus, cinq ennemis devant vous subissent un Horion de flammes puis une Explosion de lave."),
+            block(187,
+                  'Magic damage increased by $s1%. Fire spells raise critical strike chance, Nature spells raise haste.',
+                  'Dégâts magiques augmentés de $s1%. Les sorts de Feu augmentent les chances de coup critique, les sorts de Nature la hâte.')),
+    },
+    # SHADOW WORD: DESPAIR PUT ITS GROUND EFFECT ON THE PRIEST. A spell
+    # aimed at a point splits its visual in two, as every one of the game's
+    # does: one kit on the caster -- his animation, his hands, his sound --
+    # and one AT THE POINT, holding a base model and a sound (Flamestrike:
+    # 61 and 9357; Shadowfury, which has Despair's very shape: 20154 and
+    # 20155). The module had ONE kit, mixing the priest's animation with the
+    # ground model, in the visual's `cast` slot -- which plays on the caster.
+    # So the kit gives up the model and the sound to a kit of its own, below,
+    # and the visual names that kit in its INSTANT AREA slot (field 23).
+    #
+    # Field 23 and not Flamestrike's field 25: the persistent slot plays only
+    # while a lasting zone exists, and Flamestrike leaves the ground on fire.
+    # Despair's two effects strike once and leave nothing, so it is
+    # Shadowfury's instant slot that fires.
+    "SpellVisualKit.dbc": {
+        30044: {5: 0, 15: 0},       # base effect and sound leave the priest
+    },
+    "SpellVisual.dbc": {
+        30044: {23: 30212},         # ... for the ground kit, at the point aimed at
     },
 }
+
+# ROWS THE SOURCE DOES NOT HAVE. Each is derived from a row that exists --
+# "stock" for one of the game's, "module" for one collected above -- under an
+# identifier of the module's own, with the fields that differ: integers by
+# index, strings by index, and -- a sixth element, for a table whose fields
+# are not all four bytes wide -- single bytes by offset. They are added after
+# the corrections, so a correction can point at one.
+#   SpellVisual 30154        the game's meteor (7479) with the classic fire
+#                            cast kits (precast 30, cast 38) -- Meteor's
+#   CreatureModelData 802158 the orb's own model; CreatureDisplayInfo 802158
+#                            wears it. 802103 -- what the orb wore in the
+#                            source -- is the druid's red star.
+#   SpellChainEffects 2001   the beam Ray of Frost's kit asks for (its
+#                            CharParamZero says 2001): Mind Flay's beam (750)
+#                            with the frost texture. The source never had the
+#                            row; the kit pointed at nothing.
+#   SpellVisualKit 30212     Shadow Word: Despair's ground kit -- see the
+#                            correction above.
+#   Spell 8610038, 8610039   Ascendance's two stacks, derived from Ascendance
+#                            but with TWELVE SECONDS of their own (duration 29):
+#                            they outlive the ascendance that granted them,
+#                            itself: an aura of their own, no second effect,
+#                            no cost, no visual, the icons of Flame Shock and
+#                            Lightning Bolt, their own names and texts.
+# SkillLineAbility.dbc IS NOT COLLECTED. The origin never had it, and its rows
+# are not copied from anywhere: they are BUILT, one per spell the module can
+# teach, from two things the module already ships -- the class of a spell cell
+# (mod_spheregrid_node_spell) and the base spell of a rank (spell_ranks). Each
+# row is derived from a row of the game: a rank takes the line of ITS base
+# spell, a cell the line written for it below. Identifiers 25001 and up, above
+# the game's highest (21980).
+#
+# THE TREE IS A DECISION PER SPELL, and nothing in the data says it: a cell
+# only knows its class. So it is written here. What is not named takes its
+# class's default, itself written rather than counted -- a majority worked out
+# from the game's own rows falls differently from one run to the next when two
+# lines tie, and a shipped file must not move on its own.
+#
+#   default by class  1 Fury 256   2 Holy 594   3 Survival 51   4 Assassination 253
+#                     5 Holy 56    6 Unholy 772 7 Elemental Combat 375
+#                     8 Arcane 237 9 Affliction 355   11 Feral Combat 134
+#
+#   Sweeping Strikes 9000001 Arms 26          Spartan Shield 9000003 Protection 257
+#   Final Reckoning 9000011 Retribution 184   Shield of the Inquisition 9000012 Protection 267
+#   Roll the Bones 9000032 Combat 38          Symbols of Death 9000033 Subtlety 39
+#   Shadow Word: Despair 9000041 Shadow Magic 78
+#   Power Word: Barrier 9000042 Discipline 613
+#   Bonestorm 9000052 Blood 770               Breath of Sindragosa 9000053 Frost 771
+#   Meteor 9000056 Fire 8                     Ascendance 9000062 Elemental Combat 375
+#   Earthquake 9000061 Enhancement 373       Spirit Link Totem 9000063 Restoration 374
+#   Ray of Frost 9000073 Frost 6
+#   Phantom Singularity 9000081 Affliction 355   Cataclysm 9000083 Destruction 593
+#   Solstice and Equinox 9000092 Balance 574  Flourish 9000093 Restoration 573
+#   Bear Leap 9010016, Shadow Prowler 9010017, Traveler's Bound 9010018 Feral Combat 134
+#   Grove's Call 9010019 Restoration 573      Stellar Return 9010020 Balance 574
+#
+# THE FIVE FORM SPELLS (9010016 to 9010020) have no cell at all: the script
+# teaches them alongside Light Stride. Nothing named them, so they had no line
+# and fell into "General".
+#
+# AND WHAT BELONGS IN "General" HAS NO ROW AT ALL: it is the absence of a skill
+# line that puts a spell in the general tab. Light Stride 9000090 is the only
+# one.
+DERIVED = {
+    "Spell.dbc": [
+        (8610038, "module", 8600062, {40: 29, 71: 6, 95: 57, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 678, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
+         texts(block(136, 'Ascendance: Fire', 'Ascendance : Feu'),
+               block(170, 'Critical strike chance increased by $s1% per stack, for $d.',
+                     "Chances de coup critique augmentées de $s1% par cumul, pendant $d."),
+               block(187, 'Critical strike chance increased by $s1%.',
+                     'Chances de coup critique augmentées de $s1%.'))),
+        (8610039, "module", 8600062, {40: 29, 71: 6, 95: 216, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 62, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
+         texts(block(136, 'Ascendance: Nature', 'Ascendance : Nature'),
+               block(170, 'Haste increased by $s1% per stack, for $d.',
+                     "Hâte augmentée de $s1% par cumul, pendant $d."),
+               block(187, 'Haste increased by $s1%.',
+                     'Hâte augmentée de $s1%.'))),
+    ],
+    "SpellVisual.dbc": [
+        (30154, "stock", 7479, {1: 30, 2: 38}, {}),
+    ],
+    "SpellVisualKit.dbc": [
+        # Despair's ground kit: no animation (an area kit animates nothing),
+        # the shadow model and the sound the caster's kit gave up. The values
+        # are said outright rather than copied, because the row it derives
+        # from has just been emptied of them by the correction above.
+        (30212, "module", 30044, {2: 0xFFFFFFFF, 5: 8200221, 15: 990112}, {}),
+    ],
+    "CreatureModelData.dbc": [
+        (802158, "module", 802103, {}, {2: "spells\\11fx_arcaneorb02.mdx"}),
+    ],
+    "CreatureDisplayInfo.dbc": [
+        # half the model's size: the orb is a fist, not a head
+        (802158, "module", 802103, {1: 802158, 4: 0x3F000000}, {}),   # 4 = CreatureModelScale, 0.5f
+    ],
+    # NOTHING TO DERIVE. Chain 2001 -- the beam the kit's CharParamZero
+    # names -- EXISTS in the source, with a texture of its own,
+    # 8fx_jaina_glacialraybeam.blp, Jaina's glacial ray. It is not a texture
+    # of 3.3.5 and the source ships it; it is listed among the extra files
+    # below. I twice built a row that was already there, first from Mind
+    # Flay's beam and then from the game's chain 1, and neither looked like
+    # the source: the row is collected, not invented.
+    "SpellChainEffects.dbc": [],
+}
+
+# FILES ONLY A DERIVED ROW NAMES, or that no row names at all: followed like
+# any model -- skins and textures included -- and shipped when a stock client
+# lacks them.
+EXTRA_FILES = (
+    "spells\\11fx_arcaneorb02.mdx",
+    "spells\\11fx_phaseportal01.mdx",
+    # The texture chain 2001 names: Jaina's glacial ray, not a texture of
+    # 3.3.5, which the source ships itself.
+    "Textures\\SpellChainEffects\\8fx_jaina_glacialraybeam.blp",
+)
+
+# WHAT IS THE MODULE'S OWN, and must not be taken from a client. One texture:
+# the fully transparent square a particle emitter of Light of Dawn draws over
+# its flare. Every client that ran the module kept it palettized and without a
+# mipmap chain, which a particle emitter renders as GREEN SQUARES; the module
+# carries its own, in data/art, and a collection leaves it where it is.
+MODULE_OWN = (
+    "spells\\spheregrid_vide.blp",
+)
 
 
 # The archive the installer writes; see `install.py`.
@@ -517,14 +731,25 @@ def main():
             continue
         path = dbc.read_string(gob_table, record, gob_file).strip()
         if path:
-            paths.add(path)
+            grown.add(path)
             actual = real(source, path)
             if actual is not None:
                 raw = source.read(actual)
                 if m2.is_model(raw):
-                    paths.update(s for s in m2.skins(actual, raw)
+                    grown.update(s for s in m2.skins(actual, raw)
                                  if has(source, s))
-                    paths.update(m2.textures(raw))
+                    grown.update(m2.textures(raw))
+
+    # The files a derived row names, or nothing names: models are followed
+    # down to their skins and textures, like the ones the rows led to.
+    for path in EXTRA_FILES:
+        grown.add(path)
+        actual = real(source, path)
+        if actual is not None:
+            raw = source.read(actual)
+            if m2.is_model(raw):
+                grown.update(s for s in m2.skins(actual, raw) if has(source, s))
+                grown.update(m2.textures(raw))
 
     # --- what no reference leads to ---------------------------------------
     grown.update(BORROWED)
@@ -556,7 +781,10 @@ def main():
 
     # --- copy them in ------------------------------------------------------
     kinds, taken, rewritten = {}, 0, [0]
+    own = {p.lower() for p in MODULE_OWN}
     for path in missing:
+        if renamed(path).lower() in own:
+            continue                    # the module's own, in data/art already
         actual = real(source, path)
         if actual is None:
             continue
@@ -575,6 +803,8 @@ def main():
             open(landing, "wb").write(raw)
     print("  %d taken: %s" % (taken, ", ".join(
         "%s %d" % (k, v) for k, v in sorted(kinds.items()))))
+    for path in MODULE_OWN:
+        print("  %s is the module's own: left as it stands" % path)
     if rewritten[0]:
         print("  %d model(s) had their own texture names rewritten" % rewritten[0])
 
@@ -657,10 +887,11 @@ def main():
                ("SpellVisual.dbc", visuals), ("SpellVisualKit.dbc", kits),
                ("SpellVisualEffectName.dbc", effects), ("SoundEntries.dbc", sounds),
                ("CreatureDisplayInfo.dbc", sorted(ours_displays)),
-               ("CreatureModelData.dbc", sorted(model_ids))]
+               ("CreatureModelData.dbc", sorted(model_ids)),
+               ("SpellChainEffects.dbc", [])]
     for name, ids in emitted:
         table = tables.get(name) or read_dbc(source, name)
-        fields = dbc.string_fields(table)
+        fields = dbc.string_fields_of(name, table)
         part = dbc.subset(table, ids, fields)
 
         # The renames are worked out from the rows themselves: a substitution
@@ -691,22 +922,45 @@ def main():
         elif name == "SpellVisualKit.dbc":
             part = repointed(part, KIT_EFFECTS_AT, borrowed["SpellVisualEffectName.dbc"])
 
-        fixes = CORRECTIONS.get(name)
-        if fixes:
-            records, done = [], 0
+        corrections = CORRECTIONS.get(name)
+        if corrections:
+            records, done, block = [], 0, bytearray(part.strings)
             for record in part.records:
-                wanted = fixes.get(part.field(record, 0))
+                wanted = corrections.get(part.field(record, 0))
                 if wanted:
                     record = bytearray(record)
                     for at, value in sorted(wanted.items()):
-                        struct.pack_into("<I", record, at * 4, value)
+                        if isinstance(value, str):
+                            # a text: appended to the block, the field
+                            # pointed at it -- nothing else in the block moves
+                            struct.pack_into("<I", record, at * 4, len(block))
+                            block += value.encode("utf-8") + bytes(1)
+                        else:
+                            struct.pack_into("<I", record, at * 4, value)
                     record = bytes(record)
                     done += 1
                 records.append(record)
             part = dbc.Dbc(part.field_count, part.record_size, records,
-                           part.strings)
+                           bytes(block))
             if done:
                 print("    %-38s %d row(s) corrected" % ("", done))
+
+        for spec in DERIVED.get(name, ()):
+            new_id, where, from_id, ints, texts = spec[:5]
+            bytes_at = spec[5] if len(spec) > 5 else None
+            origin = part if where == "module" else read_dbc(stock, name)
+            if where == "module":
+                part = dbc.derive(part, from_id, new_id, fields, ints, texts, bytes_at)
+            else:
+                # A row of the game joins a table that may not hold it: the
+                # record is taken from the game's table, its strings re-laid
+                # into ours.
+                grown_part = dbc.derive(origin, from_id, new_id,
+                                        dbc.string_fields_of(name, origin), ints, texts,
+                                        bytes_at)
+                taken_row = dbc.subset(grown_part, [new_id], fields)
+                part = dbc.concat([part, taken_row], fields) if len(part) else taken_row
+            print("    %-38s row %d derived from %s %d" % ("", new_id, where, from_id))
 
         target = os.path.join(DBCS, "spheregrid_" + name)
         if not args.dry_run:

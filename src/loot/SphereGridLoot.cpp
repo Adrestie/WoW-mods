@@ -18,12 +18,16 @@
 /*
  * mod-spheregrid — the loot brackets.
  *
- * Everything that decides "what drops where, in what quantity and at what rate"
- * is HERE, hardcoded. See SphereGridLoot.h for why.
+ * WHAT A SOURCE IS -- an Icecrown boss, a titanium vein, a beast of level 80,
+ * a raid chest -- is decided HERE, by the predicates below, and nowhere else.
+ * WHAT IT DROPS is the operator's: every source has a setting,
+ * `SphereGrid.Loot.<key>`, that writes its rolls in a grammar of its own
+ * (see "the loot grammar" below), and the tables written here are what a
+ * setting left out means -- the defaults, and what the configuration file
+ * ships. On top of that, one factor per object (SphereGridMgr::*DropFactor)
+ * multiplies every rate at which it appears.
  *
- * These tables are what the module goes by at run time. They are edited
- * here, by hand, and a change demands a recompilation -- the price knowingly
- * paid for keeping them out of the database.
+ * Adding a source demands a recompilation; changing what one drops does not.
  *
  * TWO RULES, not to be confused:
  *
@@ -52,13 +56,19 @@
 #include "Player.h"
 #include "Random.h"
 #include "Chat.h"
+#include "Config.h"
 #include "ObjectGuid.h"
 #include "SharedDefines.h"
 #include "SphereGridMgr.h"
 #include "SphereGridStrings.h"
 
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <iterator>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -113,14 +123,15 @@ namespace
 
     struct Line
     {
-        Attempt tentatives[MAX_ATTEMPTS];
+        Attempt attempts[MAX_ATTEMPTS];
     };
 
     struct Case
     {
-        char const*  name;
+        char const*  name;      // what it is, for the logs
+        char const*  key;       // its setting: SphereGrid.Loot.<key>
         bool (*matches)(SphereGridLootSource const&);
-        Line const* lignes;
+        Line const* defaults;   // what a setting left out means
         size_t       count;
     };
 
@@ -253,75 +264,75 @@ namespace
     // IsDungeon covers both.
     Case const CASE_MONSTER[] =
     {
-        { "Icecrown raid bosses", [](SphereGridLootSource const& s)
+        { "Icecrown raid bosses", "IcecrownRaidBoss", [](SphereGridLootSource const& s)
           { return s.boss && s.map == MAP_LAST_RAID; },
           M_ICC_BOSS, std::size(M_ICC_BOSS) },
 
-        { "Wrath raid bosses, Icecrown aside", [](SphereGridLootSource const& s)
+        { "Wrath raid bosses, Icecrown aside", "WrathRaidBoss", [](SphereGridLootSource const& s)
           { return s.expansion == 2 && s.raid && s.boss; },
           M_RAID_WRATH_BOSS, std::size(M_RAID_WRATH_BOSS) },
 
-        { "Wrath raid monsters, Icecrown included", [](SphereGridLootSource const& s)
+        { "Wrath raid monsters, Icecrown included", "WrathRaidTrash", [](SphereGridLootSource const& s)
           { return s.expansion == 2 && s.raid; },
           M_RAID_WRATH, std::size(M_RAID_WRATH) },
 
-        { "Wrath heroic dungeon bosses", [](SphereGridLootSource const& s)
+        { "Wrath heroic dungeon bosses", "WrathHeroicBoss", [](SphereGridLootSource const& s)
           { return s.expansion == 2 && s.dungeon && !s.raid && s.heroic && s.boss; },
           M_HERO_BOSS, std::size(M_HERO_BOSS) },
 
-        { "Wrath heroic dungeon monsters", [](SphereGridLootSource const& s)
+        { "Wrath heroic dungeon monsters", "WrathHeroicTrash", [](SphereGridLootSource const& s)
           { return s.expansion == 2 && s.dungeon && !s.raid && s.heroic; },
           M_HERO, std::size(M_HERO) },
 
-        { "Wrath dungeon bosses", [](SphereGridLootSource const& s)
+        { "Wrath dungeon bosses", "WrathDungeonBoss", [](SphereGridLootSource const& s)
           { return s.expansion == 2 && s.dungeon && !s.raid && s.boss; },
           M_DUNGEON_WRATH_BOSS, std::size(M_DUNGEON_WRATH_BOSS) },
 
-        { "Wrath dungeon monsters", [](SphereGridLootSource const& s)
+        { "Wrath dungeon monsters", "WrathDungeonTrash", [](SphereGridLootSource const& s)
           { return s.expansion == 2 && s.dungeon && !s.raid; },
           M_DUNGEON_WRATH, std::size(M_DUNGEON_WRATH) },
 
-        { "Wrath ordinary monsters", [](SphereGridLootSource const& s)
+        { "Wrath ordinary monsters", "WrathWorld", [](SphereGridLootSource const& s)
           { return s.expansion == 2; },
           M_MONDE_WRATH, std::size(M_MONDE_WRATH) },
 
-        { "Burning Crusade raid bosses", [](SphereGridLootSource const& s)
+        { "Burning Crusade raid bosses", "BcRaidBoss", [](SphereGridLootSource const& s)
           { return s.expansion == 1 && s.raid && s.boss; },
           M_RAID_BC_BOSS, std::size(M_RAID_BC_BOSS) },
 
-        { "Burning Crusade raid monsters", [](SphereGridLootSource const& s)
+        { "Burning Crusade raid monsters", "BcRaidTrash", [](SphereGridLootSource const& s)
           { return s.expansion == 1 && s.raid; },
           M_RAID_BC, std::size(M_RAID_BC) },
 
-        { "Burning Crusade dungeon bosses", [](SphereGridLootSource const& s)
+        { "Burning Crusade dungeon bosses", "BcDungeonBoss", [](SphereGridLootSource const& s)
           { return s.expansion == 1 && s.dungeon && !s.raid && s.boss; },
           M_DUNGEON_BC_BOSS, std::size(M_DUNGEON_BC_BOSS) },
 
-        { "Burning Crusade dungeon monsters", [](SphereGridLootSource const& s)
+        { "Burning Crusade dungeon monsters", "BcDungeonTrash", [](SphereGridLootSource const& s)
           { return s.expansion == 1 && s.dungeon && !s.raid; },
           M_DUNGEON_BC, std::size(M_DUNGEON_BC) },
 
-        { "Burning Crusade ordinary monsters", [](SphereGridLootSource const& s)
+        { "Burning Crusade ordinary monsters", "BcWorld", [](SphereGridLootSource const& s)
           { return s.expansion == 1; },
           M_MONDE_BC, std::size(M_MONDE_BC) },
 
-        { "Vanilla raid bosses", [](SphereGridLootSource const& s)
+        { "Vanilla raid bosses", "VanillaRaidBoss", [](SphereGridLootSource const& s)
           { return s.raid && s.boss; },
           M_RAID_VANILLA_BOSS, std::size(M_RAID_VANILLA_BOSS) },
 
-        { "Vanilla raid monsters", [](SphereGridLootSource const& s)
+        { "Vanilla raid monsters", "VanillaRaidTrash", [](SphereGridLootSource const& s)
           { return s.raid; },
           M_RAID_VANILLA, std::size(M_RAID_VANILLA) },
 
-        { "Vanilla dungeon bosses", [](SphereGridLootSource const& s)
+        { "Vanilla dungeon bosses", "VanillaDungeonBoss", [](SphereGridLootSource const& s)
           { return s.dungeon && s.boss; },
           M_DUNGEON_VANILLA_BOSS, std::size(M_DUNGEON_VANILLA_BOSS) },
 
-        { "Vanilla dungeon monsters", [](SphereGridLootSource const& s)
+        { "Vanilla dungeon monsters", "VanillaDungeonTrash", [](SphereGridLootSource const& s)
           { return s.dungeon; },
           M_DUNGEON_VANILLA, std::size(M_DUNGEON_VANILLA) },
 
-        { "Vanilla ordinary monsters", [](SphereGridLootSource const& /*s*/)
+        { "Vanilla ordinary monsters", "VanillaWorld", [](SphereGridLootSource const& /*s*/)
           { return true; },
           M_MONDE_VANILLA, std::size(M_MONDE_VANILLA) },
     };
@@ -361,82 +372,82 @@ namespace
         // --- mining ---------------------------------------------------
         // The rich saronite deposit shares the titanium lock: only its entry
         // tells them apart. It yields nothing, deliberately.
-        { "Pure Saronite Deposit", [](SphereGridLootSource const& s)
+        { "Pure Saronite Deposit", "PureSaronite", [](SphereGridLootSource const& s)
           { return s.gob && s.gob->GetEntry() == GOB_SARONITE_PURE; },
           nullptr, 0 },
 
-        { "Titanium Vein", [](SphereGridLootSource const& s)
+        { "Titanium Vein", "Titanium", [](SphereGridLootSource const& s)
           { return IsMining(s) && s.skill == 450; },
           R_TITANIUM, std::size(R_TITANIUM) },
 
-        { "Rich Saronite Deposit", [](SphereGridLootSource const& s)
+        { "Rich Saronite Deposit", "RichSaronite", [](SphereGridLootSource const& s)
           { return IsMining(s) && s.skill == 425; },
           R_LUMINOUS_8, std::size(R_LUMINOUS_8) },
 
-        { "Saronite Deposit", [](SphereGridLootSource const& s)
+        { "Saronite Deposit", "Saronite", [](SphereGridLootSource const& s)
           { return IsMining(s) && s.skill == 400; },
           R_LUMINOUS_7, std::size(R_LUMINOUS_7) },
 
-        { "Rich Cobalt Deposit", [](SphereGridLootSource const& s)
+        { "Rich Cobalt Deposit", "RichCobalt", [](SphereGridLootSource const& s)
           { return IsMining(s) && s.skill == 375 && s.expansion == 2; },
           R_LUMINOUS_5, std::size(R_LUMINOUS_5) },
 
-        { "Cobalt Deposit", [](SphereGridLootSource const& s)
+        { "Cobalt Deposit", "Cobalt", [](SphereGridLootSource const& s)
           { return IsMining(s) && s.skill == 350 && s.expansion == 2; },
           R_LUMINOUS_3, std::size(R_LUMINOUS_3) },
 
-        { "Burning Crusade ores", [](SphereGridLootSource const& s)
+        { "Burning Crusade ores", "BcOres", [](SphereGridLootSource const& s)
           { return IsMining(s) && s.skill >= 275; },
           R_FLICKERING_3, std::size(R_FLICKERING_3) },
 
-        { "Vanilla ores", IsMining,
+        { "Vanilla ores", "VanillaOres", IsMining,
           R_DEPLETED_3, std::size(R_DEPLETED_3) },
 
         // --- herbalism ------------------------------------------------
-        { "Frost Lotus", [](SphereGridLootSource const& s)
+        { "Frost Lotus", "FrostLotus", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 450 && s.expansion == 2; },
           R_IRRADIANT_10, std::size(R_IRRADIANT_10) },
 
-        { "Icethorn", [](SphereGridLootSource const& s)
+        { "Icethorn", "Icethorn", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 435; },
           R_LUMINOUS_7, std::size(R_LUMINOUS_7) },
 
-        { "Lichbloom", [](SphereGridLootSource const& s)
+        { "Lichbloom", "Lichbloom", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 425; },
           R_LUMINOUS_7, std::size(R_LUMINOUS_7) },
 
-        { "Adder's Tongue", [](SphereGridLootSource const& s)
+        { "Adder's Tongue", "AddersTongue", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 400 && s.expansion == 2; },
           R_LUMINOUS_5, std::size(R_LUMINOUS_5) },
 
-        { "Talandra's Rose", [](SphereGridLootSource const& s)
+        { "Talandra's Rose", "TalandrasRose", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 385; },
           R_LUMINOUS_5, std::size(R_LUMINOUS_5) },
 
-        { "Tiger Lily", [](SphereGridLootSource const& s)
+        { "Tiger Lily", "TigerLily", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 375 && s.expansion == 2; },
           R_LUMINOUS_5, std::size(R_LUMINOUS_5) },
 
-        { "Fire Leaf", [](SphereGridLootSource const& s)
+        { "Fire Leaf", "FireLeaf", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 360; },
           R_LUMINOUS_3, std::size(R_LUMINOUS_3) },
 
-        { "Goldclover", [](SphereGridLootSource const& s)
+        { "Goldclover", "Goldclover", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 350 && s.expansion == 2; },
           R_LUMINOUS_3, std::size(R_LUMINOUS_3) },
 
-        { "Frozen Herb", [](SphereGridLootSource const& s)
+        { "Frozen Herb", "FrozenHerb", [](SphereGridLootSource const& s)
           { return IsHerbalism(s) && s.skill == 300 && s.expansion == 2; },
           R_LUMINOUS_3, std::size(R_LUMINOUS_3) },
 
         // Two herbs of different expansions share the same skill requirement:
         // the map is what tells them apart.
-        { "Burning Crusade herbs", [](SphereGridLootSource const& s)
+        { "Burning Crusade herbs", "BcHerbs", [](SphereGridLootSource const& s)
           { return IsHerbalism(s)
                    && (s.skill > 300 || (s.skill == 300 && s.expansion == 1)); },
           R_FLICKERING_3, std::size(R_FLICKERING_3) },
 
-        { "Vanilla herbs", IsHerbalism,
+        { "Vanilla herbs", "VanillaHerbs", IsHerbalism,
           R_DEPLETED_3, std::size(R_DEPLETED_3) },
     };
 
@@ -450,13 +461,13 @@ namespace
 
     Case const CASE_SKINNING[] =
     {
-        { "Skinning 80-83", [](SphereGridLootSource const& s) { return s.level >= 80; },
+        { "Skinning 80-83", "Skinning80", [](SphereGridLootSource const& s) { return s.level >= 80; },
           D_80, std::size(D_80) },
-        { "Skinning 71-79", [](SphereGridLootSource const& s) { return s.level >= 71; },
+        { "Skinning 71-79", "Skinning71", [](SphereGridLootSource const& s) { return s.level >= 71; },
           D_71, std::size(D_71) },
-        { "Skinning 61-70", [](SphereGridLootSource const& s) { return s.level >= 61; },
+        { "Skinning 61-70", "Skinning61", [](SphereGridLootSource const& s) { return s.level >= 61; },
           D_61, std::size(D_61) },
-        { "Skinning 1-60", [](SphereGridLootSource const& /*s*/) { return true; },
+        { "Skinning 1-60", "Skinning1", [](SphereGridLootSource const& /*s*/) { return true; },
           D_1, std::size(D_1) },
     };
 
@@ -470,15 +481,255 @@ namespace
 
     Case const CASE_CHEST[] =
     {
-        { "Raid chest", [](SphereGridLootSource const& s) { return s.raid; },
+        { "Raid chest", "RaidChest", [](SphereGridLootSource const& s) { return s.raid; },
           C_RAID, std::size(C_RAID) },
-        { "Heroic dungeon chest", [](SphereGridLootSource const& s)
+        { "Heroic dungeon chest", "HeroicDungeonChest", [](SphereGridLootSource const& s)
           { return s.dungeon && s.heroic; }, C_HERO, std::size(C_HERO) },
-        { "Dungeon chest", [](SphereGridLootSource const& s) { return s.dungeon; },
+        { "Dungeon chest", "DungeonChest", [](SphereGridLootSource const& s) { return s.dungeon; },
           C_DUNGEON, std::size(C_DUNGEON) },
-        { "World chest", [](SphereGridLootSource const& /*s*/) { return true; },
+        { "World chest", "WorldChest", [](SphereGridLootSource const& /*s*/) { return true; },
           C_MONDE, std::size(C_MONDE) },
     };
+
+    // ==================================================================
+    // THE LOOT GRAMMAR
+    //
+    // A source's setting writes its rolls: every roll is played, each with
+    // its own dice, and the rolls are separated by ";". Inside a roll, the
+    // attempts are played in order until one wins, separated by ",": that is
+    // a fallback. An attempt is object:quantity:percent.
+    //
+    //   Prismatic:1:2 ; Solar:1:25, Irradiant:1:100 ; Rune:1:33
+    //
+    // Whitespace is free and the object's name is not case-sensitive. An
+    // empty setting is a source that yields nothing; a setting that cannot
+    // be read is reported at start-up and the built-in table is used.
+    //
+    // WRITTEN IN STD ALONE, between the two markers, so that it can be cut
+    // out, compiled on its own and tried against every default and a few
+    // mistakes without a server -- which is how it was checked.
+    // ==================================================================
+    // >>> the loot grammar
+    using Roll = std::vector<Attempt>;      // attempts in order, the first winner takes it
+    using Table = std::vector<Roll>;        // every roll of a source, all played
+
+    struct Word { char const* name; Drop drop; };
+    Word const WORDS[] =
+    {
+        { "Depleted",       Nexus(NEXUS_DEPLETED) },
+        { "Flickering",     Nexus(NEXUS_FLICKERING) },
+        { "Luminous",       Nexus(NEXUS_LUMINOUS) },
+        { "Irradiant",      Nexus(NEXUS_IRRADIANT) },
+        { "Solar",          Nexus(NEXUS_SOLAR) },
+        { "Prismatic",      Nexus(NEXUS_PRISM) },
+        { "CommonStone",    Stone(1) },
+        { "UncommonStone",  Stone(2) },
+        { "RareStone",      Stone(3) },
+        { "EpicStone",      Stone(4) },
+        { "LegendaryStone", Stone(5) },
+        { "Rune",           Rune() },
+    };
+
+    std::string Trimmed(std::string const& s)
+    {
+        size_t a = 0, b = s.size();
+        while (a < b && std::isspace(static_cast<unsigned char>(s[a])))
+            ++a;
+        while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1])))
+            --b;
+        return s.substr(a, b - a);
+    }
+
+    std::vector<std::string> Split(std::string const& s, char separator)
+    {
+        std::vector<std::string> out;
+        std::string current;
+        for (char c : s)
+        {
+            if (c == separator)
+            {
+                out.push_back(current);
+                current.clear();
+            }
+            else
+                current += c;
+        }
+        out.push_back(current);
+        return out;
+    }
+
+    bool SameWord(std::string const& a, char const* b)
+    {
+        size_t i = 0;
+        for (; i < a.size() && b[i]; ++i)
+            if (std::tolower(static_cast<unsigned char>(a[i]))
+                != std::tolower(static_cast<unsigned char>(b[i])))
+                return false;
+        return i == a.size() && !b[i];
+    }
+
+    Word const* WordFor(std::string const& name)
+    {
+        for (Word const& w : WORDS)
+            if (SameWord(name, w.name))
+                return &w;
+        return nullptr;
+    }
+
+    char const* NameOf(Drop const& drop)
+    {
+        for (Word const& w : WORDS)
+            if (w.drop.entry == drop.entry && w.drop.quality == drop.quality)
+                return w.name;
+        return "?";
+    }
+
+    // Reads a source's setting into a table. On a mistake, says which piece
+    // in `problem` and returns false; `out` is then not to be used.
+    bool ParseTable(std::string const& raw, Table& out, std::string& problem)
+    {
+        out.clear();
+        for (std::string const& rollText : Split(raw, ';'))
+        {
+            if (Trimmed(rollText).empty())
+                continue;
+            Roll roll;
+            for (std::string const& piece : Split(rollText, ','))
+            {
+                std::string const text = Trimmed(piece);
+                std::vector<std::string> const parts = Split(text, ':');
+                if (parts.size() != 3)
+                {
+                    problem = "\"" + text + "\" is not object:quantity:percent";
+                    return false;
+                }
+                std::string const name = Trimmed(parts[0]);
+                Word const* word = WordFor(name);
+                if (!word)
+                {
+                    problem = "\"" + name + "\" is not an object";
+                    return false;
+                }
+                char* end = nullptr;
+                std::string const q = Trimmed(parts[1]);
+                long const quantity = std::strtol(q.c_str(), &end, 10);
+                if (q.empty() || *end || quantity < 1 || quantity > 255)
+                {
+                    problem = "\"" + q + "\" is not a quantity from 1 to 255";
+                    return false;
+                }
+                std::string const p = Trimmed(parts[2]);
+                double const percent = std::strtod(p.c_str(), &end);
+                if (p.empty() || *end || percent < 0.0 || percent > 100.0)
+                {
+                    problem = "\"" + p + "\" is not a percentage from 0 to 100";
+                    return false;
+                }
+                roll.push_back(T(word->drop, uint8(quantity), float(percent)));
+            }
+            out.push_back(roll);
+        }
+        return true;
+    }
+
+    // A table written back as its setting: what the log shows, and what the
+    // configuration file ships as the default.
+    std::string Describe(Table const& table)
+    {
+        std::string out;
+        for (Roll const& roll : table)
+        {
+            if (!out.empty())
+                out += " ; ";
+            bool first = true;
+            for (Attempt const& t : roll)
+            {
+                if (!first)
+                    out += ", ";
+                first = false;
+                char buffer[32];
+                std::snprintf(buffer, sizeof buffer, "%g", double(t.chance));
+                out += NameOf(t.drop);
+                out += ':';
+                out += std::to_string(t.quantity);
+                out += ':';
+                out += buffer;
+            }
+        }
+        return out;
+    }
+    // <<< the loot grammar
+
+    // THE TABLES AT RUN TIME, one per source, by key. Filled from the
+    // configuration by SphereGridLoadLootConfig(), which the manager calls
+    // whenever it reads the configuration -- at start-up, and on
+    // `.spheregrid reload`.
+    std::unordered_map<std::string, Table> tables;
+
+    // The built-in table of a source, in the run-time shape: a chain stops at
+    // its End().
+    Table FromDefaults(Case const& c)
+    {
+        Table out;
+        for (size_t j = 0; j < c.count; ++j)
+        {
+            Roll roll;
+            for (Attempt const& t : c.defaults[j].attempts)
+            {
+                if (t.chance <= 0.0f)
+                    break;
+                roll.push_back(t);
+            }
+            out.push_back(roll);
+        }
+        return out;
+    }
+
+    Table const& TableFor(Case const& c)
+    {
+        auto it = tables.find(c.key);
+        if (it == tables.end())
+            it = tables.emplace(c.key, FromDefaults(c)).first;
+        return it->second;
+    }
+
+    size_t changed = 0;             // sources the configuration set otherwise
+
+    void LoadCases(Case const* cases, size_t count)
+    {
+        // A value the configuration cannot hold, so that a setting left out
+        // can be told from one left empty: the first is the built-in table,
+        // the second a source that yields nothing.
+        static std::string const ABSENT = "\x01";
+        for (size_t i = 0; i < count; ++i)
+        {
+            Case const& c = cases[i];
+            std::string const key = std::string("SphereGrid.Loot.") + c.key;
+            std::string const raw = sConfigMgr->GetOption<std::string>(key, ABSENT, false);
+            Table table;
+            std::string problem;
+            if (raw == ABSENT)
+                table = FromDefaults(c);
+            else if (!ParseTable(raw, table, problem))
+            {
+                LOG_WARN("module", "SphereGrid: {} cannot be read -- {}. "
+                         "The built-in table is used.", key, problem);
+                table = FromDefaults(c);
+            }
+            // A source the configuration changed is said at start-up, as it
+            // was read: an operator who wonders whether a setting was taken
+            // finds the answer in the log, not in a kill.
+            std::string const written = Describe(table);
+            if (written != Describe(FromDefaults(c)))
+            {
+                LOG_INFO("module", "SphereGrid: loot, {} = {}", c.key,
+                         written.empty() ? "nothing" : written);
+                ++changed;
+            }
+            LOG_DEBUG("module", "SphereGrid loot: {} = {}", c.key, written);
+            tables[c.key] = table;
+        }
+    }
 
     // ------------------------------------------------------------------
     // Mechanics
@@ -576,6 +827,17 @@ namespace
     // world: skinning a grey beast, or killing a passing monster, is none of this
     // rule's business. A vein or a herb has no level anyway.
     constexpr float GREY_DIVISOR = 5.0f;
+
+    // What the configuration says of this object: a factor on the written
+    // rate. 0 is an object turned off.
+    float DropFactor(Drop const& drop)
+    {
+        if (drop.entry == DROP_RUNE)
+            return sSphereGridMgr->RuneDropFactor();
+        if (drop.entry == 0)
+            return sSphereGridMgr->StoneDropFactor(drop.quality);
+        return sSphereGridMgr->NexusDropFactor(drop.entry);
+    }
 
     float LevelFactor(SphereGridLootSource const& source)
     {
@@ -682,21 +944,30 @@ namespace
                 continue;
 
             bool gotNexus = false;
+            bool nexusPossible = false;     // a Nexus the configuration allows
 
-            for (size_t j = 0; j < label[i].count; ++j)
-                for (Attempt const& t : label[i].lignes[j].tentatives)
+            for (Roll const& roll : TableFor(label[i]))
+                for (Attempt const& t : roll)
                 {
                     if (t.chance <= 0.0f)
-                        break;          // the end of the fallback chain
-                    // The factor bears on the ROLL, not on the end of the chain
+                        continue;       // written as never: the next attempt
+                    // AN OBJECT TURNED OFF in the configuration is not rolled
+                    // at all: the chain goes on to the fallback written after
+                    // it, and the bad-luck protection cannot bring it back.
+                    float const configured = DropFactor(t.drop);
+                    if (configured <= 0.0f)
+                        continue;
+                    // The factors bear on the ROLL, not on the end of the chain
                     // above: a reduced attempt is still an attempt, and it is
                     // always the WRITTEN chance that says where the chain stops.
                     //
-                    // The protection is ADDED after the factor: it is a bonus in
-                    // points, not a multiplier, and a grey monster must not
-                    // divide it.
+                    // The protection is ADDED after the factors: it is a bonus
+                    // in points, not a multiplier, and neither a grey monster
+                    // nor a rarer object must divide it.
                     bool const nexus = IsPlainNexus(t.drop);
-                    if (roll_chance_f(t.chance * facteur + (nexus ? bonus : 0.0f)))
+                    if (nexus)
+                        nexusPossible = true;
+                    if (roll_chance_f(t.chance * facteur * configured + (nexus ? bonus : 0.0f)))
                     {
                         Place(loot, t.drop, t.quantity, label[i].name);
                         if (nexus)
@@ -705,7 +976,10 @@ namespace
                     }
                 }
 
-            if (counter)
+            // No Nexus could have dropped here -- the configuration turned
+            // them all off for this case -- so there is no bad luck to make up
+            // for, and nothing to announce.
+            if (counter && nexusPossible)
             {
                 float const before = state->*counter;
                 if (gotNexus)
@@ -806,6 +1080,18 @@ namespace
         if (modele->type == GAMEOBJECT_TYPE_CHEST)
             s.gobKind = SPHEREGRID_GOB_CHEST;
     }
+}
+
+void SphereGridLoadLootConfig()
+{
+    tables.clear();
+    changed = 0;
+    LoadCases(CASE_MONSTER, std::size(CASE_MONSTER));
+    LoadCases(CASE_GATHERING, std::size(CASE_GATHERING));
+    LoadCases(CASE_SKINNING, std::size(CASE_SKINNING));
+    LoadCases(CASE_CHEST, std::size(CASE_CHEST));
+    LOG_INFO("module", "SphereGrid: loot read - {} source(s), {} set by the "
+             "configuration.", tables.size(), changed);
 }
 
 void SphereGridFillLoot(Loot* loot, LootStore const& store, Player* player)

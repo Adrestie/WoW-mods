@@ -19,13 +19,13 @@
  * mod-spheregrid — handing out the sphere grid items through loot.
  *
  * The principle: NO row is added to the loot tables of the database. The items
- * are injected on the fly into the loot being filled, and the brackets that say
- * where and at what rate live in the server CODE — neither in the database nor
- * in Lua: nothing that decides a drop should be readable or editable anywhere
- * but in the binary.
- *
- * This is the one deliberate exception to the rule that no figure belongs in the
- * code. Its price is known: rebalancing demands a recompilation.
+ * are injected on the fly into the loot being filled. WHAT A SOURCE IS -- which
+ * monsters, veins, herbs, beasts and chests make one -- lives in the server
+ * CODE, neither in the database nor in Lua. WHAT EACH SOURCE DROPS, in what
+ * quantity, with which fallback and at what rate, is the operator's, one
+ * setting per source in the configuration; the tables in the code are the
+ * defaults. One factor per object, also in the configuration, multiplies
+ * every rate at which that object appears.
  *
  * The hook is MiscScript::OnAfterLootTemplateProcess, called by Loot::FillLoot
  * right after the template has been processed and BEFORE group rights and
@@ -77,6 +77,12 @@ struct SphereGridLootSource
     uint32 profession = 0;              // LOCKTYPE_HERBALISM or LOCKTYPE_MINING
     uint32 skill      = 0;              // skill required; 0 = no requirement
 };
+
+// Reads every source's setting from the configuration, the built-in table
+// standing in for a setting left out or unreadable. The manager calls this
+// whenever it reads the configuration: at start-up, and on `.spheregrid
+// reload`.
+void SphereGridLoadLootConfig();
 
 // Called for EVERY loot filled, whatever its nature. It filters on the loot
 // store itself (creature, fishing, gathering, skinning) and does nothing for the

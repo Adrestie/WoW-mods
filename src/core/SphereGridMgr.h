@@ -52,19 +52,19 @@ constexpr uint8 SPHEREGRID_QUALITY_COUNT = 5;
 //   a stone         = STONE_BASE + (statistic - 1) x qualities + (quality - 1)
 //   a node stone    = NODE_STONE_BASE, laid out the same way
 //   a statistic rune = STAT_RUNE_BASE + (statistic - 1)
-constexpr uint32 SPHEREGRID_STONE_BASE = 803100;
-constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 803310;
-constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 803600;
-constexpr uint32 SPHEREGRID_PIN_ENTRY = 803300;
+constexpr uint32 SPHEREGRID_STONE_BASE = 804300;
+constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 804510;
+constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 804800;
+constexpr uint32 SPHEREGRID_PIN_ENTRY = 804500;
 
 // The Nexuses, the items that grant Spherite. Five qualities, plus the
 // prismatic one, which boosts every gain instead of granting any.
-constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 803200;
-constexpr uint32 SPHEREGRID_NEXUS_FLICKERING = 803201;
-constexpr uint32 SPHEREGRID_NEXUS_LUMINOUS = 803202;
-constexpr uint32 SPHEREGRID_NEXUS_IRRADIANT = 803203;
-constexpr uint32 SPHEREGRID_NEXUS_SOLAR = 803204;
-constexpr uint32 SPHEREGRID_NEXUS_PRISMATIC = 803205;
+constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 804400;
+constexpr uint32 SPHEREGRID_NEXUS_FLICKERING = 804401;
+constexpr uint32 SPHEREGRID_NEXUS_LUMINOUS = 804402;
+constexpr uint32 SPHEREGRID_NEXUS_IRRADIANT = 804403;
+constexpr uint32 SPHEREGRID_NEXUS_SOLAR = 804404;
+constexpr uint32 SPHEREGRID_NEXUS_PRISMATIC = 804405;
 
 enum SphereGridCellType : uint8
 {
@@ -176,6 +176,17 @@ public:
     [[nodiscard]] SphereGridStatRune const* StatRune(uint32 itemEntry) const;
     // Highest number of identical runes allowed in a single grid.
     static uint8 RUNES_PER_SPELL;
+
+    // HOW OFTEN EACH OBJECT DROPS, as a factor on the rate the loot brackets
+    // write: 1 leaves it as written, 0 turns the object off, 2 doubles it.
+    // One value per Nexus, one per stone quality, one for the runes -- read
+    // from the configuration as percentages, like everything an operator
+    // tunes, and reloaded with it. An entry that is not a Nexus, or a quality
+    // out of range, answers 1: the brackets never asked for something the
+    // configuration does not name.
+    [[nodiscard]] float NexusDropFactor(uint32 itemEntry) const;
+    [[nodiscard]] float StoneDropFactor(uint8 quality) const;     // 1..5
+    [[nodiscard]] float RuneDropFactor() const { return _runeDropFactor; }
     [[nodiscard]] uint32 PinEntry() const { return SPHEREGRID_PIN_ENTRY; }
 
     [[nodiscard]] std::unordered_map<uint32, SphereGridCell> const& Cells() const { return _cells; }
@@ -212,6 +223,9 @@ private:
     std::map<uint8, std::unordered_map<uint32, uint32>> _distances;
     std::map<std::pair<uint32, uint8>, uint32> _classSpells;        // (node_id, class_id) -> spell_id
     std::map<std::pair<std::string, uint32>, uint32> _pointSources;
+    std::map<uint32, float> _nexusDropFactors;                      // item_entry -> factor
+    float _stoneDropFactors[SPHEREGRID_QUALITY_COUNT] = { 1, 1, 1, 1, 1 };
+    float _runeDropFactor = 1.0f;
     std::unordered_map<uint32, SphereGridStone> _stones;            // item_entry -> effect
     std::unordered_map<uint32, SphereGridRune> _runes;              // item_entry -> spell
     std::unordered_map<uint32, SphereGridStatRune> _statRunes;      // item_entry -> statistic

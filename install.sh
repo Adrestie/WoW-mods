@@ -27,7 +27,8 @@ echo "  A sphere grid for AzerothCore 3.3.5a."
 echo
 echo "  This looks at your server, keeps a copy of everything it is about to"
 echo "  touch, then places the module and applies its SQL. Nothing is written"
-echo "  before the copies exist."
+echo "  before the copies exist. Run on a server that already has the module,"
+echo "  it removes it instead."
 echo
 
 # --- Python ---------------------------------------------------------------
@@ -73,13 +74,26 @@ if [ ! -d "$CORE/modules" ]; then echo "  $CORE has no modules/ folder."; exit 1
 # --- 3. the client --------------------------------------------------------
 echo
 echo "  3. The CLIENT's Data directory, the one holding the .MPQ archives."
-echo "     Leave blank to skip the client; the server half is installed anyway."
-ask CLIENT "path (optional): "
+echo "     THE MODULE NEEDS ONE. Its spells exist in no client: without its"
+echo "     rows they have no name, no icon and no effect."
+echo "     If this machine has no client -- a Linux server usually has none --"
+echo "     leave it blank, and patch one where it lives afterwards."
+ask CLIENT "path: "
 LOCALE=enUS
+NOCLIENT=""
 if [ -n "$CLIENT" ]; then
     echo
     echo "     Which locale is that client? enUS, frFR, deDE..."
     ask LOCALE "locale [enUS]: " enUS
+else
+    echo
+    echo "     NO CLIENT. The server half will be installed and the module's"
+    echo "     spells will do NOTHING for a player until a client is patched:"
+    echo "        $PY tools/install.py --client-only --client <Data dir>"
+    echo "     run on the machine where the client is."
+    ask GOON "Type yes to install the server half alone: "
+    if [ "$GOON" != "yes" ]; then echo "  Nothing was done."; exit 0; fi
+    NOCLIENT="--no-client"
 fi
 
 # --- 4. mysql -------------------------------------------------------------
@@ -87,6 +101,76 @@ echo
 echo "  4. The mysql client. Leave blank if 'mysql' and 'mysqldump' are on"
 echo "     your PATH; otherwise the directory that holds them."
 ask MYSQLDIR "path (optional): "
+
+# --- is the module already there? -----------------------------------------
+# install.py answers 3 when it is, 0 when it is not, and prints what it found
+# either way. That decides which questions come next.
+echo
+echo "  ------------------------------------------------------------------"
+set -- --server "$SERVER" --core "$CORE"
+if [ -n "$CLIENT" ]; then set -- "$@" --client "$CLIENT" --locale "$LOCALE"; fi
+if [ -n "$NOCLIENT" ]; then set -- "$@" "$NOCLIENT"; fi
+if [ -n "$MYSQLDIR" ]; then set -- "$@" --mysql "$MYSQLDIR"; fi
+"$PY" tools/install.py "$@" --presence
+PRESENT=$?
+echo "  ------------------------------------------------------------------"
+case "$PRESENT" in
+    0) ;;
+    3)
+        echo
+        echo "  The module is ALREADY INSTALLED here. This run REMOVES it; to install"
+        echo "  it again, run this once more afterwards."
+        echo
+        echo "  5. WHAT PLAYERS EARNED: the Spherite and the cells they bought, in the"
+        echo "     characters database."
+        echo
+        echo "     [1] Keep it. A later install finds it again."
+        echo "     [2] Drop it too."
+        echo
+        ask EARNED "choice [1]: " 1
+        FLAGS="--keep-characters"
+        if [ "$EARNED" = "2" ]; then FLAGS="--drop-characters"; fi
+        echo
+        echo "  6. WHAT TO DO NOW."
+        echo
+        echo "     [1] Rehearse. Prints every statement and every path, removes nothing."
+        echo "     [2] Remove."
+        echo
+        ask MODE "choice [1]: " 1
+        case "$MODE" in
+            1) FLAGS="$FLAGS --dry-run" ;;
+            2)
+                echo
+                echo "  About to remove:"
+                echo "    $CORE/modules/mod-spheregrid"
+                echo "    $SERVER/lua_scripts/SphereGrid"
+                echo "    the module's configuration"
+                echo "    the module's rows and tables in the world database"
+                if [ "$EARNED" = "2" ]; then echo "    the module's tables in the characters database"; fi
+                if [ -n "$CLIENT" ]; then echo "    the module from $CLIENT/patch-Z.MPQ"; fi
+                echo
+                ask GO "Type yes to go ahead: "
+                if [ "$GO" != "yes" ]; then echo "  Nothing was done."; exit 0; fi
+                ;;
+            *) echo "  Unknown choice."; exit 1 ;;
+        esac
+        echo
+        echo "  ------------------------------------------------------------------"
+        "$PY" tools/install.py "$@" $FLAGS
+        RESULT=$?
+        echo "  ------------------------------------------------------------------"
+        echo
+        if [ "$RESULT" -ne 0 ]; then
+            echo "  It stopped. Nothing beyond what is printed above was done."
+            exit "$RESULT"
+        fi
+        if [ "$MODE" = "2" ]; then
+            echo "  Removed. Rebuild the core so the module is compiled out."
+        fi
+        exit 0
+        ;;
+    *) echo "  It stopped. Nothing beyond what is printed above was done."; exit "$PRESENT" ;;
+esac
 
 # --- 5. where the copies go -----------------------------------------------
 echo
@@ -137,7 +221,8 @@ case "$MODE" in
         echo "    $SERVER/lua_scripts/SphereGrid"
         echo "    the module's configuration, beside the server's"
         echo "    the world and characters databases"
-        if [ -n "$CLIENT" ]; then echo "    $CLIENT/patch-Z.MPQ"; fi
+        if [ -n "$CLIENT" ]; then echo "    $CLIENT/patch-Z.MPQ  (created, or written into if it is the client's)"
+        else echo "    NO CLIENT: the spells will do nothing until one is patched"; fi
         echo
         ask GO "Type yes to go ahead: "
         if [ "$GO" != "yes" ]; then echo "  Nothing was done."; exit 0; fi
@@ -150,6 +235,7 @@ echo
 echo "  ------------------------------------------------------------------"
 set -- --server "$SERVER" --core "$CORE" --backup "$BACKUP"
 if [ -n "$CLIENT" ]; then set -- "$@" --client "$CLIENT" --locale "$LOCALE"; fi
+if [ -n "$NOCLIENT" ]; then set -- "$@" "$NOCLIENT"; fi
 if [ -n "$MYSQLDIR" ]; then set -- "$@" --mysql "$MYSQLDIR"; fi
 if [ -n "$FLAGS" ]; then set -- "$@" $FLAGS; fi
 "$PY" tools/install.py "$@"

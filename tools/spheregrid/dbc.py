@@ -62,7 +62,12 @@ def read(path):
     magic, count, fields, size, string_size = HEADER.unpack_from(raw, 0)
     if magic != MAGIC:
         raise ValueError("%s is not a DBC (magic %r)" % (path, magic))
-    if fields * 4 != size:
+    # Almost every table of 3.3.5a is fields x 4 bytes. SpellChainEffects is
+    # not: five single-byte fields sit in the middle of its 177 bytes, and
+    # the fields after them are not aligned. Records are carried as bytes,
+    # and a field is read at index x 4 wherever that lands inside the record
+    # -- which is all the tools need: the identifier, and a texture path.
+    if fields * 4 != size and not (fields * 4 > size > (fields - 8) * 4):
         raise ValueError("%s: %d fields do not fill %d bytes"
                          % (path, fields, size))
     start = HEADER.size
@@ -73,13 +78,21 @@ def read(path):
     return Dbc(fields, size, records, strings)
 
 
+def to_bytes(dbc):
+    """The file a DBC would be written to, as bytes.
+
+    A caller that must decide whether to write at all -- a shift, which is
+    all of it or none of it -- builds the files first and lays them down
+    afterwards.
+    """
+    return b"".join([HEADER.pack(MAGIC, len(dbc.records), dbc.field_count,
+                                 dbc.record_size, len(dbc.strings))]
+                    + list(dbc.records) + [dbc.strings])
+
+
 def write(path, dbc):
     with open(path, "wb") as f:
-        f.write(HEADER.pack(MAGIC, len(dbc.records), dbc.field_count,
-                            dbc.record_size, len(dbc.strings)))
-        for r in dbc.records:
-            f.write(r)
-        f.write(dbc.strings)
+        f.write(to_bytes(dbc))
 
 
 def string_fields(dbc):
@@ -102,7 +115,9 @@ def string_fields(dbc):
     """
     size = len(dbc.strings)
     out = set()
-    for index in range(1, dbc.field_count):
+    # A field past the record's end -- SpellChainEffects's unaligned tail --
+    # cannot be read as four bytes, and is no string anyway.
+    for index in range(1, min(dbc.field_count, dbc.record_size // 4)):
         seen = False
         for record in dbc.records:
             value = dbc.field(record, index)
@@ -115,6 +130,52 @@ def string_fields(dbc):
             if seen:
                 out.add(index)
     return out
+
+
+# WHERE THE FORM IS KNOWN, IT IS SAID RATHER THAN GUESSED.
+#
+# `string_fields` asks that a field be a valid offset in EVERY record. That is
+# strong evidence on a whole file and weak on a small one: in a string block
+# of thirty bytes, an integer worth 1 is a valid offset, and a merge would
+# then read that integer as a text and rewrite it. It errs on whole files too
+# -- ItemDisplayInfo's GeosetGroup_3 is only ever 0 or 1, and 1 is a valid
+# offset in any block.
+#
+# The tables the module merges into a client have a fixed, known form, so it
+# is written down here once. Read from the 3.3.5a layouts, checked against
+# the reference client's own files (tens of thousands of rows each) and,
+# where the core reads them, against its format strings (`DBCfmt.h`): the
+# core marks Spell's Name and NameSubtext as sixteen strings each, and
+# ItemDisplayInfo's InventoryIcon_1 as one.
+#
+# An empty set is a table with no string at all, and says so on purpose.
+KNOWN_STRING_FIELDS = {
+    # four texts of sixteen locales each, every one followed by its mask
+    "Spell.dbc": (set(range(136, 152)) | set(range(153, 169))
+                  | set(range(170, 186)) | set(range(187, 203))),
+    "Item.dbc": set(),
+    # ModelName x2, ModelTexture x2, InventoryIcon x2, then Texture x8
+    "ItemDisplayInfo.dbc": {1, 2, 3, 4, 5, 6} | set(range(15, 23)),
+    "SpellIcon.dbc": {1},
+    "SpellVisual.dbc": set(),
+    "SpellVisualKit.dbc": set(),
+    "SpellVisualEffectName.dbc": {1, 2},          # the name, and the model
+    # the name, ten files, and the folder holding them
+    "SoundEntries.dbc": {2} | set(range(3, 13)) | {23},
+    "SpellDuration.dbc": set(),
+    "CreatureDisplayInfo.dbc": {6, 7, 8, 9},      # three skins and a portrait
+    "CreatureModelData.dbc": {2},                 # the model
+    "GameObjectDisplayInfo.dbc": {1},             # the model
+    "Emotes.dbc": {1},                            # the slash command
+    "SpellChainEffects.dbc": {7},                 # the beam's texture
+}
+
+
+def string_fields_of(name, dbc):
+    """The string fields of a table known by its file name -- declared when
+    the file is one the heuristic must not be trusted on, deduced otherwise."""
+    known = KNOWN_STRING_FIELDS.get(name.replace("spheregrid_", ""))
+    return set(known) if known is not None else string_fields(dbc)
 
 
 def read_string(dbc, record, index):
@@ -263,6 +324,46 @@ def renumber(source, mapping):
         out.append(record)
     out.sort(key=lambda r: struct.unpack_from("<I", r, 0)[0])
     return Dbc(source.field_count, source.record_size, out, source.strings)
+
+
+def derive(source, from_id, new_id, strings_at, ints=None, strings=None,
+           bytes_at=None):
+    """A copy of one record under a new identifier, some fields changed.
+
+    A MODULE MAY NEED A ROW THE GAME DOES NOT HAVE: a visual that is the
+    game's meteor with a fire cast in front of it, a display that is one of
+    ours wearing another model. Rather than hand-write thirty-two fields, the
+    row is derived from the one it is nearest to -- a row of the game or of
+    the module -- and only what differs is said: `ints` maps a field index to
+    a 32 bit value, `strings` a field index to a text, and `bytes_at` a BYTE
+    OFFSET to a byte -- for the few tables, SpellChainEffects among them,
+    whose fields are not all four bytes wide. The text is added to the block;
+    nothing else in the block moves.
+
+    The record joins the table in identifier order. A `new_id` already in the
+    table is a mistake, and is reported rather than doubled.
+    """
+    if new_id in set(source.ids()):
+        raise ValueError("identifier %d is already in the table" % new_id)
+    rows = source.by_id()
+    if from_id not in rows:
+        raise ValueError("no record %d to derive from" % from_id)
+    record = bytearray(rows[from_id])
+    block = bytearray(source.strings)
+    struct.pack_into("<I", record, 0, new_id)
+    for index, value in sorted((ints or {}).items()):
+        struct.pack_into("<I", record, index * 4, int(value) & 0xFFFFFFFF)
+    for offset, value in sorted((bytes_at or {}).items()):
+        record[offset] = int(value) & 0xFF
+    for index, text in sorted((strings or {}).items()):
+        if index not in strings_at:
+            raise ValueError("field %d is not a string field" % index)
+        offset = len(block)
+        block += text.encode("utf-8") + b"\0"
+        struct.pack_into("<I", record, index * 4, offset)
+    out = list(source.records) + [bytes(record)]
+    out.sort(key=lambda r: struct.unpack_from("<I", r, 0)[0])
+    return Dbc(source.field_count, source.record_size, out, bytes(block))
 
 
 def rename_strings(source, strings_at, changes):

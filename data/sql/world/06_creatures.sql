@@ -66,13 +66,24 @@ INSERT INTO `creature_template_model`
 SELECT 803803, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`
 FROM `creature_template_model` WHERE `CreatureID` = 3527;
 
+-- THE DREADGUARD WEARS A DISPLAY OF THE MODULE'S OWN, and a display the core
+-- knows nothing of has neither a bounding radius nor a combat reach: it says
+-- so at every start ("No model data exist for CreatureDisplayID"), the
+-- creature collides with nothing and nothing reaches it at the right
+-- distance. The figures are those of display 1912, the one creature 11859
+-- wears -- the creature this one is cloned from.
+DELETE FROM `creature_model_info` WHERE `DisplayID` = 802530;
+INSERT INTO `creature_model_info`
+    (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
+VALUES (802530, 0.9168, 1.8, 0, 0);
+
 -- ---------------------------------------------------------------------------
 -- WHAT CAME LATER. What follows was added after the blocks above and repeats
 -- some of them. Replayed in order it makes no difference: the later rows are
 -- already applied, and applying them again changes nothing.
 -- ---------------------------------------------------------------------------
 
--- Displays 802112-802115: the ghoul's four models, on a widened bounding box.
+-- Displays 802512-802515: the ghoul's four models, on a widened bounding box.
 UPDATE `creature_template`
    SET `ScriptName` = 'npc_spheregrid_ghoul',
        `minlevel` = 80, `maxlevel` = 80
@@ -80,18 +91,18 @@ UPDATE `creature_template`
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 803801;
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803801, 0, 802112, 1, 1),
-       (803801, 1, 802113, 1, 1),
-       (803801, 2, 802114, 1, 1),
-       (803801, 3, 802115, 1, 1);
+VALUES (803801, 0, 802512, 1, 1),
+       (803801, 1, 802513, 1, 1),
+       (803801, 2, 802514, 1, 1),
+       (803801, 3, 802515, 1, 1);
 DELETE FROM `creature_model_info`
- WHERE `DisplayID` IN (802112, 802113, 802114, 802115);
+ WHERE `DisplayID` IN (802512, 802513, 802514, 802515);
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802112, 0.31, 1, 2, 0),
-       (802113, 0.31, 1, 2, 0),
-       (802114, 0.31, 1, 2, 0),
-       (802115, 0.31, 1, 2, 0);
+VALUES (802512, 0.31, 1, 2, 0),
+       (802513, 0.31, 1, 2, 0),
+       (802514, 0.31, 1, 2, 0),
+       (802515, 0.31, 1, 2, 0);
 
 UPDATE `creature_template` SET `name` = 'Totem de lien d''esprit'
 WHERE `entry` = 803803;
@@ -109,7 +120,7 @@ WHERE `entry` = 803802;
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 803802;
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803802, 0, 802130, 1, 1);
+VALUES (803802, 0, 802530, 1, 1);
 DELETE FROM `creature_template_locale` WHERE `entry` = 803802 AND `locale` = 'frFR';
 INSERT INTO `creature_template_locale` (`entry`, `locale`, `Name`, `Title`)
 VALUES (803802, 'frFR', 'Tyran démoniaque', '');
@@ -135,12 +146,12 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803804, 0, 802102, 1, 1);
+VALUES (803804, 0, 802502, 1, 1);
 
-DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802101, 802102);
+DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802501, 802502);
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802101, 0.5, 0, 2, 0), (802102, 0.5, 0, 2, 0);
+VALUES (802501, 0.5, 0, 2, 0), (802502, 0.5, 0, 2, 0);
 
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 803805;
 DELETE FROM `creature_template` WHERE `entry` = 803805;
@@ -148,7 +159,7 @@ DELETE FROM `creature_template` WHERE `entry` = 803805;
 -- ------------------------------------------------------------------
 -- The arcane orb
 -- ------------------------------------------------------------------
--- A trigger cloned from 22515, wearing display 802103 -- a model the module
+-- A trigger cloned from 22515, wearing display 802503 -- a model the module
 -- ships -- and driven by npc_spheregrid_arcane_orb.
 
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 803806;
@@ -167,12 +178,19 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803806, 0, 802103, 1, 1);
+VALUES (803806, 0, 802558, 1, 1);
 
-DELETE FROM `creature_model_info` WHERE `DisplayID` = 802103;
+-- The orb is a prop that flies and strikes: the same figures as the module's
+-- other props, which touch nothing themselves.
+DELETE FROM `creature_model_info` WHERE `DisplayID` = 802558;
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802103, 0.5, 0, 2, 0);
+VALUES (802558, 0.5, 0, 2, 0);
+
+DELETE FROM `creature_model_info` WHERE `DisplayID` = 802503;
+INSERT INTO `creature_model_info`
+    (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
+VALUES (802503, 0.5, 0, 2, 0);
 
 -- ------------------------------------------------------------------
 -- The meteor
@@ -183,7 +201,7 @@ VALUES (802103, 0.5, 0, 2, 0);
 
 DELETE FROM `creature_template_model` WHERE `CreatureID` IN (803807, 803808, 803809);
 DELETE FROM `creature_template` WHERE `entry` IN (803807, 803808, 803809);
-DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802104, 802105, 802106);
+DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802504, 802505, 802506);
 
 -- ------------------------------------------------------------------
 -- The shimmer marker
@@ -205,12 +223,12 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803810, 0, 802107, 1, 1);
+VALUES (803810, 0, 802507, 1, 1);
 
-DELETE FROM `creature_model_info` WHERE `DisplayID` = 802107;
+DELETE FROM `creature_model_info` WHERE `DisplayID` = 802507;
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802107, 0.5, 0, 2, 0);
+VALUES (802507, 0.5, 0, 2, 0);
 
 -- ------------------------------------------------------------------
 -- The pack beast
@@ -234,7 +252,7 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803811, 0, 802102, 1, 1);
+VALUES (803811, 0, 802502, 1, 1);
 
 -- ------------------------------------------------------------------
 -- The angelic feather
@@ -257,12 +275,12 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803812, 0, 802108, 1, 1);
+VALUES (803812, 0, 802508, 1, 1);
 
-DELETE FROM `creature_model_info` WHERE `DisplayID` = 802108;
+DELETE FROM `creature_model_info` WHERE `DisplayID` = 802508;
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802108, 0.5, 0, 2, 0);
+VALUES (802508, 0.5, 0, 2, 0);
 
 -- ------------------------------------------------------------------
 -- The barrier
@@ -284,12 +302,12 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803813, 0, 802109, 1, 1);
+VALUES (803813, 0, 802509, 1, 1);
 
-DELETE FROM `creature_model_info` WHERE `DisplayID` = 802109;
+DELETE FROM `creature_model_info` WHERE `DisplayID` = 802509;
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802109, 0.5, 0, 2, 0);
+VALUES (802509, 0.5, 0, 2, 0);
 
 -- ------------------------------------------------------------------
 -- The halo
@@ -314,14 +332,14 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803814, 0, 802110, 1, 1),
-       (803815, 0, 802111, 1, 1);
+VALUES (803814, 0, 802510, 1, 1),
+       (803815, 0, 802511, 1, 1);
 
-DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802110, 802111);
+DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802510, 802511);
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802110, 0.5, 0, 2, 0),
-       (802111, 0.5, 0, 2, 0);
+VALUES (802510, 0.5, 0, 2, 0),
+       (802511, 0.5, 0, 2, 0);
 
 -- ------------------------------------------------------------------
 -- The gates
@@ -343,9 +361,9 @@ CREATE TEMPORARY TABLE `spheregrid_clone_go` AS
 -- THE DISPLAY IS THE MODULE'S OWN. It used to be 8500, one of the game's --
 -- a Dalaran chair -- which the client it grew up in had quietly rewritten into
 -- a portal. A module cannot do that: the row is copied into
--- spheregrid_GameObjectDisplayInfo.dbc under 802100, and the gate wears that.
+-- spheregrid_GameObjectDisplayInfo.dbc under 802500, and the gate wears that.
 UPDATE `spheregrid_clone_go` SET `entry` = 803820, `name` = 'Tunnel de la mort',
-    `type` = 22, `displayId` = 802100, `size` = 0.1,
+    `type` = 22, `displayId` = 802500, `size` = 0.08,
     `Data0` = 52751, `Data1` = 0, `Data2` = 1,
     `ScriptName` = 'go_spheregrid_gate';
 INSERT INTO `gameobject_template` SELECT * FROM `spheregrid_clone_go`;
@@ -365,19 +383,19 @@ UPDATE `creature_template`
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 803801;
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803801, 0, 802112, 1, 1),
-       (803801, 1, 802113, 1, 1),
-       (803801, 2, 802114, 1, 1),
-       (803801, 3, 802115, 1, 1);
+VALUES (803801, 0, 802512, 1, 1),
+       (803801, 1, 802513, 1, 1),
+       (803801, 2, 802514, 1, 1),
+       (803801, 3, 802515, 1, 1);
 
 DELETE FROM `creature_model_info`
- WHERE `DisplayID` IN (802112, 802113, 802114, 802115);
+ WHERE `DisplayID` IN (802512, 802513, 802514, 802515);
 INSERT INTO `creature_model_info`
     (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
-VALUES (802112, 0.31, 1, 2, 0),
-       (802113, 0.31, 1, 2, 0),
-       (802114, 0.31, 1, 2, 0),
-       (802115, 0.31, 1, 2, 0);
+VALUES (802512, 0.31, 1, 2, 0),
+       (802513, 0.31, 1, 2, 0),
+       (802514, 0.31, 1, 2, 0),
+       (802515, 0.31, 1, 2, 0);
 
 -- ------------------------------------------------------------------
 -- The spirit link totem
@@ -400,7 +418,7 @@ WHERE `entry` = 803802;
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 803802;
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803802, 0, 802130, 1, 1);
+VALUES (803802, 0, 802530, 1, 1);
 
 DELETE FROM `creature_template_locale` WHERE `entry` = 803802 AND `locale` = 'frFR';
 INSERT INTO `creature_template_locale` (`entry`, `locale`, `Name`, `Title`)
@@ -419,7 +437,7 @@ WHERE `entry` = 803802;
 -- The star
 -- ------------------------------------------------------------------
 -- Two triggers -- the star itself and the point it departs from -- used by
--- Stellar Return (8610020).
+-- Stellar Return (9010020).
 
 DELETE FROM `creature_template_model` WHERE `CreatureID` IN (803816, 803817);
 DELETE FROM `creature_template` WHERE `entry` IN (803816, 803817);
@@ -438,8 +456,16 @@ DROP TEMPORARY TABLE IF EXISTS `spheregrid_clone`;
 
 INSERT INTO `creature_template_model`
     (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`)
-VALUES (803816, 0, 802105, 1, 1),
-       (803817, 0, 802106, 1, 1);
+VALUES (803816, 0, 802505, 1, 1),
+       (803817, 0, 802506, 1, 1);
+
+-- The figures of display 16925, the second of the two creature 22515 wears --
+-- the creature both of these are cloned from.
+DELETE FROM `creature_model_info` WHERE `DisplayID` IN (802505, 802506);
+INSERT INTO `creature_model_info`
+    (`DisplayID`, `BoundingRadius`, `CombatReach`, `Gender`, `DisplayID_Other_Gender`)
+VALUES (802505, 0.5, 1, 2, 0),
+       (802506, 0.5, 1, 2, 0);
 
 DELETE FROM `creature_template_locale`
     WHERE `entry` IN (803816, 803817) AND `locale` = 'frFR';

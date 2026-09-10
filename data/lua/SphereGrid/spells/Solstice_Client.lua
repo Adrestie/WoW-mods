@@ -36,11 +36,13 @@
     WHAT WE PUT IN ITS PLACE:
 
       * the cursor follows OUR gauge, xPos = 38 x notch / 3, the notch coming
-        from the stacks of "Lunar gauge" (8610032) and "Solar gauge" (8610033).
+        from the stacks of "Lunar gauge" (9010032) and "Solar gauge" (9010033).
         THOSE AURAS MUST STAY VISIBLE: marked as having no icon, they stopped
         being returned by UnitBuff and the cursor froze in the middle.
       * a half lights when AN END IS REACHED -- that is, when the player
-        carries Solstice (8610029, sun) or Equinox (8610030, moon).
+        carries Solstice (9010029, sun) or Equinox (9010030, moon);
+      * and the bar is put away for a druid who does NOT know the spell: the
+        addon shows for any moonkin, which is one condition short of ours.
 
     The addon calls EclipseBar_Update from its own OnUpdate every frame, so
     replacing that one function is enough for everything to follow. OnShow and
@@ -60,9 +62,10 @@ end
 -- ---------------------------------------------------------------------------
 -- What the server tells us
 -- ---------------------------------------------------------------------------
-local ID_LUNAR_GAUGE, ID_SOLAR_GAUGE = 8610032, 8610033   -- 1 to 3 stacks
-local ID_EQUINOX, ID_SOLSTICE = 8610030, 8610029          -- an end reached
-local ID_SUN_SPENT, ID_MOON_SPENT = 8610034, 8610035      -- that body is spent
+local ID_SPELL = 9000092                                  -- the spell itself
+local ID_LUNAR_GAUGE, ID_SOLAR_GAUGE = 9010032, 9010033   -- 1 to 3 stacks
+local ID_EQUINOX, ID_SOLSTICE = 9010030, 9010029          -- an end reached
+local ID_SUN_SPENT, ID_MOON_SPENT = 9010034, 9010035      -- that body is spent
 local END_NOTCH = 3                                       -- notches per half
 local TRAVEL = 38                                         -- pixels, as the addon has it
 
@@ -89,6 +92,64 @@ local SCALE = 1.6
 
 local lastState
 local repositioned = false
+local known = false
+
+
+-- ---------------------------------------------------------------------------
+-- Does the player know the spell?
+-- ---------------------------------------------------------------------------
+-- THE BAR BELONGS TO THE SPELL, NOT TO THE FORM. The addon we take over shows
+-- for any moonkin, so a druid who has never bought the cell was given a gauge
+-- that meant nothing.
+--
+-- 3.3.5 has no IsSpellKnown, so the SPELL BOOK is read: GetSpellLink hands
+-- back a link carrying the identifier, which neither the client's language nor
+-- a renamed spell can disturb. It is read when the book changes, never every
+-- frame.
+-- The form the bar belongs to. MOONKIN_FORM is a global of the client; the
+-- number is the fallback for a client that does not declare it.
+local function moonkin()
+    local form = GetShapeshiftFormID and GetShapeshiftFormID()
+    return form == (MOONKIN_FORM or 31)
+end
+
+
+-- SHOWN OR PUT AWAY BY US, not only by the addon. Its own rule fires on a
+-- change of form: a druid already in moonkin who bought the cell saw nothing
+-- until he changed form, logged in again or reloaded the interface.
+local function follow()
+    if not EclipseBarFrame then
+        return
+    end
+    if known and moonkin() then
+        if not EclipseBarFrame:IsShown() then
+            lastState = nil
+            EclipseBarFrame:Show()
+        end
+    elseif not known and EclipseBarFrame:IsShown() then
+        EclipseBarFrame:Hide()
+    end
+end
+
+
+local function readBook()
+    known = false
+    local total = 0
+    for tab = 1, (GetNumSpellTabs() or 0) do
+        local _, _, offset, count = GetSpellTabInfo(tab)
+        if offset and count then
+            total = offset + count
+        end
+    end
+    for index = 1, total do
+        local link = GetSpellLink(index, BOOKTYPE_SPELL)
+        local id = link and tonumber(link:match("spell:(%d+)"))
+        if id == ID_SPELL then
+            known = true
+            return
+        end
+    end
+end
 
 
 -- ---------------------------------------------------------------------------
@@ -141,6 +202,12 @@ end
 local function updateEclipse(frame)
     if not frame or not frame.marker then
         return                              -- OnLoad has not run yet
+    end
+    -- Hidden, the frame stops updating on its own; the addon shows it again on
+    -- the next change of form, and OnShow sends us straight back here.
+    if not known then
+        frame:Hide()
+        return
     end
     local notch, endpoint, lock = readGauge()
 
@@ -225,6 +292,12 @@ end
 -- inherit the portrait's scale -- and place it in the middle, under the
 -- character. Show and Hide stay the addon's own; reparenting does not disturb
 -- them.
+--
+-- AND THE PLAYER MOVES IT. The bar drags with the left button, and where it
+-- was left is remembered PER CHARACTER through AIO's saved variables
+-- (AIO.SavePosition, LibWindow underneath): the anchor above is only where it
+-- starts the first time. A client whose AIO is older than these two helpers
+-- keeps the fixed bar, and nothing breaks.
 local function reposition()
     if repositioned or not EclipseBarFrame then
         return
@@ -234,6 +307,13 @@ local function reposition()
     EclipseBarFrame:SetPoint("CENTER", UIParent, "CENTER", ANCHOR_X, ANCHOR_Y)
     EclipseBarFrame:SetScale(SCALE)
     repositioned = true
+
+    local LibWindow = LibStub and LibStub("LibWindow-1.1", true)
+    if AIO.SavePosition and LibWindow and LibWindow.MakeDraggable then
+        AIO.SavePosition(EclipseBarFrame, true)   -- restores a saved place, or keeps this one
+        EclipseBarFrame:EnableMouse(true)
+        LibWindow.MakeDraggable(EclipseBarFrame)
+    end
 end
 
 local function connect()
@@ -267,17 +347,25 @@ local function connect()
     return true
 end
 
+readBook()
 local branch = connect()
 
--- If the addon was not loaded yet, try again on entering the world.
+-- If the addon was not loaded yet, try again on entering the world. The book is
+-- read again whenever it changes: buying the cell lights the bar without a
+-- reconnection, giving it back puts the bar away.
 local idle = CreateFrame("Frame")
 idle:RegisterEvent("PLAYER_ENTERING_WORLD")
+idle:RegisterEvent("SPELLS_CHANGED")
+idle:RegisterEvent("LEARNED_SPELL_IN_TAB")
+idle:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 idle:SetScript("OnEvent", function()
+    readBook()
     if not branch then
         branch = connect()
     end
     reposition()
-    if branch and EclipseBarFrame then
+    follow()
+    if branch and EclipseBarFrame and EclipseBarFrame:IsShown() then
         lastState = nil
         updateEclipse(EclipseBarFrame)
     end

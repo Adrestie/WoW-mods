@@ -360,7 +360,7 @@ RC.PICK_ROW_H    = 22
 RC.PICK_ROWS     = 8
 RC.PICK_ICON     = 18
 RC.PICK_PAD      = 10
-RC.PIN_ENTRY = 803300           -- a fallback; the authoritative value comes from the database
+RC.PIN_ENTRY = 804500           -- a fallback; the authoritative value comes from the database
 RC.PLAYER_BAGS   = { 0, 1, 2, 3, 4 }
 -- An item taken in hand by right-clicking it in a bag: the cursor turns into
 -- "apply to a target", like a spell to cast. SetCursor expects one of the

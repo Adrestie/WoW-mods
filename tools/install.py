@@ -17,12 +17,22 @@
 """Installs mod-spheregrid into a server, and says everything it does.
 
     python tools/install.py --server <server dir> --core <azerothcore dir>
-                            [--client <client Data dir>] [--locale enUS]
-                            [--backup vault|beside] [--survey] [--dry-run]
+                            --client <client Data dir> | --no-client
+                            [--locale enUS] [--backup vault|beside]
+                            [--survey] [--dry-run]
+    python tools/install.py --client-only --client <client Data dir>
 
 `--server` is the directory holding `worldserver.exe`, `configs/` and
 `lua_scripts/`. `--core` is the AzerothCore source tree, the one with a
 `modules/` folder: the module's sources go there and the operator rebuilds.
+
+A CLIENT IS NOT OPTIONAL. The module's spells exist in no client: without its
+rows a player sees no name, no icon and no effect, and cannot cast them. So
+`--client` is asked for, and the only way past it is to SAY so with
+`--no-client` -- for a server that has no client on it, which is most Linux
+ones. That server's operator then patches a client of his own, on the machine
+where it lives, with `--client-only`: that mode needs no server and touches
+no database.
 
 WHAT IT DOES, IN ORDER
 
@@ -40,21 +50,36 @@ do, and writes nothing either.
 
   5. CLIENT   when one is given: merges the module's DBC rows into the
               client's own files and writes them, with whatever art the module
-              ships, into a new `patch-Z.MPQ`. Nothing existing is rewritten,
-              and deleting that one archive undoes all of it.
+              ships, into `patch-Z.MPQ` -- a NEW archive holding only that when
+              the client has none, or INTO the client's own when it already
+              has one. In the second case each file it replaces is copied
+              aside first, nothing else in the archive moves, and the archive
+              keeps a record of what the module put in it.
 
-WHAT IT DOES NOT DO YET
+WHEN THE MODULE IS ALREADY THERE -- its sources under modules/, its
+interface, its configuration, its tables in the world database, or its rows in
+the client's archive -- the installer does not install: it says what it found
+and REMOVES the module instead, with `--keep-characters` or
+`--drop-characters` saying what becomes of what players earned. To update the
+module, remove it, then install it again. `--presence` only asks the question:
+exit code 3 when the module is there, 0 when it is not, nothing written.
 
-  Shift identifiers. If the survey finds one taken, it stops rather than
-  guessing. On a stock server and a stock client nothing of the module's is
-  taken, so that path is the exception -- but it is not written.
+`--shift` allows the survey's answer to be acted on: when an identifier is
+taken -- on the server, in its database, or in the client, the client's own
+`patch-Z` included -- the module's own are moved out of the way, in every
+file of the module, before anything is written. Without it the installer
+stops and says what is taken.
+
+WHAT IT DOES NOT DO
 
   Merge `FrameXML.toc` and `PetActionBarFrame.lua`. Those are the client's own
   files, and a module must not overwrite them.
 """
 import argparse
 import io
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -80,6 +105,13 @@ OURS = {
     "spheregrid_SpellVisualEffectName.dbc": "SpellVisualEffectName.dbc",
     "spheregrid_SoundEntries.dbc": "SoundEntries.dbc",
     "spheregrid_SpellDuration.dbc": "SpellDuration.dbc",
+    "spheregrid_SpellChainEffects.dbc": "SpellChainEffects.dbc",
+    # WHICH TAB A SPELL SITS IN. The spell book does not read the class from
+    # Spell.dbc: it reads the SKILL LINE a spell is tied to, and a spell no
+    # line names falls into "General". One row per spell the module can teach
+    # -- the forty-one of its cells and the four hundred and ninety-two ranks
+    # its runes grant.
+    "spheregrid_SkillLineAbility.dbc": "SkillLineAbility.dbc",
     # The animations the module's own scripts play, and the display its gate
     # wears -- a copy of one of the game's, under an identifier of ours.
     "spheregrid_Emotes.dbc": "Emotes.dbc",
@@ -333,70 +365,146 @@ def taken_in_database(target, family):
 
 # ---------------------------------------------------------------- the survey
 
-# THE ARCHIVE THIS INSTALLER WRITES. It is not the client's: it is what a
-# previous run left, and what this one is about to replace. Reading the chain
-# with it would show every identifier taken -- by us -- and would fold the
-# module's rows into a file that already holds them.
+# THE ARCHIVE THIS INSTALLER WRITES. `patch-Z` is read after every other
+# archive of the client, so what it says wins. When the client has no such
+# file the installer creates one holding only what the module adds -- the
+# module's OWN archive, set aside and rewritten by every later run, deleted
+# whole by the uninstaller. When the client already has one -- another
+# server's whole patch, perhaps gigabytes of it -- the module's rows are
+# merged INTO its files and written back into it: the archive is SHARED, it
+# stays the client's, and what the module replaced was copied aside first.
 ARCHIVE = "patch-Z.MPQ"
-# A file the installer writes INSIDE the archive, so the archive can be told
-# from another server's whatever identifiers the module carries at the time.
+# Two files the installer writes inside the archive: a line for people, and a
+# record for the tools -- which kind of archive this is, and what the module
+# put in it, row by row and file by file. The record is what lets a later run
+# tell the module's earlier rows from the client's, and what lets the
+# uninstaller take exactly those out again.
 MARK = r"SphereGrid\module.txt"
+WRITTEN = r"SphereGrid\written.json"
+OWN, SHARED = "own", "shared"
 
 
-def is_ours(path):
-    """Whether an archive named like ours IS ours.
+def dbc_from_bytes(raw):
+    """A DBC read from an archive: the reader wants a path, so it gets one
+    for as long as the read takes. Nothing is left on disk."""
+    import tempfile
+    handle = tempfile.NamedTemporaryFile(suffix=".dbc", delete=False)
+    handle.write(raw)
+    handle.close()
+    try:
+        return dbc.read(handle.name)
+    finally:
+        os.unlink(handle.name)
 
-    The module's archive carries the module's DBC rows: Spell.dbc with one of
-    the module's own spells in it. An archive of that name WITHOUT them is
-    somebody else's -- a server's whole patch, perhaps gigabytes of it -- and
-    must not be written over.
+
+def dbc_to_bytes(table):
+    """The bytes of a DBC, written the same way and kept nowhere."""
+    import tempfile
+    handle = tempfile.NamedTemporaryFile(suffix=".dbc", delete=False)
+    handle.close()
+    try:
+        dbc.write(handle.name, table)
+        with open(handle.name, "rb") as f:
+            return f.read()
+    finally:
+        os.unlink(handle.name)
+
+
+def written_record(archive):
+    """What the module wrote into an open archive, or None if nothing.
+
+    An archive with the record is read from it. One with the mark but no
+    record was written by an installer older than the record, when the only
+    kind was the module's own. One with neither carries nothing of ours,
+    whatever identifiers it holds: a server's patch that happens to use the
+    module's ranges is a clash for the survey to find, not an archive to
+    claim.
     """
+    if archive.has(WRITTEN):
+        return json.loads(archive.read(WRITTEN).decode("utf-8"))
+    if archive.has(MARK):
+        return {"kind": OWN, "version": "unknown", "dbc": {},
+                "added": [], "replaced": []}
+    return None
+
+
+def written_record_at(path):
     try:
         archive = mpq.Archive(path)
     except Exception:
-        return False
+        return None
     try:
-        if archive.has(MARK):
-            return True
-        # Archives written before the mark existed: one of our spells is in it.
-        if not archive.has(r"DBFilesClient\Spell.dbc"):
-            return False
-        raw = archive.read(r"DBFilesClient\Spell.dbc")
-        import tempfile
-        handle = tempfile.NamedTemporaryFile(suffix=".dbc", delete=False)
-        handle.write(raw)
-        handle.close()
-        try:
-            ids = set(dbc.read(handle.name).ids())
-        finally:
-            os.unlink(handle.name)
-        mine = dbc.read(os.path.join(MODULE, "data", "dbc", "spheregrid_Spell.dbc"))
-        return bool(ids & set(mine.ids()))
+        return written_record(archive)
     finally:
         archive.close()
 
 
-def foreign_archive(client_dir):
-    """The path of an archive of our name that is not ours, or None."""
+def archive_kind(path):
+    """OWN, SHARED, or None for an archive that carries nothing of ours."""
+    record = written_record_at(path)
+    return record["kind"] if record else None
+
+
+def is_ours(path):
+    return archive_kind(path) == OWN
+
+
+def top_archive(client_dir):
+    """The client's file named like ARCHIVE, in whatever case, or None."""
     for name in os.listdir(client_dir):
         if name.lower() == ARCHIVE.lower():
-            path = os.path.join(client_dir, name)
-            return None if is_ours(path) else path
+            return os.path.join(client_dir, name)
     return None
 
 
-def read_client(client_dir, locale):
-    """The client's archives, WITHOUT the module's own.
+class ClientView(object):
+    """A client's archives, and what its `patch-Z` is to the module.
 
-    Returns the chain and whether one of ours was set aside, so the caller can
-    say so: an operator reinstalling deserves to know his previous archive was
-    ignored rather than merged into.
+    `chain` is the archives in reading order. `top` is the path of the file
+    named like ARCHIVE, or None. `kind` says what that file is: None for no
+    file or the client's own untouched, OWN for the module's, SHARED for the
+    client's with the module written into it. `record` is what an earlier run
+    wrote there, or None.
+
+    The module's OWN archive is left out of the chain: it holds nothing but
+    what this run is about to write again, and reading it would show every
+    identifier taken -- by us. A SHARED one is the client's, and is read like
+    any other: its rows are the client's, minus those the record says are the
+    module's.
     """
-    before = mpq.open_client(client_dir, locale=locale)
-    mine = any(os.path.basename(a.path).lower() == ARCHIVE.lower()
-               for a in before.archives)
-    before.close()
-    return mpq.open_client(client_dir, locale=locale, ignore=(ARCHIVE,)), mine
+
+    def __init__(self, client_dir, locale):
+        self.top = top_archive(client_dir)
+        self.record = written_record_at(self.top) if self.top else None
+        self.kind = self.record["kind"] if self.record else None
+        ignore = (ARCHIVE,) if self.kind == OWN else ()
+        self.chain = mpq.open_client(client_dir, locale=locale, ignore=ignore)
+
+    def earlier(self, inside):
+        """The identifiers an earlier run put into this DBC of the client."""
+        if self.kind != SHARED:
+            return set()
+        return set(self.record.get("dbc", {}).get(inside, ()))
+
+    def describe(self):
+        base = os.path.basename(self.top) if self.top else ARCHIVE
+        if self.kind == OWN:
+            return "%s is the module's own, from an earlier run: set aside" % base
+        if self.kind == SHARED:
+            return ("%s is the client's own, with mod-spheregrid %s written "
+                    "into it earlier: those rows are the module's, not taken"
+                    % (base, self.record.get("version", "?")))
+        if self.top:
+            return ("%s is the client's own: the module will be written INTO "
+                    "it, each file it replaces copied aside first" % base)
+        return "no %s: the module's own will be created" % ARCHIVE
+
+    def close(self):
+        self.chain.close()
+
+
+def read_client(client_dir, locale):
+    return ClientView(client_dir, locale)
 
 
 def survey(target, client_dir, locale):
@@ -439,38 +547,32 @@ def survey(target, client_dir, locale):
 
     if client_dir:
         print("  the client's archives:")
-        stranger = foreign_archive(client_dir)
-        if stranger:
-            print("    %s IS NOT OURS: it carries none of the module's rows."
-                  % os.path.basename(stranger))
-            print("    On Windows it is the file this installer would write "
-                  "over. Move it, or install into another client.")
-            clashes.setdefault(ARCHIVE, set()).add(0)
-            return clashes
-        chain, mine = read_client(client_dir, locale)
+        view = read_client(client_dir, locale)
+        chain = view.chain
         print("    %d archive(s), %s answers last"
               % (len(chain.archives),
                  os.path.basename(chain.archives[-1].path)))
-        if mine:
-            print("    %s is ours, from an earlier run: set aside" % ARCHIVE)
-        import tempfile
+        print("    %s" % view.describe())
         for name, wanted in sorted(ours.items()):
+            inside = r"DBFilesClient\%s" % name
             try:
-                raw = chain.read(r"DBFilesClient\%s" % name)
+                raw = chain.read(inside)
             except (KeyError, NotImplementedError) as problem:
                 print("    %-26s unreadable: %s" % (name, problem))
                 continue
-            handle = tempfile.NamedTemporaryFile(suffix=".dbc", delete=False)
-            handle.write(raw)
-            handle.close()
-            taken = set(dbc.read(handle.name).ids())
-            os.unlink(handle.name)
+            found = set(dbc_from_bytes(raw).ids())
+            # Rows an earlier run of this installer put there are the
+            # module's own: the next write takes them out before merging.
+            earlier = found & view.earlier(inside)
+            taken = found - earlier
             taken_by.setdefault(name, set()).update(taken)
             hit = taken & wanted
             clashes.setdefault(name, set()).update(hit)
-            print("    %-26s %6d rows, %d of ours already taken"
-                  % (name, len(taken), len(hit)))
-        chain.close()
+            print("    %-26s %6d rows, %d of ours already taken%s"
+                  % (name, len(found), len(hit),
+                     ", %d of ours from the earlier run" % len(earlier)
+                     if earlier else ""))
+        view.close()
     else:
         print("  no client given -- its archives were not read")
 
@@ -545,6 +647,67 @@ def shift_module(clashes, dry_run):
               "the core when the installer is done.")
 
 
+# --------------------------------------------------------------- presence
+
+CREATE_TABLE = re.compile(r"CREATE TABLE(?: IF NOT EXISTS)? `(\w+)`")
+
+
+def own_tables(which):
+    """The tables the module creates in that database, from its own SQL."""
+    out = set()
+    folder = os.path.join(MODULE, "data", "sql", which)
+    if not os.path.isdir(folder):
+        return out
+    for name in os.listdir(folder):
+        if name.endswith(".sql"):
+            text = io.open(os.path.join(folder, name), encoding="utf-8").read()
+            out.update(CREATE_TABLE.findall(text))
+    return out
+
+
+def presence(target, client_dir):
+    """What of the module is already on this target, place by place.
+
+    Returns the list of (what, where) found, and the module's tables in the
+    characters database, which count for nothing here: they are what players
+    earned, and a removal told to keep them leaves them on purpose.
+    """
+    found = []
+    if os.path.isdir(target.module_dir):
+        found.append(("sources", target.module_dir))
+    if os.path.isdir(target.lua_dir):
+        found.append(("interface", target.lua_dir))
+    conf = os.path.join(target.conf_dir, "mod-spheregrid.conf")
+    if os.path.isfile(conf):
+        found.append(("config", conf))
+    tables = own_tables("world") & target.existing_tables("world")
+    if tables:
+        found.append(("world", "%d of the module's own tables in %s"
+                      % (len(tables), target.databases["world"]["name"])))
+    earned = own_tables("characters") & target.existing_tables("characters")
+    if client_dir:
+        top = top_archive(client_dir)
+        kind = archive_kind(top) if top else None
+        if kind == OWN:
+            found.append(("client", "%s, the module's own archive" % top))
+        elif kind == SHARED:
+            found.append(("client", "%s, the client's archive with the "
+                          "module written into it" % top))
+    return found, earned
+
+
+def report_presence(found, earned, target):
+    print("PRESENCE")
+    if not found:
+        print("  the module is not installed here")
+    for what, where in found:
+        print("  %-11s %s" % (what, where))
+    if earned:
+        print("  %-11s %d of the module's tables in %s -- what players "
+              "earned, kept from an earlier install"
+              % ("characters", len(earned), target.databases["characters"]["name"]))
+
+
 # ----------------------------------------------------------------- the steps
 
 def place(target, keeper, dry_run):
@@ -586,27 +749,38 @@ def place(target, keeper, dry_run):
 
 
 def patch_client(client_dir, locale, keeper, dry_run):
-    """Builds the client's archive: the module's DBC rows, and its art.
+    """Writes the module into the client: its DBC rows merged into the
+    client's own files, and its art.
 
     A client reads ONE Spell.dbc -- the one the highest archive answers with.
-    So the archive written here does not hold the module's rows alone: it holds
-    the client's own file WITH those rows merged in, which is the only shape
-    the game can use.
+    So what is written is never the module's rows alone: it is the client's
+    own file WITH those rows merged in, the only shape the game can use.
 
-    Nothing existing is rewritten. The archive is new, and named so that it is
-    read after every other: what it says wins, and removing it undoes all of
-    this in one gesture.
+    Where it goes depends on what the client has. No `patch-Z`: a new archive
+    is created holding only these files -- the module's OWN, set aside and
+    rewritten by the next run, deleted whole by the uninstaller. A `patch-Z`
+    that is the client's: the files are written INTO it. Each file the archive
+    already holds is copied aside before it is replaced, the archive's other
+    files are not moved, and a record inside the archive says which rows and
+    which files came from the module -- so a later run knows to take its
+    earlier rows out before merging again, and the uninstaller knows exactly
+    what to remove. The identifiers were checked, and moved if need be, by the
+    survey before this: nothing here decides them.
     """
     print("CLIENT")
-    chain, mine = read_client(client_dir, locale)
+    view = read_client(client_dir, locale)
+    chain = view.chain
     print("  %d archive(s) read, %s answers last"
           % (len(chain.archives), os.path.basename(chain.archives[-1].path)))
-    if mine:
-        print("  %s is ours, from an earlier run: set aside and rewritten"
-              % ARCHIVE)
+    print("  %s" % view.describe())
+    into = view.top if view.kind in (None, SHARED) and view.top else None
+    have = None
+    if into:
+        have = next(a for a in chain.archives
+                    if os.path.normcase(a.path) == os.path.normcase(into))
 
-    import tempfile
     contents, merged_icons, known_icons = {}, None, None
+    written_dbc = {}
     folder = os.path.join(MODULE, "data", "dbc")
     for mine, theirs in sorted(OURS.items()):
         path = os.path.join(folder, mine)
@@ -620,22 +794,32 @@ def patch_client(client_dir, locale, keeper, dry_run):
             print("    %-26s SKIPPED, the client's own is unreadable: %s"
                   % (theirs, problem))
             continue
-        handle = tempfile.NamedTemporaryFile(suffix=".dbc", delete=False)
-        handle.write(raw)
-        handle.close()
-        theirs_dbc = dbc.read(handle.name)
-        os.unlink(handle.name)
+        theirs_dbc = dbc_from_bytes(raw)
 
         # The string fields are worked out on the FULL file: a partial one
         # cannot prove the two that are empty in all of its rows.
-        whole = dbc.concat([theirs_dbc, ours], dbc.string_fields(theirs_dbc))
-        buffer = tempfile.NamedTemporaryFile(suffix=".dbc", delete=False)
-        buffer.close()
-        dbc.write(buffer.name, whole)
-        contents[inside] = open(buffer.name, "rb").read()
-        os.unlink(buffer.name)
-        print("    %-26s %6d + %d = %d rows"
-              % (theirs, len(theirs_dbc), len(ours), len(whole)))
+        strings_at = dbc.string_fields_of(theirs, theirs_dbc)
+        # What an earlier run merged in comes out first, whatever identifiers
+        # the module had then: the file goes back to the client's own rows,
+        # and the module's current rows go in. A hand-edited file can also
+        # hold the same identifier twice; the client keeps the one it read
+        # last, and so does the merge -- it cannot keep both.
+        found = list(theirs_dbc.ids())
+        stale = set(found) & view.earlier(inside)
+        if stale or len(set(found)) != len(found):
+            theirs_dbc = dbc.subset(theirs_dbc, set(found) - stale, strings_at)
+        whole = dbc.concat([theirs_dbc, ours], strings_at)
+        contents[inside] = dbc_to_bytes(whole)
+        written_dbc[inside] = sorted(ours.ids())
+        notes = []
+        if stale:
+            notes.append("%d of the earlier run's taken out first" % len(stale))
+        if len(set(found)) != len(found):
+            notes.append("%d duplicate row(s) in the client's file, the last "
+                         "of each kept" % (len(found) - len(set(found))))
+        print("    %-26s %6d + %d = %d rows%s"
+              % (theirs, len(theirs_dbc), len(ours), len(whole),
+                 " (%s)" % "; ".join(notes) if notes else ""))
         if theirs == "Spell.dbc":
             merged_icons = ours
         if theirs == "SpellIcon.dbc":
@@ -672,8 +856,8 @@ def patch_client(client_dir, locale, keeper, dry_run):
     else:
         print("    art                        none shipped (data/art is empty)")
 
-    chain.close()
-    # The mark, so that the next run knows this archive for ours.
+    # The mark and the record, so that the next run and the uninstaller know
+    # this archive, and what in it is the module's.
     version = "unknown"
     changelog = os.path.join(MODULE, "CHANGELOG.md")
     if os.path.isfile(changelog):
@@ -681,9 +865,72 @@ def patch_client(client_dir, locale, keeper, dry_run):
             if line.startswith("## "):
                 version = line[3:].strip().split()[0]
                 break
-    contents[MARK] = ("mod-spheregrid %s\r\nwritten by tools/install.py: "
-                      "the module's rows merged into this client's own DBC "
-                      "files, and its art.\r\n" % version).encode("utf-8")
+    kind = SHARED if into else OWN
+    contents[MARK] = (
+        "mod-spheregrid %s\r\narchive: %s\r\nwritten by tools/install.py: "
+        "the module's rows merged into this client's own DBC files, and its "
+        "art.%s\r\n" % (version, kind,
+                         " This archive is the client's; SphereGrid/written.json "
+                         "says what in it is the module's." if into else "")
+        ).encode("utf-8")
+    record = {"kind": kind, "version": version, "dbc": written_dbc,
+              "added": [], "replaced": [], "backups": keeper.stamp}
+    contents[WRITTEN] = b""          # classified below, then filled in
+    removals = []
+    if into:
+        before = view.record or {}
+        # A file the earlier run added stays the module's whatever the
+        # archive holds now; one it replaced stays the client's, and the
+        # copies taken THEN are the originals.
+        earlier_added = set(before.get("added", ()))
+        earlier_replaced = set(before.get("replaced", ()))
+        record["backups"] = before.get("backups") or keeper.stamp
+        for name in sorted(contents):
+            if name in earlier_replaced:
+                record["replaced"].append(name)
+            elif name in earlier_added or not have.has(name):
+                record["added"].append(name)
+            else:
+                record["replaced"].append(name)
+        # What the earlier run added and this one no longer writes -- a file
+        # renamed between versions -- comes out.
+        removals = sorted(n for n in earlier_added - set(contents)
+                          if have.has(n))
+        # A checksum file some tools keep and the game never reads: its
+        # entries would no longer match the archive's blocks, so it goes
+        # rather than mislead. The copy is in the backups.
+        if have.has("(attributes)"):
+            removals.append("(attributes)")
+    contents[WRITTEN] = json.dumps(record, indent=1,
+                                   sort_keys=True).encode("utf-8")
+
+    if into:
+        replaced = [n for n in record["replaced"] if have.has(n)]
+        print("  -> INTO %s" % into)
+        print("     %d file(s) replaced, each copied aside first; %d added; "
+              "%d removed" % (len(replaced), len(record["added"]),
+                              len(removals)))
+        for name in replaced:
+            if name.startswith("DBFilesClient"):
+                print("        %s" % name)
+        if dry_run:
+            print("     (dry run: not written)")
+            view.close()
+            return
+        for name in replaced:
+            keeper.keep_bytes(into, name, have.read(name))
+        for name in removals:
+            keeper.keep_bytes(into, name, have.read(name))
+        for name in record["added"]:
+            keeper.note_added(into, name)
+        was = os.path.getsize(into)
+        view.close()
+        mpq.patch_archive(into, contents, remove=removals)
+        print("     %.1f MB -> %.1f MB" % (was / 1048576.0,
+                                          os.path.getsize(into) / 1048576.0))
+        return
+
+    view.close()
     landing = os.path.join(client_dir, ARCHIVE)
     print("  -> %s" % landing)
     if dry_run:
@@ -694,12 +941,68 @@ def patch_client(client_dir, locale, keeper, dry_run):
     print("     %.1f MB" % (os.path.getsize(landing) / 1048576.0))
 
 
+def too_wide(target, which, folder):
+    """Every value the module's SQL writes, against the width of its column.
+
+    MySQL stops on the FIRST row it cannot take, in the middle of a file, and
+    leaves the database half written. AzerothCore does not give the same width
+    to columns holding the same kind of text -- `AuraDescription_Lang_Unk` is a
+    varchar(100) where its neighbours are varchar(550) -- so a text that fits
+    everywhere else can still be refused. The widths are read from the table
+    itself and every value measured against them, before anything is touched.
+
+    Returns a list of (file, line, table, column, room, given)."""
+    import shift as shifting
+    widths = {}
+    answer = target.run_sql(which, statement=(
+        "SELECT TABLE_NAME, COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH "
+        "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        "AND CHARACTER_MAXIMUM_LENGTH IS NOT NULL"))
+    for line in (answer or "").splitlines()[1:]:
+        bits = line.split("\t")
+        if len(bits) == 3 and bits[2].isdigit():
+            widths[(bits[0].lower(), bits[1].lower())] = int(bits[2])
+    if not widths:
+        return []
+    out = []
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith(".sql"):
+            continue
+        text = io.open(os.path.join(folder, name), encoding="utf-8",
+                       newline="").read()
+        for header in shifting.INSERT_HEADER.finditer(text):
+            table = text[header.start():header.end()].split("`")[1]
+            columns = [c.strip("` \r\n") for c in header.group(1).split(",")]
+            for spans in shifting.value_spans(text, header.end(),
+                                              until_statement_end=True):
+                for column, (start, end) in zip(columns, spans):
+                    room = widths.get((table.lower(), column.lower()))
+                    raw = text[start:end].strip()
+                    if room is None or not raw.startswith("'"):
+                        continue
+                    value = raw[1:-1].replace("''", "'")
+                    if len(value) > room:
+                        out.append((name, text[:start].count("\n") + 1,
+                                    table, column, room, len(value)))
+    return out
+
 def apply_sql(target, dry_run):
     print("SQL")
     for which in ("world", "characters"):
         folder = os.path.join(MODULE, "data", "sql", which)
         if not os.path.isdir(folder):
             continue
+        # BEFORE ANYTHING IS WRITTEN: a value that will not fit its column
+        # stops MySQL half way through a file and leaves the database posed by
+        # halves. Everything that would overflow is named here instead.
+        wide = too_wide(target, which, folder)
+        if wide:
+            for name, line, table, column, room, given in wide:
+                print("  %-12s %s line %d: %s.%s takes %d, given %d"
+                      % (which, name, line, table, column, room, given))
+            raise SystemExit(
+                "%d value(s) will not fit their column. Nothing was written."
+                % len(wide))
         for name in sorted(os.listdir(folder)):
             if not name.endswith(".sql"):
                 continue
@@ -709,10 +1012,19 @@ def apply_sql(target, dry_run):
 
 
 def take_backup(target, policy, dry_run):
+    """The copies taken before anything is written.
+
+    `target` is None when only a client is being patched: there is no server
+    to dump, and the files the client half copies aside are kept by
+    patch_client itself.
+    """
     print("BACKUP")
     keeper = backup_lib.Backup(MODULE, policy=policy)
     if dry_run:
         print("  (dry run: nothing copied)")
+        return keeper
+    if target is None:
+        print("  no server: only what the client's archive gives up is kept")
         return keeper
     for which, tables in TABLES.items():
         if not tables:
@@ -731,11 +1043,19 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--server", required=True,
+    parser.add_argument("--server",
                         help="the directory holding worldserver.exe")
-    parser.add_argument("--core", required=True,
+    parser.add_argument("--core",
                         help="the AzerothCore source tree, with its modules/")
     parser.add_argument("--client", help="a client's Data directory")
+    parser.add_argument("--no-client", action="store_true",
+                        help="install the server half alone, and say so on "
+                             "purpose: without a patched client the module's "
+                             "spells have no name, no icon and no effect")
+    parser.add_argument("--client-only", action="store_true",
+                        help="patch a client and nothing else: no server, no "
+                             "database. For the machine where the client "
+                             "lives, which is rarely the server's")
     parser.add_argument("--locale", default="enUS")
     parser.add_argument("--backup", default=backup_lib.VAULT,
                         choices=[backup_lib.VAULT, backup_lib.BESIDE])
@@ -743,18 +1063,79 @@ def main():
     parser.add_argument("--shift", action="store_true",
                         help="when an identifier is taken, move the module's "
                              "own out of the way instead of stopping")
+    parser.add_argument("--presence", action="store_true",
+                        help="say whether the module is already installed "
+                             "here (exit code 3) or not (0), and stop")
+    parser.add_argument("--keep-characters", action="store_true",
+                        help="when removing: leave what players earned")
+    parser.add_argument("--drop-characters", action="store_true",
+                        help="when removing: take it out too")
     parser.add_argument("--survey", action="store_true",
                         help="read and report, write nothing")
     parser.add_argument("--dry-run", action="store_true",
                         help="announce every step, write nothing")
     args = parser.parse_args()
 
+    # --- a client is not optional --------------------------------------------
+    if args.client_only:
+        if not args.client:
+            parser.error("--client-only needs --client <client Data dir>")
+        print("mod-spheregrid, the client half alone")
+        print("  client   %s" % args.client)
+        print()
+        keeper = take_backup(None, args.backup, args.dry_run)
+        patch_client(args.client, args.locale, keeper, args.dry_run)
+        if not args.dry_run:
+            print()
+            print("BACKUP: %s" % keeper.describe())
+            print("  receipt %s" % keeper.write_receipt("client only"))
+        return 0
+    for name in ("server", "core"):
+        if not getattr(args, name):
+            parser.error("--%s is required" % name)
+    if not args.client and not args.no_client:
+        parser.error(
+            "a client's Data directory is needed: the module's spells exist in "
+            "no client, and without its rows they have no name, no icon and no "
+            "effect. Pass --client <dir>, or --no-client if this server has no "
+            "client on it -- and then patch one with --client-only where it "
+            "lives.")
+    if args.client and args.no_client:
+        parser.error("--client and --no-client say the opposite")
+
     target = Target(args.server, args.core, args.mysql)
     print("mod-spheregrid")
     print("  server   %s" % target.server)
     print("  core     %s" % target.core)
     print("  world    %s" % target.databases["world"]["name"])
-    print("  client   %s" % (args.client or "not given"))
+    print("  client   %s" % (args.client or "NONE -- said on purpose"))
+    print()
+    if args.no_client:
+        print("  WITHOUT A PATCHED CLIENT the module's spells have no name, no")
+        print("  icon and no effect: a client has no row for them. Patch one")
+        print("  where it lives:")
+        print("      python tools/install.py --client-only --client <Data dir>")
+        print()
+
+    found, earned = presence(target, args.client)
+    report_presence(found, earned, target)
+    if args.presence:
+        return 3 if found else 0
+    if found:
+        print("  THE MODULE IS ALREADY INSTALLED HERE: this run REMOVES it. "
+              "To update it, install again once it is gone.")
+        if args.survey:
+            print("  (look only: nothing removed)")
+            return 3
+        if args.keep_characters == args.drop_characters:
+            print("  Say what becomes of what players earned: "
+                  "--keep-characters or --drop-characters.")
+            return 3
+        import uninstall
+        print()
+        uninstall.remove_module(target, args.client, args.drop_characters,
+                                args.dry_run)
+        return 0
     print()
 
     clashes = survey(target, args.client, args.locale)
@@ -795,4 +1176,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

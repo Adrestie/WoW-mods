@@ -174,6 +174,15 @@ public:
     // NO OTHER character of the account already owns it.
     bool CreditAchievement(Player* player, AchievementEntry const* achievement);
     void Reset(Player* player);                     // game master tool: full wipe
+    // EVERY SPELL THE GRID TAUGHT THIS CHARACTER, taken back. The state is what
+    // says which: a spell cell keeps in its content the spell it granted.
+    // `Recompute` never removes anything -- it only learns what the active
+    // cells ask for -- so a reset that merely emptied the state left the
+    // spells in the book with no cell left to justify them.
+    static void ForgetSpells(Player* player, SphereGridPlayerState const& state);
+    // Every spell a spell cell can teach, as an SQL list: what reaches the
+    // characters of an account who are not connected.
+    static std::string TaughtSpellList();
     // PLAYER-TRIGGERED RESET: this character hands every one of its cells back
     // and recovers the Spherite it had spent on them. The stones and runes
     // socketed STAY in their cells; the spells taught by a spell cell are

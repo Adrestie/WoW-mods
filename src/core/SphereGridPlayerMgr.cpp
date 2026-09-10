@@ -669,7 +669,13 @@ static void ApplyStat(Player* p, uint8 stat, int32 v, bool put)
             p->ApplyRatingMod(CR_HIT_RANGED, v, put);
             p->ApplyRatingMod(CR_HIT_SPELL,  v, put);
             break;
-        case 12: p->ApplySpellPowerBonus(v, put); break;
+        // SPELL POWER RAISES DAMAGE ONLY. The core's ApplySpellPowerBonus
+        // raises healing as well -- that is what "spell power" means on a
+        // piece of gear in Wrath, one stat for both. The grid has TWO
+        // statistics, spell power and healing bonus, and a player who buys
+        // one must not be given the other: the damage-only call is the one
+        // that keeps them apart.
+        case 12: p->ApplySpellDamageBonus(v, put); break;
         case 13: p->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER, TOTAL_VALUE, float(v), put); break;
         case 14: p->ApplyRatingMod(CR_ARMOR_PENETRATION, v, put); break;
         case 15: p->ApplyRatingMod(CR_EXPERTISE, v, put); break;
@@ -688,7 +694,7 @@ static void ApplyStat(Player* p, uint8 stat, int32 v, bool put)
 namespace
 {
     // Our ranks live above this bound; below it, everything is Blizzard's.
-    constexpr uint32 SPHEREGRID_CUSTOM_RANK_MIN = 8500000;
+    constexpr uint32 SPHEREGRID_CUSTOM_RANK_MIN = 8900000;
 
     // The last Blizzard rank of a family, walking the chain up from any of ours.
     // Used when the LAST rune of a family has just been removed: there is nothing
@@ -1042,10 +1048,49 @@ SphereGridSocketing SphereGridPlayerMgr::Unsocket(Player* player, uint32 nodeId,
     return SphereGridSocketing::Ok;
 }
 
+// EVERY SPELL THE GRID TAUGHT THIS CHARACTER, taken back. The state is what
+// says which: a spell cell keeps in its content the spell it granted.
+// `Recompute` never removes anything -- it only learns what the ACTIVE cells
+// ask for -- so a reset that merely emptied the state left every spell in the
+// book with no cell left to justify it.
+void SphereGridPlayerMgr::ForgetSpells(Player* player,
+                                       SphereGridPlayerState const& state)
+{
+    if (!player)
+        return;
+    for (auto const& [nodeId, content] : state.actives)
+    {
+        SphereGridCell const* def = sSphereGridMgr->Cell(nodeId);
+        if (def && def->kind == SPHEREGRID_SPELL && content.first)
+            player->removeSpell(content.first, SPEC_MASK_ALL, false);
+    }
+}
+
+// Every spell a spell cell of the grid can teach, as an SQL list. Used to
+// reach the characters of an account who are not connected: nobody holds
+// their state, and their next login removes nothing.
+std::string SphereGridPlayerMgr::TaughtSpellList()
+{
+    std::string out;
+    for (auto const& [nodeId, cell] : sSphereGridMgr->Cells())
+    {
+        if (cell.kind != SPHEREGRID_SPELL || !cell.spellId)
+            continue;
+        if (!out.empty())
+            out += ",";
+        out += std::to_string(cell.spellId);
+    }
+    return out;
+}
+
 void SphereGridPlayerMgr::Reset(Player* player)
 {
     if (!player)
         return;
+
+    // THE SPELLS FIRST, while the state still says which ones were given.
+    if (SphereGridPlayerState const* state = State(player))
+        ForgetSpells(player, *state);
 
     uint32 const guid = player->GetGUID().GetCounter();
     auto trans = CharacterDatabase.BeginTransaction();
@@ -1090,13 +1135,9 @@ uint32 SphereGridPlayerMgr::ResetProgression(Player* player)
     uint32 const refunded = state->spent;
 
     // The spells first: the state is what says which ones the grid taught.
+    ForgetSpells(player, *state);
     for (auto const& [nodeId, content] : state->actives)
-    {
-        SphereGridCell const* def = sSphereGridMgr->Cell(nodeId);
-        if (def && def->kind == SPHEREGRID_SPELL && content.first)
-            player->removeSpell(content.first, SPEC_MASK_ALL, false);
         state->inactiveContent[nodeId] = content;
-    }
     state->actives.clear();
     // A cell given back is not bought any more: forgetting with the pin, which
     // only made sense for an active cell, no longer has an object.
@@ -1138,6 +1179,11 @@ uint32 SphereGridPlayerMgr::WipeAccount(Player* player)
     if (!accountRow)
         return 0;
 
+    // The connected character hands his spells back at once; the others are
+    // reached in the database, below.
+    if (SphereGridPlayerState const* state = State(player))
+        ForgetSpells(player, *state);
+
     uint32 count = 0;
     if (QueryResult result = CharacterDatabase.Query(
         "SELECT COUNT(*) FROM characters WHERE account = {}", accountRow))
@@ -1152,6 +1198,16 @@ uint32 SphereGridPlayerMgr::WipeAccount(Player* player)
         "JOIN characters c ON c.guid = p.guid WHERE c.account = {}", accountRow);
     trans->Append("DELETE FROM mod_spheregrid_account_points WHERE account_id = {}", accountRow);
     trans->Append("DELETE FROM mod_spheregrid_account_node WHERE account_id = {}", accountRow);
+    // THE OFFLINE CHARACTERS. Their state lives only in the database and their
+    // next login takes nothing away. Only the spells a spell cell can teach are
+    // removed, and only from this account.
+    std::string const taught = TaughtSpellList();
+    if (!taught.empty())
+    {
+        trans->Append("DELETE s FROM character_spell s "
+            "JOIN characters c ON c.guid = s.guid "
+            "WHERE c.account = {} AND s.spell IN ({})", accountRow, taught);
+    }
     CharacterDatabase.DirectCommitTransaction(trans);
 
     auto it = _states.find(player->GetGUID());

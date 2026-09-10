@@ -84,6 +84,37 @@ class Backup(object):
         self.entries.append({"path": path, "copy": copy, "existed": True})
         return copy
 
+    def keep_bytes(self, archive, inside, data):
+        """Keeps a file that lives INSIDE an archive, before it is replaced.
+
+        `archive` is the archive's path on disk, `inside` the file's path in
+        it. The copy lands under the archive's own path in the vault (or
+        beside it), and the receipt says which archive it came from: putting
+        it back means writing it into that archive again.
+        """
+        if self.policy == BESIDE:
+            # A folder named after the archive, beside it. The client only
+            # reads files named `*.MPQ`, and a folder is neither.
+            copy = os.path.join("%s.before-spheregrid-%s" % (archive, self.stamp),
+                                inside.replace("\\", os.sep))
+        else:
+            drive, rest = os.path.splitdrive(os.path.abspath(archive))
+            copy = os.path.join(self.root, drive.replace(":", ""),
+                                rest.lstrip("\\/"), inside.replace("\\", os.sep))
+        os.makedirs(os.path.dirname(copy), exist_ok=True)
+        with open(copy, "wb") as out:
+            out.write(data)
+        self.entries.append({"path": inside, "copy": copy, "existed": True,
+                             "inside": archive})
+        return copy
+
+    def note_added(self, archive, inside):
+        """Records a file the module ADDS to an archive: nothing to copy, but
+        putting things back means taking it out, and only the receipt says
+        it was not there before."""
+        self.entries.append({"path": inside, "copy": None, "existed": False,
+                             "inside": archive})
+
     def keep_tree(self, folder):
         """Copies aside every file of a folder that already exists."""
         if not os.path.isdir(folder):
