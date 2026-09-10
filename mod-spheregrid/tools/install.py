@@ -281,6 +281,15 @@ def module_ids(family, root=None):
         path = os.path.join(folder, mine)
         if theirs in shifting.FAMILIES[family]["tables"] and os.path.isfile(path):
             out |= {i for i in dbc.read(path).ids() if low <= i <= high}
+    # A FAMILY WITH NO DBC OF ITS OWN IS ITS WHOLE RANGE. The templates -- the
+    # module's creatures and its objects -- live in the SQL and nowhere else,
+    # so there is no file here to enumerate them from, and an empty answer
+    # meant the survey compared what a server holds against nothing: whatever
+    # it kept in the range, no clash was ever reported and the module's SQL
+    # wrote over it. The block is what the module allocated, and the block is
+    # what has to be free.
+    if not shifting.FAMILIES[family]["tables"]:
+        return set(range(low, high + 1))
     return out
 
 
@@ -338,8 +347,13 @@ def ours_in_database(target, table, ids):
             "(ScriptName LIKE '%%spheregrid%%' OR AIName = 'NullCreatureAI' "
             "OR name IN ('Death Tunnel', 'Halo', 'Star', 'Barrier'))"
             % (table, listed)) if table == "creature_template" else (
+            # The gate carries the module's script; the workbench carries
+            # none -- it is an object the interface listens to, not one the
+            # core runs -- so it is known by its name, as the creatures that
+            # have no script of their own are.
             "SELECT entry FROM %s WHERE entry IN (%s) AND "
-            "ScriptName LIKE '%%spheregrid%%'" % (table, listed)))
+            "(ScriptName LIKE '%%spheregrid%%' OR "
+            "name = 'Sphere Grid Workbench')" % (table, listed)))
         return {int(v) for v in rows.split() if v.isdigit()}
     # item_dbc and the display tables: the module's own rows are exactly the
     # identifiers it ships, and nothing else writes at those numbers without

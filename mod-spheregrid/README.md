@@ -98,9 +98,21 @@ What the installer does, in order:
    the client has none, the client's own when it already has one — see
    [below](#a-client-that-already-has-a-patch-z).
 
-Two things are left to you afterwards: **rebuild the core**, so the module is
-compiled in, and install **AIO** on both sides — the survey says whether it
-found it, and without it no window ever opens.
+Three things are left to you afterwards. **Rebuild the core**, so the module
+is compiled in. Install **AIO** on both sides — the survey says whether it
+found it, and without it no window ever opens. And **put down a workbench**:
+the module ships the object, not a place for it, since where it stands is a
+decision about your world and not about the module. Stand where you want one,
+as a game master:
+
+```
+.gobject add 803700
+```
+
+As many as you like, wherever you like — a capital of each faction is the
+usual choice. The object is a window, not a gate: `fuse`, `reroll`, `reforge`
+and `grind` are commands, and a player who never walks past a workbench can
+still use them.
 
 Run again on a server that already has the module, the installer does not
 install: it becomes the remover — see [Removing](#removing). To update the

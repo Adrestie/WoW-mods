@@ -84,7 +84,14 @@ FAMILIES = {
                                "spell_bonus_data", "spell_custom_attr")),
     "items": dict(low=803100, high=803699, size=600,
                   tables=("Item.dbc",), sql_tables=("item_template", "item_dbc")),
-    "templates": dict(low=803800, high=803899, size=100,
+    # THE WORKBENCH SITS A HUNDRED BELOW THE CREATURES. It is a gameobject
+    # template like the death tunnel's gate, so it belongs here; it was given
+    # 803700 when the creatures were given 803800, and the hundred between
+    # the two was declared by nobody. A number in no family is never surveyed
+    # and never moved: the module wrote its workbench over whatever a server
+    # already kept at 803700, and said nothing of it. The family owns both
+    # hundreds, and moves as one.
+    "templates": dict(low=803700, high=803899, size=200,
                       tables=(), sql_tables=("creature_template",
                                              "gameobject_template")),
     "displays": dict(low=802001, high=802199, size=200,
@@ -131,7 +138,7 @@ FAMILIES = {
                       constant="ICON")),
 }
 
-TEXT = (".sql", ".cpp", ".h", ".lua", ".xml", ".json")
+TEXT = (".sql", ".cpp", ".h", ".lua", ".xml", ".json", ".md")
 INSERT_HEADER = re.compile(r"INSERT INTO `\w+`\s*\(([^)]*)\)\s*VALUES")
 
 
@@ -374,6 +381,14 @@ def files():
         for base, _, names in os.walk(os.path.join(MODULE, folder)):
             for name in sorted(names):
                 yield os.path.join(base, name)
+    # THE README NAMES ONE OF THEM. It tells an operator to place the
+    # workbench himself, by its entry, and an instruction left at a number
+    # the module no longer carries would put down someone else's object --
+    # or nothing at all. The changelog stays out of this: it says what
+    # happened, at the numbers it happened at.
+    readme = os.path.join(MODULE, "README.md")
+    if os.path.isfile(readme):
+        yield readme
 
 
 def shift(family, by, dry_run):
