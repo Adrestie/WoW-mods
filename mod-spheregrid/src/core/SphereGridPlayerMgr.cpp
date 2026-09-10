@@ -1161,6 +1161,9 @@ uint32 SphereGridPlayerMgr::ResetProgression(Player* player)
     // Recomputation on an empty grid: everything the grid had applied falls,
     // rune ranks included (SyncRunes).
     Recompute(player);
+    // THE BUTTON'S OWN PATH. `Reset` is the game master's command; this is what
+    // the player presses, so this is where he must hear his grid go.
+    player->PlayDirectSound(SPHEREGRID_SOUND_RESET, player);
     return refunded;
 }
 
