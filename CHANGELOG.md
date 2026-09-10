@@ -157,6 +157,15 @@ into the mark it leaves in the client's archive.
   Chain Lightning and Lava Burst instant, and its two stacks last twelve
   seconds of their own and outlive the ascendance that granted them; the death
   tunnel is a fifth smaller; Earthquake sits in Enhancement.
+- A SHIFT REWRITES THE COPY, NEVER THE SOURCE. `--shift` used to move
+  identifiers in the module's own files, where the installer was launched
+  from: six thousand numbers rewritten in someone's checkout to suit the
+  server in front of it, and a repository published afterwards carried
+  another server's numbers. The module is copied into the core's `modules/`
+  folder first -- which the installer already did, only later -- and the shift
+  applies there. Everything after reads the copy: the interface, the
+  configuration, the SQL, the rows written into the client. So does the
+  removal, since the copy is what the database and the client were given.
 - A value too wide for its column is said BEFORE the database is touched.
   MySQL stops on the first row it cannot take, in the middle of a file, and
   leaves the module half posed; AzerothCore does not give the same width to
