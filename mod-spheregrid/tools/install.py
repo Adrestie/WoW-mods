@@ -353,7 +353,7 @@ def ours_in_database(target, table, ids):
             # have no script of their own are.
             "SELECT entry FROM %s WHERE entry IN (%s) AND "
             "(ScriptName LIKE '%%spheregrid%%' OR "
-            "name = 'Sphere Grid Workbench')" % (table, listed)))
+            "name IN ('Sphere Grid Workbench', 'Workbench'))" % (table, listed)))
         return {int(v) for v in rows.split() if v.isdigit()}
     # item_dbc and the display tables: the module's own rows are exactly the
     # identifiers it ships, and nothing else writes at those numbers without
@@ -766,6 +766,34 @@ def place_interface(root, target, keeper, dry_run):
             shutil.copy2(source, landing)
         else:
             print("             (kept: a configuration was already there)")
+
+
+
+
+# THE SHARED WORKBENCH. `data/lua/Workbench/` is a copy of a component several
+# modules of the repository share -- one object in the world, one window --
+# and it goes to `lua_scripts/Workbench/` ONCE: placed when absent, replaced
+# only by a newer VERSION, and never touched otherwise, whatever module
+# brought it.
+def workbench_version(folder):
+    path = os.path.join(folder, "VERSION")
+    try:
+        return int(io.open(path, encoding="utf-8").read().strip())
+    except (IOError, ValueError):
+        return 0
+
+
+def place_workbench(root, target, keeper, dry_run):
+    source = os.path.join(root, "data", "lua", "Workbench")
+    if not os.path.isdir(source):
+        return
+    landing = os.path.join(os.path.dirname(target.lua_dir), "Workbench")
+    mine, theirs = workbench_version(source), workbench_version(landing)
+    if os.path.isdir(landing) and theirs >= mine:
+        print("  %-10s kept: lua_scripts/Workbench is already there (version %d)"
+              % ("workbench", theirs))
+        return
+    copy_tree("workbench", source, landing, set(), keeper, dry_run)
 
 
 def copy_tree(what, source, destination, skip, keeper, dry_run):
@@ -1205,6 +1233,7 @@ def main():
         print()
         print("PLACE")
     place_interface(root, target, keeper, args.dry_run)
+    place_workbench(root, target, keeper, args.dry_run)
     print()
     apply_sql(target, args.dry_run, root)
     if args.client:

@@ -1,0 +1,1763 @@
+--[[
+    This file is part of mod-stellar-tarot.
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+    Public License for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program. If not, see <http://www.gnu.org/licenses/>.
+]]
+
+--[[----------------------------------------------------------------------------
+    Stellar tarot — the window, client side (shipped by AIO).
+
+    Three columns. THE DECK on the left: one tab per tag, standing on the left
+    edge, and the grid of every card of the tab -- known and free, known and
+    laid on the board (dimmed), or not yet known (a question mark). THE BOARD
+    in the middle: the slot that equips one, the grid with the board's numbers
+    around it, every card laid with its four edge numbers -- lit where they
+    match -- and its level; the "remove all" button; the presets. THE CARD IN
+    HAND on the right: what is hovered, large, with its edges and its four
+    levels; under it, the effects active on the board.
+
+    A card is laid by dragging it from the deck onto an empty cell, and taken
+    off by a right-click. Nothing is decided here: every gesture is sent to
+    the server, which runs the module's command as the player and sends the
+    layout back. The levels are computed here as well, from the same rule the
+    module applies, so that the drawing follows the gesture at once.
+
+    A card the account already knows says so in its bag tooltip, in red, as a
+    recipe already learnt does.
+
+    The way in: /tarot. Texts bilingual according to the client's language.
+    Everything the client draws is the game's own art: no texture is shipped.
+------------------------------------------------------------------------------]]
+
+local AIO = AIO or require("AIO")
+
+if AIO.AddAddon() then
+    return                                  -- server side: we stop here
+end
+
+local Handlers = AIO.AddHandlers("StellarTarot", {})
+
+local fmt, floor = string.format, math.floor
+
+-- ---------------------------------------------------------------------------
+-- Texts, in the client's language
+-- ---------------------------------------------------------------------------
+
+local FR = GetLocale() == "frFR"
+local L = {
+    title         = FR and "Tarot stellaire" or "Stellar Tarot",
+    deck          = FR and "Deck" or "Deck",
+    all           = FR and "Toutes" or "All",
+    unknown       = FR and "Carte inconnue" or "Unknown card",
+    cumulative    = FR and "Cumulatif" or "Cumulative",
+    spell_unknown = FR and "sort n°%d" or "spell #%d",
+    edges         = FR and "Bords : haut %d, droite %d, bas %d, gauche %d"
+                       or "Edges: top %d, right %d, bottom %d, left %d",
+    level         = FR and "Niveau %d : %s" or "Level %d: %s",
+    combo         = FR and "%d : %s" or "%d: %s",             -- a line of the card's box
+    combos        = FR and "Paires :" or "Pairs:",
+    size          = FR and "%d ligne(s) x %d colonne(s)" or "%d row(s) x %d column(s)",
+    row_numbers   = FR and "Chiffres des lignes : %s" or "Row numbers: %s",
+    col_numbers   = FR and "Chiffres des colonnes : %s" or "Column numbers: %s",
+    already_known = FR and "Déjà connu" or "Already known",
+    on_board      = FR and "Posée sur le plateau" or "Laid on the board",
+    board         = FR and "Plateau" or "Board",
+    board_none    = FR and "Aucun plateau équipé" or "No board equipped",
+    board_pick    = FR and "Cliquez pour choisir un plateau" or "Click to choose a board",
+    board_take_off = FR and "Retirer le plateau" or "Take the board off",
+    board_change  = FR and "Changer de plateau retire toutes les cartes."
+                       or "Changing the board takes every card off.",
+    remove_all    = FR and "Tout retirer" or "Remove all",
+    remove_all_ask = FR and "Retirer toutes les cartes du plateau ?" or "Take every card off the board?",
+    yes           = FR and "Retirer" or "Remove",
+    cancel        = FR and "Annuler" or "Cancel",
+    cell_empty    = FR and "Case vide" or "Empty cell",
+    cell_hint     = FR and "Clic droit : retirer la carte" or "Right-click: take the card off",
+    activation    = FR and "Activation : %d / 4" or "Activation: %d / 4",
+    inert         = FR and "Inerte : aucun bord ne se raccorde." or "Inert: no edge matches.",
+    highest_only  = FR and "Seul le niveau atteint s'applique." or "Only the level reached applies.",
+    cumulative_long = FR and "Cumulatif : un niveau atteint conserve les précédents."
+                       or "Cumulative: a level reached keeps the ones below.",
+    presets       = FR and "Presets" or "Presets",
+    preset_save   = FR and "Enregistrer" or "Save",
+    preset_load   = FR and "Cliquez pour charger ce preset" or "Click to load this preset",
+    preset_delete = FR and "Supprimer ce preset" or "Delete this preset",
+    preset_none   = FR and "Aucun preset enregistré." or "No preset saved.",
+    hand          = FR and "Aperçu" or "Preview",
+    hand_empty    = FR and "Survolez une carte du deck ou du plateau."
+                       or "Hover a card of the deck or of the board.",
+    effects       = FR and "Effets actifs" or "Active effects",
+    effects_none  = FR and "Aucun effet actif." or "No active effect.",
+    effects_wheel = FR and "Molette de la souris : faire défiler la liste."
+                       or "Mouse wheel: scroll the list.",
+    effect_line   = FR and "%s — niveau %d : %s" or "%s — level %d: %s",
+}
+
+-- ---------------------------------------------------------------------------
+-- State
+-- ---------------------------------------------------------------------------
+
+local S = {
+    cat = nil,          -- the catalogue, as the server sent it
+    known = {},         -- card id -> true
+    knownBoards = {},   -- board id -> true
+    tab = 0,            -- the deck tab shown: a tag id, 0 for "All"
+    layout = nil,       -- { board, cells = { {row, col, card} }, presets = { {id, name, board} } }
+    placed = {},        -- card id -> true, the cards on the board
+    acts = {},          -- row*10+col -> { card, matched, level, row, col }
+    hover = nil,        -- { card, act } shown in the hand
+    drag = nil,         -- the card being dragged
+    dragFrom = nil,     -- { row, col } when it comes from the board, nil from the deck
+    projection = nil,   -- what the drag would do: { kind, card, row, col, from } -- see Project
+    ui = nil,
+}
+
+-- WHAT THE TOOLTIPS READ. The hook below is installed once per session and
+-- must see the CURRENT binder after every reload of this file, so the set of
+-- known item entries lives in a global rather than in an upvalue.
+STELLAR_TAROT_KNOWN = STELLAR_TAROT_KNOWN or {}
+
+local function SetBinder(binder)
+    S.known, S.knownBoards = {}, {}
+    local entries = {}
+    for _, id in ipairs(binder.cards or {}) do
+        S.known[id] = true
+        entries[902000 + id] = true
+    end
+    for _, id in ipairs(binder.boards or {}) do
+        S.knownBoards[id] = true
+        entries[902500 + id] = true
+    end
+    STELLAR_TAROT_KNOWN = entries
+end
+
+local function CardById(id)
+    if not S.cat then return nil end
+    for _, card in ipairs(S.cat.cards) do
+        if card.id == id then return card end
+    end
+    return nil
+end
+
+local function BoardById(id)
+    if not S.cat or not id or id == 0 then return nil end
+    for _, board in ipairs(S.cat.boards) do
+        if board.id == id then return board end
+    end
+    return nil
+end
+
+-- THE RULE OF A CELL, the same the module applies: a card faces four numbers
+-- -- its neighbours' opposite edges, or the board's own on the rim -- and
+-- every equality is a match. Edges are 1 top, 2 right, 3 bottom, 4 left.
+local OPPOSITE = { 3, 4, 1, 2 }
+local DROW = { -1, 0, 1, 0 }
+local DCOL = { 0, 1, 0, -1 }
+
+local function Activations(cells)
+    local acts, placed = {}, {}
+    local board = S.layout and BoardById(S.layout.board)
+    if not board then return acts, placed end
+    cells = cells or S.layout.cells
+    local grid = {}
+    for _, cell in ipairs(cells) do
+        grid[cell.row * 10 + cell.col] = CardById(cell.card)
+    end
+    for _, cell in ipairs(cells) do
+        local card = grid[cell.row * 10 + cell.col]
+        if card then
+            placed[card.id] = true
+            local matched, level = {}, 0
+            for e = 1, 4 do
+                local nr, nc = cell.row + DROW[e], cell.col + DCOL[e]
+                local facing
+                if nr < 1 then
+                    facing = board.colTop[cell.col]
+                elseif nr > board.rows then
+                    facing = board.colBottom[cell.col]
+                elseif nc < 1 then
+                    facing = board.rowLeft[cell.row]
+                elseif nc > board.cols then
+                    facing = board.rowRight[cell.row]
+                else
+                    local other = grid[nr * 10 + nc]
+                    facing = other and other.edges[OPPOSITE[e]] or 0
+                end
+                matched[e] = card.edges[e] == facing
+                if matched[e] then level = level + 1 end
+            end
+            acts[cell.row * 10 + cell.col] = { card = card, matched = matched, level = level,
+                                               row = cell.row, col = cell.col }
+        end
+    end
+    return acts, placed
+end
+
+-- ---------------------------------------------------------------------------
+-- Items the client has never seen have neither name nor icon: GetItemInfo
+-- asks the server on the spot and the answer lands a moment later. The
+-- unknown ones are asked for, and the window redraws itself when the answers
+-- arrive.
+-- ---------------------------------------------------------------------------
+
+local WAITING = {}
+local Refresh
+
+local function Prime(entry)
+    if not S.ui or GetItemInfo(entry) or WAITING[entry] then return end
+    WAITING[entry] = true
+    local ui = S.ui
+    if not ui.probe then
+        ui.probe = CreateFrame("GameTooltip", "StellarTarotProbe", nil, "GameTooltipTemplate")
+        ui.waiter = CreateFrame("Frame")
+        ui.waiter.elapsed = 0
+        ui.waiter:SetScript("OnUpdate", function(self, delta)
+            self.elapsed = self.elapsed + (delta or 0)
+            if self.elapsed < 0.2 then return end
+            self.elapsed = 0
+            local left, arrived = false, false
+            for e in pairs(WAITING) do
+                if GetItemInfo(e) then
+                    WAITING[e] = nil
+                    arrived = true
+                else
+                    left = true
+                end
+            end
+            if arrived and ui.frame:IsShown() then Refresh() end
+            if not left then self:Hide() end
+        end)
+    end
+    ui.probe:SetOwner(UIParent, "ANCHOR_NONE")
+    ui.probe:SetHyperlink("item:" .. entry)
+    ui.probe:Hide()
+    ui.waiter.elapsed = 0
+    ui.waiter:Show()
+end
+
+local UNKNOWN_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+
+local ItemIcon
+
+-- A card's icon: cut from its own illustration when it has one (`art`,
+-- the texture path without extension: the icon is `<art>_icon`), else the
+-- icon of its item.
+local function CardIcon(card)
+    if card.art and card.art ~= "" then return card.art .. "_icon" end
+    return ItemIcon(card.entry)
+end
+
+function ItemIcon(entry)
+    local _, _, _, _, _, _, _, _, _, texture = GetItemInfo(entry)
+    if not texture then Prime(entry) end
+    return texture or UNKNOWN_ICON
+end
+
+local function QualityColor(quality)
+    local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality or 1]
+    if c then return c.r, c.g, c.b end
+    return 1, 1, 1
+end
+
+-- The numbers of one axis, both sides: "1/7, 4/4, 8/2" for three rows read
+-- left/right, or three columns read top/bottom.
+local function Join(first, second)
+    local out = {}
+    for i, v in ipairs(first) do out[i] = tostring(v) .. "/" .. tostring(second[i] or "?") end
+    return table.concat(out, ", ")
+end
+
+-- ---------------------------------------------------------------------------
+-- What a level says: the spell's own tooltip text, read from the client's
+-- Spell.dbc through a hidden tooltip, and/or the script's description sent
+-- by the server. A spell the client has no row for is named by its number.
+-- ---------------------------------------------------------------------------
+
+local SPELL_TEXT = {}
+
+local function SpellText(spellId)
+    if SPELL_TEXT[spellId] then return SPELL_TEXT[spellId] end
+    local text
+    if GetSpellInfo(spellId) then
+        local probe = _G["StellarTarotSpellProbe"]
+            or CreateFrame("GameTooltip", "StellarTarotSpellProbe", nil, "GameTooltipTemplate")
+        probe:SetOwner(UIParent, "ANCHOR_NONE")
+        probe:SetHyperlink("spell:" .. spellId)
+        -- Line 1 is the name; the cast time ("Instant", "2 sec cast") and
+        -- the range are not the description either.
+        local skip = { [SPELL_CAST_TIME_INSTANT or "Instant"] = true,
+                       [SPELL_CAST_TIME_INSTANT_NO_MANA or "Instant"] = true }
+        local lines = {}
+        for i = 2, probe:NumLines() do
+            local line = _G["StellarTarotSpellProbeTextLeft" .. i]
+            local s = line and line:GetText()
+            if s and s ~= "" and not skip[s] and not (i == 2 and s:find("%d")) then
+                lines[#lines + 1] = s
+            end
+        end
+        probe:Hide()
+        text = #lines > 0 and table.concat(lines, " ") or GetSpellInfo(spellId)
+    else
+        text = fmt(L.spell_unknown, spellId)
+    end
+    SPELL_TEXT[spellId] = text
+    return text
+end
+
+local function LevelText(card, level)
+    local parts = {}
+    local spell = card.spells and card.spells[level] or 0
+    if spell and spell ~= 0 then parts[#parts + 1] = SpellText(spell) end
+    local script = card.scripts and card.scripts[level]
+    if script then parts[#parts + 1] = script.desc end
+    return #parts > 0 and table.concat(parts, " ") or "-"
+end
+
+-- ---------------------------------------------------------------------------
+-- Tooltips
+-- ---------------------------------------------------------------------------
+
+-- WHAT A CARD IS CALLED. Every card carries a number for the players, "1."
+-- onwards in the order of the catalogue -- a name to point at a card by,
+-- known or not. It is not the card's identifier: the module never reads it.
+local function Label(card)
+    if S.known[card.id] then
+        return fmt("%d. %s", card.no or 0, card.name)
+    end
+    return fmt("%d. %s", card.no or 0, L.unknown)
+end
+
+-- A known card: its name, "Cumulative" when it is, and what each of its four
+-- levels does -- nothing else. A card not yet known: its number, and the
+-- hint to find it -- nothing of what it does.
+local function CardTooltip(button)
+    local card = button.card
+    if not card then return end
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    if not S.known[card.id] then
+        GameTooltip:SetText(Label(card), 0.8, 0.2, 0.2)
+        GameTooltip:AddLine(card.hint and card.hint ~= "" and card.hint or "-", 1, 1, 1, true)
+        GameTooltip:Show()
+        return
+    end
+    GameTooltip:SetText(Label(card), QualityColor(card.quality))
+    GameTooltip:AddLine(" ")
+    if card.cumulative then
+        GameTooltip:AddLine(L.cumulative, 1, 0.82, 0)
+    end
+    -- One line per level, never wrapped: the tooltip widens to fit.
+    for level = 1, 4 do
+        GameTooltip:AddLine(fmt(L.level, level, LevelText(card, level)), 1, 1, 1, false)
+    end
+    GameTooltip:Show()
+end
+
+local function BoardTooltip(button)
+    local board = button.board
+    if not board then return end
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    GameTooltip:SetText(board.name, QualityColor(board.quality))
+    GameTooltip:AddLine(fmt(L.size, board.rows, board.cols), 1, 1, 1, true)
+    GameTooltip:AddLine(fmt(L.row_numbers, Join(board.rowLeft, board.rowRight)), 0.8, 0.8, 0.8, true)
+    GameTooltip:AddLine(fmt(L.col_numbers, Join(board.colTop, board.colBottom)), 0.8, 0.8, 0.8, true)
+    GameTooltip:Show()
+end
+
+-- ---------------------------------------------------------------------------
+-- A board previewed: the grid, small, with its numbers around it -- what a
+-- tooltip cannot draw, so a frame of its own, shown beside what is hovered.
+-- ---------------------------------------------------------------------------
+
+local PREVIEW_CELL, PREVIEW_GAP, PREVIEW_RIM = 22, 2, 14
+
+local function PreviewFrame()
+    local ui = S.ui
+    if ui.preview then return ui.preview end
+    local frame = CreateFrame("Frame", "StellarTarotBoardPreview", UIParent)
+    frame:SetFrameStrata("TOOLTIP")
+    frame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    frame:SetBackdropColor(0, 0, 0, 1)
+    frame.name = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.name:SetPoint("TOPLEFT", 10, -8)
+    frame.size = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.size:SetPoint("TOPLEFT", frame.name, "BOTTOMLEFT", 0, -2)
+    frame.grid = CreateFrame("Frame", nil, frame)
+    frame.grid:SetPoint("TOP", frame.size, "BOTTOM", 0, -6)
+    frame.cells, frame.rims = {}, { left = {}, right = {}, top = {}, bottom = {} }
+    for i = 1, 16 do
+        local cell = frame.grid:CreateTexture(nil, "ARTWORK")
+        cell:SetSize(PREVIEW_CELL, PREVIEW_CELL)
+        cell:SetTexture(0.2, 0.2, 0.25, 1)
+        frame.cells[i] = cell
+    end
+    for _, side in pairs(frame.rims) do
+        for i = 1, 4 do
+            local text = frame.grid:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            text:SetTextColor(1, 0.82, 0)
+            side[i] = text
+        end
+    end
+    frame:Hide()
+    ui.preview = frame
+    return frame
+end
+
+local function ShowPreview(board, anchor)
+    local frame = PreviewFrame()
+    frame.name:SetText(board.name)
+    frame.name:SetTextColor(QualityColor(board.quality))
+    frame.size:SetText(fmt(L.size, board.rows, board.cols))
+    local step = PREVIEW_CELL + PREVIEW_GAP
+    local width, height = board.cols * step - PREVIEW_GAP, board.rows * step - PREVIEW_GAP
+    frame.grid:SetSize(width + 2 * PREVIEW_RIM, height + 2 * PREVIEW_RIM)
+    for i, cell in ipairs(frame.cells) do
+        local r, c = floor((i - 1) / 4) + 1, (i - 1) % 4 + 1
+        if r <= board.rows and c <= board.cols then
+            cell:ClearAllPoints()
+            cell:SetPoint("TOPLEFT", frame.grid, "TOPLEFT",
+                          PREVIEW_RIM + (c - 1) * step, -PREVIEW_RIM - (r - 1) * step)
+            cell:Show()
+        else
+            cell:Hide()
+        end
+    end
+    for _, side in pairs(frame.rims) do for _, t in ipairs(side) do t:Hide() end end
+    for r = 1, board.rows do
+        local y = -PREVIEW_RIM - (r - 1) * step - PREVIEW_CELL / 2
+        frame.rims.left[r]:ClearAllPoints()
+        frame.rims.left[r]:SetPoint("CENTER", frame.grid, "TOPLEFT", PREVIEW_RIM / 2, y)
+        frame.rims.left[r]:SetText(board.rowLeft[r])
+        frame.rims.left[r]:Show()
+        frame.rims.right[r]:ClearAllPoints()
+        frame.rims.right[r]:SetPoint("CENTER", frame.grid, "TOPLEFT", PREVIEW_RIM + width + PREVIEW_RIM / 2, y)
+        frame.rims.right[r]:SetText(board.rowRight[r])
+        frame.rims.right[r]:Show()
+    end
+    for c = 1, board.cols do
+        local x = PREVIEW_RIM + (c - 1) * step + PREVIEW_CELL / 2
+        frame.rims.top[c]:ClearAllPoints()
+        frame.rims.top[c]:SetPoint("CENTER", frame.grid, "TOPLEFT", x, -PREVIEW_RIM / 2)
+        frame.rims.top[c]:SetText(board.colTop[c])
+        frame.rims.top[c]:Show()
+        frame.rims.bottom[c]:ClearAllPoints()
+        frame.rims.bottom[c]:SetPoint("CENTER", frame.grid, "TOPLEFT", x, -PREVIEW_RIM - height - PREVIEW_RIM / 2)
+        frame.rims.bottom[c]:SetText(board.colBottom[c])
+        frame.rims.bottom[c]:Show()
+    end
+    local textWidth = math.max(frame.name:GetStringWidth(), frame.size:GetStringWidth())
+    frame:SetSize(math.max(width + 2 * PREVIEW_RIM, textWidth) + 20,
+                  8 + frame.name:GetStringHeight() + 2 + frame.size:GetStringHeight() + 6
+                  + height + 2 * PREVIEW_RIM + 10)
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0)
+    frame:Show()
+end
+
+local function HidePreview()
+    if S.ui and S.ui.preview then S.ui.preview:Hide() end
+end
+
+-- ---------------------------------------------------------------------------
+-- The card in hand: the right column
+-- ---------------------------------------------------------------------------
+
+local GREEN, CYAN, RED = { 0.2, 1, 0.2 }, { 0, 1, 1 }, { 1, 0.25, 0.25 }
+-- The inks on the card frame's parchment.
+local PARCHMENT_INK = { 0.18, 0.11, 0.04 }
+local PARCHMENT_GREEN_HEX, PARCHMENT_TEAL_HEX, PARCHMENT_FADED_HEX = "0d660d", "005973", "615242"
+local PARCHMENT_INK_HEX = "2e1c0a"
+
+-- The block of levels: its lines left-aligned, the block itself as wide
+-- as its widest line and centred, both ways, in the room the box leaves
+-- it -- never closer to the box's edge than the margin.
+local LEVELS_LIFT = 6                       -- pixels the block sits above the exact centre
+
+local function CentreLevels()
+    local ui = S.ui
+    local box = ui.handLevelsBox
+    if not box then return end
+    local text = ui.handLevels
+    text:SetWidth(box.width)                                  -- laid out at full width first, to measure
+    local width = math.min(box.width, (text:GetStringWidth() or 0) + 2)
+    text:SetWidth(width)
+    local height = text:GetStringHeight() or 0
+    text:ClearAllPoints()
+    -- Centred in its room, then lifted a little: it reads better nearer
+    -- the heading than the foot.
+    text:SetPoint("TOPLEFT", ui.hand, "TOPLEFT",
+                  box.left + (box.width - width) / 2,
+                  box.top - math.max(0, (box.room - height) / 2 - LEVELS_LIFT))
+end
+
+local function ShowHand(card, act, tint)
+    local ui = S.ui
+    tint = tint or GREEN
+    S.hover = card and { card = card, act = act } or nil
+    if not card then
+        ui.handIcon:Hide()
+        ui.handName:SetText(L.hand_empty)
+        ui.handName:SetTextColor(0.45, 0.4, 0.35)
+        for e = 1, 4 do ui.handEdges[e]:SetText("") end
+        ui.handMode:SetText("")
+        ui.handPairs:SetText("")
+        ui.handLevels:SetText("")
+        return
+    end
+    ui.handIcon:SetTexture((card.art and card.art ~= "") and card.art or CardIcon(card))
+    ui.handIcon:Show()
+    ui.handName:SetText(Label(card))
+    ui.handName:SetTextColor(PARCHMENT_INK[1], PARCHMENT_INK[2], PARCHMENT_INK[3])
+    for e = 1, 4 do
+        ui.handEdges[e]:SetText(card.edges[e])
+        if act and act.matched[e] then
+            ui.handEdges[e]:SetTextColor(tint[1], tint[2], tint[3])
+        else
+            ui.handEdges[e]:SetTextColor(1, 1, 1)
+        end
+    end
+    -- The four levels, one block centred in the box. On the parchment the
+    -- inks are dark: green for a level in force -- the one reached, and the
+    -- ones below when the card is cumulative -- teal for one projected,
+    -- faded brown for the rest.
+    local ink = tint == CYAN and PARCHMENT_TEAL_HEX or PARCHMENT_GREEN_HEX
+    ui.handPairs:SetText(L.combos)
+    local lines = {}
+    for i = 1, 4 do
+        local colour = (act and (act.level == i or (card.cumulative and i < act.level))) and ink or PARCHMENT_FADED_HEX
+        lines[#lines + 1] = "|cff" .. colour .. fmt(L.combo, i, LevelText(card, i)) .. "|r"
+    end
+    ui.handLevels:SetText(table.concat(lines, "\n"))
+    CentreLevels()
+    -- Under them, at the bottom of the box: the one word, when it applies.
+    ui.handMode:SetText(card.cumulative and L.cumulative or "")
+end
+
+-- The levels a card has in force at an activation: the one reached, and
+-- the ones below when the card is cumulative.
+local function LevelsInForce(act)
+    local out = {}
+    if act and act.level > 0 then
+        for level = act.card.cumulative and 1 or act.level, act.level do out[level] = true end
+    end
+    return out
+end
+
+-- The effects in force, as an equipment set reads: the card, then one line
+-- per active level under it, "(level) effect". Only what is in force -- or,
+-- given what the board WOULD hold (`after`), what is and what would be: a
+-- level kept in green, one gained in cyan, one lost in red.
+local function RefreshEffects(after)
+    local ui = S.ui
+    local now = S.acts
+    after = after or now
+    local lines = {}
+    local keys, seen = {}, {}
+    for key in pairs(after) do keys[#keys + 1] = key seen[key] = true end
+    for key in pairs(now) do if not seen[key] then keys[#keys + 1] = key end end
+    table.sort(keys)
+    for _, key in ipairs(keys) do
+        local act = after[key] or now[key]
+        local before, later = LevelsInForce(now[key]), LevelsInForce(after[key])
+        local card = act.card
+        local block = {}
+        for level = 1, 4 do
+            local colour = before[level] and later[level] and "33ff33"
+                        or later[level] and "00ffff"
+                        or before[level] and "ff4040"
+            if colour then
+                block[#block + 1] = fmt("   |cff%s(%d) %s|r", colour, level, LevelText(card, level))
+            end
+        end
+        if #block > 0 then
+            lines[#lines + 1] = "|cffffd100" .. Label(card) .. " :|r"
+            for _, line in ipairs(block) do lines[#lines + 1] = line end
+        end
+    end
+    ui.effects:SetText(#lines > 0 and table.concat(lines, "\n") or L.effects_none)
+    ui.effectsContent:SetHeight(math.max(ui.effects:GetStringHeight() + 8, 20))
+end
+
+-- ---------------------------------------------------------------------------
+-- The projection: while the dragged card hovers a free cell, the hand and
+-- the effects show the board as it would be, and go back to what it is as
+-- soon as the card leaves the cell, is laid, or is let go.
+-- ---------------------------------------------------------------------------
+
+local RefreshBoard
+
+-- The mouse wheel while a projection is shown: the effects list scrolls,
+-- through its own bar so that the bar follows.
+local function WheelEffects(delta)
+    if not S.projection then return end
+    local bar = _G["StellarTarotEffectsScrollScrollBar"]
+    if not bar then return end
+    local lo, hi = bar:GetMinMaxValues()
+    bar:SetValue(math.max(lo, math.min(hi, bar:GetValue() - delta * 24)))
+end
+
+local function ShowWheelHint(shown)
+    local ui = S.ui
+    if not ui or not ui.effectsHint then return end
+    if shown then
+        ui.effectsHint:Show()
+        ui.effectsScroll:SetPoint("BOTTOMRIGHT", -30, 28)
+    else
+        ui.effectsHint:Hide()
+        ui.effectsScroll:SetPoint("BOTTOMRIGHT", -30, 10)
+    end
+end
+
+-- The cells as the board WOULD hold them, by the kind of the projection:
+--   place    a deck card onto a free cell
+--   replace  a deck card onto a taken cell: that card comes off
+--   move     a board card onto a free cell
+--   swap     a board card onto a taken cell: the two exchange
+--   remove   a board card held outside the board
+local function ProjectedCells(p)
+    local cells = {}
+    for _, cell in ipairs(S.layout.cells) do
+        local keep = true
+        if p.from and cell.row == p.from.row and cell.col == p.from.col then keep = false end
+        if p.kind ~= "remove" and cell.row == p.row and cell.col == p.col then keep = false end
+        if keep then cells[#cells + 1] = cell end
+    end
+    if p.kind ~= "remove" then
+        cells[#cells + 1] = { row = p.row, col = p.col, card = p.card.id }
+    end
+    if p.kind == "swap" then
+        cells[#cells + 1] = { row = p.from.row, col = p.from.col, card = p.other.id }
+    end
+    return cells
+end
+
+local function RefreshProjection()
+    local p = S.projection
+    if not p or not S.layout then return end
+    local after = Activations(ProjectedCells(p))
+    RefreshBoard(after)
+    RefreshEffects(after)
+    if p.kind == "remove" then
+        ShowHand(p.card, nil, CYAN)
+    else
+        ShowHand(p.card, after[p.row * 10 + p.col], CYAN)
+    end
+    ShowWheelHint(true)
+end
+
+local function ClearProjection()
+    if not S.projection then return end
+    S.projection = nil
+    ShowWheelHint(false)
+    RefreshBoard()
+    RefreshEffects()
+    if S.hover then ShowHand(S.hover.card, S.hover.act) end
+end
+
+-- The cell under the cursor, found geometrically: IsMouseOver is reliable
+-- during a drag where GetMouseFocus is not.
+local function CellUnderCursor()
+    for _, cell in ipairs(S.ui.cells) do
+        if cell:IsShown() and cell:IsMouseOver() then return cell end
+    end
+    return nil
+end
+
+-- What the drag would do if let go here, or nil for nothing.
+local function Project(card, over)
+    local from = S.dragFrom
+    if not from then
+        if not over then return nil end
+        return { kind = over.act and "replace" or "place", card = card, row = over.row, col = over.col,
+                 other = over.act and over.act.card or nil }
+    end
+    if not over then
+        return { kind = "remove", card = card, from = from }
+    end
+    if over.row == from.row and over.col == from.col then return nil end
+    return { kind = over.act and "swap" or "move", card = card, row = over.row, col = over.col, from = from,
+             other = over.act and over.act.card or nil }
+end
+
+local function SameProjection(a, b)
+    if not a or not b then return a == b end
+    return a.kind == b.kind and a.card == b.card and a.row == b.row and a.col == b.col
+end
+
+-- Called as the ghost moves.
+local function TrackProjection()
+    local card = S.drag
+    if not card then return end
+    local wanted = Project(card, CellUnderCursor())
+    if SameProjection(S.projection, wanted) then return end
+    if not wanted then
+        ClearProjection()
+        return
+    end
+    S.projection = wanted
+    RefreshProjection()
+end
+
+-- ---------------------------------------------------------------------------
+-- Dragging a card from the deck onto a cell
+-- ---------------------------------------------------------------------------
+
+local function Ghost()
+    local ui = S.ui
+    if ui.ghost then return ui.ghost end
+    local ghost = CreateFrame("Frame", nil, UIParent)
+    ghost:SetSize(40, 40)
+    ghost:SetFrameStrata("TOOLTIP")
+    ghost.icon = ghost:CreateTexture(nil, "ARTWORK")
+    ghost.icon:SetAllPoints()
+    ghost:SetScript("OnUpdate", function(self)
+        local x, y = GetCursorPosition()
+        local scale = UIParent:GetEffectiveScale()
+        self:ClearAllPoints()
+        self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+        TrackProjection()
+    end)
+    ghost:Hide()
+    ui.ghost = ghost
+    return ghost
+end
+
+local function BeginDrag(card, from)
+    S.drag, S.dragFrom = card, from
+    local ghost = Ghost()
+    ghost.icon:SetTexture(CardIcon(card))
+    ghost:Show()
+    GameTooltip:Hide()
+    if from then RefreshBoard() end            -- the cell picked up is dimmed
+end
+
+local function DragStart(button)
+    local card = button.card
+    if not card or not S.known[card.id] or S.placed[card.id] or not S.layout or S.layout.board == 0 then return end
+    BeginDrag(card, nil)
+end
+
+local function DragStartCell(cell)
+    if not cell.act then return end
+    BeginDrag(cell.act.card, { row = cell.row, col = cell.col })
+end
+
+-- The cell under the cursor, found geometrically: IsMouseOver is reliable
+-- during a drag where GetMouseFocus is not.
+-- Let go: the projected action, for real. The server answers with the
+-- layout, and the window redraws itself from it.
+local function DragStop()
+    local card, from = S.drag, S.dragFrom
+    local p = card and Project(card, CellUnderCursor()) or nil
+    S.drag, S.dragFrom = nil, nil
+    if S.ui.ghost then S.ui.ghost:Hide() end
+    ClearProjection()
+    RefreshBoard()
+    if not p then return end
+    if p.kind == "place" or p.kind == "replace" then
+        AIO.Handle("StellarTarot", "Place", p.row, p.col, card.id)
+    elseif p.kind == "remove" then
+        AIO.Handle("StellarTarot", "Remove", from.row, from.col)
+    else
+        AIO.Handle("StellarTarot", "Move", from.row, from.col, p.row, p.col)
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Building the window
+-- ---------------------------------------------------------------------------
+
+local WIDTH, HEIGHT = 1368, 700
+local COL1, COL2, COL3 = 20, 464, 908          -- the three columns' left edges, 4 px apart
+local DECK_WIDTH, BOARD_WIDTH, HAND_WIDTH = 440, 440, 440   -- every column the same width
+local TAB_WIDTH, TAB_HEIGHT = 96, 26           -- the deck's tabs
+local CELL, GAP, COLUMNS = 44, 4, 6            -- the deck grid
+local SLOT = 60                                -- a board cell
+-- The frame of an edge number on a laid card: the module's own texture, a
+-- flat trapezoid whose long base sits on the cell's edge. 32 px wide and
+-- 12 px deep in the file, drawn at 30 x 11 so the digit fits inside; a
+-- second texture, dark green, when the edge matches.
+local EDGE_BOX_TEXTURE = "Interface\\mod-Tarot\\UI\\edge_box"
+local EDGE_BOX_MATCH = "Interface\\mod-Tarot\\UI\\edge_box_match"
+local EDGE_BOX_PREVIEW = "Interface\\mod-Tarot\\UI\\edge_box_preview"   -- cyan: would match
+local EDGE_BOX_DEPTH = 12 / 32
+local EDGE_BOX_LONG, EDGE_BOX_SHORT = 30, 11
+local GRID_AREA = 340                          -- the square the grid is centred in, room for 4 x 4 and the numbers
+local SLOT_GAP = 4
+
+local function Panel(parent, x, width, caption, y, height)
+    local panel = CreateFrame("Frame", nil, parent)
+    panel:SetPoint("TOPLEFT", x, y or -44)
+    panel:SetSize(width, height or HEIGHT - 64)
+    panel:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    panel:SetBackdropColor(0.05, 0.05, 0.1, 1)
+    local text = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    text:SetPoint("TOPLEFT", 12, -10)
+    text:SetText(caption)
+    return panel
+end
+
+local function BuildFrame()
+    -- A frame from an earlier load of this file is set aside, hidden: the
+    -- client never destroys a frame, and reusing its children would tie them
+    -- to code that no longer exists.
+    local old = _G["StellarTarotFrame"]
+    if old then old:Hide() end
+
+    local frame = CreateFrame("Frame", "StellarTarotFrame", UIParent)
+    frame:SetSize(WIDTH, HEIGHT)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("HIGH")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:SetClampedToScreen(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:EnableMouseWheel(true)
+    frame:SetScript("OnMouseWheel", function(_, delta) WheelEffects(delta) end)
+    -- The dialog background is translucent: an opaque ground goes under it.
+    local ground = frame:CreateTexture(nil, "BACKGROUND")
+    ground:SetPoint("TOPLEFT", 10, -10)
+    ground:SetPoint("BOTTOMRIGHT", -10, 10)
+    ground:SetTexture(0, 0, 0, 1)
+    frame:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 },
+    })
+    frame:Hide()
+    tinsert(UISpecialFrames, "StellarTarotFrame")
+
+    local header = frame:CreateTexture(nil, "ARTWORK")
+    header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+    header:SetSize(300, 64)
+    header:SetPoint("TOP", 0, 12)
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", header, "TOP", 0, -14)
+    title:SetText(L.title)
+
+    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", -4, -4)
+    return frame
+end
+
+-- THE DECK: the tabs on the left edge, one per tag; the grid of the tab's
+-- cards to their right.
+local function BuildDeck(ui)
+    local panel = Panel(ui.frame, COL1, DECK_WIDTH, L.deck)
+
+    local tabs = CreateFrame("Frame", nil, panel)
+    tabs:SetPoint("TOPLEFT", 10, -40)
+    tabs:SetSize(TAB_WIDTH, HEIGHT - 120)
+
+    local scroll = CreateFrame("ScrollFrame", "StellarTarotDeckScroll", panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", tabs, "TOPRIGHT", 8, 0)
+    scroll:SetPoint("BOTTOMRIGHT", -30, 10)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(COLUMNS * (CELL + GAP), 10)
+    scroll:SetScrollChild(content)
+
+    ui.deck = panel
+    ui.tabs, ui.content = tabs, content
+    ui.tabButtons, ui.cardButtons = {}, {}
+end
+
+local function BuildBoard(ui)
+    local panel = Panel(ui.frame, COL2, BOARD_WIDTH, L.board)
+
+    -- The slot: the board equipped, and the list to choose one.
+    local slot = CreateFrame("Button", nil, panel)
+    slot:SetSize(44, 44)
+    slot:SetPoint("TOPLEFT", 12, -32)
+    slot.icon = slot:CreateTexture(nil, "ARTWORK")
+    slot.icon:SetPoint("TOPLEFT", 2, -2)
+    slot.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+    slot:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
+                       bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                       insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+    slot:SetBackdropColor(0, 0, 0, 0.8)
+    slot:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    slot.label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    slot.label:SetPoint("LEFT", slot, "RIGHT", 8, 6)
+    slot.label:SetWidth(BOARD_WIDTH - 80)
+    slot.label:SetJustifyH("LEFT")
+    slot.hint = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    slot.hint:SetPoint("LEFT", slot, "RIGHT", 8, -10)
+    slot.hint:SetWidth(BOARD_WIDTH - 80)
+    slot.hint:SetJustifyH("LEFT")
+    slot.hint:SetText(L.board_pick)
+
+    -- The list of boards, shown by the slot.
+    local picker = CreateFrame("Frame", nil, panel)
+    picker:SetPoint("TOPLEFT", slot, "BOTTOMLEFT", 0, -2)
+    picker:SetWidth(BOARD_WIDTH - 24)
+    picker:SetFrameStrata("DIALOG")
+    picker:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    picker:SetBackdropColor(0, 0, 0, 1)
+    picker:Hide()
+    picker.rows = {}
+    -- A CLICK ANYWHERE ELSE CLOSES THE LIST. While it is open, an invisible
+    -- frame covers the whole screen under it and swallows the first click,
+    -- which does nothing but close the list.
+    local catcher = CreateFrame("Frame", nil, UIParent)
+    catcher:SetAllPoints(UIParent)
+    catcher:SetFrameStrata("DIALOG")
+    catcher:SetFrameLevel(picker:GetFrameLevel() - 1)
+    catcher:EnableMouse(true)
+    catcher:SetScript("OnMouseDown", function() picker:Hide() end)
+    catcher:Hide()
+    picker:SetFrameLevel(catcher:GetFrameLevel() + 5)
+    slot:SetScript("OnClick", function()
+        if picker:IsShown() then picker:Hide() else picker:Show() end
+    end)
+    picker:SetScript("OnShow", function() catcher:Show() end)
+    picker:SetScript("OnHide", function() catcher:Hide() HidePreview() end)
+    -- The board equipped: its name and size only -- its numbers stand around
+    -- the grid already.
+    slot:SetScript("OnEnter", function(self)
+        if self.board then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.board.name, QualityColor(self.board.quality))
+            GameTooltip:AddLine(fmt(L.size, self.board.rows, self.board.cols), 1, 1, 1, true)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(L.board_change, 0.6, 0.6, 0.6, true)
+            GameTooltip:Show()
+        end
+    end)
+    slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- The grid: the cells, and the board's numbers around them.
+    -- A square area with room for a 4 x 4 board and its numbers; whatever
+    -- the board's size, its cells are centred in it, vertically as well.
+    local grid = CreateFrame("Frame", nil, panel)
+    grid:SetPoint("TOP", panel, "TOP", 0, -84)
+    grid:SetSize(GRID_AREA, GRID_AREA)
+    grid:EnableMouseWheel(true)
+    grid:SetScript("OnMouseWheel", function(_, delta) WheelEffects(delta) end)
+    ui.cells, ui.rims = {}, {}
+    for r = 1, 4 do
+        for c = 1, 4 do
+            local cell = CreateFrame("Button", nil, grid)
+            cell:SetSize(SLOT, SLOT)
+            cell.row, cell.col = r, c
+            cell:EnableMouseWheel(true)
+            cell:SetScript("OnMouseWheel", function(_, delta) WheelEffects(delta) end)
+            cell:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
+                               bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                               insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+            cell:SetBackdropColor(0, 0, 0, 0.7)
+            -- A laid card fills the cell; its four numbers sit in small
+            -- trapezoids glued to the middle of each edge, over the picture:
+            -- the module's own texture, drawn with its long base on top and
+            -- turned for the other three edges through the texture coordinates.
+            cell.icon = cell:CreateTexture(nil, "ARTWORK")
+            cell.icon:SetPoint("TOPLEFT", 3, -3)
+            cell.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+            cell.edges, cell.boxes = {}, {}
+            local anchors = { "TOP", "RIGHT", "BOTTOM", "LEFT" }
+            local offsets = { { 0, -3 }, { -3, 0 }, { 0, 3 }, { 3, 0 } }
+            -- The trapezoid fills the texture's width and its top 20/32.
+            local V = EDGE_BOX_DEPTH
+            local coords = {
+                { 0, 0,  0, V,  1, 0,  1, V },   -- top: as drawn
+                { 0, V,  1, V,  0, 0,  1, 0 },   -- right: base on the right
+                { 0, V,  0, 0,  1, V,  1, 0 },   -- bottom: flipped
+                { 0, 0,  1, 0,  0, V,  1, V },   -- left: base on the left
+            }
+            for e = 1, 4 do
+                local box = CreateFrame("Frame", nil, cell)
+                if e == 1 or e == 3 then box:SetSize(EDGE_BOX_LONG, EDGE_BOX_SHORT)
+                else box:SetSize(EDGE_BOX_SHORT, EDGE_BOX_LONG) end
+                box:SetFrameLevel(cell:GetFrameLevel() + 1)
+                box:SetPoint(anchors[e], cell, anchors[e], offsets[e][1], offsets[e][2])
+                box.bg = box:CreateTexture(nil, "BACKGROUND")
+                box.bg:SetAllPoints()
+                box.bg:SetTexture(EDGE_BOX_TEXTURE)
+                box.coords = coords[e]
+                box.bg:SetTexCoord(unpack(coords[e]))
+                -- The digit sits in the middle of the trapezoid, a touch
+                -- towards the long base, where the shape is widest.
+                local text = box:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                local nudge = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
+                text:SetPoint("CENTER", nudge[e][1], nudge[e][2])
+                box:Hide()
+                cell.boxes[e] = box
+                cell.edges[e] = text
+            end
+            cell.badge = cell:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            cell.badge:SetPoint("TOPLEFT", 4, -3)
+            cell:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+            cell:RegisterForClicks("RightButtonUp")
+            cell:SetScript("OnClick", function(self)
+                if self.act then AIO.Handle("StellarTarot", "Remove", self.row, self.col) end
+            end)
+            cell:RegisterForDrag("LeftButton")
+            cell:SetScript("OnDragStart", DragStartCell)
+            cell:SetScript("OnDragStop", DragStop)
+            cell:SetScript("OnEnter", function(self)
+                if self.act then
+                    ShowHand(self.act.card, self.act)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(Label(self.act.card), QualityColor(self.act.card.quality))
+                    GameTooltip:AddLine(self.act.level > 0 and fmt(L.activation, self.act.level) or L.inert, 1, 1, 1)
+                    GameTooltip:AddLine(L.cell_hint, 0.6, 0.6, 0.6)
+                    GameTooltip:Show()
+                else
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(L.cell_empty, 0.7, 0.7, 0.7)
+                    GameTooltip:Show()
+                end
+            end)
+            cell:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            cell:Hide()
+            ui.cells[#ui.cells + 1] = cell
+        end
+    end
+    -- The rim numbers: one text per side and per index, placed when the board
+    -- is known.
+    for _, side in ipairs({ "left", "right", "top", "bottom" }) do
+        ui.rims[side] = {}
+        for i = 1, 4 do
+            local text = grid:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            text:SetTextColor(1, 0.82, 0)
+            text:Hide()
+            ui.rims[side][i] = text
+        end
+    end
+    ui.boardNote = grid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    ui.boardNote:SetPoint("CENTER")
+    ui.boardNote:SetWidth(BOARD_WIDTH - 40)
+    ui.boardNote:SetText(L.board_none)
+
+    local clear = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    clear:SetSize(120, 22)
+    clear:SetPoint("TOP", grid, "BOTTOM", 0, -6)
+    clear:SetText(L.remove_all)
+    -- Asked first: the game's own confirmation box, and nothing happens
+    -- until it is answered.
+    StaticPopupDialogs["STELLAR_TAROT_REMOVE_ALL"] = {
+        text = L.remove_all_ask,
+        button1 = L.yes,
+        button2 = L.cancel,
+        OnAccept = function() AIO.Handle("StellarTarot", "Clear") end,
+        timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+    }
+    clear:SetScript("OnClick", function()
+        if S.layout and S.layout.cells and #S.layout.cells > 0 then
+            StaticPopup_Show("STELLAR_TAROT_REMOVE_ALL")
+        end
+    end)
+
+    -- The presets.
+    local presetsCaption = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    presetsCaption:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -466)
+    presetsCaption:SetText(L.presets)
+    local nameBox = CreateFrame("EditBox", "StellarTarotPresetName", panel, "InputBoxTemplate")
+    nameBox:SetSize(230, 20)
+    nameBox:SetPoint("TOPLEFT", presetsCaption, "BOTTOMLEFT", 6, -4)
+    nameBox:SetAutoFocus(false)
+    nameBox:SetMaxLetters(32)
+    local save = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    save:SetSize(100, 22)
+    save:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
+    save:SetText(L.preset_save)
+    local function Save()
+        local name = nameBox:GetText()
+        if name and name:match("%S") then
+            AIO.Handle("StellarTarot", "PresetSave", name)
+            nameBox:SetText("")
+            nameBox:ClearFocus()
+        end
+    end
+    save:SetScript("OnClick", Save)
+    nameBox:SetScript("OnEnterPressed", Save)
+    nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    local list = CreateFrame("ScrollFrame", "StellarTarotPresetScroll", panel, "UIPanelScrollFrameTemplate")
+    list:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", -6, -6)
+    list:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 10)
+    local rows = CreateFrame("Frame", nil, list)
+    rows:SetSize(BOARD_WIDTH - 50, 10)
+    list:SetScrollChild(rows)
+    ui.presetNote = rows:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    ui.presetNote:SetPoint("TOPLEFT", 4, -4)
+
+    ui.board = panel
+    ui.slot, ui.picker, ui.grid, ui.presetRows, ui.presetButtons = slot, picker, grid, rows, {}
+end
+
+-- The right column: the preview on top, the active effects under it.
+local PREVIEW_HEIGHT = 384
+
+-- THE CARD, COMPOSED IN THE INTERFACE: the module's frame (a 2:3 template,
+-- drawn from the upper three quarters of a 512 x 1024 texture), the
+-- illustration behind the frame's window, the name in the banner, the four
+-- levels in the box. The zones are fractions of the template, measured by
+-- the workshop tool that makes the frame texture (make_card_frame.py).
+local FRAME_TEXTURE = "Interface\\mod-Tarot\\UI\\card_frame"
+local FRAME_TEXCOORD_BOTTOM = 0.75
+local FRAME_W, FRAME_H = 232, 348
+local FRAME_X, FRAME_Y = (HAND_WIDTH - FRAME_W) / 2, -(PREVIEW_HEIGHT - FRAME_H) / 2   -- centred in the panel
+local FRAME_ZONES = {
+    window      = { 0.1631, 0.1055, 0.8350, 0.4570 },
+    banner      = { 0.1523, 0.4759, 0.8467, 0.5267 },
+    box         = { 0.1504, 0.5872, 0.8486, 0.8626 },
+    -- The four trapezoids on the card's edges, where the edge numbers sit:
+    -- top, right, bottom, left, in the order of the edges.
+    edge_top    = { 0.4209, 0.0404, 0.5781, 0.0898 },
+    edge_right  = { 0.9121, 0.4570, 0.9668, 0.5391 },
+    edge_bottom = { 0.4189, 0.8822, 0.5791, 0.9362 },
+    edge_left   = { 0.0342, 0.4570, 0.0879, 0.5391 },
+}
+local EDGE_ZONES = { "edge_top", "edge_right", "edge_bottom", "edge_left" }
+
+-- A region of the frame, in pixels of the panel: left, top (negative), width, height.
+local function FrameZone(name)
+    local z = FRAME_ZONES[name]
+    return FRAME_X + z[1] * FRAME_W, FRAME_Y - z[2] * FRAME_H, (z[3] - z[1]) * FRAME_W, (z[4] - z[2]) * FRAME_H
+end
+
+local function BuildHand(ui)
+    local panel = Panel(ui.frame, COL3, HAND_WIDTH, L.hand, -44, PREVIEW_HEIGHT)
+
+    -- The illustration, under the frame: as wide as the window, and cut top
+    -- and bottom to the window's proportions (the illustrations are square).
+    local wx, wy, ww, wh = FrameZone("window")
+    local icon = panel:CreateTexture(nil, "BORDER")
+    icon:SetSize(ww, wh)
+    icon:SetPoint("TOPLEFT", panel, "TOPLEFT", wx, wy)
+    local cut = (1 - wh / ww) / 2
+    icon:SetTexCoord(0, 1, cut, 1 - cut)
+    icon:Hide()
+
+    local frame = panel:CreateTexture(nil, "ARTWORK")
+    frame:SetSize(FRAME_W, FRAME_H)
+    frame:SetPoint("TOPLEFT", panel, "TOPLEFT", FRAME_X, FRAME_Y)
+    frame:SetTexture(FRAME_TEXTURE)
+    frame:SetTexCoord(0, 1, 0, FRAME_TEXCOORD_BOTTOM)
+
+    -- The four edge numbers, each centred in its trapezoid on the card's
+    -- edge.
+    local edges = {}
+    for e = 1, 4 do
+        local zx, zy, zw, zh = FrameZone(EDGE_ZONES[e])
+        local text = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        text:SetPoint("TOPLEFT", panel, "TOPLEFT", zx, zy)
+        text:SetSize(zw, zh)
+        text:SetJustifyH("CENTER")
+        text:SetJustifyV("MIDDLE")
+        text:SetShadowOffset(0, 0)
+        edges[e] = text
+    end
+
+    -- The name, in the banner.
+    local bx, by, bw, bh = FrameZone("banner")
+    local name = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    name:SetPoint("TOPLEFT", panel, "TOPLEFT", bx, by)
+    name:SetSize(bw, bh)
+    name:SetJustifyH("CENTER")
+    name:SetJustifyV("MIDDLE")
+    name:SetShadowOffset(0, 0)
+
+    -- The four levels, one block centred in the box, above the kind of
+    -- card, which sits at the bottom of the box.
+    local lx, ly, lw, lh = FrameZone("box")
+    local KIND_H = 14
+    -- The block is placed by hand once its text is known (CentreLevels):
+    -- the client's own vertical centring only holds for text that fits.
+    local BOX_MARGIN = 10
+    -- At the top of the box, centred: the heading of the lines.
+    local pairs = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pairs:SetPoint("TOPLEFT", panel, "TOPLEFT", lx, ly - 4)
+    pairs:SetSize(lw, KIND_H)
+    pairs:SetJustifyH("CENTER")
+    pairs:SetShadowOffset(0, 0)
+    pairs:SetTextColor(PARCHMENT_INK[1], PARCHMENT_INK[2], PARCHMENT_INK[3])
+    ui.handPairs = pairs
+    -- The lines, a block centred in what is left between the heading and
+    -- the kind of card.
+    local levels = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    levels:SetPoint("TOPLEFT", panel, "TOPLEFT", lx + BOX_MARGIN, ly - 4 - KIND_H)
+    levels:SetWidth(lw - 2 * BOX_MARGIN)
+    levels:SetJustifyH("LEFT")
+    levels:SetShadowOffset(0, 0)
+    ui.handLevelsBox = { left = lx + BOX_MARGIN, top = ly - 4 - KIND_H, width = lw - 2 * BOX_MARGIN,
+                         room = lh - 8 - 2 * KIND_H }
+    local mode = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mode:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", lx, ly - lh + 4)
+    mode:SetSize(lw, KIND_H)
+    mode:SetJustifyH("CENTER")
+    mode:SetShadowOffset(0, 0)
+    mode:SetTextColor(PARCHMENT_INK[1], PARCHMENT_INK[2], PARCHMENT_INK[3])
+    local state = nil
+
+    local effectsPanel = Panel(ui.frame, COL3, HAND_WIDTH, L.effects,
+                               -44 - PREVIEW_HEIGHT - 4, HEIGHT - 64 - PREVIEW_HEIGHT - 4)
+    local scroll = CreateFrame("ScrollFrame", "StellarTarotEffectsScroll", effectsPanel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 10, -36)
+    scroll:SetPoint("BOTTOMRIGHT", -30, 10)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(HAND_WIDTH - 44, 20)
+    scroll:SetScrollChild(content)
+    local effects = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    effects:SetPoint("TOPLEFT", 4, -4)
+    effects:SetWidth(HAND_WIDTH - 56)
+    effects:SetJustifyH("LEFT")
+    -- Said at the bottom while a projection is shown: the wheel scrolls.
+    local hint = effectsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hint:SetPoint("BOTTOMLEFT", 12, 10)
+    hint:SetPoint("RIGHT", effectsPanel, "RIGHT", -12, 0)
+    hint:SetJustifyH("LEFT")
+    hint:SetTextColor(0.7, 0.7, 0.7)
+    hint:SetText(L.effects_wheel)
+    hint:Hide()
+    ui.effectsScroll, ui.effectsHint = scroll, hint
+
+    ui.hand, ui.effectsPanel = panel, effectsPanel
+    ui.handIcon, ui.handEdges, ui.handName, ui.handState, ui.handLevels = icon, edges, name, state, levels
+    ui.handMode = mode
+    ui.effects, ui.effectsContent = effects, content
+end
+
+local function Build()
+    if S.ui then return S.ui end
+    local ui = {}
+    ui.frame = BuildFrame()
+    BuildDeck(ui)
+    BuildBoard(ui)
+    BuildHand(ui)
+    S.ui = ui
+    ShowHand(nil)
+    return ui
+end
+
+-- ---------------------------------------------------------------------------
+-- Drawing the deck
+-- ---------------------------------------------------------------------------
+
+-- The tabs, stacked on the left edge: "All" first, then one per tag. The one
+-- shown is lit. Tag 0 stands for "All".
+local ALL = 0
+
+local function LayoutTabs()
+    local ui = S.ui
+    for _, b in ipairs(ui.tabButtons) do b:Hide() end
+    local tabs = { { id = ALL, name = L.all } }
+    for _, tag in ipairs(S.cat.tags) do tabs[#tabs + 1] = tag end
+    local found = false
+    for _, tag in ipairs(tabs) do
+        if tag.id == S.tab then found = true end
+    end
+    if not found then S.tab = ALL end
+    for i, tag in ipairs(tabs) do
+        local b = ui.tabButtons[i]
+        if not b then
+            b = CreateFrame("Button", nil, ui.tabs)
+            b:SetSize(TAB_WIDTH, TAB_HEIGHT)
+            b:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
+                            insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+            b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            b.label:SetPoint("CENTER")
+            b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+            b:SetScript("OnClick", function(self)
+                S.tab = self.tagId
+                Refresh()
+            end)
+            ui.tabButtons[i] = b
+        end
+        b.tagId = tag.id
+        b.label:SetText(tag.name)
+        if tag.id == S.tab then
+            b:SetBackdropColor(0.25, 0.2, 0.05, 1)
+            b:SetBackdropBorderColor(1, 0.82, 0)
+            b.label:SetTextColor(1, 0.82, 0)
+        else
+            b:SetBackdropColor(0, 0, 0, 0.8)
+            b:SetBackdropBorderColor(0.5, 0.5, 0.5)
+            b.label:SetTextColor(0.8, 0.8, 0.8)
+        end
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", 0, -(i - 1) * (TAB_HEIGHT + 4))
+        b:Show()
+    end
+end
+
+local function CardButton(i)
+    local ui = S.ui
+    local b = ui.cardButtons[i]
+    if b then return b end
+    b = CreateFrame("Button", nil, ui.content)
+    b:SetSize(CELL, CELL)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetPoint("TOPLEFT", 2, -2)
+    b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+    b:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
+                    insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+    b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    b:RegisterForDrag("LeftButton")
+    b:SetScript("OnDragStart", DragStart)
+    b:SetScript("OnDragStop", DragStop)
+    b:SetScript("OnEnter", function(self)
+        if self.card and S.known[self.card.id] then
+            ShowHand(self.card, nil)
+        end
+        CardTooltip(self)
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    ui.cardButtons[i] = b
+    return b
+end
+
+-- Every card of the tab shown -- every card at all under "All": known and
+-- free, known and laid (dimmed), or not yet known (a question mark).
+local function RefreshDeck()
+    local ui = S.ui
+    LayoutTabs()
+    for _, b in ipairs(ui.cardButtons) do b:Hide() end
+    local shown = 0
+    for _, card in ipairs(S.cat.cards) do
+        if S.tab == ALL or card.tag == S.tab then
+            shown = shown + 1
+            local b = CardButton(shown)
+            b.card = card
+            if S.known[card.id] then
+                b.icon:SetTexture(CardIcon(card))
+                b:SetBackdropBorderColor(QualityColor(card.quality))
+                if S.placed[card.id] then
+                    b.icon:SetDesaturated(true)
+                    b:SetAlpha(0.4)
+                else
+                    b.icon:SetDesaturated(false)
+                    b:SetAlpha(1)
+                end
+            else
+                -- Not known yet: the red question mark, as the game draws it.
+                b.icon:SetTexture(UNKNOWN_ICON)
+                b.icon:SetDesaturated(false)
+                b:SetBackdropBorderColor(0.6, 0.15, 0.15)
+                b:SetAlpha(1)
+            end
+            local col, row = (shown - 1) % COLUMNS, floor((shown - 1) / COLUMNS)
+            b:ClearAllPoints()
+            b:SetPoint("TOPLEFT", col * (CELL + GAP), -row * (CELL + GAP))
+            b:Show()
+        end
+    end
+    local rows = shown > 0 and (floor((shown - 1) / COLUMNS) + 1) or 0
+    ui.content:SetHeight(math.max(rows * (CELL + GAP), 10))
+end
+
+-- ---------------------------------------------------------------------------
+-- Drawing the board
+-- ---------------------------------------------------------------------------
+
+local function RefreshPicker()
+    local ui = S.ui
+    local picker = ui.picker
+    for _, row in ipairs(picker.rows) do row:Hide() end
+    local y, n = -6, 0
+    local function Row(text, r, g, b, boardId, board)
+        n = n + 1
+        local row = picker.rows[n]
+        if not row then
+            row = CreateFrame("Button", nil, picker)
+            row:SetSize(BOARD_WIDTH - 36, 20)
+            row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.label:SetPoint("LEFT", 6, 0)
+            row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+            row:SetScript("OnClick", function(self)
+                picker:Hide()
+                AIO.Handle("StellarTarot", "Equip", self.boardId)
+            end)
+            row:SetScript("OnEnter", function(self) if self.board then ShowPreview(self.board, self) end end)
+            row:SetScript("OnLeave", HidePreview)
+            picker.rows[n] = row
+        end
+        row.boardId, row.board = boardId, board
+        row.label:SetText(text)
+        row.label:SetTextColor(r, g, b)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 6, y)
+        row:Show()
+        y = y - 20
+    end
+    Row(L.board_take_off, 0.7, 0.7, 0.7, 0, nil)
+    for _, board in ipairs(S.cat.boards) do
+        if S.knownBoards[board.id] then
+            local r, g, b = QualityColor(board.quality)
+            Row(fmt("%s (%dx%d)", board.name, board.rows, board.cols), r, g, b, board.id, board)
+        end
+    end
+    picker:SetHeight(-y + 6)
+end
+
+function RefreshBoard(after)
+    local ui = S.ui
+    local board = S.layout and BoardById(S.layout.board)
+    ui.slot.board = board
+    if board then
+        ui.slot.icon:SetTexture(ItemIcon(board.entry))
+        ui.slot.label:SetText(board.name)
+        ui.slot.label:SetTextColor(QualityColor(board.quality))
+        ui.slot.hint:SetText(fmt(L.size, board.rows, board.cols))
+        ui.boardNote:Hide()
+    else
+        ui.slot.icon:SetTexture(nil)
+        ui.slot.label:SetText(L.board_none)
+        ui.slot.label:SetTextColor(0.6, 0.6, 0.6)
+        ui.slot.hint:SetText(L.board_pick)
+        ui.boardNote:Show()
+    end
+    RefreshPicker()
+
+    for _, cell in ipairs(ui.cells) do cell.act = nil end
+    for _, side in pairs(ui.rims) do for _, t in ipairs(side) do t:Hide() end end
+    if not board then
+        for _, cell in ipairs(ui.cells) do cell:Hide() end
+        return
+    end
+
+    -- The grid is centred in its frame; the rim numbers sit outside it.
+    local step = SLOT + SLOT_GAP
+    local width, height = board.cols * step - SLOT_GAP, board.rows * step - SLOT_GAP
+    local left, top = -width / 2, height / 2
+    for _, cell in ipairs(ui.cells) do
+        if cell.row <= board.rows and cell.col <= board.cols then
+            cell:ClearAllPoints()
+            cell:SetPoint("TOPLEFT", ui.grid, "CENTER", left + (cell.col - 1) * step, top - (cell.row - 1) * step)
+            local act = S.acts[cell.row * 10 + cell.col]
+            local will = after and after[cell.row * 10 + cell.col]
+            cell.act = act
+            local lifted = S.dragFrom and S.dragFrom.row == cell.row and S.dragFrom.col == cell.col
+            cell:SetAlpha(lifted and 0.35 or 1)
+            if act then
+                cell.icon:SetTexture(CardIcon(act.card))
+                cell:SetBackdropBorderColor(QualityColor(act.card.quality))
+                for e = 1, 4 do
+                    cell.edges[e]:SetText(act.card.edges[e])
+                    -- The same card still there, and matched: green. Matched
+                    -- now but not after -- another card, or nothing, would face
+                    -- it: red on the plain box.
+                    local same = will and will.card.id == act.card.id
+                    if act.matched[e] and (not after or (same and will.matched[e])) then
+                        cell.edges[e]:SetTextColor(0.75, 1, 0.75)
+                        cell.boxes[e].bg:SetTexture(EDGE_BOX_MATCH)
+                    elseif act.matched[e] and after then
+                        cell.edges[e]:SetTextColor(1, 0.35, 0.35)
+                        cell.boxes[e].bg:SetTexture(EDGE_BOX_TEXTURE)
+                    elseif same and will.matched[e] then
+                        -- Would match once the dragged card is laid: cyan.
+                        cell.edges[e]:SetTextColor(0.6, 1, 1)
+                        cell.boxes[e].bg:SetTexture(EDGE_BOX_PREVIEW)
+                    else
+                        cell.edges[e]:SetTextColor(0.95, 0.95, 0.95)
+                        cell.boxes[e].bg:SetTexture(EDGE_BOX_TEXTURE)
+                    end
+                    cell.boxes[e].bg:SetTexCoord(unpack(cell.boxes[e].coords))
+                    cell.boxes[e]:Show()
+                end
+                cell.badge:SetText("")                  -- the lit edges say the level
+            else
+                cell.icon:SetTexture(nil)
+                cell:SetBackdropBorderColor(0.4, 0.4, 0.4)
+                for e = 1, 4 do cell.boxes[e]:Hide() end
+                cell.badge:SetText("")
+            end
+            -- NEVER hidden and shown again while it stays on the board: a
+            -- drag that started on it would be cancelled, without any event.
+            if not cell:IsShown() then cell:Show() end
+        else
+            cell:Hide()
+        end
+    end
+    -- A rim number lights up green when the card facing it matches it:
+    -- the left edge (4) of the row's first card, the right edge (2) of its
+    -- last, the top edge (1) of the column's first card, the bottom edge (3)
+    -- of its last.
+    local function Rim(text, value, key, edge)
+        local act, will = S.acts[key], after and after[key]
+        text:SetText(value)
+        local now = act and act.matched[edge] or false
+        local later = after and (will and will.matched[edge] or false) or now
+        if now and later then
+            text:SetTextColor(0.2, 1, 0.2)
+        elseif later then
+            text:SetTextColor(0, 1, 1)
+        elseif now then
+            text:SetTextColor(1, 0.35, 0.35)
+        else
+            text:SetTextColor(1, 0.82, 0)
+        end
+        text:Show()
+    end
+    for r = 1, board.rows do
+        local yy = top - (r - 1) * step - SLOT / 2
+        ui.rims.left[r]:ClearAllPoints()
+        ui.rims.left[r]:SetPoint("CENTER", ui.grid, "CENTER", left - 16, yy)
+        Rim(ui.rims.left[r], board.rowLeft[r], r * 10 + 1, 4)
+        ui.rims.right[r]:ClearAllPoints()
+        ui.rims.right[r]:SetPoint("CENTER", ui.grid, "CENTER", left + width + 16, yy)
+        Rim(ui.rims.right[r], board.rowRight[r], r * 10 + board.cols, 2)
+    end
+    for c = 1, board.cols do
+        local xx = left + (c - 1) * step + SLOT / 2
+        ui.rims.top[c]:ClearAllPoints()
+        ui.rims.top[c]:SetPoint("CENTER", ui.grid, "CENTER", xx, top + 16)
+        Rim(ui.rims.top[c], board.colTop[c], 1 * 10 + c, 1)
+        ui.rims.bottom[c]:ClearAllPoints()
+        ui.rims.bottom[c]:SetPoint("CENTER", ui.grid, "CENTER", xx, top - height - 16)
+        Rim(ui.rims.bottom[c], board.colBottom[c], board.rows * 10 + c, 3)
+    end
+end
+
+local function RefreshPresets()
+    local ui = S.ui
+    for _, row in ipairs(ui.presetButtons) do row:Hide() end
+    local presets = S.layout and S.layout.presets or {}
+    local y = -4
+    for i, preset in ipairs(presets) do
+        local row = ui.presetButtons[i]
+        if not row then
+            row = CreateFrame("Button", nil, ui.presetRows)
+            row:SetSize(BOARD_WIDTH - 90, 20)
+            row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.label:SetPoint("LEFT", 4, 0)
+            row.label:SetWidth(BOARD_WIDTH - 100)
+            row.label:SetJustifyH("LEFT")
+            row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+            row:SetScript("OnClick", function(self) AIO.Handle("StellarTarot", "PresetLoad", self.presetId) end)
+            row:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(self.presetName, 1, 1, 1)
+                local board = BoardById(self.boardId)
+                if board then GameTooltip:AddLine(board.name, QualityColor(board.quality)) end
+                GameTooltip:AddLine(L.preset_load, 0.6, 0.6, 0.6)
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            row.delete = CreateFrame("Button", nil, row, "UIPanelCloseButton")
+            row.delete:SetSize(22, 22)
+            row.delete:SetPoint("LEFT", row, "RIGHT", 0, 0)
+            row.delete:SetScript("OnClick", function(self) AIO.Handle("StellarTarot", "PresetDelete", self:GetParent().presetId) end)
+            row.delete:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(L.preset_delete, 1, 0.3, 0.3)
+                GameTooltip:Show()
+            end)
+            row.delete:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            ui.presetButtons[i] = row
+        end
+        row.presetId, row.presetName, row.boardId = preset.id, preset.name, preset.board
+        row.label:SetText(preset.name)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 4, y)
+        row:Show()
+        y = y - 22
+    end
+    if #presets == 0 then
+        ui.presetNote:SetText(L.preset_none)
+        ui.presetNote:Show()
+        y = y - 20
+    else
+        ui.presetNote:Hide()
+    end
+    ui.presetRows:SetHeight(-y + 4)
+end
+
+function Refresh()
+    if not S.ui or not S.cat then return end
+    S.acts, S.placed = Activations()
+    RefreshDeck()
+    RefreshBoard()
+    RefreshPresets()
+    RefreshEffects()
+    -- The card in hand follows the board: its level may have changed.
+    if S.hover then
+        local act = nil
+        for _, a in pairs(S.acts) do
+            if a.card.id == S.hover.card.id then act = a end
+        end
+        ShowHand(S.hover.card, act)
+    end
+    if S.projection then RefreshProjection() end
+end
+
+-- ---------------------------------------------------------------------------
+-- What the server sends
+-- ---------------------------------------------------------------------------
+
+local function Take(catalogue, binder, layout)
+    S.cat = catalogue
+    -- The players' numbers: 1 onwards, in the order the server lists the
+    -- cards (by catalogue number).
+    for i, card in ipairs(S.cat.cards) do card.no = i end
+    SetBinder(binder)
+    S.layout = layout
+    S.acts, S.placed = Activations()
+end
+
+-- At login: everything, and no window. The aura's tooltip reads it.
+function Handlers.Prime(_, catalogue, binder, layout)
+    Take(catalogue, binder, layout)
+end
+
+function Handlers.Show(_, catalogue, binder, layout)
+    Take(catalogue, binder, layout)
+    Build()
+    Refresh()
+    S.ui.frame:Show()
+end
+
+function Handlers.Binder(_, binder)
+    SetBinder(binder)
+    if S.ui and S.ui.frame:IsShown() then Refresh() end
+end
+
+function Handlers.Layout(_, layout)
+    S.layout = layout
+    S.acts, S.placed = Activations()
+    if S.ui and S.ui.frame:IsShown() then Refresh() end
+end
+
+-- ---------------------------------------------------------------------------
+-- THE AURA'S TOOLTIP LISTS THE EFFECTS IN FORCE. The aura's own text is the
+-- client's spell file, fixed; the lines under it are added here, from the
+-- layout the server sent, whenever the buff "Stellar Tarot" is hovered.
+-- Installed once per session, and reading the CURRENT state through a global.
+-- ---------------------------------------------------------------------------
+
+local BANNER_SPELL = 903002
+
+-- The effects in force, without their source, and MERGED: two effects that
+-- read the same but for their figure become one line with the figures
+-- added -- "+50 Stamina" and "+150 Stamina" read "+200 Stamina". An effect
+-- with no figure is listed once.
+function STELLAR_TAROT_ACTIVE_LINES()
+    local lines = {}
+    if not S.cat then return lines end
+    local keys = {}
+    for key in pairs(S.acts) do keys[#keys + 1] = key end
+    table.sort(keys)
+    local order, totals = {}, {}
+    local function Add(text)
+        if not text or text == "" or text == "-" then return end
+        -- The first number of the text is the figure; the rest is the key.
+        local figure = text:match("%d+")
+        local key = figure and text:gsub("%d+", "#", 1) or text
+        if not totals[key] then
+            totals[key] = { text = text, sum = 0, figure = figure ~= nil }
+            order[#order + 1] = key
+        end
+        if figure then totals[key].sum = totals[key].sum + tonumber(figure) end
+    end
+    for _, key in ipairs(keys) do
+        local act = S.acts[key]
+        if act.level > 0 then
+            local first = act.card.cumulative and 1 or act.level
+            for level = first, act.level do
+                local spell = act.card.spells and act.card.spells[level] or 0
+                if spell and spell ~= 0 then Add(SpellText(spell)) end
+                local script = act.card.scripts and act.card.scripts[level]
+                if script then Add(script.desc) end
+            end
+        end
+    end
+    for _, key in ipairs(order) do
+        local entry = totals[key]
+        if entry.figure then
+            lines[#lines + 1] = (key:gsub("#", tostring(entry.sum), 1))
+        else
+            lines[#lines + 1] = entry.text
+        end
+    end
+    return lines
+end
+
+-- The hook itself is installed once per session; what it does is a global
+-- function, redefined by every reload of this file, so that a reload changes
+-- the behaviour without a restart.
+function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
+    local name = UnitBuff(unit, index, filter)
+    if not name or name ~= GetSpellInfo(BANNER_SPELL) then return end
+    local lines = STELLAR_TAROT_ACTIVE_LINES()
+    if #lines == 0 then return end
+    tip:AddLine(" ")
+    for _, line in ipairs(lines) do
+        tip:AddLine(line, 0.2, 1, 0.2, true)
+    end
+    tip:Show()
+end
+
+if not STELLAR_TAROT_AURA_HOOKED_V2 then
+    STELLAR_TAROT_AURA_HOOKED_V2 = true
+    hooksecurefunc(GameTooltip, "SetUnitBuff", function(tip, unit, index, filter)
+        STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
+    end)
+    hooksecurefunc(GameTooltip, "SetUnitAura", function(tip, unit, index, filter)
+        STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
+    end)
+end
+
+-- ---------------------------------------------------------------------------
+-- "Already known" in the bag tooltip of a card or board the account has
+-- studied -- red, as a recipe already learnt. Installed once per session: a
+-- reload of this file must not stack a second line.
+-- ---------------------------------------------------------------------------
+
+if not STELLAR_TAROT_TOOLTIP_HOOKED then
+    STELLAR_TAROT_TOOLTIP_HOOKED = true
+    GameTooltip:HookScript("OnTooltipSetItem", function(tip)
+        local _, link = tip:GetItem()
+        local entry = link and tonumber(link:match("item:(%d+)"))
+        if entry and STELLAR_TAROT_KNOWN[entry] then
+            tip:AddLine(STELLAR_TAROT_ALREADY_KNOWN or "Already known", 1, 0.13, 0.13)
+            tip:Show()
+        end
+    end)
+end
+STELLAR_TAROT_ALREADY_KNOWN = L.already_known
+
+-- ---------------------------------------------------------------------------
+-- The way in
+-- ---------------------------------------------------------------------------
+
+SLASH_STELLARTAROT1 = "/tarot"
+SlashCmdList["STELLARTAROT"] = function()
+    if S.ui and S.ui.frame:IsShown() then
+        S.ui.frame:Hide()
+    else
+        AIO.Handle("StellarTarot", "Open")
+    end
+end
+
+-- The binder is asked for as soon as this file runs, so that the tooltips
+-- know what is already studied before the window is ever opened.
+AIO.Handle("StellarTarot", "Hello")

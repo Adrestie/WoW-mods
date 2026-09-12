@@ -9,8 +9,15 @@ needed, the tooling to patch the client. Follow the README inside the folder.
 |---|---|
 | [mod-attriboost](mod-attriboost/) | Attribute and talent points players earn from tradeable books and spend across ten statistics, through an NPC or a dedicated interface. Extended fork of [AnchyDev/Attriboost](https://github.com/AnchyDev/Attriboost). |
 | [mod-item-upgrade](mod-item-upgrade/) | Rank-by-rank stat upgrades on gear, bought with gold and tokens, plus separate tracks for weapon damage and swing speed and a chance for looted items to arrive already upgraded. Extended fork of [silviu20092/mod-item-upgrade](https://github.com/silviu20092/mod-item-upgrade). |
+| [mod-stellar-tarot](mod-stellar-tarot/) | Cards with a number on each edge, laid on a board whose rows and columns carry numbers too: every edge that matches its neighbour or the board raises the card's level, 1 to 4, and each level applies an aura or runs a script. An account-wide binder, presets, a window over AIO that composes each card from its illustration, and loot sources per creature. Original module, work in progress. **[How to do things with it](mod-stellar-tarot/docs/HOWTO.md)**. |
 | [mod-spheregrid](mod-spheregrid/) | A second progression on a grid of cells the character walks through, bought with a currency the content awards: stat stones, runes that add ranks to the game's own spells, and cells teaching custom class spells with backported visuals. An in-game grid editor and a player interface over AIO. Ships its own client patch and writes into a client that already has one, moving its identifiers aside when a server has taken them. Original module. **[How to do things with it](mod-spheregrid/docs/HOWTO.md)**, screenshots included. |
 
+The `workbench/` folder is not a module but a component the modules share: one
+object in the world and one window, to which each installed module brings its
+recipes. Every module that uses it ships an identical copy under
+`data/lua/Workbench/`; `workbench/` is where it is edited.
+
 Each module keeps the licence of the project it forks, or MIT when original; see
-the `LICENSE` file in its folder. All three are MIT at the time of writing.
-AzerothCore itself is AGPL v3.
+the `LICENSE` file in its folder. mod-stellar-tarot is GPL-2.0-or-later, the
+licence of AzerothCore it is compiled into; the others are MIT at the time of
+writing. AzerothCore itself is AGPL v3.

@@ -88,8 +88,11 @@ Three things are left to you afterwards. **Rebuild the core**, so the module
 is compiled in. Install **AIO** on both sides — the survey says whether it
 found it, and without it no window ever opens. And **put down a workbench**:
 the module ships the object, not a place for it, since where it stands is a
-decision about your world and not about the module. Stand where you want one,
-as a game master:
+decision about your world and not about the module. The workbench is SHARED
+with the other modules of this repository that have recipes -- one object,
+one window, `data/lua/Workbench/` placed once by whichever installs first --
+and each module brings its own recipes to it. Stand where you want one, as a
+game master:
 
 ```
 .gobject add 803700

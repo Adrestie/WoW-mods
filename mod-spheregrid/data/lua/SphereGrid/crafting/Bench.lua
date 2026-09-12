@@ -16,32 +16,29 @@
 ]]
 
 --[[----------------------------------------------------------------------------
-    The workbench, server side.
-
-    Four recipes:
+    The sphere grid at the workbench: what the SHARED bench
+    (lua_scripts/Workbench, a component several modules bring their recipes
+    to) can do with stones and runes.
 
       fuse      3 identical stones           -> 1 stone of the quality above
       reroll    2 stones of the same quality -> 1 stone, same quality, other effect
       reforge   3 runes, any of them         -> 1 rune drawn from the catalogue
       grind     1 item                       -> Spherite, and the item is gone
 
-    THIS FILE DECIDES NOTHING. It relays to the module's commands, which carry
-    every rule and answer the player in their own language -- the same division
-    as socketing. What it does do is serve the catalogue the client needs to
-    recognise, among the bags, what can go into which recipe.
-
-    It opens from the world object the module ships: the template comes with the
-    SQL, and where it stands in the world is placed by hand.
+    THIS FILE DECIDES NOTHING. It says which items are the sphere grid's and
+    which combinations the bench may offer; the module's commands, run as the
+    player, carry every rule and answer the player in their own language --
+    the same division as socketing. The window, the object in the world and
+    the lock by content belong to the shared component; the sphere grid only
+    registers itself as a provider.
 ------------------------------------------------------------------------------]]
-
-local AIO = require("AIO")
-
-local WorkbenchHandlers = AIO.AddHandlers("SphereGridWorkbench", {})
 
 local fmt = string.format
 
-local WORKBENCH_ENTRY = 803700
-local GAMEOBJECT_EVENT_ON_USE = 14
+if not Workbench then
+    print("SphereGrid: the shared workbench (lua_scripts/Workbench/Workbench.ext) is not loaded; no recipe registered.")
+    return
+end
 
 -- The identifiers the module allocates (SphereGridMgr.h): a stone is
 -- STONE_BASE + (statistic - 1) x qualities + (quality - 1), a statistic rune
@@ -49,188 +46,161 @@ local GAMEOBJECT_EVENT_ON_USE = 14
 local STONE_BASE = 803100
 local STAT_RUNE_BASE = 803600
 local QUALITY_COUNT = 5
-local QUALITIES = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
+local STAT_COUNT = 16
 
--- The settings come from mod-spheregrid.conf, the file the module itself reads.
--- A key that is absent gives back the empty string, hence the fallback -- which
--- must be the C++ default, or the window would announce a price the module does
--- not pay.
+-- What a stone and a rune are, read once from the base -- the same reading
+-- as before, minus the amounts the old window used to announce: the module
+-- says what it pays when it pays it.
+local stones, runes = {}, {}
+
+local q = WorldDBQuery(fmt(
+    "SELECT entry FROM item_template WHERE entry BETWEEN %d AND %d",
+    STONE_BASE, STONE_BASE + STAT_COUNT * QUALITY_COUNT - 1))
+if q then
+    repeat
+        local entry = q:GetUInt32(0)
+        local rank = entry - STONE_BASE
+        stones[entry] = { stat = math.floor(rank / QUALITY_COUNT) + 1, quality = rank % QUALITY_COUNT + 1 }
+    until not q:NextRow()
+end
+
+q = WorldDBQuery("SELECT item_entry FROM mod_spheregrid_rune")
+if q then
+    repeat runes[q:GetUInt32(0)] = true until not q:NextRow()
+end
+
+q = WorldDBQuery(fmt(
+    "SELECT entry FROM item_template WHERE entry BETWEEN %d AND %d",
+    STAT_RUNE_BASE, STAT_RUNE_BASE + STAT_COUNT - 1))
+if q then
+    repeat runes[q:GetUInt32(0)] = true until not q:NextRow()
+end
+
+local function AllStones(entries)
+    for _, e in ipairs(entries) do
+        if not stones[e] then return false end
+    end
+    return true
+end
+
+local function AllRunes(entries)
+    for _, e in ipairs(entries) do
+        if not runes[e] then return false end
+    end
+    return true
+end
+
+-- WHAT THE BENCH SHOWS AS THE RESULT, as the old window did: the stone one
+-- quality above, a stone of the same quality as a witness of a reroll, "a
+-- rune" for a reforge, Spherite for a grind -- with the amount, read from
+-- mod-spheregrid.conf as the module itself reads it (a display, nothing
+-- more: the module remains the only judge of what is paid).
+local LOCALE_FRFR = 2
+local QUALITIES = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
+-- A result drawn at random shows the type's icon under the game's red
+-- question mark: the module's own textures (data/art/Textures).
+local RANDOM_STONE = "Textures\\random_stone_"           -- .. common / uncommon / rare / epic / legendary
+local RANDOM_RUNE = "Textures\\random_rune"
+local SPHERITE = "Interface\\Icons\\Spell_Nature_WispSplode"
+
 local function Conf(key, fallback)
     return tonumber(GetConfigValue(key)) or fallback
 end
 
--- The statistics, in the order the module allocates them. THE SAME LIST AS THE
--- PLAYER INTERFACE: the order is what maps a stone onto a statistic, so the two
--- must never drift apart. See docs/PRESENTATION.md.
-local STAT_KEYS = {
-    "stamina", "intellect", "spirit", "agility", "strength",
-    "parry", "block", "dodge", "haste", "crit", "hit",
-    "spell_power", "attack_power", "armor_penetration", "expertise", "bonus_healing",
-}
+local function StoneEntry(stat, quality)
+    return STONE_BASE + (stat - 1) * QUALITY_COUNT + (quality - 1)
+end
 
-local CATALOGUE = nil
-
--- The catalogue is the same for the whole world and only moves on a
--- `.spheregrid reload`, so it is built once.
-local function Catalogue()
-    if CATALOGUE then return CATALOGUE end
-
-    local cat = { stones = {}, runes = {}, statRunes = {} }
-
-    -- WHAT A STONE IS follows from its entry -- statistic and quality -- and what
-    -- it grants from the conf. THE DATABASE IS ASKED ONE THING ONLY: which of
-    -- these entries exists as a real item. A node stone is worth less and exists
-    -- as no item; the workbench must never fabricate one, and this is what keeps
-    -- it out.
-    local q = WorldDBQuery(fmt(
-        "SELECT entry FROM item_template WHERE entry BETWEEN %d AND %d",
-        STONE_BASE, STONE_BASE + #STAT_KEYS * QUALITY_COUNT - 1))
-    if q then
-        local bonus = {}
-        for i = 1, QUALITY_COUNT do
-            bonus[i] = Conf("SphereGrid.Stone.StatBonus." .. QUALITIES[i],
-                            ({ 5, 7, 10, 15, 30 })[i])
-        end
-        repeat
-            local entry = q:GetUInt32(0)
-            local rank = entry - STONE_BASE
-            local stat = STAT_KEYS[math.floor(rank / QUALITY_COUNT) + 1]
-            local quality = rank % QUALITY_COUNT + 1
-            if stat then
-                cat.stones[entry] = { stat = stat, amount = bonus[quality],
-                                       quality = quality }
-            end
-        until not q:NextRow()
+local function GrindAmount(entry)
+    local stone = stones[entry]
+    if stone then
+        return Conf("SphereGrid.Points.Grind.Stone." .. QUALITIES[stone.quality],
+                    ({ 100, 250, 500, 1000, 2500 })[stone.quality])
     end
-
-    q = WorldDBQuery(
-        "SELECT r.item_entry, r.first_spell_id, r.base_rank, t.Quality FROM mod_spheregrid_rune r "
-        .. "JOIN item_template t ON t.entry = r.item_entry")
-    if q then
-        repeat
-            cat.runes[q:GetUInt32(0)] = { spell = q:GetUInt32(1), rank = q:GetUInt32(2) + 1,
-                                          quality = q:GetUInt32(3) }
-        until not q:NextRow()
-    end
-
-    -- Statistic runes: one per statistic, allocated in a row, and a single
-    -- percentage for all of them. Epic, like the rank runes.
-    local pct = Conf("SphereGrid.StatRune.Percent", 10)
-    q = WorldDBQuery(fmt(
-        "SELECT entry FROM item_template WHERE entry BETWEEN %d AND %d",
-        STAT_RUNE_BASE, STAT_RUNE_BASE + #STAT_KEYS - 1))
-    if q then
-        repeat
-            local entry = q:GetUInt32(0)
-            local stat = STAT_KEYS[entry - STAT_RUNE_BASE + 1]
-            if stat then
-                cat.statRunes[entry] = { stat = stat, pct = pct, quality = 4 }
-            end
-        until not q:NextRow()
-    end
-
-    -- WHAT GRINDING PAYS. The window has to announce the amount BEFORE the
-    -- gesture, so it needs the numbers too: stones by their quality, runes at a
-    -- single price. THIS IS A DISPLAY AND NOTHING MORE -- the module remains the
-    -- only judge of what is actually paid.
-    cat.grind = { stone = {}, rune = 0 }
-    local grindDefaults = { 100, 250, 500, 1000, 2500 }
-    for i = 1, QUALITY_COUNT do
-        cat.grind.stone[i] = Conf("SphereGrid.Points.Grind.Stone." .. QUALITIES[i],
-                                  grindDefaults[i])
-    end
-    cat.grind.rune = Conf("SphereGrid.Points.Grind.Rune", 750)
-
-    CATALOGUE = cat
-    return cat
+    return Conf("SphereGrid.Points.Grind.Rune", 750)
 end
 
-function WorkbenchHandlers.Catalogue(player)
-    AIO.Handle(player, "SphereGridWorkbench", "Catalogue", Catalogue())
+local function Text(player, en, fr)
+    return player:GetDbLocaleIndex() == LOCALE_FRFR and fr or en
 end
 
-function WorkbenchHandlers.Open(player)
-    AIO.Handle(player, "SphereGridWorkbench", "Show", Catalogue())
-end
-
--- The four recipes. The module checks everything -- what the items are, their
--- qualities, whether the player holds them, whether there is room in the bags --
--- and speaks to the player. Here we only pass the request on, and let the client
--- refresh its own bags afterwards.
-local function Whole(v)
-    return type(v) == "number" and math.floor(v) or 0
-end
-
-function WorkbenchHandlers.Fuse(player, entry)
-    entry = Whole(entry)
-    if entry <= 0 then return end
-    player:RunCommand(fmt("spheregrid fuse %d", entry))
-end
-
-function WorkbenchHandlers.Reroll(player, a, b)
-    a, b = Whole(a), Whole(b)
-    if a <= 0 or b <= 0 then return end
-    player:RunCommand(fmt("spheregrid reroll %d %d", a, b))
-end
-
-function WorkbenchHandlers.Reforge(player, a, b, c)
-    a, b, c = Whole(a), Whole(b), Whole(c)
-    if a <= 0 or b <= 0 or c <= 0 then return end
-    player:RunCommand(fmt("spheregrid reforge %d %d %d", a, b, c))
-end
-
--- GRINDING takes ONE item, destroys it, and returns Spherite. It is the fourth
--- recipe and the only one that produces no item. What it pays depends on a
--- stone's quality, and is a single price for a rune.
-function WorkbenchHandlers.Grind(player, entry)
-    entry = Whole(entry)
-    if entry <= 0 then return end
-    player:RunCommand(fmt("spheregrid grind %d", entry))
-end
-
--- THE WINDOW CLOSES WHEN THE PLAYER WALKS AWAY, as a bank's does, or a
--- gossip's. The client cannot see a world object and has no way of knowing how
--- far it stands, so the watching is done here: where the workbench stands is
--- remembered when the window opens, and a timer carried BY THE PLAYER -- the
--- engine drops it when he leaves the world -- shuts the window as soon as he
--- is out of reach. The place is remembered as three numbers rather than as the
--- object: nothing then outlives the object itself.
-local WATCH_DELAY = 500                     -- ms between two looks
-local WATCH_RANGE = 10                      -- yards. The game lets an object be
-                                            -- used at five; a step back must not
-                                            -- slam the door in the player's face
-local watching = {}                         -- player guid -> event id
-
-local function Unwatch(player)
-    local guid = player:GetGUIDLow()
-    if watching[guid] then
-        player:RemoveEventById(watching[guid])
-        watching[guid] = nil
-    end
-end
-
-local function Watch(player, mapId, x, y, z)
-    Unwatch(player)
-    watching[player:GetGUIDLow()] = player:RegisterEvent(function(_, _, _, who)
-        if not who then return end
-        if who:GetMapId() ~= mapId or who:GetDistance(x, y, z) > WATCH_RANGE then
-            Unwatch(who)
-            AIO.Handle(who, "SphereGridWorkbench", "Close")
-        end
-    end, WATCH_DELAY, 0)
-end
-
--- The world object opens the window.
-local function OnUseWorkbench(_, object, player)
-    if not player then return end
-    AIO.Handle(player, "SphereGridWorkbench", "Show", Catalogue())
-    if object then
-        local x, y, z = object:GetLocation()
-        Watch(player, object:GetMapId(), x, y, z)
-    end
-    return true                             -- and nothing else happens
-end
-
-RegisterGameObjectEvent(WORKBENCH_ENTRY, GAMEOBJECT_EVENT_ON_USE, OnUseWorkbench)
-
-print("SphereGrid: workbench loaded.")
+Workbench.Register({
+    module = "mod-spheregrid",
+    Owns = function(entry)
+        return stones[entry] ~= nil or runes[entry] == true
+    end,
+    kinds = {
+        { key = "stone", name = { enUS = "Stones", frFR = "Pierres" },
+          Of = function(entry) return stones[entry] ~= nil end },
+        { key = "rune", name = { enUS = "Runes", frFR = "Runes" },
+          Of = function(entry) return runes[entry] == true end },
+    },
+    recipes = {
+        {
+            key = "fuse", slots = 3,
+            name = { enUS = "Merging: the same stone, one quality above.",
+                     frFR = "Fusion : la même pierre, une qualité au-dessus." },
+            Fits = function(_, placed, entry)
+                if not stones[entry] or stones[entry].quality >= QUALITY_COUNT then return false end
+                for _, p in ipairs(placed) do
+                    if p ~= entry then return false end
+                end
+                return true
+            end,
+            Accepts = function(_, e)
+                return AllStones(e) and e[1] == e[2] and e[2] == e[3] and stones[e[1]].quality < QUALITY_COUNT
+            end,
+            Preview = function(_, e)
+                local s = stones[e[1]]
+                return { entry = StoneEntry(s.stat, s.quality + 1) }
+            end,
+            Run = function(player, e) player:RunCommand(fmt("spheregrid fuse %d", e[1])) end,
+        },
+        {
+            key = "reroll", slots = 2,
+            name = { enUS = "Reroll: another stone, of the same quality.",
+                     frFR = "Relance : une autre pierre, de même qualité." },
+            Fits = function(_, placed, entry)
+                if not stones[entry] then return false end
+                for _, p in ipairs(placed) do
+                    if not stones[p] or stones[p].quality ~= stones[entry].quality then return false end
+                end
+                return true
+            end,
+            Accepts = function(_, e)
+                return AllStones(e) and stones[e[1]].quality == stones[e[2]].quality
+            end,
+            Preview = function(player, e)
+                local quality = stones[e[1]].quality
+                return { icon = RANDOM_STONE .. string.lower(QUALITIES[quality]), quality = quality - 1,
+                         text = Text(player, "Stone drawn at random, statistic unknown.",
+                                     "Pierre tirée au hasard, statistique inconnue.") }
+            end,
+            Run = function(player, e) player:RunCommand(fmt("spheregrid reroll %d %d", e[1], e[2])) end,
+        },
+        {
+            key = "reforge", slots = 3,
+            name = { enUS = "Recasting: one rune drawn at random from the whole catalogue.",
+                     frFR = "Refonte : une rune tirée au hasard dans tout le catalogue." },
+            Fits = function(_, placed, entry) return runes[entry] == true and AllRunes(placed) end,
+            Accepts = function(_, e) return AllRunes(e) end,
+            Preview = function(player)
+                return { icon = RANDOM_RUNE, text = Text(player, "Rune drawn at random.", "Rune tirée au hasard."), quality = 4 }
+            end,
+            Run = function(player, e) player:RunCommand(fmt("spheregrid reforge %d %d %d", e[1], e[2], e[3])) end,
+        },
+        {
+            key = "grind", slots = 1,
+            name = { enUS = "Grinding: the item is destroyed and turned into Spherite.",
+                     frFR = "Broyage : l'objet est détruit et rendu en Spherite." },
+            Fits = function(_, placed, entry)
+                return #placed == 0 and (stones[entry] ~= nil or runes[entry] == true)
+            end,
+            Accepts = function(_, e) return stones[e[1]] ~= nil or runes[e[1]] == true end,
+            Preview = function(_, e)
+                return { icon = SPHERITE, text = fmt("+%d Spherite", GrindAmount(e[1])) }
+            end,
+            Run = function(player, e) player:RunCommand(fmt("spheregrid grind %d", e[1])) end,
+        },
+    },
+})

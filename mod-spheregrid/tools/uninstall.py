@@ -133,6 +133,49 @@ def undo_database(target, which, folder, dry_run):
     target.run_sql(which, statement=";\n".join(lines) + ";\n")
 
 
+
+
+# THE SHARED WORKBENCH goes with the last provider. Another module is a
+# provider when one of its Lua files, outside this module's own folder,
+# registers itself with `Workbench.Register(`.
+def other_providers(target):
+    scripts = os.path.dirname(target.lua_dir)
+    own = os.path.normcase(target.lua_dir)
+    found = []
+    for base, folders, names in os.walk(scripts):
+        if os.path.normcase(base).startswith(own):
+            continue
+        for name in names:
+            if not name.endswith((".lua", ".ext")):
+                continue
+            try:
+                text = io.open(os.path.join(base, name), encoding="utf-8", errors="replace").read()
+            except IOError:
+                continue
+            if "Workbench.Register(" in text:
+                found.append(os.path.relpath(os.path.join(base, name), scripts))
+    return found
+
+
+def remove_workbench(target, dry_run):
+    others = other_providers(target)
+    if others:
+        print("  %-11s kept: still used by %s" % ("workbench", ", ".join(others)))
+        return
+    remove(os.path.join(os.path.dirname(target.lua_dir), "Workbench"), dry_run, "workbench")
+    lines = [
+        "DELETE FROM `gameobject` WHERE `id` = 803700",
+        "DELETE FROM `gameobject_template_locale` WHERE `entry` = 803700",
+        "DELETE FROM `gameobject_template` WHERE `entry` = 803700",
+    ]
+    print("  %-11s the object 803700 and its spawns, nobody else uses them" % "workbench")
+    if dry_run:
+        for line in lines:
+            print("      %s" % line)
+        return
+    target.run_sql("world", statement=";\n".join(lines) + ";\n")
+
+
 def remove(path, dry_run, what):
     if not os.path.exists(path):
         print("  %-11s %s (not there)" % (what, path))
@@ -316,6 +359,7 @@ def remove_module(target, client_dir, drop_characters, dry_run):
     remove(os.path.join(target.core, "modules", "mod-spheregrid"),
            dry_run, "sources")
     remove(target.lua_dir, dry_run, "interface")
+    remove_workbench(target, dry_run)
     remove(os.path.join(target.server, "configs", "modules", "mod-spheregrid.conf"),
            dry_run, "config")
 

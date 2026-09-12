@@ -254,15 +254,19 @@ INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 ('mod-spheregrid', 52, 'frFR', 'Établi : vous ne portez pas ces objets.'),
 ('mod-spheregrid', 53, 'frFR', 'Établi : vos sacs sont pleins.');
 
-DELETE FROM `gameobject_template` WHERE `entry` = 803700;
-INSERT INTO `gameobject_template`
+-- THE WORKBENCH IS SHARED with the other modules of the repository that
+-- have recipes: one template, the same in every module, inserted ONLY WHEN
+-- ABSENT -- whoever installs first puts it down, nobody rewrites it -- and
+-- no DELETE here, on purpose: the remover replays the deletes of this SQL,
+-- and the object must outlive this module when another provider still
+-- uses it. The remover takes it out itself, when it is the last to go.
+INSERT IGNORE INTO `gameobject_template`
   (`entry`, `type`, `displayId`, `name`, `IconName`, `castBarCaption`, `unk1`,
    `size`, `Data0`, `Data1`, `Data2`, `Data3`, `ScriptName`) VALUES
-(803700, 3, 8176, 'Sphere Grid Workbench', '', '', '', 1.6, 0, 0, 0, 0, '');
+(803700, 3, 8176, 'Workbench', '', '', '', 1.6, 0, 0, 0, 0, '');
 
-DELETE FROM `gameobject_template_locale` WHERE `entry` = 803700;
-INSERT INTO `gameobject_template_locale` (`entry`, `locale`, `name`, `castBarCaption`) VALUES
-(803700, 'frFR', 'Établi du sphèrier', '');
+INSERT IGNORE INTO `gameobject_template_locale` (`entry`, `locale`, `name`, `castBarCaption`) VALUES
+(803700, 'frFR', 'Établi', '');
 
 -- ------------------------------------------------------------------
 -- The wording of the spell counts

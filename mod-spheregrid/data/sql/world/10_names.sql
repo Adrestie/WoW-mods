@@ -44,7 +44,7 @@ INSERT INTO `creature_template_locale` (`entry`, `locale`, `Name`, `Title`, `Ver
 (803816, 'frFR', 'Étoile',                '', 0),
 (803817, 'frFR', 'Départ stellaire',      '', 0);
 
-DELETE FROM `gameobject_template_locale` WHERE `entry` IN (803700, 803820) AND `locale` = 'frFR';
+-- The workbench (803700) is not named here: it is shared, see 02_strings.sql.
+DELETE FROM `gameobject_template_locale` WHERE `entry` = 803820 AND `locale` = 'frFR';
 INSERT INTO `gameobject_template_locale` (`entry`, `locale`, `name`, `castBarCaption`, `VerifiedBuild`) VALUES
-(803700, 'frFR', 'Établi du sphèrier', '', 0),
 (803820, 'frFR', 'Tunnel de la mort',  '', 0);

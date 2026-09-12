@@ -1,0 +1,57 @@
+#
+# mod-stellar-tarot — configuration
+#
+# What a server operator tunes. The identifiers the module allocates are not
+# settings: they are part of the module, and the installer is what adapts them
+# to a server. The catalogue -- cards, boards, tags, effects -- is data in the
+# world database, reloaded by `.tarot reload`.
+#
+# Every value below is also the built-in default, so a setting left out changes
+# nothing.
+#
+# Copy this file to your configs/modules directory and drop the .dist extension.
+#
+
+[worldserver]
+
+###############################################################################
+#
+#    StellarTarot.Enabled
+#        Description: Loads the catalogue and answers the .tarot commands.
+#                     0 leaves the module compiled in but inert.
+#        Default:     1
+#
+
+StellarTarot.Enabled = 1
+
+###############################################################################
+#
+#    StellarTarot.Loot.Enabled
+#        Description: Plays the loot sources (mod_stellar_tarot_source) when
+#                     a creature's loot is filled. 0 keeps the sources loaded
+#                     and listed, and drops nothing.
+#        Default:     1
+#
+
+StellarTarot.Loot.Enabled = 1
+
+#
+#    StellarTarot.Loot.Rate
+#        Description: A percentage applied to every chance written in the
+#                     sources: 100 leaves them as written, 50 halves them,
+#                     1000 multiplies them by ten (a chance is capped at 100).
+#        Default:     100
+#
+
+StellarTarot.Loot.Rate = 100
+
+#
+#    StellarTarot.Loot.Known
+#        Description: Whether a card or a board the account already knows may
+#                     drop again -- to be fused at the workbench, or traded.
+#                     0 draws only among what the account does not know yet,
+#                     and drops nothing once it knows everything.
+#        Default:     1
+#
+
+StellarTarot.Loot.Known = 1

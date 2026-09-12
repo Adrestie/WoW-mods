@@ -182,7 +182,9 @@ door repricing the whole grid for that class is not a bug.
 ## Put a workbench in the world
 
 The module ships the object, not a place for it: where it stands is a decision
-about your world. As a game master, stand where you want one:
+about your world. The bench is shared with the other modules of the repository
+that have recipes: one object, one window, each module's recipes on it. As a
+game master, stand where you want one:
 
 ```
 .gobject add 803700

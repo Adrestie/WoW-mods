@@ -5,6 +5,17 @@ into the mark it leaves in the client's archive.
 
 ## 0.2.0 (unreleased)
 
+- The workbench is a component SHARED with the other modules of the
+  repository (`data/lua/Workbench/`, placed once in `lua_scripts/Workbench/`):
+  one object, one window, locked to the craft of the first item placed on it.
+  The sphere grid registers its four recipes as a provider, each with what
+  it gives for the result box; the window is the one it had, now shared.
+  A result drawn at random (a reroll, a recasting) shows the type's icon
+  under the game's red question mark: six textures of the module's own in
+  `data/art/Textures/` (one stone per quality, one rune), shipped and removed
+  with the rest of its art. The object is named "Workbench" and is only inserted when absent;
+  the remover takes it out with the last provider.
+
 - A client that already has a `patch-Z` of its own is written INTO, in place:
   the module's rows merged into the archive's DBC files, its art added, every
   replaced file copied aside first, a record inside the archive saying what is

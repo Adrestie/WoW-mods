@@ -1,0 +1,126 @@
+-- mod-stellar-tarot — the texts of the commands.
+--
+-- English by default, in `module_string`; every other language is served
+-- from `module_string_locale`, falling back on English. Ids match
+-- StellarTarotStrings.h and are never reused once retired.
+--
+-- Regenerable: every block deletes its own range before writing it again, so
+-- the file may be replayed at will.
+
+DELETE FROM `module_string` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1 AND 50;
+INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
+('mod-stellar-tarot',  1, 'Stellar tarot: {} card(s), {} board(s), {} tag(s) loaded.'),
+('mod-stellar-tarot',  2, '  Card {} "{}": edges {}/{}/{}/{} (top/right/bottom/left), item {}, tags: {}.'),
+('mod-stellar-tarot',  3, '  Board {} "{}": {} row(s) x {} column(s), rows left/right {}, columns top/bottom {}, item {}.'),
+('mod-stellar-tarot',  4, 'Stellar tarot: catalogue reloaded - {} card(s), {} board(s).'),
+('mod-stellar-tarot',  5, 'Stellar tarot: the module is disabled by configuration.'),
+('mod-stellar-tarot',  6, 'Item {} is neither a card nor a board of the stellar tarot.'),
+('mod-stellar-tarot',  7, 'You do not carry {}.'),
+('mod-stellar-tarot',  8, 'Already known: {}.'),
+('mod-stellar-tarot',  9, '{} joins your binder.'),
+('mod-stellar-tarot', 10, '{}''s binder: {} card(s), {} board(s).'),
+('mod-stellar-tarot', 11, '  Cards: {}'),
+('mod-stellar-tarot', 12, '  Boards: {}'),
+('mod-stellar-tarot', 13, 'Stellar tarot: player not found or offline.'),
+('mod-stellar-tarot', 14, 'Board {} does not exist.'),
+('mod-stellar-tarot', 15, 'Your account does not own {}.'),
+('mod-stellar-tarot', 16, '{} equipped. Every card was taken off the board.'),
+('mod-stellar-tarot', 17, 'No board equipped. Every card was taken off.'),
+('mod-stellar-tarot', 18, 'No board is equipped.'),
+('mod-stellar-tarot', 19, 'There is no cell {},{} on this board.'),
+('mod-stellar-tarot', 20, 'Cell {},{} is already taken.'),
+('mod-stellar-tarot', 21, 'Cell {},{} is empty.'),
+('mod-stellar-tarot', 22, 'Card {} does not exist.'),
+('mod-stellar-tarot', 23, 'Your account does not know {}.'),
+('mod-stellar-tarot', 24, '{} is already on the board.'),
+('mod-stellar-tarot', 25, '{} laid on cell {},{}.'),
+('mod-stellar-tarot', 26, '{} taken off cell {},{}.'),
+('mod-stellar-tarot', 27, 'Every card was taken off the board.'),
+('mod-stellar-tarot', 28, 'Preset "{}" saved, {} card(s).'),
+('mod-stellar-tarot', 29, 'There is no preset {}.'),
+('mod-stellar-tarot', 30, 'Preset "{}" loaded: {} card(s) laid, {} skipped.'),
+('mod-stellar-tarot', 31, 'Preset "{}" deleted.'),
+('mod-stellar-tarot', 32, 'A preset needs a name of 1 to 32 characters, without quotes.'),
+('mod-stellar-tarot', 33, '{}''s board: {} ({} x {}), {} card(s) laid.'),
+('mod-stellar-tarot', 34, '  Cell {},{}: {} - level {} (top/right/bottom/left {}).'),
+('mod-stellar-tarot', 35, '{}''s active effects: {}.'),
+('mod-stellar-tarot', 36, '  {} level {}: spell {}, script {}.'),
+('mod-stellar-tarot', 37, '  Card {} "{}" REFUSED: {}.'),
+('mod-stellar-tarot', 38, '    {} - level 1: {} | 2: {} | 3: {} | 4: {}'),
+('mod-stellar-tarot', 39, 'Scripts the module knows: {}.'),
+('mod-stellar-tarot', 40, 'Fusing takes three cards, or three boards.'),
+('mod-stellar-tarot', 41, 'You do not carry those items.'),
+('mod-stellar-tarot', 42, 'Your bags are full.'),
+('mod-stellar-tarot', 43, 'Nothing could be drawn.'),
+('mod-stellar-tarot', 44, 'The three become {}.'),
+('mod-stellar-tarot', 45, 'Loot sources: {}. Loot {}, rate {} %, known items {}.'),
+('mod-stellar-tarot', 46, '  #{}: {}'),
+('mod-stellar-tarot', 47, 'No loot source.'),
+('mod-stellar-tarot', 48, '{} takes the place of {} on {},{}.'),
+('mod-stellar-tarot', 49, '{} moved to {},{}.'),
+('mod-stellar-tarot', 50, '{} and {} swap places.');
+
+-- What each script says of itself (mod_stellar_tarot_script names the id).
+-- {} stands for each parameter of the card's column, in order.
+DELETE FROM `module_string` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1001 AND 1002;
+INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
+('mod-stellar-tarot', 1001, 'Every creature you kill yields {} copper.'),
+('mod-stellar-tarot', 1002, 'Every creature you kill heals you for {}% of your health.');
+
+DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1 AND 50;
+INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
+('mod-stellar-tarot',  1, 'frFR', 'Tarot stellaire : {} carte(s), {} plateau(x), {} tag(s) chargés.'),
+('mod-stellar-tarot',  2, 'frFR', '  Carte {} « {} » : bords {}/{}/{}/{} (haut/droite/bas/gauche), objet {}, tags : {}.'),
+('mod-stellar-tarot',  3, 'frFR', '  Plateau {} « {} » : {} ligne(s) x {} colonne(s), lignes gauche/droite {}, colonnes haut/bas {}, objet {}.'),
+('mod-stellar-tarot',  4, 'frFR', 'Tarot stellaire : catalogue rechargé - {} carte(s), {} plateau(x).'),
+('mod-stellar-tarot',  5, 'frFR', 'Tarot stellaire : le module est désactivé par la configuration.'),
+('mod-stellar-tarot',  6, 'frFR', 'L''objet {} n''est ni une carte ni un plateau du tarot stellaire.'),
+('mod-stellar-tarot',  7, 'frFR', 'Vous ne portez pas {}.'),
+('mod-stellar-tarot',  8, 'frFR', 'Déjà connu : {}.'),
+('mod-stellar-tarot',  9, 'frFR', '{} rejoint votre classeur.'),
+('mod-stellar-tarot', 10, 'frFR', 'Classeur de {} : {} carte(s), {} plateau(x).'),
+('mod-stellar-tarot', 11, 'frFR', '  Cartes : {}'),
+('mod-stellar-tarot', 12, 'frFR', '  Plateaux : {}'),
+('mod-stellar-tarot', 13, 'frFR', 'Tarot stellaire : joueur introuvable ou hors ligne.'),
+('mod-stellar-tarot', 14, 'frFR', 'Le plateau {} n''existe pas.'),
+('mod-stellar-tarot', 15, 'frFR', 'Votre compte ne possède pas {}.'),
+('mod-stellar-tarot', 16, 'frFR', '{} équipé. Toutes les cartes ont été retirées du plateau.'),
+('mod-stellar-tarot', 17, 'frFR', 'Aucun plateau équipé. Toutes les cartes ont été retirées.'),
+('mod-stellar-tarot', 18, 'frFR', 'Aucun plateau n''est équipé.'),
+('mod-stellar-tarot', 19, 'frFR', 'Il n''y a pas de case {},{} sur ce plateau.'),
+('mod-stellar-tarot', 20, 'frFR', 'La case {},{} est déjà occupée.'),
+('mod-stellar-tarot', 21, 'frFR', 'La case {},{} est vide.'),
+('mod-stellar-tarot', 22, 'frFR', 'La carte {} n''existe pas.'),
+('mod-stellar-tarot', 23, 'frFR', 'Votre compte ne connaît pas {}.'),
+('mod-stellar-tarot', 24, 'frFR', '{} est déjà sur le plateau.'),
+('mod-stellar-tarot', 25, 'frFR', '{} posée en case {},{}.'),
+('mod-stellar-tarot', 26, 'frFR', '{} retirée de la case {},{}.'),
+('mod-stellar-tarot', 27, 'frFR', 'Toutes les cartes ont été retirées du plateau.'),
+('mod-stellar-tarot', 28, 'frFR', 'Preset « {} » enregistré, {} carte(s).'),
+('mod-stellar-tarot', 29, 'frFR', 'Il n''y a pas de preset {}.'),
+('mod-stellar-tarot', 30, 'frFR', 'Preset « {} » chargé : {} carte(s) posée(s), {} ignorée(s).'),
+('mod-stellar-tarot', 31, 'frFR', 'Preset « {} » supprimé.'),
+('mod-stellar-tarot', 32, 'frFR', 'Un preset demande un nom de 1 à 32 caractères, sans guillemets.'),
+('mod-stellar-tarot', 33, 'frFR', 'Plateau de {} : {} ({} x {}), {} carte(s) posée(s).'),
+('mod-stellar-tarot', 34, 'frFR', '  Case {},{} : {} - niveau {} (haut/droite/bas/gauche {}).'),
+('mod-stellar-tarot', 35, 'frFR', 'Effets actifs de {} : {}.'),
+('mod-stellar-tarot', 36, 'frFR', '  {} niveau {} : sort {}, script {}.'),
+('mod-stellar-tarot', 37, 'frFR', '  Carte {} « {} » REFUSÉE : {}.'),
+('mod-stellar-tarot', 38, 'frFR', '    {} - niveau 1 : {} | 2 : {} | 3 : {} | 4 : {}'),
+('mod-stellar-tarot', 39, 'frFR', 'Scripts connus du module : {}.'),
+('mod-stellar-tarot', 40, 'frFR', 'La fusion demande trois cartes, ou trois plateaux.'),
+('mod-stellar-tarot', 41, 'frFR', 'Vous ne portez pas ces objets.'),
+('mod-stellar-tarot', 42, 'frFR', 'Vos sacs sont pleins.'),
+('mod-stellar-tarot', 43, 'frFR', 'Rien à tirer.'),
+('mod-stellar-tarot', 44, 'frFR', 'Les trois deviennent {}.'),
+('mod-stellar-tarot', 45, 'frFR', 'Sources de butin : {}. Butin {}, taux {} %, objets connus : {}.'),
+('mod-stellar-tarot', 46, 'frFR', '  n°{} : {}'),
+('mod-stellar-tarot', 47, 'frFR', 'Aucune source de butin.'),
+('mod-stellar-tarot', 48, 'frFR', '{} prend la place de {} en {},{}.'),
+('mod-stellar-tarot', 49, 'frFR', '{} déplacée en {},{}.'),
+('mod-stellar-tarot', 50, 'frFR', '{} et {} échangent leurs places.');
+
+DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1001 AND 1002;
+INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
+('mod-stellar-tarot', 1001, 'frFR', 'Chaque créature que vous tuez rapporte {} pièces de cuivre.'),
+('mod-stellar-tarot', 1002, 'frFR', 'Chaque créature que vous tuez vous rend {} % de votre santé.');

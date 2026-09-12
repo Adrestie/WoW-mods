@@ -1,0 +1,552 @@
+--[[
+    The workbench, a component shared by the modules of this repository.
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+    Public License for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program. If not, see <http://www.gnu.org/licenses/>.
+]]
+
+--[[----------------------------------------------------------------------------
+    The workbench, server side. ONE object in the world, ONE window, shared by
+    every module that has recipes -- and none of them owns it.
+
+    A module declares itself as a PROVIDER when it loads:
+
+        Workbench.Register({
+            module  = "mod-something",
+            Owns    = function(entry) ... end,            -- is that item ours?
+            kinds   = {                                   -- the types, in order (optional)
+                { key = "stone", name = { enUS = "Stones", frFR = "Pierres" },
+                  Of = function(entry) ... end },         -- is that item of this type?
+            },
+            recipes = {
+                { key = "fuse", slots = 3,
+                  name = { enUS = "Fuse three stones", frFR = "Fusionner trois pierres" },
+                  Fits    = function(player, placed, entry) ... end, -- may that item join what is placed?
+                  Accepts = function(player, entries) ... end,   -- is that combination sound?
+                  Preview = function(player, entries) ... end,   -- what it gives: { entry = item }
+                                                                 -- or { icon = path, text = "...", quality = n }
+                  Run     = function(player, entries) ... end }, -- do it (a module command)
+            },
+        })
+
+    WHAT IS ON THE BENCH DECIDES. The first item placed names its provider,
+    and while anything stays on the bench an item of another provider is
+    refused; taking everything off frees the bench. Within the provider, an
+    item is offered and accepted only if some recipe with room left says it
+    may join what is placed (Fits): after a stone, only a stone of the same
+    quality; after a rune, only a rune. The rules of a recipe are the
+    provider's -- Accepts says whether the bench may offer it, Run hands it
+    to the module's own command, which checks everything again and speaks to
+    the player.
+
+    This file is a `.ext`: the Lua engine loads it before every `.lua`, so a
+    provider finds the global `Workbench` ready. Every module that uses the
+    bench ships an identical copy of this folder; the installers place it once
+    and remove it when the last provider goes.
+------------------------------------------------------------------------------]]
+
+local AIO = require("AIO")
+
+local fmt = string.format
+
+Workbench = Workbench or {}
+Workbench.VERSION = 2
+
+-- The object in the world: one template, shipped by every module that uses
+-- the bench (inserted only when absent), placed by hand with `.gobject add`.
+local WORKBENCH_ENTRY = 803700
+local GAMEOBJECT_EVENT_ON_USE = 14
+local LOCALE_FRFR = 2
+
+local Handlers = AIO.AddHandlers("Workbench", {})
+
+-- ---------------------------------------------------------------------------
+-- Texts, by the player's language
+-- ---------------------------------------------------------------------------
+
+local MESSAGES = {
+    not_carried = { "You do not carry that item.", "Vous ne portez pas cet objet." },
+    nobody      = { "Nothing on this workbench takes that item.",
+                    "Rien sur cet établi n'accepte cet objet." },
+    locked      = { "That item belongs to another craft than what is already on the bench.",
+                    "Cet objet relève d'un autre artisanat que ce qui est déjà sur l'établi." },
+    no_recipe   = { "The bench cannot make that with what is on it.",
+                    "L'établi ne peut pas faire cela avec ce qui est posé." },
+    no_fit      = { "That item does not go with what is on the bench.",
+                    "Cet objet ne va pas avec ce qui est sur l'établi." },
+}
+
+local function Say(player, key)
+    local m = MESSAGES[key]
+    player:SendNotification(player:GetDbLocaleIndex() == LOCALE_FRFR and m[2] or m[1])
+end
+
+local function Localized(name, player)
+    if type(name) ~= "table" then return tostring(name) end
+    return (player:GetDbLocaleIndex() == LOCALE_FRFR and name.frFR) or name.enUS or "?"
+end
+
+-- ---------------------------------------------------------------------------
+-- The providers
+-- ---------------------------------------------------------------------------
+
+local providers = {}
+
+function Workbench.Register(provider)
+    assert(type(provider) == "table" and type(provider.module) == "string", "Workbench.Register: a module name is needed")
+    assert(type(provider.Owns) == "function", "Workbench.Register: Owns(entry) is needed")
+    assert(type(provider.recipes) == "table", "Workbench.Register: recipes are needed")
+    for _, recipe in ipairs(provider.recipes) do
+        assert(type(recipe.key) == "string" and type(recipe.slots) == "number" and type(recipe.Run) == "function",
+               "Workbench.Register: a recipe needs a key, a number of slots and Run")
+    end
+    for _, kind in ipairs(provider.kinds or {}) do
+        assert(type(kind.key) == "string" and type(kind.Of) == "function",
+               "Workbench.Register: a kind needs a key and Of(entry)")
+    end
+    -- A module reloaded registers again: the earlier entry goes.
+    for i, p in ipairs(providers) do
+        if p.module == provider.module then table.remove(providers, i) break end
+    end
+    providers[#providers + 1] = provider
+    print(fmt("Workbench: provider %s registered, %d recipe(s).", provider.module, #provider.recipes))
+end
+
+local function ProviderOf(entry)
+    for _, p in ipairs(providers) do
+        if p.Owns(entry) then return p end
+    end
+    return nil
+end
+
+local function ProviderNamed(module)
+    for _, p in ipairs(providers) do
+        if p.module == module then return p end
+    end
+    return nil
+end
+
+local function MaxSlots()
+    local n = 1
+    for _, p in ipairs(providers) do
+        for _, r in ipairs(p.recipes) do
+            if r.slots > n then n = r.slots end
+        end
+    end
+    return n
+end
+
+-- ---------------------------------------------------------------------------
+-- The item's card, pushed to the client
+--
+-- A client knows an item's name, icon and quality only from the card the
+-- server sends it, and asks for that card the first time it meets the item.
+-- The result of a recipe is often an item the player has never held, so the
+-- window would show it late. The bench sends the card itself, before the
+-- state -- what the world server does for a loot -- built exactly as the
+-- core builds it (WorldSession::HandleItemQuerySingleOpcode), from the same
+-- table. The core computes the count of statistics as the non-zero pairs;
+-- the spell cooldowns come from the template when set there, else from the
+-- spell's own record (spell_dbc for a module's spell; a base-game spell has
+-- none readable here and gets zeros, which only affects a cooldown display).
+-- ---------------------------------------------------------------------------
+
+local SMSG_ITEM_QUERY_SINGLE_RESPONSE = 0x058
+local LOCALES = { [0] = "enUS", "koKR", "frFR", "deDE", "zhCN", "zhTW", "esES", "esMX", "ruRU" }
+local MAX_STATS, MAX_DAMAGES, MAX_SPELLS, MAX_SOCKETS = 10, 2, 5, 3
+
+local function U32(p, v)
+    v = math.floor(tonumber(v) or 0)
+    if v >= 2147483648 then p:WriteLong(v - 4294967296) else p:WriteLong(v) end
+end
+
+local function F32(p, v)
+    p:WriteFloat(tonumber(v) or 0)
+end
+
+local function Escape(str)
+    return (tostring(str):gsub("\\", "\\\\"):gsub("'", "\\'"))
+end
+
+-- The cooldown triple of spell slot s, as the core chooses it, or nil when
+-- the spell does not exist.
+local function Cooldowns(t, s)
+    local spellId = math.floor(t["spellid_" .. s] or 0)
+    local spell = spellId > 0 and GetSpellInfo(spellId)
+    if not spell then return nil end
+    local cd, catCd = t["spellcooldown_" .. s] or -1, t["spellcategorycooldown_" .. s] or -1
+    if cd >= 0 or catCd >= 0 then return cd, t["spellcategory_" .. s] or 0, catCd end
+    local q = WorldDBQuery(fmt("SELECT RecoveryTime, Category, CategoryRecoveryTime FROM spell_dbc WHERE ID = %d", spellId))
+    if q then return q:GetUInt32(0), q:GetUInt32(1), q:GetUInt32(2) end
+    return 0, spell:GetCategory(), 0
+end
+
+-- Sends the card of `entry` to the player; returns its localized name, or
+-- nil when the item does not exist.
+local function PushItemCard(player, entry)
+    local q = WorldDBQuery(fmt("SELECT * FROM item_template WHERE entry = %d", entry))
+    if not q then return nil end
+    local t = q:GetRow()
+    local name, description = t.name or "", t.description or ""
+    local locale = LOCALES[player:GetDbLocaleIndex()]
+    if locale and locale ~= "enUS" then
+        local lq = WorldDBQuery(fmt("SELECT Name, Description FROM item_template_locale WHERE ID = %d AND locale = '%s'",
+                                    entry, Escape(locale)))
+        if lq then
+            local ln, ld = lq:GetString(0), lq:GetString(1)
+            if ln and ln ~= "" then name = ln end
+            if ld and ld ~= "" then description = ld end
+        end
+    end
+
+    local p = CreatePacket(SMSG_ITEM_QUERY_SINGLE_RESPONSE, 600)
+    U32(p, t.entry)
+    U32(p, t.class)
+    U32(p, t.subclass)
+    p:WriteLong(math.floor(t.SoundOverrideSubclass or 0))
+    p:WriteString(name)
+    p:WriteUByte(0)                              -- Name2, Name3, Name4: empty
+    p:WriteUByte(0)
+    p:WriteUByte(0)
+    U32(p, t.displayid)
+    U32(p, t.Quality)
+    U32(p, t.Flags)
+    U32(p, t.FlagsExtra)
+    p:WriteLong(math.floor(t.BuyPrice or 0))
+    U32(p, t.SellPrice)
+    U32(p, t.InventoryType)
+    p:WriteLong(math.floor(t.AllowableClass or 0))
+    p:WriteLong(math.floor(t.AllowableRace or 0))
+    U32(p, t.ItemLevel)
+    U32(p, t.RequiredLevel)
+    U32(p, t.RequiredSkill)
+    U32(p, t.RequiredSkillRank)
+    U32(p, t.requiredspell)
+    U32(p, t.requiredhonorrank)
+    U32(p, t.RequiredCityRank)
+    U32(p, t.RequiredReputationFaction)
+    U32(p, t.RequiredReputationRank)
+    p:WriteLong(math.floor(t.maxcount or 0))
+    p:WriteLong(math.floor(t.stackable or 0))
+    U32(p, t.ContainerSlots)
+
+    local stats = {}
+    for i = 1, MAX_STATS do
+        local value = math.floor(t["stat_value" .. i] or 0)
+        if value ~= 0 then stats[#stats + 1] = { math.floor(t["stat_type" .. i] or 0), value } end
+    end
+    U32(p, #stats)
+    for _, st in ipairs(stats) do
+        U32(p, st[1])
+        p:WriteLong(st[2])
+    end
+    U32(p, t.ScalingStatDistribution)
+    p:WriteLong(math.floor(t.ScalingStatValue or 0))
+    for i = 1, MAX_DAMAGES do
+        F32(p, t["dmg_min" .. i])
+        F32(p, t["dmg_max" .. i])
+        U32(p, t["dmg_type" .. i])
+    end
+    U32(p, t.armor)
+    U32(p, t.holy_res)
+    U32(p, t.fire_res)
+    U32(p, t.nature_res)
+    U32(p, t.frost_res)
+    U32(p, t.shadow_res)
+    U32(p, t.arcane_res)
+    U32(p, t.delay)
+    U32(p, t.ammo_type)
+    F32(p, t.RangedModRange)
+
+    for s = 1, MAX_SPELLS do
+        local cd, category, catCd = Cooldowns(t, s)
+        if cd then
+            U32(p, t["spellid_" .. s])
+            U32(p, t["spelltrigger_" .. s])
+            p:WriteLong(math.floor(t["spellcharges_" .. s] or 0))
+            p:WriteLong(math.floor(cd))
+            U32(p, category)
+            p:WriteLong(math.floor(catCd))
+        else
+            U32(p, 0)
+            U32(p, 0)
+            U32(p, 0)
+            p:WriteLong(-1)
+            U32(p, 0)
+            p:WriteLong(-1)
+        end
+    end
+    U32(p, t.bonding)
+    p:WriteString(description)
+    U32(p, t.PageText)
+    U32(p, t.LanguageID)
+    U32(p, t.PageMaterial)
+    U32(p, t.startquest)
+    U32(p, t.lockid)
+    p:WriteLong(math.floor(t.Material or 0))
+    U32(p, t.sheath)
+    p:WriteLong(math.floor(t.RandomProperty or 0))
+    U32(p, t.RandomSuffix)
+    U32(p, t.block)
+    U32(p, t.itemset)
+    U32(p, t.MaxDurability)
+    U32(p, t.area)
+    U32(p, t.Map)
+    U32(p, t.BagFamily)
+    U32(p, t.TotemCategory)
+    for i = 1, MAX_SOCKETS do
+        U32(p, t["socketColor_" .. i])
+        U32(p, t["socketContent_" .. i])
+    end
+    U32(p, t.socketBonus)
+    U32(p, t.GemProperties)
+    p:WriteLong(math.floor(t.RequiredDisenchantSkill or 0))
+    F32(p, t.ArmorDamageModifier)
+    U32(p, t.duration)
+    U32(p, t.ItemLimitCategory)
+    U32(p, t.HolidayId)
+    player:SendPacket(p)
+    return name
+end
+
+-- ---------------------------------------------------------------------------
+-- What each player has on the bench
+-- ---------------------------------------------------------------------------
+
+local benches = {}                  -- guid -> { slots = {}, lock = module or nil }
+
+local function Bench(player)
+    local guid = player:GetGUIDLow()
+    if not benches[guid] then benches[guid] = { slots = {}, lock = nil } end
+    return benches[guid]
+end
+
+local function Entries(bench, except)
+    local out = {}
+    for i = 1, MaxSlots() do
+        if bench.slots[i] and i ~= except then out[#out + 1] = bench.slots[i] end
+    end
+    return out
+end
+
+-- May `entry` join what is placed? Yes if some recipe of the provider with
+-- room left admits every item already placed AND the candidate with them
+-- (Fits); a recipe without Fits takes anything the provider owns. `placed`
+-- leaves out the slot being filled.
+local function Admits(player, r, placed, entry)
+    if not r.Fits then return true end
+    for i, p in ipairs(placed) do
+        local before = {}
+        for j = 1, i - 1 do before[j] = placed[j] end
+        if not r.Fits(player, before, p) then return false end
+    end
+    return r.Fits(player, placed, entry) and true or false
+end
+
+local function Joins(player, provider, placed, entry)
+    for _, r in ipairs(provider.recipes) do
+        if r.slots > #placed and Admits(player, r, placed, entry) then
+            return true
+        end
+    end
+    return false
+end
+
+-- The bench as the client draws it: the slots, the lock, every recipe of the
+-- locked provider with whether it accepts what is placed and, when it does,
+-- what it would give (Preview: { entry = item } or { icon, text, quality }),
+-- and the help -- the recipes of the locked craft, or of every craft while
+-- the bench is empty.
+local function State(player)
+    local bench = Bench(player)
+    local entries = Entries(bench)
+    if #entries == 0 then bench.lock = nil end
+    local recipes, help = {}, {}
+    local provider = bench.lock and ProviderNamed(bench.lock)
+    if provider then
+        for _, r in ipairs(provider.recipes) do
+            local ok = #entries == r.slots and #entries > 0
+            if ok and r.Accepts then ok = r.Accepts(player, entries) and true or false end
+            local preview = nil
+            if ok and r.Preview then preview = r.Preview(player, entries) end
+            -- The client gets the item's card before the state, so that the
+            -- result shows at once, name and icon.
+            if preview and preview.entry and not preview.name then
+                preview.name = PushItemCard(player, preview.entry)
+            end
+            recipes[#recipes + 1] = { key = r.key, name = Localized(r.name, player), slots = r.slots,
+                                      ok = ok, preview = preview }
+        end
+    end
+    for _, p in ipairs(providers) do
+        if not provider or p == provider then
+            for _, r in ipairs(p.recipes) do
+                help[#help + 1] = Localized(r.name, player)
+            end
+        end
+    end
+    return { slots = bench.slots, lock = bench.lock, maxSlots = MaxSlots(), recipes = recipes, help = help }
+end
+
+local function Send(player)
+    AIO.Handle(player, "Workbench", "State", State(player))
+end
+
+-- How many of an entry the bench already holds: three identical stones need
+-- three in the bags.
+local function Placed(bench, entry)
+    local n = 0
+    for _, e in pairs(bench.slots) do
+        if e == entry then n = n + 1 end
+    end
+    return n
+end
+
+local function Whole(v)
+    return type(v) == "number" and math.floor(v) or 0
+end
+
+function Handlers.Put(player, slot, entry)
+    slot, entry = Whole(slot), Whole(entry)
+    local bench = Bench(player)
+    if slot < 1 or slot > MaxSlots() or entry < 1 then return end
+    local provider = ProviderOf(entry)
+    if not provider then Say(player, "nobody") return end
+    if bench.lock and bench.lock ~= provider.module then Say(player, "locked") return end
+    if not Joins(player, provider, Entries(bench, slot), entry) then Say(player, "no_fit") return end
+    local needed = Placed(bench, entry) + 1
+    if bench.slots[slot] == entry then needed = needed - 1 end
+    if not player:HasItem(entry, needed) then Say(player, "not_carried") return end
+    bench.slots[slot] = entry
+    bench.lock = provider.module
+    Send(player)
+end
+
+function Handlers.Take(player, slot)
+    slot = Whole(slot)
+    local bench = Bench(player)
+    bench.slots[slot] = nil
+    Send(player)
+end
+
+function Handlers.Clear(player)
+    local bench = Bench(player)
+    bench.slots, bench.lock = {}, nil
+    Send(player)
+end
+
+-- The type of an item, by its provider's declaration: the kind's key, or ""
+-- for a provider that declares none.
+local function KindOf(provider, entry)
+    for _, k in ipairs(provider.kinds or {}) do
+        if k.Of(entry) then return k.key end
+    end
+    return ""
+end
+
+-- Every type every provider declares, in order: the tabs of the list.
+local function Kinds(player)
+    local out = {}
+    for _, p in ipairs(providers) do
+        for _, k in ipairs(p.kinds or {}) do
+            out[#out + 1] = { k.key, Localized(k.name, player) }
+        end
+    end
+    return out
+end
+
+-- Which of the entries the client found in its bags the bench would take in
+-- `slot`: those of a provider -- the locked one when the bench holds
+-- something -- that may still lead to a recipe with what is placed. Each
+-- goes with its type, and the types go along for the tabs.
+function Handlers.Owners(player, entries, slot)
+    local bench = Bench(player)
+    local placed = Entries(bench, Whole(slot))
+    local out = {}
+    for _, entry in ipairs(entries or {}) do
+        entry = Whole(entry)
+        local provider = entry > 0 and ProviderOf(entry)
+        if provider and (not bench.lock or bench.lock == provider.module)
+           and Joins(player, provider, placed, entry) then
+            out[#out + 1] = { entry, KindOf(provider, entry) }
+        end
+    end
+    AIO.Handle(player, "Workbench", "Eligible", out, Kinds(player))
+end
+
+function Handlers.Run(player, key)
+    local bench = Bench(player)
+    local provider = bench.lock and ProviderNamed(bench.lock)
+    if not provider then Say(player, "no_recipe") return end
+    local entries = Entries(bench)
+    for _, r in ipairs(provider.recipes) do
+        if r.key == key then
+            if #entries ~= r.slots or (r.Accepts and not r.Accepts(player, entries)) then
+                Say(player, "no_recipe")
+                return
+            end
+            r.Run(player, entries)
+            -- The bags have changed: the bench starts empty again.
+            bench.slots, bench.lock = {}, nil
+            Send(player)
+            return
+        end
+    end
+    Say(player, "no_recipe")
+end
+
+function Handlers.Open(player)
+    AIO.Handle(player, "Workbench", "Show", State(player))
+end
+
+-- ---------------------------------------------------------------------------
+-- The object in the world opens the window, and the window closes when the
+-- player walks away, as a bank's does.
+-- ---------------------------------------------------------------------------
+
+local WATCH_DELAY = 500
+local WATCH_RANGE = 10
+local watching = {}
+
+local function Unwatch(player)
+    local guid = player:GetGUIDLow()
+    if watching[guid] then
+        player:RemoveEventById(watching[guid])
+        watching[guid] = nil
+    end
+end
+
+local function Watch(player, mapId, x, y, z)
+    Unwatch(player)
+    watching[player:GetGUIDLow()] = player:RegisterEvent(function(_, _, _, who)
+        if not who then return end
+        if who:GetMapId() ~= mapId or who:GetDistance(x, y, z) > WATCH_RANGE then
+            Unwatch(who)
+            AIO.Handle(who, "Workbench", "Close")
+        end
+    end, WATCH_DELAY, 0)
+end
+
+local function OnUse(_, object, player)
+    if not player then return end
+    AIO.Handle(player, "Workbench", "Show", State(player))
+    if object then
+        local x, y, z = object:GetLocation()
+        Watch(player, object:GetMapId(), x, y, z)
+    end
+    return true
+end
+
+RegisterGameObjectEvent(WORKBENCH_ENTRY, GAMEOBJECT_EVENT_ON_USE, OnUse)
+
+print(fmt("Workbench %d: loaded, waiting for providers.", Workbench.VERSION))

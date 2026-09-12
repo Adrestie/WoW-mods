@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+
+# What the installer keeps aside when it runs from here.
+Backups/
+
+# The author's own tooling: it names the origin server, and means nothing
+# anywhere else.
+tools/local/
