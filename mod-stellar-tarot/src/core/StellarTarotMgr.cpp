@@ -271,6 +271,19 @@ void StellarTarotMgr::Load()
              _cards.size(), _boards.size(), _tags.size(),
              _refused.empty() ? "" : ", " + std::to_string(_refused.size()) + " card(s) REFUSED (see above)");
 
+    // -- A CARD THE CATALOGUE NO LONGER HOLDS -- refused, or gone from the
+    // table -- COMES OFF EVERY BOARD: a placement the server would grant
+    // nothing for must not linger. Presets keep their rows; loading one
+    // skips what the catalogue lacks. Nothing is touched when no card
+    // loaded at all: that is a failed load, not an empty catalogue.
+    if (!_cards.empty())
+    {
+        std::string ids;
+        for (auto const& [id, card] : _cards)
+            ids += (ids.empty() ? "" : ",") + std::to_string(id);
+        CharacterDatabase.DirectExecute("DELETE FROM mod_stellar_tarot_character_cell WHERE card_id NOT IN ({})", ids);
+    }
+
     // -- where it all drops from: checked against the catalogue just read --
     StellarTarotLoot::Load();
 }

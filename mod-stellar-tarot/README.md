@@ -125,7 +125,9 @@ spell (`card_spell_N`, applied as an aura) and/or a script
 1, 2 and 3 together, or level 3 alone. A level with neither a spell nor a
 script, a spell the server does not have or a script it does not know is an
 error at load: the card is REFUSED, logged, listed by `.tarot info`, and
-cannot be laid.
+cannot be laid -- the deck still shows it, the server declines it. One
+already on a board is taken off every board at that load, as is a card
+whose row was deleted.
 
 What is in force follows the layout: it is computed again at every change,
 at login (every aura of the module is removed first, so a card changed while

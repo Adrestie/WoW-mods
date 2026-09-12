@@ -170,7 +170,8 @@ the run that replaced them. Then rebuild the core without the folder.
 
 The reason follows: an edge out of 1..9, a level with neither spell nor
 script, a spell the server does not have, a script it does not know, a tag
-that does not exist. Fix the row, `.tarot reload`.
+that does not exist. The card is taken off every board it was on. Fix the
+row, `.tarot reload`; the deck showed it all along, and lays it again.
 
 ### A card's aura shows in the aura bar
 
