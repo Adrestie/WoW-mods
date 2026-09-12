@@ -95,8 +95,7 @@ local L = {
     preset_delete = FR and "Supprimer ce preset" or "Delete this preset",
     preset_none   = FR and "Aucun preset enregistré." or "No preset saved.",
     hand          = FR and "Aperçu" or "Preview",
-    hand_empty    = FR and "Survolez une carte du deck ou du plateau."
-                       or "Hover a card of the deck or of the board.",
+    hand_empty    = FR and "Survolez une carte" or "Hover a card",
     effects       = FR and "Effets actifs" or "Active effects",
     effects_none  = FR and "Aucun effet actif." or "No active effect.",
     effects_wheel = FR and "Molette de la souris : faire défiler la liste."
@@ -570,7 +569,13 @@ local function RefreshEffects(after)
     local keys, seen = {}, {}
     for key in pairs(after) do keys[#keys + 1] = key seen[key] = true end
     for key in pairs(now) do if not seen[key] then keys[#keys + 1] = key end end
-    table.sort(keys)
+    -- In the order of the cards' numbers, not of their cells.
+    local function CardOf(key) return (after[key] or now[key]).card.id end
+    table.sort(keys, function(a, b)
+        local ca, cb = CardOf(a), CardOf(b)
+        if ca ~= cb then return ca < cb end
+        return a < b
+    end)
     for _, key in ipairs(keys) do
         local act = after[key] or now[key]
         local before, later = LevelsInForce(now[key]), LevelsInForce(after[key])
@@ -782,11 +787,19 @@ end
 -- Building the window
 -- ---------------------------------------------------------------------------
 
-local WIDTH, HEIGHT = 1368, 700
-local COL1, COL2, COL3 = 20, 464, 908          -- the three columns' left edges, 4 px apart
-local DECK_WIDTH, BOARD_WIDTH, HAND_WIDTH = 440, 440, 440   -- every column the same width
-local TAB_WIDTH, TAB_HEIGHT = 96, 26           -- the deck's tabs
-local CELL, GAP, COLUMNS = 44, 4, 6            -- the deck grid
+-- THE COLUMNS. The deck is as wide as its tabs, its grid of five cards and
+-- the scroll bar need; the board takes the same width; the hand is the
+-- card's frame with a third of the room it used to have on either side, and
+-- the effects sit under it at the same width. The window follows.
+local TAB_WIDTH, TAB_HEIGHT = 64, 26           -- the deck's tabs
+local CELL, GAP, COLUMNS = 44, 4, 5            -- the deck grid
+local DECK_WIDTH = 10 + TAB_WIDTH + 8 + COLUMNS * (CELL + GAP) + 30 + 4
+local BOARD_WIDTH = DECK_WIDTH
+local HAND_WIDTH = 232 + 2 * 35                -- the frame (232) and its margins
+local COL1 = 20
+local COL2 = COL1 + DECK_WIDTH + 4             -- the three columns' left edges, 4 px apart
+local COL3 = COL2 + BOARD_WIDTH + 4
+local WIDTH, HEIGHT = COL3 + HAND_WIDTH + 20, 700
 local SLOT = 60                                -- a board cell
 -- The frame of an edge number on a laid card: the module's own texture, a
 -- flat trapezoid whose long base sits on the cell's edge. 32 px wide and
@@ -1137,6 +1150,8 @@ local FRAME_ZONES = {
     edge_left   = { 0.0342, 0.4570, 0.0879, 0.5391 },
 }
 local EDGE_ZONES = { "edge_top", "edge_right", "edge_bottom", "edge_left" }
+local ART_LIFT = 1                             -- pixels the illustration sits above the measured window (negative: below)
+local ART_SCALE = 1.05                         -- the illustration, relative to the window
 
 -- A region of the frame, in pixels of the panel: left, top (negative), width, height.
 local function FrameZone(name)
@@ -1145,14 +1160,18 @@ local function FrameZone(name)
 end
 
 local function BuildHand(ui)
-    local panel = Panel(ui.frame, COL3, HAND_WIDTH, L.hand, -44, PREVIEW_HEIGHT)
+    -- No caption: the card is its own title.
+    local panel = Panel(ui.frame, COL3, HAND_WIDTH, "", -44, PREVIEW_HEIGHT)
 
     -- The illustration, under the frame: as wide as the window, and cut top
     -- and bottom to the window's proportions (the illustrations are square).
     local wx, wy, ww, wh = FrameZone("window")
     local icon = panel:CreateTexture(nil, "BORDER")
-    icon:SetSize(ww, wh)
-    icon:SetPoint("TOPLEFT", panel, "TOPLEFT", wx, wy)
+    -- Drawn a little larger than the window, about its centre: the frame
+    -- overlaps its edges, so the picture never falls short of them.
+    icon:SetSize(ww * ART_SCALE, wh * ART_SCALE)
+    icon:SetPoint("TOPLEFT", panel, "TOPLEFT",
+                  wx - ww * (ART_SCALE - 1) / 2, wy + ART_LIFT + wh * (ART_SCALE - 1) / 2)
     local cut = (1 - wh / ww) / 2
     icon:SetTexCoord(0, 1, cut, 1 - cut)
     icon:Hide()

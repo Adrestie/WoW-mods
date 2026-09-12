@@ -39,7 +39,8 @@ INSERT INTO `item_template`
 (902012, 15, 4, 'The Tide', 31767, 2, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A card of the stellar tarot.', '', 903000, 0, 0),
 (902501, 15, 4, 'Novice''s Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0),
 (902502, 15, 4, 'Wanderer''s Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0),
-(902503, 15, 4, 'Astral Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0);
+(902503, 15, 4, 'Astral Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0),
+(902504, 15, 4, 'Grand Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0);
 
 INSERT INTO `item_template_locale` (`ID`, `locale`, `Name`, `Description`) VALUES
 (902001, 'frFR', 'L''Étoile', 'Une carte du tarot stellaire.'),
@@ -56,7 +57,8 @@ INSERT INTO `item_template_locale` (`ID`, `locale`, `Name`, `Description`) VALUE
 (902012, 'frFR', 'La Marée', 'Une carte du tarot stellaire.'),
 (902501, 'frFR', 'Plateau du novice', 'Un plateau du tarot stellaire.'),
 (902502, 'frFR', 'Plateau du vagabond', 'Un plateau du tarot stellaire.'),
-(902503, 'frFR', 'Plateau astral', 'Un plateau du tarot stellaire.');
+(902503, 'frFR', 'Plateau astral', 'Un plateau du tarot stellaire.'),
+(902504, 'frFR', 'Grand plateau', 'Un plateau du tarot stellaire.');
 
 INSERT INTO `item_dbc`
   (`ID`, `ClassID`, `SubclassID`, `Sound_Override_Subclassid`, `Material`,
@@ -75,4 +77,5 @@ INSERT INTO `item_dbc`
 (902012, 15, 4, -1, 0, 31767, 0, 0),
 (902501, 15, 4, -1, 0, 31755, 0, 0),
 (902502, 15, 4, -1, 0, 31755, 0, 0),
-(902503, 15, 4, -1, 0, 31755, 0, 0);
+(902503, 15, 4, -1, 0, 31755, 0, 0),
+(902504, 15, 4, -1, 0, 31755, 0, 0);

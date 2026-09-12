@@ -12,7 +12,8 @@ DELETE FROM `mod_stellar_tarot_board`;
 INSERT INTO `mod_stellar_tarot_board` (`board_id`, `row_count`, `col_count`, `art`) VALUES
 (1, 2, 2, ''),
 (2, 3, 3, ''),
-(3, 4, 2, '');
+(3, 4, 2, ''),
+(4, 4, 4, '');
 
 INSERT INTO `mod_stellar_tarot_board_line` (`board_id`, `axis`, `idx`, `side`, `number`) VALUES
 (1, 0, 1, 0, 3),
@@ -46,4 +47,20 @@ INSERT INTO `mod_stellar_tarot_board_line` (`board_id`, `axis`, `idx`, `side`, `
 (3, 1, 1, 0, 1),
 (3, 1, 1, 1, 8),
 (3, 1, 2, 0, 4),
-(3, 1, 2, 1, 2);
+(3, 1, 2, 1, 2),
+(4, 0, 1, 0, 2),
+(4, 0, 1, 1, 7),
+(4, 0, 2, 0, 5),
+(4, 0, 2, 1, 3),
+(4, 0, 3, 0, 8),
+(4, 0, 3, 1, 1),
+(4, 0, 4, 0, 4),
+(4, 0, 4, 1, 6),
+(4, 1, 1, 0, 3),
+(4, 1, 1, 1, 9),
+(4, 1, 2, 0, 6),
+(4, 1, 2, 1, 2),
+(4, 1, 3, 0, 1),
+(4, 1, 3, 1, 5),
+(4, 1, 4, 0, 7),
+(4, 1, 4, 1, 4);
