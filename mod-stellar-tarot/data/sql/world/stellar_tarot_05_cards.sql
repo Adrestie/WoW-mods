@@ -14,16 +14,18 @@ DELETE FROM `mod_stellar_tarot_tag_locale`;
 DELETE FROM `mod_stellar_tarot_tag`;
 
 INSERT INTO `mod_stellar_tarot_tag` (`tag_id`, `name`) VALUES
-(1, 'Combat'),
+(1, 'Physical'),
 (2, 'Magic'),
-(3, 'Fortune'),
-(4, 'Nature');
+(3, 'Wealth'),
+(4, 'Madness'),
+(5, 'Misc.');
 
 INSERT INTO `mod_stellar_tarot_tag_locale` (`tag_id`, `locale`, `name`) VALUES
-(1, 'frFR', 'Combat'),
+(1, 'frFR', 'Physique'),
 (2, 'frFR', 'Magie'),
-(3, 'frFR', 'Fortune'),
-(4, 'frFR', 'Nature');
+(3, 'frFR', 'Richesse'),
+(4, 'frFR', 'Folie'),
+(5, 'frFR', 'Divers');
 
 INSERT INTO `mod_stellar_tarot_card`
   (`card_id`, `name`, `edge_top`, `edge_right`, `edge_bottom`, `edge_left`, `tag_id`, `cumulative`,
@@ -33,14 +35,14 @@ INSERT INTO `mod_stellar_tarot_card`
 (2, 'The Moon', 5, 3, 4, 5, 2, 1, 903008, 903009, 903010, 903011, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_moon'),
 (3, 'The Sun', 3, 1, 2, 3, 1, 1, 903012, 903013, 903014, 903015, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_sun'),
 (4, 'The Comet', 1, 4, 4, 2, 1, 1, 903016, 903017, 903018, 903019, '', '', '', 'gold_on_kill:1234', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_comet'),
-(5, 'The Eclipse', 4, 2, 5, 4, 2, 1, 903020, 903021, 903022, 903023, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_eclipse'),
-(6, 'The Nebula', 2, 1, 3, 2, 4, 1, 903024, 903025, 903026, 903027, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_nebula'),
-(7, 'The Void', 5, 5, 1, 1, 2, 0, 903028, 903029, 903030, 903031, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_void'),
-(8, 'The Wanderer', 4, 3, 2, 1, 4, 0, 903032, 0, 903034, 903035, '', 'heal_on_kill:12', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_wanderer'),
+(5, 'The Eclipse', 4, 2, 5, 4, 4, 1, 903020, 903021, 903022, 903023, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_eclipse'),
+(6, 'The Nebula', 2, 1, 3, 2, 5, 1, 903024, 903025, 903026, 903027, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_nebula'),
+(7, 'The Void', 5, 5, 1, 1, 4, 0, 903028, 903029, 903030, 903031, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_void'),
+(8, 'The Wanderer', 4, 3, 2, 1, 5, 0, 903032, 0, 903034, 903035, '', 'heal_on_kill:12', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_wanderer'),
 (9, 'The Twins', 3, 2, 3, 3, 1, 0, 903036, 903037, 903038, 903039, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_twins'),
-(10, 'The Serpent', 2, 4, 8, 9, 4, 0, 903040, 903041, 903042, 903043, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_serpent'),
+(10, 'The Serpent', 2, 4, 8, 9, 5, 0, 903040, 903041, 903042, 903043, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_serpent'),
 (11, 'The Lantern', 1, 1, 5, 4, 3, 0, 903044, 903045, 903046, 903047, '', '', '', '', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_lantern'),
-(12, 'The Tide', 8, 2, 1, 5, 4, 0, 0, 0, 0, 903051, 'heal_on_kill:12', 'heal_on_kill:24', 'gold_on_kill:1234', 'gold_on_kill:1234', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_tide');
+(12, 'The Tide', 8, 2, 1, 5, 5, 0, 0, 0, 0, 903051, 'heal_on_kill:12', 'heal_on_kill:24', 'gold_on_kill:1234', 'gold_on_kill:1234', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_tide');
 
 INSERT INTO `mod_stellar_tarot_card_locale` (`card_id`, `locale`, `hint`) VALUES
 (1, 'frFR', 'Lorem ipsum'),
