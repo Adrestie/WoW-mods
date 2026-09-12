@@ -805,11 +805,187 @@ local SLOT = 60                                -- a board cell
 -- flat trapezoid whose long base sits on the cell's edge. 32 px wide and
 -- 12 px deep in the file, drawn at 30 x 11 so the digit fits inside; a
 -- second texture, dark green, when the edge matches.
-local EDGE_BOX_TEXTURE = "Interface\\mod-Tarot\\UI\\edge_box"
-local EDGE_BOX_MATCH = "Interface\\mod-Tarot\\UI\\edge_box_match"
-local EDGE_BOX_PREVIEW = "Interface\\mod-Tarot\\UI\\edge_box_preview"   -- cyan: would match
-local EDGE_BOX_DEPTH = 12 / 32
-local EDGE_BOX_LONG, EDGE_BOX_SHORT = 30, 11
+local EDGE_BOX_TEXTURE = "Interface\\mod-Tarot\\UI\\trapezoid_off"
+local EDGE_BOX_MATCH = "Interface\\mod-Tarot\\UI\\trapezoid_on"          -- dark green: matches
+local EDGE_BOX_PREVIEW = "Interface\\mod-Tarot\\UI\\trapezoid_preview"   -- teal: would match
+local EDGE_BOX_DEPTH = 51 / 64                 -- the trapezoid fills the texture's width and its top 51 rows of 64
+local EDGE_BOX_LONG, EDGE_BOX_SHORT = 30, 12
+-- The four ways of drawing the trapezoid, its long base against the edge
+-- it sits on: top as drawn, right, bottom flipped, left.
+local TRAPEZOID_COORDS = {
+    { 0, 0,  0, EDGE_BOX_DEPTH,  1, 0,  1, EDGE_BOX_DEPTH },
+    { 0, EDGE_BOX_DEPTH,  1, EDGE_BOX_DEPTH,  0, 0,  1, 0 },
+    { 0, EDGE_BOX_DEPTH,  0, 0,  1, EDGE_BOX_DEPTH,  1, 0 },
+    { 0, 0,  1, 0,  0, EDGE_BOX_DEPTH,  1, EDGE_BOX_DEPTH },
+}
+
+-- THE BOARDS' FRAMES, one texture per size, assembled by the workshop tool
+-- from the module's sprites (make_boards.py), which also measures where the
+-- cells and the trapezoids sit, in fractions of the drawn content.
+BOARD_FRAMES = {
+    ["2x2"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_2x2", texcoord = { 1.0000, 1.0000 }, aspect = 1.0000,
+        cells = {
+            { 1, 1, { 0.1805, 0.1805, 0.4872, 0.4872 } },
+            { 1, 2, { 0.5128, 0.1805, 0.8195, 0.4872 } },
+            { 2, 1, { 0.1805, 0.5128, 0.4872, 0.8195 } },
+            { 2, 2, { 0.5128, 0.5128, 0.8195, 0.8195 } },
+        },
+        top = { { 0.2133, 0.0224, 0.4545, 0.1182 }, { 0.5455, 0.0224, 0.7867, 0.1182 } },
+        bottom = { { 0.2133, 0.8818, 0.4545, 0.9776 }, { 0.5455, 0.8818, 0.7867, 0.9776 } },
+        left = { { 0.0224, 0.2133, 0.1182, 0.4545 }, { 0.0224, 0.5455, 0.1182, 0.7867 } },
+        right = { { 0.8818, 0.2133, 0.9776, 0.4545 }, { 0.8818, 0.5455, 0.9776, 0.7867 } },
+    },
+    ["3x3"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_3x3", texcoord = { 1.0000, 1.0000 }, aspect = 1.0000,
+        cells = {
+            { 1, 1, { 0.1355, 0.1355, 0.3657, 0.3657 } },
+            { 1, 2, { 0.3849, 0.1355, 0.6151, 0.3657 } },
+            { 1, 3, { 0.6343, 0.1355, 0.8645, 0.3657 } },
+            { 2, 1, { 0.1355, 0.3849, 0.3657, 0.6151 } },
+            { 2, 2, { 0.3849, 0.3849, 0.6151, 0.6151 } },
+            { 2, 3, { 0.6343, 0.3849, 0.8645, 0.6151 } },
+            { 3, 1, { 0.1355, 0.6343, 0.3657, 0.8645 } },
+            { 3, 2, { 0.3849, 0.6343, 0.6151, 0.8645 } },
+            { 3, 3, { 0.6343, 0.6343, 0.8645, 0.8645 } },
+        },
+        top = { { 0.1601, 0.0168, 0.3411, 0.0887 }, { 0.4095, 0.0168, 0.5905, 0.0887 }, { 0.6589, 0.0168, 0.8399, 0.0887 } },
+        bottom = { { 0.1601, 0.9113, 0.3411, 0.9832 }, { 0.4095, 0.9113, 0.5905, 0.9832 }, { 0.6589, 0.9113, 0.8399, 0.9832 } },
+        left = { { 0.0168, 0.1601, 0.0887, 0.3411 }, { 0.0168, 0.4095, 0.0887, 0.5905 }, { 0.0168, 0.6589, 0.0887, 0.8399 } },
+        right = { { 0.9113, 0.1601, 0.9832, 0.3411 }, { 0.9113, 0.4095, 0.9832, 0.5905 }, { 0.9113, 0.6589, 0.9832, 0.8399 } },
+    },
+    ["4x4"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_4x4", texcoord = { 1.0000, 1.0000 }, aspect = 1.0000,
+        cells = {
+            { 1, 1, { 0.1084, 0.1084, 0.2927, 0.2927 } },
+            { 1, 2, { 0.3081, 0.1084, 0.4923, 0.2927 } },
+            { 1, 3, { 0.5077, 0.1084, 0.6919, 0.2927 } },
+            { 1, 4, { 0.7073, 0.1084, 0.8916, 0.2927 } },
+            { 2, 1, { 0.1084, 0.3081, 0.2927, 0.4923 } },
+            { 2, 2, { 0.3081, 0.3081, 0.4923, 0.4923 } },
+            { 2, 3, { 0.5077, 0.3081, 0.6919, 0.4923 } },
+            { 2, 4, { 0.7073, 0.3081, 0.8916, 0.4923 } },
+            { 3, 1, { 0.1084, 0.5077, 0.2927, 0.6919 } },
+            { 3, 2, { 0.3081, 0.5077, 0.4923, 0.6919 } },
+            { 3, 3, { 0.5077, 0.5077, 0.6919, 0.6919 } },
+            { 3, 4, { 0.7073, 0.5077, 0.8916, 0.6919 } },
+            { 4, 1, { 0.1084, 0.7073, 0.2927, 0.8916 } },
+            { 4, 2, { 0.3081, 0.7073, 0.4923, 0.8916 } },
+            { 4, 3, { 0.5077, 0.7073, 0.6919, 0.8916 } },
+            { 4, 4, { 0.7073, 0.7073, 0.8916, 0.8916 } },
+        },
+        top = { { 0.1281, 0.0134, 0.2730, 0.0710 }, { 0.3277, 0.0134, 0.4726, 0.0710 }, { 0.5274, 0.0134, 0.6723, 0.0710 }, { 0.7270, 0.0134, 0.8719, 0.0710 } },
+        bottom = { { 0.1281, 0.9290, 0.2730, 0.9866 }, { 0.3277, 0.9290, 0.4726, 0.9866 }, { 0.5274, 0.9290, 0.6723, 0.9866 }, { 0.7270, 0.9290, 0.8719, 0.9866 } },
+        left = { { 0.0134, 0.1281, 0.0710, 0.2730 }, { 0.0134, 0.3277, 0.0710, 0.4726 }, { 0.0134, 0.5274, 0.0710, 0.6723 }, { 0.0134, 0.7270, 0.0710, 0.8719 } },
+        right = { { 0.9290, 0.1281, 0.9866, 0.2730 }, { 0.9290, 0.3277, 0.9866, 0.4726 }, { 0.9290, 0.5274, 0.9866, 0.6723 }, { 0.9290, 0.7270, 0.9866, 0.8719 } },
+    },
+    ["2x3"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_2x3", texcoord = { 0.6660, 1.0000 }, aspect = 1.3323,
+        cells = {
+            { 1, 1, { 0.1355, 0.1805, 0.3657, 0.4872 } },
+            { 1, 2, { 0.3849, 0.1805, 0.6151, 0.4872 } },
+            { 1, 3, { 0.6343, 0.1805, 0.8645, 0.4872 } },
+            { 2, 1, { 0.1355, 0.5128, 0.3657, 0.8195 } },
+            { 2, 2, { 0.3849, 0.5128, 0.6151, 0.8195 } },
+            { 2, 3, { 0.6343, 0.5128, 0.8645, 0.8195 } },
+        },
+        top = { { 0.1601, 0.0224, 0.3411, 0.1182 }, { 0.4095, 0.0224, 0.5905, 0.1182 }, { 0.6589, 0.0224, 0.8399, 0.1182 } },
+        bottom = { { 0.1601, 0.8818, 0.3411, 0.9776 }, { 0.4095, 0.8818, 0.5905, 0.9776 }, { 0.6589, 0.8818, 0.8399, 0.9776 } },
+        left = { { 0.0168, 0.2133, 0.0887, 0.4545 }, { 0.0168, 0.5455, 0.0887, 0.7867 } },
+        right = { { 0.9113, 0.2133, 0.9832, 0.4545 }, { 0.9113, 0.5455, 0.9832, 0.7867 } },
+    },
+    ["3x2"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_3x2", texcoord = { 1.0000, 0.6660 }, aspect = 0.7506,
+        cells = {
+            { 1, 1, { 0.1805, 0.1355, 0.4872, 0.3657 } },
+            { 1, 2, { 0.5128, 0.1355, 0.8195, 0.3657 } },
+            { 2, 1, { 0.1805, 0.3849, 0.4872, 0.6151 } },
+            { 2, 2, { 0.5128, 0.3849, 0.8195, 0.6151 } },
+            { 3, 1, { 0.1805, 0.6343, 0.4872, 0.8645 } },
+            { 3, 2, { 0.5128, 0.6343, 0.8195, 0.8645 } },
+        },
+        top = { { 0.2133, 0.0168, 0.4545, 0.0887 }, { 0.5455, 0.0168, 0.7867, 0.0887 } },
+        bottom = { { 0.2133, 0.9113, 0.4545, 0.9832 }, { 0.5455, 0.9113, 0.7867, 0.9832 } },
+        left = { { 0.0224, 0.1601, 0.1182, 0.3411 }, { 0.0224, 0.4095, 0.1182, 0.5905 }, { 0.0224, 0.6589, 0.1182, 0.8399 } },
+        right = { { 0.8818, 0.1601, 0.9776, 0.3411 }, { 0.8818, 0.4095, 0.9776, 0.5905 }, { 0.8818, 0.6589, 0.9776, 0.8399 } },
+    },
+    ["2x4"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_2x4", texcoord = { 0.8320, 1.0000 }, aspect = 1.6645,
+        cells = {
+            { 1, 1, { 0.1084, 0.1805, 0.2927, 0.4872 } },
+            { 1, 2, { 0.3081, 0.1805, 0.4923, 0.4872 } },
+            { 1, 3, { 0.5077, 0.1805, 0.6919, 0.4872 } },
+            { 1, 4, { 0.7073, 0.1805, 0.8916, 0.4872 } },
+            { 2, 1, { 0.1084, 0.5128, 0.2927, 0.8195 } },
+            { 2, 2, { 0.3081, 0.5128, 0.4923, 0.8195 } },
+            { 2, 3, { 0.5077, 0.5128, 0.6919, 0.8195 } },
+            { 2, 4, { 0.7073, 0.5128, 0.8916, 0.8195 } },
+        },
+        top = { { 0.1281, 0.0224, 0.2730, 0.1182 }, { 0.3277, 0.0224, 0.4726, 0.1182 }, { 0.5274, 0.0224, 0.6723, 0.1182 }, { 0.7270, 0.0224, 0.8719, 0.1182 } },
+        bottom = { { 0.1281, 0.8818, 0.2730, 0.9776 }, { 0.3277, 0.8818, 0.4726, 0.9776 }, { 0.5274, 0.8818, 0.6723, 0.9776 }, { 0.7270, 0.8818, 0.8719, 0.9776 } },
+        left = { { 0.0134, 0.2133, 0.0710, 0.4545 }, { 0.0134, 0.5455, 0.0710, 0.7867 } },
+        right = { { 0.9290, 0.2133, 0.9866, 0.4545 }, { 0.9290, 0.5455, 0.9866, 0.7867 } },
+    },
+    ["4x2"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_4x2", texcoord = { 1.0000, 0.8320 }, aspect = 0.6008,
+        cells = {
+            { 1, 1, { 0.1805, 0.1084, 0.4872, 0.2927 } },
+            { 1, 2, { 0.5128, 0.1084, 0.8195, 0.2927 } },
+            { 2, 1, { 0.1805, 0.3081, 0.4872, 0.4923 } },
+            { 2, 2, { 0.5128, 0.3081, 0.8195, 0.4923 } },
+            { 3, 1, { 0.1805, 0.5077, 0.4872, 0.6919 } },
+            { 3, 2, { 0.5128, 0.5077, 0.8195, 0.6919 } },
+            { 4, 1, { 0.1805, 0.7073, 0.4872, 0.8916 } },
+            { 4, 2, { 0.5128, 0.7073, 0.8195, 0.8916 } },
+        },
+        top = { { 0.2133, 0.0134, 0.4545, 0.0710 }, { 0.5455, 0.0134, 0.7867, 0.0710 } },
+        bottom = { { 0.2133, 0.9290, 0.4545, 0.9866 }, { 0.5455, 0.9290, 0.7867, 0.9866 } },
+        left = { { 0.0224, 0.1281, 0.1182, 0.2730 }, { 0.0224, 0.3277, 0.1182, 0.4726 }, { 0.0224, 0.5274, 0.1182, 0.6723 }, { 0.0224, 0.7270, 0.1182, 0.8719 } },
+        right = { { 0.8818, 0.1281, 0.9776, 0.2730 }, { 0.8818, 0.3277, 0.9776, 0.4726 }, { 0.8818, 0.5274, 0.9776, 0.6723 }, { 0.8818, 0.7270, 0.9776, 0.8719 } },
+    },
+    ["3x4"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_3x4", texcoord = { 0.6250, 1.0000 }, aspect = 1.2494,
+        cells = {
+            { 1, 1, { 0.1084, 0.1355, 0.2927, 0.3657 } },
+            { 1, 2, { 0.3081, 0.1355, 0.4923, 0.3657 } },
+            { 1, 3, { 0.5077, 0.1355, 0.6919, 0.3657 } },
+            { 1, 4, { 0.7073, 0.1355, 0.8916, 0.3657 } },
+            { 2, 1, { 0.1084, 0.3849, 0.2927, 0.6151 } },
+            { 2, 2, { 0.3081, 0.3849, 0.4923, 0.6151 } },
+            { 2, 3, { 0.5077, 0.3849, 0.6919, 0.6151 } },
+            { 2, 4, { 0.7073, 0.3849, 0.8916, 0.6151 } },
+            { 3, 1, { 0.1084, 0.6343, 0.2927, 0.8645 } },
+            { 3, 2, { 0.3081, 0.6343, 0.4923, 0.8645 } },
+            { 3, 3, { 0.5077, 0.6343, 0.6919, 0.8645 } },
+            { 3, 4, { 0.7073, 0.6343, 0.8916, 0.8645 } },
+        },
+        top = { { 0.1281, 0.0168, 0.2730, 0.0887 }, { 0.3277, 0.0168, 0.4726, 0.0887 }, { 0.5274, 0.0168, 0.6723, 0.0887 }, { 0.7270, 0.0168, 0.8719, 0.0887 } },
+        bottom = { { 0.1281, 0.9113, 0.2730, 0.9832 }, { 0.3277, 0.9113, 0.4726, 0.9832 }, { 0.5274, 0.9113, 0.6723, 0.9832 }, { 0.7270, 0.9113, 0.8719, 0.9832 } },
+        left = { { 0.0134, 0.1601, 0.0710, 0.3411 }, { 0.0134, 0.4095, 0.0710, 0.5905 }, { 0.0134, 0.6589, 0.0710, 0.8399 } },
+        right = { { 0.9290, 0.1601, 0.9866, 0.3411 }, { 0.9290, 0.4095, 0.9866, 0.5905 }, { 0.9290, 0.6589, 0.9866, 0.8399 } },
+    },
+    ["4x3"] = {
+        texture = "Interface\\mod-Tarot\\Boards\\board_4x3", texcoord = { 1.0000, 0.6250 }, aspect = 0.8004,
+        cells = {
+            { 1, 1, { 0.1355, 0.1084, 0.3657, 0.2927 } },
+            { 1, 2, { 0.3849, 0.1084, 0.6151, 0.2927 } },
+            { 1, 3, { 0.6343, 0.1084, 0.8645, 0.2927 } },
+            { 2, 1, { 0.1355, 0.3081, 0.3657, 0.4923 } },
+            { 2, 2, { 0.3849, 0.3081, 0.6151, 0.4923 } },
+            { 2, 3, { 0.6343, 0.3081, 0.8645, 0.4923 } },
+            { 3, 1, { 0.1355, 0.5077, 0.3657, 0.6919 } },
+            { 3, 2, { 0.3849, 0.5077, 0.6151, 0.6919 } },
+            { 3, 3, { 0.6343, 0.5077, 0.8645, 0.6919 } },
+            { 4, 1, { 0.1355, 0.7073, 0.3657, 0.8916 } },
+            { 4, 2, { 0.3849, 0.7073, 0.6151, 0.8916 } },
+            { 4, 3, { 0.6343, 0.7073, 0.8645, 0.8916 } },
+        },
+        top = { { 0.1601, 0.0134, 0.3411, 0.0710 }, { 0.4095, 0.0134, 0.5905, 0.0710 }, { 0.6589, 0.0134, 0.8399, 0.0710 } },
+        bottom = { { 0.1601, 0.9290, 0.3411, 0.9866 }, { 0.4095, 0.9290, 0.5905, 0.9866 }, { 0.6589, 0.9290, 0.8399, 0.9866 } },
+        left = { { 0.0168, 0.1281, 0.0887, 0.2730 }, { 0.0168, 0.3277, 0.0887, 0.4726 }, { 0.0168, 0.5274, 0.0887, 0.6723 }, { 0.0168, 0.7270, 0.0887, 0.8719 } },
+        right = { { 0.9113, 0.1281, 0.9832, 0.2730 }, { 0.9113, 0.3277, 0.9832, 0.4726 }, { 0.9113, 0.5274, 0.9832, 0.6723 }, { 0.9113, 0.7270, 0.9832, 0.8719 } },
+    },
+}
 local GRID_AREA = 340                          -- the square the grid is centred in, room for 4 x 4 and the numbers
 local SLOT_GAP = 4
 
@@ -974,6 +1150,11 @@ local function BuildBoard(ui)
     grid:SetSize(GRID_AREA, GRID_AREA)
     grid:EnableMouseWheel(true)
     grid:SetScript("OnMouseWheel", function(_, delta) WheelEffects(delta) end)
+    -- The board's frame, drawn under the cells at the size that makes its
+    -- cells SLOT wide, centred in the grid area.
+    ui.boardArt = grid:CreateTexture(nil, "BACKGROUND")
+    ui.boardArt:SetPoint("CENTER")
+    ui.boardArt:Hide()
     ui.cells, ui.rims = {}, {}
     for r = 1, 4 do
         for c = 1, 4 do
@@ -982,28 +1163,20 @@ local function BuildBoard(ui)
             cell.row, cell.col = r, c
             cell:EnableMouseWheel(true)
             cell:SetScript("OnMouseWheel", function(_, delta) WheelEffects(delta) end)
-            cell:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
-                               bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-                               insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+            -- No border of its own: the board's frame draws a ring around it.
+            cell:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
             cell:SetBackdropColor(0, 0, 0, 0.7)
             -- A laid card fills the cell; its four numbers sit in small
             -- trapezoids glued to the middle of each edge, over the picture:
             -- the module's own texture, drawn with its long base on top and
             -- turned for the other three edges through the texture coordinates.
             cell.icon = cell:CreateTexture(nil, "ARTWORK")
-            cell.icon:SetPoint("TOPLEFT", 3, -3)
-            cell.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+            cell.icon:SetPoint("TOPLEFT", 0, 0)
+            cell.icon:SetPoint("BOTTOMRIGHT", 0, 0)
             cell.edges, cell.boxes = {}, {}
             local anchors = { "TOP", "RIGHT", "BOTTOM", "LEFT" }
-            local offsets = { { 0, -3 }, { -3, 0 }, { 0, 3 }, { 3, 0 } }
-            -- The trapezoid fills the texture's width and its top 20/32.
-            local V = EDGE_BOX_DEPTH
-            local coords = {
-                { 0, 0,  0, V,  1, 0,  1, V },   -- top: as drawn
-                { 0, V,  1, V,  0, 0,  1, 0 },   -- right: base on the right
-                { 0, V,  0, 0,  1, V,  1, 0 },   -- bottom: flipped
-                { 0, 0,  1, 0,  0, V,  1, V },   -- left: base on the left
-            }
+            local offsets = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } }   -- the long base on the cell's edge
+            local coords = TRAPEZOID_COORDS
             for e = 1, 4 do
                 local box = CreateFrame("Frame", nil, cell)
                 if e == 1 or e == 3 then box:SetSize(EDGE_BOX_LONG, EDGE_BOX_SHORT)
@@ -1055,13 +1228,29 @@ local function BuildBoard(ui)
     end
     -- The rim numbers: one text per side and per index, placed when the board
     -- is known.
+    -- Each rim number on its own trapezoid, a frame over the board's art
+    -- and under the cells.
+    -- Drawn with the long base towards the cells: the top band uses the
+    -- bottom edge's drawing, and so on.
+    local RIM_EDGE = { top = 3, right = 4, bottom = 1, left = 2 }
     for _, side in ipairs({ "left", "right", "top", "bottom" }) do
         ui.rims[side] = {}
         for i = 1, 4 do
-            local text = grid:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-            text:SetTextColor(1, 0.82, 0)
-            text:Hide()
-            ui.rims[side][i] = text
+            local box = CreateFrame("Frame", nil, grid)
+            box:SetFrameLevel(grid:GetFrameLevel() + 1)
+            box.bg = box:CreateTexture(nil, "BACKGROUND")
+            box.bg:SetAllPoints()
+            box.bg:SetTexture(EDGE_BOX_TEXTURE)
+            box.coords = TRAPEZOID_COORDS[RIM_EDGE[side]]
+            box.bg:SetTexCoord(unpack(box.coords))
+            local text = box:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            -- Nudged two pixels towards the cells, where the trapezoid is widest.
+            local RIM_NUDGE = { top = { 0, -2 }, right = { -2, 0 }, bottom = { 0, 2 }, left = { 2, 0 } }
+            text:SetPoint("CENTER", RIM_NUDGE[side][1], RIM_NUDGE[side][2])
+            text:SetTextColor(1, 1, 1)
+            box.text = text
+            box:Hide()
+            ui.rims[side][i] = box
         end
     end
     ui.boardNote = grid:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -1461,17 +1650,33 @@ function RefreshBoard(after)
     for _, side in pairs(ui.rims) do for _, t in ipairs(side) do t:Hide() end end
     if not board then
         for _, cell in ipairs(ui.cells) do cell:Hide() end
+        ui.boardArt:Hide()
         return
     end
 
     -- The grid is centred in its frame; the rim numbers sit outside it.
-    local step = SLOT + SLOT_GAP
-    local width, height = board.cols * step - SLOT_GAP, board.rows * step - SLOT_GAP
-    local left, top = -width / 2, height / 2
+    -- The frame for this size: drawn so that a cell is SLOT wide, centred
+    -- in the grid area; every cell and every trapezoid at its measured place.
+    local art = BOARD_FRAMES[board.rows .. "x" .. board.cols]
+    local cellFrac = art.cells[1][3][3] - art.cells[1][3][1]
+    local artW = SLOT / cellFrac
+    local artH = artW / art.aspect
+    ui.boardArt:SetTexture(art.texture)
+    ui.boardArt:SetTexCoord(0, art.texcoord[1], 0, art.texcoord[2])
+    ui.boardArt:SetSize(artW, artH)
+    ui.boardArt:Show()
+    local left, top = -artW / 2, artH / 2
+    local function Zone(rect)
+        return left + rect[1] * artW, top - rect[2] * artH, (rect[3] - rect[1]) * artW, (rect[4] - rect[2]) * artH
+    end
+    local cellZone = {}
+    for _, z in ipairs(art.cells) do cellZone[z[1] * 10 + z[2]] = z[3] end
     for _, cell in ipairs(ui.cells) do
         if cell.row <= board.rows and cell.col <= board.cols then
+            local zx, zy, zw, zh = Zone(cellZone[cell.row * 10 + cell.col])
             cell:ClearAllPoints()
-            cell:SetPoint("TOPLEFT", ui.grid, "CENTER", left + (cell.col - 1) * step, top - (cell.row - 1) * step)
+            cell:SetSize(zw, zh)
+            cell:SetPoint("TOPLEFT", ui.grid, "CENTER", zx, zy)
             local act = S.acts[cell.row * 10 + cell.col]
             local will = after and after[cell.row * 10 + cell.col]
             cell.act = act
@@ -1521,39 +1726,41 @@ function RefreshBoard(after)
     -- the left edge (4) of the row's first card, the right edge (2) of its
     -- last, the top edge (1) of the column's first card, the bottom edge (3)
     -- of its last.
-    local function Rim(text, value, key, edge)
+    -- A rim number on its trapezoid: green on a green trapezoid when the
+    -- card facing it matches, cyan on a teal one when it would, red on a
+    -- plain one when it would stop, white on a plain one otherwise.
+    local function Rim(box, rect, value, key, edge)
         local act, will = S.acts[key], after and after[key]
-        text:SetText(value)
+        local zx, zy, zw, zh = Zone(rect)
+        box:ClearAllPoints()
+        box:SetSize(zw, zh)
+        box:SetPoint("TOPLEFT", ui.grid, "CENTER", zx, zy)
+        box.text:SetText(value)
         local now = act and act.matched[edge] or false
         local later = after and (will and will.matched[edge] or false) or now
         if now and later then
-            text:SetTextColor(0.2, 1, 0.2)
+            box.text:SetTextColor(0.2, 1, 0.2)
+            box.bg:SetTexture(EDGE_BOX_MATCH)
         elseif later then
-            text:SetTextColor(0, 1, 1)
+            box.text:SetTextColor(0, 1, 1)
+            box.bg:SetTexture(EDGE_BOX_PREVIEW)
         elseif now then
-            text:SetTextColor(1, 0.35, 0.35)
+            box.text:SetTextColor(1, 0.35, 0.35)
+            box.bg:SetTexture(EDGE_BOX_TEXTURE)
         else
-            text:SetTextColor(1, 0.82, 0)
+            box.text:SetTextColor(1, 1, 1)
+            box.bg:SetTexture(EDGE_BOX_TEXTURE)
         end
-        text:Show()
+        box.bg:SetTexCoord(unpack(box.coords))
+        box:Show()
     end
     for r = 1, board.rows do
-        local yy = top - (r - 1) * step - SLOT / 2
-        ui.rims.left[r]:ClearAllPoints()
-        ui.rims.left[r]:SetPoint("CENTER", ui.grid, "CENTER", left - 16, yy)
-        Rim(ui.rims.left[r], board.rowLeft[r], r * 10 + 1, 4)
-        ui.rims.right[r]:ClearAllPoints()
-        ui.rims.right[r]:SetPoint("CENTER", ui.grid, "CENTER", left + width + 16, yy)
-        Rim(ui.rims.right[r], board.rowRight[r], r * 10 + board.cols, 2)
+        Rim(ui.rims.left[r], art.left[r], board.rowLeft[r], r * 10 + 1, 4)
+        Rim(ui.rims.right[r], art.right[r], board.rowRight[r], r * 10 + board.cols, 2)
     end
     for c = 1, board.cols do
-        local xx = left + (c - 1) * step + SLOT / 2
-        ui.rims.top[c]:ClearAllPoints()
-        ui.rims.top[c]:SetPoint("CENTER", ui.grid, "CENTER", xx, top + 16)
-        Rim(ui.rims.top[c], board.colTop[c], 1 * 10 + c, 1)
-        ui.rims.bottom[c]:ClearAllPoints()
-        ui.rims.bottom[c]:SetPoint("CENTER", ui.grid, "CENTER", xx, top - height - 16)
-        Rim(ui.rims.bottom[c], board.colBottom[c], board.rows * 10 + c, 3)
+        Rim(ui.rims.top[c], art.top[c], board.colTop[c], 1 * 10 + c, 1)
+        Rim(ui.rims.bottom[c], art.bottom[c], board.colBottom[c], board.rows * 10 + c, 3)
     end
 end
 
