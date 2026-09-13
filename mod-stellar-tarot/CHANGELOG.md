@@ -62,3 +62,32 @@ into the mark it leaves in the client's archive.
   two recipes: three cards into one drawn at random, three boards likewise.
   `.tarot fuse`. The result box shows a card, or a board, under the game's
   red question mark (`data/art/Interface/mod-Tarot/Icons/`).
+- The real catalogue: 197 cards over the five tags, generated from the
+  author's design workbook (one line per card: edges, four effects, cumulative)
+  with a French name each, and the loot source of the test pointed at The Star
+  under its new number. Every level names a spell: a plain statistic (percent,
+  "per level of the player" through the spell's per-level scaling, flat) is a
+  real aura; a condition or an event is a script of the engine, the spell
+  carrying its text.
+- The engine (`src/effects/StellarTarotEngine.cpp`): six families named
+  after the workbook's conditions -- `cond` (the level's aura while a state
+  holds: shield, two-hander, dual wield, unarmed, solo, night, day, in or out
+  of combat, rested, in water, still, mounted, health or mana below, gold
+  above, hours; with stacks per period), `proc` (on an event, with a chance
+  and a cooldown: kills, hits, damage taken, spells cast, heals, combat,
+  levels, death and resurrection, zones, quests, timers; plus the core's own
+  procs for critical hits, spell and heal crits, dodges, parries, blocks and
+  misses, through passive trigger auras and marker spells; actions: a timed
+  and stacking aura, health, mana, gold, damage, root, stun, bleed),
+  `dmgmod` and `takenmod` (damage dealt or taken under a condition on the
+  target), `sp_pct` (spell power in percent of the current one), `econ`
+  (gold looted, experience, reputation, quest gold, repairs, vendor prices).
+  Three controls of the module's own (root, stun, bleed) and the auras of
+  the "per level" statistics reapplied at every level.
+- The interface: the card larger in its own column, the active effects in a
+  fourth; the levels in a transparent scrolling box; a click in the deck pins
+  the preview; effects read short (chances and cooldowns hidden, "+N stat")
+  and grouped under their condition, the aura's tooltip likewise, merged by
+  statistic across cards; the buffs of the procs visible, their bonus
+  multiplied by the stacks; "per level" figures shown as totals.
+

@@ -58,6 +58,16 @@ constexpr uint32 STELLAR_TAROT_BOARD_MAX = 99;             // 902501..902599
 // force. The effects' own auras are hidden from the aura bar; this one says
 // that something is, and points at the window.
 constexpr uint32 STELLAR_TAROT_BANNER_SPELL = 903002;
+// THE ENGINE'S OWN SPELLS, at the top of the block: three controls it puts on
+// a target, eight markers the core's proc system casts to signal an event,
+// and the passive trigger auras the generator allocates from 903820 up.
+constexpr uint32 STELLAR_TAROT_SPELL_ROOT   = 903800;
+constexpr uint32 STELLAR_TAROT_SPELL_STUN   = 903801;
+constexpr uint32 STELLAR_TAROT_SPELL_BLEED  = 903802;
+constexpr uint32 STELLAR_TAROT_MARKER_FIRST = 903810;   // crit, spell_crit, heal_crit, dodge, parry, block, crit_taken, miss
+constexpr uint32 STELLAR_TAROT_MARKER_LAST  = 903817;
+constexpr uint32 STELLAR_TAROT_TRIGGER_FIRST = 903820;
+constexpr uint32 STELLAR_TAROT_TRIGGER_LAST  = 903999;
 
 // A card has four edges and four activation levels; a board has 2 to 4 rows
 // and 2 to 4 columns; every number on an edge or around a board is 1 to 9.

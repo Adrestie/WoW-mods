@@ -45,4 +45,4 @@ INSERT INTO `mod_stellar_tarot_source`
 (1, 'creature', 'card',  0, 0, -1, 'world',   -1, '',      0, 0, 12.34, 1, 'any creature of the open world: a card drawn at random'),
 (2, 'creature', 'board', 0, 0, -1, 'dungeon', -1, 'boss',  0, 0, 12.34, 1, 'a dungeon boss: a board drawn at random'),
 (3, 'creature', 'card',  0, 0, -1, 'raid',    -1, 'boss',  0, 0, 12.34, 2, 'a raid boss: two cards drawn at random'),
-(4, 'creature', 'card',  1, 0,  2, '',        -1, 'elite', 0, 0, 12.34, 1, 'an elite of a Wrath map: card 1, The Star');
+(4, 'creature', 'card', 43, 0,  2, '',        -1, 'elite', 0, 0, 12.34, 1, 'an elite of a Wrath map: card 43, The Star');

@@ -48,6 +48,13 @@ namespace
 
     uint32 Guid(Player* player) { return player->GetGUID().GetCounter(); }
 
+    // Milliseconds since the last tick, per character.
+    std::map<uint32, uint32>& Clocks()
+    {
+        static std::map<uint32, uint32> clocks;
+        return clocks;
+    }
+
     // A card at a level is one key; two cards can name the same spell, and an
     // aura is only removed when no other effect in force still names it.
     bool SameEffect(StellarTarotActiveEffect const& a, StellarTarotActiveEffect const& b)
@@ -85,19 +92,24 @@ namespace
     {
         Running r;
         r.effect = effect;
-        if (effect.spellId && !player->HasAura(effect.spellId))
-            player->AddAura(effect.spellId, player);
+        // The script first: one that OWNS the level's spell applies it itself.
         if (!effect.script.empty())
         {
             StellarTarotCard const* card = sStellarTarotMgr->Card(effect.cardId);
             std::string error;
             if (card)
                 r.script = StellarTarotScripts::Create(card->effects[effect.level - 1].script, error);
-            if (r.script)
-                r.script->Apply(player);
-            else
+            if (!r.script)
                 LOG_ERROR("module", "StellarTarot: card {} level {}: script not started ({}).",
                           effect.cardId, effect.level, error);
+        }
+        bool const owned = r.script && r.script->OwnsAura();
+        if (effect.spellId && !owned && !player->HasAura(effect.spellId))
+            player->AddAura(effect.spellId, player);
+        if (r.script)
+        {
+            r.script->SetSpell(effect.spellId);
+            r.script->Apply(player);
         }
         running.push_back(std::move(r));
     }
@@ -177,14 +189,22 @@ void StellarTarotEffects::OnLogin(Player* player)
     // since. What the layout grants today is applied afresh.
     for (uint32 spellId : sStellarTarotMgr->EffectSpells())
         player->RemoveAurasDueToSpell(spellId);
+    for (uint32 spellId = STELLAR_TAROT_TRIGGER_FIRST; spellId <= STELLAR_TAROT_TRIGGER_LAST; ++spellId)
+        player->RemoveAurasDueToSpell(spellId);
     player->RemoveAurasDueToSpell(STELLAR_TAROT_BANNER_SPELL);
     Refresh(player);
+}
+
+void StellarTarotEffects::OnLevelChanged(Player* player)
+{
+    OnLogin(player);
 }
 
 void StellarTarotEffects::OnLogout(Player* player)
 {
     if (!player)
         return;
+    Clocks().erase(Guid(player));
     auto it = Everyone().find(Guid(player));
     if (it == Everyone().end())
         return;
@@ -225,3 +245,108 @@ std::vector<StellarTarotActiveEffect> StellarTarotEffects::Active(Player* player
         out.push_back(r.effect);
     return out;
 }
+
+// ---------------------------------------------------------------------------
+// The events, to the scripts of the character concerned.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    template <typename F>
+    void Each(Player* player, F fn)
+    {
+        if (!player)
+            return;
+        auto it = Everyone().find(Guid(player));
+        if (it == Everyone().end())
+            return;
+        for (Running& r : it->second)
+            if (r.script)
+                fn(*r.script);
+    }
+
+}
+
+void StellarTarotEffects::OnUpdate(Player* player, uint32 diff)
+{
+    if (!player || !player->IsInWorld())
+        return;
+    uint32& clock = Clocks()[Guid(player)];
+    clock += diff;
+    if (clock < 1000)
+        return;
+    clock = 0;
+    Each(player, [&](StellarTarotScript& s) { s.OnTick(player); });
+}
+
+void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell)
+{
+    if (attacker && attacker->IsPlayer())
+        Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell); });
+    if (victim && victim->IsPlayer())
+        Each(victim->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageTaken(victim->ToPlayer(), attacker, damage, spell); });
+}
+
+void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
+{
+    if (healer && healer->IsPlayer())
+        Each(healer->ToPlayer(), [&](StellarTarotScript& s) { s.OnHealDone(healer->ToPlayer(), receiver, gain); });
+}
+
+void StellarTarotEffects::OnSpellCast(Player* player, Spell* spell)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnSpellCast(player, spell); });
+}
+void StellarTarotEffects::OnEnterCombat(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnEnterCombat(player); });
+}
+void StellarTarotEffects::OnLeaveCombat(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnLeaveCombat(player); });
+}
+void StellarTarotEffects::OnDeath(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnDeath(player); });
+}
+void StellarTarotEffects::OnResurrect(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnResurrect(player); });
+}
+void StellarTarotEffects::OnZone(Player* player, uint32 zone, uint32 area)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnZone(player, zone, area); });
+}
+void StellarTarotEffects::OnQuestComplete(Player* player, Quest const* quest)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnQuestComplete(player, quest); });
+}
+void StellarTarotEffects::OnLootMoney(Player* player, uint32& copper)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnLootMoney(player, copper); });
+}
+void StellarTarotEffects::OnGiveXP(Player* player, uint32& amount)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnGiveXP(player, amount); });
+}
+void StellarTarotEffects::OnGiveReputation(Player* player, float& amount)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnGiveReputation(player, amount); });
+}
+void StellarTarotEffects::OnRepairDiscount(Player* player, float& discountMod)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnRepairDiscount(player, discountMod); });
+}
+void StellarTarotEffects::OnVendorDiscount(Player const* player, float& discount)
+{
+    Each(const_cast<Player*>(player), [&](StellarTarotScript& s) { s.OnVendorDiscount(player, discount); });
+}
+void StellarTarotEffects::OnMoneyChanged(Player* player, int32& amount)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnMoneyChanged(player, amount); });
+}
+void StellarTarotEffects::OnSellItem(Player* player, Item* item)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnSellItem(player, item); });
+}
+

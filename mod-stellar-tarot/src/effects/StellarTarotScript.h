@@ -18,24 +18,36 @@
 /*
  * mod-stellar-tarot — the scripts a card can name.
  *
- * A spell applied as an aura covers most powers; what an aura cannot do -- a
- * thing that happens on a kill, on a loot, on a hit -- is a SCRIPT: a small
- * C++ class registered under a name, that a card names in one of its
+ * A spell applied as an aura covers a plain statistic; everything else -- a
+ * thing that happens on a kill, on a hit, under a condition -- is a SCRIPT:
+ * a small C++ class registered under a name, that a card names in one of its
  * `card_script_N` columns as `name` or `name:param:param`.
  *
  * ONE INSTANCE PER PLAYER AND PER ACTIVE LEVEL. The module creates it when the
- * level is reached, calls Apply, feeds it the game's events while it lives,
- * calls Remove and destroys it when the level is lost or the player logs out.
- * A script keeps whatever state it needs in its own members.
+ * level is reached, tells it the level's spell, calls Apply, feeds it the
+ * game's events while it lives, calls Remove and destroys it when the level
+ * is lost or the player logs out. A script keeps whatever state it needs in
+ * its own members.
  *
- * WHAT A SCRIPT SAYS OF ITSELF is not in the code: the table
- * mod_stellar_tarot_script names, for each script, a row of module_string
- * (English) and module_string_locale, which the interface formats with the
- * script's parameters -- a description changes in the database, without a
- * rebuild. A script without a row shows its column as written.
+ * THE LEVEL'S SPELL. Every level names a spell. Normally the module applies
+ * it as a permanent aura; a script that answers true to OwnsAura takes it
+ * over instead -- applies it under a condition, or for a while after an
+ * event, or with figures it computes -- and the module leaves it alone.
  *
- * TO ADD A SCRIPT: derive from StellarTarotScript, register it in
- * StellarTarotScripts.cpp, add its description rows to the SQL.
+ * THE FAMILIES (StellarTarotEngine.cpp), named after the conditions of the
+ * design workbook:
+ *
+ *   cond:<state>[:n]                      the level's aura, while a state holds
+ *   proc:<event>:<chance>:<icd>:<action>  something happens on an event
+ *   dmgmod:<target condition>[:n]:<pct>   damage dealt, under a condition on the target
+ *   takenmod:<condition>:<pct>            damage taken, under a condition
+ *   sp_pct:<pct>                          spell power, in percent of the current one
+ *   econ:<kind>:<pct>                     gold, experience, reputation, prices
+ *
+ * plus the two examples, gold_on_kill:<copper> and heal_on_kill:<percent>.
+ *
+ * WHAT A SCRIPT SAYS OF ITSELF is not in the code: the interface reads the
+ * level's spell description, which the workbook wrote.
  */
 
 #ifndef MOD_STELLAR_TAROT_SCRIPT_H_
@@ -49,7 +61,11 @@
 #include <vector>
 
 class Creature;
+class Item;
 class Player;
+class Quest;
+class Spell;
+class Unit;
 
 class StellarTarotScript
 {
@@ -61,11 +77,40 @@ public:
     // every instance before Apply.
     virtual bool Parse(std::vector<std::string> const& params, std::string& error) = 0;
 
+    // The level's spell, told before Apply.
+    void SetSpell(uint32 spellId) { _spellId = spellId; }
+    [[nodiscard]] uint32 SpellId() const { return _spellId; }
+    // True: the module does not apply the level's spell itself.
+    [[nodiscard]] virtual bool OwnsAura() const { return false; }
+
     virtual void Apply(Player* /*player*/) { }
     virtual void Remove(Player* /*player*/) { }
 
     // The game's events, while the level is active.
+    virtual void OnTick(Player* /*player*/) { }                                  // about once a second
     virtual void OnCreatureKill(Player* /*player*/, Creature* /*killed*/) { }
+    // Damage the player is about to deal / take. `damage` may be changed.
+    virtual void OnDamageDealt(Player* /*player*/, Unit* /*victim*/, uint32& /*damage*/, bool /*spell*/) { }
+    virtual void OnDamageTaken(Player* /*player*/, Unit* /*attacker*/, uint32& /*damage*/, bool /*spell*/) { }
+    virtual void OnHealDone(Player* /*player*/, Unit* /*target*/, uint32& /*gain*/) { }
+    virtual void OnSpellCast(Player* /*player*/, Spell* /*spell*/) { }
+    virtual void OnEnterCombat(Player* /*player*/) { }
+    virtual void OnLeaveCombat(Player* /*player*/) { }
+    virtual void OnLevelUp(Player* /*player*/) { }
+    virtual void OnDeath(Player* /*player*/) { }
+    virtual void OnResurrect(Player* /*player*/) { }
+    virtual void OnZone(Player* /*player*/, uint32 /*zone*/, uint32 /*area*/) { }
+    virtual void OnQuestComplete(Player* /*player*/, Quest const* /*quest*/) { }
+    virtual void OnLootMoney(Player* /*player*/, uint32& /*copper*/) { }
+    virtual void OnGiveXP(Player* /*player*/, uint32& /*amount*/) { }
+    virtual void OnGiveReputation(Player* /*player*/, float& /*amount*/) { }
+    virtual void OnRepairDiscount(Player* /*player*/, float& /*discountMod*/) { }
+    virtual void OnVendorDiscount(Player const* /*player*/, float& /*discount*/) { }
+    virtual void OnMoneyChanged(Player* /*player*/, int32& /*amount*/) { }
+    virtual void OnSellItem(Player* /*player*/, Item* /*item*/) { }
+
+protected:
+    uint32 _spellId = 0;
 };
 
 namespace StellarTarotScripts
@@ -83,6 +128,8 @@ namespace StellarTarotScripts
 
     // Makes sure every script of the module is registered.
     void RegisterAll();
+    // The families of the engine (StellarTarotEngine.cpp).
+    void RegisterEngine();
 }
 
 #endif

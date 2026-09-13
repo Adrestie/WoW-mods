@@ -41,7 +41,11 @@
 #include <vector>
 
 class Creature;
+class Item;
 class Player;
+class Quest;
+class Spell;
+class Unit;
 
 // One effect in force on a character: which card, which level, what it is.
 struct StellarTarotActiveEffect
@@ -60,11 +64,34 @@ namespace StellarTarotEffects
     void OnLogin(Player* player);
     // Logout: forget the character.
     void OnLogout(Player* player);
+    // A new level: the auras scaled by the character's level (Spell.dbc
+    // RealPointsPerLevel) were computed at the old one. Everything of the
+    // module is purged and applied afresh, as at login.
+    void OnLevelChanged(Player* player);
     // Every online character, after a .tarot reload.
     void RefreshEveryone();
 
     // The game's events, handed to every active script of the character.
     void OnCreatureKill(Player* player, Creature* killed);
+    void OnUpdate(Player* player, uint32 diff);               // ticks the scripts about once a second
+    // Damage about to be dealt by `attacker` to `victim`: the attacker's
+    // scripts see it as dealt, the victim's as taken. Either may be a creature.
+    void OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell);
+    void OnHeal(Unit* healer, Unit* receiver, uint32& gain);
+    void OnSpellCast(Player* player, Spell* spell);
+    void OnEnterCombat(Player* player);
+    void OnLeaveCombat(Player* player);
+    void OnDeath(Player* player);
+    void OnResurrect(Player* player);
+    void OnZone(Player* player, uint32 zone, uint32 area);
+    void OnQuestComplete(Player* player, Quest const* quest);
+    void OnLootMoney(Player* player, uint32& copper);
+    void OnGiveXP(Player* player, uint32& amount);
+    void OnGiveReputation(Player* player, float& amount);
+    void OnRepairDiscount(Player* player, float& discountMod);
+    void OnVendorDiscount(Player const* player, float& discount);
+    void OnMoneyChanged(Player* player, int32& amount);
+    void OnSellItem(Player* player, Item* item);
 
     [[nodiscard]] std::vector<StellarTarotActiveEffect> Active(Player* player);
 }

@@ -16,12 +16,12 @@
  */
 
 /*
- * mod-stellar-tarot — the registry of scripts, and the module's own.
- *
- * Two scripts ship as examples of the mechanism:
+ * mod-stellar-tarot — the registry of scripts, and two examples.
  *
  *   gold_on_kill:<copper>    every creature killed yields that much money
  *   heal_on_kill:<percent>   every creature killed heals that share of health
+ *
+ * The families of the engine are registered from StellarTarotEngine.cpp.
  */
 
 #include "StellarTarotScript.h"
@@ -137,4 +137,5 @@ void StellarTarotScripts::RegisterAll()
     done = true;
     Register("gold_on_kill", [] { return std::make_unique<GoldOnKill>(); });
     Register("heal_on_kill", [] { return std::make_unique<HealOnKill>(); });
+    RegisterEngine();
 }

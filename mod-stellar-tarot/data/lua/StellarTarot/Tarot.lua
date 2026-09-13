@@ -97,7 +97,9 @@ local function Catalogue(locale)
         for piece in (column .. ":"):gmatch("([^:]*):") do pieces[#pieces + 1] = piece end
         local name = pieces[1] or column
         local text = scriptTexts[name]
-        if not text then return { text = column, desc = column } end
+        -- No row: the level's spell description says it all (the engine's
+        -- families have none by design); the column stays for the tools.
+        if not text then return { text = column, desc = "" } end
         local at = 1
         text = text:gsub("{}", function()
             at = at + 1

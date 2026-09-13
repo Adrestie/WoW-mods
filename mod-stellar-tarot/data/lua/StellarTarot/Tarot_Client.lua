@@ -116,6 +116,7 @@ local S = {
     placed = {},        -- card id -> true, the cards on the board
     acts = {},          -- row*10+col -> { card, matched, level, row, col }
     hover = nil,        -- { card, act } shown in the hand
+    pinned = nil,       -- the card a click in the deck PINNED the hand on; nil: the hand follows the mouse
     drag = nil,         -- the card being dragged
     dragFrom = nil,     -- { row, col } when it comes from the board, nil from the deck
     projection = nil,   -- what the drag would do: { kind, card, row, col, from } -- see Project
@@ -285,6 +286,82 @@ end
 
 local SPELL_TEXT = {}
 
+-- Defined with the aura's tooltip, below; the hand uses them too.
+local SplitCondition, Lower, ScaledBonus
+local PROC_SPELLS                -- buff name -> spell id of a proc, built from the catalogue
+
+-- HOW AN EFFECT READS. The designer's text names the chances and the internal
+-- cooldowns; the player is not shown them. And a plain change of a value is
+-- written as a signed number: "augmente la force de 1%" reads "+1% force".
+local ARTICLES = { "les scores de ", "le score de ", "les scores d'", "le score d'",
+                   "les ", "le ", "la ", "l'", "vos ", "votre " }
+local function StripArticle(what)
+    for _, a in ipairs(ARTICLES) do
+        if what:sub(1, #a) == a then what = what:sub(#a + 1) break end
+    end
+    -- "force, l'agilité et l'endurance" -> "force, agilité et endurance"
+    what = what:gsub(", l[ae]s? ", ", "):gsub(", l'", ", "):gsub(" et l[ae]s? ", " et "):gsub(" et l'", " et ")
+    what = what:gsub(" et de ", " et "):gsub(" et d'", " et ")
+    return what
+end
+local SHORT = {
+    { " par niveau du joueur", "/niv." },
+    { "supplémentaires", "suppl." },
+    { "supplémentaire", "suppl." },
+    { "cumulable", "cumul." },
+    { "Cumulable", "cumul." },
+    { "temps de recharge", "recharge" },
+    { "les membres du groupe à moins de", "le groupe à" },
+    { "les membres du groupe à", "le groupe à" },
+    { "les membres de votre groupe à", "le groupe à" },
+    { "de vos PV max", "PV max" },
+    { "des PV max", "PV max" },
+    { "%% de PV", "%% PV" },
+    { "secondes", "s" },
+    { "seconde", "s" },
+    { "minutes", "min" },
+    { "minute", "min" },
+    { "pendant", "pdt" },
+}
+local function Pretty(text)
+    if not text then return text end
+    -- "(10% de chance, 8 sec d'ICD)", "(100% de chance)", "(3 sec d'ICD)": gone.
+    text = text:gsub("%s*%b()", function(p)
+        if p:find("chance") or p:find("ICD") then return "" end
+    end)
+    -- ... and one never closed, to the end of the text.
+    text = text:gsub("%s*%([^()]*$", function(p)
+        if p:find("chance") or p:find("ICD") then return "" end
+    end)
+    -- "5% de chance de" -> "une chance de"
+    text = text:gsub("%d+[%.,]?%d*%s*%% de chances? (d[e'])", "une chance %1")
+    text = text:gsub("%d+[%.,]?%d*%s*%% de chances? (qu')", "une chance %1")
+    -- "augmente la force de 1%" -> "+1% force" ; "réduit les dégâts subis de 3%" -> "-3% dégâts subis"
+    text = text:gsub("[Aa]ugmente (.-) de (%d+[%.,]?%d*%%?)", function(what, n)
+        return "+" .. n .. " " .. StripArticle(what)
+    end)
+    text = text:gsub("[Rr]éduit (.-) de (%d+[%.,]?%d*%%?)", function(what, n)
+        return "-" .. n .. " " .. StripArticle(what)
+    end)
+    -- Then the SHORT FORMS: the box on the card is small.
+    text = text:gsub("ont une chance de ", "peuvent "):gsub("ont une chance d'", "peuvent ")
+    text = text:gsub("a une chance de ", "peut "):gsub("a une chance d'", "peut ")
+    text = text:gsub("à une chance de ", "peut "):gsub("à une chance d'", "peut ")
+    -- "chance d'appliquer ..." at the start, "chance quand ..."
+    text = text:gsub("^[Cc]hance de ", "peut "):gsub("^[Cc]hance d'", "peut "):gsub("^[Cc]hance quand ", "quand ")
+    text = text:gsub("quand vos PV passent sous (%d+)%%", "sous %1%% PV")
+    for _, pair in ipairs(SHORT) do
+        text = text:gsub(pair[1], pair[2])
+    end
+    text = text:gsub(" sec([%s%),])", " s%1"):gsub(" sec$", " s"):gsub("(%d) sec%.", "%1 s.")
+    text = text:gsub("(le groupe à %d+ m) gagnent", "%1 gagne")
+    text = text:gsub(" pdt (%d+ s)", ", %1"):gsub(" pdt (%d+ min)", ", %1"):gsub(" pdt (%d+)%.", ", %1 s.")
+    text = text:gsub("subits", "subis"):gsub(" %.", "."):gsub("%.%.", ".")
+    text = text:gsub("[Cc]umul%. (%d+) fois", "%1 cumul.")
+    text = text:gsub("  +", " "):gsub("^%s+", ""):gsub("%s+$", "")
+    return text
+end
+
 local function SpellText(spellId)
     if SPELL_TEXT[spellId] then return SPELL_TEXT[spellId] end
     local text
@@ -310,6 +387,7 @@ local function SpellText(spellId)
     else
         text = fmt(L.spell_unknown, spellId)
     end
+    text = Pretty(text)
     SPELL_TEXT[spellId] = text
     return text
 end
@@ -319,7 +397,7 @@ local function LevelText(card, level)
     local spell = card.spells and card.spells[level] or 0
     if spell and spell ~= 0 then parts[#parts + 1] = SpellText(spell) end
     local script = card.scripts and card.scripts[level]
-    if script then parts[#parts + 1] = script.desc end
+    if script and script.desc ~= "" then parts[#parts + 1] = script.desc end
     return #parts > 0 and table.concat(parts, " ") or "-"
 end
 
@@ -491,17 +569,42 @@ local function CentreLevels()
     local ui = S.ui
     local box = ui.handLevelsBox
     if not box then return end
-    local text = ui.handLevels
-    text:SetWidth(box.width)                                  -- laid out at full width first, to measure
-    local width = math.min(box.width, (text:GetStringWidth() or 0) + 2)
+    local text, child = ui.handLevels, ui.handScrollChild
+    -- The block is as wide as its widest LINE -- measured one by one with
+    -- the hidden twin: on a text of several lines the client only answers
+    -- for the first.
+    local widest, m = 0, ui.handMeasure
+    m:SetFont(text:GetFont())
+    for line in (text:GetText() or ""):gmatch("[^\n]+") do
+        m:SetText(line)
+        widest = math.max(widest, m:GetStringWidth() or 0)
+    end
+    local width = math.min(box.width, widest + 2)
     text:SetWidth(width)
     local height = text:GetStringHeight() or 0
     text:ClearAllPoints()
-    -- Centred in its room, then lifted a little: it reads better nearer
-    -- the heading than the foot.
-    text:SetPoint("TOPLEFT", ui.hand, "TOPLEFT",
-                  box.left + (box.width - width) / 2,
-                  box.top - math.max(0, (box.room - height) / 2 - LEVELS_LIFT))
+    if height <= box.room then
+        -- It fits: centred in its room, then lifted a little -- it reads
+        -- better nearer the heading than the foot. No scrolling.
+        text:SetPoint("TOPLEFT", child, "TOPLEFT", (box.width - width) / 2,
+                      -math.max(0, (box.room - height) / 2 - LEVELS_LIFT))
+        child:SetHeight(box.room)
+    else
+        -- Too long for the box: from the top, and the box SCROLLS.
+        text:SetPoint("TOPLEFT", child, "TOPLEFT", (box.width - width) / 2, 0)
+        child:SetHeight(height + 2)
+    end
+    ui.handScroll:SetVerticalScroll(0)
+    ui.handScroll:UpdateScrollChildRect()
+end
+
+-- The activation of a card on the board, if it is laid.
+local function ActOf(card)
+    if not card then return nil end
+    for _, a in pairs(S.acts) do
+        if a.card.id == card.id then return a end
+    end
+    return nil
 end
 
 local function ShowHand(card, act, tint)
@@ -516,6 +619,7 @@ local function ShowHand(card, act, tint)
         ui.handMode:SetText("")
         ui.handPairs:SetText("")
         ui.handLevels:SetText("")
+        CentreLevels()
         return
     end
     ui.handIcon:SetTexture((card.art and card.art ~= "") and card.art or CardIcon(card))
@@ -536,15 +640,46 @@ local function ShowHand(card, act, tint)
     -- faded brown for the rest.
     local ink = tint == CYAN and PARCHMENT_TEAL_HEX or PARCHMENT_GREEN_HEX
     ui.handPairs:SetText(L.combos)
-    local lines = {}
+    -- The levels, GROUPED under their condition when they share one (the
+    -- same reading as the aura's tooltip): the condition on its line, in the
+    -- parchment's ink, the levels under it. A level without one keeps its
+    -- own line.
+    -- Only CONSECUTIVE levels share a heading: the levels always read 1 to 4.
+    local order = {}
     for i = 1, 4 do
-        local colour = (act and (act.level == i or (card.cumulative and i < act.level))) and ink or PARCHMENT_FADED_HEX
-        lines[#lines + 1] = "|cff" .. colour .. fmt(L.combo, i, LevelText(card, i)) .. "|r"
+        local cond, rest = SplitCondition(LevelText(card, i))
+        local key = cond and Lower(cond) or nil
+        local last = order[#order]
+        if last and key and last.key == key then
+            last.items[#last.items + 1] = { level = i, text = rest }
+        else
+            order[#order + 1] = { key = key, cond = cond, items = { { level = i, text = rest } } }
+        end
+    end
+    local lines = {}
+    for _, g in ipairs(order) do
+        if g.cond then lines[#lines + 1] = "|cff" .. PARCHMENT_INK_HEX .. g.cond .. " :|r" end
+        -- "Niveau du joueur : +1 force" reads as the total at the character's level.
+        local perLevel = g.key == "niveau du joueur"
+        for _, it in ipairs(g.items) do
+            local i = it.level
+            local colour = (act and (act.level == i or (card.cumulative and i < act.level))) and ink or PARCHMENT_FADED_HEX
+            local text = perLevel and ScaledBonus(it.text, UnitLevel("player")) or it.text
+            lines[#lines + 1] = "|cff" .. colour .. fmt(L.combo, i, text) .. "|r"
+        end
     end
     ui.handLevels:SetText(table.concat(lines, "\n"))
     CentreLevels()
     -- Under them, at the bottom of the box: the one word, when it applies.
     ui.handMode:SetText(card.cumulative and L.cumulative or "")
+end
+
+-- What the mouse passes over goes to the hand -- unless a click in the deck
+-- PINNED the hand on a card: then the hand stays on it. A drag still shows
+-- its projection, and the pinned card comes back after it.
+local function HoverHand(card, act, tint)
+    if S.pinned then return end
+    ShowHand(card, act, tint)
 end
 
 -- The levels a card has in force at an activation: the one reached, and
@@ -671,7 +806,11 @@ local function ClearProjection()
     ShowWheelHint(false)
     RefreshBoard()
     RefreshEffects()
-    if S.hover then ShowHand(S.hover.card, S.hover.act) end
+    if S.pinned then
+        ShowHand(S.pinned, ActOf(S.pinned))
+    elseif S.hover then
+        ShowHand(S.hover.card, S.hover.act)
+    end
 end
 
 -- The cell under the cursor, found geometrically: IsMouseOver is reliable
@@ -795,11 +934,13 @@ local TAB_WIDTH, TAB_HEIGHT = 64, 26           -- the deck's tabs
 local CELL, GAP, COLUMNS = 44, 4, 5            -- the deck grid
 local DECK_WIDTH = 10 + TAB_WIDTH + 8 + COLUMNS * (CELL + GAP) + 30 + 4
 local BOARD_WIDTH = DECK_WIDTH
-local HAND_WIDTH = 232 + 2 * 35                -- the frame (232) and its margins
+local HAND_WIDTH = 400 + 2 * 11                -- the card frame (400) and its margins
+local EFFECTS_WIDTH = 280                      -- the fourth column: the effects in force
 local COL1 = 20
-local COL2 = COL1 + DECK_WIDTH + 4             -- the three columns' left edges, 4 px apart
+local COL2 = COL1 + DECK_WIDTH + 4             -- the four columns' left edges, 4 px apart
 local COL3 = COL2 + BOARD_WIDTH + 4
-local WIDTH, HEIGHT = COL3 + HAND_WIDTH + 20, 700
+local COL4 = COL3 + HAND_WIDTH + 4
+local WIDTH, HEIGHT = COL4 + EFFECTS_WIDTH + 20, 700
 local SLOT = 60                                -- a board cell
 -- The frame of an edge number on a laid card: the module's own texture, a
 -- flat trapezoid whose long base sits on the cell's edge. 32 px wide and
@@ -1209,7 +1350,7 @@ local function BuildBoard(ui)
             cell:SetScript("OnDragStop", DragStop)
             cell:SetScript("OnEnter", function(self)
                 if self.act then
-                    ShowHand(self.act.card, self.act)
+                    HoverHand(self.act.card, self.act)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     GameTooltip:SetText(Label(self.act.card), QualityColor(self.act.card.quality))
                     GameTooltip:AddLine(self.act.level > 0 and fmt(L.activation, self.act.level) or L.inert, 1, 1, 1)
@@ -1316,7 +1457,7 @@ local function BuildBoard(ui)
 end
 
 -- The right column: the preview on top, the active effects under it.
-local PREVIEW_HEIGHT = 384
+local PREVIEW_HEIGHT = HEIGHT - 64             -- the whole column
 
 -- THE CARD, COMPOSED IN THE INTERFACE: the module's frame (a 2:3 template,
 -- drawn from the upper three quarters of a 512 x 1024 texture), the
@@ -1325,7 +1466,7 @@ local PREVIEW_HEIGHT = 384
 -- the workshop tool that makes the frame texture (make_card_frame.py).
 local FRAME_TEXTURE = "Interface\\mod-Tarot\\UI\\card_frame"
 local FRAME_TEXCOORD_BOTTOM = 0.75
-local FRAME_W, FRAME_H = 232, 348
+local FRAME_W, FRAME_H = 400, 600
 local FRAME_X, FRAME_Y = (HAND_WIDTH - FRAME_W) / 2, -(PREVIEW_HEIGHT - FRAME_H) / 2   -- centred in the panel
 local FRAME_ZONES = {
     window      = { 0.1631, 0.1055, 0.8350, 0.4570 },
@@ -1376,7 +1517,7 @@ local function BuildHand(ui)
     local edges = {}
     for e = 1, 4 do
         local zx, zy, zw, zh = FrameZone(EDGE_ZONES[e])
-        local text = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        local text = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
         text:SetPoint("TOPLEFT", panel, "TOPLEFT", zx, zy)
         text:SetSize(zw, zh)
         text:SetJustifyH("CENTER")
@@ -1387,7 +1528,7 @@ local function BuildHand(ui)
 
     -- The name, in the banner.
     local bx, by, bw, bh = FrameZone("banner")
-    local name = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local name = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     name:SetPoint("TOPLEFT", panel, "TOPLEFT", bx, by)
     name:SetSize(bw, bh)
     name:SetJustifyH("CENTER")
@@ -1397,12 +1538,12 @@ local function BuildHand(ui)
     -- The four levels, one block centred in the box, above the kind of
     -- card, which sits at the bottom of the box.
     local lx, ly, lw, lh = FrameZone("box")
-    local KIND_H = 14
+    local KIND_H = 20
     -- The block is placed by hand once its text is known (CentreLevels):
     -- the client's own vertical centring only holds for text that fits.
-    local BOX_MARGIN = 10
+    local BOX_MARGIN = 14
     -- At the top of the box, centred: the heading of the lines.
-    local pairs = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local pairs = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     pairs:SetPoint("TOPLEFT", panel, "TOPLEFT", lx, ly - 4)
     pairs:SetSize(lw, KIND_H)
     pairs:SetJustifyH("CENTER")
@@ -1410,15 +1551,31 @@ local function BuildHand(ui)
     pairs:SetTextColor(PARCHMENT_INK[1], PARCHMENT_INK[2], PARCHMENT_INK[3])
     ui.handPairs = pairs
     -- The lines, a block centred in what is left between the heading and
-    -- the kind of card.
-    local levels = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    levels:SetPoint("TOPLEFT", panel, "TOPLEFT", lx + BOX_MARGIN, ly - 4 - KIND_H)
-    levels:SetWidth(lw - 2 * BOX_MARGIN)
+    -- the kind of card -- in a TRANSPARENT SCROLLING BOX: when the four
+    -- levels are too long for the parchment, the box scrolls (wheel, or the
+    -- bar on its right, shown only then).
+    local SCROLLBAR_W = 22                     -- the template's bar sits 4 px right of the frame, 16 px wide
+    local roomW, roomH = lw - 2 * BOX_MARGIN - SCROLLBAR_W, lh - 8 - 2 * KIND_H
+    local scroll = CreateFrame("ScrollFrame", "StellarTarotHandScroll", panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", lx + BOX_MARGIN, ly - 4 - KIND_H)
+    scroll:SetSize(roomW, roomH)
+    scroll.scrollBarHideable = 1
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetSize(roomW, roomH)
+    scroll:SetScrollChild(child)
+    local levels = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    levels:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
+    levels:SetWidth(roomW)
     levels:SetJustifyH("LEFT")
     levels:SetShadowOffset(0, 0)
-    ui.handLevelsBox = { left = lx + BOX_MARGIN, top = ly - 4 - KIND_H, width = lw - 2 * BOX_MARGIN,
-                         room = lh - 8 - 2 * KIND_H }
-    local mode = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- A hidden twin, to measure a line before it is written.
+    local measure = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    measure:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
+    measure:Hide()
+    ui.handMeasure = measure
+    ui.handScroll, ui.handScrollChild = scroll, child
+    ui.handLevelsBox = { width = roomW, room = roomH }
+    local mode = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     mode:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", lx, ly - lh + 4)
     mode:SetSize(lw, KIND_H)
     mode:SetJustifyH("CENTER")
@@ -1426,17 +1583,17 @@ local function BuildHand(ui)
     mode:SetTextColor(PARCHMENT_INK[1], PARCHMENT_INK[2], PARCHMENT_INK[3])
     local state = nil
 
-    local effectsPanel = Panel(ui.frame, COL3, HAND_WIDTH, L.effects,
-                               -44 - PREVIEW_HEIGHT - 4, HEIGHT - 64 - PREVIEW_HEIGHT - 4)
+    -- The fourth column, the whole height.
+    local effectsPanel = Panel(ui.frame, COL4, EFFECTS_WIDTH, L.effects, -44, HEIGHT - 64)
     local scroll = CreateFrame("ScrollFrame", "StellarTarotEffectsScroll", effectsPanel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 10, -36)
     scroll:SetPoint("BOTTOMRIGHT", -30, 10)
     local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(HAND_WIDTH - 44, 20)
+    content:SetSize(EFFECTS_WIDTH - 44, 20)
     scroll:SetScrollChild(content)
     local effects = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     effects:SetPoint("TOPLEFT", 4, -4)
-    effects:SetWidth(HAND_WIDTH - 56)
+    effects:SetWidth(EFFECTS_WIDTH - 56)
     effects:SetJustifyH("LEFT")
     -- Said at the bottom while a projection is shown: the wheel scrolls.
     local hint = effectsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1518,6 +1675,8 @@ local function LayoutTabs()
     end
 end
 
+local TogglePin                                -- defined after RefreshDeck, which it calls
+
 local function CardButton(i)
     local ui = S.ui
     local b = ui.cardButtons[i]
@@ -1533,9 +1692,15 @@ local function CardButton(i)
     b:RegisterForDrag("LeftButton")
     b:SetScript("OnDragStart", DragStart)
     b:SetScript("OnDragStop", DragStop)
+    -- A CLICK (a press released without dragging) pins the hand on the card;
+    -- a click on the pinned card lets the hand follow the mouse again.
+    b:RegisterForClicks("LeftButtonUp")
+    b:SetScript("OnClick", function(self)
+        if self.card and S.known[self.card.id] then TogglePin(self.card) end
+    end)
     b:SetScript("OnEnter", function(self)
         if self.card and S.known[self.card.id] then
-            ShowHand(self.card, nil)
+            HoverHand(self.card, ActOf(self.card))
         end
         CardTooltip(self)
     end)
@@ -1558,7 +1723,11 @@ local function RefreshDeck()
             b.card = card
             if S.known[card.id] then
                 b.icon:SetTexture(CardIcon(card))
-                b:SetBackdropBorderColor(QualityColor(card.quality))
+                if S.pinned and S.pinned.id == card.id then
+                    b:SetBackdropBorderColor(1, 0.82, 0)           -- gold: the hand is pinned here
+                else
+                    b:SetBackdropBorderColor(QualityColor(card.quality))
+                end
                 if S.placed[card.id] then
                     b.icon:SetDesaturated(true)
                     b:SetAlpha(0.4)
@@ -1581,6 +1750,16 @@ local function RefreshDeck()
     end
     local rows = shown > 0 and (floor((shown - 1) / COLUMNS) + 1) or 0
     ui.content:SetHeight(math.max(rows * (CELL + GAP), 10))
+end
+
+TogglePin = function(card)
+    if S.pinned and S.pinned.id == card.id then
+        S.pinned = nil
+    else
+        S.pinned = card
+    end
+    ShowHand(card, ActOf(card))
+    RefreshDeck()
 end
 
 -- ---------------------------------------------------------------------------
@@ -1826,12 +2005,10 @@ function Refresh()
     RefreshPresets()
     RefreshEffects()
     -- The card in hand follows the board: its level may have changed.
-    if S.hover then
-        local act = nil
-        for _, a in pairs(S.acts) do
-            if a.card.id == S.hover.card.id then act = a end
-        end
-        ShowHand(S.hover.card, act)
+    if S.pinned then
+        ShowHand(S.pinned, ActOf(S.pinned))
+    elseif S.hover then
+        ShowHand(S.hover.card, ActOf(S.hover.card))
     end
     if S.projection then RefreshProjection() end
 end
@@ -1842,6 +2019,7 @@ end
 
 local function Take(catalogue, binder, layout)
     S.cat = catalogue
+    PROC_SPELLS = nil
     -- The players' numbers: 1 onwards, in the order the server lists the
     -- cards (by catalogue number).
     for i, card in ipairs(S.cat.cards) do card.no = i end
@@ -1882,10 +2060,206 @@ end
 
 local BANNER_SPELL = 903002
 
--- The effects in force, without their source, and MERGED: two effects that
--- read the same but for their figure become one line with the figures
--- added -- "+50 Stamina" and "+150 Stamina" read "+200 Stamina". An effect
--- with no figure is listed once.
+-- The effects in force, without their source, MERGED and GROUPED. Two
+-- effects that read the same but for their figure become one line with the
+-- figures added -- "+50 Stamina" and "+150 Stamina" read "+200 Stamina"; an
+-- effect with no figure is listed once. And the effects that share a
+-- CONDITION -- the part before the colon, "Si 2 armes équipées :" -- stand
+-- under it, indented, when there are two or more; a lone one stays on its
+-- line. Every line is { text, indent }.
+-- THE EVENTS AND CONDITIONS, NORMALISED. An effect begins with a trigger
+-- ("subir des dégâts", "vos attaques", "tuer un ennemi"...) or reads
+-- "condition : effect"; every wording is brought to ONE canonical form, the
+-- key the effects are grouped under and the heading they are listed under.
+-- The prefixes are in the short form Pretty gives the text; longest first.
+local TRIGGERS = {
+    -- damage taken
+    { "subir un coup critique", "Subir un crit." }, { "subir un crit.", "Subir un crit." },
+    { "subir des dégâts", "Subir des dégâts" }, { "recevoir des dégâts", "Subir des dégâts" },
+    { "être touché en mêlée", "Subir des dégâts" }, { "être touché", "Subir des dégâts" },
+    { "subir un sort de dégâts", "Subir un sort" }, { "subir un sort de contrôle", "Subir un contrôle" },
+    { "subir un sort", "Subir un sort" }, { "subir un contrôle", "Subir un contrôle" },
+    { "être étourdi ou enraciné", "Subir un contrôle" }, { "après une peur ou un charme subi", "Subir un contrôle" },
+    { "subir 5 coups d'affilée sans en rendre", "Subir des dégâts" },
+    { "quand des dégâts sont subis", "Subir des dégâts" }, { "quand vous subissez des dégâts", "Subir des dégâts" },
+    { "quand inflige des dégâts", "Infliger des dégâts" }, { "quand vous infligez des dégâts", "Infliger des dégâts" },
+    { "quand vous touchez", "Infliger des dégâts" },
+    -- damage dealt
+    { "infliger un coup critique", "Infliger un crit." }, { "infliger un crit.", "Infliger un crit." },
+    { "effectuer un coup critique", "Infliger un crit." }, { "effectuer un crit.", "Infliger un crit." },
+    { "vos coups critiques de sort", "Infliger un crit. de sort" }, { "vos crit. de sort", "Infliger un crit. de sort" },
+    { "vos coups critiques de feu", "Infliger un crit. de feu" }, { "vos crit. de feu", "Infliger un crit. de feu" },
+    { "vos coups critiques", "Infliger un crit." }, { "vos crit.", "Infliger un crit." },
+    { "infliger des dégâts", "Infliger des dégâts" }, { "vos attaques et sorts", "Infliger des dégâts" },
+    { "vos attaques à distance", "Infliger des dégâts à distance" }, { "vos attaques", "Infliger des dégâts" },
+    { "chaque coup porté", "Infliger des dégâts" },
+    { "attaquer une cible que personne d'autre n'attaque", "Cible que personne d'autre n'attaque" },
+    { "face à un seul ennemi", "Face à un seul ennemi" },
+    { "rater une attaque", "Rater une attaque" },
+    -- spells
+    { "vos sorts de dégâts", "Lancer un sort" }, { "vos sorts de feu", "Lancer un sort de feu" },
+    { "vos sorts de givre", "Lancer un sort de givre" }, { "vos sorts de nature", "Lancer un sort de nature" },
+    { "vos sorts d'ombre", "Lancer un sort d'ombre" }, { "vos sorts périodiques", "Lancer un sort périodique" },
+    { "vos effets périodiques", "Effets périodiques" }, { "vos sorts à incantation", "Lancer un sort" },
+    { "vos sorts de zone", "Lancer un sort de zone" }, { "vos sorts", "Lancer un sort" },
+    { "lancer un sort périodique", "Lancer un sort périodique" }, { "lancer un sort de feu", "Lancer un sort de feu" },
+    { "lancer plusieurs fois de suite le même sort", "Lancer un sort" }, { "lancer 5 sorts d'affilée", "Lancer un sort" },
+    { "lancer un sort", "Lancer un sort" }, { "changer d'école de sort", "Changer d'école de sort" },
+    { "les tirs de baguette", "Tir de baguette" }, { "chaque tir de baguette", "Tir de baguette" },
+    -- healing
+    { "vos soins critiques", "Soin critique" }, { "soigner un allié", "Soigner" }, { "vos soins", "Soigner" },
+    -- kills, combat, movement
+    { "tuer un ennemi avec un sort", "Tuer un ennemi" }, { "tuer un ennemi", "Tuer un ennemi" },
+    { "quand votre familier tue un ennemi", "Tuer un ennemi" }, { "tuer un boss", "Tuer un boss" },
+    { "entrer en combat", "Entrer en combat" }, { "sortir du combat", "Sortir du combat" },
+    { "être le premier du groupe à engager un ennemi", "Entrer en combat" },
+    { "esquiver", "Esquiver" }, { "bloquer ou parer", "Parer ou bloquer" }, { "parer", "Parer ou bloquer" },
+    { "mourir", "Mourir" }, { "revenir à la vie", "Revenir à la vie" }, { "rester immobile", "Rester immobile" },
+    { "sauter", "Sauter" }, { "courir", "Courir" }, { "marcher", "Marcher" },
+    -- states
+    { "à chaque connexion", "À chaque connexion" }, { "la nuit", "La nuit" }, { "de nuit", "La nuit" },
+    { "de jour", "De jour" }, { "seul", "Seul" }, { "en combat", "En combat" }, { "hors combat", "Hors combat" },
+    { "être reposé", "Reposé" }, { "être monté", "Monté" }, { "être dans l'eau", "Dans l'eau" },
+    { "marée haute", "Marée haute" }, { "marée basse", "Marée basse" },
+    { "chaque changement de marée", "Changement de marée" },
+    -- world
+    { "terminer une quête", "Terminer une quête" }, { "les quêtes journalières", "Quête journalière" },
+    { "découvrir une nouvelle zone", "Découvrir une zone" }, { "boire une potion", "Boire une potion" },
+    { "boire", "Boire" }, { "manger ou boire", "Manger ou boire" }, { "manger", "Manger" },
+    { "fabriquer un objet", "Fabriquer un objet" }, { "fabriquer une potion", "Fabriquer un objet" },
+    { "extraire un filon", "Extraire un filon" }, { "fondre un minerai", "Fondre un minerai" },
+    { "cueillir une plante", "Cueillir une plante" }, { "dépecer un cadavre", "Dépecer" }, { "pêcher", "Pêcher" },
+    { "ouvrir un butin", "Ouvrir un butin" }, { "ouvrir un coffre", "Ouvrir un coffre" },
+    { "ouvrir un conteneur", "Ouvrir un conteneur" }, { "acheter un objet chez un marchand", "Acheter chez un marchand" },
+    { "acheter chez un marchand", "Acheter chez un marchand" }, { "vendre un objet", "Vendre un objet" },
+    { "réparer", "Réparer" }, { "arriver d'un vol", "Arriver d'un vol" }, { "prendre un vol", "Prendre un vol" },
+    { "atteindre un nouveau niveau", "Monter de niveau" }, { "monter de niveau", "Monter de niveau" },
+    { "utiliser la pierre de foyer", "Pierre de foyer" }, { "entrer dans une instance", "Entrer dans une instance" },
+    { "entrer dans une capitale", "Entrer dans une capitale" },
+    -- others
+    { "la mort de votre familier", "Mort du familier" }, { "votre familier", "Familier" }, { "le familier", "Familier" },
+    { "le groupe à 20 m", "Le groupe à 20 m" }, { "le groupe à 30 m", "Le groupe à 30 m" },
+    { "quand un allié à 30 m", "Un allié à 30 m" }, { "quand un allié à 20 m", "Un allié à 20 m" },
+    { "quand un allié à moins de 10 m", "Un allié à 10 m" }, { "quand un membre du groupe à 30 m", "Un allié à 30 m" },
+    { "posséder plus de", "Posséder plus de" },
+}
+-- A qualifier that follows a trigger stays with it, in one spelling.
+local QUALIFIERS = { { "physiques", "physiques" }, { "physique", "physiques" }, { "magiques", "magiques" },
+                     { "mortels", "mortels" } }
+-- Conditions that carry a figure: "sous 30% PV", "sous 20% de mana".
+local THRESHOLDS = { { "^sous (%d+)%% pv", "Sous %s%% PV" }, { "^sous (%d+)%% de mana", "Sous %s%% de mana" },
+                     { "^sous (%d+)%% de pv", "Sous %s%% PV" } }
+
+-- Case, ASCII only: string.lower/upper follow the locale and may mangle
+-- the bytes of an accented letter.
+Lower = function(text)
+    return (text:gsub("[A-Z]", function(c) return string.char(c:byte() + 32) end))
+end
+local function Capitalise(text)
+    return (text:gsub("^[a-z]", function(c) return string.char(c:byte() - 32) end))
+end
+
+-- The canonical form of a condition, and what is left of the effect.
+local function Canonical(text)
+    local lower = Lower(text)
+    for _, t in ipairs(THRESHOLDS) do
+        local a, b, n = lower:find(t[1])
+        if a then
+            local rest = text:sub(b + 1):gsub("^%s*[,:]?%s*", "")
+            return string.format(t[2], n), rest
+        end
+    end
+    for _, pair in ipairs(TRIGGERS) do
+        local t = Lower(pair[1])
+        if lower:sub(1, #t) == t then
+            local after = text:sub(#t + 1)
+            local sep = after:match("^%s*[,:]%s*") or after:match("^%s+") or ""
+            if sep ~= "" or after == "" then
+                local cond, rest = pair[2], after:sub(#sep + 1)
+                for _, q in ipairs(QUALIFIERS) do
+                    if Lower(rest):sub(1, #q[1] + 1) == q[1] .. " " then
+                        cond, rest = cond .. " " .. q[2], rest:sub(#q[1] + 2)
+                        break
+                    end
+                end
+                return cond, rest
+            end
+        end
+    end
+    return nil, text
+end
+
+-- THE CONDITIONS OF EQUIPMENT AND SITUATION, matched whole -- before the
+-- colon ("Si 2 armes équipées : ...") or at the END of the effect ("... si un
+-- bouclier est équipé") -- and brought to one form.
+local CONDITIONS = {
+    { "si une seule arme à 2 mains est équipée", "Arme à 2 mains" },
+    { "si une arme à 2 mains est équipée", "Arme à 2 mains" }, { "si une arme à deux mains est équipée", "Arme à 2 mains" },
+    { "si un bouclier est équipé", "Bouclier équipé" }, { "si un bouclier équipé", "Bouclier équipé" },
+    { "si 2 armes équipées", "2 armes équipées" }, { "si deux armes équipées", "2 armes équipées" },
+    { "si 2 armes sont équipées", "2 armes équipées" }, { "si aucune arme", "Aucune arme" },
+    { "si aucune arme équipée", "Aucune arme" }, { "sans arme", "Aucune arme" },
+    { "quand vous n'êtes pas en groupe", "Seul" }, { "si vous n'êtes pas en groupe", "Seul" }, { "seul", "Seul" },
+    { "en groupe", "En groupe" }, { "en combat", "En combat" }, { "hors combat", "Hors combat" },
+    { "la nuit", "La nuit" }, { "de jour", "De jour" }, { "face à un seul ennemi", "Face à un seul ennemi" },
+    { "contre les cibles à plus de 90% de pv", "Cible à plus de 90% PV" },
+    { "quand vous touchez", "Infliger des dégâts" }, { "quand des dégâts sont subis", "Subir des dégâts" },
+    { "contre une cible à plus de 50% de pv", "Cible à plus de 50% PV" },
+}
+
+-- A condition read whole: one of the known ones, else a trigger read whole,
+-- else as written with a capital.
+local function CanonicalCondition(cond)
+    local lower = Lower(cond):gsub("^%s+", ""):gsub("%s*:?%s*$", "")
+    for _, p in ipairs(CONDITIONS) do
+        if lower == p[1] then return p[2] end
+    end
+    local canon, left = Canonical(cond)
+    if canon and left == "" then return canon end
+    return Capitalise(cond)
+end
+
+-- A known condition at the END of the effect: its canonical form and the
+-- effect before it, or nil.
+local function TrailingCondition(text)
+    local lower = Lower(text)
+    for _, p in ipairs(CONDITIONS) do
+        local tail = " " .. p[1]
+        if #lower > #tail and lower:sub(-#tail) == tail then
+            return p[2], (text:sub(1, #text - #tail):gsub("[%s,]+$", ""))
+        end
+        -- The condition in the middle of the effect, before a punctuation:
+        -- "peut appliquer un saignement quand vous touchez. dure 16 s".
+        local a, b = lower:find(tail, 1, true)
+        if a and a > 1 and lower:sub(b + 1, b + 1):match("[%.,;]") then
+            local before = text:sub(1, a - 1):gsub("[%s,]+$", "")
+            local after = text:sub(b + 1)
+            return p[2], (before .. after)
+        end
+    end
+    return nil
+end
+
+-- Splits an effect into its canonical condition and the rest: "cond : rest"
+-- (the condition normalised when it is a known one, capitalised otherwise),
+-- or a trigger at the start of the effect.
+SplitCondition = function(text)
+    -- A known trigger or threshold at the start wins, whatever follows.
+    local canon, left = Canonical(text)
+    if canon and left ~= "" then
+        -- "vos attaques peuvent ..." under "Infliger des dégâts" reads "peut ..."
+        left = left:gsub("^peuvent ", "peut ")
+        return canon, left
+    end
+    -- Else "condition : effect", the condition normalised.
+    local cond, rest = text:match("^(.-)%s*:%s*(.+)$")
+    if cond and cond ~= "" then return CanonicalCondition(cond), rest end
+    -- Else "effect ... if <condition>", a known condition at the end.
+    local tail, before = TrailingCondition(text)
+    if tail then return tail, before end
+    return nil, text
+end
+
 function STELLAR_TAROT_ACTIVE_LINES()
     local lines = {}
     if not S.cat then return lines end
@@ -1893,14 +2267,54 @@ function STELLAR_TAROT_ACTIVE_LINES()
     for key in pairs(S.acts) do keys[#keys + 1] = key end
     table.sort(keys)
     local order, totals = {}, {}
+    local groups, groupOrder = {}, {}
+    -- "+20 endurance et +20 force", "+8% dégâts mais -8% PV": several TERMS,
+    -- each summed on its own with the same term of other cards. A line is
+    -- split only when every piece is a signed figure and a statistic.
+    local function SplitTerms(rest)
+        local pieces = {}
+        for piece in (rest .. " et "):gmatch("(.-)%s+et%s+") do
+            for sub in (piece .. " mais "):gmatch("(.-)%s+mais%s+") do
+                for part in (sub .. ", "):gmatch("(.-),%s+") do
+                    if part ~= "" then pieces[#pieces + 1] = part end
+                end
+            end
+        end
+        if #pieces < 2 then return nil end
+        for _, p in ipairs(pieces) do
+            if not p:match("^[+-]%d+[,.]?%d*%%?%s+%S") then return nil end
+        end
+        return pieces
+    end
+    local AddOne
     local function Add(text)
         if not text or text == "" or text == "-" then return end
-        -- The first number of the text is the figure; the rest is the key.
-        local figure = text:match("%d+")
-        local key = figure and text:gsub("%d+", "#", 1) or text
+        local cond, rest = SplitCondition(text)
+        local terms = SplitTerms(rest)
+        if terms then
+            for _, term in ipairs(terms) do AddOne(cond, term) end
+        else
+            AddOne(cond, rest)
+        end
+    end
+    AddOne = function(cond, rest)
+        local condKey = cond and cond:lower() or ""
+        -- The first number of the effect is the figure; the rest is the key.
+        local figure = rest:match("%d+")
+        local restKey = figure and rest:gsub("%d+", "#", 1) or rest
+        local key = condKey .. "|" .. restKey
         if not totals[key] then
-            totals[key] = { text = text, sum = 0, figure = figure ~= nil }
+            totals[key] = { cond = cond, condKey = condKey, text = rest, key = restKey, sum = 0,
+                            figure = figure ~= nil }
             order[#order + 1] = key
+            if cond then
+                if not groups[condKey] then
+                    groups[condKey] = { cond = cond, keys = {} }
+                    groupOrder[#groupOrder + 1] = condKey
+                end
+                local g = groups[condKey]
+                g.keys[#g.keys + 1] = key
+            end
         end
         if figure then totals[key].sum = totals[key].sum + tonumber(figure) end
     end
@@ -1912,16 +2326,29 @@ function STELLAR_TAROT_ACTIVE_LINES()
                 local spell = act.card.spells and act.card.spells[level] or 0
                 if spell and spell ~= 0 then Add(SpellText(spell)) end
                 local script = act.card.scripts and act.card.scripts[level]
-                if script then Add(script.desc) end
+                if script and script.desc ~= "" then Add(script.desc) end
             end
         end
     end
+    local function Text(entry)
+        local text = entry.text
+        if entry.figure then text = (entry.key:gsub("#", tostring(entry.sum), 1)) end
+        if entry.condKey == "niveau du joueur" then text = ScaledBonus(text, UnitLevel("player")) end
+        return text
+    end
+    local done = {}
     for _, key in ipairs(order) do
         local entry = totals[key]
-        if entry.figure then
-            lines[#lines + 1] = (key:gsub("#", tostring(entry.sum), 1))
-        else
-            lines[#lines + 1] = entry.text
+        if not entry.cond then
+            lines[#lines + 1] = { text = Text(entry), indent = false }
+        elseif not done[entry.condKey] then
+            done[entry.condKey] = true
+            local g = groups[entry.condKey]
+            -- The condition on its own line, every effect under it, indented.
+            lines[#lines + 1] = { text = g.cond .. " :", indent = false }
+            for _, k in ipairs(g.keys) do
+                lines[#lines + 1] = { text = Text(totals[k]), indent = true }
+            end
         end
     end
     return lines
@@ -1930,14 +2357,77 @@ end
 -- The hook itself is installed once per session; what it does is a global
 -- function, redefined by every reload of this file, so that a reload changes
 -- the behaviour without a restart.
+-- THE BUFFS OF THE PROCS. A level whose script grants its aura for a while
+-- shows in the buff bar; its tooltip is the bonus alone, and the bonus is
+-- shown MULTIPLIED BY THE STACKS -- the client is not told an aura's real
+-- amount, only its stack count, so the figure is computed here.
+local function ProcSpellByName(name)
+    if not S.cat then return nil end
+    if not PROC_SPELLS then
+        PROC_SPELLS = {}
+        for _, card in ipairs(S.cat.cards) do
+            for level = 1, 4 do
+                local id = card.spells and card.spells[level]
+                if id and id ~= 0 then
+                    local spellName = GetSpellInfo(id)
+                    if spellName then PROC_SPELLS[spellName] = id end
+                end
+            end
+        end
+    end
+    return PROC_SPELLS[name]
+end
+
+ScaledBonus = function(text, count)
+    if not count or count <= 1 then return text end
+    return (text:gsub("([+-])(%d+[,.]?%d*)", function(sign, n)
+        local v = tonumber((n:gsub(",", "."))) * count
+        local s = (v == math.floor(v)) and tostring(math.floor(v)) or string.format("%.1f", v):gsub("%.", ",")
+        return sign .. s
+    end))
+end
+
+-- The engine's bleed: a tick every 2 s of 5% of the caster's attack power
+-- (the generator's figure, StellarTarot: bleed:<sec>:5). The client is not
+-- told the tick's amount: it is computed here from the player's own attack
+-- power, the player being the caster.
+local BLEED_SPELL, BLEED_PCT = 903802, 5
+local function BleedText()
+    local base, pos, neg = UnitAttackPower("player")
+    local ap = (base or 0) + (pos or 0) + (neg or 0)
+    return fmt(FR and "Saigne : %d dégâts toutes les 2 sec" or "Bleeds: %d damage every 2 sec",
+               math.floor(ap * BLEED_PCT / 100))
+end
+
 function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
-    local name = UnitBuff(unit, index, filter)
-    if not name or name ~= GetSpellInfo(BANNER_SPELL) then return end
+    local name, _, _, count = UnitAura(unit, index, filter)
+    if not name then return end
+    if name == GetSpellInfo(BLEED_SPELL) then
+        local line = _G[tip:GetName() .. "TextLeft2"]
+        if line then
+            line:SetText(BleedText())
+            line:SetTextColor(1, 1, 1)
+            tip:Show()
+        end
+        return
+    end
+    if name ~= GetSpellInfo(BANNER_SPELL) then
+        local id = ProcSpellByName(name)
+        if not id then return end
+        local line = _G[tip:GetName() .. "TextLeft2"]
+        if line and line:GetText() then
+            line:SetText(ScaledBonus(line:GetText(), count))
+            tip:Show()
+        end
+        return
+    end
     local lines = STELLAR_TAROT_ACTIVE_LINES()
     if #lines == 0 then return end
+    -- Wider than the buff's own text: the lines wrap less.
+    tip:SetMinimumWidth(420)
     tip:AddLine(" ")
     for _, line in ipairs(lines) do
-        tip:AddLine(line, 0.2, 1, 0.2, true)
+        tip:AddLine((line.indent and "    " or "") .. line.text, 0.2, 1, 0.2, true)
     end
     tip:Show()
 end
@@ -1949,6 +2439,9 @@ if not STELLAR_TAROT_AURA_HOOKED_V2 then
     end)
     hooksecurefunc(GameTooltip, "SetUnitAura", function(tip, unit, index, filter)
         STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
+    end)
+    hooksecurefunc(GameTooltip, "SetUnitDebuff", function(tip, unit, index, filter)
+        STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter or "HARMFUL")
     end)
 end
 

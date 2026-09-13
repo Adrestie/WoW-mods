@@ -145,6 +145,29 @@ rebuild. A spell describes itself through its own tooltip. To add a script,
 derive from `StellarTarotScript`, register it in `StellarTarotScripts.cpp`,
 add its rows to the SQL.
 
+## The engine
+
+A level that is not a plain statistic names a script of the engine in its
+`card_script_N` column, written `family:param:param`. The families follow
+the conditions of the design workbook:
+
+| Family | Reads | Example |
+|---|---|---|
+| `cond:<state>[:n][:stacks:<k>]` | the level's aura while a state holds | `cond:shield`, `cond:hp_below:30`, `cond:still:5:stacks:5` |
+| `proc:<event>:<chance>:<icd>:<action>` | something on an event | `proc:hit_melee:100:5:aura:15:3`, `proc:kill:100:0:mana:2` |
+| `dmgmod:<target condition>:<pct>` | damage dealt, by the target's state | `dmgmod:stunned:10` |
+| `takenmod:<condition>:<pct>` | damage taken | `takenmod:alone:-5` |
+| `sp_pct:<pct>` | spell power, in percent of the current one | `sp_pct:5` |
+| `econ:<kind>:<pct>` | gold, experience, reputation, prices | `econ:gold_loot:5`, `econ:repair:-20` |
+
+The events a hook of the core cannot see (critical hits, dodges, parries,
+blocks, misses) go through the core's proc system: the script carries a
+passive trigger aura (`trigger:<spell>`, 903820 and up, their conditions in
+`stellar_tarot_11_procs.sql`) that casts a marker spell (903810..903817)
+the module recognises. The engine's own controls are 903800 (root), 903801
+(stun) and 903802 (bleed). `StellarTarotEngine.cpp` lists every state,
+event and action.
+
 ## The loot
 
 Where cards and boards come from is content, in `mod_stellar_tarot_source`:
