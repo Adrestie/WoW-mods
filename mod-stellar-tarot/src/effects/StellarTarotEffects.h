@@ -40,6 +40,7 @@
 #include <string>
 #include <vector>
 
+class Aura;
 class Creature;
 class Item;
 class Player;
@@ -76,7 +77,7 @@ namespace StellarTarotEffects
     void OnUpdate(Player* player, uint32 diff);               // ticks the scripts about once a second
     // Damage about to be dealt by `attacker` to `victim`: the attacker's
     // scripts see it as dealt, the victim's as taken. Either may be a creature.
-    void OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell);
+    void OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell, uint32 school = 1, uint32 spellId = 0);
     void OnHeal(Unit* healer, Unit* receiver, uint32& gain);
     void OnSpellCast(Player* player, Spell* spell);
     void OnEnterCombat(Player* player);
@@ -92,6 +93,9 @@ namespace StellarTarotEffects
     void OnVendorDiscount(Player const* player, float& discount);
     void OnMoneyChanged(Player* player, int32& amount);
     void OnSellItem(Player* player, Item* item);
+    void OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block);
+    void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal);
+    void OnAuraApply(Unit* target, Aura* aura);
 
     [[nodiscard]] std::vector<StellarTarotActiveEffect> Active(Player* player);
 }

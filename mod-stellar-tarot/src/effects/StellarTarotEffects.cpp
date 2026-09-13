@@ -25,6 +25,9 @@
 #include "StellarTarotLayout.h"
 #include "StellarTarotMgr.h"
 #include "StellarTarotScript.h"
+#include "Spell.h"
+#include "SpellAuras.h"
+#include "SpellInfo.h"
 #include "WorldSession.h"
 #include "WorldSessionMgr.h"
 #include <map>
@@ -279,12 +282,12 @@ void StellarTarotEffects::OnUpdate(Player* player, uint32 diff)
     Each(player, [&](StellarTarotScript& s) { s.OnTick(player); });
 }
 
-void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell)
+void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell, uint32 school, uint32 spellId)
 {
     if (attacker && attacker->IsPlayer())
-        Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell); });
+        Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell, school, spellId); });
     if (victim && victim->IsPlayer())
-        Each(victim->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageTaken(victim->ToPlayer(), attacker, damage, spell); });
+        Each(victim->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageTaken(victim->ToPlayer(), attacker, damage, spell, school, spellId); });
 }
 
 void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
@@ -348,5 +351,24 @@ void StellarTarotEffects::OnMoneyChanged(Player* player, int32& amount)
 void StellarTarotEffects::OnSellItem(Player* player, Item* item)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnSellItem(player, item); });
+}
+void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
+{
+    if (!aura || !target)
+        return;
+    Unit* const caster = aura->GetCaster();
+    if (caster && caster->IsPlayer())
+        Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnAuraApplied(caster->ToPlayer(), target, aura); });
+}
+
+void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal)
+{
+    if (caster && caster->IsPlayer())
+        Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal); });
+}
+void StellarTarotEffects::OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block)
+{
+    if (attacker && attacker->IsPlayer())
+        Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnMeleeRoll(attacker->ToPlayer(), victim, crit, miss, dodge, parry, block); });
 }
 

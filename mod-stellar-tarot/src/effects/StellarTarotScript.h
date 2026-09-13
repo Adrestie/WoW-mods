@@ -64,6 +64,7 @@ class Creature;
 class Item;
 class Player;
 class Quest;
+class Aura;
 class Spell;
 class Unit;
 
@@ -90,8 +91,13 @@ public:
     virtual void OnTick(Player* /*player*/) { }                                  // about once a second
     virtual void OnCreatureKill(Player* /*player*/, Creature* /*killed*/) { }
     // Damage the player is about to deal / take. `damage` may be changed.
-    virtual void OnDamageDealt(Player* /*player*/, Unit* /*victim*/, uint32& /*damage*/, bool /*spell*/) { }
-    virtual void OnDamageTaken(Player* /*player*/, Unit* /*attacker*/, uint32& /*damage*/, bool /*spell*/) { }
+    // `school` is the school mask of the blow: 1 physical, 4 fire, and so on.
+    // `spellId` is the spell that strikes, 0 for a weapon swing: a condition on
+    // the target must be able to tell an aura this very spell keeps up.
+    virtual void OnDamageDealt(Player* /*player*/, Unit* /*victim*/, uint32& /*damage*/, bool /*spell*/,
+                               uint32 /*school*/ = 1, uint32 /*spellId*/ = 0) { }
+    virtual void OnDamageTaken(Player* /*player*/, Unit* /*attacker*/, uint32& /*damage*/, bool /*spell*/,
+                               uint32 /*school*/ = 1, uint32 /*spellId*/ = 0) { }
     virtual void OnHealDone(Player* /*player*/, Unit* /*target*/, uint32& /*gain*/) { }
     virtual void OnSpellCast(Player* /*player*/, Spell* /*spell*/) { }
     virtual void OnEnterCombat(Player* /*player*/) { }
@@ -108,6 +114,14 @@ public:
     virtual void OnVendorDiscount(Player const* /*player*/, float& /*discount*/) { }
     virtual void OnMoneyChanged(Player* /*player*/, int32& /*amount*/) { }
     virtual void OnSellItem(Player* /*player*/, Item* /*item*/) { }
+    // An aura the player has just laid on someone.
+    virtual void OnAuraApplied(Player* /*player*/, Unit* /*target*/, Aura* /*aura*/) { }
+    // A tick of one of the player's periodic effects, before it lands: damage
+    // on a victim, or healing on whoever carries the effect.
+    virtual void OnPeriodicTick(Player* /*player*/, Unit* /*other*/, uint32& /*amount*/, bool /*heal*/) { }
+    // The chances of the player's next melee swing, before the roll (percent).
+    virtual void OnMeleeRoll(Player* /*player*/, Unit* /*victim*/, int32& /*crit*/, int32& /*miss*/,
+                             int32& /*dodge*/, int32& /*parry*/, int32& /*block*/) { }
 
 protected:
     uint32 _spellId = 0;

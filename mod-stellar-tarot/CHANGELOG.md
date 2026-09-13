@@ -84,6 +84,38 @@ into the mark it leaves in the client's archive.
   (gold looted, experience, reputation, quest gold, repairs, vendor prices).
   Three controls of the module's own (root, stun, bleed) and the auras of
   the "per level" statistics reapplied at every level.
+- The engine, further: every action an event can carry (shields on self, a
+  target, an ally or the group; heals of the group, the pet, an ally; leeching,
+  reflecting, splashing, cleaving, exploding, knocking back; the controls of the
+  module -- disorient, fear, immunity to snares; a free next spell, a recast,
+  cooldowns cut or reset, copper per point of damage, a full repair, gold
+  multiplied on a loot, a guaranteed critical or unavoidable next swing, a blink,
+  spell-power damage, a bleed), a cost in health, mana or a control on the
+  player, and a small action on a timer while a state holds.
+- Values the night changes: a figure written "(N% de nuit)" takes that value
+  between 21:00 and 06:00, and ", la nuit uniquement" grants the effect by night
+  alone. The banner then says what is in force NOW: the figure of the moment,
+  and nothing of what the night alone would give. New families for it: `stat`
+  (the level's aura at the figure of the hour), `spell_cast_school` (a spell of
+  one school), `night:<n>` and `onlynight` on a proc.
+- The school of a blow travels to the scripts, so `dmgmod` and `takenmod` may
+  name one: "burning target: +3% fire damage" raises fire alone. A condition on
+  the target ignores an aura born of the very blow being counted -- a spell lays
+  its aura before its damage is told -- but counts one laid earlier, even when
+  this blow renews it (the hour of an aura is fixed at its creation).
+- Periodic effects: `tickmod` (a tick of damage or healing counts for more, by
+  night alone if asked), `dotlong` (an effect of one school lasts one tick
+  longer, caught as the aura is laid, since a spell in flight lays it late), a
+  fire burn of the module's own worth a share of the blow per tick, and
+  `costmod` (a heal on a target at the end of its health costs less mana).
+- Mana costs the client believes: a reduction is a spell modifier of the cost
+  (the core sends those), not the school aura it ignored -- the figure shown
+  drops and the spell can be cast.
+- An aura the cards do not show is silent: neither the aura bar nor the combat
+  log mentions it, so a state laid over and over says nothing.
+- The deck: cards numbered by power over every tag, a search box above the grid,
+  and the four edge numbers on every icon. A column of the design workbook says,
+  effect by effect, whether its aura shows.
 - The interface: the card larger in its own column, the active effects in a
   fourth; the levels in a transparent scrolling box; a click in the deck pins
   the preview; effects read short (chances and cooldowns hidden, "+N stat")

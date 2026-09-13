@@ -58,6 +58,7 @@ local FR = GetLocale() == "frFR"
 local L = {
     title         = FR and "Tarot stellaire" or "Stellar Tarot",
     deck          = FR and "Deck" or "Deck",
+    search        = FR and "Rechercher..." or "Search...",
     all           = FR and "Toutes" or "All",
     unknown       = FR and "Carte inconnue" or "Unknown card",
     cumulative    = FR and "Cumulatif" or "Cumulative",
@@ -213,6 +214,7 @@ end
 
 local WAITING = {}
 local Refresh
+local RefreshDeck
 
 local function Prime(entry)
     if not S.ui or GetItemInfo(entry) or WAITING[entry] then return end
@@ -951,6 +953,7 @@ local EDGE_BOX_MATCH = "Interface\\mod-Tarot\\UI\\trapezoid_on"          -- dark
 local EDGE_BOX_PREVIEW = "Interface\\mod-Tarot\\UI\\trapezoid_preview"   -- teal: would match
 local EDGE_BOX_DEPTH = 51 / 64                 -- the trapezoid fills the texture's width and its top 51 rows of 64
 local EDGE_BOX_LONG, EDGE_BOX_SHORT = 30, 12
+local DECK_BOX_LONG, DECK_BOX_SHORT = 20, 9    -- the same trapezoid on a deck icon
 -- The four ways of drawing the trapezoid, its long base against the edge
 -- it sits on: top as drawn, right, bottom flipped, left.
 local TRAPEZOID_COORDS = {
@@ -1202,8 +1205,30 @@ local function BuildDeck(ui)
     tabs:SetPoint("TOPLEFT", 10, -40)
     tabs:SetSize(TAB_WIDTH, HEIGHT - 120)
 
+    -- The search: an edit box above the grid; the grid only shows the cards
+    -- whose name contains what is typed (accents and case ignored).
+    local search = CreateFrame("EditBox", "StellarTarotDeckSearch", panel, "InputBoxTemplate")
+    search:SetPoint("TOPLEFT", tabs, "TOPRIGHT", 14, 0)
+    search:SetSize(COLUMNS * (CELL + GAP) - 10, 20)
+    search:SetAutoFocus(false)
+    search:SetMaxLetters(40)
+    search.hint = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    search.hint:SetPoint("LEFT", 2, 0)
+    search.hint:SetText(L.search)
+    search:SetScript("OnTextChanged", function(self)
+        local text = self:GetText() or ""
+        if text == "" then self.hint:Show() else self.hint:Hide() end
+        if S.search ~= text then
+            S.search = text
+            if RefreshDeck then RefreshDeck() end
+        end
+    end)
+    search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+    search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    ui.search = search
+
     local scroll = CreateFrame("ScrollFrame", "StellarTarotDeckScroll", panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", tabs, "TOPRIGHT", 8, 0)
+    scroll:SetPoint("TOPLEFT", tabs, "TOPRIGHT", 8, -26)
     scroll:SetPoint("BOTTOMRIGHT", -30, 10)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(COLUMNS * (CELL + GAP), 10)
@@ -1631,6 +1656,13 @@ end
 -- shown is lit. Tag 0 stands for "All".
 local ALL = 0
 
+-- The name typed in the search box, and whether a card answers it.
+local function Matches(card)
+    local wanted = S.search or ""
+    if wanted == "" then return true end
+    return Lower(card.name or ""):find(Lower(wanted), 1, true) ~= nil
+end
+
 local function LayoutTabs()
     local ui = S.ui
     for _, b in ipairs(ui.tabButtons) do b:Hide() end
@@ -1689,6 +1721,29 @@ local function CardButton(i)
     b:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
                     insets = { left = 2, right = 2, top = 2, bottom = 2 } })
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    -- The four edge numbers, each on a small trapezoid glued to the middle
+    -- of its edge, as on a laid card, drawn smaller.
+    b.edges, b.boxes = {}, {}
+    local anchors = { "TOP", "RIGHT", "BOTTOM", "LEFT" }
+    for e = 1, 4 do
+        local box = CreateFrame("Frame", nil, b)
+        if e == 1 or e == 3 then box:SetSize(DECK_BOX_LONG, DECK_BOX_SHORT)
+        else box:SetSize(DECK_BOX_SHORT, DECK_BOX_LONG) end
+        box:SetFrameLevel(b:GetFrameLevel() + 1)
+        box:SetPoint(anchors[e], b, anchors[e], 0, 0)
+        box.bg = box:CreateTexture(nil, "BACKGROUND")
+        box.bg:SetAllPoints()
+        box.bg:SetTexture(EDGE_BOX_TEXTURE)
+        box.bg:SetTexCoord(unpack(TRAPEZOID_COORDS[e]))
+        local text = box:CreateFontString(nil, "OVERLAY")
+        text:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+        text:SetTextColor(0.95, 0.95, 0.95)
+        local nudge = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
+        text:SetPoint("CENTER", nudge[e][1], nudge[e][2])
+        box:Hide()
+        b.boxes[e] = box
+        b.edges[e] = text
+    end
     b:RegisterForDrag("LeftButton")
     b:SetScript("OnDragStart", DragStart)
     b:SetScript("OnDragStop", DragStop)
@@ -1711,18 +1766,22 @@ end
 
 -- Every card of the tab shown -- every card at all under "All": known and
 -- free, known and laid (dimmed), or not yet known (a question mark).
-local function RefreshDeck()
+RefreshDeck = function()
     local ui = S.ui
     LayoutTabs()
     for _, b in ipairs(ui.cardButtons) do b:Hide() end
     local shown = 0
     for _, card in ipairs(S.cat.cards) do
-        if S.tab == ALL or card.tag == S.tab then
+        if (S.tab == ALL or card.tag == S.tab) and Matches(card) then
             shown = shown + 1
             local b = CardButton(shown)
             b.card = card
             if S.known[card.id] then
                 b.icon:SetTexture(CardIcon(card))
+                for e = 1, 4 do
+                    b.edges[e]:SetText(card.edges[e])
+                    b.boxes[e]:Show()
+                end
                 if S.pinned and S.pinned.id == card.id then
                     b:SetBackdropBorderColor(1, 0.82, 0)           -- gold: the hand is pinned here
                 else
@@ -1741,6 +1800,7 @@ local function RefreshDeck()
                 b.icon:SetDesaturated(false)
                 b:SetBackdropBorderColor(0.6, 0.15, 0.15)
                 b:SetAlpha(1)
+                for e = 1, 4 do b.boxes[e]:Hide() end
             end
             local col, row = (shown - 1) % COLUMNS, floor((shown - 1) / COLUMNS)
             b:ClearAllPoints()
@@ -2286,9 +2346,40 @@ function STELLAR_TAROT_ACTIVE_LINES()
         end
         return pieces
     end
+    -- THE BANNER SAYS WHAT IS IN FORCE NOW. Night, by the clock of the machine
+    -- as the server reads it: from 21:00 to 06:00. A figure the night changes
+    -- shows its night value, an effect the night alone grants is not listed by
+    -- day, and the markers themselves never show.
+    local hour = tonumber(date("%H")) or 12
+    local night = hour < 6 or hour >= 21
+    local function Tonight(text)
+        local only = false
+        local t = text
+        local mark = function() only = true; return "" end
+        t = t:gsub(",%s*[Ll]a nuit uniquement", mark)
+        t = t:gsub("^[Dd]e nuit uniquement%s*[,:]%s*", mark)
+        t = t:gsub("^[Ll]a nuit uniquement%s*[,:]%s*", mark)
+        t = t:gsub("^[Nn]uit uniquement%s*[,:]%s*", mark)
+        if only and not night then return nil end
+        local figure = t:match("%(([%-%+]?%d+)%%%s+de nuit%)") or t:match(",%s*([%-%+]?%d+)%%%s+la nuit")
+        if figure then
+            t = t:gsub("%s*%([%-%+]?%d+%%%s+de nuit%)", ""):gsub(",%s*[%-%+]?%d+%%%s+la nuit", "")
+            if night then
+                -- the figure of the effect, not one the condition names; a
+                -- signed night figure replaces the day's sign as well
+                local pattern = figure:match("^[%-%+]") and "[%-%+]?%d+" or "%d+"
+                local head, rest = t:match("^(.- : )(.+)$")
+                if head then t = head .. (rest:gsub(pattern, figure, 1))
+                else t = (t:gsub(pattern, figure, 1)) end
+            end
+        end
+        return t
+    end
     local AddOne
     local function Add(text)
         if not text or text == "" or text == "-" then return end
+        text = Tonight(text)
+        if not text then return end
         local cond, rest = SplitCondition(text)
         local terms = SplitTerms(rest)
         if terms then
@@ -2391,6 +2482,11 @@ end
 -- (the generator's figure, StellarTarot: bleed:<sec>:5). The client is not
 -- told the tick's amount: it is computed here from the player's own attack
 -- power, the player being the caster.
+-- The engine's bleed: a tick every 2 s of 5% of the caster's attack power
+-- (the generator's figure, StellarTarot: bleed:<sec>:5). The client is not
+-- told the tick's amount: it is computed here from the player's own attack
+-- power, the player being the caster. The module's fire burn says nothing of
+-- its figure, as Blizzard's own periodic effects do not.
 local BLEED_SPELL, BLEED_PCT = 903802, 5
 local function BleedText()
     local base, pos, neg = UnitAttackPower("player")

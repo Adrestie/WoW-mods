@@ -144,20 +144,58 @@ public:
         {
             UNITHOOK_MODIFY_MELEE_DAMAGE,
             UNITHOOK_MODIFY_SPELL_DAMAGE_TAKEN,
-            UNITHOOK_ON_HEAL
+            UNITHOOK_MODIFY_PERIODIC_DAMAGE_AURAS_TICK,
+            UNITHOOK_MODIFY_HEAL_RECEIVED,
+            UNITHOOK_ON_AURA_APPLY,
+            UNITHOOK_ON_HEAL,
+            UNITHOOK_ON_BEFORE_ROLL_MELEE_OUTCOME_AGAINST
         }) { }
+
+    void OnBeforeRollMeleeOutcomeAgainst(Unit const* attacker, Unit const* victim, WeaponAttackType /*attType*/,
+        int32& /*attackerMaxSkill*/, int32& /*victimMaxSkill*/, int32& /*attackerWeaponSkill*/, int32& /*victimDefenseSkill*/,
+        int32& crit, int32& miss, int32& dodge, int32& parry, int32& block) override
+    {
+        StellarTarotEffects::OnMeleeRoll(const_cast<Unit*>(attacker), const_cast<Unit*>(victim), crit, miss, dodge, parry, block);
+    }
 
     void ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage) override
     {
         StellarTarotEffects::OnDamage(attacker, target, damage, false);
     }
-    void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* /*spellInfo*/) override
+    void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* spellInfo) override
     {
         if (damage <= 0)
             return;
         uint32 d = uint32(damage);
-        StellarTarotEffects::OnDamage(attacker, target, d, true);
+        // The school of the blow travels with it: a card may name one.
+        StellarTarotEffects::OnDamage(attacker, target, d, true,
+                                      spellInfo ? uint32(spellInfo->GetSchoolMask()) : 0,
+                                      spellInfo ? spellInfo->Id : 0);
         damage = int32(d);
+    }
+    // An aura laid on someone: the caster's cards may stretch it.
+    void OnAuraApply(Unit* unit, Aura* aura) override
+    {
+        StellarTarotEffects::OnAuraApply(unit, aura);
+    }
+
+    // A tick of a periodic damage effect: the caster's cards may add to it.
+    void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage, SpellInfo const* /*spellInfo*/) override
+    {
+        StellarTarotEffects::OnPeriodicTick(attacker, target, damage, false);
+    }
+
+    // Every heal passes here, periodic ticks included. CAREFUL: the core calls
+    // this with the CASTER first and the healed unit second, whatever the names
+    // of the parameters say (Unit::HealBySpell). Only a spell that heals over
+    // time is a tick.
+    void ModifyHealReceived(Unit* caster, Unit* healed, uint32& heal, SpellInfo const* spellInfo) override
+    {
+        if (!spellInfo || !heal)
+            return;
+        if (!spellInfo->HasAura(SPELL_AURA_PERIODIC_HEAL) && !spellInfo->HasAura(SPELL_AURA_OBS_MOD_HEALTH))
+            return;
+        StellarTarotEffects::OnPeriodicTick(caster, healed, heal, true);
     }
     void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override
     {
