@@ -7,7 +7,7 @@
 -- Regenerable: every block deletes its own range before writing it again, so
 -- the file may be replayed at will.
 
-DELETE FROM `module_string` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1 AND 50;
+DELETE FROM `module_string` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1 AND 60;
 INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
 ('mod-stellar-tarot',  1, 'Stellar tarot: {} card(s), {} board(s), {} tag(s) loaded.'),
 ('mod-stellar-tarot',  2, '  Card {} "{}": edges {}/{}/{}/{} (top/right/bottom/left), item {}, tags: {}.'),
@@ -58,7 +58,14 @@ INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
 ('mod-stellar-tarot', 47, 'No loot source.'),
 ('mod-stellar-tarot', 48, '{} takes the place of {} on {},{}.'),
 ('mod-stellar-tarot', 49, '{} moved to {},{}.'),
-('mod-stellar-tarot', 50, '{} and {} swap places.');
+('mod-stellar-tarot', 50, '{} and {} swap places.'),
+('mod-stellar-tarot', 51, 'Bingo! You get {}g {}s {}c.'),
+('mod-stellar-tarot', 52, 'Jackpot! You have found a purse full of coin!'),
+('mod-stellar-tarot', 53, 'Lucky! You have found {}g {}s {}c.'),
+('mod-stellar-tarot', 54, 'The vendor gives you a rebate of {}g {}s {}c!'),
+('mod-stellar-tarot', 55, 'Jackpot! You found {}g {}s {}c on your victim!'),
+('mod-stellar-tarot', 56, '[{}] : {}'),
+('mod-stellar-tarot', 57, 'quest reward increased by {}g {}s {}c!');
 
 -- What each script says of itself (mod_stellar_tarot_script names the id).
 -- {} stands for each parameter of the card's column, in order.
@@ -67,7 +74,7 @@ INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
 ('mod-stellar-tarot', 1001, 'Every creature you kill yields {} copper.'),
 ('mod-stellar-tarot', 1002, 'Every creature you kill heals you for {}% of your health.');
 
-DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1 AND 50;
+DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1 AND 60;
 INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 ('mod-stellar-tarot',  1, 'frFR', 'Tarot stellaire : {} carte(s), {} plateau(x), {} tag(s) chargés.'),
 ('mod-stellar-tarot',  2, 'frFR', '  Carte {} « {} » : bords {}/{}/{}/{} (haut/droite/bas/gauche), objet {}, tags : {}.'),
@@ -118,7 +125,14 @@ INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 ('mod-stellar-tarot', 47, 'frFR', 'Aucune source de butin.'),
 ('mod-stellar-tarot', 48, 'frFR', '{} prend la place de {} en {},{}.'),
 ('mod-stellar-tarot', 49, 'frFR', '{} déplacée en {},{}.'),
-('mod-stellar-tarot', 50, 'frFR', '{} et {} échangent leurs places.');
+('mod-stellar-tarot', 50, 'frFR', '{} et {} échangent leurs places.'),
+('mod-stellar-tarot', 51, 'frFR', 'Bingo ! Vous obtenez {} po {} pa {} pc.'),
+('mod-stellar-tarot', 52, 'frFR', 'Jackpot ! Vous avez trouvé une bourse remplie d''argent !'),
+('mod-stellar-tarot', 53, 'frFR', 'La chance ! Vous avez trouvé {} po {} pa {} pc.'),
+('mod-stellar-tarot', 54, 'frFR', 'Le vendeur vous fait une ristourne de {} po {} pa {} pc !'),
+('mod-stellar-tarot', 55, 'frFR', 'Jackpot ! Vous avez trouvé {} po {} pa {} pc sur votre victime !'),
+('mod-stellar-tarot', 56, 'frFR', '[{}] : {}'),
+('mod-stellar-tarot', 57, 'frFR', 'récompense de quête majorée de {} po {} pa {} pc !');
 
 DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1001 AND 1002;
 INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES

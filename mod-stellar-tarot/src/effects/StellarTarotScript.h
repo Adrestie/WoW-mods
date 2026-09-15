@@ -54,6 +54,7 @@
 #define MOD_STELLAR_TAROT_SCRIPT_H_
 
 #include "Define.h"
+#include "ObjectGuid.h"
 #include "StellarTarotMgr.h"
 #include <functional>
 #include <memory>
@@ -65,6 +66,9 @@ class Item;
 class Player;
 class Quest;
 class Aura;
+class Loot;
+class LootTemplate;
+class LootStore;
 class Spell;
 class Unit;
 
@@ -104,16 +108,36 @@ public:
     virtual void OnLeaveCombat(Player* /*player*/) { }
     virtual void OnLevelUp(Player* /*player*/) { }
     virtual void OnDeath(Player* /*player*/) { }
+    // Une creature vient de mourir pres du joueur, tuee par n'importe qui --
+    // lui compris. La distance est a la charge du script.
+    virtual void OnNearbyDeath(Player* /*player*/, Unit* /*died*/) { }
+    // Le joueur saute : le seul signal que le coeur donne d'un saut.
+    virtual void OnJump(Player* /*player*/) { }
     virtual void OnResurrect(Player* /*player*/) { }
     virtual void OnZone(Player* /*player*/, uint32 /*zone*/, uint32 /*area*/) { }
+    // Le joueur vient de changer de carte : franchir le seuil d'une instance
+    // se lit ici, le coeur n'ayant pas d'evenement plus precis.
+    virtual void OnMapChanged(Player* /*player*/) { }
     virtual void OnQuestComplete(Player* /*player*/, Quest const* /*quest*/) { }
     virtual void OnLootMoney(Player* /*player*/, uint32& /*copper*/) { }
     virtual void OnGiveXP(Player* /*player*/, uint32& /*amount*/) { }
     virtual void OnGiveReputation(Player* /*player*/, float& /*amount*/) { }
-    virtual void OnRepairDiscount(Player* /*player*/, float& /*discountMod*/) { }
+    // Une réparation sur le point d'être payée : l'objet visé, ou un GUID
+    // vide quand le joueur répare tout.
+    virtual void OnRepairDiscount(Player* /*player*/, ObjectGuid /*itemGuid*/, float& /*discountMod*/) { }
     virtual void OnVendorDiscount(Player const* /*player*/, float& /*discount*/) { }
     virtual void OnMoneyChanged(Player* /*player*/, int32& /*amount*/) { }
     virtual void OnSellItem(Player* /*player*/, Item* /*item*/) { }
+    // The loot of a creature, while it is being filled: a card may add to it.
+    virtual void OnCreatureLoot(Player* /*player*/, Loot* /*loot*/) { }
+    // Le butin d'un OBJET du decor -- un coffre -- pendant qu'il se remplit,
+    // avec la table dont il sort : une carte peut y puiser de nouveau.
+    virtual void OnObjectLoot(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
+                              LootStore const* /*store*/) { }
+    // An item BOUGHT from a vendor, once it is in the bags: how many pieces
+    // landed, and what the player ACTUALLY paid -- reputation and the other
+    // cards' rebates included.
+    virtual void OnVendorBuy(Player* /*player*/, Item* /*item*/, uint32 /*count*/, uint32 /*paid*/) { }
     // An aura the player has just laid on someone.
     virtual void OnAuraApplied(Player* /*player*/, Unit* /*target*/, Aura* /*aura*/) { }
     // A tick of one of the player's periodic effects, before it lands: damage

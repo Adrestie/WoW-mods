@@ -72,6 +72,21 @@ constexpr uint32 STELLAR_TAROT_SPELL_SILENCE = 903807;
 constexpr uint32 STELLAR_TAROT_SPELL_IMMUNE_SNARE = 903808;
 constexpr uint32 STELLAR_TAROT_SPELL_IMMUNE_CONTROL = 903809;
 constexpr uint32 STELLAR_TAROT_SPELL_BURN = 903795;              // fire, over time
+constexpr uint32 STELLAR_TAROT_SPELL_TAKEN_MORE = 903798;        // a drawback: the player takes more damage
+constexpr uint32 STELLAR_TAROT_SPELL_WAND_SHOT = 903794;         // the second shot a card grants, a wand's own
+// LE PRIX A PAYER : the health a drawback takes is taken under THIS name, and
+// not under the level's. The level may then keep quiet -- its aura is hidden --
+// without carrying off the scrolling text of the price with it.
+constexpr uint32 STELLAR_TAROT_SPELL_PRICE = 903799;             // a drawback: what it costs in health
+// RETOURNE : the mark a creature wears while a card has it strike its own.
+// It carries no mechanic -- the threat does the work -- it only lets the
+// player see on whom the card has taken hold.
+constexpr uint32 STELLAR_TAROT_SPELL_TURNED = 903792;
+// ARMURE BRISEE : a drawback that takes a share of the player's armour for a
+// while. It has its own spell so that it may outlast -- or fall short of --
+// the boon the level's aura carries, the two having their own durations.
+constexpr uint32 STELLAR_TAROT_SPELL_ARMOR_DOWN = 903793;
+constexpr uint32 STELLAR_TAROT_ITEM_CRATE = 902600;              // the crate of goods a card lays in a corpse
 constexpr uint32 STELLAR_TAROT_SPELL_VISUAL_MAGIC = 903796;      // an explosion's animation, arcane
 constexpr uint32 STELLAR_TAROT_SPELL_VISUAL_PHYS  = 903797;      // an explosion's animation, physical
 constexpr uint32 STELLAR_TAROT_MARKER_FIRST = 903810;   // crit, spell_crit, heal_crit, dodge, parry, block, crit_taken, miss

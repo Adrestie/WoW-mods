@@ -36,6 +36,8 @@
 #include "StellarTarotLoot.h"
 #include "StellarTarotMgr.h"
 
+#include <algorithm>
+
 class StellarTarotWorldScript : public WorldScript
 {
 public:
@@ -69,12 +71,15 @@ public:
             PLAYERHOOK_ON_PLAYER_JUST_DIED,
             PLAYERHOOK_ON_PLAYER_RESURRECT,
             PLAYERHOOK_ON_UPDATE_ZONE,
+            PLAYERHOOK_ON_MAP_CHANGED,
             PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST,
             PLAYERHOOK_ON_SPELL_CAST,
             PLAYERHOOK_ON_BEFORE_LOOT_MONEY,
             PLAYERHOOK_ON_GIVE_EXP,
             PLAYERHOOK_ON_GIVE_REPUTATION,
             PLAYERHOOK_ON_BEFORE_DURABILITY_REPAIR,
+            PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM,
+            PLAYERHOOK_ANTICHEAT_HANDLE_DOUBLE_JUMP,
             PLAYERHOOK_ON_GET_REPUTATION_PRICE_DISCOUNT,
             PLAYERHOOK_ON_MONEY_CHANGED,
             PLAYERHOOK_CAN_SELL_ITEM
@@ -107,6 +112,7 @@ public:
     void OnPlayerJustDied(Player* player) override { StellarTarotEffects::OnDeath(player); }
     void OnPlayerResurrect(Player* player, float /*restore*/, bool& /*sickness*/) override { StellarTarotEffects::OnResurrect(player); }
     void OnPlayerUpdateZone(Player* player, uint32 newZone, uint32 newArea) override { StellarTarotEffects::OnZone(player, newZone, newArea); }
+    void OnPlayerMapChanged(Player* player) override { StellarTarotEffects::OnMapChanged(player); }
     void OnPlayerCompleteQuest(Player* player, Quest const* quest) override { StellarTarotEffects::OnQuestComplete(player, quest); }
     void OnPlayerSpellCast(Player* player, Spell* spell, bool /*skipCheck*/) override { StellarTarotEffects::OnSpellCast(player, spell); }
     void OnPlayerBeforeLootMoney(Player* player, Loot* loot) override
@@ -119,15 +125,46 @@ public:
     {
         StellarTarotEffects::OnGiveReputation(player, amount);
     }
-    void OnPlayerBeforeDurabilityRepair(Player* player, ObjectGuid /*npc*/, ObjectGuid /*item*/, float& discountMod, uint8 /*guildBank*/) override
+    void OnPlayerBeforeDurabilityRepair(Player* player, ObjectGuid /*npc*/, ObjectGuid item, float& discountMod, uint8 /*guildBank*/) override
     {
-        StellarTarotEffects::OnRepairDiscount(player, discountMod);
+        StellarTarotEffects::OnRepairDiscount(player, item, discountMod);
     }
     void OnPlayerGetReputationPriceDiscount(Player const* player, Creature const* /*creature*/, float& discount) override
     {
         StellarTarotEffects::OnVendorDiscount(player, discount);
     }
+    // A purchase, once the goods are in the bags -- and only a purchase: the
+    // core calls this for what a VENDOR hands over, nothing else.
+    //
+    // CAREFUL: `count` is what the player ASKED FOR, counted in the vendor's
+    // own lots, not in items. A lot is `BuyCount` items -- one click on a
+    // stack of arrows buys two hundred of them -- so what actually landed in
+    // the bags is the product of the two. Scripts are told the real figure.
+    void OnPlayerAfterStoreOrEquipNewItem(Player* player, uint32 /*vendorslot*/, Item* item, uint8 count,
+                                          uint8 /*bag*/, uint8 /*slot*/, ItemTemplate const* proto,
+                                          Creature* vendor, VendorItem const* /*crItem*/, bool /*store*/) override
+    {
+        if (!vendor || !proto)
+            return;
+        uint32 const lot = proto->BuyCount ? proto->BuyCount : 1;
+        // LE PRIX REELLEMENT PAYE, calcule comme Player::BuyItemFromVendorSlot
+        // le calcule : le prix du lot, multiplie par le nombre de lots, puis
+        // la remise du moment -- celle de la reputation ET celle que les autres
+        // cartes accordent, puisque toutes passent par le meme crochet.
+        uint64 price = uint64(proto->BuyPrice) * uint64(count);
+        price = uint64(double(price) * double(player->GetReputationPriceDiscount(vendor)));
+        StellarTarotEffects::OnVendorBuy(player, item, uint32(count) * lot,
+                                         uint32(std::min<uint64>(price, 2000000000ULL)));
+    }
     void OnPlayerMoneyChanged(Player* player, int32& amount) override { StellarTarotEffects::OnMoneyChanged(player, amount); }
+    // LE SAUT. Le coeur n'a pas d'evenement de saut : il n'y a que ce crochet
+    // d'anti-triche, appele sur l'opcode MSG_MOVE_JUMP et sur lui seul. On
+    // regarde passer, on laisse toujours faire.
+    bool AnticheatHandleDoubleJump(Player* player, Unit* /*mover*/) override
+    {
+        StellarTarotEffects::OnJump(player);
+        return true;
+    }
     bool OnPlayerCanSellItem(Player* player, Item* item, Creature* /*vendor*/) override
     {
         StellarTarotEffects::OnSellItem(player, item);
@@ -148,8 +185,16 @@ public:
             UNITHOOK_MODIFY_HEAL_RECEIVED,
             UNITHOOK_ON_AURA_APPLY,
             UNITHOOK_ON_HEAL,
-            UNITHOOK_ON_BEFORE_ROLL_MELEE_OUTCOME_AGAINST
+            UNITHOOK_ON_BEFORE_ROLL_MELEE_OUTCOME_AGAINST,
+            UNITHOOK_ON_UNIT_DEATH
         }) { }
+
+    // Le coeur ne signale une mort qu'au tueur : c'est ici que le module
+    // apprend qu'une creature est tombee, pour prevenir les temoins.
+    void OnUnitDeath(Unit* unit, Unit* killer) override
+    {
+        StellarTarotEffects::OnUnitDied(unit, killer);
+    }
 
     void OnBeforeRollMeleeOutcomeAgainst(Unit const* attacker, Unit const* victim, WeaponAttackType /*attType*/,
         int32& /*attackerMaxSkill*/, int32& /*victimMaxSkill*/, int32& /*attackerWeaponSkill*/, int32& /*victimDefenseSkill*/,
@@ -214,11 +259,25 @@ public:
             MISCHOOK_ON_AFTER_LOOT_TEMPLATE_PROCESS
         }) { }
 
-    void OnAfterLootTemplateProcess(Loot* loot, LootTemplate const* /*tab*/,
+    void OnAfterLootTemplateProcess(Loot* loot, LootTemplate const* tab,
         LootStore const& store, Player* lootOwner, bool /*personal*/,
         bool /*noEmptyError*/, uint16 /*lootMode*/) override
     {
         StellarTarotLoot::Fill(loot, store, lootOwner);
+        if (!lootOwner)
+            return;
+        // What the CARDS add to a corpse: the same moment, the creature's own
+        // loot store and no other.
+        if (&store == &LootTemplates_Creature)
+            StellarTarotEffects::OnCreatureLoot(lootOwner, loot);
+        // Un coffre : la carte peut puiser de nouveau dans SA table.
+        else if (&store == &LootTemplates_Gameobject)
+            StellarTarotEffects::OnObjectLoot(lootOwner, loot, tab, &store);
+        // The crate of goods being opened: the module fills it itself.
+        else if (&store == &LootTemplates_Item)
+            if (Item const* opened = lootOwner->GetItemByGuid(loot->containerGUID))
+                if (opened->GetEntry() == STELLAR_TAROT_ITEM_CRATE)
+                    StellarTarotLoot::FillCrate(lootOwner, loot);
     }
 };
 

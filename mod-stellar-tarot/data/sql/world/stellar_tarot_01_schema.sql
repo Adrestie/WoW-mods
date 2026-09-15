@@ -44,15 +44,24 @@ CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_card` (
   `card_spell_2` INT UNSIGNED NOT NULL DEFAULT 0,
   `card_spell_3` INT UNSIGNED NOT NULL DEFAULT 0,
   `card_spell_4` INT UNSIGNED NOT NULL DEFAULT 0,
-  `card_script_1` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'module script at level 1: name, or name:param:param; empty = none',
-  `card_script_2` VARCHAR(64) NOT NULL DEFAULT '',
-  `card_script_3` VARCHAR(64) NOT NULL DEFAULT '',
-  `card_script_4` VARCHAR(64) NOT NULL DEFAULT '',
+  `card_script_1` VARCHAR(128) NOT NULL DEFAULT '' COMMENT 'module script at level 1: name, or name:param:param; empty = none',
+  `card_script_2` VARCHAR(128) NOT NULL DEFAULT '',
+  `card_script_3` VARCHAR(128) NOT NULL DEFAULT '',
+  `card_script_4` VARCHAR(128) NOT NULL DEFAULT '',
   `hint` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'where to find the card: what the deck shows for a card not yet known, English',
   `art` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'texture of the card face, client side, under Interface\\mod-Tarot\\Cards',
   PRIMARY KEY (`card_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='StellarTarot: the cards -- four edges, and a spell and/or a script per level';
+
+-- Une base déjà créée garde ses colonnes : on les élargit ici. Une ligne de
+-- script porte maintenant son revers (« ... but:stun:1 »), et 64 caractères
+-- n'y suffisaient plus -- le plus long en faisait déjà 59.
+ALTER TABLE `mod_stellar_tarot_card`
+  MODIFY `card_script_1` VARCHAR(128) NOT NULL DEFAULT '',
+  MODIFY `card_script_2` VARCHAR(128) NOT NULL DEFAULT '',
+  MODIFY `card_script_3` VARCHAR(128) NOT NULL DEFAULT '',
+  MODIFY `card_script_4` VARCHAR(128) NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_card_locale` (
   `card_id` INT UNSIGNED NOT NULL,

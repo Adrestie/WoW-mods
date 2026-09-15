@@ -243,6 +243,18 @@ function Handlers.Open(player)
     AIO.Handle(player, "StellarTarot", "Show", Catalogue(Locale(player)), Binder(player), Layout(player))
 end
 
+-- CE QUE LE SORT COUTE VRAIMENT. Le client sait calculer un coût, mais il
+-- n'applique pas tout ce que le serveur lui envoie : un modificateur de coût
+-- posé par une carte ne se voit dans ses infobulles que pour une poignée de
+-- sorts. Il demande donc ici le chiffre, et le cœur le lui donne -- le sien,
+-- celui qu'il prélèvera. Rien n'est recalculé de part et d'autre.
+function Handlers.SpellCost(player, spellId)
+    spellId = tonumber(spellId)
+    if not spellId then return end
+    local cost, power = player:GetSpellPowerCost(spellId)
+    AIO.Handle(player, "StellarTarot", "SpellCost", spellId, cost, power)
+end
+
 -- ---------------------------------------------------------------------------
 -- The gestures of the window. Each one is a command run as the player; the
 -- layout is sent back afterwards, whatever the command said.

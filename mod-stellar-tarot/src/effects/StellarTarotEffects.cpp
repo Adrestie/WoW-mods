@@ -30,6 +30,10 @@
 #include "SpellInfo.h"
 #include "WorldSession.h"
 #include "WorldSessionMgr.h"
+#include "CellImpl.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
+#include <list>
 #include <map>
 #include <memory>
 
@@ -336,9 +340,9 @@ void StellarTarotEffects::OnGiveReputation(Player* player, float& amount)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnGiveReputation(player, amount); });
 }
-void StellarTarotEffects::OnRepairDiscount(Player* player, float& discountMod)
+void StellarTarotEffects::OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod)
 {
-    Each(player, [&](StellarTarotScript& s) { s.OnRepairDiscount(player, discountMod); });
+    Each(player, [&](StellarTarotScript& s) { s.OnRepairDiscount(player, itemGuid, discountMod); });
 }
 void StellarTarotEffects::OnVendorDiscount(Player const* player, float& discount)
 {
@@ -348,6 +352,51 @@ void StellarTarotEffects::OnMoneyChanged(Player* player, int32& amount)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnMoneyChanged(player, amount); });
 }
+void StellarTarotEffects::OnVendorBuy(Player* player, Item* item, uint32 count, uint32 paid)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnVendorBuy(player, item, count, paid); });
+}
+
+void StellarTarotEffects::OnCreatureLoot(Player* player, Loot* loot)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnCreatureLoot(player, loot); });
+}
+
+// PERSONNE NE PREVIENT LES TEMOINS. Le coeur ne signale une mort qu'a celui
+// qui l'a donnee ; une carte qui veut voir mourir autour d'elle doit chercher
+// elle-meme. On ne parcourt que les joueurs qui portent des cartes, et la
+// distance exacte reste au script : chacun a la sienne.
+void StellarTarotEffects::OnUnitDied(Unit* died, Unit* /*killer*/)
+{
+    if (!died || !died->IsCreature())
+        return;
+    // On cherche autour du mort plutot que de parcourir tous les porteurs de
+    // cartes du royaume : cent metres de garde-fou, la portee exacte restant
+    // au script.
+    std::list<Player*> around;
+    Acore::AnyPlayerInObjectRangeCheck check(died, 100.0f);
+    Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(died, around, check);
+    Cell::VisitObjects(died, searcher, 100.0f);
+    for (Player* player : around)
+        if (player && player->IsInWorld())
+            Each(player, [&](StellarTarotScript& s) { s.OnNearbyDeath(player, died); });
+}
+
+void StellarTarotEffects::OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnObjectLoot(player, loot, tab, store); });
+}
+
+void StellarTarotEffects::OnMapChanged(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnMapChanged(player); });
+}
+
+void StellarTarotEffects::OnJump(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnJump(player); });
+}
+
 void StellarTarotEffects::OnSellItem(Player* player, Item* item)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnSellItem(player, item); });

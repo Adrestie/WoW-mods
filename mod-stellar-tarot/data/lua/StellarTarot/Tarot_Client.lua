@@ -2343,6 +2343,10 @@ function STELLAR_TAROT_ACTIVE_LINES()
         if #pieces < 2 then return nil end
         for _, p in ipairs(pieces) do
             if not p:match("^[+-]%d+[,.]?%d*%%?%s+%S") then return nil end
+            -- « -10% sous 60% PV » commence bien par un chiffre signe, mais ce
+            -- n'est pas une statistique : c'est une condition, et la ligne doit
+            -- rester entiere plutot que de se couper en deux.
+            if p:find(" sous ") then return nil end
         end
         return pieces
     end

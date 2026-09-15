@@ -69,6 +69,16 @@ namespace StellarTarotLoot
     // loot is a creature's.
     void Fill(Loot* loot, LootStore const& store, Player* player);
 
+    // THE CRATE OF GOODS a card lays in a corpse. What it holds is the loot
+    // table of a LOCKED CHEST of the player's own expansion -- the game's own
+    // tables, chosen by the lockpicking skill their locks ask for -- and a
+    // purse whose weight follows that same expansion.
+    void FillCrate(Player* player, Loot* loot);
+
+    // A GREY TRINKET of the player's own age, for a card that adds one to a
+    // corpse; 0 when there is none to give.
+    [[nodiscard]] uint32 GreyItemFor(uint8 level);
+
     // One line saying what a source is, for `.tarot sources`.
     [[nodiscard]] std::string Describe(StellarTarotSource const& source);
 }

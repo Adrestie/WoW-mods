@@ -31,14 +31,51 @@
 #include "QueryResult.h"
 #include "Random.h"
 #include "SharedDefines.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "StellarTarotBinder.h"
 #include "StellarTarotMgr.h"
 #include "WorldSession.h"
 
 #include <fmt/format.h>
+#include <vector>
 
 namespace
 {
+    // CE QU'UNE CAISSE CONTIENT : la table de butin d'un COFFRET, choisi dans
+    // la liste que l'auteur a arretee -- un coffret par tranche de niveau, du
+    // bronze au titane. C'est leur table que la caisse joue, telle quelle,
+    // avec les chances du jeu.
+    uint32 const CRATE_BOXES[3][8] =
+    {
+        // l'ancien monde
+        { 4633,     // Heavy Bronze Lockbox
+          4634,     // Iron Lockbox
+          4636,     // Strong Iron Lockbox
+          4637,     // Steel Lockbox
+          4638,     // Reinforced Steel Lockbox
+          5758,     // Mithril Lockbox
+          5759,     // Thorium Lockbox
+          5760 },   // Eternium Lockbox
+        { 31952, 0, 0, 0, 0, 0, 0, 0 },     // Outreterre : coffret en khorium
+        { 43622,    // Norfendre : coffret en acier de Givre
+          43624,    // coffret en titane
+          0, 0, 0, 0, 0, 0 },
+    };
+    bool fillingCrate = false;          // une caisse qui se remplit ne se remplit pas elle-meme
+
+    // LES OBJETS GRIS que le monde fait tomber, ranges par age : de quoi
+    // ajouter une babiole a un cadavre. Le niveau d'objet les date proprement
+    // (<= 55 l'ancien monde, 56-69 l'Outreterre, au-dela Norfendre).
+    std::vector<uint32> junk[3];
+
+    uint8 CrateAgeOf(uint8 level)
+    {
+        if (level <= 57) return 0;
+        if (level <= 67) return 1;
+        return 2;
+    }
+
     std::vector<StellarTarotSource> sources;
     bool enabled = true;
     float rate = 100.0f;
@@ -238,6 +275,24 @@ void StellarTarotLoot::Load()
     }
     LOG_INFO("module", "StellarTarot: {} loot source(s) loaded, {} refused; loot {}, rate {} %, known items {}.",
              sources.size(), refused, enabled ? "on" : "off", rate, knownMayDrop ? "may drop" : "never drop");
+    // La reserve de babioles : tout objet GRIS qu'une creature laisse.
+    for (auto& age : junk)
+        age.clear();
+    if (QueryResult greys = WorldDatabase.Query(
+        "SELECT i.entry, i.ItemLevel FROM item_template i WHERE i.Quality = 0 AND i.bonding = 0 "
+        "AND i.startquest = 0 AND i.map = 0 AND i.area = 0 AND (i.Flags & 4) = 0 "
+        "AND i.entry IN (SELECT DISTINCT Item FROM creature_loot_template)"))
+    {
+        do
+        {
+            Field* g = greys->Fetch();
+            uint32 const entry = g[0].Get<uint32>();
+            uint32 const itemLevel = g[1].Get<uint32>();
+            junk[itemLevel <= 55 ? 0 : (itemLevel <= 69 ? 1 : 2)].push_back(entry);
+        } while (greys->NextRow());
+    }
+    LOG_INFO("module", "StellarTarot: {} / {} / {} grey item(s) a card may add to a corpse.",
+             junk[0].size(), junk[1].size(), junk[2].size());
 }
 
 std::vector<StellarTarotSource> const& StellarTarotLoot::Sources() { return sources; }
@@ -296,4 +351,38 @@ std::string StellarTarotLoot::Describe(StellarTarotSource const& s)
     if (!s.comment.empty())
         line += " -- " + s.comment;
     return line;
+}
+
+// The crate of goods, opened: the module plays the loot table of one of the
+// LOCKBOXES the author named for that expansion -- the game's own table, with
+// the game's own chances -- and lays a purse on top of it.
+void StellarTarotLoot::FillCrate(Player* player, Loot* loot)
+{
+    if (!player || !loot || fillingCrate)
+        return;
+    uint8 const age = CrateAgeOf(player->GetLevel());
+    uint32 boxes[8] = { 0 };
+    uint8 count = 0;
+    for (uint32 box : CRATE_BOXES[age])
+        if (box)
+            boxes[count++] = box;
+    if (!count)
+        return;
+    uint32 const chosen = boxes[urand(0, count - 1)];
+    fillingCrate = true;                // la table jouee ne doit pas rappeler ceci
+    loot->clear();
+    loot->FillLoot(chosen, LootTemplates_Item, player, true, true);
+    fillingCrate = false;
+    // Les pieces au fond de la caisse, a la mesure de l'extension : de 5 pa a
+    // 1 po pour l'ancien monde, de 2 a 5 po pour l'Outreterre, de 5 a 10 po
+    // pour Norfendre.
+    static uint32 const purse[3][2] = { { 500, 10000 }, { 20000, 50000 }, { 50000, 100000 } };
+    loot->gold = urand(purse[age][0], purse[age][1]);
+}
+
+// One grey trinket of the player's own age, 0 when the reserve is empty.
+uint32 StellarTarotLoot::GreyItemFor(uint8 level)
+{
+    std::vector<uint32> const& age = junk[CrateAgeOf(level)];
+    return age.empty() ? 0 : age[urand(0, uint32(age.size()) - 1)];
 }

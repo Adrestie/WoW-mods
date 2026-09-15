@@ -37,12 +37,16 @@
 #define MOD_STELLAR_TAROT_EFFECTS_H_
 
 #include "Define.h"
+#include "ObjectGuid.h"
 #include <string>
 #include <vector>
 
 class Aura;
 class Creature;
 class Item;
+class Loot;
+class LootTemplate;
+class LootStore;
 class Player;
 class Quest;
 class Spell;
@@ -85,14 +89,22 @@ namespace StellarTarotEffects
     void OnDeath(Player* player);
     void OnResurrect(Player* player);
     void OnZone(Player* player, uint32 zone, uint32 area);
+    void OnMapChanged(Player* player);
     void OnQuestComplete(Player* player, Quest const* quest);
     void OnLootMoney(Player* player, uint32& copper);
     void OnGiveXP(Player* player, uint32& amount);
     void OnGiveReputation(Player* player, float& amount);
-    void OnRepairDiscount(Player* player, float& discountMod);
+    void OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod);
     void OnVendorDiscount(Player const* player, float& discount);
     void OnMoneyChanged(Player* player, int32& amount);
     void OnSellItem(Player* player, Item* item);
+    void OnVendorBuy(Player* player, Item* item, uint32 count, uint32 paid);
+    void OnCreatureLoot(Player* player, Loot* loot);
+    void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
+    void OnJump(Player* player);
+    // Une creature morte : le module cherche lui-meme les porteurs de cartes
+    // alentour, le coeur ne prevenant que le tueur.
+    void OnUnitDied(Unit* died, Unit* killer);
     void OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block);
     void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal);
     void OnAuraApply(Unit* target, Aura* aura);

@@ -92,6 +92,14 @@ enum StellarTarotStrings : uint32
     STELLAR_TAROT_STR_REPLACED          = 48,  // {} takes the place of {} on {},{}
     STELLAR_TAROT_STR_MOVED             = 49,  // {} moved to {},{}
     STELLAR_TAROT_STR_SWAPPED           = 50,  // {} and {} swap places
+    // What a card says of itself, in the chat, as it happens
+    STELLAR_TAROT_STR_BINGO             = 51,  // Bingo! You get {}g {}s {}c
+    STELLAR_TAROT_STR_JACKPOT           = 52,  // a purse full of coin: the loot was multiplied by more than two
+    STELLAR_TAROT_STR_LUCKY             = 53,  // Lucky! You have found {}g {}s {}c
+    STELLAR_TAROT_STR_REBATE            = 54,  // the vendor gives part of the price back
+    STELLAR_TAROT_STR_SPOILS            = 55,  // coin found on the victim
+    STELLAR_TAROT_STR_FROM_CARD         = 56,  // [{card}] : {what it says}
+    STELLAR_TAROT_STR_QUEST_GOLD        = 57,  // quest reward increased by {}g {}s {}c
     // 1001 and up: what each script says of itself (mod_stellar_tarot_script).
 };
 
