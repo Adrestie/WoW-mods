@@ -132,6 +132,24 @@ public:
     virtual void OnCreatureLoot(Player* /*player*/, Loot* /*loot*/) { }
     // Le butin d'un OBJET du decor -- un coffre -- pendant qu'il se remplit,
     // avec la table dont il sort : une carte peut y puiser de nouveau.
+    // Un MINERAI PROSPECTE : sa table vient d'etre tiree, et une carte peut
+    // la faire tirer une fois de plus.
+    virtual void OnProspect(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
+                            LootStore const* /*store*/) { }
+    // UNE DEPENSE : de l'or vient de passer a un MARCHAND (un achat, une
+    // reparation) ou a l'HOTEL DES VENTES (un depot, une enchere, un achat
+    // immediat). Le courrier, le vol et l'entraineur n'en sont pas.
+    virtual void OnSpend(Player* /*player*/) { }
+    // LE JOUEUR BOUGE : la place et l'orientation qu'un paquet de mouvement
+    // vient d'annoncer. Tout ce que le serveur sait de la rotation passe par la.
+    virtual void OnFacing(Player* /*player*/, float /*x*/, float /*y*/, float /*orientation*/,
+                          uint32 /*moveFlags*/) { }
+    // UNE AURA POSEE SUR LE JOUEUR, quel qu'en soit le lanceur.
+    virtual void OnAuraTaken(Player* /*player*/, Aura* /*aura*/) { }
+    // LA PECHE : le butin du bouchon vient d'etre tire, et une carte peut y
+    // ajouter -- ou doubler ce qui en sort.
+    virtual void OnFishing(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
+                           LootStore const* /*store*/) { }
     virtual void OnObjectLoot(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
                               LootStore const* /*store*/) { }
     // An item BOUGHT from a vendor, once it is in the bags: how many pieces
@@ -142,7 +160,8 @@ public:
     virtual void OnAuraApplied(Player* /*player*/, Unit* /*target*/, Aura* /*aura*/) { }
     // A tick of one of the player's periodic effects, before it lands: damage
     // on a victim, or healing on whoever carries the effect.
-    virtual void OnPeriodicTick(Player* /*player*/, Unit* /*other*/, uint32& /*amount*/, bool /*heal*/) { }
+    virtual void OnPeriodicTick(Player* /*player*/, Unit* /*other*/, uint32& /*amount*/, bool /*heal*/,
+                                uint32 /*spellId*/) { }
     // The chances of the player's next melee swing, before the roll (percent).
     virtual void OnMeleeRoll(Player* /*player*/, Unit* /*victim*/, int32& /*crit*/, int32& /*miss*/,
                              int32& /*dodge*/, int32& /*parry*/, int32& /*block*/) { }

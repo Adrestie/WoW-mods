@@ -31,6 +31,7 @@
  * .tarot preset delete <preset_id>     (SEC_PLAYER)         forgets a saved layout
  * .tarot layout [player]               (SEC_GAMEMASTER)     a player's board and the level of every card
  * .tarot effects [player]              (SEC_GAMEMASTER)     the effects in force on a player
+ * .tarot xp [player]                   (SEC_GAMEMASTER)     what the cards make of 1000 experience
  * .tarot fuse <a> <b> <c>              (SEC_PLAYER)         the workbench: three cards, or three boards, become one
  *
  * .tarot with no argument lists the subcommands (the core behaviour for a
@@ -90,6 +91,7 @@ public:
             { "preset", presetTable },
             { "layout", HandleLayoutCommand, SEC_GAMEMASTER,    Console::Yes },
             { "effects", HandleEffectsCommand, SEC_GAMEMASTER,  Console::Yes },
+            { "xp",     HandleXpCommand,      SEC_GAMEMASTER,  Console::Yes },
             // The workbench: the shared bench relays here; the rules stay here.
             { "fuse",   HandleFuseCommand,   SEC_PLAYER,        Console::No  },
             { "sources", HandleSourcesCommand, SEC_GAMEMASTER,  Console::Yes },
@@ -440,6 +442,22 @@ public:
             Say(handler, STELLAR_TAROT_STR_LAYOUT_CELL, uint32(a.placement.row), uint32(a.placement.col),
                 sStellarTarotMgr->CardName(a.placement.cardId), uint32(a.level), edges);
         }
+        return true;
+    }
+
+    // CE QUE LES CARTES FONT DE L'EXPERIENCE : une somme de reference passee
+    // par le meme chemin que celle d'une creature tuee. Rien n'est recalcule a
+    // cote : c'est le chiffre du module lui-meme.
+    static bool HandleXpCommand(ChatHandler* handler, Optional<PlayerIdentifier> target)
+    {
+        Player* player = ConnectedTarget(handler, target);
+        if (!player)
+            return true;
+        uint32 const before = 1000;
+        uint32 amount = before;
+        StellarTarotEffects::OnGiveXP(player, amount);
+        Say(handler, STELLAR_TAROT_STR_XP_BONUS, player->GetName(), amount,
+            int32(amount) - int32(before));
         return true;
     }
 

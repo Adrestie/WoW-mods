@@ -101,12 +101,16 @@ namespace StellarTarotEffects
     void OnVendorBuy(Player* player, Item* item, uint32 count, uint32 paid);
     void OnCreatureLoot(Player* player, Loot* loot);
     void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
+    void OnProspect(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
+    void OnFishing(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
+    void OnSpend(Player* player);
+    void OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags);
     void OnJump(Player* player);
     // Une creature morte : le module cherche lui-meme les porteurs de cartes
     // alentour, le coeur ne prevenant que le tueur.
     void OnUnitDied(Unit* died, Unit* killer);
     void OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block);
-    void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal);
+    void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId);
     void OnAuraApply(Unit* target, Aura* aura);
 
     [[nodiscard]] std::vector<StellarTarotActiveEffect> Active(Player* player);

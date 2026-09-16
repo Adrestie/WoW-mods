@@ -65,7 +65,8 @@ INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
 ('mod-stellar-tarot', 54, 'The vendor gives you a rebate of {}g {}s {}c!'),
 ('mod-stellar-tarot', 55, 'Jackpot! You found {}g {}s {}c on your victim!'),
 ('mod-stellar-tarot', 56, '[{}] : {}'),
-('mod-stellar-tarot', 57, 'quest reward increased by {}g {}s {}c!');
+('mod-stellar-tarot', 57, 'quest reward increased by {}g {}s {}c!'),
+('mod-stellar-tarot', 58, '{}: 1000 experience gives {} ({} %).');
 
 -- What each script says of itself (mod_stellar_tarot_script names the id).
 -- {} stands for each parameter of the card's column, in order.
@@ -132,7 +133,8 @@ INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 ('mod-stellar-tarot', 54, 'frFR', 'Le vendeur vous fait une ristourne de {} po {} pa {} pc !'),
 ('mod-stellar-tarot', 55, 'frFR', 'Jackpot ! Vous avez trouvé {} po {} pa {} pc sur votre victime !'),
 ('mod-stellar-tarot', 56, 'frFR', '[{}] : {}'),
-('mod-stellar-tarot', 57, 'frFR', 'récompense de quête majorée de {} po {} pa {} pc !');
+('mod-stellar-tarot', 57, 'frFR', 'récompense de quête majorée de {} po {} pa {} pc !'),
+('mod-stellar-tarot', 58, 'frFR', '{} : 1000 points d''expérience en donnent {} ({} %).');
 
 DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 1001 AND 1002;
 INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES

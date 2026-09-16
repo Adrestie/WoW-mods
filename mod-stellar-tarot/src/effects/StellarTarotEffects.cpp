@@ -202,11 +202,6 @@ void StellarTarotEffects::OnLogin(Player* player)
     Refresh(player);
 }
 
-void StellarTarotEffects::OnLevelChanged(Player* player)
-{
-    OnLogin(player);
-}
-
 void StellarTarotEffects::OnLogout(Player* player)
 {
     if (!player)
@@ -328,6 +323,15 @@ void StellarTarotEffects::OnQuestComplete(Player* player, Quest const* quest)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnQuestComplete(player, quest); });
 }
+void StellarTarotEffects::OnLevelChanged(Player* player)
+{
+    // Les auras « par niveau du joueur » se reposent au nouveau chiffre...
+    OnLogin(player);
+    // ... et les scripts apprennent le niveau gagne : sans cela, une ligne
+    // accrochee au niveau ne se declenchait jamais.
+    Each(player, [&](StellarTarotScript& s) { s.OnLevelUp(player); });
+}
+
 void StellarTarotEffects::OnLootMoney(Player* player, uint32& copper)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnLootMoney(player, copper); });
@@ -382,6 +386,26 @@ void StellarTarotEffects::OnUnitDied(Unit* died, Unit* /*killer*/)
             Each(player, [&](StellarTarotScript& s) { s.OnNearbyDeath(player, died); });
 }
 
+void StellarTarotEffects::OnProspect(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnProspect(player, loot, tab, store); });
+}
+
+void StellarTarotEffects::OnFishing(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnFishing(player, loot, tab, store); });
+}
+
+void StellarTarotEffects::OnSpend(Player* player)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnSpend(player); });
+}
+
+void StellarTarotEffects::OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnFacing(player, x, y, orientation, moveFlags); });
+}
+
 void StellarTarotEffects::OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnObjectLoot(player, loot, tab, store); });
@@ -408,12 +432,15 @@ void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
     Unit* const caster = aura->GetCaster();
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnAuraApplied(caster->ToPlayer(), target, aura); });
+    // ET CE QU'IL SUBIT, LUI : une carte peut peser sur ce qu'on lui pose.
+    if (Player* const porteur = target->ToPlayer())
+        Each(porteur, [&](StellarTarotScript& s) { s.OnAuraTaken(porteur, aura); });
 }
 
-void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal)
+void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId)
 {
     if (caster && caster->IsPlayer())
-        Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal); });
+        Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal, spellId); });
 }
 void StellarTarotEffects::OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block)
 {

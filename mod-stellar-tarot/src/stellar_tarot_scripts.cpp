@@ -25,9 +25,11 @@
  * which passes the event to the scripts of the character concerned.
  */
 
+#include "AuctionHouseMgr.h"
 #include "Creature.h"
 #include "Item.h"
 #include "LootMgr.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "QuestDef.h"
 #include "ScriptMgr.h"
@@ -80,8 +82,10 @@ public:
             PLAYERHOOK_ON_BEFORE_DURABILITY_REPAIR,
             PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM,
             PLAYERHOOK_ANTICHEAT_HANDLE_DOUBLE_JUMP,
+            PLAYERHOOK_ANTICHEAT_CHECK_MOVEMENT_INFO,
             PLAYERHOOK_ON_GET_REPUTATION_PRICE_DISCOUNT,
             PLAYERHOOK_ON_MONEY_CHANGED,
+            PLAYERHOOK_CAN_PLACE_AUCTION_BID,
             PLAYERHOOK_CAN_SELL_ITEM
         }) { }
 
@@ -128,6 +132,7 @@ public:
     void OnPlayerBeforeDurabilityRepair(Player* player, ObjectGuid /*npc*/, ObjectGuid item, float& discountMod, uint8 /*guildBank*/) override
     {
         StellarTarotEffects::OnRepairDiscount(player, item, discountMod);
+        StellarTarotEffects::OnSpend(player);
     }
     void OnPlayerGetReputationPriceDiscount(Player const* player, Creature const* /*creature*/, float& discount) override
     {
@@ -155,6 +160,8 @@ public:
         price = uint64(double(price) * double(player->GetReputationPriceDiscount(vendor)));
         StellarTarotEffects::OnVendorBuy(player, item, uint32(count) * lot,
                                          uint32(std::min<uint64>(price, 2000000000ULL)));
+        if (price)
+            StellarTarotEffects::OnSpend(player);
     }
     void OnPlayerMoneyChanged(Player* player, int32& amount) override { StellarTarotEffects::OnMoneyChanged(player, amount); }
     // LE SAUT. Le coeur n'a pas d'evenement de saut : il n'y a que ce crochet
@@ -163,6 +170,26 @@ public:
     bool AnticheatHandleDoubleJump(Player* player, Unit* /*mover*/) override
     {
         StellarTarotEffects::OnJump(player);
+        return true;
+    }
+    // LA ROTATION. Le coeur n'a pas d'evenement pour « le joueur se tourne » :
+    // il n'y a que ce crochet d'anti-triche, appele a CHAQUE paquet de
+    // mouvement -- et le paquet porte l'orientation. On regarde passer, on
+    // laisse toujours faire.
+    bool AnticheatCheckMovementInfo(Player* player, MovementInfo const& movementInfo,
+                                    Unit* /*mover*/, bool /*jump*/) override
+    {
+        StellarTarotEffects::OnFacing(player, movementInfo.pos.GetPositionX(),
+                                     movementInfo.pos.GetPositionY(), movementInfo.pos.GetOrientation(),
+                                     movementInfo.GetMovementFlags());
+        return true;
+    }
+    // L'HOTEL DES VENTES : une enchere ou un achat immediat. Le coeur appelle
+    // ce crochet au tout debut de la demande -- avant meme de savoir si elle
+    // aboutira -- et n'en offre pas d'autre : le geste vaut la depense.
+    bool OnPlayerCanPlaceAuctionBid(Player* player, AuctionEntry* /*auction*/) override
+    {
+        StellarTarotEffects::OnSpend(player);
         return true;
     }
     bool OnPlayerCanSellItem(Player* player, Item* item, Creature* /*vendor*/) override
@@ -225,9 +252,9 @@ public:
     }
 
     // A tick of a periodic damage effect: the caster's cards may add to it.
-    void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage, SpellInfo const* /*spellInfo*/) override
+    void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage, SpellInfo const* spellInfo) override
     {
-        StellarTarotEffects::OnPeriodicTick(attacker, target, damage, false);
+        StellarTarotEffects::OnPeriodicTick(attacker, target, damage, false, spellInfo ? spellInfo->Id : 0);
     }
 
     // Every heal passes here, periodic ticks included. CAREFUL: the core calls
@@ -240,7 +267,7 @@ public:
             return;
         if (!spellInfo->HasAura(SPELL_AURA_PERIODIC_HEAL) && !spellInfo->HasAura(SPELL_AURA_OBS_MOD_HEALTH))
             return;
-        StellarTarotEffects::OnPeriodicTick(caster, healed, heal, true);
+        StellarTarotEffects::OnPeriodicTick(caster, healed, heal, true, spellInfo->Id);
     }
     void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override
     {
@@ -273,11 +300,37 @@ public:
         // Un coffre : la carte peut puiser de nouveau dans SA table.
         else if (&store == &LootTemplates_Gameobject)
             StellarTarotEffects::OnObjectLoot(lootOwner, loot, tab, &store);
+        // Un minerai prospecte : la table du minerai, la meme, une fois de plus.
+        else if (&store == &LootTemplates_Prospecting)
+            StellarTarotEffects::OnProspect(lootOwner, loot, tab, &store);
+        // La peche : ce que le bouchon vient de remonter.
+        else if (&store == &LootTemplates_Fishing)
+            StellarTarotEffects::OnFishing(lootOwner, loot, tab, &store);
         // The crate of goods being opened: the module fills it itself.
         else if (&store == &LootTemplates_Item)
             if (Item const* opened = lootOwner->GetItemByGuid(loot->containerGUID))
                 if (opened->GetEntry() == STELLAR_TAROT_ITEM_CRATE)
                     StellarTarotLoot::FillCrate(lootOwner, loot);
+    }
+};
+
+// L'HOTEL DES VENTES, du cote du vendeur : une vente mise en ligne, son depot
+// deja preleve. Le coeur appelle aussi ce crochet en relisant les ventes de la
+// base au demarrage -- personne n'est alors en jeu, et rien ne se passe.
+class StellarTarotAuctionScript : public AuctionHouseScript
+{
+public:
+    StellarTarotAuctionScript() : AuctionHouseScript("StellarTarotAuctionScript",
+        {
+            AUCTIONHOUSEHOOK_ON_AUCTION_ADD
+        }) { }
+
+    void OnAuctionAdd(AuctionHouseObject* /*ah*/, AuctionEntry* entry) override
+    {
+        if (!entry)
+            return;
+        if (Player* seller = ObjectAccessor::FindConnectedPlayer(entry->owner))
+            StellarTarotEffects::OnSpend(seller);
     }
 };
 
@@ -287,4 +340,5 @@ void AddSC_stellar_tarot_scripts()
     new StellarTarotPlayerScript();
     new StellarTarotUnitScript();
     new StellarTarotLootScript();
+    new StellarTarotAuctionScript();
 }

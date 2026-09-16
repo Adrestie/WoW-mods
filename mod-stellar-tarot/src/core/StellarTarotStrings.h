@@ -100,6 +100,8 @@ enum StellarTarotStrings : uint32
     STELLAR_TAROT_STR_SPOILS            = 55,  // coin found on the victim
     STELLAR_TAROT_STR_FROM_CARD         = 56,  // [{card}] : {what it says}
     STELLAR_TAROT_STR_QUEST_GOLD        = 57,  // quest reward increased by {}g {}s {}c
+    // What the cards make of a reference experience -- `.tarot xp`
+    STELLAR_TAROT_STR_XP_BONUS          = 58,  // {}: 1000 experience becomes {} ({} %)
     // 1001 and up: what each script says of itself (mod_stellar_tarot_script).
 };
 

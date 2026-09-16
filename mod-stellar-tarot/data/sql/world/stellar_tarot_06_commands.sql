@@ -27,6 +27,9 @@ INSERT INTO `command` (`name`, `security`, `help`) VALUES
 ('tarot preset delete', 0, 'Syntax: .tarot preset delete $preset_id\n\nForgets a saved preset. The board and the cards laid today are not touched.'),
 ('tarot layout',        2, 'Syntax: .tarot layout [$player]\n\nShows a player''s equipped board, every card laid on it and the activation level of each -- the named player, else your target, else yourself.'),
 ('tarot effects',       2, 'Syntax: .tarot effects [$player]\n\nLists the effects in force on a player: for every laid card, each active level with its spell and its script -- the named player, else your target, else yourself.'),
+('tarot xp',            2, 'Syntax: .tarot xp [$player]
+
+Says what the cards make of a reference experience: a thousand points are passed through the module''s own hook, and the result is shown with the share it adds. The named player, else your target, else yourself.'),
 ('tarot fuse',          0, 'Syntax: .tarot fuse $item_entry $item_entry $item_entry\n\nThe workbench: three cards you carry, any of them, become one card drawn at random from the whole catalogue; three boards become one board. This is the path the shared workbench takes.'),
 ('tarot sources',       2, 'Syntax: .tarot sources
 

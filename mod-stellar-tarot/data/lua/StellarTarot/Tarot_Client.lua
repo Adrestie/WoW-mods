@@ -2499,9 +2499,60 @@ local function BleedText()
                math.floor(ap * BLEED_PCT / 100))
 end
 
+-- ---------------------------------------------------------------------------
+-- CE QU'UNE CARTE AJOUTE A UNE POTION. Le client ecrit l'infobulle d'un buff
+-- depuis son propre Spell.dbc : elle ne dit que les chiffres de la potion, le
+-- serveur ne lui envoyant d'une aura ni montant ni texte. Le module chuchote
+-- donc les montants qu'il applique vraiment -- un message d'addon, comme AIO
+-- en envoie -- et l'infobulle est corrigee ici, chiffre par chiffre.
+--
+-- La table est rangee PAR NOM DE SORT : c'est ce que l'infobulle donne.
+-- ---------------------------------------------------------------------------
+
+STELLAR_TAROT_POTION_BOOST = STELLAR_TAROT_POTION_BOOST or {}
+
+if not STELLAR_TAROT_POTION_HOOKED then
+    STELLAR_TAROT_POTION_HOOKED = true
+    local receiver = CreateFrame("Frame")
+    receiver:RegisterEvent("CHAT_MSG_ADDON")
+    receiver:SetScript("OnEvent", function(_, _, prefix, message)
+        if prefix ~= "StellarTarotPotion" or not message then return end
+        local id, rest = message:match("^(%d+)(.*)$")
+        local spellName = id and GetSpellInfo(tonumber(id))
+        if not spellName then return end
+        local map, any = {}, false
+        for propre, releve in rest:gmatch("|(%-?%d+)&(%-?%d+)") do
+            map[propre], any = releve, true
+        end
+        STELLAR_TAROT_POTION_BOOST[spellName] = any and map or nil
+    end)
+end
+
+-- Les nombres de l'infobulle que le module a releves, remplaces par les siens.
+local function RaisePotionLines(tip, map)
+    local n, changed = 2, false
+    while true do
+        local line = _G[tip:GetName() .. "TextLeft" .. n]
+        local text = line and line:GetText()
+        if not text then break end
+        local raised = text:gsub("%d+", function(num) return map[num] end)
+        if raised ~= text then
+            line:SetText(raised)
+            changed = true
+        end
+        n = n + 1
+    end
+    return changed
+end
+
 function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
     local name, _, _, count = UnitAura(unit, index, filter)
     if not name then return end
+    local boost = STELLAR_TAROT_POTION_BOOST[name]
+    if boost then
+        if RaisePotionLines(tip, boost) then tip:Show() end
+        return
+    end
     if name == GetSpellInfo(BLEED_SPELL) then
         local line = _G[tip:GetName() .. "TextLeft2"]
         if line then
@@ -2512,7 +2563,11 @@ function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
         return
     end
     if name ~= GetSpellInfo(BANNER_SPELL) then
+        -- Les auras du module qui ne sont pas un niveau de carte -- le revers
+        -- qu'une ligne pose a part, par exemple -- portent son nom : leur
+        -- infobulle se multiplie par les cumuls comme celle d'un niveau.
         local id = ProcSpellByName(name)
+            or ((name:match("^Tarot stellaire") or name:match("^Stellar Tarot")) and -1 or nil)
         if not id then return end
         local line = _G[tip:GetName() .. "TextLeft2"]
         if line and line:GetText() then
