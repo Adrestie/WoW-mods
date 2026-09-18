@@ -93,6 +93,14 @@ constexpr uint32 STELLAR_TAROT_MARKER_FIRST = 903810;   // crit, spell_crit, hea
 constexpr uint32 STELLAR_TAROT_MARKER_LAST  = 903819;
 constexpr uint32 STELLAR_TAROT_TRIGGER_FIRST = 903820;
 constexpr uint32 STELLAR_TAROT_TRIGGER_LAST  = 903999;
+// THE SECOND RESERVE. The block's lower half carries the ITEMS -- cards up to
+// 902499, boards up to 902599, the crate at 902600 -- and nothing else. What
+// is left of it, from 902700 up, is a second reserve of SPELLS: an item number
+// and a spell number are two separate lists, and no number here is shared. The
+// generator fills the upper reserve first and spills into this one, so no
+// spell already laid ever changes its number.
+constexpr uint32 STELLAR_TAROT_SPELL_LOW_FIRST = 902700;
+constexpr uint32 STELLAR_TAROT_SPELL_LOW_LAST  = 902999;
 
 // A card has four edges and four activation levels; a board has 2 to 4 rows
 // and 2 to 4 columns; every number on an edge or around a board is 1 to 9.

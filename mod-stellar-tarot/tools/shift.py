@@ -83,21 +83,26 @@ FAMILIES = {
     # of the two can be moved by sight: the displays are moved by POSITION --
     # the field of Item.dbc and the columns of the SQL that hold one -- so
     # that moving them never touches an item's entry.
-    "items": dict(low=902000, high=902999, size=1000,
+    "items": dict(ranges=((902000, 902699),), size=2000,
                   tables=("Item.dbc",),
                   sql_tables=("item_template", "item_template_locale", "item_dbc")),
-    "displays": dict(low=902000, high=902999, size=1000,
+    "displays": dict(ranges=((902000, 902699),), size=2000,
                      tables=("ItemDisplayInfo.dbc",), sql_tables=(),
                      by_position=dict(
                          fields={"Item.dbc": (5,)},          # DisplayInfoID
                          sql_columns=("displayid", "DisplayInfoID"),
                          constant="DISPLAY")),
-    # The spells sit in the thousand above: 903000 studies a card, 903001 a
-    # board, and the aura of card N at level L is 903000 + 4 x N + (L - 1).
-    "spells": dict(low=903000, high=903999, size=1000,
+    # The spells own the thousand above -- 903000 studies a card, 903001 a
+    # board, and the aura of card N at level L is 903000 + 4 x N + (L - 1) --
+    # AND the end of the lower half, 902700..902999, which carries no item.
+    # Two ranges, one family: a number in either is a spell of ours.
+    "spells": dict(ranges=((902700, 902999), (903000, 903999)), size=2000,
                    tables=("Spell.dbc",),
                    sql_tables=("spell_dbc", "mod_stellar_tarot_card_effect")),
-    "icons": dict(low=902000, high=902999, size=1000,
+    # The spell icons wear the numbers of the SPELLS' thousand (903000 + N, one
+    # per card), not the items'. They are moved by POSITION -- the fields of
+    # Spell.dbc that name one -- so that moving them never touches a spell.
+    "icons": dict(ranges=((903000, 903999),), size=2000,
                   tables=("SpellIcon.dbc",), sql_tables=(),
                   by_position=dict(
                       fields={"Spell.dbc": (133, 134)},   # SpellIconID, ActiveIconID
@@ -110,7 +115,15 @@ INSERT_HEADER = re.compile(r"INSERT INTO `\w+`\s*\(([^)]*)\)\s*VALUES")
 
 
 def in_family(family, value):
-    return FAMILIES[family]["low"] <= value <= FAMILIES[family]["high"]
+    """UNE FAMILLE TIENT UNE OU PLUSIEURS PLAGES, et un numero est des siens
+    des qu'il tombe dans l'une d'elles."""
+    return any(low <= value <= high for low, high in FAMILIES[family]["ranges"])
+
+
+def family_bounds(family):
+    """Le plus petit et le plus grand numero que la famille peut porter."""
+    ranges = FAMILIES[family]["ranges"]
+    return min(low for low, _ in ranges), max(high for _, high in ranges)
 
 
 # ------------------------------------------------------------------ the DBCs
@@ -185,13 +198,13 @@ def shift_text(path, family, by):
 
     Returns how many moved and the text to write, or None when none did."""
     text = io.open(path, encoding="utf-8", newline="").read()
-    low, high = FAMILIES[family]["low"], FAMILIES[family]["high"]
+    low, high = family_bounds(family)
     width = len(str(low))
     counter = [0]
 
     def bump(match):
         value = int(match.group(0))
-        if low <= value <= high:
+        if in_family(family, value):
             counter[0] += 1
             return str(value + by)
         return match.group(0)
@@ -374,7 +387,7 @@ def leftovers(family):
     here: a record is numbers all the way down, and every one of them would
     answer.
     """
-    low, high = FAMILIES[family]["low"], FAMILIES[family]["high"]
+    low, high = family_bounds(family)
     pattern = re.compile(r"(?<![\w.])\d{%d,%d}(?![\w.])"
                          % (len(str(low)), len(str(high))))
     out = []
@@ -383,7 +396,7 @@ def leftovers(family):
             continue
         for number, line in enumerate(
                 io.open(path, encoding="utf-8", newline="").read().splitlines(), 1):
-            if any(low <= int(m.group(0)) <= high for m in pattern.finditer(line)):
+            if any(in_family(family, int(m.group(0))) for m in pattern.finditer(line)):
                 out.append((path, number, line.strip()))
     return out
 
@@ -439,7 +452,7 @@ def shift(family, by, dry_run):
                 seen[0] += 1
             print("  numbers still between %d and %d. What the shift knows to hold "
                   "one has moved; check that none of these is ours:"
-                  % (FAMILIES[family]["low"], FAMILIES[family]["high"]))
+                  % family_bounds(family))
             for name, (count, first) in sorted(per_file.items(),
                                                key=lambda kv: -kv[1][0]):
                 print("    %-58s %4d line(s), first at %d" % (name, count, first))
@@ -470,7 +483,7 @@ def current_ranges():
     out = {}
     for name, spec in FAMILIES.items():
         by = done.get(name, 0)
-        out[name] = (spec["low"] + by, spec["high"] + by)
+        out[name] = tuple((low + by, high + by) for low, high in spec["ranges"])
     return out
 
 
@@ -484,15 +497,14 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.list:
-        for name, (low, high) in sorted(current_ranges().items()):
-            print("  %-10s %9d .. %-9d  moves by multiples of %d"
-                  % (name, low, high, FAMILIES[name]["size"]))
+        for name, ranges in sorted(current_ranges().items()):
+            print("  %-10s %-30s  moves by multiples of %d"
+                  % (name, ", ".join("%d..%d" % r for r in ranges), FAMILIES[name]["size"]))
         return
     if not args.family or args.by is None:
         parser.error("--family and --by, or --list")
     # A family that was already shifted is looked for where it now stands.
-    low, high = current_ranges()[args.family]
-    FAMILIES[args.family]["low"], FAMILIES[args.family]["high"] = low, high
+    FAMILIES[args.family]["ranges"] = current_ranges()[args.family]
     shift(args.family, args.by, args.dry_run)
 
 

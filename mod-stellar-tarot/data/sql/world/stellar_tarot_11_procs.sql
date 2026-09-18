@@ -6,8 +6,8 @@
 -- casts a marker spell (903810..903817) the module recognises.
 -- The core reads `spell_proc`; `spell_proc_event` is only cleaned of the
 -- rows an earlier version of this file wrote there.
-DELETE FROM `spell_proc_event` WHERE `entry` BETWEEN 903820 AND 903999;
-DELETE FROM `spell_proc` WHERE `SpellId` BETWEEN 903820 AND 903999;
+DELETE FROM `spell_proc_event` WHERE `entry` BETWEEN 902000 AND 903999;
+DELETE FROM `spell_proc` WHERE `SpellId` BETWEEN 902000 AND 903999;
 INSERT INTO `spell_proc`
   (`SpellId`, `SchoolMask`, `SpellFamilyName`, `SpellFamilyMask0`, `SpellFamilyMask1`, `SpellFamilyMask2`,
    `ProcFlags`, `SpellTypeMask`, `SpellPhaseMask`, `HitMask`, `AttributesMask`, `DisableEffectsMask`,
