@@ -118,7 +118,10 @@ public:
     virtual void OnMapChanged(Player* /*player*/) { }
     virtual void OnQuestComplete(Player* /*player*/, Quest const* /*quest*/) { }
     virtual void OnLootMoney(Player* /*player*/, uint32& /*copper*/) { }
-    virtual void OnGiveXP(Player* /*player*/, uint32& /*amount*/) { }
+    // `source` : d'ou vient l'experience (Player.h, enum PlayerXPSource) --
+    // 0 une victime, 1 et 2 une quete, 3 une decouverte, 4 un champ de
+    // bataille. Les auras natives ne couvrent que les trois premieres.
+    virtual void OnGiveXP(Player* /*player*/, uint32& /*amount*/, uint8 /*source*/) { }
     virtual void OnGiveReputation(Player* /*player*/, float& /*amount*/) { }
     // Une réparation sur le point d'être payée : l'objet visé, ou un GUID
     // vide quand le joueur répare tout.

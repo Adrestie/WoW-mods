@@ -391,9 +391,9 @@ void StellarTarotEffects::OnLootMoney(Player* player, uint32& copper)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnLootMoney(player, copper); });
 }
-void StellarTarotEffects::OnGiveXP(Player* player, uint32& amount)
+void StellarTarotEffects::OnGiveXP(Player* player, uint32& amount, uint8 source)
 {
-    Each(player, [&](StellarTarotScript& s) { s.OnGiveXP(player, amount); });
+    Each(player, [&](StellarTarotScript& s) { s.OnGiveXP(player, amount, source); });
 }
 void StellarTarotEffects::OnGiveReputation(Player* player, float& amount)
 {

@@ -455,7 +455,10 @@ public:
             return true;
         uint32 const before = 1000;
         uint32 amount = before;
-        StellarTarotEffects::OnGiveXP(player, amount);
+        // Une victime : la source la plus ordinaire, celle que la commande
+        // montre. Les auras natives n'y paraissent pas -- c'est le chiffre du
+        // module seul, comme le dit le commentaire ci-dessus.
+        StellarTarotEffects::OnGiveXP(player, amount, 0);
         Say(handler, STELLAR_TAROT_STR_XP_BONUS, player->GetName(), amount,
             int32(amount) - int32(before));
         return true;

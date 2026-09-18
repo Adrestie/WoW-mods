@@ -99,7 +99,7 @@ namespace StellarTarotEffects
     void OnMapChanged(Player* player);
     void OnQuestComplete(Player* player, Quest const* quest);
     void OnLootMoney(Player* player, uint32& copper);
-    void OnGiveXP(Player* player, uint32& amount);
+    void OnGiveXP(Player* player, uint32& amount, uint8 source);
     void OnGiveReputation(Player* player, float& amount);
     void OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod);
     void OnVendorDiscount(Player const* player, float& discount);

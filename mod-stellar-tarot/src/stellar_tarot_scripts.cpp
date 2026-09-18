@@ -124,7 +124,7 @@ public:
         if (loot)
             StellarTarotEffects::OnLootMoney(player, loot->gold);
     }
-    void OnPlayerGiveXP(Player* player, uint32& amount, Unit* /*victim*/, uint8 /*source*/) override { StellarTarotEffects::OnGiveXP(player, amount); }
+    void OnPlayerGiveXP(Player* player, uint32& amount, Unit* /*victim*/, uint8 source) override { StellarTarotEffects::OnGiveXP(player, amount, source); }
     void OnPlayerGiveReputation(Player* player, int32 /*faction*/, float& amount, ReputationSource /*source*/) override
     {
         StellarTarotEffects::OnGiveReputation(player, amount);

@@ -4525,9 +4525,13 @@ namespace
         void Remove(Player* player) override { RemoveOwned(player, _spellId); _kin = 0; }
         void OnLevelUp(Player* player) override { Read(player); Show(player); }
 
-        void OnGiveXP(Player* player, uint32& amount) override
+        // LE COMPTE EST DANS L'AURA : le sort du niveau porte MOD_XP_PCT a la
+        // part PAR CUMUL, et le coeur la multiplie par les cumuls que le module
+        // y met. Ne reste ici que ce que l'aura ne couvre pas -- la decouverte
+        // et le champ de bataille.
+        void OnGiveXP(Player* player, uint32& amount, uint8 source) override
         {
-            if (!_kin || !amount || !player)
+            if (!_kin || !amount || !player || (source != XPSOURCE_EXPLORE && source != XPSOURCE_BATTLEGROUND))
                 return;
             amount = uint32(std::llround(double(amount) * (100 + int32(_kin) * _pct) / 100.0));
         }
@@ -4566,8 +4570,11 @@ namespace
         {
             Reader r(params);
             _kind = r.Word();
-            static char const* const kinds[] = { "gold_loot", "xp", "rep", "quest_gold", "repair", "vendor_buy",
-                                                 "vendor_sell", "vendor_sell_grey", "vendor_sell_good" };
+            // `xp_other` : l'experience que l'AURA NE COUVRE PAS -- la
+            // decouverte et le champ de bataille. Les auras 200 et 291 portent
+            // le reste, et une ligne qui les a gardees n'y ajoute rien.
+            static char const* const kinds[] = { "gold_loot", "xp", "xp_other", "rep", "quest_gold", "repair",
+                                                 "vendor_buy", "vendor_sell", "vendor_sell_grey", "vendor_sell_good" };
             bool known = false;
             for (char const* k : kinds)
                 if (_kind == k) known = true;
@@ -4636,9 +4643,17 @@ namespace
             if (Has("gold_loot") && On(player))
                 copper = uint32(std::llround(double(copper) * (100 + PctOf(player, "gold_loot")) / 100.0));
         }
-        void OnGiveXP(Player* player, uint32& amount) override
+        // `xp` couvre TOUTE l'experience -- c'est ce qui reste aux lignes qu'une
+        // aura ne peut pas porter : celles qui nomment un etat ou deux genres.
+        // `xp_other` ne couvre que ce que l'aura laisse : la decouverte et le
+        // champ de bataille.
+        void OnGiveXP(Player* player, uint32& amount, uint8 source) override
         {
-            if (Has("xp") && On(player)) amount = uint32(std::llround(double(amount) * (100 + PctOf(player, "xp")) / 100.0));
+            bool const reste = source == XPSOURCE_EXPLORE || source == XPSOURCE_BATTLEGROUND;
+            if (Has("xp") && On(player))
+                amount = uint32(std::llround(double(amount) * (100 + PctOf(player, "xp")) / 100.0));
+            else if (reste && Has("xp_other") && On(player))
+                amount = uint32(std::llround(double(amount) * (100 + PctOf(player, "xp_other")) / 100.0));
         }
         void OnGiveReputation(Player* player, float& amount) override
         {
