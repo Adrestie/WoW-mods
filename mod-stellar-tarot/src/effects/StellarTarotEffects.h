@@ -77,6 +77,13 @@ namespace StellarTarotEffects
     void RefreshEveryone();
 
     // The game's events, handed to every active script of the character.
+    // LE VERROU DE RE-ENTRANCE, par joueur. Le module ne se declenche pas sur ce
+    // qu'il vient lui-meme d'infliger ou de soigner : ses aides le levent le
+    // temps de leur ouvrage, et les relais s'en remettent a lui.
+    void HoldFor(ObjectGuid who);
+    void ReleaseFor(ObjectGuid who);
+    bool HeldFor(ObjectGuid who);
+
     void OnCreatureKill(Player* player, Creature* killed);
     void OnUpdate(Player* player, uint32 diff);               // ticks the scripts about once a second
     // Damage about to be dealt by `attacker` to `victim`: the attacker's

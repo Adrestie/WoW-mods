@@ -409,6 +409,7 @@
  */
 
 #include "StellarTarotScript.h"
+#include "StellarTarotEffects.h"   // le verrou de re-entrance, tenu par les repartiteurs
 #include "StellarTarotLoot.h"
 #include "Creature.h"
 #include "DatabaseEnv.h"
@@ -560,8 +561,6 @@ namespace
     // charge : c'est a eux que l'evenement `fever` reconnait un tic de fievre.
     std::set<uint32> gFeverSpells;
 
-    bool gInsideDamage = false;
-
     // The hostile units within `range` of `center`, `except` left out.
     std::list<Unit*> HostilesAround(Player* player, WorldObject* center, float range, Unit* except)
     {
@@ -572,8 +571,6 @@ namespace
         out.remove(except);
         return out;
     }
-
-    bool gInsideHeal = false;
 
     // The states a line can wait for WITHOUT keeping anything: no parameter,
     // no memory of the past. `cond` knows more of them and remembers what it
@@ -614,9 +611,10 @@ namespace
     // client shows the figure.
     void Hurt(Player* player, Unit* victim, uint32 damage, uint32 school, uint32 spellId = 0)
     {
-        if (!victim || !victim->IsAlive() || !damage || gInsideDamage)
+        if (!victim || !victim->IsAlive() || !damage
+            || StellarTarotEffects::HeldFor(player->GetGUID()))
             return;
-        gInsideDamage = true;
+        StellarTarotEffects::HoldFor(player->GetGUID());
         SpellInfo const* info = Info(spellId);
         uint32 const dealt = Unit::DealDamage(player, victim, damage, nullptr, SPELL_DIRECT_DAMAGE, SpellSchoolMask(school), info, false);
         // CE QUE LA CARTE A INFLIGE, et non ce que la cible a bien voulu
@@ -627,7 +625,7 @@ namespace
         if (info)
             player->SendSpellNonMeleeDamageLog(victim, info, dealt ? dealt : damage,
                                                SpellSchoolMask(school), 0, 0, school == 1, 0);
-        gInsideDamage = false;
+        StellarTarotEffects::ReleaseFor(player->GetGUID());
     }
 
     // A heal by the module: through the spell log, so the client shows it.
@@ -641,11 +639,10 @@ namespace
             target->ModifyHealth(int32(amount));
             return;
         }
-        bool const was = gInsideHeal;
-        gInsideHeal = true;
+        StellarTarotEffects::HoldFor(player->GetGUID());
         HealInfo healInfo(player, target, amount, info, SPELL_SCHOOL_MASK_HOLY);
         player->HealBySpell(healInfo);
-        gInsideHeal = was;
+        StellarTarotEffects::ReleaseFor(player->GetGUID());
     }
     // ================= CE QU'UNE CARTE DIT DANS LE CHAT =================
     //
@@ -737,9 +734,9 @@ namespace
         if (dmg <= 0)
             return;
         SpellInfo const* info = Info(spellId);
-        gInsideDamage = true;
+        StellarTarotEffects::HoldFor(player->GetGUID());
         Unit::DealDamage(player, player, uint32(dmg), nullptr, SELF_DAMAGE, SPELL_SCHOOL_MASK_SHADOW, info, false);
-        gInsideDamage = false;
+        StellarTarotEffects::ReleaseFor(player->GetGUID());
         if (info)
             player->SendSpellNonMeleeDamageLog(player, info, uint32(dmg), SPELL_SCHOOL_MASK_SHADOW, 0, 0, false, 0);
     }
@@ -1863,8 +1860,6 @@ namespace
         }
         void OnHealDone(Player* player, Unit* target, uint32& gain) override
         {
-            if (gInsideHeal)
-                return;
             if (_event == "heal" || (_event == "heal_ally" && target != player))
                 Fire(player, target, gain);
         }

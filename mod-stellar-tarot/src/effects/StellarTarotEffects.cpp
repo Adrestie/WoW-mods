@@ -281,8 +281,55 @@ void StellarTarotEffects::OnUpdate(Player* player, uint32 diff)
     Each(player, [&](StellarTarotScript& s) { s.OnTick(player); });
 }
 
+namespace
+{
+    // Une PROFONDEUR par joueur, et non un booleen global : deux cartes qui se
+    // repondent ne doivent pas se masquer l'une l'autre, et deux joueurs qui
+    // frappent en meme temps ne partagent pas un verrou.
+    std::map<ObjectGuid, uint32>& Locks()
+    {
+        static std::map<ObjectGuid, uint32> locks;
+        return locks;
+    }
+
+    // UN SORT DU MODULE NE DECLENCHE PAS LE MODULE.
+    bool OursSpell(uint32 spellId)
+    {
+        return spellId >= STELLAR_TAROT_CARD_ITEM_BASE && spellId <= STELLAR_TAROT_TRIGGER_LAST;
+    }
+
+    // Le verrou vaut pour l'unite qui agit comme pour celle qui subit : le
+    // coup qu'une carte porte ne doit reveiller aucune ligne, des deux cotes.
+    bool Held(Unit* one, Unit* two)
+    {
+        return (one && StellarTarotEffects::HeldFor(one->GetGUID()))
+            || (two && StellarTarotEffects::HeldFor(two->GetGUID()));
+    }
+}
+
+void StellarTarotEffects::HoldFor(ObjectGuid who)
+{
+    ++Locks()[who];
+}
+
+void StellarTarotEffects::ReleaseFor(ObjectGuid who)
+{
+    auto it = Locks().find(who);
+    if (it == Locks().end())
+        return;
+    if (--it->second == 0)
+        Locks().erase(it);
+}
+
+bool StellarTarotEffects::HeldFor(ObjectGuid who)
+{
+    return Locks().count(who) != 0;
+}
+
 void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell, uint32 school, uint32 spellId)
 {
+    if (OursSpell(spellId) || Held(attacker, victim))
+        return;
     if (attacker && attacker->IsPlayer())
         Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell, school, spellId); });
     if (victim && victim->IsPlayer())
@@ -297,6 +344,8 @@ void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage,
 
 void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
 {
+    if (Held(healer, receiver))
+        return;
     if (healer && healer->IsPlayer())
         Each(healer->ToPlayer(), [&](StellarTarotScript& s) { s.OnHealDone(healer->ToPlayer(), receiver, gain); });
 }
@@ -442,6 +491,8 @@ void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
 
 void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId)
 {
+    if (OursSpell(spellId) || Held(caster, other))
+        return;
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal, spellId); });
 }
