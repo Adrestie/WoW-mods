@@ -14,7 +14,7 @@ INSERT INTO `spell_linked_spell` (`spell_trigger`, `spell_effect`, `type`, `comm
 (903358, 903981, 2, 'The Paranoia level 3: the rest of the aura'),
 (903449, 903980, 2, 'The Hysteria level 2: the rest of the aura'),
 (903451, 903979, 2, 'The Hysteria level 4: the rest of the aura'),
-(903772, 903974, 2, 'The Oblivion level 1: the rest of the aura'),
-(903773, 903973, 2, 'The Oblivion level 2: the rest of the aura'),
-(903774, 903972, 2, 'The Oblivion level 3: the rest of the aura'),
-(903775, 903971, 2, 'The Oblivion level 4: the rest of the aura');
+(903772, 903973, 2, 'The Oblivion level 1: the rest of the aura'),
+(903773, 903972, 2, 'The Oblivion level 2: the rest of the aura'),
+(903774, 903971, 2, 'The Oblivion level 3: the rest of the aura'),
+(903775, 903970, 2, 'The Oblivion level 4: the rest of the aura');

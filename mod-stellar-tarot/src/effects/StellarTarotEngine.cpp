@@ -851,7 +851,14 @@ namespace
     // Le revers s'ecrit en queue de n'importe quelle ligne, « but:<quoi>:<n>
     // [:<n2>][:chance:<c>] », et le joueur le subit lui-meme :
     //
-    //   hp:<pct> / mana:<pct>          il paie de sa sante ou de son mana
+    //   hp:<pct> / mana:<pct>          il paie de sa sante ou de son mana,
+    //                                  d'un coup
+    //   hp_each:<pct>                  le meme coup, MULTIPLIE par le nombre
+    //                                  de cumuls du bienfait
+    //   hp_stack:<pct>:<sec>:<sort>    il paie SUR LA DUREE, sous une plaie a
+    //                                  lui qui porte autant de cumuls que le
+    //                                  bienfait : la part annoncee PAR CUMUL,
+    //                                  en tout, etalee sur les battements
     //   stun|silence|sleep|disorient|root:<sec>   il se met hors jeu un instant
     //   taken:<pct>:<sec>              il encaisse plus, un moment
     //   burn:<pct>:<sec>               il perd des PV par tics
@@ -859,10 +866,44 @@ namespace
     //
     // « cost: » reste accepte pour dire la meme chose : c'est le mot d'avant.
     void Cost(Player* player, std::string const& kind, int32 n, int32 n2 = 0, uint32 spellId = 0,
-              uint32 markSpell = 0)
+              uint32 markSpell = 0, int32 stacks = 1)
     {
+        stacks = std::max(1, stacks);
         if (kind == "hp")
             Bleed(player, PctOf(player->GetMaxHealth(), n), STELLAR_TAROT_SPELL_PRICE);
+        // LE COUP QUI S'EMPILE : le meme coup que `hp`, multiplie par le
+        // nombre de cumuls que le bienfait porte.
+        else if (kind == "hp_each")
+            Bleed(player, PctOf(player->GetMaxHealth(), n) * uint32(stacks), STELLAR_TAROT_SPELL_PRICE);
+        // LA PLAIE QUI S'EMPILE : une plaie sur le joueur, qui vit aussi
+        // longtemps que le bienfait et porte AUTANT DE CUMULS QUE LUI. Elle bat
+        // toutes les deux secondes et coute EN TOUT la part annoncee par
+        // cumul : le battement vaut donc cette part divisee par le nombre de
+        // battements, et le coeur la multiplie par les cumuls. Le de du sort
+        // ajoute le dernier point, on le retire.
+        else if (kind == "hp_stack")
+        {
+            uint32 const mal = markSpell ? markSpell : STELLAR_TAROT_SPELL_PRICE;
+            int32 const battements = std::max(1, n2 / 2);
+            int32 const parTic = std::max<int32>(1, int32(PctOf(player->GetMaxHealth(), n)) / battements) - 1;
+            Aura* plaie = player->GetAura(mal, player->GetGUID());
+            if (!plaie)
+            {
+                player->CastCustomSpell(player, mal, &parTic, nullptr, nullptr, true);
+                plaie = player->GetAura(mal, player->GetGUID());
+            }
+            if (plaie)
+            {
+                // AUTANT DE CUMULS QUE LE BIENFAIT, ni plus ni moins.
+                if (int32(plaie->GetStackAmount()) != stacks)
+                    plaie->SetStackAmount(uint8(std::min<int32>(stacks, int32(plaie->GetSpellInfo()->StackAmount ? plaie->GetSpellInfo()->StackAmount : 1))));
+                if (n2)
+                {
+                    plaie->SetMaxDuration(n2 * 1000);
+                    plaie->SetDuration(n2 * 1000);
+                }
+            }
+        }
         else if (kind == "mana")
             player->ModifyPower(POWER_MANA, -int32(PctOf(player->GetMaxPower(POWER_MANA), n)));
         else if (kind == "disorient") Put(player, player, STELLAR_TAROT_SPELL_DISORIENT, n);
@@ -902,14 +943,14 @@ namespace
     }
     bool CostKind(std::string const& k)
     {
-        return k == "hp" || k == "mana" || k == "disorient" || k == "stun" || k == "silence"
-            || k == "sleep" || k == "root" || k == "taken" || k == "burn" || k == "burn_s"
-            || k == "self_hit" || k == "armor";
+        return k == "hp" || k == "hp_each" || k == "hp_stack" || k == "mana" || k == "disorient"
+            || k == "stun" || k == "silence" || k == "sleep" || k == "root" || k == "taken"
+            || k == "burn" || k == "burn_s" || k == "self_hit" || k == "armor";
     }
     // Les revers qui demandent DEUX chiffres (une valeur et une duree).
     bool CostPair(std::string const& k)
     {
-        return k == "taken" || k == "burn" || k == "burn_s" || k == "armor";
+        return k == "taken" || k == "burn" || k == "burn_s" || k == "armor" || k == "hp_stack";
     }
 
     // LES REVERS QUI COUPENT L'ACTION. Eux seuls attendent un demi-tour
@@ -1491,7 +1532,8 @@ namespace
                         return false;
                     }
                     // Le sort de la marque, quand le revers en pose une.
-                    if (_costKind == "armor" || _costKind == "taken" || _costKind == "burn_s")
+                    if (_costKind == "armor" || _costKind == "taken" || _costKind == "burn_s"
+                        || _costKind == "hp_stack")
                         r.OptInt(902000, 903999, _costSpell);
                     continue;
                 }
@@ -1515,7 +1557,28 @@ namespace
                 error = "after the action, only trigger, but, chance, say, night or onlynight may follow";
                 return false;
             }
+            // SANS SON AURA, une ligne a marqueur ne partirait jamais : c'est
+            // l'aura qui la designe quand le coeur lance le marqueur.
+            if (FromProcSystem(_event) && !_trigger)
+            {
+                error = "this event comes from the core's proc system: the line must name its own "
+                        "trigger aura -- trigger:<id>";
+                return false;
+            }
             return true;
+        }
+        // LES EVENEMENTS QUE LE SYSTEME DE PROCS DU COEUR ANNONCE, chacun par
+        // son marqueur (903810 et suivants, dans cet ordre). Une ligne qui les
+        // guette porte OBLIGATOIREMENT une aura trigger : c'est elle qui la
+        // designe quand le marqueur part.
+        static bool FromProcSystem(std::string const& event)
+        {
+            static char const* const events[] = { "crit", "spell_crit", "heal_crit", "dodge", "parry",
+                                                  "block", "crit_taken", "miss", "spell_crit_fire" };
+            for (char const* w : events)
+                if (event == w)
+                    return true;
+            return false;
         }
         // A state the level's spell shows while it lasts: the module does not
         // apply that spell itself.
@@ -1871,16 +1934,20 @@ namespace
             uint32 const id = spell->GetSpellInfo()->Id;
             if (id >= STELLAR_TAROT_MARKER_FIRST && id <= STELLAR_TAROT_MARKER_LAST)
             {
-                static char const* const markers[] = { "crit", "spell_crit", "heal_crit", "dodge", "parry", "block",
-                                                      "crit_taken", "miss", "spell_crit_fire", "" };
-                if (_event == markers[id - STELLAR_TAROT_MARKER_FIRST])
-                {
-                    // The marker comes right after the blow that fired it: the
-                    // unit struck and the figure struck for are the ones the
-                    // damage hook has just seen.
-                    Unit* struck = _lastVictim ? ObjectAccessor::GetUnit(*player, _lastVictim) : nullptr;
-                    Fire(player, struck ? struck : spell->m_targets.GetUnitTarget(), _lastAmount);
-                }
+                // LE MARQUEUR EST-IL LE MIEN ? Dix marqueurs servent vingt-cinq
+                // lignes : le nom de l'evenement ne suffit pas a les distinguer,
+                // et deux cartes qui guettent le meme evenement feraient evaluer
+                // chaque ligne deux fois. Le coeur attache au lancement l'AURA
+                // qui l'a demande (AuraEffect::HandleProcTriggerSpellAuraProc
+                // passe `this` a CastSpell) : c'est elle qui nomme la ligne.
+                SpellInfo const* const par = spell->GetTriggeredByAuraSpellInfo();
+                if (!par || int32(par->Id) != _trigger)
+                    return;
+                // The marker comes right after the blow that fired it: the
+                // unit struck and the figure struck for are the ones the
+                // damage hook has just seen.
+                Unit* struck = _lastVictim ? ObjectAccessor::GetUnit(*player, _lastVictim) : nullptr;
+                Fire(player, struck ? struck : spell->m_targets.GetUnitTarget(), _lastAmount);
                 return;
             }
             if (spell->IsTriggered())
@@ -2201,7 +2268,10 @@ namespace
                     Hurt(player, player, PctOf(_lastAmount, _costN), SPELL_SCHOOL_MASK_NORMAL,
                          STELLAR_TAROT_SPELL_PRICE);
                 else
-                    Cost(player, _costKind, _costN, _costN2, _spellId, uint32(_costSpell));
+                    // LES REVERS QUI COMPTENT LES CUMULS lisent celui du
+                    // bienfait, retenu a la pose.
+                    Cost(player, _costKind, _costN, _costN2, _spellId, uint32(_costSpell),
+                         _lastStacks);
                 return;
             }
             ObjectGuid const who = player->GetGUID();
@@ -2280,6 +2350,10 @@ namespace
                     aura = player->AddAura(_spellId, who);
                 else if (_b > 1 && aura->GetStackAmount() < uint8(_b))
                     aura->ModStackAmount(1);
+                // LE PRIX SUIT LE BIENFAIT : son revers lira ce compte-la, et
+                // non le sien. Sans cela, changer de cible ferait repartir le
+                // bienfait a un cumul pendant que le prix continuait de monter.
+                _lastStacks = aura ? int32(aura->GetStackAmount()) : 1;
                 if (aura && _a)
                 {
                     aura->SetMaxDuration(_a * 1000);
@@ -2670,6 +2744,9 @@ namespace
         uint32 _lastMs = 0;
         int32 _wasTurning = 0;      // le sens tenu au dernier paquet : 1 gauche, -1 droite
         int32 _spinWay = 0;         // le sens que la carte demande, 0 : les deux
+        // Le nombre de cumuls que le bienfait porte apres ce declenchement :
+        // ce que les revers « par cumul » multiplient.
+        int32 _lastStacks = 1;
         int32 _eventN = 0, _eventM = 0, _row = 0, _spPct = 0, _ratingPct = 0, _countSpell = 0, _signSpell = 0;
         std::vector<int32> _ratingParts;
         int32 _debuffSpell = 0;

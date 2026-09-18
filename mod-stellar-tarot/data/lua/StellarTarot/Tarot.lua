@@ -187,7 +187,7 @@ local function Catalogue(locale)
     -- un $s, et le client multiplie deja ce chiffre par les cumuls. L'addon ne
     -- doit donc pas le multiplier une seconde fois.
     cat.scaled = {}
-    q = WorldDBQuery("SELECT Id FROM spell_dbc WHERE Id BETWEEN 903000 AND 903999 "
+    q = WorldDBQuery("SELECT Id FROM spell_dbc WHERE Id BETWEEN 902000 AND 903999 "
                      .. "AND (AuraDescription_Lang_enUS LIKE '%$s%' OR AuraDescription_Lang_koKR LIKE '%$s%')")
     if q then
         repeat
