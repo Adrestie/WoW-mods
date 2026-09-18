@@ -92,6 +92,7 @@ OURS = {
     "stellartarot_ItemDisplayInfo.dbc": "ItemDisplayInfo.dbc",
     "stellartarot_Spell.dbc": "Spell.dbc",
     "stellartarot_SpellIcon.dbc": "SpellIcon.dbc",
+    "stellartarot_SpellDuration.dbc": "SpellDuration.dbc",
 }
 
 # The tables the module writes into, and which must be kept before it does:
