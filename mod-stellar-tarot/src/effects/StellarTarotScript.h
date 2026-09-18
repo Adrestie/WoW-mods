@@ -44,8 +44,6 @@
  *   sp_pct:<pct>                          spell power, in percent of the current one
  *   econ:<kind>:<pct>                     gold, experience, reputation, prices
  *
- * plus the two examples, gold_on_kill:<copper> and heal_on_kill:<percent>.
- *
  * WHAT A SCRIPT SAYS OF ITSELF is not in the code: the interface reads the
  * level's spell description, which the workbook wrote.
  */
@@ -144,11 +142,6 @@ public:
     // vient d'annoncer. Tout ce que le serveur sait de la rotation passe par la.
     virtual void OnFacing(Player* /*player*/, float /*x*/, float /*y*/, float /*orientation*/,
                           uint32 /*moveFlags*/) { }
-    // UNE AURA POSEE SUR LE JOUEUR, quel qu'en soit le lanceur.
-    virtual void OnAuraTaken(Player* /*player*/, Aura* /*aura*/) { }
-    // UN OBJET FABRIQUE, sorti d'un sort de metier : ce qui vient d'etre cree
-    // et en quel nombre.
-    virtual void OnCreateItem(Player* /*player*/, Item* /*item*/, uint32 /*count*/) { }
     // UN COUP DU FAMILIER : le maitre est prevenu de ce que sa bete porte.
     virtual void OnPetDamage(Player* /*player*/, Unit* /*victim*/, uint32& /*damage*/) { }
     // LA PECHE : le butin du bouchon vient d'etre tire, et une carte peut y

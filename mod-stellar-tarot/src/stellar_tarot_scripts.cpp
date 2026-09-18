@@ -85,7 +85,6 @@ public:
             PLAYERHOOK_ANTICHEAT_CHECK_MOVEMENT_INFO,
             PLAYERHOOK_ON_GET_REPUTATION_PRICE_DISCOUNT,
             PLAYERHOOK_ON_MONEY_CHANGED,
-            PLAYERHOOK_ON_CREATE_ITEM,
             PLAYERHOOK_CAN_PLACE_AUCTION_BID,
             PLAYERHOOK_CAN_SELL_ITEM
         }) { }
@@ -165,11 +164,6 @@ public:
             StellarTarotEffects::OnSpend(player);
     }
     void OnPlayerMoneyChanged(Player* player, int32& amount) override { StellarTarotEffects::OnMoneyChanged(player, amount); }
-    // Un objet qui sort d'un sort de metier -- une barre fondue, par exemple.
-    void OnPlayerCreateItem(Player* player, Item* item, uint32 count) override
-    {
-        StellarTarotEffects::OnCreateItem(player, item, count);
-    }
     // LE SAUT. Le coeur n'a pas d'evenement de saut : il n'y a que ce crochet
     // d'anti-triche, appele sur l'opcode MSG_MOVE_JUMP et sur lui seul. On
     // regarde passer, on laisse toujours faire.

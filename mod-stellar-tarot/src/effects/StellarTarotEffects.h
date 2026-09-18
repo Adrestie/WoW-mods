@@ -104,7 +104,6 @@ namespace StellarTarotEffects
     void OnProspect(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
     void OnFishing(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
     void OnSpend(Player* player);
-    void OnCreateItem(Player* player, Item* item, uint32 count);
     void OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags);
     void OnJump(Player* player);
     // Une creature morte : le module cherche lui-meme les porteurs de cartes

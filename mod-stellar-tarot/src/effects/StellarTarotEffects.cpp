@@ -407,11 +407,6 @@ void StellarTarotEffects::OnSpend(Player* player)
     Each(player, [&](StellarTarotScript& s) { s.OnSpend(player); });
 }
 
-void StellarTarotEffects::OnCreateItem(Player* player, Item* item, uint32 count)
-{
-    Each(player, [&](StellarTarotScript& s) { s.OnCreateItem(player, item, count); });
-}
-
 void StellarTarotEffects::OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnFacing(player, x, y, orientation, moveFlags); });
@@ -443,9 +438,6 @@ void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
     Unit* const caster = aura->GetCaster();
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnAuraApplied(caster->ToPlayer(), target, aura); });
-    // ET CE QU'IL SUBIT, LUI : une carte peut peser sur ce qu'on lui pose.
-    if (Player* const porteur = target->ToPlayer())
-        Each(porteur, [&](StellarTarotScript& s) { s.OnAuraTaken(porteur, aura); });
 }
 
 void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId)

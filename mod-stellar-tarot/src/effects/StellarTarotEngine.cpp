@@ -38,9 +38,7 @@
  *       first, a card asking for one by itself being refused at load;
  *       stacks:<k>: a stack per period of the state, up to k
  *       (still:5:stacks:5); tick:<sec>:<action>:<n>: that small action while
- *       the state holds -- heal, mana, heal_both, repair; sp:<pct>: the aura
- *       carries a spell power read as a percentage of the player's current
- *       one.
+ *       the state holds -- heal, mana, heal_both, repair.
  *
  *   proc:<event>:<chance>:<icd>:<action>[:<params>]
  *       On the event, with that chance (percent) and no more often than the
@@ -60,7 +58,7 @@
  *       COMBAT: the count runs while the player fights no one and the line fires
  *       once it is full; entering combat sets it to zero AND re-arms the line,
  *       so a single peace gives the boon but once),
- *       levelup, resurrect, zone, quest, hourly,
+ *       levelup, resurrect, zone, quest,
  *       ally_low:<yards>:<pct> (AN ALLY WITHIN REACH IS IN DANGER: a friendly
  *       unit -- a companion, a pet, anyone the player would not strike -- stands
  *       under that share of his health within that many yards. The count is
@@ -69,9 +67,7 @@
  *       death_near:<yards> (a creature dies within that many yards, whoever
  *       killed it -- the core tells only the killer, the module finds the
  *       witnesses), enter_instance (the player steps into a dungeon or a raid),
- *       spell_cast_tp (he casts something that carries him away -- a hearth, a
- *       teleport; a portal another opened is not his cast), dmg_taken_back (a
- *       blow from behind), tick:<sec> (in combat), every:<sec>, hp_below:<pct> (when crossed),
+ *       dmg_taken_back (a blow from behind), tick:<sec> (in combat), every:<sec>, hp_below:<pct> (when crossed),
  *       mana_below:<pct>, wand (a wand shot lands -- a second shot a card
  *       granted included, except for the line that granted it), vendor_buy
  *       (something bought from a vendor), repair (a repair about to be paid),
@@ -147,8 +143,7 @@
  *       follows the MASTER'S level), shield_self:<pct of max health>:<sec> (15 seconds when
  *       the figure is 0), shield_target:<pct of the amount>:<sec>,
  *       shield_ally:<pct of his max>:<yards>:<sec> (the most injured member),
- *       shield_group:<pct>:<yards>:<sec>, reflect:<pct of the damage>
- *       (physical, on the striker), copper_per_damage:<copper a point>,
+ *       shield_group:<pct>:<yards>:<sec>, copper_per_damage:<copper a point>,
  *       splash:<pct of the amount>:<yards> (around the victim),
  *       cleave:<pct>:<yards> (before the player alone),
  *       explode:<pct of the victim's max health>:<yards> (never on a boss),
@@ -217,12 +212,6 @@
  *       The damage the player deals is changed by pct when the target meets
  *       the condition: stunned, alone, hp_above:<pct>, hp_below:<pct>, full_hp,
  *       humanoid, range_over:<yards>, slowed, burning.
- *
- *   critfull:<sec>
- *       THE FIRST BLOW ON AN UNTOUCHED FOE NEVER FAILS ITS CRIT: while the
- *       victim stands at FULL HEALTH, the player's swing is made a critical --
- *       no more often than that many seconds, which is what makes it the FIRST
- *       blow and not every blow.
  *
  *   wandmod:<chance>:<pct>[:hp_below:<n>]
  *       What a WAND SHOT deals -- a granted second shot included -- changed by
@@ -309,13 +298,6 @@
  *       update, given by the level's own spell so that the player SEES it; the
  *       figure the client shows before the cast does not move.
  *
- *   slowworse:<pct>
- *       THE SNARES BITE DEEPER. Every slowing aura laid ON THE PLAYER, whoever
- *       laid it, sees what it takes from his speed raised by that much -- a
- *       half taken becomes three quarters at 50. The aura's own duration is not
- *       touched: a card that wants the snares to last longer says so with the
- *       core's own mechanic, an automatic aura of the generator.
- *
  *   fever:<share>:<worsened share>:<four spells>:<spell of the level that
  *         worsens>:<spell of the level that quickens>
  *       THE FEVER, A LEVEL THE OTHERS CHANGE. While the player is IN COMBAT he
@@ -383,11 +365,6 @@
  *       waterlogged crate on the old world, the curious crate in Outland, the
  *       reinforced crate in Northrend. pearl: a pearl, chosen by the place in
  *       the same way.
- *
- *   lockpick:<value>
- *       The player is lent the LOCKPICKING skill at that value while the card
- *       is laid -- the core asks for the skill itself, not for an aura -- and
- *       a rogue is given his own back, untouched, when it goes.
  *
  *   hearthcd:<pct>
  *       The hearthstone comes back sooner: its cooldown is cut by that share
@@ -1094,11 +1071,7 @@ namespace
                     if (SmallKind(_tickAction) && r.Int(1, 100000, _tickN))
                         continue;
                 }
-                // sp:<pct> -- the aura's figure is a percentage of the spell
-                // power the player has, recomputed while the state holds.
-                if (word == "sp" && r.Int(1, 1000, _spPct))
-                    continue;
-                error = "after the state, only stacks:<k>, tick:<sec>:<action>:<n> or sp:<pct> may follow";
+                error = "after the state, only stacks:<k> or tick:<sec>:<action>:<n> may follow";
                 return false;
             }
             return true;
@@ -1237,26 +1210,6 @@ namespace
             if (!Holds(player))
             {
                 RemoveOwned(player, _spellId);
-                _applied = 0;
-                return;
-            }
-            if (_spPct)
-            {
-                // A figure read from the player's own spell power: the aura is
-                // cast again whenever that figure moves.
-                int32 const current = std::max(0, player->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC)) - _applied;
-                int32 const bonus = int32(std::llround(double(current) * _spPct / 100.0));
-                if (bonus != _applied || !player->HasAura(_spellId))
-                {
-                    RemoveOwned(player, _spellId);
-                    _applied = bonus;
-                    // The aura is there while the state holds, even at nothing:
-                    // a character with no spell power still sees the condition
-                    // met. The figure passed is one short, the spell's die side
-                    // adding the last point (as the generator writes them).
-                    int32 const bp = bonus - 1;
-                    player->CastCustomSpell(player, _spellId, &bp, &bp, nullptr, true);
-                }
                 return;
             }
             ApplyOwned(player, _spellId);
@@ -1272,7 +1225,7 @@ namespace
             }
         }
         std::string _state, _and, _tickAction;
-        int32 _n = 0, _m = 0, _stacks = 1, _tickEvery = 0, _tickN = 0, _spPct = 0, _applied = 0;
+        int32 _n = 0, _m = 0, _stacks = 1, _tickEvery = 0, _tickN = 0;
         uint32 _ticked = 0;
         uint32 _stillSince = 0;
         float _x = 0, _y = 0;
@@ -1289,12 +1242,12 @@ namespace
             Reader r(params);
             _event = r.Word();
             static char const* const plain[] = { "kill", "kill_boss", "kill_elite", "kill_humanoid", "hit", "hit_weapon", "hit_melee",
-                                                 "enter_instance", "spell_cast_tp", "dmg_taken_back",
+                                                 "enter_instance", "dmg_taken_back",
                                                  "hit_spell", "hit_ranged", "dmg_taken", "dmg_taken_phys", "dmg_taken_magic", "spell_cast",
                                                  "spell_cast_dmg", "spell_cast_heal", "spell_cast_timed",
                                                  "spell_crit_fire", "wand",
                                                  "heal", "heal_ally", "enter_combat", "leave_combat", "levelup", "resurrect",
-                                                 "zone", "quest", "hourly", "loot_gold", "vendor_buy", "repair",
+                                                 "zone", "quest", "loot_gold", "vendor_buy", "repair",
                                                  "flight_end", "loot_creature", "vendor_sell",
                                                  "jump", "jump_combat", "death", "pet_hit",
                                                  "crit", "spell_crit", "heal_crit", "dodge", "parry", "block", "crit_taken", "miss",
@@ -1370,7 +1323,7 @@ namespace
             else if (A == "aura_group")
                 ok = r.Int(1, 86400, _a) && r.Int(1, 100, _b);
             else if (A == "heal" || A == "mana" || A == "heal_both" || A == "leech" || A == "mirror"
-                     || A == "reflect" || A == "copper_per_damage"
+                     || A == "copper_per_damage"
                      || A == "free_next" || A == "cooldowns" || A == "reset_cooldowns" || A == "repair" || A == "gold_mult"
                      || A == "immune_snare" || A == "root" || A == "stun" || A == "disorient" || A == "fear" || A == "sleep"
                      || A == "silence" || A == "knockback")
@@ -1702,10 +1655,6 @@ namespace
                     Fire(player, player->GetVictim(), 0);
                 _wasBelow = below;
             }
-            else if (_event == "hourly")
-            {
-                if (++_elapsed >= 3600) { _elapsed = 0; Fire(player, nullptr, 0); }
-            }
             // The end of a flight: the core tells no one when a taxi sets its
             // passenger down, so the card watches -- once a second is enough
             // for something that lasts minutes.
@@ -1885,11 +1834,6 @@ namespace
             // spell_cast_id:<sort> : CE sort-la, nomme par son identifiant.
             if (_event == "spell_cast_id")
                 fires = int32(info->Id) == _eventN;
-            // UN SORT QUI EMPORTE : la pierre de foyer, un rappel, un voyage.
-            // Un portail ouvert par un autre n'est pas un lancement du joueur
-            // et ne passe donc pas par ici.
-            else if (_event == "spell_cast_tp")
-                fires = info->HasEffect(SPELL_EFFECT_TELEPORT_UNITS);
             if (_event == "spell_cast_school")
                 fires = (info->GetSchoolMask() & uint32(_eventN)) != 0;
             else if (_event == "spell_cast_dmg")
@@ -2420,7 +2364,6 @@ namespace
                     }
                 }
             }
-            else if (A == "reflect") Hurt(player, other, PctOf(amount, _a), 1, _spellId);
             else if (A == "extra")
                 Hurt(player, other, PctOf(amount, _a),
                      uint32(_b ? _b : (_lastSchool ? _lastSchool : uint32(SPELL_SCHOOL_MASK_NORMAL))), _spellId);
@@ -2786,41 +2729,6 @@ namespace
     private:
         int32 _chance = 100, _pct = 0, _hpBelow = 0;
     };
-
-    // =========================================================================
-    // critfull:<sec>
-    //     LE PREMIER COUP SUR UNE CIBLE INTACTE NE RATE PAS SON CRITIQUE. Tant
-    //     que la victime est A PLEINE VIE, le coup d'arme du joueur est rendu
-    //     critique -- pas plus souvent que ces secondes-la, et c'est ce delai
-    //     qui en fait le PREMIER coup et non tous les coups.
-    // =========================================================================
-    class CritFull : public StellarTarotScript
-    {
-    public:
-        bool Parse(std::vector<std::string> const& params, std::string& error) override
-        {
-            Reader r(params);
-            return (r.Int(1, 3600, _icd) && r.End())
-                || (error = "expects the seconds between two blows", false);
-        }
-
-        void OnMeleeRoll(Player* player, Unit* victim, int32& crit, int32& /*miss*/, int32& /*dodge*/,
-                         int32& /*parry*/, int32& /*block*/) override
-        {
-            if (!player || !victim || victim->GetHealth() < victim->GetMaxHealth())
-                return;
-            uint32 const now = uint32(GameTime::GetGameTime().count());
-            if (_last && now - _last < uint32(_icd))
-                return;
-            _last = now;
-            crit = 10000;               // les chances se comptent en centiemes de pour cent
-        }
-
-    private:
-        int32 _icd = 0;
-        uint32 _last = 0;
-    };
-
     // =========================================================================
     // takenmod:<condition>:<pct>
     // =========================================================================
@@ -3743,47 +3651,6 @@ namespace
         uint32 _worse = 0, _faster = 0;
         int32 _pct = 0, _pctMore = 0;
     };
-
-    // =========================================================================
-    // slowworse:<pct>
-    //     LES RALENTISSEMENTS MORDENT DAVANTAGE. Toute aura qui ralentit le
-    //     joueur -- d'ou qu'elle vienne -- voit la part qu'elle lui prend
-    //     relevee d'autant : la moitie devient trois quarts a 50. La duree ne
-    //     bouge pas ici : une carte qui veut des ralentissements plus longs le
-    //     dit par la mecanique du coeur, une aura automatique du generateur.
-    // =========================================================================
-    class SlowWorse : public StellarTarotScript
-    {
-    public:
-        bool Parse(std::vector<std::string> const& params, std::string& error) override
-        {
-            Reader r(params);
-            return (r.Int(1, 1000, _pct) && r.End())
-                || (error = "expects the percentage", false);
-        }
-
-        void OnAuraTaken(Player* player, Aura* aura) override
-        {
-            if (!player || !aura)
-                return;
-            for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-            {
-                AuraEffect* const eff = aura->GetEffect(i);
-                if (!eff || eff->GetAuraType() != SPELL_AURA_MOD_DECREASE_SPEED)
-                    continue;
-                int32 const part = eff->GetAmount();
-                if (part >= 0)
-                    continue;               // ce qui hate n'est pas un ralentissement
-                int32 const pire = std::max(int32(std::llround(double(part) * (100 + _pct) / 100.0)), -100);
-                if (pire != part)
-                    eff->ChangeAmount(pire);
-            }
-        }
-
-    private:
-        int32 _pct = 0;
-    };
-
     // L'objet qui a servi a lancer le sort, quand il y en a un : c'est par lui
     // qu'une fiole se reconnait, le sort seul ne disant pas d'ou il vient.
     ItemTemplate const* CastItemOf(Spell* spell)
@@ -4348,45 +4215,6 @@ namespace
         int32 _chance = 0;
         std::string _what;
     };
-
-    // =========================================================================
-    // lockpick:<valeur>
-    //     LES SERRURES CEDENT. Le coeur demande une COMPETENCE de crochetage
-    //     (Spell::CanOpenLock, LOCK_KEY_SKILL) : une aura n'y peut rien, il
-    //     faut que le joueur la possede. La carte la lui prete le temps qu'elle
-    //     est posee, et la lui reprend en s'en allant -- en rendant a un voleur
-    //     la sienne, telle qu'elle etait.
-    // =========================================================================
-    class LockPick : public StellarTarotScript
-    {
-    public:
-        bool Parse(std::vector<std::string> const& params, std::string& error) override
-        {
-            Reader r(params);
-            return (r.Int(1, 450, _value) && r.End())
-                || (error = "expects the skill value", false);
-        }
-        void Apply(Player* player) override
-        {
-            _had = player->HasSkill(SKILL_LOCKPICKING);
-            _was = _had ? player->GetPureSkillValue(SKILL_LOCKPICKING) : uint16(0);
-            _wasMax = _had ? player->GetPureMaxSkillValue(SKILL_LOCKPICKING) : uint16(0);
-            if (!_had || _was < uint16(_value))
-                player->SetSkill(SKILL_LOCKPICKING, 0, uint16(_value), uint16(_value));
-        }
-        void Remove(Player* player) override
-        {
-            if (_had)
-                player->SetSkill(SKILL_LOCKPICKING, 0, _was, _wasMax);
-            else
-                player->SetSkill(SKILL_LOCKPICKING, 0, 0, 0);
-        }
-    private:
-        int32 _value = 0;
-        uint16 _was = 0, _wasMax = 0;
-        bool _had = false;
-    };
-
     // =========================================================================
     // hearthcd:<pct>
     //     La PIERRE DE FOYER revient plus vite : sa recharge est ecourtee de
@@ -4717,7 +4545,6 @@ void StellarTarotScripts::RegisterEngine()
     Register("dmgmod", [] { return std::make_unique<DmgMod>(); });
     Register("wandmod", [] { return std::make_unique<WandMod>(); });
     Register("takenmod", [] { return std::make_unique<TakenMod>(); });
-    Register("critfull", [] { return std::make_unique<CritFull>(); });
     Register("sp_pct", [] { return std::make_unique<SpellPowerPct>(); });
     Register("schoolsp", [] { return std::make_unique<SchoolSpellPower>(); });
     Register("seal", [] { return std::make_unique<Seal>(); });
@@ -4727,7 +4554,6 @@ void StellarTarotScripts::RegisterEngine()
     Register("costmod", [] { return std::make_unique<CostMod>(); });
     Register("drink", [] { return std::make_unique<Drink>(); });
     Register("fever", [] { return std::make_unique<Fever>(); });
-    Register("slowworse", [] { return std::make_unique<SlowWorse>(); });
     Register("potion", [] { return std::make_unique<PotionPower>(); });
     Register("potion_keep", [] { return std::make_unique<PotionKeep>(); });
     Register("elixirlong", [] { return std::make_unique<ElixirLong>(); });
@@ -4737,7 +4563,6 @@ void StellarTarotScripts::RegisterEngine()
     Register("ratingpct", [] { return std::make_unique<RatingPct>(); });
     Register("shoutlong", [] { return std::make_unique<ShoutLong>(); });
     Register("hearthcd", [] { return std::make_unique<HearthCooldown>(); });
-    Register("lockpick", [] { return std::make_unique<LockPick>(); });
     Register("chest_extra", [] { return std::make_unique<ChestExtra>(); });
     Register("prospect", [] { return std::make_unique<Prospect>(); });
     Register("fish", [] { return std::make_unique<Fish>(); });

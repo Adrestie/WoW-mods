@@ -16,18 +16,13 @@
  */
 
 /*
- * mod-stellar-tarot — the registry of scripts, and two examples.
+ * mod-stellar-tarot — the registry of scripts.
  *
- *   gold_on_kill:<copper>    every creature killed yields that much money
- *   heal_on_kill:<percent>   every creature killed heals that share of health
- *
- * The families of the engine are registered from StellarTarotEngine.cpp.
+ * Every family lives in StellarTarotEngine.cpp and is registered from there;
+ * this file holds the registry itself and nothing else.
  */
 
 #include "StellarTarotScript.h"
-#include "Creature.h"
-#include "Player.h"
-#include <cstdlib>
 #include <map>
 
 namespace
@@ -38,58 +33,6 @@ namespace
         return registry;
     }
 
-    // One whole number, and nothing else.
-    bool OneNumber(std::vector<std::string> const& params, char const* what, uint32 low, uint32 high,
-                   uint32& out, std::string& error)
-    {
-        if (params.size() != 1 || params[0].empty() || params[0].find_first_not_of("0123456789") != std::string::npos)
-        {
-            error = std::string("expects one whole number, the ") + what;
-            return false;
-        }
-        unsigned long const value = std::strtoul(params[0].c_str(), nullptr, 10);
-        if (value < low || value > high)
-        {
-            error = std::string("the ") + what + " must be between " + std::to_string(low) + " and " + std::to_string(high);
-            return false;
-        }
-        out = uint32(value);
-        return true;
-    }
-
-    // -- gold_on_kill:<copper> ------------------------------------------------
-    class GoldOnKill : public StellarTarotScript
-    {
-    public:
-        bool Parse(std::vector<std::string> const& params, std::string& error) override
-        {
-            return OneNumber(params, "amount of copper", 1, 1000000000, _copper, error);
-        }
-        void OnCreatureKill(Player* player, Creature* /*killed*/) override
-        {
-            player->ModifyMoney(int32(_copper));
-        }
-    private:
-        uint32 _copper = 0;
-    };
-
-    // -- heal_on_kill:<percent> -----------------------------------------------
-    class HealOnKill : public StellarTarotScript
-    {
-    public:
-        bool Parse(std::vector<std::string> const& params, std::string& error) override
-        {
-            return OneNumber(params, "percentage of health", 1, 100, _percent, error);
-        }
-        void OnCreatureKill(Player* player, Creature* /*killed*/) override
-        {
-            if (!player->IsAlive())
-                return;
-            player->ModifyHealth(int32(uint64(player->GetMaxHealth()) * _percent / 100));
-        }
-    private:
-        uint32 _percent = 0;
-    };
 }
 
 void StellarTarotScripts::Register(std::string const& name, Factory factory)
@@ -135,7 +78,5 @@ void StellarTarotScripts::RegisterAll()
     if (done)
         return;
     done = true;
-    Register("gold_on_kill", [] { return std::make_unique<GoldOnKill>(); });
-    Register("heal_on_kill", [] { return std::make_unique<HealOnKill>(); });
     RegisterEngine();
 }
