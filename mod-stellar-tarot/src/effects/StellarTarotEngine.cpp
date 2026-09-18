@@ -38,7 +38,9 @@
  *       first, a card asking for one by itself being refused at load;
  *       stacks:<k>: a stack per period of the state, up to k
  *       (still:5:stacks:5); tick:<sec>:<action>:<n>: that small action while
- *       the state holds -- heal, mana, heal_both, repair.
+ *       the state holds -- heal, mana, heal_both, repair; rating:<pct>: the
+ *       aura carries that share of the COMBAT RATINGS the player wears, one
+ *       effect per rating the spell names, read again while the state holds.
  *
  *   proc:<event>:<chance>:<icd>:<action>[:<params>]
  *       On the event, with that chance (percent) and no more often than the
@@ -186,6 +188,10 @@
  *       the player beside the boon, with the same duration and the same stacks,
  *       but ranged among the debuffs and carrying its own words -- for a line
  *       whose drawback must be READ and not merely suffered),
+ *       rating:<pct> (the aura the action lays carries that share of the
+ *       COMBAT RATINGS the player wears -- haste, crit, hit, parry, dodge,
+ *       block, armour penetration, defence, expertise -- one effect per rating
+ *       the spell names, the aura's own share taken out first),
  *       sp:<pct> (the aura the action lays carries a SPELL POWER read as that
  *       percentage of the player's own at the moment it is laid -- the aura's
  *       own share taken out first, so that it never compounds; as with cond),
@@ -983,6 +989,64 @@ namespace
 
     // -- aura helpers ----------------------------------------------------------
 
+    // ================== UNE PART DES SCORES QUE LE JOUEUR PORTE ==================
+    //
+    // L'aura nomme un score par effet (MOD_RATING, son masque disant lequel) ;
+    // on y ecrit cette part de ce que le joueur porte deja. L'aura est retiree
+    // AVANT la lecture : sans cela elle compterait sa propre part.
+    int32 FirstRating(int32 mask)
+    {
+        for (int32 cr = 0; cr < MAX_COMBAT_RATING; ++cr)
+            if (mask & (1 << cr))
+                return cr;
+        return -1;
+    }
+
+    // Pose l'aura du niveau en y ecrivant, effet par effet, la part demandee
+    // des scores du joueur. Rend false si le sort ne nomme aucun score.
+    bool LayRatingShare(Player* player, uint32 spellId, std::vector<int32> const& parts, int32 seconds)
+    {
+        SpellInfo const* const info = sSpellMgr->GetSpellInfo(spellId);
+        if (!info || !player)
+            return false;
+        player->RemoveAurasDueToSpell(spellId);          // sa part ne compte pas
+        int32 bp[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
+        bool porte[MAX_SPELL_EFFECTS] = { false, false, false };
+        bool nomme = false;
+        size_t compte = 0;
+        for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (info->Effects[i].ApplyAuraName != SPELL_AURA_MOD_RATING)
+                continue;
+            int32 const cr = FirstRating(info->Effects[i].MiscValue);
+            if (cr < 0)
+                continue;
+            // UNE PART PAR SCORE NOMME, dans l'ordre ou le sort les nomme ;
+            // la derniere vaut pour ceux qui suivent.
+            int32 const part = parts.empty() ? 0
+                             : parts[std::min<size_t>(compte, parts.size() - 1)];
+            ++compte;
+            nomme = porte[i] = true;
+            int32 const own = std::max<int32>(0, int32(player->GetUInt32Value(
+                uint16(PLAYER_FIELD_COMBAT_RATING_1) + uint16(cr))));
+            // La face du de ajoute le dernier point, comme partout ailleurs.
+            bp[i] = int32(std::llround(double(own) * part / 100.0)) - 1;
+        }
+        if (!nomme)
+            return false;
+        // CE QUI N'EST PAS UN SCORE GARDE LE CHIFFRE DU DBC : on ne passe de
+        // valeur que pour les effets qu'on remplit.
+        player->CastCustomSpell(player, spellId, porte[0] ? &bp[0] : nullptr,
+                                porte[1] ? &bp[1] : nullptr, porte[2] ? &bp[2] : nullptr, true);
+        if (seconds)
+            if (Aura* laid = player->GetAura(spellId, player->GetGUID()))
+            {
+                laid->SetMaxDuration(seconds * 1000);
+                laid->SetDuration(seconds * 1000);
+            }
+        return true;
+    }
+
     void ApplyOwned(Player* player, uint32 spellId)
     {
         if (spellId && !player->HasAura(spellId))
@@ -1071,7 +1135,17 @@ namespace
                     if (SmallKind(_tickAction) && r.Int(1, 100000, _tickN))
                         continue;
                 }
-                error = "after the state, only stacks:<k> or tick:<sec>:<action>:<n> may follow";
+                // rating:<pct>[:<pct>...] -- une part par score nomme, relue
+                // tant que l'etat tient. Une part negative en retire.
+                if (word == "rating" && r.Int(-1000, 1000, _ratingPct))
+                {
+                    _ratingParts.push_back(_ratingPct);
+                    int32 autre = 0;
+                    while (r.OptInt(-1000, 1000, autre))
+                        _ratingParts.push_back(autre);
+                    continue;
+                }
+                error = "after the state, only stacks:<k>, tick:<sec>:<action>:<n> or rating:<pct> may follow";
                 return false;
             }
             return true;
@@ -1212,6 +1286,13 @@ namespace
                 RemoveOwned(player, _spellId);
                 return;
             }
+            // UNE PART DES SCORES : relue a chaque battement, l'aura etant
+            // reposee quand le chiffre bouge.
+            if (_ratingPct)
+            {
+                LayRatingShare(player, _spellId, _ratingParts, 0);
+                return;
+            }
             ApplyOwned(player, _spellId);
             if (_stacks > 1 && _n > 0)
             {
@@ -1225,7 +1306,8 @@ namespace
             }
         }
         std::string _state, _and, _tickAction;
-        int32 _n = 0, _m = 0, _stacks = 1, _tickEvery = 0, _tickN = 0;
+        int32 _n = 0, _m = 0, _stacks = 1, _tickEvery = 0, _tickN = 0, _ratingPct = 0;
+        std::vector<int32> _ratingParts;
         uint32 _ticked = 0;
         uint32 _stillSince = 0;
         float _x = 0, _y = 0;
@@ -1382,6 +1464,15 @@ namespace
                 // sorts lue sur celle du joueur, comme chez « cond ».
                 if (word == "sp" && r.Int(1, 1000, _spPct))
                     continue;
+                // rating:<pct>[:<pct>...] : une part par score nomme.
+                if (word == "rating" && r.Int(-1000, 1000, _ratingPct))
+                {
+                    _ratingParts.push_back(_ratingPct);
+                    int32 autre = 0;
+                    while (r.OptInt(-1000, 1000, autre))
+                        _ratingParts.push_back(autre);
+                    continue;
+                }
                 // say:<chaine> : la phrase que CETTE ligne dit, a la place de
                 // celle que son action dirait d'elle-meme.
                 if (word == "say" && r.Int(1, 999, _say))
@@ -2175,6 +2266,10 @@ namespace
                 // UNE PART DE LA PUISSANCE DES SORTS : l'aura porte le chiffre
                 // lu au moment ou elle se pose, la sienne retiree d'abord pour
                 // qu'elle ne se nourrisse pas d'elle-meme.
+                // UNE PART DES SCORES : meme chemin que la puissance des
+                // sorts, mais score par score.
+                if (_ratingPct && A == "aura" && LayRatingShare(player, _spellId, _ratingParts, _a))
+                    return;
                 if (_spPct && A == "aura")
                 {
                     RemoveOwned(player, _spellId);
@@ -2586,7 +2681,8 @@ namespace
         uint32 _lastMs = 0;
         int32 _wasTurning = 0;      // le sens tenu au dernier paquet : 1 gauche, -1 droite
         int32 _spinWay = 0;         // le sens que la carte demande, 0 : les deux
-        int32 _eventN = 0, _eventM = 0, _row = 0, _spPct = 0, _countSpell = 0, _signSpell = 0;
+        int32 _eventN = 0, _eventM = 0, _row = 0, _spPct = 0, _ratingPct = 0, _countSpell = 0, _signSpell = 0;
+        std::vector<int32> _ratingParts;
         int32 _debuffSpell = 0;
         uint32 _lastSpellId = 0, _mirrorSpell = 0, _mirrorAmount = 0;
         bool _peaceSpent = false;
@@ -3287,10 +3383,15 @@ namespace
         bool Parse(std::vector<std::string> const& params, std::string& error) override
         {
             Reader r(params);
-            if (!r.Int(1, 1000, _pct))
+            int32 part = 0;
+            if (!r.Int(-1000, 1000, part))
                 return (error = "expects the percentage", false);
+            _parts.push_back(part);
+            while (r.OptInt(-1000, 1000, part))
+                _parts.push_back(part);
             if (!r.End())
-                return (error = "expects nothing but the percentage", false);
+                return (error = "expects one percentage per rating and nothing more", false);
+            _pct = _parts[0];
             return true;
         }
         bool OwnsAura() const override { return true; }
@@ -3321,6 +3422,7 @@ namespace
                 return;
             bool const worn = player->HasAura(_spellId);
             bool change = !worn;
+            size_t compte = 0;
             int32 want[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
             for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             {
@@ -3333,7 +3435,10 @@ namespace
                 // avant d'en prendre la part, sinon le score s'enfle tout seul.
                 int32 const mine = worn ? _applied[i] : 0;
                 int32 const own = std::max(0, int32(player->GetUInt32Value(uint16(PLAYER_FIELD_COMBAT_RATING_1) + uint16(cr))) - mine);
-                want[i] = int32(std::llround(double(own) * _pct / 100.0));
+                // UNE PART PAR SCORE NOMME, dans l'ordre ou le sort les nomme.
+                int32 const part = _parts[std::min<size_t>(compte, _parts.size() - 1)];
+                ++compte;
+                want[i] = int32(std::llround(double(own) * part / 100.0));
                 if (want[i] != _applied[i])
                     change = true;
             }
@@ -3352,6 +3457,7 @@ namespace
             player->CastCustomSpell(player, _spellId, p[0], p[1], p[2], true);
         }
         int32 _pct = 0;
+        std::vector<int32> _parts;
         int32 _applied[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
     };
 
