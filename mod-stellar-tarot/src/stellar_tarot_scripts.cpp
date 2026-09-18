@@ -199,6 +199,21 @@ public:
     }
 };
 
+namespace
+{
+    // LE DERNIER TIC DE SOIN VU. Le coeur annonce le tic d'un soin par deux
+    // crochets consecutifs -- les tics, puis le soin -- avec les memes unites
+    // et le meme sort. Le premier pose ce jeton, le second le consomme : c'est
+    // a cela, et a cela seul, que le chemin periodique se reconnait de face du
+    // chemin direct, ou les deux unites sont nommees dans l'autre ordre.
+    struct TickMark
+    {
+        ObjectGuid healed, healer;
+        uint32 spell = 0;
+    };
+    TickMark gTickMark;
+}
+
 // Damage and healing, both ways: the hooks fire for every unit, the module
 // keeps what concerns a character with effects in force.
 class StellarTarotUnitScript : public UnitScript
@@ -251,28 +266,39 @@ public:
         StellarTarotEffects::OnAuraApply(unit, aura);
     }
 
-    // A tick of a periodic damage effect: the caster's cards may add to it.
+    // UN TIC D'EFFET PERIODIQUE : les cartes du LANCEUR peuvent y ajouter. Le
+    // coeur nomme ici la cible la premiere et le lanceur ensuite -- le module
+    // les remet dans son ordre a lui. Il appelle AUSSI ce crochet sur le tic
+    // d'un SOIN (HandlePeriodicHealAurasTick) : le sort dit lequel c'est.
     void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage, SpellInfo const* spellInfo) override
     {
-        StellarTarotEffects::OnPeriodicTick(attacker, target, damage, false, spellInfo ? spellInfo->Id : 0);
+        bool const soin = spellInfo && (spellInfo->HasAura(SPELL_AURA_PERIODIC_HEAL)
+                                        || spellInfo->HasAura(SPELL_AURA_OBS_MOD_HEALTH));
+        // Le jeton, pour le crochet du soin qui suit immediatement.
+        if (soin && target && attacker)
+            gTickMark = { target->GetGUID(), attacker->GetGUID(), spellInfo->Id };
+        StellarTarotEffects::OnPeriodicTick(attacker, target, damage, soin, spellInfo ? spellInfo->Id : 0);
     }
 
-    // Every heal passes here, periodic ticks included. CAREFUL: the core calls
-    // this with the CASTER first and the healed unit second, whatever the names
-    // of the parameters say (Unit::HealBySpell). Only a spell that heals over
-    // time is a tick.
-    void ModifyHealReceived(Unit* caster, Unit* healed, uint32& heal, SpellInfo const* spellInfo) override
+    // TOUT SOIN passe ici, tics compris -- mais pas dans le meme ordre :
+    //   soin direct    Unit::HealBySpell               (soigneur, soigne)
+    //   tic d'un soin  HandlePeriodicHealAurasTick     (soigne, soigneur)
+    // Le jeton pose juste avant par le crochet des tics tranche ; le tic
+    // lui-meme y a deja ete annonce, il ne l'est donc plus ici.
+    void ModifyHealReceived(Unit* premier, Unit* second, uint32& heal, SpellInfo const* spellInfo) override
     {
+        bool const tic = spellInfo && premier && second
+                      && spellInfo->Id == gTickMark.spell
+                      && premier->GetGUID() == gTickMark.healed
+                      && second->GetGUID() == gTickMark.healer;
+        gTickMark = {};                          // le jeton ne sert qu'une fois
         if (!spellInfo || !heal)
             return;
         // LE MONTANT DU SOIN, et non ce qu'il a rendu : une carte qui promet
         // « une part du montant » doit compter le sort tel qu'il est lancé. Le
         // crochet d'apres (OnHeal) ne connait que le gain -- nul des qu'une
         // cible manque peu de vie, ce qui faisait taire la ligne.
-        StellarTarotEffects::OnHeal(caster, healed, heal);
-        if (!spellInfo->HasAura(SPELL_AURA_PERIODIC_HEAL) && !spellInfo->HasAura(SPELL_AURA_OBS_MOD_HEALTH))
-            return;
-        StellarTarotEffects::OnPeriodicTick(caster, healed, heal, true, spellInfo->Id);
+        StellarTarotEffects::OnHeal(tic ? second : premier, tic ? premier : second, heal);
     }
     // Le soin une fois rendu : plus rien ne s'y accroche, les lignes comptant
     // desormais le MONTANT du sort, au crochet precedent.
