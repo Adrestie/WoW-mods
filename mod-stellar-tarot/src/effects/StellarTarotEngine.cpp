@@ -269,12 +269,6 @@
  *       damage, which a percentage of damage done never does. A negative
  *       percentage takes away.
  *
- *   withaura:<spell>[:<spell>...]
- *       THE REST OF THE AURA. A spell carries but three effects; when a line
- *       asks for more, the generator puts what is left over into companion
- *       spells and this family lays them beside the level's own aura, then
- *       takes them off with it.
- *
  *   secondpct:<pct>[:<spell>...]
  *       The SECONDARY statistics, in percent -- haste, crit, hit, attack power,
  *       spell power, block, parry. Eight auras are needed and a spell carries
@@ -3265,52 +3259,6 @@ namespace
         std::vector<Part> _parts;
         int32 _applied = 0;
     };
-
-    // =========================================================================
-    // secondpct:<pct>[:<sort>...]
-    //     LES STATISTIQUES SECONDAIRES, en pourcentage. Huit auras sont
-    //     necessaires -- la hate en demande deux, le toucher deux -- et un sort
-    //     n'en porte que trois : le niveau pose le sien et les sorts compagnons
-    //     que le generateur lui a fabriques. La puissance des sorts, qui n'a
-    //     aucune aura de pourcentage, est calculee ici comme le fait sp_pct.
-    // =========================================================================
-    // =========================================================================
-    // withaura:<sort>[:<sort>...]
-    //     LE RESTE DE L'AURA. Un sort ne porte que trois effets ; quand une
-    //     ligne en demande davantage, le generateur range le surplus dans des
-    //     sorts compagnons, muets, que cette famille pose avec l'aura du niveau
-    //     -- celle-ci restant a la charge du cadre -- et reprend avec elle.
-    // =========================================================================
-    class WithAura : public StellarTarotScript
-    {
-    public:
-        bool Parse(std::vector<std::string> const& params, std::string& error) override
-        {
-            Reader r(params);
-            while (!r.End())
-            {
-                int32 id = 0;
-                if (!r.Int(902000, 903999, id))
-                    return (error = "expects companion spells", false);
-                _more.push_back(uint32(id));
-            }
-            return !_more.empty() || (error = "expects at least one companion spell", false);
-        }
-        void Apply(Player* player) override
-        {
-            for (uint32 id : _more)
-                ApplyOwned(player, id);
-        }
-        void Remove(Player* player) override
-        {
-            for (uint32 id : _more)
-                RemoveOwned(player, id);
-        }
-
-    private:
-        std::vector<uint32> _more;
-    };
-
     class SecondaryPct : public StellarTarotScript
     {
     public:
@@ -4665,7 +4613,6 @@ void StellarTarotScripts::RegisterEngine()
     Register("elixirlong", [] { return std::make_unique<ElixirLong>(); });
     Register("statcond", [] { return std::make_unique<StateStat>(); });
     Register("secondpct", [] { return std::make_unique<SecondaryPct>(); });
-    Register("withaura", [] { return std::make_unique<WithAura>(); });
     Register("ratingpct", [] { return std::make_unique<RatingPct>(); });
     Register("shoutlong", [] { return std::make_unique<ShoutLong>(); });
     Register("hearthcd", [] { return std::make_unique<HearthCooldown>(); });
