@@ -10,11 +10,13 @@
 
 DELETE FROM `spell_linked_spell` WHERE ABS(`spell_trigger`) BETWEEN 902000 AND 903999;
 INSERT INTO `spell_linked_spell` (`spell_trigger`, `spell_effect`, `type`, `comment`) VALUES
-(903356, 903982, 2, 'The Paranoia level 1: the rest of the aura'),
-(903358, 903981, 2, 'The Paranoia level 3: the rest of the aura'),
-(903449, 903980, 2, 'The Hysteria level 2: the rest of the aura'),
-(903451, 903979, 2, 'The Hysteria level 4: the rest of the aura'),
-(903772, 903973, 2, 'The Oblivion level 1: the rest of the aura'),
-(903773, 903972, 2, 'The Oblivion level 2: the rest of the aura'),
-(903774, 903971, 2, 'The Oblivion level 3: the rest of the aura'),
-(903775, 903970, 2, 'The Oblivion level 4: the rest of the aura');
+(903213, 903983, 2, 'The Grin level 2: the rest of the aura'),
+(903239, 903982, 2, 'The Familiar level 4: the rest of the aura'),
+(903356, 903980, 2, 'The Paranoia level 1: the rest of the aura'),
+(903358, 903979, 2, 'The Paranoia level 3: the rest of the aura'),
+(903449, 903978, 2, 'The Hysteria level 2: the rest of the aura'),
+(903451, 903977, 2, 'The Hysteria level 4: the rest of the aura'),
+(903772, 903971, 2, 'The Oblivion level 1: the rest of the aura'),
+(903773, 903970, 2, 'The Oblivion level 2: the rest of the aura'),
+(903774, 903969, 2, 'The Oblivion level 3: the rest of the aura'),
+(903775, 903968, 2, 'The Oblivion level 4: the rest of the aura');
