@@ -188,6 +188,9 @@
  *       the player beside the boon, with the same duration and the same stacks,
  *       but ranged among the debuffs and carrying its own words -- for a line
  *       whose drawback must be READ and not merely suffered),
+ *       core:chance[:icd] (the CORE holds that part of the line: spell_proc
+ *       carries the chance and the cooldown, and the line stops drawing for
+ *       it),
  *       rating:<pct> (the aura the action lays carries that share of the
  *       COMBAT RATINGS the player wears -- haste, crit, hit, parry, dodge,
  *       block, armour penetration, defence, expertise -- one effect per rating
@@ -1464,6 +1467,21 @@ namespace
                 std::string const word = r.Word();
                 if (word == "trigger" && r.Int(int32(STELLAR_TAROT_TRIGGER_FIRST), int32(STELLAR_TAROT_TRIGGER_LAST), _trigger))
                     continue;
+                // CE QUE LE COEUR TIENT : `core:chance`, `core:icd`. La ligne de
+                // `spell_proc` porte alors la chance et la recharge, et cette
+                // ligne-ci cesse de les tirer -- sans quoi le filtre serait
+                // applique deux fois.
+                if (word == "core")
+                {
+                    while (!r.End() && (r.Peek() == "chance" || r.Peek() == "icd"))
+                    {
+                        if (r.Word() == "chance")
+                            _coreChance = true;
+                        else
+                            _coreIcd = true;
+                    }
+                    continue;
+                }
                 // then:<chiffre>:<sec> -- CE QUI VIENT APRES : quand l'aura du
                 // niveau tombe, elle est reposee a cet autre chiffre, pour ce
                 // temps-la. Une suite, pas une boucle : ce qui revient, c'est
@@ -2260,9 +2278,12 @@ namespace
             // reglee se marcheraient dessus.
             if (_seqUntil && now < _seqUntil)
                 return false;
-            if (_icd && _last && now - _last < uint32(_icd))
+            // LA RECHARGE ET LE DE : seulement ce que le coeur ne tient pas.
+            // `spell_proc` porte l'autre moitie, et l'appliquer ici aussi
+            // reviendrait a filtrer deux fois.
+            if (!_coreIcd && _icd && _last && now - _last < uint32(_icd))
                 return false;
-            if (_chance < 100 && int32(urand(1, 100)) > _chance)
+            if (!_coreChance && _chance < 100 && int32(urand(1, 100)) > _chance)
                 return false;
             _last = now;
             return true;
@@ -2784,6 +2805,9 @@ namespace
         // Le nombre de cumuls que le bienfait porte apres ce declenchement :
         // ce que les revers « par cumul » multiplient.
         int32 _lastStacks = 1;
+        // CE QUE LE COEUR TIENT POUR CETTE LIGNE : le de, la recharge, ou les
+        // deux. La garniture `core:` le dit, le generateur l'ecrit.
+        bool _coreChance = false, _coreIcd = false;
         int32 _eventN = 0, _eventM = 0, _row = 0, _spPct = 0, _ratingPct = 0, _countSpell = 0, _signSpell = 0;
         std::vector<int32> _ratingParts;
         int32 _debuffSpell = 0;
