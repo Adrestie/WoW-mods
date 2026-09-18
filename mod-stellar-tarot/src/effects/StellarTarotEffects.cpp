@@ -287,6 +287,12 @@ void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage,
         Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell, school, spellId); });
     if (victim && victim->IsPlayer())
         Each(victim->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageTaken(victim->ToPlayer(), attacker, damage, spell, school, spellId); });
+    // LE COUP DU FAMILIER : le coeur ne parle que de la bete ; le module remonte
+    // jusqu'au maitre, dont les cartes peuvent y repondre.
+    if (attacker && !attacker->IsPlayer())
+        if (Unit* owner = attacker->GetOwner())
+            if (Player* master = owner->ToPlayer())
+                Each(master, [&](StellarTarotScript& s) { s.OnPetDamage(master, victim, damage); });
 }
 
 void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
@@ -399,6 +405,11 @@ void StellarTarotEffects::OnFishing(Player* player, Loot* loot, LootTemplate con
 void StellarTarotEffects::OnSpend(Player* player)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnSpend(player); });
+}
+
+void StellarTarotEffects::OnCreateItem(Player* player, Item* item, uint32 count)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnCreateItem(player, item, count); });
 }
 
 void StellarTarotEffects::OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags)

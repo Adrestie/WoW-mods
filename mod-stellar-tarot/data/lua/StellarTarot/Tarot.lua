@@ -183,6 +183,17 @@ local function Catalogue(locale)
         until not q:NextRow()
     end
 
+    -- LES SORTS DONT LE CLIENT CALCULE LES CHIFFRES LUI-MEME : leur texte porte
+    -- un $s, et le client multiplie deja ce chiffre par les cumuls. L'addon ne
+    -- doit donc pas le multiplier une seconde fois.
+    cat.scaled = {}
+    q = WorldDBQuery("SELECT Id FROM spell_dbc WHERE Id BETWEEN 903000 AND 903999 "
+                     .. "AND (AuraDescription_Lang_enUS LIKE '%$s%' OR AuraDescription_Lang_koKR LIKE '%$s%')")
+    if q then
+        repeat
+            cat.scaled[#cat.scaled + 1] = q:GetUInt32(0)
+        until not q:NextRow()
+    end
     return cat
 end
 

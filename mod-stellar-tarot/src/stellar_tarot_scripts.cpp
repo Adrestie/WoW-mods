@@ -85,6 +85,7 @@ public:
             PLAYERHOOK_ANTICHEAT_CHECK_MOVEMENT_INFO,
             PLAYERHOOK_ON_GET_REPUTATION_PRICE_DISCOUNT,
             PLAYERHOOK_ON_MONEY_CHANGED,
+            PLAYERHOOK_ON_CREATE_ITEM,
             PLAYERHOOK_CAN_PLACE_AUCTION_BID,
             PLAYERHOOK_CAN_SELL_ITEM
         }) { }
@@ -164,6 +165,11 @@ public:
             StellarTarotEffects::OnSpend(player);
     }
     void OnPlayerMoneyChanged(Player* player, int32& amount) override { StellarTarotEffects::OnMoneyChanged(player, amount); }
+    // Un objet qui sort d'un sort de metier -- une barre fondue, par exemple.
+    void OnPlayerCreateItem(Player* player, Item* item, uint32 count) override
+    {
+        StellarTarotEffects::OnCreateItem(player, item, count);
+    }
     // LE SAUT. Le coeur n'a pas d'evenement de saut : il n'y a que ce crochet
     // d'anti-triche, appele sur l'opcode MSG_MOVE_JUMP et sur lui seul. On
     // regarde passer, on laisse toujours faire.
@@ -265,14 +271,18 @@ public:
     {
         if (!spellInfo || !heal)
             return;
+        // LE MONTANT DU SOIN, et non ce qu'il a rendu : une carte qui promet
+        // « une part du montant » doit compter le sort tel qu'il est lancé. Le
+        // crochet d'apres (OnHeal) ne connait que le gain -- nul des qu'une
+        // cible manque peu de vie, ce qui faisait taire la ligne.
+        StellarTarotEffects::OnHeal(caster, healed, heal);
         if (!spellInfo->HasAura(SPELL_AURA_PERIODIC_HEAL) && !spellInfo->HasAura(SPELL_AURA_OBS_MOD_HEALTH))
             return;
         StellarTarotEffects::OnPeriodicTick(caster, healed, heal, true, spellInfo->Id);
     }
-    void OnHeal(Unit* healer, Unit* receiver, uint32& gain) override
-    {
-        StellarTarotEffects::OnHeal(healer, receiver, gain);
-    }
+    // Le soin une fois rendu : plus rien ne s'y accroche, les lignes comptant
+    // desormais le MONTANT du sort, au crochet precedent.
+    void OnHeal(Unit* /*healer*/, Unit* /*receiver*/, uint32& /*gain*/) override { }
 };
 
 // Cards and boards into the loot. The hook fires on EVERY loot the server

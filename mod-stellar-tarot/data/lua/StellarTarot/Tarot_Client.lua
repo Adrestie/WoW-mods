@@ -2080,6 +2080,7 @@ end
 local function Take(catalogue, binder, layout)
     S.cat = catalogue
     PROC_SPELLS = nil
+    SCALED_NAMES = nil
     -- The players' numbers: 1 onwards, in the order the server lists the
     -- cards (by catalogue number).
     for i, card in ipairs(S.cat.cards) do card.no = i end
@@ -2561,6 +2562,18 @@ function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
             tip:Show()
         end
         return
+    end
+    -- Le client multiplie deja par les cumuls le chiffre d'un texte en $s :
+    -- l'addon n'y touche pas, sous peine de compter deux fois.
+    if S.cat and S.cat.scaled then
+        if not SCALED_NAMES then
+            SCALED_NAMES = {}
+            for _, id in ipairs(S.cat.scaled) do
+                local n = GetSpellInfo(id)
+                if n then SCALED_NAMES[n] = true end
+            end
+        end
+        if SCALED_NAMES[name] then return end
     end
     if name ~= GetSpellInfo(BANNER_SPELL) then
         -- Les auras du module qui ne sont pas un niveau de carte -- le revers

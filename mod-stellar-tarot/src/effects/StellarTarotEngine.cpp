@@ -61,6 +61,11 @@
  *       once it is full; entering combat sets it to zero AND re-arms the line,
  *       so a single peace gives the boon but once),
  *       levelup, resurrect, zone, quest, hourly,
+ *       ally_low:<yards>:<pct> (AN ALLY WITHIN REACH IS IN DANGER: a friendly
+ *       unit -- a companion, a pet, anyone the player would not strike -- stands
+ *       under that share of his health within that many yards. The count is
+ *       taken every second, and the line's own cooldown says how often the
+ *       sentinel may answer),
  *       death_near:<yards> (a creature dies within that many yards, whoever
  *       killed it -- the core tells only the killer, the module finds the
  *       witnesses), enter_instance (the player steps into a dungeon or a raid),
@@ -74,7 +79,11 @@
  *       the core announcing nothing), loot_creature (a creature's loot is being
  *       filled -- what a card adds goes in the corpse, not in the bags),
  *       vendor_sell (something sold to a vendor: the sum follows), loot_gold
- *       (coin taken from a corpse or a chest), jump (a jump, wherever and
+ *       hit_ranged (a blow of a RANGED weapon -- a shot, whatever spell carries
+ *       it: the core sorts a spell by its damage class, and that class says
+ *       ranged),
+ *       (coin taken from a corpse or a chest), pet_hit (THE PET LANDS A BLOW --
+ *       the master's own cards answer for it), jump (a jump, wherever and
  *       whenever), jump_combat (a jump in combat and nowhere else),
  *       death (the player's own death), dismount:<sec> (the player gets off his
  *       mount after riding at least that long; the count is kept second by
@@ -110,7 +119,11 @@
  *       for that long and falls on the nearest of its own -- a faction, not a
  *       charm: the player is given no hold over it; nothing happens when it
  *       stands alone), root:<sec>, stun:<sec>, bleed:<sec>:<pct of attack power per tick> (the
- *       other unit of a hit or kill event), mana_pm:<thousandths of max mana>,
+ *       other unit of a hit or kill event),
+ *       bleed_hit:<sec>:<pct of the blow a tick>:<spell> (THE SAME WOUND, but
+ *       measured on the blow that opened it, and wearing the spell named at the
+ *       end -- whose tooltip says the share),
+ *       mana_pm:<thousandths of max mana>,
  *       extra_shot (a second shot of the wand -- the module's own copy of Shoot,
  *       three times as fast, set apart by its identifier so that a granted shot
  *       never grants another), extra_copy (one more of what was just bought,
@@ -128,7 +141,10 @@
  *       range), heal_group:<pct of each one's max>:<yards>,
  *       heal_ally_amount:<pct of the amount>:<yards> (the most injured member,
  *       the one just healed left out), heal_pet:<pct of the pet's max>:<pct of
- *       the player's>, shield_self:<pct of max health>:<sec> (15 seconds when
+ *       the player's>, leech_pet:<pct of the damage> (THE PET is healed by that
+ *       share of the blow), aura_pet:<sec>:<stacks> (the level's aura is laid ON
+ *       THE PET, the master being the caster -- so a figure written per level
+ *       follows the MASTER'S level), shield_self:<pct of max health>:<sec> (15 seconds when
  *       the figure is 0), shield_target:<pct of the amount>:<sec>,
  *       shield_ally:<pct of his max>:<yards>:<sec> (the most injured member),
  *       shield_group:<pct>:<yards>:<sec>, reflect:<pct of the damage>
@@ -141,6 +157,10 @@
  *       immune_snare:<sec> (on the player himself), knockback:<yards>,
  *       blink:<yards>:<0 backwards, 1 any way>, burn:<sec>:<pct of the blow a
  *       tick>, recast (the spell just cast goes off again),
+ *       mirror:<pct of the damage> (THE SPELL ITSELF GOES OFF AGAIN at once, on
+ *       the same victim -- its own images, its own school, its own log -- and
+ *       the blow it lands is brought back to that share of the first; the mirror
+ *       never mirrors itself),
  *       cooldowns:<sec> (every cooldown of the player shortened by that much),
  *       reset_cooldowns:<sec> (those with less than that left are cleared),
  *       resurrect:<pct of max health> (he rises where he fell),
@@ -198,6 +218,12 @@
  *       the condition: stunned, alone, hp_above:<pct>, hp_below:<pct>, full_hp,
  *       humanoid, range_over:<yards>, slowed, burning.
  *
+ *   critfull:<sec>
+ *       THE FIRST BLOW ON AN UNTOUCHED FOE NEVER FAILS ITS CRIT: while the
+ *       victim stands at FULL HEALTH, the player's swing is made a critical --
+ *       no more often than that many seconds, which is what makes it the FIRST
+ *       blow and not every blow.
+ *
  *   wandmod:<chance>:<pct>[:hp_below:<n>]
  *       What a WAND SHOT deals -- a granted second shot included -- changed by
  *       pct with that chance, and only when the target is under that share of
@@ -206,7 +232,8 @@
  *   takenmod:<condition>:<pct>[:<school>]
  *       The damage the player takes is changed by pct: alone (one attacker),
  *       controlled (stunned, rooted, feared, confused), charmed (feared or
- *       charmed -- the mind taken from him, and nothing else).
+ *       charmed -- the mind taken from him, and nothing else), back (the blow
+ *       comes from BEHIND him, outside the half-circle he faces).
  *
  *   convoy:<sec>:<stacks>:<yards>
  *       THE COLUMN ON THE MARCH. While the bearer RIDES AND MOVES, the level's
@@ -336,6 +363,17 @@
  *       A chest gives more: its own table is drawn n times over, as the loot
  *       is being composed. The card chooses nothing -- the chest does.
  *
+ *   ore:<chance>:<what>
+ *       WHAT THE STONE GIVES UP, with that chance. double: the ore a MINING VEIN
+ *       has just given is laid in double -- the same ore, twice over, whatever
+ *       the vein gave; what is no ore is left alone, and a chest is no vein --
+ *       the lock is read, and it must ask for the mining skill. bar: one more of
+ *       the bar a SMELTING is about to give. keep: the ore that same smelting
+ *       puts to the fire is put back in the bags as it goes, so the stack never
+ *       moves. A SMELTING IS KNOWN BY ITS TRADE -- a spell of the mining skill
+ *       that creates an item -- for a bar and an ore are of one kind to the
+ *       game, and only the trade tells them apart.
+ *
  *   fish:<chance>:<what>
  *       WHAT THE LINE BRINGS OUT OF THE WATER, as the fishing loot is being
  *       composed, with that chance. double: the catch is laid in double -- the
@@ -412,6 +450,7 @@
 #include "World.h"
 #include "CellImpl.h"
 #include "GridNotifiers.h"
+#include "GameObject.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Pet.h"
@@ -1251,13 +1290,13 @@ namespace
             _event = r.Word();
             static char const* const plain[] = { "kill", "kill_boss", "kill_elite", "kill_humanoid", "hit", "hit_weapon", "hit_melee",
                                                  "enter_instance", "spell_cast_tp", "dmg_taken_back",
-                                                 "hit_spell", "dmg_taken", "dmg_taken_phys", "dmg_taken_magic", "spell_cast",
+                                                 "hit_spell", "hit_ranged", "dmg_taken", "dmg_taken_phys", "dmg_taken_magic", "spell_cast",
                                                  "spell_cast_dmg", "spell_cast_heal", "spell_cast_timed",
                                                  "spell_crit_fire", "wand",
                                                  "heal", "heal_ally", "enter_combat", "leave_combat", "levelup", "resurrect",
                                                  "zone", "quest", "hourly", "loot_gold", "vendor_buy", "repair",
                                                  "flight_end", "loot_creature", "vendor_sell",
-                                                 "jump", "jump_combat", "death",
+                                                 "jump", "jump_combat", "death", "pet_hit",
                                                  "crit", "spell_crit", "heal_crit", "dodge", "parry", "block", "crit_taken", "miss",
                                                  "fever" };
             bool known = false;
@@ -1276,6 +1315,15 @@ namespace
                 // monte, a droite elle descend.
                 if (r.Peek() == "left" || r.Peek() == "right")
                     _spinWay = r.Word() == "left" ? 1 : -1;
+            }
+            if (_event == "ally_low")
+            {
+                known = true;
+                if (!r.Int(1, 100, _eventN) || !r.Int(1, 99, _eventM))
+                {
+                    error = "ally_low expects the yards then the share of health";
+                    return false;
+                }
             }
             if (_event == "spell_cast_row")
             {
@@ -1315,11 +1363,14 @@ namespace
                 ok = r.Int(1, 100, _a);
             else if (A == "mana_pm")
                 ok = r.Int(1, 1000, _a);
-            else if (A == "aura" || A == "aura_target")
+            else if (A == "leech_pet")
+                ok = r.Int(1, 100, _a);
+            else if (A == "aura" || A == "aura_target" || A == "aura_pet")
                 ok = r.Int(0, 86400, _a) && r.Int(1, 100, _b);
             else if (A == "aura_group")
                 ok = r.Int(1, 86400, _a) && r.Int(1, 100, _b);
-            else if (A == "heal" || A == "mana" || A == "heal_both" || A == "leech" || A == "reflect" || A == "copper_per_damage"
+            else if (A == "heal" || A == "mana" || A == "heal_both" || A == "leech" || A == "mirror"
+                     || A == "reflect" || A == "copper_per_damage"
                      || A == "free_next" || A == "cooldowns" || A == "reset_cooldowns" || A == "repair" || A == "gold_mult"
                      || A == "immune_snare" || A == "root" || A == "stun" || A == "disorient" || A == "fear" || A == "sleep"
                      || A == "silence" || A == "knockback")
@@ -1329,6 +1380,8 @@ namespace
             else if (A == "shield_self" || A == "shield_target" || A == "splash" || A == "cleave" || A == "explode"
                      || A == "heal_group" || A == "heal_ally_amount" || A == "heal_pet" || A == "bleed" || A == "blink")
                 ok = r.Int(1, 10000, _a) && r.Int(0, 10000, _b);
+            else if (A == "bleed_hit")
+                ok = r.Int(1, 3600, _a) && r.Int(1, 100, _b) && r.Int(902000, 903999, _c);
             else if (A == "turn" || A == "turn_ally")
                 ok = r.Int(1, 3600, _a) && (r.OptInt(1, 100, _b) || true);
             else if (A == "shield_ally" || A == "shield_group" || A == "damage_sp" || A == "damage_ap" || A == "extra"
@@ -1436,7 +1489,13 @@ namespace
             return _action == "next_crit" || _action == "next_sure" || _action == "next_instant"
                 || _action == "free_next" || _action == "cost_next";
         }
-        bool OwnsAura() const override { return _action == "aura" || _action == "aura_target" || _action == "aura_group" || State(); }
+        // `aura_pet` compris : l'aura va sur la BETE, jamais sur le joueur --
+        // sans cette declaration le cadre la posait aussi sur le maitre.
+        bool OwnsAura() const override
+        {
+            return _action == "aura" || _action == "aura_target" || _action == "aura_group"
+                || _action == "aura_pet" || State();
+        }
         void Apply(Player* player) override
         {
             _last = 0; _wasBelow = false; _elapsed = 0; _freeLeft = 0; _nextCrit = false; _nextSure = false;
@@ -1447,6 +1506,9 @@ namespace
         void Remove(Player* player) override
         {
             if (_action == "aura" || State()) RemoveOwned(player, _spellId);
+            if (_action == "aura_pet")
+                if (Pet* pet = player->GetPet())
+                    pet->RemoveAurasDueToSpell(_spellId, player->GetGUID());
             if (_debuffSpell) RemoveOwned(player, uint32(_debuffSpell));
             if (_countSpell) RemoveOwned(player, uint32(_countSpell));
             if (_signSpell) RemoveOwned(player, uint32(_signSpell));
@@ -1475,6 +1537,14 @@ namespace
                 return;
             if (gFeverSpells.count(spellId))
                 Fire(player, nullptr, 0);
+        }
+
+        // LE FAMILIER A FRAPPE : la ligne du maitre y repond, le coup lui etant
+        // rapporte tel quel -- de quoi en rendre une part.
+        void OnPetDamage(Player* player, Unit* victim, uint32& damage) override
+        {
+            if (_event == "pet_hit" && damage)
+                Fire(player, victim, damage);
         }
 
         void OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags) override
@@ -1561,6 +1631,25 @@ namespace
             else if (_event == "every")
             {
                 if (++_elapsed >= uint32(_eventN)) { _elapsed = 0; Fire(player, nullptr, 0); }
+            }
+            // UN ALLIE EN DANGER : on regarde alentour a chaque seconde. Le
+            // delai de la ligne fait le reste -- sans lui, la sentinelle
+            // repondrait a chaque battement tant que l'allie reste bas.
+            else if (_event == "ally_low")
+            {
+                std::list<Unit*> autour;
+                Acore::AnyFriendlyUnitInObjectRangeCheck check(player, player, float(_eventN));
+                Acore::UnitListSearcher<Acore::AnyFriendlyUnitInObjectRangeCheck> searcher(player, autour, check);
+                Cell::VisitObjects(player, searcher, float(_eventN));
+                for (Unit* ami : autour)
+                {
+                    if (!ami || ami == player || !ami->IsAlive())
+                        continue;
+                    if (ami->GetHealthPct() >= float(_eventM))
+                        continue;
+                    Fire(player, ami, 0);
+                    break;
+                }
             }
             // LE TEMPS DE PAIX : les secondes hors combat se comptent ici. Le
             // combat les efface et rearme la ligne ; une meme paix ne donne donc
@@ -1661,6 +1750,18 @@ namespace
         void OnDamageDealt(Player* player, Unit* victim, uint32& damage, bool spell, uint32 school,
                            uint32 spellId) override
         {
+            // LE COUP DU REFLET : il vaut la part promise de l'original, et il
+            // ne se reflete pas lui-meme.
+            if (_mirrorSpell && spellId == _mirrorSpell)
+            {
+                if (_mirrorAmount)
+                    damage = _mirrorAmount;
+                _mirrorSpell = 0;
+                _mirrorAmount = 0;
+                return;
+            }
+            if (spellId)
+                _lastSpellId = spellId;
             // L'ECOLE DU COUP : une ligne qui double les degats sans nommer
             // d'ecole doit rendre la meme monnaie -- du feu pour du feu.
             if (school)
@@ -1681,6 +1782,15 @@ namespace
                 Spend(player);
             if (_event == "hit" || (_event == "hit_melee" && !spell) || (_event == "hit_spell" && spell))
                 Fire(player, victim, damage);
+            // UN COUP DE TRAIT : le coeur range un sort par sa CLASSE DE DEGATS,
+            // et c'est elle qui dit le tir -- le trait ordinaire comme la fleche
+            // que porte un sort de chasseur.
+            else if (_event == "hit_ranged")
+            {
+                SpellInfo const* const info = Info(spellId);
+                if (info && info->DmgClass == SPELL_DAMAGE_CLASS_RANGED)
+                    Fire(player, victim, damage);
+            }
             // L'ARME ET LE GESTE, MAIS PAS LE SORT : une attaque automatique,
             // ou une competence dont la classe de degats est celle d'une arme
             // (melee ou distance). Un sort de magie ne compte pas.
@@ -2211,6 +2321,17 @@ namespace
                 player->SetPower(POWER_MANA, player->GetMaxPower(POWER_MANA));
             }
             else if (A == "leech") Heal(player, player, PctOf(amount, _a), _spellId);
+            // LE SORT SE RELANCE, pour une part de ce qu'il vient d'infliger :
+            // le sort lui-meme repart -- ses images, son ecole, son journal --
+            // et son coup sera ramene a cette part-la.
+            else if (A == "mirror")
+            {
+                if (!other || !_lastSpellId || !amount)
+                    return;
+                _mirrorSpell = _lastSpellId;
+                _mirrorAmount = std::max<uint32>(1, PctOf(amount, _a));
+                player->CastSpell(other, _lastSpellId, true);
+            }
             else if (A == "heal_group")
             {
                 for (Player* member : GroupAround(player, float(_b)))
@@ -2225,6 +2346,35 @@ namespace
                         pick = member;
                 if (pick)
                     Heal(player, pick, PctOf(amount, _a), _spellId);
+            }
+            // LE FAMILIER SOIGNE PAR LE COUP DE SON MAITRE : une part de ce
+            // qui vient d'etre inflige, jamais moins d'un point.
+            else if (A == "leech_pet")
+            {
+                Pet* pet = player->GetPet();
+                if (!pet || !pet->IsAlive() || !amount)
+                    return;
+                Heal(player, pet, std::max<uint32>(1, PctOf(amount, _a)), _spellId);
+                return;
+            }
+            // L'AURA POSEE SUR LE FAMILIER : le maitre la lance, donc un chiffre
+            // ecrit par niveau suit le niveau DU MAITRE.
+            else if (A == "aura_pet")
+            {
+                Pet* pet = player->GetPet();
+                if (!pet || !pet->IsAlive())
+                    return;
+                Aura* aura = pet->GetAura(_spellId, player->GetGUID());
+                if (!aura)
+                    aura = player->AddAura(_spellId, pet);
+                else if (_b > 1 && aura->GetStackAmount() < uint8(_b))
+                    aura->ModStackAmount(1);
+                if (aura && _a)
+                {
+                    aura->SetMaxDuration(_a * 1000);
+                    aura->SetDuration(_a * 1000);
+                }
+                return;
             }
             else if (A == "heal_pet")
             {
@@ -2382,6 +2532,15 @@ namespace
                 if (perTick > 0)
                     Put(player, other, STELLAR_TAROT_SPELL_BLEED, _a, &perTick);
             }
+            // LA PLAIE QUE LE COUP OUVRE : sa part se mesure sur le coup meme,
+            // et le sort nomme en dit le chiffre.
+            else if (A == "bleed_hit")
+            {
+                if (!other || !amount)
+                    return;
+                int32 const perTick = std::max<int32>(1, int32(PctOf(amount, _b)));
+                Put(player, other, uint32(_c), _a, &perTick);
+            }
             else if (A == "burn")
             {
                 // A share of the blow, spread over the ticks of two seconds.
@@ -2486,6 +2645,7 @@ namespace
         int32 _spinWay = 0;         // le sens que la carte demande, 0 : les deux
         int32 _eventN = 0, _eventM = 0, _row = 0, _spPct = 0, _countSpell = 0, _signSpell = 0;
         int32 _debuffSpell = 0;
+        uint32 _lastSpellId = 0, _mirrorSpell = 0, _mirrorAmount = 0;
         bool _peaceSpent = false;
         uint32 _idleSince = 0;
         int32 _chance = 100, _icd = 0, _a = 0, _b = 0, _c = 0, _trigger = 0, _costN = 0, _freeLeft = 0;
@@ -2628,6 +2788,40 @@ namespace
     };
 
     // =========================================================================
+    // critfull:<sec>
+    //     LE PREMIER COUP SUR UNE CIBLE INTACTE NE RATE PAS SON CRITIQUE. Tant
+    //     que la victime est A PLEINE VIE, le coup d'arme du joueur est rendu
+    //     critique -- pas plus souvent que ces secondes-la, et c'est ce delai
+    //     qui en fait le PREMIER coup et non tous les coups.
+    // =========================================================================
+    class CritFull : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 3600, _icd) && r.End())
+                || (error = "expects the seconds between two blows", false);
+        }
+
+        void OnMeleeRoll(Player* player, Unit* victim, int32& crit, int32& /*miss*/, int32& /*dodge*/,
+                         int32& /*parry*/, int32& /*block*/) override
+        {
+            if (!player || !victim || victim->GetHealth() < victim->GetMaxHealth())
+                return;
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            if (_last && now - _last < uint32(_icd))
+                return;
+            _last = now;
+            crit = 10000;               // les chances se comptent en centiemes de pour cent
+        }
+
+    private:
+        int32 _icd = 0;
+        uint32 _last = 0;
+    };
+
+    // =========================================================================
     // takenmod:<condition>:<pct>
     // =========================================================================
     class TakenMod : public StellarTarotScript
@@ -2637,20 +2831,24 @@ namespace
         {
             Reader r(params);
             _cond = r.Word();
-            if (_cond != "alone" && _cond != "controlled" && _cond != "charmed")
+            if (_cond != "alone" && _cond != "controlled" && _cond != "charmed" && _cond != "back")
             { error = "unknown condition \"" + _cond + "\""; return false; }
             if (!r.Int(-100, 1000, _pct))
                 return (error = "expects the percentage", false);
             r.OptInt(0, 127, _school);
             return r.End() || (error = "after the percentage, only the school may follow", false);
         }
-        void OnDamageTaken(Player* player, Unit* /*attacker*/, uint32& damage, bool /*spell*/, uint32 school,
+        void OnDamageTaken(Player* player, Unit* attacker, uint32& damage, bool /*spell*/, uint32 school,
                            uint32 /*spellId*/) override
         {
             if (_school && !(school & uint32(_school)))
                 return;
             bool meets = false;
             if (_cond == "alone") meets = player->getAttackers().size() <= 1;
+            // DANS LE DOS : le coup vient de derriere, hors du demi-cercle que
+            // le joueur a devant lui -- le meme compas que l'evenement
+            // `dmg_taken_back`.
+            if (_cond == "back") meets = attacker && !player->HasInArc(float(M_PI), attacker);
             if (_cond == "controlled") meets = player->HasUnitState(UNIT_STATE_STUNNED | UNIT_STATE_ROOT | UNIT_STATE_FLEEING | UNIT_STATE_CONFUSED);
             // La peur et le charme, et rien d'autre : l'esprit qu'on lui prend.
             if (_cond == "charmed") meets = player->HasUnitState(UNIT_STATE_FLEEING | UNIT_STATE_CHARMED);
@@ -3904,6 +4102,143 @@ namespace
     };
 
     // =========================================================================
+    // ore:<chance>:<quoi>
+    //     CE QUE LA PIERRE REND, avec cette chance :
+    //       double : le minerai qu'un FILON vient de donner est mis en double --
+    //                le meme minerai, deux fois. Un coffre n'est pas un filon :
+    //                la serrure est lue, et elle doit demander le minage.
+    //       bar    : une barre de plus, celle qui vient d'etre fondue.
+    //       keep   : le minerai que la fonte met au feu est remis dans les sacs
+    //                au moment ou elle part, et la pile ne bouge pas.
+    // =========================================================================
+    class Ore : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            _what = r.Word();
+            if (_what != "double" && _what != "bar" && _what != "keep")
+                return (error = "expects double, bar or keep", false);
+            return r.End() || (error = "nothing follows what the line gives", false);
+        }
+
+        // LE FILON : ce qu'il vient de donner, mis en double.
+        void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* /*tab*/,
+                          LootStore const* /*store*/) override
+        {
+            if (_what != "double" || !player || !loot || !IsVein(player, loot))
+                return;
+            bool aucun = true;
+            for (LootItem const& item : loot->items)
+                if (IsOre(item.itemid))
+                {
+                    aucun = false;
+                    break;
+                }
+            if (aucun || (_chance < 100 && int32(urand(1, 100)) > _chance))
+                return;
+            for (LootItem& item : loot->items)
+            {
+                if (!IsOre(item.itemid))
+                    continue;
+                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item.itemid);
+                uint32 const pile = proto && proto->GetMaxStackSize() ? proto->GetMaxStackSize() : 1;
+                item.count = uint8(std::min<uint32>(uint32(item.count) * 2, pile));
+            }
+        }
+
+        // LE MINERAI QUI NE PART PAS AU FEU : le coeur prendra les composants
+        // une fois le sort lance ; la carte les remet dans les sacs avant, et la
+        // pile ne bouge pas.
+        void OnSpellCast(Player* player, Spell* spell) override
+        {
+            if ((_what != "keep" && _what != "bar") || !player || !spell)
+                return;
+            SpellInfo const* const info = spell->GetSpellInfo();
+            if (!info || !Smelts(info))
+                return;
+            if (_chance < 100 && int32(urand(1, 100)) > _chance)
+                return;
+            // UNE BARRE DE PLUS : celle-la meme que la fonte va donner.
+            if (_what == "bar")
+            {
+                for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                {
+                    uint32 const entry = info->Effects[i].ItemType;
+                    if (info->Effects[i].Effect != SPELL_EFFECT_CREATE_ITEM || !entry)
+                        continue;
+                    ItemPosCountVec dest;
+                    if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, entry, 1) != EQUIP_ERR_OK)
+                        continue;
+                    if (Item* more = player->StoreNewItem(dest, entry, true))
+                        player->SendNewItem(more, 1, true, false);
+                    break;
+                }
+                return;
+            }
+            for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+            {
+                if (info->Reagent[i] <= 0 || !info->ReagentCount[i])
+                    continue;
+                uint32 const entry = uint32(info->Reagent[i]);
+                uint32 const combien = uint32(info->ReagentCount[i]);
+                ItemPosCountVec dest;
+                if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, entry, combien) != EQUIP_ERR_OK)
+                    continue;
+                if (Item* back = player->StoreNewItem(dest, entry, true))
+                    player->SendNewItem(back, combien, true, false);
+            }
+        }
+
+    private:
+        // Un minerai, une pierre, une barre : la meme famille d'objets.
+        static bool IsOreProto(ItemTemplate const* proto)
+        {
+            return proto && proto->Class == ITEM_CLASS_TRADE_GOODS
+                && proto->SubClass == ITEM_SUBCLASS_METAL_STONE;
+        }
+        static bool IsOre(uint32 entry)
+        {
+            return IsOreProto(sObjectMgr->GetItemTemplate(entry));
+        }
+        // UN FILON, ET NON UN COFFRE : la serrure de l'objet du decor demande la
+        // competence de minage.
+        static bool IsVein(Player* player, Loot const* loot)
+        {
+            GameObject const* const go = ObjectAccessor::GetGameObject(*player, loot->sourceWorldObjectGUID);
+            if (!go || !go->GetGOInfo())
+                return false;
+            LockEntry const* const lock = sLockStore.LookupEntry(go->GetGOInfo()->GetLockId());
+            if (!lock)
+                return false;
+            for (uint8 i = 0; i < MAX_LOCK_CASE; ++i)
+                if (lock->Type[i] == LOCK_KEY_SKILL && lock->Index[i] == LOCKTYPE_MINING)
+                    return true;
+            return false;
+        }
+        // UNE FONTE, et non une fabrication quelconque : le sort appartient au
+        // METIER DE MINAGE et cree un objet. Le metier tranche la ou la sorte de
+        // l'objet ne suffit pas -- une barre et un minerai sont du meme bois
+        // pour le jeu, seul le metier les separe.
+        static bool Smelts(SpellInfo const* info)
+        {
+            if (!info->HasEffect(SPELL_EFFECT_CREATE_ITEM))
+                return false;
+            SkillLineAbilityMapBounds const bounds = sSpellMgr->GetSkillLineAbilityMapBounds(info->Id);
+            for (auto it = bounds.first; it != bounds.second; ++it)
+                if (it->second->SkillLine == SKILL_MINING)
+                    return true;
+            return false;
+        }
+
+        int32 _chance = 0;
+        std::string _what;
+    };
+
+    // =========================================================================
     // fish:<chance>:<quoi>
     //     CE QUE LA LIGNE REMONTE DE L'EAU, au moment ou le butin de la peche
     //     se compose, avec cette chance :
@@ -4382,6 +4717,7 @@ void StellarTarotScripts::RegisterEngine()
     Register("dmgmod", [] { return std::make_unique<DmgMod>(); });
     Register("wandmod", [] { return std::make_unique<WandMod>(); });
     Register("takenmod", [] { return std::make_unique<TakenMod>(); });
+    Register("critfull", [] { return std::make_unique<CritFull>(); });
     Register("sp_pct", [] { return std::make_unique<SpellPowerPct>(); });
     Register("schoolsp", [] { return std::make_unique<SchoolSpellPower>(); });
     Register("seal", [] { return std::make_unique<Seal>(); });
@@ -4405,6 +4741,7 @@ void StellarTarotScripts::RegisterEngine()
     Register("chest_extra", [] { return std::make_unique<ChestExtra>(); });
     Register("prospect", [] { return std::make_unique<Prospect>(); });
     Register("fish", [] { return std::make_unique<Fish>(); });
+    Register("ore", [] { return std::make_unique<Ore>(); });
     Register("tickmod", [] { return std::make_unique<TickMod>(); });
     Register("dotlong", [] { return std::make_unique<DotLong>(); });
     Register("stunlong", [] { return std::make_unique<StunLong>(); });
