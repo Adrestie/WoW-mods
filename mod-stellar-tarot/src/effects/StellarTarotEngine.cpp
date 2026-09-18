@@ -1360,7 +1360,7 @@ namespace
                                                  "hit_spell", "hit_ranged", "dmg_taken", "dmg_taken_phys", "dmg_taken_magic", "spell_cast",
                                                  "spell_cast_dmg", "spell_cast_heal", "spell_cast_timed",
                                                  "spell_crit_fire", "wand",
-                                                 "heal", "heal_ally", "enter_combat", "leave_combat", "levelup", "resurrect",
+                                                 "heal", "heal_ally", "heal_full", "enter_combat", "leave_combat", "levelup", "resurrect",
                                                  "zone", "quest", "loot_gold", "vendor_buy", "repair",
                                                  "flight_end", "loot_creature", "vendor_sell",
                                                  "jump", "jump_combat", "death", "pet_hit",
@@ -1874,8 +1874,21 @@ namespace
             if (spell && (_nextCrit || _nextSure) && player->HasAura(_spellId)
                 && _armedAt != uint32(GameTime::GetGameTimeMS().count()))
                 Spend(player);
-            if (_event == "hit" || (_event == "hit_melee" && !spell) || (_event == "hit_spell" && spell))
+            if (_event == "hit" || (_event == "hit_spell" && spell))
                 Fire(player, victim, damage);
+            // LE CORPS A CORPS NOMME : l'attaque automatique et la competence
+            // dont la classe de degats est celle d'une arme de melee. Un sort
+            // ne compte pas -- c'est `hit_spell`, et `hit_weapon` vaut pour les
+            // deux armes a la fois.
+            else if (_event == "hit_melee")
+            {
+                bool melee = !spell;
+                if (spell)
+                    if (SpellInfo const* const info = Info(spellId))
+                        melee = info->DmgClass == SPELL_DAMAGE_CLASS_MELEE;
+                if (melee)
+                    Fire(player, victim, damage);
+            }
             // UN COUP DE TRAIT : le coeur range un sort par sa CLASSE DE DEGATS,
             // et c'est elle qui dit le tir -- le trait ordinaire comme la fleche
             // que porte un sort de chasseur.
@@ -1923,7 +1936,20 @@ namespace
         }
         void OnHealDone(Player* player, Unit* target, uint32& gain) override
         {
+            // LE SOIN QUI VIENT DE PARTIR, dans son propre souvenir : le
+            // marqueur du critique de soin arrive juste apres et ne sait rien
+            // de lui-meme -- ni sur qui le soin est alle, ni de combien. Le
+            // montant est celui du SORT, non ce qu'il a rendu : une cible a
+            // pleine vie donne donc un bouclier plein.
+            if (target)
+                _lastHealed = target->GetGUID();
+            _lastHealAmount = gain;
             if (_event == "heal" || (_event == "heal_ally" && target != player))
+                Fire(player, target, gain);
+            // A PLEINE VIE : l'allie n'a rien a recevoir du soin, et la carte
+            // lui donne autre chose. Le coeur appelle ce crochet AVANT que la
+            // vie ne monte : ce qu'on lit ici est bien l'etat d'avant.
+            else if (_event == "heal_full" && target && target != player && target->IsFullHealth())
                 Fire(player, target, gain);
         }
         // A spell the player casts himself -- or a MARKER the core's proc
@@ -1943,11 +1969,25 @@ namespace
                 SpellInfo const* const par = spell->GetTriggeredByAuraSpellInfo();
                 if (!par || int32(par->Id) != _trigger)
                     return;
-                // The marker comes right after the blow that fired it: the
-                // unit struck and the figure struck for are the ones the
-                // damage hook has just seen.
-                Unit* struck = _lastVictim ? ObjectAccessor::GetUnit(*player, _lastVictim) : nullptr;
-                Fire(player, struck ? struck : spell->m_targets.GetUnitTarget(), _lastAmount);
+                // LE MARQUEUR VIENT JUSTE APRES CE QUI L'A FAIT PARTIR, et il
+                // ne dit rien de lui-meme : sa cible implicite est le lanceur.
+                // Un marqueur de SOIN prend donc le soigne et le montant du
+                // soin ; tout autre prend l'unite frappee et le coup porte.
+                bool const duSoin = _event == "heal_crit";
+                uint32 const combien = duSoin ? _lastHealAmount : _lastAmount;
+                // LE COEUR A DEJA CHOISI L'UNITE : il lance le marqueur SUR
+                // elle -- le soigne, l'unite frappee, l'assaillant -- comme
+                // « Guerison ancestrale » du chaman pose sa reduction de degats
+                // sur la cible du soin critique. La cible du marqueur fait donc
+                // foi ; le souvenir du module n'est qu'un repli, pour le jour
+                // ou elle aurait disparu.
+                Unit* vise = spell->m_targets.GetUnitTarget();
+                if (!vise)
+                {
+                    ObjectGuid const qui = duSoin ? _lastHealed : _lastVictim;
+                    vise = qui ? ObjectAccessor::GetUnit(*player, qui) : nullptr;
+                }
+                Fire(player, vise, combien);
                 return;
             }
             if (spell->IsTriggered())
@@ -2760,6 +2800,10 @@ namespace
         bool _onlyNight = false, _onlyDark = false;
         ObjectGuid _lastVictim;
         uint32 _lastAmount = 0;
+        // LE SOIN A SON PROPRE SOUVENIR : le soigne et le montant du sort. Sans
+        // cela, le marqueur d'un critique de soin lisait celui d'un coup porte.
+        ObjectGuid _lastHealed;
+        uint32 _lastHealAmount = 0;
         uint32 _last = 0, _elapsed = 0, _armedAt = 0, _lastSchool = 0;
         bool _wasBelow = false, _nextCrit = false, _nextSure = false, _wasFlying = false, _selling = false;
         bool _wasMounted = false;
