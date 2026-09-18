@@ -491,7 +491,11 @@ void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
 
 void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId)
 {
-    if (OursSpell(spellId) || Held(caster, other))
+    // ICI, PAS DE GARDE SUR LE BLOC DU MODULE : une carte ECOUTE ses propres
+    // battements -- la fievre reconnait ses tics a leur sort, et `tickmod`
+    // amplifie ceux qu'une carte a poses. Seul le verrou de re-entrance vaut,
+    // celui que les aides levent le temps de leur ouvrage.
+    if (Held(caster, other))
         return;
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal, spellId); });
