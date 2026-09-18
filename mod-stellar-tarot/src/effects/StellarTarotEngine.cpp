@@ -1005,19 +1005,16 @@ namespace
         Cost(player, but.kind, but.n, but.n2, spellId, uint32(but.spell));
     }
 
-    // A periodic action under a state (Cond) or on a timer: what and how much.
-    void SmallAction(Player* player, std::string const& action, int32 n, uint32 spellId = 0)
+    // UN VERSEMENT SOUS CONDITION, a chaque battement. Les PV et le mana n'y
+    // passent plus : le COEUR les verse lui-meme, par une aura permanente que
+    // l'etat porte (auras 20 et 21, leur periode dans le sort). Ne reste que la
+    // durabilite, que l'effet 111 sait bien reparer mais en le journalisant,
+    // quand l'ecriture directe du module est muette.
+    void SmallAction(Player* player, std::string const& action, int32 n, uint32 /*spellId*/ = 0)
     {
-        if (action == "heal") Heal(player, player, PctOf(player->GetMaxHealth(), n), spellId);
-        else if (action == "mana") Energize(player, player, PctOf(player->GetMaxPower(POWER_MANA), n), spellId);
-        else if (action == "heal_both")
-        {
-            Heal(player, player, PctOf(player->GetMaxHealth(), n), spellId);
-            Energize(player, player, PctOf(player->GetMaxPower(POWER_MANA), n), spellId);
-        }
-        else if (action == "repair") Mend(player, uint32(n));
+        if (action == "repair") Mend(player, uint32(n));
     }
-    bool SmallKind(std::string const& a) { return a == "heal" || a == "mana" || a == "heal_both" || a == "repair"; }
+    bool SmallKind(std::string const& a) { return a == "repair"; }
 
     // -- aura helpers ----------------------------------------------------------
 
