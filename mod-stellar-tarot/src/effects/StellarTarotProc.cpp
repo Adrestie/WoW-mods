@@ -47,6 +47,7 @@
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "SpellAuraEffects.h"
+#include "SpellAuras.h"
 #include "SpellInfo.h"
 #include "SpellScript.h"
 #include "StellarTarotEffects.h"
@@ -76,6 +77,26 @@ class spell_stellar_tarot_line : public AuraScript
         StellarTarotEffects::OnProc(player, GetId(), autre, montant);
     }
 
+    // LE COEUR A DEPENSE UNE PROMESSE DE COUT OU D'INCANTATION. Celle-la
+    // n'est pas un proc : c'est `Player::RemoveSpellMods` qui laisse tomber sa
+    // charge a la fin du lancement, et l'aura part alors avec la raison
+    // AURA_REMOVE_BY_EXPIRE. L'echeance donne la meme raison ; ce qui les
+    // separe, c'est le temps qui restait -- une promesse depensee en a encore,
+    // une promesse echue n'en a plus. Une aura permanente n'echoit jamais :
+    // toute expiration y est une depense.
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        AuraApplication const* const pose = GetTargetApplication();
+        if (!pose || pose->GetRemoveMode() != AURA_REMOVE_BY_EXPIRE)
+            return;
+        Aura const* const aura = GetAura();
+        if (aura && !aura->IsPermanent() && aura->GetDuration() <= 0)
+            return;                                 // l'echeance, non la depense
+        Unit* const owner = GetUnitOwner();
+        if (Player* const player = owner ? owner->ToPlayer() : nullptr)
+            StellarTarotEffects::OnPromiseSpent(player, GetId());
+    }
+
     void Register() override
     {
         // LE CROCHET SE PREND SUR L'AURA, non sur un de ses effets : l'aura
@@ -84,6 +105,12 @@ class spell_stellar_tarot_line : public AuraScript
         // `OnEffectProc` aurait refuse de s'y lier. `OnProc` est appele pour
         // toute aura qui part, avant la boucle de ses effets.
         OnProc += AuraProcFn(spell_stellar_tarot_line::HandleProc);
+        // LE RETRAIT, pour les promesses que le coeur depense sans proc. Le
+        // type d'aura n'est pas connu d'avance -- factice sur une ligne, 108
+        // sur une promesse de cout, 290 ou 240 sur une promesse de coup --
+        // d'ou SPELL_AURA_ANY, que le coeur accepte (SpellScript.cpp:794).
+        AfterEffectRemove += AuraEffectRemoveFn(spell_stellar_tarot_line::HandleRemove, EFFECT_0,
+                                                SPELL_AURA_ANY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 

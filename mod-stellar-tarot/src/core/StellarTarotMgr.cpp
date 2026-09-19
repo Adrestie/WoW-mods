@@ -113,6 +113,18 @@ void StellarTarotMgr::Load()
     }
 
     // -- the tags ----------------------------------------------------------
+    // -- ce que le lieu donne, par age ---------------------------------------
+    _lootPools.clear();
+    if (QueryResult result = WorldDatabase.Query(
+        "SELECT pool, age, entry FROM mod_stellar_tarot_loot_pool ORDER BY pool, age, entry"))
+    {
+        do
+        {
+            Field* f = result->Fetch();
+            _lootPools[f[0].Get<std::string>()][f[1].Get<uint32>()].push_back(f[2].Get<uint32>());
+        } while (result->NextRow());
+    }
+
     if (QueryResult result = WorldDatabase.Query("SELECT tag_id, name FROM mod_stellar_tarot_tag"))
     {
         do
@@ -339,4 +351,19 @@ std::string StellarTarotMgr::BoardName(uint32 boardId) const
 {
     ItemTemplate const* item = sObjectMgr->GetItemTemplate(ItemForBoard(boardId));
     return item ? item->Name1 : std::string("?");
+}
+
+std::vector<uint32> const& StellarTarotMgr::LootPool(std::string const& pool, uint32 age) const
+{
+    static std::vector<uint32> const vide;
+    auto const it = _lootPools.find(pool);
+    if (it == _lootPools.end())
+        return vide;
+    auto const par_age = it->second.find(age);
+    if (par_age != it->second.end() && !par_age->second.empty())
+        return par_age->second;
+    // L'AGE SANS LISTE SE RABAT SUR LE VIEUX MONDE : une extension nouvelle
+    // donne ce que donnait la precedente, plutot que rien.
+    auto const vieux = it->second.find(0);
+    return vieux == it->second.end() ? vide : vieux->second;
 }

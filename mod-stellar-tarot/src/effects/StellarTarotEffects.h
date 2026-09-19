@@ -119,6 +119,9 @@ namespace StellarTarotEffects
     void OnUnitDied(Unit* died, Unit* killer);
     void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId);
     void OnAuraApply(Unit* target, Aura* aura);
+    // LE COEUR CALCULE LA DUREE D'UNE AURA : appele pour TOUTE aura du monde,
+    // donc rendu au plus vite quand elle ne vient pas d'un porteur de cartes.
+    void OnCalcDuration(Aura const* aura, int32& duration);
 
     [[nodiscard]] std::vector<StellarTarotActiveEffect> Active(Player* player);
 

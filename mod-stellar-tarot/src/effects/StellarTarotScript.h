@@ -112,6 +112,10 @@ public:
     // chance et la recharge de `spell_proc` l'ont laisse passer, et le coeur
     // donne l'unite et le montant. Rien a reconstituer.
     virtual void OnTriggerProc(Player* /*player*/, Unit* /*other*/, uint32 /*amount*/) { }
+    // LE COEUR CALCULE LA DUREE D'UNE AURA que le joueur pose, avant que
+    // cette aura n'existe (Aura::CalcMaxDuration -> OnCalcMaxDuration).
+    virtual void OnCalcAuraDuration(Player* /*player*/, Aura const* /*aura*/,
+                                    int32& /*duration*/) { }
     // LE COEUR A CONSOMME LA PROMESSE : le coup promis a porte, l'aura est
     // retiree, et le prix est du. Le module ne suppose plus rien.
     virtual void OnPromiseSpent(Player* /*player*/) { }
@@ -124,6 +128,17 @@ public:
     // Une creature vient de mourir pres du joueur, tuee par n'importe qui --
     // lui compris. La distance est a la charge du script.
     virtual void OnNearbyDeath(Player* /*player*/, Unit* /*died*/) { }
+    // LES CROCHETS QUE LE COEUR APPELLE BEAUCOUP : une ligne qui les veut le
+    // DIT. Sans cette declaration, le module partirait en recherche spatiale a
+    // chaque mort de creature du royaume, et suivrait chaque pas et chaque
+    // saut de chaque joueur, pour n'y trouver personne.
+    enum Guet : uint32
+    {
+        GUET_MORT_ALENTOUR = 0x1,   // une creature meurt pres du joueur
+        GUET_ROTATION      = 0x2,   // le joueur tourne sur place
+        GUET_SAUT          = 0x4,   // le joueur saute
+    };
+    [[nodiscard]] virtual uint32 Watches() const { return 0; }
     // Le joueur saute : le seul signal que le coeur donne d'un saut.
     virtual void OnJump(Player* /*player*/) { }
     virtual void OnResurrect(Player* /*player*/) { }

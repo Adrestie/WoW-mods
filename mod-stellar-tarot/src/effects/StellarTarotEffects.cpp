@@ -56,6 +56,41 @@ namespace
 
     uint32 Guid(Player* player) { return player->GetGUID().GetCounter(); }
 
+    // CE QUE LES PLATEAUX GUETTENT. Par personnage, et l'union pour le
+    // royaume. Relu du registre a chaque changement de plateau, de connexion
+    // ou de deconnexion -- jamais tenu a la main, donc jamais derive.
+    std::map<uint32, uint32>& Guets()
+    {
+        static std::map<uint32, uint32> guets;
+        return guets;
+    }
+
+    uint32 gGuetDuRoyaume = 0;
+
+    void RelireLesGuets()
+    {
+        gGuetDuRoyaume = 0;
+        Guets().clear();
+        for (auto const& [guid, scripts] : Everyone())
+        {
+            uint32 masque = 0;
+            for (Running const& r : scripts)
+                if (r.script)
+                    masque |= r.script->Watches();
+            if (masque)
+                Guets()[guid] = masque;
+            gGuetDuRoyaume |= masque;
+        }
+    }
+
+    uint32 GuetDe(Player* player)
+    {
+        if (!player)
+            return 0;
+        auto it = Guets().find(Guid(player));
+        return it == Guets().end() ? 0u : it->second;
+    }
+
     // Secondes ecoulees depuis le dernier verdict porte au journal, par
     // personnage : l'instrument ne parle que toutes les trente secondes.
     std::map<uint32, uint32>& Verdicts()
@@ -197,6 +232,7 @@ void StellarTarotEffects::Refresh(Player* player)
     // mesure. Les temoins se posent, les compteurs repartent de zero.
     if (sStellarTarotMgr->Checking())
         MesureCommence(player);
+    RelireLesGuets();
 }
 
 void StellarTarotEffects::OnLogin(Player* player)
@@ -231,6 +267,7 @@ void StellarTarotEffects::OnLogout(Player* player)
         if (r.script)
             r.script->Remove(player);
     Everyone().erase(it);
+    RelireLesGuets();
 }
 
 void StellarTarotEffects::RefreshEveryone()
@@ -735,6 +772,10 @@ void StellarTarotEffects::OnUnitDied(Unit* died, Unit* /*killer*/)
 {
     if (!died || !died->IsCreature())
         return;
+    // PERSONNE NE GUETTE : pas de recherche. C'est le cas ordinaire, et il
+    // vaut pour chaque mort de creature du royaume.
+    if (!(gGuetDuRoyaume & StellarTarotScript::GUET_MORT_ALENTOUR))
+        return;
     // On cherche autour du mort plutot que de parcourir tous les porteurs de
     // cartes du royaume : cent metres de garde-fou, la portee exacte restant
     // au script.
@@ -764,6 +805,10 @@ void StellarTarotEffects::OnSpend(Player* player)
 
 void StellarTarotEffects::OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags)
 {
+    // LE COEUR APPELLE CECI A CHAQUE PAQUET DE MOUVEMENT : sans plateau qui
+    // guette la rotation, le module n'a rien a y faire.
+    if (!(GuetDe(player) & StellarTarotScript::GUET_ROTATION))
+        return;
     Each(player, [&](StellarTarotScript& s) { s.OnFacing(player, x, y, orientation, moveFlags); });
 }
 
@@ -779,6 +824,8 @@ void StellarTarotEffects::OnMapChanged(Player* player)
 
 void StellarTarotEffects::OnJump(Player* player)
 {
+    if (!(GuetDe(player) & StellarTarotScript::GUET_SAUT))
+        return;
     Each(player, [&](StellarTarotScript& s) { s.OnJump(player); });
 }
 
@@ -793,6 +840,19 @@ void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
     Unit* const caster = aura->GetCaster();
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnAuraApplied(caster->ToPlayer(), target, aura); });
+}
+
+void StellarTarotEffects::OnCalcDuration(Aura const* aura, int32& duration)
+{
+    if (!aura || duration <= 0)
+        return;
+    Unit* const caster = aura->GetCaster();
+    if (!caster || !caster->IsPlayer())
+        return;
+    Each(caster->ToPlayer(), [&](StellarTarotScript& s)
+    {
+        s.OnCalcAuraDuration(caster->ToPlayer(), aura, duration);
+    });
 }
 
 void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId)

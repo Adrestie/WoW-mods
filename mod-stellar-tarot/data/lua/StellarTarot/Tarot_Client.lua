@@ -65,7 +65,7 @@ local L = {
     spell_unknown = FR and "sort n°%d" or "spell #%d",
     edges         = FR and "Bords : haut %d, droite %d, bas %d, gauche %d"
                        or "Edges: top %d, right %d, bottom %d, left %d",
-    level         = FR and "Niveau %d : %s" or "Level %d: %s",
+    level         = FR and "(%d) %s" or "(%d) %s",
     combo         = FR and "%d : %s" or "%d: %s",             -- a line of the card's box
     combos        = FR and "Paires :" or "Pairs:",
     size          = FR and "%d ligne(s) x %d colonne(s)" or "%d row(s) x %d column(s)",
@@ -289,6 +289,39 @@ end
 local SPELL_TEXT = {}
 
 -- Defined with the aura's tooltip, below; the hand uses them too.
+-- LES MOTS QUE L'ADDON LIT DANS LES PHRASES DES CARTES. Le texte arrive dans
+-- la LANGUE DU CLIENT : ces mots-la doivent donc exister dans les deux, sans
+-- quoi rien ne se reconnait -- ni la mesure par niveau, ni les termes a
+-- separer, ni la clause de nuit.
+local MOTS = FR and {
+    par_niveau = "niveau du joueur",
+    et         = "et",
+    mais       = "mais",
+    seuil      = " sous ",                       -- « -10% sous 60% PV »
+    nuit_seule = { ",%s*[Ll]a nuit uniquement",
+                   "^[Dd]e nuit uniquement%s*[,:]%s*",
+                   "^[Ll]a nuit uniquement%s*[,:]%s*",
+                   "^[Nn]uit uniquement%s*[,:]%s*" },
+    nuit_chiffre = { "%(([%-%+]?%d+)%%%s+de nuit%)",
+                     ",%s*([%-%+]?%d+)%%%s+la nuit" },
+    nuit_retrait = { "%s*%([%-%+]?%d+%%%s+de nuit%)",
+                     ",%s*[%-%+]?%d+%%%s+la nuit" },
+} or {
+    par_niveau = "per player level",
+    et         = "and",
+    mais       = "but",
+    seuil      = " under ",
+    nuit_seule = { ",%s*[Aa]t night only",
+                   "^[Aa]t night only%s*[,:]%s*",
+                   "^[Nn]ight only%s*[,:]%s*",
+                   -- « At night, ... » : la meme clause, dite plus court
+                   "^[Aa]t night%s*[,:]%s*" },
+    nuit_chiffre = { "%(([%-%+]?%d+)%%%s+at night%)",
+                     ",%s*([%-%+]?%d+)%%%s+at night" },
+    nuit_retrait = { "%s*%([%-%+]?%d+%%%s+at night%)",
+                     ",%s*[%-%+]?%d+%%%s+at night" },
+}
+
 local SplitCondition, Lower, ScaledBonus
 local PROC_SPELLS                -- buff name -> spell id of a proc, built from the catalogue
 
@@ -567,35 +600,75 @@ local PARCHMENT_INK_HEX = "2e1c0a"
 -- it -- never closer to the box's edge than the margin.
 local LEVELS_LIFT = 6                       -- pixels the block sits above the exact centre
 
-local function CentreLevels()
+-- LES LIGNES DE LA CARTE, une par FontString. C'est le seul moyen d'avoir une
+-- condition en gras, un effet indente dont le repli respecte son indentation,
+-- et un bloc serre a gauche et en haut : un texte d'un seul tenant n'a qu'une
+-- police, une marge et un centrage.
+local LIGNE_RETRAIT, LIGNE_AIR = 14, 4
+
+local function PoserLignes(entrees)
     local ui = S.ui
-    local box = ui.handLevelsBox
+    local box, child = ui.handLevelsBox, ui.handScrollChild
     if not box then return end
-    local text, child = ui.handLevels, ui.handScrollChild
-    -- The block is as wide as its widest LINE -- measured one by one with
-    -- the hidden twin: on a text of several lines the client only answers
-    -- for the first.
-    local widest, m = 0, ui.handMeasure
-    m:SetFont(text:GetFont())
-    for line in (text:GetText() or ""):gmatch("[^\n]+") do
-        m:SetText(line)
-        widest = math.max(widest, m:GetStringWidth() or 0)
+    ui.handLines = ui.handLines or {}
+    ui.handBold = ui.handBold or {}
+    local haut = LIGNE_AIR              -- un peu d'air sous le mot « Paires »
+    for i, e in ipairs(entrees) do
+        local fs = ui.handLines[i]
+        if not fs then
+            fs = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            fs:SetJustifyH("LEFT")
+            fs:SetJustifyV("TOP")
+            fs:SetShadowOffset(0, 0)
+            ui.handLines[i] = fs
+        end
+        local police, taille = fs:GetFont()
+        fs:SetFont(police, taille, "")
+        local retrait = e.indent and LIGNE_RETRAIT or 0
+        fs:SetWidth(box.width - retrait)
+        fs:ClearAllPoints()
+        fs:SetPoint("TOPLEFT", child, "TOPLEFT", retrait, -haut)
+        fs:SetText(e.text or "")
+        fs:Show()
+        -- LE GRAS, SANS TOUCHER A LA COULEUR : la meme ligne ecrite une
+        -- seconde fois a un pixel d'ecart. Le contour du client est NOIR et
+        -- salirait l'encre du parchemin.
+        local gras = ui.handBold[i]
+        if e.bold then
+            if not gras then
+                gras = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                gras:SetJustifyH("LEFT")
+                gras:SetJustifyV("TOP")
+                gras:SetShadowOffset(0, 0)
+                ui.handBold[i] = gras
+            end
+            gras:SetFont(police, taille, "")
+            gras:SetWidth(box.width - retrait)
+            gras:ClearAllPoints()
+            gras:SetPoint("TOPLEFT", child, "TOPLEFT", retrait + 1, -haut)
+            gras:SetText(e.text or "")
+            gras:Show()
+        elseif gras then
+            gras:Hide()
+        end
+        haut = haut + (fs:GetStringHeight() or 0)
     end
-    local width = math.min(box.width, widest + 2)
-    text:SetWidth(width)
-    local height = text:GetStringHeight() or 0
-    text:ClearAllPoints()
-    if height <= box.room then
-        -- It fits: centred in its room, then lifted a little -- it reads
-        -- better nearer the heading than the foot. No scrolling.
-        text:SetPoint("TOPLEFT", child, "TOPLEFT", (box.width - width) / 2,
-                      -math.max(0, (box.room - height) / 2 - LEVELS_LIFT))
-        child:SetHeight(box.room)
-    else
-        -- Too long for the box: from the top, and the box SCROLLS.
-        text:SetPoint("TOPLEFT", child, "TOPLEFT", (box.width - width) / 2, 0)
-        child:SetHeight(height + 2)
+    -- LE MENAGE SE FAIT SUR LA TABLE ENTIERE : celle des secondes frappes est
+    -- CREUSE -- seules les lignes en gras en ont une -- et « # » ne dit rien
+    -- d'une table a trous.
+    for i, fs in pairs(ui.handLines) do
+        if i > #entrees then
+            fs:SetText("")
+            fs:Hide()
+        end
     end
+    for i, gras in pairs(ui.handBold) do
+        if i > #entrees or not entrees[i].bold then
+            gras:SetText("")
+            gras:Hide()
+        end
+    end
+    child:SetHeight(math.max(box.room, haut + 2))
     ui.handScroll:SetVerticalScroll(0)
     ui.handScroll:UpdateScrollChildRect()
 end
@@ -619,9 +692,9 @@ local function ShowHand(card, act, tint)
         ui.handName:SetTextColor(0.45, 0.4, 0.35)
         for e = 1, 4 do ui.handEdges[e]:SetText("") end
         ui.handMode:SetText("")
+        if ui.handModeBold then ui.handModeBold:SetText("") end
         ui.handPairs:SetText("")
-        ui.handLevels:SetText("")
-        CentreLevels()
+        PoserLignes({})
         return
     end
     ui.handIcon:SetTexture((card.art and card.art ~= "") and card.art or CardIcon(card))
@@ -658,22 +731,30 @@ local function ShowHand(card, act, tint)
             order[#order + 1] = { key = key, cond = cond, items = { { level = i, text = rest } } }
         end
     end
-    local lines = {}
+    local entrees = {}
     for _, g in ipairs(order) do
-        if g.cond then lines[#lines + 1] = "|cff" .. PARCHMENT_INK_HEX .. g.cond .. " :|r" end
-        -- "Niveau du joueur : +1 force" reads as the total at the character's level.
-        local perLevel = g.key == "niveau du joueur"
+        -- LA CONDITION EN GRAS, sur sa ligne ; ce qu'elle commande, indente.
+        if g.cond then
+            entrees[#entrees + 1] = { text = "|cff" .. PARCHMENT_INK_HEX .. g.cond .. " :|r",
+                                      bold = true }
+        end
+        -- LA PREVIEW DIT CE QUE LA CARTE PORTE, non ce que le joueur en tire :
+        -- « +1 strength par niveau » se lit « +1 strength ». Le total est
+        -- l'affaire de la banniere, qui dit ce qui est en force.
         for _, it in ipairs(g.items) do
             local i = it.level
             local colour = (act and (act.level == i or (card.cumulative and i < act.level))) and ink or PARCHMENT_FADED_HEX
-            local text = perLevel and ScaledBonus(it.text, UnitLevel("player")) or it.text
-            lines[#lines + 1] = "|cff" .. colour .. fmt(L.combo, i, text) .. "|r"
+            entrees[#entrees + 1] = { text = "|cff" .. colour .. fmt(L.combo, i, it.text) .. "|r",
+                                      indent = g.cond ~= nil }
         end
     end
-    ui.handLevels:SetText(table.concat(lines, "\n"))
-    CentreLevels()
+    PoserLignes(entrees)
     -- Under them, at the bottom of the box: the one word, when it applies.
     ui.handMode:SetText(card.cumulative and L.cumulative or "")
+    if ui.handModeBold then
+        ui.handModeBold:SetTextColor(ui.handMode:GetTextColor())
+        ui.handModeBold:SetText(ui.handMode:GetText() or "")
+    end
 end
 
 -- What the mouse passes over goes to the hand -- unless a click in the deck
@@ -1564,8 +1645,7 @@ local function BuildHand(ui)
     -- card, which sits at the bottom of the box.
     local lx, ly, lw, lh = FrameZone("box")
     local KIND_H = 20
-    -- The block is placed by hand once its text is known (CentreLevels):
-    -- the client's own vertical centring only holds for text that fits.
+    -- Les lignes se posent une a une (PoserLignes), du haut et de la gauche.
     local BOX_MARGIN = 14
     -- At the top of the box, centred: the heading of the lines.
     local pairs = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -1588,19 +1668,12 @@ local function BuildHand(ui)
     local child = CreateFrame("Frame", nil, scroll)
     child:SetSize(roomW, roomH)
     scroll:SetScrollChild(child)
-    local levels = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    levels:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
-    levels:SetWidth(roomW)
-    levels:SetJustifyH("LEFT")
-    levels:SetShadowOffset(0, 0)
-    -- A hidden twin, to measure a line before it is written.
-    local measure = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    measure:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
-    measure:Hide()
-    ui.handMeasure = measure
+    -- LES LIGNES SE POSENT UNE A UNE (PoserLignes) : plus de bloc d'un seul
+    -- tenant, donc plus de mesure de la ligne la plus large.
     ui.handScroll, ui.handScrollChild = scroll, child
     ui.handLevelsBox = { width = roomW, room = roomH }
     local mode = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+
     mode:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", lx, ly - lh + 4)
     mode:SetSize(lw, KIND_H)
     mode:SetJustifyH("CENTER")
@@ -1631,7 +1704,16 @@ local function BuildHand(ui)
     ui.effectsScroll, ui.effectsHint = scroll, hint
 
     ui.hand, ui.effectsPanel = panel, effectsPanel
-    ui.handIcon, ui.handEdges, ui.handName, ui.handState, ui.handLevels = icon, edges, name, state, levels
+    ui.handIcon, ui.handEdges, ui.handName, ui.handState = icon, edges, name, state
+    -- EN GRAS, SANS TOUCHER A LA COULEUR : le mot est ecrit deux fois, a un
+    -- pixel d'ecart. Sa seconde frappe suit son texte (ShowHand).
+    local modeBold = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    modeBold:SetPoint("BOTTOMLEFT", panel, "TOPLEFT", lx + 1, ly - lh + 4)
+    modeBold:SetSize(lw, KIND_H)
+    modeBold:SetJustifyH(mode:GetJustifyH())
+    modeBold:SetShadowOffset(0, 0)
+    modeBold:SetTextColor(mode:GetTextColor())
+    ui.handModeBold = modeBold
     ui.handMode = mode
     ui.effects, ui.effectsContent = effects, content
 end
@@ -2334,8 +2416,8 @@ function STELLAR_TAROT_ACTIVE_LINES()
     -- split only when every piece is a signed figure and a statistic.
     local function SplitTerms(rest)
         local pieces = {}
-        for piece in (rest .. " et "):gmatch("(.-)%s+et%s+") do
-            for sub in (piece .. " mais "):gmatch("(.-)%s+mais%s+") do
+        for piece in (rest .. " " .. MOTS.et .. " "):gmatch("(.-)%s+" .. MOTS.et .. "%s+") do
+            for sub in (piece .. " " .. MOTS.mais .. " "):gmatch("(.-)%s+" .. MOTS.mais .. "%s+") do
                 for part in (sub .. ", "):gmatch("(.-),%s+") do
                     if part ~= "" then pieces[#pieces + 1] = part end
                 end
@@ -2347,7 +2429,7 @@ function STELLAR_TAROT_ACTIVE_LINES()
             -- « -10% sous 60% PV » commence bien par un chiffre signe, mais ce
             -- n'est pas une statistique : c'est une condition, et la ligne doit
             -- rester entiere plutot que de se couper en deux.
-            if p:find(" sous ") then return nil end
+            if p:find(MOTS.seuil, 1, true) then return nil end
         end
         return pieces
     end
@@ -2361,14 +2443,18 @@ function STELLAR_TAROT_ACTIVE_LINES()
         local only = false
         local t = text
         local mark = function() only = true; return "" end
-        t = t:gsub(",%s*[Ll]a nuit uniquement", mark)
-        t = t:gsub("^[Dd]e nuit uniquement%s*[,:]%s*", mark)
-        t = t:gsub("^[Ll]a nuit uniquement%s*[,:]%s*", mark)
-        t = t:gsub("^[Nn]uit uniquement%s*[,:]%s*", mark)
+        for _, motif in ipairs(MOTS.nuit_seule) do
+            t = t:gsub(motif, mark)
+        end
         if only and not night then return nil end
-        local figure = t:match("%(([%-%+]?%d+)%%%s+de nuit%)") or t:match(",%s*([%-%+]?%d+)%%%s+la nuit")
+        local figure
+        for _, motif in ipairs(MOTS.nuit_chiffre) do
+            figure = figure or t:match(motif)
+        end
         if figure then
-            t = t:gsub("%s*%([%-%+]?%d+%%%s+de nuit%)", ""):gsub(",%s*[%-%+]?%d+%%%s+la nuit", "")
+            for _, motif in ipairs(MOTS.nuit_retrait) do
+                t = t:gsub(motif, "")
+            end
             if night then
                 -- the figure of the effect, not one the condition names; a
                 -- signed night figure replaces the day's sign as well
@@ -2429,23 +2515,58 @@ function STELLAR_TAROT_ACTIVE_LINES()
     local function Text(entry)
         local text = entry.text
         if entry.figure then text = (entry.key:gsub("#", tostring(entry.sum), 1)) end
-        if entry.condKey == "niveau du joueur" then text = ScaledBonus(text, UnitLevel("player")) end
+        if entry.condKey == MOTS.par_niveau then text = ScaledBonus(text, UnitLevel("player")) end
         return text
     end
-    local done = {}
+    -- LES GAINS ENSEMBLE, LES PERTES ENSEMBLE. Le joueur lit ce qu'il gagne,
+    -- puis ce que cela lui coute ; ce qui ne porte pas de signe -- une phrase,
+    -- un effet qui se declenche -- tient le milieu. A rang egal, l'ordre
+    -- d'arrivee departage.
+    local function Rang(texte)
+        if texte:match("^%s*%+") then return 1 end
+        if texte:match("^%s*%-") then return 3 end
+        return 2
+    end
+    local function Ranger(liste)
+        local ordre = {}
+        for i, e in ipairs(liste) do ordre[i] = { i = i, e = e } end
+        table.sort(ordre, function(a, b)
+            local ra, rb = Rang(a.e.text), Rang(b.e.text)
+            if ra ~= rb then return ra < rb end
+            return a.i < b.i
+        end)
+        local out = {}
+        for i, o in ipairs(ordre) do out[i] = o.e end
+        return out
+    end
+    local done, plats, blocs = {}, {}, {}
     for _, key in ipairs(order) do
         local entry = totals[key]
         if not entry.cond then
-            lines[#lines + 1] = { text = Text(entry), indent = false }
+            plats[#plats + 1] = { text = Text(entry), indent = false }
         elseif not done[entry.condKey] then
             done[entry.condKey] = true
             local g = groups[entry.condKey]
-            -- The condition on its own line, every effect under it, indented.
-            lines[#lines + 1] = { text = g.cond .. " :", indent = false }
-            for _, k in ipairs(g.keys) do
-                lines[#lines + 1] = { text = Text(totals[k]), indent = true }
+            if entry.condKey == MOTS.par_niveau then
+                -- CE N'EST PAS UNE CONDITION, c'est une mesure : la banniere
+                -- donne le total, sans dire d'ou il vient.
+                for _, k in ipairs(g.keys) do
+                    plats[#plats + 1] = { text = Text(totals[k]), indent = false }
+                end
+            else
+                local sous = {}
+                for _, k in ipairs(g.keys) do
+                    sous[#sous + 1] = { text = Text(totals[k]), indent = true }
+                end
+                blocs[#blocs + 1] = { cond = g.cond, items = Ranger(sous) }
             end
         end
+    end
+    -- Ce qui vaut toujours d'abord, ce qui demande une condition ensuite.
+    for _, e in ipairs(Ranger(plats)) do lines[#lines + 1] = e end
+    for _, b in ipairs(blocs) do
+        lines[#lines + 1] = { text = b.cond .. " :", indent = false }
+        for _, e in ipairs(b.items) do lines[#lines + 1] = e end
     end
     return lines
 end
@@ -2457,21 +2578,24 @@ end
 -- shows in the buff bar; its tooltip is the bonus alone, and the bonus is
 -- shown MULTIPLIED BY THE STACKS -- the client is not told an aura's real
 -- amount, only its stack count, so the figure is computed here.
-local function ProcSpellByName(name)
+-- UN NIVEAU DE CARTE, reconnu a son IDENTIFIANT. Le nom ne sert plus que de
+-- repli, pour un client qui ne donnerait pas l'identifiant dans UnitAura.
+local function SortDeNiveau(id, name)
     if not S.cat then return nil end
     if not PROC_SPELLS then
         PROC_SPELLS = {}
         for _, card in ipairs(S.cat.cards) do
             for level = 1, 4 do
-                local id = card.spells and card.spells[level]
-                if id and id ~= 0 then
-                    local spellName = GetSpellInfo(id)
-                    if spellName then PROC_SPELLS[spellName] = id end
+                local sid = card.spells and card.spells[level]
+                if sid and sid ~= 0 then
+                    PROC_SPELLS[sid] = sid
+                    local spellName = GetSpellInfo(sid)
+                    if spellName then PROC_SPELLS[spellName] = sid end
                 end
             end
         end
     end
-    return PROC_SPELLS[name]
+    return (id and PROC_SPELLS[id]) or (name and PROC_SPELLS[name])
 end
 
 ScaledBonus = function(text, count)
@@ -2483,21 +2607,50 @@ ScaledBonus = function(text, count)
     end))
 end
 
--- The engine's bleed: a tick every 2 s of 5% of the caster's attack power
--- (the generator's figure, StellarTarot: bleed:<sec>:5). The client is not
--- told the tick's amount: it is computed here from the player's own attack
--- power, the player being the caster.
--- The engine's bleed: a tick every 2 s of 5% of the caster's attack power
--- (the generator's figure, StellarTarot: bleed:<sec>:5). The client is not
--- told the tick's amount: it is computed here from the player's own attack
--- power, the player being the caster. The module's fire burn says nothing of
--- its figure, as Blizzard's own periodic effects do not.
-local BLEED_SPELL, BLEED_PCT = 903802, 5
-local function BleedText()
+-- LE SAIGNEMENT : un tic toutes les 2 secondes valant une PART de la puissance
+-- d'attaque du lanceur. Le client n'est pas averti du montant du tic ; il le
+-- calcule ici, le joueur etant le lanceur. Le feu du module, lui, ne dit rien
+-- de son chiffre, comme les effets periodiques de Blizzard.
+--
+-- LA PART NE SE RECOPIE PLUS : elle est dans la ligne de la carte,
+-- `bleed:<sec>:<part>`, que le catalogue porte deja jusqu'ici. Si le classeur
+-- change la part, l'infobulle suit.
+--
+-- `bleed_hit:<sec>:<part>:<sort>` est un AUTRE saignement : sa part se prend
+-- sur LE COUP qui vient de porter, non sur la puissance d'attaque, et le
+-- client ne connait pas ce coup. Son infobulle dit « 2 % du coup », ce qui est
+-- deja vrai : elle n'est pas reecrite.
+local BLEED_SPELL = 903802      -- l'etabli : une part de la puissance d'attaque
+local PARTS_DE_SAIGNEMENT
+local function PartDeSaignement(id, name)
+    if not (S.cat and S.cat.cards) then return nil end
+    if not PARTS_DE_SAIGNEMENT then
+        PARTS_DE_SAIGNEMENT = {}
+        local function poser(sort, part)
+            sort, part = tonumber(sort), tonumber(part)
+            if not (sort and part) then return end
+            PARTS_DE_SAIGNEMENT[sort] = part
+            local n = GetSpellInfo(sort)
+            if n then PARTS_DE_SAIGNEMENT[n] = part end
+        end
+        for _, card in ipairs(S.cat.cards) do
+            for level = 1, 4 do
+                local spec = card.scripts and card.scripts[level]
+                              and card.scripts[level].text or ""
+                -- « bleed: » seul : « bleed_hit: » ne repond pas au motif, le
+                -- deux-points ne suivant pas immediatement le mot.
+                poser(BLEED_SPELL, spec:match("bleed:%d+:(%d+)"))
+            end
+        end
+    end
+    return (id and PARTS_DE_SAIGNEMENT[id]) or (name and PARTS_DE_SAIGNEMENT[name])
+end
+
+local function BleedText(part)
     local base, pos, neg = UnitAttackPower("player")
     local ap = (base or 0) + (pos or 0) + (neg or 0)
     return fmt(FR and "Saigne : %d dégâts toutes les 2 sec" or "Bleeds: %d damage every 2 sec",
-               math.floor(ap * BLEED_PCT / 100))
+               math.floor(ap * part / 100))
 end
 
 -- ---------------------------------------------------------------------------
@@ -2525,6 +2678,10 @@ if not STELLAR_TAROT_POTION_HOOKED then
         for propre, releve in rest:gmatch("|(%-?%d+)&(%-?%d+)") do
             map[propre], any = releve, true
         end
+        -- PAR IDENTIFIANT D'ABORD : deux sorts peuvent porter le meme nom. Le
+        -- nom reste en repli, pour un client qui ne donnerait pas
+        -- l'identifiant dans UnitAura.
+        STELLAR_TAROT_POTION_BOOST[tonumber(id)] = any and map or nil
         STELLAR_TAROT_POTION_BOOST[spellName] = any and map or nil
     end)
 end
@@ -2547,17 +2704,22 @@ local function RaisePotionLines(tip, map)
 end
 
 function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
-    local name, _, _, count = UnitAura(unit, index, filter)
+    -- L'IDENTIFIANT DU SORT est la onzieme valeur de `UnitAura` en 3.3.5 :
+    -- tout se range par lui, et deux sorts homonymes cessent de se prendre
+    -- l'un pour l'autre. Le nom demeure en repli.
+    local name, _, _, count, _, _, _, _, _, _, spellId = UnitAura(unit, index, filter)
     if not name then return end
-    local boost = STELLAR_TAROT_POTION_BOOST[name]
+    local boost = (spellId and STELLAR_TAROT_POTION_BOOST[spellId])
+                  or STELLAR_TAROT_POTION_BOOST[name]
     if boost then
         if RaisePotionLines(tip, boost) then tip:Show() end
         return
     end
-    if name == GetSpellInfo(BLEED_SPELL) then
+    local part = PartDeSaignement(spellId, name)
+    if part then
         local line = _G[tip:GetName() .. "TextLeft2"]
         if line then
-            line:SetText(BleedText())
+            line:SetText(BleedText(part))
             line:SetTextColor(1, 1, 1)
             tip:Show()
         end
@@ -2569,17 +2731,18 @@ function STELLAR_TAROT_ON_BUFF_TOOLTIP(tip, unit, index, filter)
         if not SCALED_NAMES then
             SCALED_NAMES = {}
             for _, id in ipairs(S.cat.scaled) do
+                SCALED_NAMES[id] = true
                 local n = GetSpellInfo(id)
                 if n then SCALED_NAMES[n] = true end
             end
         end
-        if SCALED_NAMES[name] then return end
+        if (spellId and SCALED_NAMES[spellId]) or SCALED_NAMES[name] then return end
     end
-    if name ~= GetSpellInfo(BANNER_SPELL) then
+    if spellId ~= BANNER_SPELL and name ~= GetSpellInfo(BANNER_SPELL) then
         -- Les auras du module qui ne sont pas un niveau de carte -- le revers
         -- qu'une ligne pose a part, par exemple -- portent son nom : leur
         -- infobulle se multiplie par les cumuls comme celle d'un niveau.
-        local id = ProcSpellByName(name)
+        local id = SortDeNiveau(spellId, name)
             or ((name:match("^Tarot stellaire") or name:match("^Stellar Tarot")) and -1 or nil)
         if not id then return end
         local line = _G[tip:GetName() .. "TextLeft2"]

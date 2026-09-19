@@ -207,6 +207,9 @@ public:
     // Every spell any card names, at any level: what a login purges before
     // applying the layout, so that nothing the core saved survives a change.
     [[nodiscard]] std::set<uint32> const& EffectSpells() const { return _effectSpells; }
+    // CE QUE LE LIEU DONNE : la liste de l'age demande, ou celle de l'age 0
+    // quand cet age-la n'en a pas. Vide si la reserve n'existe pas.
+    [[nodiscard]] std::vector<uint32> const& LootPool(std::string const& pool, uint32 age) const;
 
     [[nodiscard]] StellarTarotCard const* Card(uint32 cardId) const;
     [[nodiscard]] StellarTarotBoard const* Board(uint32 boardId) const;
@@ -231,6 +234,8 @@ private:
     std::map<uint32, StellarTarotBoard> _boards;
     std::map<uint32, StellarTarotTag> _tags;
     std::map<uint32, std::string> _refused;
+    // reserve -> age -> les objets qu'elle donne
+    std::map<std::string, std::map<uint32, std::vector<uint32>>> _lootPools;
     std::set<uint32> _effectSpells;
 };
 

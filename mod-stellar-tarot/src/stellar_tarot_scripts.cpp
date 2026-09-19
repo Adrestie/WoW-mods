@@ -357,6 +357,22 @@ public:
     }
 };
 
+// LE COEUR CALCULE LA DUREE D'UNE AURA. Un seul crochet est demande : le
+// module n'est pas appele pour les treize autres.
+class StellarTarotSpellScript : public AllSpellScript
+{
+public:
+    StellarTarotSpellScript() : AllSpellScript("StellarTarotSpellScript",
+        {
+            ALLSPELLHOOK_ON_CALC_MAX_DURATION
+        }) { }
+
+    void OnCalcMaxDuration(Aura const* aura, int32& maxDuration) override
+    {
+        StellarTarotEffects::OnCalcDuration(aura, maxDuration);
+    }
+};
+
 void AddSC_stellar_tarot_scripts()
 {
     new StellarTarotWorldScript();
@@ -364,4 +380,5 @@ void AddSC_stellar_tarot_scripts()
     new StellarTarotUnitScript();
     new StellarTarotLootScript();
     new StellarTarotAuctionScript();
+    new StellarTarotSpellScript();
 }
