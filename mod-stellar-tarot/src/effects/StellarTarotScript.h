@@ -112,6 +112,9 @@ public:
     // chance et la recharge de `spell_proc` l'ont laisse passer, et le coeur
     // donne l'unite et le montant. Rien a reconstituer.
     virtual void OnTriggerProc(Player* /*player*/, Unit* /*other*/, uint32 /*amount*/) { }
+    // LE COEUR A CONSOMME LA PROMESSE : le coup promis a porte, l'aura est
+    // retiree, et le prix est du. Le module ne suppose plus rien.
+    virtual void OnPromiseSpent(Player* /*player*/) { }
     // L'AURA QUI NOMME CETTE LIGNE, quand elle en a une (le `trigger:`).
     [[nodiscard]] virtual uint32 Trigger() const { return 0; }
     virtual void OnEnterCombat(Player* /*player*/) { }
@@ -175,9 +178,6 @@ public:
     // on a victim, or healing on whoever carries the effect.
     virtual void OnPeriodicTick(Player* /*player*/, Unit* /*other*/, uint32& /*amount*/, bool /*heal*/,
                                 uint32 /*spellId*/) { }
-    // The chances of the player's next melee swing, before the roll (percent).
-    virtual void OnMeleeRoll(Player* /*player*/, Unit* /*victim*/, int32& /*crit*/, int32& /*miss*/,
-                             int32& /*dodge*/, int32& /*parry*/, int32& /*block*/) { }
 
 protected:
     uint32 _spellId = 0;

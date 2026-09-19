@@ -1595,6 +1595,17 @@ namespace
                     return true;
             return false;
         }
+        // LE COEUR A CONSOMME LA PROMESSE. Il a retire l'aura de l'etat au
+        // premier coup qui repondait au masque -- un critique pour `next_crit`,
+        // un coup qui porte pour `next_sure` -- et c'est maintenant, et
+        // seulement maintenant, que le prix est du.
+        void OnPromiseSpent(Player* player) override
+        {
+            if (!State())
+                return;
+            if (!_costKind.empty() && _costChance >= 100)
+                Suffer(player);
+        }
         // LE COEUR A FAIT PARTIR NOTRE AURA : la ligne n'a qu'a jouer.
         void OnTriggerProc(Player* player, Unit* other, uint32 amount) override
         {
@@ -1628,7 +1639,7 @@ namespace
         }
         void Apply(Player* player) override
         {
-            _last = 0; _wasBelow = false; _elapsed = 0; _freeLeft = 0; _nextCrit = false; _nextSure = false;
+            _last = 0; _wasBelow = false; _elapsed = 0; _freeLeft = 0;
             _armedAt = 0; _row = 0; _idleSince = 0;
             if (_trigger)
                 ApplyOwned(player, uint32(_trigger));
@@ -1898,14 +1909,6 @@ namespace
                 _lastVictim = victim->GetGUID();
                 _lastAmount = damage;
             }
-            // UN SORT OU UNE COMPETENCE QUI PORTE consomme l'etat : son aura
-            // donne cent pour cent de critique a TOUT (aura 290), le coup est
-            // donc bien le critique promis. Un sort qui rate n'inflige rien et
-            // ne passe pas ici : l'etat tient, et rien n'est du. La passe
-            // d'armes ordinaire, elle, se regle dans OnMeleeRoll.
-            if (spell && (_nextCrit || _nextSure) && player->HasAura(_spellId)
-                && _armedAt != uint32(GameTime::GetGameTimeMS().count()))
-                Spend(player);
             if (_event == "hit" || (_event == "hit_spell" && spell))
                 Fire(player, victim, damage);
             // LE CORPS A CORPS NOMME : l'attaque automatique et la competence
@@ -2214,27 +2217,6 @@ namespace
             _selling = false;
             Pay(player);
         }
-        void OnMeleeRoll(Player* player, Unit* /*victim*/, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block) override
-        {
-            if (!_nextCrit && !_nextSure)
-                return;
-            // Unit::CalculateMeleeDamage hands the damage to the scripts BEFORE
-            // it rolls the swing's outcome: a state a hit has just armed would
-            // be spent by that very swing, the aura gone before it is seen. It
-            // waits for the next swing -- a later world tick.
-            if (_armedAt == uint32(GameTime::GetGameTimeMS().count()))
-                return;
-            bool const held = player->HasAura(_spellId);         // the state ran out with its aura
-            // The chances are in hundredths of a percent (RollMeleeOutcomeAgainst).
-            if (!held)                                       // l'aura n'est plus la
-            {
-                _nextCrit = false; _nextSure = false;
-                return;
-            }
-            if (_nextCrit) { crit = 10000; miss = 0; }
-            if (_nextSure) { dodge = 0; parry = 0; block = 0; miss = 0; }
-            Spend(player);
-        }
 
     private:
         // The chance and the cooldown, without firing.
@@ -2288,7 +2270,6 @@ namespace
         // L'etat vient de servir : il s'efface et son prix tombe.
         void Spend(Player* player)
         {
-            _nextCrit = false; _nextSure = false;
             RemoveOwned(player, _spellId);
             if (!_costKind.empty() && _costChance >= 100)
                 Suffer(player);
@@ -2715,10 +2696,13 @@ namespace
                 _armedAt = uint32(GameTime::GetGameTimeMS().count());
                 Put(player, player, _spellId, 0);
             }
+            // LA PROMESSE EST TOUTE DANS L'AURA : +100 % de critique (aura 290)
+            // pour `next_crit`, 500 points d'expertise (aura 240) pour
+            // `next_sure` -- de quoi passer l'esquive ET la parade sous zero,
+            // que le coeur lit dans le coup blanc comme dans la competence. Le
+            // module ne decide plus d'aucune issue.
             else if (A == "next_crit" || A == "next_sure")
             {
-                if (A == "next_crit") _nextCrit = true; else _nextSure = true;
-                _armedAt = uint32(GameTime::GetGameTimeMS().count());
                 // L'ETAT TIENT JUSQU'A CE QU'IL SERVE : il promet le prochain
                 // coup, pas les vingt prochaines secondes. Une attaque ratee de
                 // plus ne le consomme pas -- rien n'a ete donne, rien n'est du.
@@ -2808,7 +2792,7 @@ namespace
         ObjectGuid _lastVictim;
         uint32 _lastAmount = 0;
         uint32 _last = 0, _elapsed = 0, _armedAt = 0, _lastSchool = 0;
-        bool _wasBelow = false, _nextCrit = false, _nextSure = false, _wasFlying = false, _selling = false;
+        bool _wasBelow = false, _wasFlying = false, _selling = false;
         bool _wasMounted = false;
         Spell* _lastCast = nullptr;
     };

@@ -238,13 +238,6 @@ public:
         StellarTarotEffects::OnUnitDied(unit, killer);
     }
 
-    void OnBeforeRollMeleeOutcomeAgainst(Unit const* attacker, Unit const* victim, WeaponAttackType /*attType*/,
-        int32& /*attackerMaxSkill*/, int32& /*victimMaxSkill*/, int32& /*attackerWeaponSkill*/, int32& /*victimDefenseSkill*/,
-        int32& crit, int32& miss, int32& dodge, int32& parry, int32& block) override
-    {
-        StellarTarotEffects::OnMeleeRoll(const_cast<Unit*>(attacker), const_cast<Unit*>(victim), crit, miss, dodge, parry, block);
-    }
-
     void ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage) override
     {
         StellarTarotEffects::OnDamage(attacker, target, damage, false);

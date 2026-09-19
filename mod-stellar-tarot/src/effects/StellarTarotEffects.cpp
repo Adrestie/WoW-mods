@@ -544,11 +544,33 @@ void StellarTarotEffects::OnProc(Player* player, uint32 auraId, Unit* other, uin
         CompteOccasion(player, auraId - STELLAR_TAROT_WITNESS_FIRST);
         return;
     }
+    // L'AURA D'UN NIVEAU qui part n'est pas une ligne qui se declenche : c'est
+    // une PROMESSE que le coeur vient de consommer.
+    bool promesse = false;
+    Each(player, [&](StellarTarotScript& s)
+    {
+        if (s.SpellId() == auraId)
+            promesse = true;
+    });
+    if (promesse)
+    {
+        OnPromiseSpent(player, auraId);
+        return;
+    }
     // L'AURA NOMME LA LIGNE : c'est le `trigger:` qu'elle declare.
     Each(player, [&](StellarTarotScript& s)
     {
         if (s.Trigger() == auraId)
             s.OnTriggerProc(player, other, amount);
+    });
+}
+
+void StellarTarotEffects::OnPromiseSpent(Player* player, uint32 spellId)
+{
+    Each(player, [&](StellarTarotScript& s)
+    {
+        if (s.SpellId() == spellId)
+            s.OnPromiseSpent(player);
     });
 }
 
@@ -783,10 +805,5 @@ void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amou
         return;
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal, spellId); });
-}
-void StellarTarotEffects::OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block)
-{
-    if (attacker && attacker->IsPlayer())
-        Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnMeleeRoll(attacker->ToPlayer(), victim, crit, miss, dodge, parry, block); });
 }
 

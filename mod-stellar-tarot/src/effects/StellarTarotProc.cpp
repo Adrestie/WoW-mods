@@ -57,7 +57,7 @@ class spell_stellar_tarot_line : public AuraScript
 {
     PrepareAuraScript(spell_stellar_tarot_line);
 
-    void HandleProc(AuraEffect const* /*aurEff*/, ProcEventInfo& eventInfo)
+    void HandleProc(ProcEventInfo& eventInfo)
     {
         Unit* const owner = GetUnitOwner();
         Player* const player = owner ? owner->ToPlayer() : nullptr;
@@ -78,11 +78,12 @@ class spell_stellar_tarot_line : public AuraScript
 
     void Register() override
     {
-        // L'aura d'une ligne ne porte qu'un effet, une aura factice : elle
-        // n'existe que pour que le coeur la fasse partir sur l'evenement que
-        // `spell_proc` lui donne.
-        OnEffectProc += AuraEffectProcFn(spell_stellar_tarot_line::HandleProc, EFFECT_0,
-                                         SPELL_AURA_DUMMY);
+        // LE CROCHET SE PREND SUR L'AURA, non sur un de ses effets : l'aura
+        // d'une ligne ne porte qu'une aura factice, mais celle d'un ETAT porte
+        // un effet reel (+100 % de critique, 500 points d'expertise), et
+        // `OnEffectProc` aurait refuse de s'y lier. `OnProc` est appele pour
+        // toute aura qui part, avant la boucle de ses effets.
+        OnProc += AuraProcFn(spell_stellar_tarot_line::HandleProc);
     }
 };
 

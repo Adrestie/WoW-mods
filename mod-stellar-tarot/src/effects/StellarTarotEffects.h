@@ -117,7 +117,6 @@ namespace StellarTarotEffects
     // Une creature morte : le module cherche lui-meme les porteurs de cartes
     // alentour, le coeur ne prevenant que le tueur.
     void OnUnitDied(Unit* died, Unit* killer);
-    void OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss, int32& dodge, int32& parry, int32& block);
     void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId);
     void OnAuraApply(Unit* target, Aura* aura);
 
@@ -161,6 +160,9 @@ namespace StellarTarotEffects
     // LE COEUR A FAIT PARTIR UNE AURA DU MODULE. Celle d'une ligne reveille la
     // ligne ; celle d'un TEMOIN ne fait que compter l'occasion.
     void OnProc(Player* player, uint32 auraId, Unit* other, uint32 amount);
+    // L'aura d'un NIVEAU qui part est une promesse consommee : le coeur l'a
+    // retiree au premier coup qui repondait, et le prix est du.
+    void OnPromiseSpent(Player* player, uint32 spellId);
     void CompteDepart(Player* player, uint32 spellId, Unit* sur);
     void CompteRevers(Player* player, uint32 spellId);
     // Ce que la ligne d'un sort de niveau promet : sa chance, son temps de
