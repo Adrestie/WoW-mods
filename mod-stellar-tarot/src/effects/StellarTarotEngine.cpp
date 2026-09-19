@@ -1595,6 +1595,17 @@ namespace
                     return true;
             return false;
         }
+        // CE QUE LA LIGNE PROMET, pour l'instrument de mesure.
+        bool Promise(std::string& event, int32& chance, int32& icd,
+                     bool& coreChance, bool& coreIcd) const override
+        {
+            event = _event;
+            chance = _chance;
+            icd = _icd;
+            coreChance = _coreChance;
+            coreIcd = _coreIcd;
+            return true;
+        }
         // A state the level's spell shows while it lasts: the module does not
         // apply that spell itself.
         bool State() const
@@ -2322,6 +2333,7 @@ namespace
             // Ce qui ne coupe rien tombe tout de suite, avec le bienfait.
             if (!CostInterrupts(_costKind))
             {
+                StellarTarotEffects::CompteRevers(player, _spellId);
                 if (_costKind == "self_hit")
                     Hurt(player, player, PctOf(_lastAmount, _costN), SPELL_SCHOOL_MASK_NORMAL,
                          STELLAR_TAROT_SPELL_PRICE);
@@ -2363,6 +2375,8 @@ namespace
             }
             if (!Ready(player))
                 return;
+            // L'INSTRUMENT DE MESURE : un depart de plus pour cette ligne.
+            StellarTarotEffects::CompteDepart(player, _spellId);
             // The night figure stands in for the action's own while it lasts.
             int32 const day = _a;
             if (_nightA && IsNight())

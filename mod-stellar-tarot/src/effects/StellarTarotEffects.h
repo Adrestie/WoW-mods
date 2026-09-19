@@ -38,6 +38,7 @@
 
 #include "Define.h"
 #include "ObjectGuid.h"
+#include <map>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,46 @@ namespace StellarTarotEffects
     void OnAuraApply(Unit* target, Aura* aura);
 
     [[nodiscard]] std::vector<StellarTarotActiveEffect> Active(Player* player);
+
+    // ===================== L'INSTRUMENT DE MESURE =====================
+    //
+    // Ce que le coeur cache depuis qu'il filtre : les procs REFUSES. Une aura
+    // TEMOIN par evenement, a chance 100 et sans recharge, les rend visibles --
+    // le module compte alors les OCCASIONS d'un cote, les DEPARTS de l'autre, et
+    // le verdict se lit tout seul.
+    struct Compte
+    {
+        uint32 occasions = 0;
+        // LES OCCASIONS ELIGIBLES : celles ou la recharge ne bloquait pas. Une
+        // ligne a recharge refuse deliberement les autres -- juger sa chance sur
+        // le total reviendrait a lui reprocher de faire son office.
+        uint32 eligibles = 0;
+        uint32 departs = 0;
+        uint32 dernier = 0;          // le dernier depart, en millisecondes
+        uint32 ecartMin = 0;         // le plus court intervalle entre deux departs
+        uint32 revers = 0;           // les contreparties tombees
+        uint32 dites = 0;            // les occasions deja portees au journal
+    };
+
+    // Commence ou arrete la mesure pour ce joueur ; rend le nombre de lignes
+    // mesurees (les lignes a evenement de proc qu'il porte).
+    uint32 MesureCommence(Player* player);
+    // Le verdict au JOURNAL, ligne par ligne. Rend false s'il n'y a rien de
+    // neuf a dire depuis la derniere fois.
+    bool MesureAuJournal(Player* player, bool force);
+    void MesureArrete(Player* player);
+    bool MesureEnCours(Player* player);
+    // Le releve, par sort de niveau.
+    std::map<uint32, Compte> const& Mesure(Player* player);
+    // Les trois compteurs, appeles par le moteur.
+    void CompteOccasion(Player* player, uint32 marqueur);
+    void CompteDepart(Player* player, uint32 spellId);
+    void CompteRevers(Player* player, uint32 spellId);
+    // Ce que la ligne d'un sort de niveau promet : sa chance, son temps de
+    // recharge, et ce que le coeur en tient. Faux si le sort n'est pas une
+    // ligne a evenement.
+    bool PromesseDe(Player* player, uint32 spellId, int32& chance, int32& icd,
+                    bool& coreChance, bool& coreIcd);
 }
 
 #endif

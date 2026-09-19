@@ -80,6 +80,12 @@ public:
     // every instance before Apply.
     virtual bool Parse(std::vector<std::string> const& params, std::string& error) = 0;
 
+    // CE QUE LA LIGNE PROMET, pour l'instrument de mesure : son evenement, sa
+    // chance, son temps de recharge, et ce que le coeur en tient desormais.
+    // Faux pour les familles qui ne sont pas des procs.
+    virtual bool Promise(std::string& /*event*/, int32& /*chance*/, int32& /*icd*/,
+                         bool& /*coreChance*/, bool& /*coreIcd*/) const { return false; }
+
     // The level's spell, told before Apply.
     void SetSpell(uint32 spellId) { _spellId = spellId; }
     [[nodiscard]] uint32 SpellId() const { return _spellId; }

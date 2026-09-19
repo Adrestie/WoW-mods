@@ -102,6 +102,10 @@ void StellarTarotMgr::Load()
     _effectSpells.clear();
 
     _enabled = sConfigMgr->GetOption<bool>("StellarTarot.Enabled", true);
+    // L'INSTRUMENT DE MESURE : eteint par defaut. Allume, il pose les temoins
+    // sur les lignes a evenement que le joueur porte et ecrit au journal, toutes
+    // les trente secondes, si chaque ligne tient ce qu'elle promet.
+    _check = sConfigMgr->GetOption<bool>("StellarTarot.Check", false);
     if (!_enabled)
     {
         LOG_INFO("module", "StellarTarot: disabled by configuration (StellarTarot.Enabled = 0).");

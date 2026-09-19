@@ -99,7 +99,13 @@ constexpr uint32 STELLAR_TAROT_TRIGGER_LAST  = 903999;
 // and a spell number are two separate lists, and no number here is shared. The
 // generator fills the upper reserve first and spills into this one, so no
 // spell already laid ever changes its number.
-constexpr uint32 STELLAR_TAROT_SPELL_LOW_FIRST = 902700;
+// LES TEMOINS DE MESURE : une aura par evenement du systeme de procs, a chance
+// 100 et sans recharge, lancant le MEME marqueur que l'evenement. Le module les
+// pose le temps d'une mesure (`.tarot check`) pour compter les OCCASIONS -- ce
+// que le coeur lui cache depuis qu'il filtre lui-meme la chance et l'ICD.
+constexpr uint32 STELLAR_TAROT_WITNESS_FIRST = 902700;
+constexpr uint32 STELLAR_TAROT_WITNESS_LAST  = 902708;
+constexpr uint32 STELLAR_TAROT_SPELL_LOW_FIRST = 902710;
 constexpr uint32 STELLAR_TAROT_SPELL_LOW_LAST  = 902999;
 
 // A card has four edges and four activation levels; a board has 2 to 4 rows
@@ -190,6 +196,8 @@ public:
     void Load();
 
     [[nodiscard]] bool Enabled() const { return _enabled; }
+    // L'instrument de mesure est-il allume ? (StellarTarot.Check)
+    [[nodiscard]] bool Checking() const { return _check; }
 
     [[nodiscard]] std::map<uint32, StellarTarotCard> const& Cards() const { return _cards; }
     [[nodiscard]] std::map<uint32, StellarTarotBoard> const& Boards() const { return _boards; }
@@ -218,6 +226,7 @@ public:
 
 private:
     bool _enabled = true;
+    bool _check = false;
     std::map<uint32, StellarTarotCard> _cards;
     std::map<uint32, StellarTarotBoard> _boards;
     std::map<uint32, StellarTarotTag> _tags;

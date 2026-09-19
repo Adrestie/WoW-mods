@@ -33,6 +33,7 @@
  * .tarot effects [player]              (SEC_GAMEMASTER)     the effects in force on a player
  * .tarot xp [player]                   (SEC_GAMEMASTER)     what the cards make of 1000 experience
  * .tarot fuse <a> <b> <c>              (SEC_PLAYER)         the workbench: three cards, or three boards, become one
+ * .tarot check [start|stop]           (SEC_GAMEMASTER)     measures the event lines and gives the verdict
  *
  * .tarot with no argument lists the subcommands (the core behaviour for a
  * parent command, filtered by security level). Each subcommand describes
@@ -48,6 +49,8 @@
  */
 
 #include "Chat.h"
+#include "Log.h"
+#include <cmath>
 #include "CommandScript.h"
 #include "Player.h"
 #include "StellarTarotBinder.h"
@@ -95,6 +98,7 @@ public:
             // The workbench: the shared bench relays here; the rules stay here.
             { "fuse",   HandleFuseCommand,   SEC_PLAYER,        Console::No  },
             { "sources", HandleSourcesCommand, SEC_GAMEMASTER,  Console::Yes },
+            { "check",  HandleCheckCommand,  SEC_GAMEMASTER,    Console::No  },
         };
 
         static ChatCommandTable commandTable =
@@ -510,6 +514,110 @@ public:
 
     // Where cards and boards drop from, as loaded: every source, and the
     // three settings that govern them.
+    // ===================== L'INSTRUMENT DE MESURE =====================
+    //
+    // Ce que le coeur cache depuis qu'il filtre lui-meme la chance et la
+    // recharge : les procs REFUSES. Une aura TEMOIN par evenement, a chance 100
+    // et sans recharge, les rend visibles. La commande compte alors les
+    // OCCASIONS d'un cote, les DEPARTS de l'autre, et rend le verdict.
+    static bool HandleCheckCommand(ChatHandler* handler, Optional<std::string> quoi)
+    {
+        Player* const player = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
+        if (!player)
+            return true;
+        std::string const mot = quoi ? *quoi : "";
+        if (mot == "stop")
+        {
+            StellarTarotEffects::MesureArrete(player);
+            handler->PSendSysMessage("Tarot : mesure arretee, temoins retires.");
+            return true;
+        }
+        if (mot == "start")
+        {
+            uint32 const lignes = StellarTarotEffects::MesureCommence(player);
+            handler->PSendSysMessage("Tarot : mesure commencee sur %u ligne(s) a evenement. "
+                                     "Frappez, puis `.tarot check`.", lignes);
+            LOG_INFO("module", "StellarTarot CHECK: mesure commencee pour {} sur {} ligne(s).",
+                     player->GetName(), lignes);
+            return true;
+        }
+        if (!StellarTarotEffects::MesureEnCours(player))
+        {
+            handler->PSendSysMessage("Tarot : aucune mesure en cours. `.tarot check start` d'abord.");
+            return true;
+        }
+        if (StellarTarotEffects::Mesure(player).empty())
+        {
+            handler->PSendSysMessage("Tarot : rien a mesurer -- aucune carte posee ne guette un "
+                                     "evenement du systeme de procs (critique, esquive, parade, "
+                                     "blocage, attaque ratee, critique de soin).");
+            return true;
+        }
+        // LE VERDICT, ligne par ligne.
+        bool tout = true;
+        for (auto const& paire : StellarTarotEffects::Mesure(player))
+        {
+            uint32 const spellId = paire.first;
+            StellarTarotEffects::Compte const& c = paire.second;
+            // La ligne dit ce qu'elle promet ; le nom de la carte vient de la
+            // liste des effets en force.
+            std::string quoiDit = "?";
+            int32 chance = 100, icd = 0;
+            bool coreChance = false, coreIcd = false;
+            uint32 carte = 0;
+            uint8 niveau = 0;
+            for (StellarTarotActiveEffect const& e : StellarTarotEffects::Active(player))
+                if (e.spellId == spellId)
+                {
+                    carte = e.cardId;
+                    niveau = e.level;
+                    quoiDit = e.script;
+                }
+            StellarTarotEffects::PromesseDe(player, spellId, chance, icd, coreChance, coreIcd);
+            // LA CHANCE : fourchette binomiale a trois ecarts-types.
+            double const p = double(chance) / 100.0;
+            // LA CHANCE SE JUGE SUR LES ELIGIBLES, la recharge refusant les
+            // autres de son plein droit.
+            double const attendu = double(c.eligibles) * p;
+            double const sigma = std::sqrt(double(c.eligibles) * p * (1.0 - p));
+            double const marge = std::max(3.0 * sigma, 1.0);
+            // A CHANCE CERTAINE, une seule occasion suffit a juger.
+            bool const assez = c.eligibles >= 30 || chance >= 100 || chance <= 0;
+            bool const chanceOk = !assez ? true
+                                : std::fabs(double(c.departs) - attendu) <= marge;
+            // LA RECHARGE : jamais deux departs a moins de l'ICD annonce -- et
+            // si rien ne l'a approchee, elle n'est pas eprouvee.
+            bool const icdOk = !icd || c.departs < 2 || c.ecartMin + 50 >= uint32(icd) * 1000;
+            tout = tout && chanceOk && icdOk;
+            char const* const verdictChance = !c.eligibles ? "AUCUNE OCCASION"
+                                            : !assez ? "ECHANTILLON INSUFFISANT"
+                                            : chanceOk ? "ATTEINT" : "MANQUE";
+            char const* const verdictIcd = !icd ? "sans objet"
+                                         : c.departs < 2 ? "ECHANTILLON INSUFFISANT"
+                                         : !icdOk ? "MANQUE"
+                                         : (c.ecartMin > uint32(icd) * 2000 ? "ATTEINT (NON EPROUVE)"
+                                                                            : "ATTEINT");
+            handler->PSendSysMessage("carte %u N%u : %u occasions dont %u eligibles, %u departs "
+                                     "(attendu %.1f, marge %.1f) -> chance %s", carte, uint32(niveau),
+                                     c.occasions, c.eligibles, c.departs, attendu, marge, verdictChance);
+            handler->PSendSysMessage("   ecart minimal %.1f s (ICD annonce %d s) -> %s%s",
+                                     double(c.ecartMin) / 1000.0, icd, verdictIcd,
+                                     coreIcd ? " [tenu par le coeur]" : " [tenu par le module]");
+            if (c.revers)
+                handler->PSendSysMessage("   revers tombe %u fois sur %u occasions", c.revers, c.occasions);
+            LOG_INFO("module", "StellarTarot CHECK: carte {} N{} [{}] occasions={} departs={} "
+                               "attendu={:.1f} marge={:.1f} chance={} ecartMin={:.1f}s icd={}s icd={} "
+                               "revers={} chanceTenue={} icdTenu={}",
+                     carte, uint32(niveau), quoiDit, c.occasions, c.departs, attendu, marge,
+                     verdictChance, double(c.ecartMin) / 1000.0, icd, verdictIcd, c.revers,
+                     coreChance ? "coeur" : "module", coreIcd ? "coeur" : "module");
+        }
+        handler->PSendSysMessage("Tarot : verdict d'ensemble -> %s", tout ? "ATTEINT" : "MANQUE");
+        LOG_INFO("module", "StellarTarot CHECK: verdict d'ensemble pour {} -> {}",
+                 player->GetName(), tout ? "ATTEINT" : "MANQUE");
+        return true;
+    }
+
     static bool HandleSourcesCommand(ChatHandler* handler)
     {
         if (!sStellarTarotMgr->Enabled())

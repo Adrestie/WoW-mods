@@ -24,6 +24,22 @@
 
 StellarTarot.Enabled = 1
 
+#
+#    StellarTarot.Check
+#        Description: The measuring instrument. When on, the module lays a
+#                     WITNESS aura for every event line the player carries -- a
+#                     proc at 100% with no cooldown -- and writes to the log,
+#                     every thirty seconds, whether each line keeps what it
+#                     promises: its chance, measured against the occasions the
+#                     witness counted, and its cooldown, measured as the
+#                     shortest gap between two departures.
+#                     Meant for a test realm; it costs one aura per event.
+#        Default:     0 - (Off)
+#                     1 - (On)
+#
+
+StellarTarot.Check = 0
+
 ###############################################################################
 #
 #    StellarTarot.Loot.Enabled

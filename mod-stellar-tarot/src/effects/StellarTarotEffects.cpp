@@ -20,6 +20,7 @@
  */
 
 #include "StellarTarotEffects.h"
+#include "GameTime.h"
 #include "Log.h"
 #include "Player.h"
 #include "StellarTarotLayout.h"
@@ -54,6 +55,14 @@ namespace
     }
 
     uint32 Guid(Player* player) { return player->GetGUID().GetCounter(); }
+
+    // Secondes ecoulees depuis le dernier verdict porte au journal, par
+    // personnage : l'instrument ne parle que toutes les trente secondes.
+    std::map<uint32, uint32>& Verdicts()
+    {
+        static std::map<uint32, uint32> verdicts;
+        return verdicts;
+    }
 
     // Milliseconds since the last tick, per character.
     std::map<uint32, uint32>& Clocks()
@@ -184,6 +193,10 @@ void StellarTarotEffects::Refresh(Player* player)
     }
     else
         player->RemoveAurasDueToSpell(STELLAR_TAROT_BANNER_SPELL);
+    // L'INSTRUMENT DE MESURE suit le plateau : ce qui est pose est ce qui est
+    // mesure. Les temoins se posent, les compteurs repartent de zero.
+    if (sStellarTarotMgr->Checking())
+        MesureCommence(player);
 }
 
 void StellarTarotEffects::OnLogin(Player* player)
@@ -206,6 +219,10 @@ void StellarTarotEffects::OnLogout(Player* player)
 {
     if (!player)
         return;
+    // UN DERNIER VERDICT avant de tout oublier.
+    if (sStellarTarotMgr->Checking())
+        MesureAuJournal(player, true);
+    Verdicts().erase(Guid(player));
     Clocks().erase(Guid(player));
     auto it = Everyone().find(Guid(player));
     if (it == Everyone().end())
@@ -279,6 +296,17 @@ void StellarTarotEffects::OnUpdate(Player* player, uint32 diff)
         return;
     clock = 0;
     Each(player, [&](StellarTarotScript& s) { s.OnTick(player); });
+    // LE VERDICT AU JOURNAL, toutes les trente secondes et seulement s'il s'est
+    // passe quelque chose depuis la derniere fois.
+    if (sStellarTarotMgr->Checking())
+    {
+        uint32& depuis = Verdicts()[Guid(player)];
+        if (++depuis >= 30)
+        {
+            depuis = 0;
+            MesureAuJournal(player, false);
+        }
+    }
 }
 
 namespace
@@ -350,8 +378,244 @@ void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
         Each(healer->ToPlayer(), [&](StellarTarotScript& s) { s.OnHealDone(healer->ToPlayer(), receiver, gain); });
 }
 
+// ===================== L'INSTRUMENT DE MESURE =====================
+//
+// Un releve par joueur mesure, range par sort de niveau. Les occasions viennent
+// des auras TEMOIN -- a chance 100, sans recharge -- et les departs de la ligne
+// elle-meme : le rapport des deux est la chance reellement vecue, et le plus
+// court intervalle entre deux departs la recharge reellement tenue.
+namespace
+{
+    std::map<uint32, std::map<uint32, StellarTarotEffects::Compte>>& Releves()
+    {
+        static std::map<uint32, std::map<uint32, StellarTarotEffects::Compte>> releves;
+        return releves;
+    }
+
+    // L'evenement d'une ligne -> le marqueur qui l'annonce, dans l'ordre des
+    // marqueurs (903810 et suivants).
+    int32 MarqueurDe(std::string const& event)
+    {
+        static char const* const events[] = { "crit", "spell_crit", "heal_crit", "dodge", "parry",
+                                              "block", "crit_taken", "miss", "spell_crit_fire" };
+        for (int32 i = 0; i < int32(sizeof(events) / sizeof(events[0])); ++i)
+            if (event == events[i])
+                return i;
+        return -1;
+    }
+}
+
+uint32 StellarTarotEffects::MesureCommence(Player* player)
+{
+    if (!player)
+        return 0;
+    auto& releve = Releves()[Guid(player)];
+    releve.clear();
+    uint32 posees = 0;
+    Each(player, [&](StellarTarotScript& s)
+    {
+        std::string event;
+        int32 chance = 0, icd = 0;
+        bool coreChance = false, coreIcd = false;
+        if (!s.Promise(event, chance, icd, coreChance, coreIcd))
+            return;
+        int32 const index = MarqueurDe(event);
+        if (index < 0)
+            return;                       // l'evenement ne vient pas du systeme de procs
+        releve[s.SpellId()] = Compte();
+        LOG_INFO("module", "StellarTarot CHECK: sous l'oeil -- sort {} sur « {} », chance {}% {}, "
+                           "ICD {}s {}",
+                 s.SpellId(), event, chance,
+                 chance >= 100 ? "sans tirage" : (coreChance ? "coeur" : "module"),
+                 icd, coreIcd ? "coeur" : "module");
+        // LE TEMOIN DE CET EVENEMENT : il part a chaque occasion.
+        uint32 const temoin = STELLAR_TAROT_WITNESS_FIRST + uint32(index);
+        if (!player->HasAura(temoin))
+        {
+            player->AddAura(temoin, player);
+            ++posees;
+        }
+    });
+    if (releve.empty())
+        LOG_INFO("module", "StellarTarot CHECK: rien a mesurer -- aucune ligne du plateau ne guette "
+                           "un evenement du systeme de procs (critique, esquive, parade, blocage, "
+                           "attaque ratee, critique de soin). Les autres lignes passent par les "
+                           "crochets du module et n'ont pas de chance a verifier ici.");
+    return uint32(releve.size());
+}
+
+void StellarTarotEffects::MesureArrete(Player* player)
+{
+    if (!player)
+        return;
+    for (uint32 id = STELLAR_TAROT_WITNESS_FIRST; id <= STELLAR_TAROT_WITNESS_LAST; ++id)
+        player->RemoveAurasDueToSpell(id);
+    Releves().erase(Guid(player));
+}
+
+bool StellarTarotEffects::MesureEnCours(Player* player)
+{
+    return player && Releves().count(Guid(player)) != 0;
+}
+
+std::map<uint32, StellarTarotEffects::Compte> const& StellarTarotEffects::Mesure(Player* player)
+{
+    static std::map<uint32, Compte> vide;
+    if (!player)
+        return vide;
+    auto it = Releves().find(Guid(player));
+    return it == Releves().end() ? vide : it->second;
+}
+
+// LE VERDICT AU JOURNAL. Les criteres sont ceux de la ligne elle-meme : les
+// departs doivent tenir dans la fourchette binomiale a trois ecarts-types autour
+// de `occasions x chance`, et le plus court intervalle entre deux departs ne
+// jamais descendre sous l'ICD annonce.
+bool StellarTarotEffects::MesureAuJournal(Player* player, bool force)
+{
+    if (!MesureEnCours(player))
+        return false;
+    auto& releve = Releves()[Guid(player)];
+    bool du_neuf = false;
+    for (auto& paire : releve)
+        if (paire.second.occasions != paire.second.dites)
+            du_neuf = true;
+    if (!du_neuf && !force)
+        return false;
+    for (auto& paire : releve)
+    {
+        Compte& c = paire.second;
+        c.dites = c.occasions;
+        int32 chance = 100, icd = 0;
+        bool coreChance = false, coreIcd = false;
+        if (!PromesseDe(player, paire.first, chance, icd, coreChance, coreIcd))
+            continue;
+        uint32 carte = 0;
+        uint32 niveau = 0;
+        for (StellarTarotActiveEffect const& e : Active(player))
+            if (e.spellId == paire.first)
+            {
+                carte = e.cardId;
+                niveau = e.level;
+            }
+        double const p = double(chance) / 100.0;
+        // LA CHANCE SE JUGE SUR LES ELIGIBLES : une ligne a recharge refuse
+        // volontairement les occasions qui tombent dans sa fenetre.
+        double const attendu = double(c.eligibles) * p;
+        double const sigma = std::sqrt(double(c.eligibles) * p * (1.0 - p));
+        double const marge = std::max(3.0 * sigma, 1.0);
+        // A CHANCE CERTAINE la loi n'a aucune variance : une seule occasion
+        // suffit a juger. Le seuil de trente ne vaut que pour l'incertain.
+        bool const assez = c.eligibles >= 30 || chance >= 100 || chance <= 0;
+        char const* const verdictChance =
+            !c.eligibles ? "AUCUNE OCCASION"
+                         : !assez ? "ECHANTILLON INSUFFISANT"
+                         : (std::fabs(double(c.departs) - attendu) <= marge ? "ATTEINT" : "MANQUE");
+        // UNE RECHARGE QUE RIEN N'A APPROCHEE n'est pas eprouvee : le dire, au
+        // lieu de la declarer tenue.
+        bool const tenue = c.ecartMin + 50 >= uint32(icd) * 1000;
+        char const* const verdictIcd =
+            !icd ? "sans objet"
+                 : c.departs < 2 ? "ECHANTILLON INSUFFISANT"
+                 : !tenue ? "MANQUE"
+                 : (c.ecartMin > uint32(icd) * 2000 ? "ATTEINT (NON EPROUVE)" : "ATTEINT");
+        double const taux = c.eligibles ? 100.0 * double(c.departs) / double(c.eligibles) : 0.0;
+        LOG_INFO("module",
+                 "StellarTarot CHECK: carte {} N{} | occasions {} dont {} eligibles | departs {} "
+                 "= {:.1f}% (annonce {}% {}, attendu {:.1f} +/- {:.1f}) -> {} | ecart min {:.1f}s / "
+                 "ICD {}s {} -> {} | revers {}",
+                 carte, niveau, c.occasions, c.eligibles, c.departs, taux,
+                 chance, chance >= 100 ? "sans tirage" : (coreChance ? "coeur" : "module"),
+                 attendu, marge, verdictChance,
+                 double(c.ecartMin) / 1000.0, icd, coreIcd ? "coeur" : "module", verdictIcd,
+                 c.revers);
+    }
+    return true;
+}
+
+void StellarTarotEffects::CompteOccasion(Player* player, uint32 marqueur)
+{
+    if (!MesureEnCours(player))
+        return;
+    int32 const index = int32(marqueur) - int32(STELLAR_TAROT_MARKER_FIRST);
+    auto& releve = Releves()[Guid(player)];
+    uint32 const now = uint32(GameTime::GetGameTimeMS().count());
+    // L'OCCASION VAUT POUR TOUTES LES LIGNES QUI GUETTENT CET EVENEMENT. Elle
+    // est ELIGIBLE quand la recharge de la ligne etait ecoulee : c'est sur
+    // celles-la, et sur elles seules, que la chance se juge.
+    Each(player, [&](StellarTarotScript& s)
+    {
+        std::string event;
+        int32 chance = 0, icd = 0;
+        bool coreChance = false, coreIcd = false;
+        if (!s.Promise(event, chance, icd, coreChance, coreIcd) || MarqueurDe(event) != index)
+            return;
+        auto it = releve.find(s.SpellId());
+        if (it == releve.end())
+            return;
+        ++it->second.occasions;
+        if (!icd || !it->second.dernier || now - it->second.dernier >= uint32(icd) * 1000)
+            ++it->second.eligibles;
+    });
+}
+
+void StellarTarotEffects::CompteDepart(Player* player, uint32 spellId)
+{
+    if (!MesureEnCours(player))
+        return;
+    auto& releve = Releves()[Guid(player)];
+    auto it = releve.find(spellId);
+    if (it == releve.end())
+        return;
+    uint32 const now = uint32(GameTime::GetGameTimeMS().count());
+    if (it->second.dernier)
+    {
+        uint32 const ecart = now - it->second.dernier;
+        if (!it->second.ecartMin || ecart < it->second.ecartMin)
+            it->second.ecartMin = ecart;
+    }
+    it->second.dernier = now;
+    ++it->second.departs;
+}
+
+bool StellarTarotEffects::PromesseDe(Player* player, uint32 spellId, int32& chance, int32& icd,
+                                     bool& coreChance, bool& coreIcd)
+{
+    bool trouve = false;
+    Each(player, [&](StellarTarotScript& s)
+    {
+        std::string event;
+        if (s.SpellId() == spellId && s.Promise(event, chance, icd, coreChance, coreIcd))
+            trouve = true;
+    });
+    return trouve;
+}
+
+void StellarTarotEffects::CompteRevers(Player* player, uint32 spellId)
+{
+    if (!MesureEnCours(player))
+        return;
+    auto& releve = Releves()[Guid(player)];
+    auto it = releve.find(spellId);
+    if (it != releve.end())
+        ++it->second.revers;
+}
+
 void StellarTarotEffects::OnSpellCast(Player* player, Spell* spell)
 {
+    // LE MARQUEUR D'UN TEMOIN ne reveille aucune ligne : il ne sert qu'a
+    // compter l'occasion, puisque son aura part a chaque fois.
+    if (spell && player)
+    {
+        uint32 const id = spell->GetSpellInfo()->Id;
+        if (id >= STELLAR_TAROT_MARKER_FIRST && id <= STELLAR_TAROT_MARKER_LAST)
+            if (SpellInfo const* const par = spell->GetTriggeredByAuraSpellInfo())
+                if (par->Id >= STELLAR_TAROT_WITNESS_FIRST && par->Id <= STELLAR_TAROT_WITNESS_LAST)
+                {
+                    CompteOccasion(player, id);
+                    return;
+                }
+    }
     Each(player, [&](StellarTarotScript& s) { s.OnSpellCast(player, spell); });
 }
 void StellarTarotEffects::OnEnterCombat(Player* player)
