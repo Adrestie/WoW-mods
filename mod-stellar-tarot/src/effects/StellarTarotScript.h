@@ -108,6 +108,12 @@ public:
                                uint32 /*school*/ = 1, uint32 /*spellId*/ = 0) { }
     virtual void OnHealDone(Player* /*player*/, Unit* /*target*/, uint32& /*gain*/) { }
     virtual void OnSpellCast(Player* /*player*/, Spell* /*spell*/) { }
+    // LE COEUR A FAIT PARTIR L'AURA DE CETTE LIGNE : l'evenement a eu lieu, la
+    // chance et la recharge de `spell_proc` l'ont laisse passer, et le coeur
+    // donne l'unite et le montant. Rien a reconstituer.
+    virtual void OnTriggerProc(Player* /*player*/, Unit* /*other*/, uint32 /*amount*/) { }
+    // L'AURA QUI NOMME CETTE LIGNE, quand elle en a une (le `trigger:`).
+    [[nodiscard]] virtual uint32 Trigger() const { return 0; }
     virtual void OnEnterCombat(Player* /*player*/) { }
     virtual void OnLeaveCombat(Player* /*player*/) { }
     virtual void OnLevelUp(Player* /*player*/) { }

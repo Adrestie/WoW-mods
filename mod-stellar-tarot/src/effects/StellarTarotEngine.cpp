@@ -1595,6 +1595,12 @@ namespace
                     return true;
             return false;
         }
+        // LE COEUR A FAIT PARTIR NOTRE AURA : la ligne n'a qu'a jouer.
+        void OnTriggerProc(Player* player, Unit* other, uint32 amount) override
+        {
+            Fire(player, other, amount);
+        }
+        [[nodiscard]] uint32 Trigger() const override { return uint32(_trigger); }
         // CE QUE LA LIGNE PROMET, pour l'instrument de mesure.
         bool Promise(std::string& event, int32& chance, int32& icd,
                      bool& coreChance, bool& coreIcd) const override
@@ -1962,14 +1968,6 @@ namespace
         }
         void OnHealDone(Player* player, Unit* target, uint32& gain) override
         {
-            // LE SOIN QUI VIENT DE PARTIR, dans son propre souvenir : le
-            // marqueur du critique de soin arrive juste apres et ne sait rien
-            // de lui-meme -- ni sur qui le soin est alle, ni de combien. Le
-            // montant est celui du SORT, non ce qu'il a rendu : une cible a
-            // pleine vie donne donc un bouclier plein.
-            if (target)
-                _lastHealed = target->GetGUID();
-            _lastHealAmount = gain;
             if (_event == "heal" || (_event == "heal_ally" && target != player))
                 Fire(player, target, gain);
             // A PLEINE VIE : l'allie n'a rien a recevoir du soin, et la carte
@@ -1983,39 +1981,6 @@ namespace
         // earlier is refunded here.
         void OnSpellCast(Player* player, Spell* spell) override
         {
-            uint32 const id = spell->GetSpellInfo()->Id;
-            if (id >= STELLAR_TAROT_MARKER_FIRST && id <= STELLAR_TAROT_MARKER_LAST)
-            {
-                // LE MARQUEUR EST-IL LE MIEN ? Dix marqueurs servent vingt-cinq
-                // lignes : le nom de l'evenement ne suffit pas a les distinguer,
-                // et deux cartes qui guettent le meme evenement feraient evaluer
-                // chaque ligne deux fois. Le coeur attache au lancement l'AURA
-                // qui l'a demande (AuraEffect::HandleProcTriggerSpellAuraProc
-                // passe `this` a CastSpell) : c'est elle qui nomme la ligne.
-                SpellInfo const* const par = spell->GetTriggeredByAuraSpellInfo();
-                if (!par || int32(par->Id) != _trigger)
-                    return;
-                // LE MARQUEUR VIENT JUSTE APRES CE QUI L'A FAIT PARTIR, et il
-                // ne dit rien de lui-meme : sa cible implicite est le lanceur.
-                // Un marqueur de SOIN prend donc le soigne et le montant du
-                // soin ; tout autre prend l'unite frappee et le coup porte.
-                bool const duSoin = _event == "heal_crit";
-                uint32 const combien = duSoin ? _lastHealAmount : _lastAmount;
-                // LE COEUR A DEJA CHOISI L'UNITE : il lance le marqueur SUR
-                // elle -- le soigne, l'unite frappee, l'assaillant -- comme
-                // « Guerison ancestrale » du chaman pose sa reduction de degats
-                // sur la cible du soin critique. La cible du marqueur fait donc
-                // foi ; le souvenir du module n'est qu'un repli, pour le jour
-                // ou elle aurait disparu.
-                Unit* vise = spell->m_targets.GetUnitTarget();
-                if (!vise)
-                {
-                    ObjectGuid const qui = duSoin ? _lastHealed : _lastVictim;
-                    vise = qui ? ObjectAccessor::GetUnit(*player, qui) : nullptr;
-                }
-                Fire(player, vise, combien);
-                return;
-            }
             if (spell->IsTriggered())
                 return;
             SpellInfo const* const info = spell->GetSpellInfo();
@@ -2383,7 +2348,7 @@ namespace
             if (!Ready(player))
                 return;
             // L'INSTRUMENT DE MESURE : un depart de plus pour cette ligne.
-            StellarTarotEffects::CompteDepart(player, _spellId);
+            StellarTarotEffects::CompteDepart(player, _spellId, other);
             // The night figure stands in for the action's own while it lasts.
             int32 const day = _a;
             if (_nightA && IsNight())
@@ -2842,10 +2807,6 @@ namespace
         bool _onlyNight = false, _onlyDark = false;
         ObjectGuid _lastVictim;
         uint32 _lastAmount = 0;
-        // LE SOIN A SON PROPRE SOUVENIR : le soigne et le montant du sort. Sans
-        // cela, le marqueur d'un critique de soin lisait celui d'un coup porte.
-        ObjectGuid _lastHealed;
-        uint32 _lastHealAmount = 0;
         uint32 _last = 0, _elapsed = 0, _armedAt = 0, _lastSchool = 0;
         bool _wasBelow = false, _nextCrit = false, _nextSure = false, _wasFlying = false, _selling = false;
         bool _wasMounted = false;

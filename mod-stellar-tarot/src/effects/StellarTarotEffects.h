@@ -141,6 +141,9 @@ namespace StellarTarotEffects
         uint32 ecartMin = 0;         // le plus court intervalle entre deux departs
         uint32 revers = 0;           // les contreparties tombees
         uint32 dites = 0;            // les occasions deja portees au journal
+        // SUR QUI la ligne a agi la derniere fois. Une ligne qui part n'est pas
+        // une ligne qui agit sur la bonne unite : le journal doit le dire.
+        std::string cible;
     };
 
     // Commence ou arrete la mesure pour ce joueur ; rend le nombre de lignes
@@ -154,8 +157,11 @@ namespace StellarTarotEffects
     // Le releve, par sort de niveau.
     std::map<uint32, Compte> const& Mesure(Player* player);
     // Les trois compteurs, appeles par le moteur.
-    void CompteOccasion(Player* player, uint32 marqueur);
-    void CompteDepart(Player* player, uint32 spellId);
+    void CompteOccasion(Player* player, uint32 index);
+    // LE COEUR A FAIT PARTIR UNE AURA DU MODULE. Celle d'une ligne reveille la
+    // ligne ; celle d'un TEMOIN ne fait que compter l'occasion.
+    void OnProc(Player* player, uint32 auraId, Unit* other, uint32 amount);
+    void CompteDepart(Player* player, uint32 spellId, Unit* sur);
     void CompteRevers(Player* player, uint32 spellId);
     // Ce que la ligne d'un sort de niveau promet : sa chance, son temps de
     // recharge, et ce que le coeur en tient. Faux si le sort n'est pas une

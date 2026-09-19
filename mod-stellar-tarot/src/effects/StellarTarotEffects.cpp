@@ -523,21 +523,40 @@ bool StellarTarotEffects::MesureAuJournal(Player* player, bool force)
         LOG_INFO("module",
                  "StellarTarot CHECK: carte {} N{} | occasions {} dont {} eligibles | departs {} "
                  "= {:.1f}% (annonce {}% {}, attendu {:.1f} +/- {:.1f}) -> {} | ecart min {:.1f}s / "
-                 "ICD {}s {} -> {} | revers {}",
+                 "ICD {}s {} -> {} | revers {} | sur {}",
                  carte, niveau, c.occasions, c.eligibles, c.departs, taux,
                  chance, chance >= 100 ? "sans tirage" : (coreChance ? "coeur" : "module"),
                  attendu, marge, verdictChance,
                  double(c.ecartMin) / 1000.0, icd, coreIcd ? "coeur" : "module", verdictIcd,
-                 c.revers);
+                 c.revers, c.cible.empty() ? "-" : c.cible);
     }
     return true;
 }
 
-void StellarTarotEffects::CompteOccasion(Player* player, uint32 marqueur)
+void StellarTarotEffects::OnProc(Player* player, uint32 auraId, Unit* other, uint32 amount)
+{
+    if (!player)
+        return;
+    // UNE AURA DE TEMOIN ne reveille aucune ligne : elle part a chaque
+    // occasion, et c'est tout ce qu'on lui demande.
+    if (auraId >= STELLAR_TAROT_WITNESS_FIRST && auraId <= STELLAR_TAROT_WITNESS_LAST)
+    {
+        CompteOccasion(player, auraId - STELLAR_TAROT_WITNESS_FIRST);
+        return;
+    }
+    // L'AURA NOMME LA LIGNE : c'est le `trigger:` qu'elle declare.
+    Each(player, [&](StellarTarotScript& s)
+    {
+        if (s.Trigger() == auraId)
+            s.OnTriggerProc(player, other, amount);
+    });
+}
+
+void StellarTarotEffects::CompteOccasion(Player* player, uint32 quel)
 {
     if (!MesureEnCours(player))
         return;
-    int32 const index = int32(marqueur) - int32(STELLAR_TAROT_MARKER_FIRST);
+    int32 const index = int32(quel);
     auto& releve = Releves()[Guid(player)];
     uint32 const now = uint32(GameTime::GetGameTimeMS().count());
     // L'OCCASION VAUT POUR TOUTES LES LIGNES QUI GUETTENT CET EVENEMENT. Elle
@@ -559,7 +578,7 @@ void StellarTarotEffects::CompteOccasion(Player* player, uint32 marqueur)
     });
 }
 
-void StellarTarotEffects::CompteDepart(Player* player, uint32 spellId)
+void StellarTarotEffects::CompteDepart(Player* player, uint32 spellId, Unit* sur)
 {
     if (!MesureEnCours(player))
         return;
@@ -576,6 +595,7 @@ void StellarTarotEffects::CompteDepart(Player* player, uint32 spellId)
     }
     it->second.dernier = now;
     ++it->second.departs;
+    it->second.cible = sur ? sur->GetName() : "-";
 }
 
 bool StellarTarotEffects::PromesseDe(Player* player, uint32 spellId, int32& chance, int32& icd,
