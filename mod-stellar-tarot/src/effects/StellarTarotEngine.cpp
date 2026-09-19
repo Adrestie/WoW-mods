@@ -2292,11 +2292,18 @@ namespace
             // LA RECHARGE ET LE DE : seulement ce que le coeur ne tient pas.
             // `spell_proc` porte l'autre moitie, et l'appliquer ici aussi
             // reviendrait a filtrer deux fois.
-            if (!_coreIcd && _icd && _last && now - _last < uint32(_icd))
+            //
+            // LA RECHARGE SE COMPTE EN MILLISECONDES. En secondes entieres, le
+            // compte se faisait sur un battement d'une seconde et l'attente
+            // reelle tombait n'importe ou dans [icd-1, icd[ : mesure a 9,5 sec
+            // pour une recharge de 10 sur la carte 58. Le coeur, lui, donne
+            // l'ICD exact ; ce que le module garde doit valoir autant.
+            uint32 const nowMs = uint32(GameTime::GetGameTimeMS().count());
+            if (!_coreIcd && _icd && _last && nowMs - _last < uint32(_icd) * 1000)
                 return false;
             if (!_coreChance && _chance < 100 && int32(urand(1, 100)) > _chance)
                 return false;
-            _last = now;
+            _last = nowMs;
             return true;
         }
         // Le revers paye AVEC le bienfait : seulement quand aucune chance propre
