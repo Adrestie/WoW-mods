@@ -108,6 +108,9 @@ public:
                                uint32 /*school*/ = 1, uint32 /*spellId*/ = 0) { }
     virtual void OnHealDone(Player* /*player*/, Unit* /*target*/, uint32& /*gain*/) { }
     virtual void OnSpellCast(Player* /*player*/, Spell* /*spell*/) { }
+    // NOTE D'UNITE : la chance qu'une ligne annonce (`Promise`) est EN POUR
+    // MILLE -- 25 vaut 2,5 %. La ligne l'ecrit en pour-cent, le moteur la garde
+    // au dixieme.
     // LE COEUR A FAIT PARTIR L'AURA DE CETTE LIGNE : l'evenement a eu lieu, la
     // chance et la recharge de `spell_proc` l'ont laisse passer, et le coeur
     // donne l'unite et le montant. Rien a reconstituer.

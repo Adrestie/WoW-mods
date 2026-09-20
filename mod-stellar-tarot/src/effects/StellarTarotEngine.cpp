@@ -469,6 +469,32 @@ namespace
         return true;
     }
 
+    // UNE CHANCE AU DIXIEME DE POUR-CENT, rendue EN POUR MILLE. « 2.5 » vaut 25,
+    // « 10 » en vaut 100 : une ligne ecrite en entiers garde exactement son
+    // sens. Le point et la virgule se lisent tous les deux, un seul chiffre
+    // apres -- c'est la finesse que le tirage sait tenir.
+    bool Millieme(std::string const& s, int32 low, int32 high, int32& out)
+    {
+        if (s.empty())
+            return false;
+        size_t const sep = s.find_first_of(".,");
+        int32 unites = 0;
+        if (!Number(s.substr(0, sep), 0, 100000, unites))
+            return false;
+        int32 dixieme = 0;
+        if (sep != std::string::npos)
+        {
+            std::string const reste = s.substr(sep + 1);
+            if (reste.size() != 1 || !Number(reste, 0, 9, dixieme))
+                return false;
+        }
+        int32 const v = unites * 10 + dixieme;
+        if (v < low || v > high)
+            return false;
+        out = v;
+        return true;
+    }
+
     // "hp_below:30" split on the first colon is already done by the spec:
     // the state and its number come as two parameters. This joins a name and
     // reads the optional number that follows it in the parameter list.
@@ -483,6 +509,14 @@ namespace
         bool Int(int32 low, int32 high, int32& out)
         {
             if (at >= p.size() || !Number(p[at], low, high, out))
+                return false;
+            ++at;
+            return true;
+        }
+        // Une chance, au dixieme de pour-cent pres, rendue en pour mille.
+        bool Mille(int32 low, int32 high, int32& out)
+        {
+            if (at >= p.size() || !Millieme(p[at], low, high, out))
                 return false;
             ++at;
             return true;
@@ -1652,7 +1686,10 @@ namespace
                 if (!r.Int(1, 86400, _eventN)) { error = _event + " expects a number"; return false; }
             }
             if (!known) { error = "unknown event \"" + _event + "\""; return false; }
-            if (!r.Int(0, 100, _chance) || !r.Int(0, 86400, _icd)) { error = "expects the chance then the cooldown"; return false; }
+            // LA CHANCE SE LIT EN POUR-CENT ET SE GARDE EN POUR MILLE : « 2.5 »
+            // est la plus fine que la ligne sache dire, et « 10 » vaut ce qu'il
+            // a toujours valu.
+            if (!r.Mille(0, 1000, _chance) || !r.Int(0, 86400, _icd)) { error = "expects the chance then the cooldown"; return false; }
             _action = r.Word();
             bool ok = true;
             std::string const& A = _action;
@@ -2473,7 +2510,7 @@ namespace
             uint32 const nowMs = uint32(GameTime::GetGameTimeMS().count());
             if (!_coreIcd && _icd && _last && nowMs - _last < uint32(_icd) * 1000)
                 return false;
-            if (!_coreChance && _chance < 100 && int32(urand(1, 100)) > _chance)
+            if (!_coreChance && _chance < 1000 && int32(urand(1, 1000)) > _chance)
                 return false;
             _last = nowMs;
             return true;
@@ -2978,7 +3015,9 @@ namespace
         uint32 _lastSpellId = 0, _mirrorSpell = 0, _mirrorAmount = 0;
         bool _peaceSpent = false;
         uint32 _idleSince = 0;
-        int32 _chance = 100, _icd = 0, _a = 0, _b = 0, _c = 0, _trigger = 0, _nightEvery = 0;
+        // _chance est EN POUR MILLE (25 = 2,5 %) ; la ligne, elle, l'ecrit en
+        // pour-cent. Tout ce qui la lit ou l'annonce compte en pour mille.
+        int32 _chance = 1000, _icd = 0, _a = 0, _b = 0, _c = 0, _trigger = 0, _nightEvery = 0;
         int32 _nightA = 0, _say = 0, _emote = 0, _thenPct = 0, _thenSec = 0, _thenSpell = 0;
         uint32 _seqUntil = 0;
         bool _onlyNight = false, _onlyDark = false;

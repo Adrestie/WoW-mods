@@ -469,8 +469,8 @@ uint32 StellarTarotEffects::MesureCommence(Player* player)
         releve[s.SpellId()] = Compte();
         LOG_INFO("module", "StellarTarot CHECK: sous l'oeil -- sort {} sur « {} », chance {}% {}, "
                            "ICD {}s {}",
-                 s.SpellId(), event, chance,
-                 chance >= 100 ? "sans tirage" : (coreChance ? "coeur" : "module"),
+                 s.SpellId(), event, double(chance) / 10.0,
+                 chance >= 1000 ? "sans tirage" : (coreChance ? "coeur" : "module"),
                  icd, coreIcd ? "coeur" : "module");
         // LE TEMOIN DE CET EVENEMENT : il part a chaque occasion.
         uint32 const temoin = STELLAR_TAROT_WITNESS_FIRST + uint32(index);
@@ -542,7 +542,7 @@ bool StellarTarotEffects::MesureAuJournal(Player* player, bool force)
                 carte = e.cardId;
                 niveau = e.level;
             }
-        double const p = double(chance) / 100.0;
+        double const p = double(chance) / 1000.0;      // la chance est en pour mille
         // LA CHANCE SE JUGE SUR LES ELIGIBLES : une ligne a recharge refuse
         // volontairement les occasions qui tombent dans sa fenetre.
         double const attendu = double(c.eligibles) * p;
@@ -550,7 +550,7 @@ bool StellarTarotEffects::MesureAuJournal(Player* player, bool force)
         double const marge = std::max(3.0 * sigma, 1.0);
         // A CHANCE CERTAINE la loi n'a aucune variance : une seule occasion
         // suffit a juger. Le seuil de trente ne vaut que pour l'incertain.
-        bool const assez = c.eligibles >= 30 || chance >= 100 || chance <= 0;
+        bool const assez = c.eligibles >= 30 || chance >= 1000 || chance <= 0;
         char const* const verdictChance =
             !c.eligibles ? "AUCUNE OCCASION"
                          : !assez ? "ECHANTILLON INSUFFISANT"
@@ -569,7 +569,8 @@ bool StellarTarotEffects::MesureAuJournal(Player* player, bool force)
                  "= {:.1f}% (annonce {}% {}, attendu {:.1f} +/- {:.1f}) -> {} | ecart min {:.1f}s / "
                  "ICD {}s {} -> {} | revers {} | sur {}",
                  carte, niveau, c.occasions, c.eligibles, c.departs, taux,
-                 chance, chance >= 100 ? "sans tirage" : (coreChance ? "coeur" : "module"),
+                 double(chance) / 10.0,
+                 chance >= 1000 ? "sans tirage" : (coreChance ? "coeur" : "module"),
                  attendu, marge, verdictChance,
                  double(c.ecartMin) / 1000.0, icd, coreIcd ? "coeur" : "module", verdictIcd,
                  c.revers, c.cible.empty() ? "-" : c.cible);

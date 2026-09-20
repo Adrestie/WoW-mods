@@ -50,7 +50,7 @@ INSERT INTO `mod_stellar_tarot_card`
 (16, 'The Ink', 2, 2, 1, 1, 2, 1, 903064, 903065, 903066, 903067, '', '', '', '', 'Lorem ipsum', ''),
 (17, 'The Merchant', 1, 2, 1, 2, 3, 1, 903068, 903069, 903070, 903071, 'econ:vendor_buy:-5', 'econ:vendor_sell:5', 'proc:repair:10:0:free_repair', 'proc:vendor_buy:5:0:extra_copy', 'Lorem ipsum', ''),
 (18, 'The Coin', 2, 1, 2, 1, 3, 1, 903072, 903073, 903074, 903075, 'proc:kill:2:0:silver_level:5', 'proc:loot_gold:1:0:gold_mult:2', 'econ:vendor_sell_grey:10', 'proc:loot_gold:1:0:gold_mult:10', 'Lorem ipsum', ''),
-(19, 'The Harbor', 1, 1, 2, 2, 3, 1, 903076, 903077, 903078, 903079, 'econ:gold_loot:3:rested', 'cond:nocombat', 'proc:loot_creature:2:0:crate', 'proc:flight_end:100:0:aura:600:1', 'Lorem ipsum', ''),
+(19, 'The Harbor', 1, 1, 2, 2, 3, 1, 903076, 903077, 903078, 903079, 'econ:gold_loot:3:rested', 'cond:nocombat', 'proc:loot_creature:2.5:0:crate', 'proc:flight_end:100:0:aura:600:1', 'Lorem ipsum', ''),
 (20, 'The Market', 2, 2, 1, 1, 3, 1, 903080, 903081, 903082, 903083, 'econ:vendor_sell_grey:10', 'proc:vendor_sell:10:0:gold_mult:2', 'proc:loot_creature:5:0:grey_item', 'econ:vendor_sell_good:15', 'Lorem ipsum', ''),
 (21, 'The Ledger', 1, 2, 2, 1, 3, 1, 903084, 903085, 903086, 903087, 'econ:repair:-10', 'econ:repair:-1:per_gold:500:cap:10', 'proc:vendor_buy:100:0:refund:3', 'proc:every:300:100:0:repair_one:1', 'Lorem ipsum', ''),
 (22, 'The Tithe', 2, 1, 1, 2, 3, 1, 903088, 903089, 903090, 903091, 'proc:kill:5:60:silver_level:3', 'econ:quest_gold:5', 'proc:kill:5:60:silver_level:5:say:55', 'econ:quest_gold:10', 'Lorem ipsum', ''),
