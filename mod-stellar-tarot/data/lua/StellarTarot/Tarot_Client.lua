@@ -2686,6 +2686,110 @@ if not STELLAR_TAROT_POTION_HOOKED then
     end)
 end
 
+-- ---------------------------------------------------------------------------
+-- LE BÉNÉFICE D'UNE VENTE, ANNONCÉ QUAND LE MARCHAND SE FERME.
+--
+-- Le serveur ne sait pas quand la fenêtre du marchand se ferme : le client
+-- n'envoie rien en la fermant. Il envoie donc ce que CHAQUE vente a rapporté
+-- en plus, et c'est ici qu'on additionne, pour le dire d'un trait au moment où
+-- le joueur repart -- une ligne par carte qui y a contribué.
+--
+-- Le nom de la carte vient du DBC du client (`GetSpellInfo`), donc dans sa
+-- langue ; la parenthèse du niveau est retirée, c'est la CARTE qui parle.
+-- ---------------------------------------------------------------------------
+
+if not STELLAR_TAROT_PROFIT_HOOKED then
+    STELLAR_TAROT_PROFIT_HOOKED = true
+    local gains = {}                       -- nom de carte -> cuivre
+
+    local PIECES = FR and { { 10000, "pièce d'or", "pièces d'or" },
+                            { 100, "pièce d'argent", "pièces d'argent" },
+                            { 1, "pièce de cuivre", "pièces de cuivre" } }
+                     or { { 10000, "gold coin", "gold coins" },
+                          { 100, "silver coin", "silver coins" },
+                          { 1, "copper coin", "copper coins" } }
+
+    -- « 15 pièces d'argent », « 2 pièces d'or et 15 pièces d'argent » : les
+    -- rangs nuls se taisent, et le dernier se joint par « et ».
+    local function Somme(cuivre)
+        local bouts, reste = {}, cuivre
+        for _, rang in ipairs(PIECES) do
+            local combien = math.floor(reste / rang[1])
+            reste = reste - combien * rang[1]
+            if combien > 0 then
+                bouts[#bouts + 1] = combien .. " " .. (combien > 1 and rang[3] or rang[2])
+            end
+        end
+        if #bouts == 0 then return nil end
+        if #bouts == 1 then return bouts[1] end
+        local dernier = table.remove(bouts)
+        return table.concat(bouts, ", ") .. (FR and " et " or " and ") .. dernier
+    end
+
+    local function Nom(spellId)
+        local nom = GetSpellInfo(spellId)
+        if not nom then return nil end
+        return (nom:gsub("%s*%b()%s*$", ""))
+    end
+
+    local receiver = CreateFrame("Frame")
+    receiver:RegisterEvent("CHAT_MSG_ADDON")
+    receiver:RegisterEvent("MERCHANT_SHOW")
+    receiver:RegisterEvent("MERCHANT_CLOSED")
+    receiver:SetScript("OnEvent", function(_, event, prefix, message)
+        if event == "MERCHANT_SHOW" then
+            gains = {}
+            return
+        end
+        if event == "CHAT_MSG_ADDON" then
+            -- LA REPARATION OFFERTE : elle se dit sur-le-champ, sans rien
+            -- attendre -- le forgeron a fini, il n'y a pas de fenêtre à fermer.
+            -- L'EXEMPLAIRE OFFERT : l'objet se nomme par son LIEN, que le
+            -- client colore et rend cliquable. Il vient d'entrer dans les sacs,
+            -- donc le client le connaît déjà.
+            if prefix == "StellarTarotExtraCopy" and message then
+                local id, objet = message:match("^(%d+):(%d+)$")
+                local nom = id and Nom(tonumber(id))
+                local _, lien = GetItemInfo(tonumber(objet or 0))
+                if nom and lien then
+                    DEFAULT_CHAT_FRAME:AddMessage(
+                        FR and ("[" .. nom .. "] Vous venez de recevoir " .. lien .. " en plus, gratuitement !")
+                            or ("[" .. nom .. "] You just got a little extra of " .. lien .. " for free!"),
+                        1.0, 0.82, 0.0)
+                end
+                return
+            end
+            if prefix == "StellarTarotFreeRepair" and message then
+                local nom = Nom(tonumber(message))
+                if nom then
+                    DEFAULT_CHAT_FRAME:AddMessage(
+                        FR and ("[" .. nom .. "] Le forgeron vous a offert vos réparations !")
+                            or ("[" .. nom .. "] The blacksmith repaired your gear for free!"),
+                        1.0, 0.82, 0.0)
+                end
+                return
+            end
+            if prefix ~= "StellarTarotProfit" or not message then return end
+            local id, cuivre = message:match("^(%d+):(%d+)$")
+            local nom = id and Nom(tonumber(id))
+            if not nom then return end
+            gains[nom] = (gains[nom] or 0) + tonumber(cuivre)
+            return
+        end
+        -- MERCHANT_CLOSED : le moment que le joueur reconnaît.
+        for nom, cuivre in pairs(gains) do
+            local somme = Somme(cuivre)
+            if somme then
+                DEFAULT_CHAT_FRAME:AddMessage(
+                    FR and ("[" .. nom .. "] Vous avez gagné " .. somme .. " de bénéfice.")
+                        or ("[" .. nom .. "] You have gained " .. somme .. " in profit."),
+                    1.0, 0.82, 0.0)
+            end
+        end
+        gains = {}
+    end)
+end
+
 -- Les nombres de l'infobulle que le module a releves, remplaces par les siens.
 local function RaisePotionLines(tip, map)
     local n, changed = 2, false

@@ -666,6 +666,11 @@ namespace
     constexpr Milliseconds TOUR_SUIVANT{ 1 };     // le coeur finit ce qu'il fait
     constexpr Milliseconds APRES_COUP{ 500 };     // le demi-tour d'horloge du revers
 
+    // CE QUE SEUL LE CLIENT PEUT DIRE, annonce ici : la definition est plus
+    // bas, avec les infobulles de potion qu'elle sert d'abord, mais des lignes
+    // qui viennent avant s'en servent aussi.
+    void TellClient(Player* player, char const* prefix, std::string const& message);
+
     template <typename F>
     void PlusTard(Player* player, Milliseconds delai, F travail)
     {
@@ -2387,7 +2392,15 @@ namespace
             if (!Ready(player))
                 return;
             if (Item* copy = player->StoreNewItem(dest, entry, true, item->GetItemRandomPropertyId()))
+            {
                 player->SendNewItem(copy, count, true, false);
+                // L'EXEMPLAIRE EST DANS LES SACS, ET LE JOUEUR DOIT LE SAVOIR :
+                // rien ne distingue ce qu'il a paye de ce que la carte ajoute.
+                // L'objet se nomme cote client, qui seul a sa langue, sa
+                // couleur de qualite et son lien.
+                TellClient(player, "StellarTarotExtraCopy",
+                           std::to_string(SpellId()) + ":" + std::to_string(entry));
+            }
             Pay(player);
         }
         // A repair the player is about to pay for: it costs nothing.
@@ -2409,6 +2422,10 @@ namespace
             else
                 player->DurabilityRepairAll(false, 0.0f, false);
             Pay(player);
+            // LE FORGERON N'A RIEN PRIS, ET LE JOUEUR DOIT L'APPRENDRE : le
+            // coeur ne trouve plus rien a facturer, donc rien ne le lui dirait.
+            // La carte se nomme elle-meme, dans la langue du client.
+            TellClient(player, "StellarTarotFreeRepair", std::to_string(SpellId()));
         }
         // Une vente : le marchand paie le double. L'objet est nomme quand il
         // part, la somme n'arrive qu'ensuite -- la ligne s'arme ici et agit sur
@@ -4894,7 +4911,20 @@ namespace
                 && _kind != "vendor_sell_good")
                 return;
             if (SommeAttendue(_selling) && amount > 0)
+            {
+                int32 const sans_la_carte = amount;
                 amount = int32(std::llround(double(amount) * (100 + Pct(player)) / 100.0));
+                // LE BENEFICE, PORTE AU CLIENT. La fermeture de la fenetre du
+                // marchand n'existe pas cote serveur -- le client 3.3.5
+                // n'envoie rien en la fermant -- donc le module ne peut pas
+                // attendre ce moment pour parler. Il dit ce que CETTE vente a
+                // rapporte en plus ; l'addon additionne et annonce le total a
+                // `MERCHANT_CLOSED`, quand le joueur repart.
+                if (amount > sans_la_carte)
+                    TellClient(player, "StellarTarotProfit",
+                               std::to_string(SpellId()) + ":"
+                               + std::to_string(amount - sans_la_carte));
+            }
         }
     private:
         std::string _kind, _kind2, _state;
