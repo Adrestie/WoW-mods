@@ -1639,7 +1639,8 @@ namespace
                 }
             }
             if (_event == "tick" || _event == "every" || _event == "hp_below" || _event == "mana_below"
-                || _event == "spell_cast_school" || _event == "death_near" || _event == "spell_cast_id"
+                || _event == "spell_cast_school" || _event == "hit_spell_school"
+                || _event == "death_near" || _event == "spell_cast_id"
                 || _event == "no_spend" || _event == "nocombat")
             {
                 known = true;
@@ -2135,6 +2136,12 @@ namespace
                 _lastAmount = damage;
             }
             if (_event == "hit" || (_event == "hit_spell" && spell))
+                Fire(player, victim, damage);
+            // L'IMPACT D'UN SORT D'UNE ECOLE NOMMEE. Le coup a porte, et c'est
+            // l'ECOLE DU COUP qui compte, non celle du sort qu'on a voulu : un
+            // sort qui rate, qui est resiste ou qui n'inflige rien ne passe pas
+            // par ici. Ce qui se donne ici se gagne sur le coup.
+            else if (_event == "hit_spell_school" && spell && (school & uint32(_eventN)))
                 Fire(player, victim, damage);
             // LE CORPS A CORPS NOMME : l'attaque automatique et la competence
             // dont la classe de degats est celle d'une arme de melee. Un sort
@@ -2854,7 +2861,18 @@ namespace
             // fin du lancement, et seulement si le sort a vraiment employe le
             // modificateur. Un sort deja gratuit ou deja instantane ne la
             // consomme donc plus.
-            else if (A == "free_next" || A == "cost_next" || A == "next_instant")
+            // LA PROMESSE DE COUT ARRIVE AU TOUR SUIVANT. Le coeur peut encore
+            // evaluer des procs du sort qui l'arme apres le crochet qui la pose
+            // (Spell.cpp:3825, puis 4003 pour la phase de lancement) : posee
+            // sur-le-champ, l'aura risquerait d'etre devoree par ce sort meme,
+            // puisqu'il est de la bonne ecole. Un tour d'horloge plus tard, il
+            // est clos et la promesse attend le suivant.
+            else if (A == "cost_next")
+            {
+                uint32 const promesse = _spellId;
+                PlusTard(player, TOUR_SUIVANT, [promesse](Player* p) { Put(p, p, promesse, 0); });
+            }
+            else if (A == "free_next" || A == "next_instant")
                 Put(player, player, _spellId, 0);
             // LA PROMESSE EST TOUTE DANS L'AURA : +100 % de critique (aura 290)
             // pour `next_crit`, 500 points d'expertise (aura 240) pour

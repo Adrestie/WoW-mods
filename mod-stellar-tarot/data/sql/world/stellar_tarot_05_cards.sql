@@ -42,7 +42,7 @@ INSERT INTO `mod_stellar_tarot_card`
 (8, 'The Hound', 2, 2, 1, 1, 1, 1, 903032, 903033, 903034, 903035, '', '', '', '', 'Lorem ipsum', ''),
 (9, 'The Star', 2, 1, 2, 1, 2, 1, 903036, 903037, 903038, 903039, 'sp_pct:2:night:6', 'stat:1:3', 'proc:spell_crit:100:8:mana:1:trigger:903820:night:2:core:icd', 'proc:hit_spell:5:0:extra:7:64:onlynight', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_star'),
 (10, 'The Moon', 1, 2, 1, 2, 2, 1, 903040, 903041, 903042, 903043, 'proc:every:10:100:0:mana:1:night_every:5', 'stat:-5:-10', 'proc:kill:100:0:mana:2:night:3', 'tickmod:5:100:onlynight', 'Lorem ipsum', 'Interface\\mod-Tarot\\Cards\\the_moon'),
-(11, 'The Candle', 1, 2, 2, 1, 2, 0, 903044, 903045, 903046, 903047, '', 'proc:spell_crit_fire:100:0:burn:6:5:trigger:903821', 'proc:spell_cast_school:4:100:5:cost_next:3', '', 'Lorem ipsum', ''),
+(11, 'The Candle', 1, 2, 2, 1, 2, 0, 903044, 903045, 903046, 903047, '', 'proc:spell_crit_fire:100:0:burn:6:5:trigger:903821', 'proc:hit_spell_school:4:100:5:cost_next:3', '', 'Lorem ipsum', ''),
 (12, 'The Ember', 2, 1, 1, 2, 2, 1, 903048, 903049, 903050, 903051, 'dmgmod:burning:3:4', 'dotlong:4:1', '', '', 'Lorem ipsum', ''),
 (13, 'The Frost', 2, 2, 1, 1, 2, 1, 903052, 903053, 903054, 903055, '', 'dmgmod:slowed:3:0', '', '', 'Lorem ipsum', ''),
 (14, 'The Wand', 1, 1, 2, 2, 2, 1, 903056, 903057, 903058, 903059, 'proc:wand:15:0:extra_shot', 'proc:wand:100:0:mana_pm:5', 'wandmod:10:50', 'wandmod:100:20:hp_below:20', 'Lorem ipsum', ''),

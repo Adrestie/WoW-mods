@@ -12,6 +12,7 @@ INSERT INTO `spell_proc`
   (`SpellId`, `SchoolMask`, `SpellFamilyName`, `SpellFamilyMask0`, `SpellFamilyMask1`, `SpellFamilyMask2`,
    `ProcFlags`, `SpellTypeMask`, `SpellPhaseMask`, `HitMask`, `AttributesMask`, `DisableEffectsMask`,
    `ProcsPerMinute`, `Chance`, `Cooldown`, `Charges`) VALUES
+(903046, 4, 0, 0, 0, 0, 87040, 0, 1, 3, 0, 0, 0, 100, 0, 1),
 (903098, 0, 0, 0, 0, 0, 69972, 0, 2, 2, 0, 0, 0, 100, 0, 1),
 (903206, 0, 0, 0, 0, 0, 69972, 0, 2, 2, 0, 0, 0, 100, 0, 1),
 (903334, 0, 0, 0, 0, 0, 69972, 0, 2, 2, 0, 0, 0, 100, 0, 1),

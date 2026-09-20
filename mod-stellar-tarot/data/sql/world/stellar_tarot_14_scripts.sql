@@ -20,6 +20,7 @@ INSERT INTO `spell_script_names` (`spell_id`, `ScriptName`) VALUES
 (902706, 'spell_stellar_tarot_line'),
 (902707, 'spell_stellar_tarot_line'),
 (902708, 'spell_stellar_tarot_line'),
+(903046, 'spell_stellar_tarot_line'),
 (903098, 'spell_stellar_tarot_line'),
 (903206, 'spell_stellar_tarot_line'),
 (903334, 'spell_stellar_tarot_line'),
