@@ -2467,16 +2467,28 @@ namespace
         // Une vente : le marchand paie le double. L'objet est nomme quand il
         // part, la somme n'arrive qu'ensuite -- la ligne s'arme ici et agit sur
         // le mouvement d'argent qui suit.
-        void OnSellItem(Player* player, Item* /*item*/) override
+        void OnSellItem(Player* player, Item* item) override
         {
             if (_event == "vendor_sell" && _action == "gold_mult" && Ready(player))
+            {
+                // L'OBJET SE NOMME ICI, ET NULLE PART AILLEURS : quand la somme
+                // arrive, il a deja quitte les sacs. On retient son numero.
+                _venduEntry = item ? item->GetEntry() : 0;
                 AttendreLaSomme(_selling);
+            }
         }
         void OnMoneyChanged(Player* player, int32& amount) override
         {
             if (!SommeAttendue(_selling) || amount <= 0)
                 return;
             amount = int32(std::min<int64>(int64(amount) * int64(_a), 2000000000LL));
+            // LE MARCHAND A PAYE DOUBLE, ET LE JOUEUR DOIT LE SAVOIR : rien ne
+            // distingue une bonne affaire d'une vente ordinaire. Le client
+            // nomme l'objet par son lien, dans sa langue.
+            if (_venduEntry)
+                TellClient(player, "StellarTarotKeenBuyer",
+                           std::to_string(SpellId()) + ":" + std::to_string(_venduEntry));
+            _venduEntry = 0;
             Pay(player);
         }
 
@@ -3018,6 +3030,7 @@ namespace
         // _chance est EN POUR MILLE (25 = 2,5 %) ; la ligne, elle, l'ecrit en
         // pour-cent. Tout ce qui la lit ou l'annonce compte en pour mille.
         int32 _chance = 1000, _icd = 0, _a = 0, _b = 0, _c = 0, _trigger = 0, _nightEvery = 0;
+        uint32 _venduEntry = 0;          // l'objet vendu, retenu jusqu'a l'arrivee de l'argent
         int32 _nightA = 0, _say = 0, _emote = 0, _thenPct = 0, _thenSec = 0, _thenSpell = 0;
         uint32 _seqUntil = 0;
         bool _onlyNight = false, _onlyDark = false;

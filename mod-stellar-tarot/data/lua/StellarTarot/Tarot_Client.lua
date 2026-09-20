@@ -2744,6 +2744,20 @@ if not STELLAR_TAROT_PROFIT_HOOKED then
         if event == "CHAT_MSG_ADDON" then
             -- LA REPARATION OFFERTE : elle se dit sur-le-champ, sans rien
             -- attendre -- le forgeron a fini, il n'y a pas de fenêtre à fermer.
+            -- LA BONNE AFFAIRE : le marchand a paye le double, et l'objet se
+            -- nomme comme les autres, par son lien.
+            if prefix == "StellarTarotKeenBuyer" and message then
+                local id, objet = message:match("^(%d+):(%d+)$")
+                local nom = id and Nom(tonumber(id))
+                local _, lien = GetItemInfo(tonumber(objet or 0))
+                if nom and lien then
+                    DEFAULT_CHAT_FRAME:AddMessage(
+                        FR and ("[" .. nom .. "] Le marchand était très intéressé par " .. lien .. " !")
+                            or ("[" .. nom .. "] The merchant was very interested in " .. lien .. "!"),
+                        1.0, 0.82, 0.0)
+                end
+                return
+            end
             -- L'EXEMPLAIRE OFFERT : l'objet se nomme par son LIEN, que le
             -- client colore et rend cliquable. Il vient d'entrer dans les sacs,
             -- donc le client le connaît déjà.
