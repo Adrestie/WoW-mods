@@ -45,7 +45,7 @@ INSERT INTO `mod_stellar_tarot_card`
 (11, 'The Candle', 1, 2, 2, 1, 2, 0, 903044, 903045, 903046, 903047, '', 'proc:spell_crit_fire:100:0:burn:6:5:trigger:903821', 'proc:hit_spell_school:4:100:5:cost_next:3', '', 'Lorem ipsum', ''),
 (12, 'The Ember', 2, 1, 1, 2, 2, 1, 903048, 903049, 903050, 903051, 'dmgmod:burning:3:4', 'dotlong:4:1', '', '', 'Lorem ipsum', ''),
 (13, 'The Frost', 2, 2, 1, 1, 2, 1, 903052, 903053, 903054, 903055, '', 'dmgmod:slowed:3:0', '', '', 'Lorem ipsum', ''),
-(14, 'The Wand', 1, 1, 2, 2, 2, 1, 903056, 903057, 903058, 903059, 'proc:wand:15:0:extra_shot', 'proc:wand:100:0:mana_pm:5', 'wandmod:10:50', 'wandmod:100:20:hp_below:20', 'Lorem ipsum', ''),
+(14, 'The Wand', 1, 1, 2, 2, 2, 1, 903056, 903057, 903058, 903059, 'proc:wand:15:0:extra_shot', 'proc:wand:100:0:mana_pm:2', 'wandmod:10:50', 'wandmod:100:20:hp_below:20', 'Lorem ipsum', ''),
 (15, 'The Quill', 1, 2, 1, 2, 2, 1, 903060, 903061, 903062, 903063, '', '', '', '', 'Lorem ipsum', ''),
 (16, 'The Ink', 2, 2, 1, 1, 2, 1, 903064, 903065, 903066, 903067, '', '', '', '', 'Lorem ipsum', ''),
 (17, 'The Merchant', 1, 2, 1, 2, 3, 1, 903068, 903069, 903070, 903071, 'econ:vendor_buy:-5', 'econ:vendor_sell:5', 'proc:repair:10:0:free_repair', 'proc:vendor_buy:5:0:extra_copy', 'Lorem ipsum', ''),

@@ -393,7 +393,14 @@ bool StellarTarotEffects::HeldFor(ObjectGuid who)
 
 void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell, uint32 school, uint32 spellId)
 {
-    if (OursSpell(spellId) || Held(attacker, victim))
+    // LE TIR SUPPLEMENTAIRE EST UN TIR COMME UN AUTRE. Les sorts du module ne
+    // reveillent aucune ligne -- sans quoi un coup de carte en appellerait un
+    // autre sans fin -- mais celui-ci n'est pas un coup de carte : c'est la
+    // baguette qui tire une seconde fois, et une carte l'a promis. Il rend donc
+    // son mana et porte les majorations comme le premier. La ligne qui l'a
+    // offert, elle, ne le voit pas (evenement `wand` du moteur) : rien ne boucle.
+    if ((OursSpell(spellId) && spellId != STELLAR_TAROT_SPELL_WAND_SHOT)
+        || Held(attacker, victim))
         return;
     if (attacker && attacker->IsPlayer())
         Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell, school, spellId); });
