@@ -22,3 +22,4 @@ CastBar.lua
 ActionBar.lua
 BottomBar.lua
 StatusBars.lua
+Bags.lua

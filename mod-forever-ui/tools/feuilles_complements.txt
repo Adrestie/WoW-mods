@@ -1,0 +1,40 @@
+# Les feuilles d'atlas que l'addon lit en dehors des cinq ecrans inventories.
+# Une ligne par feuille, telle que le client moderne la nomme.
+# tools/ajouter_feuilles.py les fait entrer dans data/art et regenere
+# data/addon/ForeverUI/UIAtlas_06_complements.lua.
+
+# cadre joueur et cible
+interface/hud/uiunitframerestingflipbook.blp
+interface/hud/uiunitframehorizontal.blp
+interface/hud/uiunitframeboss.blp
+interface/hud/uiunitframebossc60.blp
+
+# runes du chevalier de la mort
+interface/playerframe/classoverlaydeathknightrunes.blp
+interface/playerframe/classoverlaydeathknightrunesfill.blp
+interface/hud/uideathknightrunes.blp
+
+# barre d'incantation
+interface/castingbar/uicastingbar.blp
+interface/castingbar/uicastingbarfx.blp
+
+# barres d'experience et de reputation
+interface/hud/uiexperiencebarcamelot.blp
+
+# micro-menu et separateur vertical de la rangee du bas
+interface/hud/uimicromenu2x.blp
+interface/hud/uimicromenuc602x.blp
+interface/hud/uiactionbarverticalc60.blp
+
+# panneaux : l'encadrement de metal en neuf tranches, et le fond plat
+interface/framegeneral/uiframemetal2xc60.blp
+interface/framegeneral/uiframemetalvertical2xc60.blp
+interface/framegeneral/uiframemetalhorizontal2xc60.blp
+interface/framegeneral/uiframebackground.blp
+
+# sacs : emplacement, bouton de tri, surbrillance, fleche et eclat
+interface/containerframe/bags.blp
+interface/containerframe/bagsitemslot2xc60.blp
+
+# champ de recherche : loupe et bouton d'effacement
+interface/common/commonsearch.blp

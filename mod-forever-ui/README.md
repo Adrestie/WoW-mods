@@ -16,6 +16,7 @@ inside it -- because 3.3.5 has no `SetAtlas`.
 | Action bar, page block, end caps | done |
 | Micro menu, bags bar | done |
 | Experience and reputation bars | done |
+| Bags: panel, slots, search box, sort button | done |
 | Minimap, chat, tooltips, auras, party and raid frames, panels | not started |
 
 Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
@@ -29,8 +30,11 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
     docs/AMELIORATIONS.md     what is known to be improvable, and why
     tools/deployer.py         puts the addon in a client and the art in patch-Z
     tools/test_addon.py       a mock client that loads the addon and checks it
+    tools/ajouter_feuilles.py brings an atlas sheet in with its preview, and
+                              regenerates the atlas table
     tools/apercu_rangee.py    composes the bottom row as a picture, to look at
                               it before trying it in game
+    tools/apercu_sacs.py      the same for the backpack window
 
 ## Working on it
 

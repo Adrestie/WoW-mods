@@ -70,6 +70,18 @@ libre est à droite des dix boutons — du côté où le micro-menu s'allonge.
 est remplacée par le cadre du sac en mélange additif, comme sur les boutons
 d'action. La référence ne dit rien sur ce point précis.
 
+### 1.8 Les sacs : ce qui s'écarte de la source
+
+| Point | Ce qui est fait | Pourquoi |
+|---|---|---|
+| Grille du sac à dos | descendue de 12 px, et le cadre grandi d'autant | 3.3.5 commence sa grille 48 px sous le haut du cadre, et le champ de recherche de camelot occupe cette bande (-37 à -55) |
+| Portrait du sac | icône carrée de 34 x 34, rognée à 8 % et posée dans l'anneau | 3.3.5 n'a pas de `MaskTexture` ; la source masque un portrait de 62 x 62 en rond |
+| Bouton de fermeture | celui de 3.3.5, à sa place d'origine | la source emploie `UIPanelCloseButtonDefaultAnchors`, non relevé |
+| Son du tri | aucun | la source joue `SOUNDKIT.UI_BAG_SORTING_01`, qui n'existe pas en 3.3.5 |
+| Ce que la recherche compare | nom, type et sous-type de l'objet | le client moderne fait la comparaison lui-même (`C_Container.SetItemSearch`) et sait aussi reconnaître la qualité ou l'emplacement d'équipement |
+| Ordre du rangement | catégorie selon `GetAuctionItemClasses`, puis qualité décroissante, nom, taille de pile | `C_Container.SortBags` est écrit dans le client : son ordre n'est pas lisible. **CHOIX ASSUMÉ** |
+| Rythme du rangement | un déplacement toutes les 0,1 s, 400 au maximum | chaque échange doit être confirmé par le serveur avant le suivant, sinon la case est encore verrouillée |
+
 ---
 
 ## 2. Ce que 3.3.5 ne sait pas faire
@@ -169,3 +181,9 @@ cadres de groupe et de raid, livre de sorts, talents, feuille de personnage,
 
 Les barres d'action secondaires (`MultiBar*`) sont habillées mais ne sont ni
 placées ni encadrées comme la référence le fait.
+
+Les sacs gardent la grille de 3.3.5 (quatre colonnes, boutons de 37, pas de
+42 x 41) : seul l'habillage change. La fenêtre unique qui réunit tous les sacs
+(`ContainerFrameCombinedBags`) n'existe pas ici, chaque sac garde la sienne.
+`ForeverUI.SetPanelArt` est écrit pour servir à tous les panneaux à venir :
+feuille de personnage, livre de sorts, talents.

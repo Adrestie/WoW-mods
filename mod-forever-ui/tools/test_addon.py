@@ -104,6 +104,20 @@ function CreateFrame(kind, name, parent, template)
     function f:GetScale() return self.scale or 1 end
     function f:GetFrameLevel() return self.frameLevel or 1 end
     function f:SetHitRectInsets(...) self.hitRect = {...} end
+    function f:SetID(id) self.id = id end
+    function f:GetID() return self.id or 0 end
+    function f:SetAutoFocus(v) self.autoFocus = v end
+    function f:SetMaxLetters(v) self.maxLetters = v end
+    function f:SetTextInsets(a, b, c, d) self.insets = {a, b, c, d} end
+    function f:SetText(t) self.text = t end
+    function f:GetText() return self.text or "" end
+    function f:HasFocus() return self.focused end
+    function f:SetFocus() self.focused = true end
+    function f:ClearFocus() self.focused = false end
+    function f:SetNormalTexture(t) self._normal = t end
+    function f:SetPushedTexture(t) self._pushed = t end
+    function f:SetHighlightTexture(t) self._highlight = t end
+    function f:SetJustifyH(j) self.justify = j end
     function f:SetAttribute(k, v) self.attributes[k] = v end
     function f:GetAttribute(k) return self.attributes[k] end
     function f:StartMoving() self.moving = true end
@@ -212,7 +226,8 @@ function CombatFeedback_OnCombatEvent(self, event, flags, amount, kind) self.las
 function CombatFeedback_OnUpdate(self, elapsed) end
 function RegisterUnitWatch(f) f.unitWatch = true end
 function ToggleDropDownMenu() end
-GameTooltip = { SetOwner = function() end, SetText = function() end, Hide = function() end }
+GameTooltip = { SetOwner = function() end, SetText = function() end,
+                AddLine = function() end, Show = function() end, Hide = function() end }
 RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
                       DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 } }
 GROUP = "Groupe"
@@ -302,6 +317,89 @@ end
 KeyRingButton = CreateFrame("CheckButton", "KeyRingButton", MainMenuBarArtFrame)
 KeyRingButton:Hide()
 
+-- les sacs du client
+NUM_CONTAINER_FRAMES = 13
+MAX_CONTAINER_ITEMS = 36
+NUM_BAG_SLOTS = 4
+SEARCH = "Rechercher"
+BAG_CLEANUP_BAGS = nil
+for i = 1, NUM_CONTAINER_FRAMES do
+    local nom = "ContainerFrame" .. i
+    local c = CreateFrame("Frame", nom, UIParent)
+    c.size = 16
+    c:SetID(0)
+    _G[nom .. "Portrait"] = c:CreateTexture(nom .. "Portrait", "BACKGROUND")
+    _G[nom .. "Name"] = c:CreateFontString(nom .. "Name", "ARTWORK")
+    for _, suffixe in ipairs({ "BackgroundTop", "BackgroundMiddle1", "BackgroundMiddle2",
+                              "BackgroundBottom", "Background1Slot" }) do
+        _G[nom .. suffixe] = c:CreateTexture(nom .. suffixe, "ARTWORK")
+    end
+    for j = 1, MAX_CONTAINER_ITEMS do
+        local b = CreateFrame("Button", nom .. "Item" .. j, c)
+        b:SetID(j)
+        _G[nom .. "Item" .. j .. "IconTexture"] = b:CreateTexture(nil, "BORDER")
+    end
+end
+
+-- l'inventaire simule : SACS[sac][emplacement] = { lien, nombre }
+SACS = { [0] = {}, [1] = {}, [2] = {}, [3] = {}, [4] = {} }
+TAILLES = { [0] = 4, [1] = 4, [2] = 0, [3] = 0, [4] = 0 }
+OBJETS = {
+    ["|cffffffff|Hitem:1|h[Pain]|h|r"] = { nom = "Pain", qualite = 1, type_ = "Consommable",
+                                           sousType = "Nourriture", pileMax = 20 },
+    ["|cff0070dd|Hitem:2|h[Epee]|h|r"] = { nom = "Epee", qualite = 3, type_ = "Arme",
+                                           sousType = "Epee a une main", pileMax = 1 },
+    ["|cffffffff|Hitem:3|h[Potion]|h|r"] = { nom = "Potion", qualite = 1, type_ = "Consommable",
+                                             sousType = "Potion", pileMax = 20 },
+}
+PRISES = {}
+CURSEUR = nil
+
+function GetContainerNumSlots(sac) return TAILLES[sac] or 0 end
+function GetContainerItemLink(sac, emplacement)
+    local case = SACS[sac] and SACS[sac][emplacement]
+    return case and case.lien or nil
+end
+function GetContainerItemInfo(sac, emplacement)
+    local case = SACS[sac] and SACS[sac][emplacement]
+    if not case then return nil end
+    return "icone", case.nombre, false, 1, false
+end
+function GetItemInfo(lien)
+    local o = OBJETS[lien]
+    if not o then return nil end
+    return o.nom, lien, o.qualite, 1, 1, o.type_, o.sousType, o.pileMax
+end
+function GetAuctionItemClasses() return "Arme", "Armure", "Consommable", "Divers" end
+function CursorHasItem() return CURSEUR ~= nil end
+function ClearCursor() CURSEUR = nil end
+function PickupContainerItem(sac, emplacement)
+    table.insert(PRISES, { sac = sac, emplacement = emplacement })
+    local case = SACS[sac][emplacement]
+    if CURSEUR == nil then
+        CURSEUR = { sac = sac, emplacement = emplacement, case = case }
+        SACS[sac][emplacement] = nil
+    else
+        -- Le client reunit deux piles entamees du meme objet ; sinon il echange.
+        local porte = CURSEUR.case
+        if case and porte and case.lien == porte.lien then
+            local max = OBJETS[case.lien].pileMax
+            if case.nombre + porte.nombre <= max then
+                SACS[sac][emplacement] = { lien = case.lien, nombre = case.nombre + porte.nombre }
+                CURSEUR = nil
+                return
+            end
+        end
+        SACS[CURSEUR.sac][CURSEUR.emplacement] = case
+        SACS[sac][emplacement] = porte
+        CURSEUR = nil
+    end
+end
+function ContainerFrame_GenerateFrame() end
+function ContainerFrame_Update() end
+function ContainerFrame_OnHide() end
+function ToggleBag() end
+
 HOOKS = {}
 function hooksecurefunc(nom, fn) HOOKS[nom] = fn end
 function ActionButton_Update() end
@@ -319,7 +417,7 @@ def main():
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
-             "CastBar.lua", "ActionBar.lua", "BottomBar.lua", "StatusBars.lua"]
+             "CastBar.lua", "ActionBar.lua", "BottomBar.lua", "StatusBars.lua", "Bags.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -976,6 +1074,88 @@ def main():
     gauche = g.ForeverUI.ActionBarEndCaps.left.points[1]
     print("embout gauche : %s sur %s (%s, %s)" % (gauche[1], gauche[3], gauche[4], gauche[5]))
     assert gauche[1] == "BOTTOMRIGHT" and gauche[3] == "BOTTOMLEFT" and gauche[5] == 0
+
+    # ------------------------------------------------------- les sacs
+    sac = g.ContainerFrame1
+    print("cadre de sac : habille=%s | ancien fond efface=%s" % (
+        sac.foreverSkinned == True, g["ContainerFrame1BackgroundTop"].alpha == 0))
+    assert sac.foreverSkinned, "le cadre de sac n'est pas habille"
+    assert g["ContainerFrame1BackgroundTop"].alpha == 0, "l'habillage d'epoque est reste"
+
+    panneau = sac.foreverPanel
+    print("panneau : %d morceaux de fond, coins %s" % (
+        len(list(panneau.fond.values())),
+        ", ".join(sorted(k for k in dict(panneau).keys() if str(k).startswith("coin")))))
+    assert panneau.coinHautGauche is not None and panneau.bordBas is not None
+
+    portrait = g["ContainerFrame1Portrait"]
+    pt = portrait.points[1]
+    print("portrait : %dx%d, %s sur %s (%.1f, %.1f), rogne a %.2f" % (
+        portrait.width, portrait.height, pt[1], pt[3], pt[4], pt[5], portrait.texcoord[1]))
+    assert portrait.width == 34 and pt[3] == "TOPLEFT" and abs(pt[4] - 13.5) < 0.01
+
+    bouton = g["ContainerFrame1Item1"]
+    print("emplacement : fond=%s | voile de recherche=%s" % (
+        bouton._normal.texture is not None, bouton.foreverVoile is not None))
+    assert bouton.foreverVoile is not None, "le voile de recherche manque"
+    assert bouton._normal.allPoints, "l'emplacement ne couvre pas le bouton"
+
+    # le champ et le bouton de tri ne se montrent que sur le sac principal
+    g.ForeverUI.BagsLayout()
+    champ = g.ForeverUIBagSearchBox
+    tri = g.ForeverUIBagSortButton
+    print("champ %dx%d visible=%s | bouton de tri %dx%d visible=%s" % (
+        champ.width, champ.height, champ.shown, tri.width, tri.height, tri.shown))
+    assert champ.width == 96 and champ.height == 18
+    assert tri.width == 28 and tri.height == 26
+
+    pc = champ.points[1]
+    pt2 = tri.points[1]
+    print("champ ancre %s (%s, %s) | tri ancre %s (%s, %s)" % (
+        pc[1], pc[4], pc[5], pt2[1], pt2[4], pt2[5]))
+    assert pc[4] == 42 and pc[5] == -37, "le champ n'est pas a la place de la source"
+    assert pt2[4] == -9 and pt2[5] == -34, "le bouton de tri n'est pas a la place de la source"
+
+    # la recherche : le pain reste, l'epee se voile
+    lua.execute("""
+        SACS[0][1] = { lien = "|cffffffff|Hitem:1|h[Pain]|h|r", nombre = 5 }
+        SACS[0][2] = { lien = "|cff0070dd|Hitem:2|h[Epee]|h|r", nombre = 1 }
+        SACS[0][3] = { lien = "|cffffffff|Hitem:3|h[Potion]|h|r", nombre = 3 }
+        ContainerFrame1.size = 4
+    """)
+    g.ForeverUI.BagSearch.Set("pain")
+    voiles = [g["ContainerFrame1Item" + str(i)].foreverVoile.shown for i in (1, 2, 3, 4)]
+    print("recherche \"pain\" : voiles = %s (le premier est le pain)" % voiles)
+    assert voiles[0] == False and voiles[1] == True, "la recherche ne filtre pas"
+    g.ForeverUI.BagSearch.Set("consommable")
+    voiles = [g["ContainerFrame1Item" + str(i)].foreverVoile.shown for i in (1, 2, 3)]
+    print("recherche par type          : voiles = %s" % voiles)
+    assert voiles[0] == False and voiles[2] == False, "le type ne compte pas dans la recherche"
+    g.ForeverUI.BagSearch.Set("")
+
+    # le tri : deux piles de pain se reunissent, puis l'ordre se fait
+    lua.execute("""
+        SACS[0][1] = { lien = "|cffffffff|Hitem:3|h[Potion]|h|r", nombre = 3 }
+        SACS[0][2] = { lien = "|cffffffff|Hitem:1|h[Pain]|h|r", nombre = 5 }
+        SACS[0][3] = { lien = "|cff0070dd|Hitem:2|h[Epee]|h|r", nombre = 1 }
+        SACS[0][4] = { lien = "|cffffffff|Hitem:1|h[Pain]|h|r", nombre = 7 }
+        PRISES = {}
+    """)
+    g.ForeverUI.BagSort.Lancer()
+    tic = g.ForeverUI.BagSort
+    horloge = [f for f in g.FRAMES.values() if f.scripts and f.scripts.OnUpdate][-1]
+    for _ in range(60):
+        if not tic.actif:
+            break
+        horloge.scripts.OnUpdate(horloge, 0.2)
+    contenu = []
+    for i in range(1, 5):
+        case = g.SACS[0][i]
+        contenu.append("%s x%d" % (case.lien.split("[")[1].split("]")[0], case.nombre) if case else "vide")
+    print("apres le tri : %s" % " | ".join(contenu))
+    print("   %d prises d'objet, %d etapes" % (len(list(g.PRISES.values())), tic.etapes))
+    assert not tic.actif, "le tri ne s'est pas arrete"
+    assert "Pain x12" in " ".join(contenu), "les deux piles de pain n'ont pas ete reunies"
 
     # ------------------------------------------------ cible de la cible
     totcadre = g.ForeverUITargetOfTarget

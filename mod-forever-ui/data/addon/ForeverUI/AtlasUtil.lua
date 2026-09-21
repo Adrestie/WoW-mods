@@ -211,3 +211,108 @@ function ForeverUI.CreateDivider(parent, niveau)
 	cadre.haut, cadre.centre, cadre.bas = haut, centre, bas
 	return cadre
 end
+
+-- LE PANNEAU.
+--
+-- RELEVE -- mainline/SharedUIPanelTemplates.xml : un panneau du client moderne
+-- (PortraitFrameFlatTemplate) est fait de deux couches.
+--   1. le fond plat (FlatPanelBackgroundTemplate), pose entre TOPLEFT (2, -20)
+--      et BOTTOMRIGHT (-2, 3) : deux coins arrondis de 16 x 16 en bas
+--      (uiframebackground-nineslice-cornerbottom*), un bord entre eux, et tout
+--      le reste en aplat, le tout teinte par PANEL_BACKGROUND_COLOR ;
+--   2. l'encadrement de metal en neuf tranches, jeu HeldBagLayout de
+--      mainline/NineSliceLayouts.lua, avec les corrections de
+--      camelot/NineSliceLayoutOverrides.lua (coin haut droit x -2, coins bas
+--      y = -8).
+--
+-- PANEL_BACKGROUND_COLOR est une couleur du client, absente du code extrait :
+-- elle est MESUREE dans l'art, au point ou le fond deborde sous le coin de
+-- metal (0, 0, 0, 168/255).
+--
+-- Les bords sont ETIRES et non paves : une texture d'atlas en pavage etale la
+-- feuille entiere.
+local PANNEAU_FOND = { 0, 0, 0, 168 / 255 }
+
+local PANNEAU_COINS = {
+	{ cle = "coinHautGauche", nom = "ui-frame-portraitmetal-cornertopleftsmall",
+	  point = "TOPLEFT", x = -13, y = 16 },
+	{ cle = "coinHautDroit", nom = "ui-frame-metal-cornertopright",
+	  point = "TOPRIGHT", x = 2, y = 16 },
+	{ cle = "coinBasGauche", nom = "ui-frame-metal-cornerbottomleft",
+	  point = "BOTTOMLEFT", x = -13, y = -8 },
+	{ cle = "coinBasDroit", nom = "ui-frame-metal-cornerbottomright",
+	  point = "BOTTOMRIGHT", x = 2, y = -8 },
+}
+
+function ForeverUI.SetPanelArt(frame)
+	if frame.foreverPanel then
+		return frame.foreverPanel
+	end
+
+	local p = {}
+
+	-- 1. le fond plat
+	local r, v, b, a = PANNEAU_FOND[1], PANNEAU_FOND[2], PANNEAU_FOND[3], PANNEAU_FOND[4]
+
+	local basGauche = frame:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(basGauche, "uiframebackground-nineslice-cornerbottomleft")
+	basGauche:SetVertexColor(r, v, b, a)
+	basGauche:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 3)
+
+	local basDroit = frame:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(basDroit, "uiframebackground-nineslice-cornerbottomright")
+	basDroit:SetVertexColor(r, v, b, a)
+	basDroit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 3)
+
+	local bordBas = frame:CreateTexture(nil, "BACKGROUND")
+	bordBas:SetTexture(r, v, b, a)
+	bordBas:SetPoint("TOPLEFT", basGauche, "TOPRIGHT")
+	bordBas:SetPoint("BOTTOMRIGHT", basDroit, "BOTTOMLEFT")
+
+	local corps = frame:CreateTexture(nil, "BACKGROUND")
+	corps:SetTexture(r, v, b, a)
+	corps:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -20)
+	corps:SetPoint("BOTTOMRIGHT", basDroit, "TOPRIGHT")
+
+	p.fond = { basGauche, basDroit, bordBas, corps }
+
+	-- 2. l'encadrement de metal
+	for _, coin in ipairs(PANNEAU_COINS) do
+		local texture = frame:CreateTexture(nil, "OVERLAY")
+		if ForeverUI.SetAtlas(texture, coin.nom) then
+			texture:SetPoint(coin.point, frame, coin.point, coin.x, coin.y)
+			p[coin.cle] = texture
+		else
+			texture:Hide()
+		end
+	end
+
+	local function bord(nom, point1, cible1, relatif1, point2, cible2, relatif2)
+		local texture = frame:CreateTexture(nil, "OVERLAY")
+		if not ForeverUI.SetAtlas(texture, nom) then
+			texture:Hide()
+			return nil
+		end
+		texture:SetPoint(point1, cible1, relatif1)
+		texture:SetPoint(point2, cible2, relatif2)
+		return texture
+	end
+
+	if p.coinHautGauche and p.coinHautDroit then
+		p.bordHaut = bord("_ui-frame-metal-edgetop",
+			"TOPLEFT", p.coinHautGauche, "TOPRIGHT",
+			"TOPRIGHT", p.coinHautDroit, "TOPLEFT")
+		p.bordGauche = bord("!ui-frame-metal-edgeleft",
+			"TOPLEFT", p.coinHautGauche, "BOTTOMLEFT",
+			"BOTTOMLEFT", p.coinBasGauche, "TOPLEFT")
+		p.bordDroit = bord("!ui-frame-metal-edgeright",
+			"TOPRIGHT", p.coinHautDroit, "BOTTOMRIGHT",
+			"BOTTOMRIGHT", p.coinBasDroit, "TOPRIGHT")
+		p.bordBas = bord("_ui-frame-metal-edgebottom",
+			"BOTTOMLEFT", p.coinBasGauche, "BOTTOMRIGHT",
+			"BOTTOMRIGHT", p.coinBasDroit, "BOTTOMLEFT")
+	end
+
+	frame.foreverPanel = p
+	return p
+end
