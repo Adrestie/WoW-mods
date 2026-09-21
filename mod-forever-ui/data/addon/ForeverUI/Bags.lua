@@ -136,16 +136,15 @@ local R = {
 	fermeture = 24,
 	fermetureX = 1,
 	fermetureY = 0,
-	-- LE PORTRAIT. camelot le pose en 36, AU-DESSUS du metal, et le rend rond
-	-- avec PortraitContainer.CircleMask. 3.3.5 n'a pas de masque : on le passe
-	-- SOUS le metal, dont le trou joue le masque. Le trou de
-	-- ui-frame-portraitmetal-cornertopleftsmall fait 18 de diametre une fois
-	-- dessine ; un carre de 20 le remplit (bords a 10 > 9) et ses coins, a
-	-- 14,1 du centre, restent caches par le metal opaque jusqu'a 19,5. La
-	-- rondeur est donc celle de l'art de camelot, et l'icone n'est pas rognee.
-	portrait = 20,
-	portraitX = 14,         -- le centre du portrait de la source : -4 + 36/2
-	portraitY = -17,        -- 1 - 36/2 ; le trou mesure est a (13,9 ; -17,7)
+	-- LE PORTRAIT, a sa taille et a sa place d'origine :
+	-- SetPortraitTextureSizeAndOffset(36, -4, 1). camelot le rend rond avec
+	-- PortraitContainer.CircleMask ; ce client ne sait pas masquer une
+	-- texture, alors l'icone passe DERRIERE la fenetre et c'est la fenetre
+	-- qui la masque -- le fond opaque cache tout, le trou de l'anneau laisse
+	-- passer le rond. Aucun rognage, aucune taille inventee.
+	portrait = 36,          -- SetPortraitTextureSizeAndOffset(36, ...)
+	portraitX = -4,         -- ... (..., -4, 1), depuis le TOPLEFT du cadre
+	portraitY = 1,
 
 	-- L'EMPILEMENT DES SACS -- UpdateContainerFrameAnchors, lignes 1372-1401
 	ecartSacs = 8,          -- CONTAINER_SPACING
@@ -262,18 +261,13 @@ local function habillerCadre(cadre)
 		end
 	end
 
-	ForeverUI.SetPanelArt(cadre)
-
-	-- Le portrait se pose dans l'anneau du coin haut gauche. L'anneau est
-	-- centre a 13,5 px du bord gauche et 14 px sous le haut, son trou fait 36
-	-- de diametre -- la taille que la source donne au portrait. 3.3.5 n'a pas
-	-- de masque : l'icone est rognee pour tenir dans le rond.
-	--
-	-- La texture est creee APRES SetPanelArt et dans le MEME calque que son
+	-- LE PORTRAIT PASSE DERRIERE LA FENETRE, et c'est elle qui le masque.
+	-- Il est donc cree AVANT l'art du panneau, dans le meme calque que son
 	-- fond : deux regions d'un meme calque ne sont ordonnees que par leur
-	-- ordre de creation, elle passe donc au-dessus du fond -- ce qui manquait
-	-- au portrait du client, cree au chargement -- et reste sous le metal,
-	-- qui est en OVERLAY et lui sert de masque.
+	-- ordre de creation, tout ce qui suit le recouvre. Le fond est opaque, le
+	-- metal est en OVERLAY, et le trou de l'anneau est le seul endroit par ou
+	-- l'icone se voit. Elle garde sa taille (36) et sa place (-4, 1), celles
+	-- de SetPortraitTextureSizeAndOffset.
 	local ancien = _G[nom .. "Portrait"]
 	if ancien then
 		ancien:SetAlpha(0)
@@ -282,8 +276,10 @@ local function habillerCadre(cadre)
 	local portrait = cadre:CreateTexture(nil, "BACKGROUND")
 	portrait:SetWidth(R.portrait)
 	portrait:SetHeight(R.portrait)
-	portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
+	portrait:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.portraitX, R.portraitY)
 	cadre.foreverPortrait = portrait
+
+	ForeverUI.SetPanelArt(cadre)
 
 	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
 	-- avec 35, et le modele TitleContainer : un CADRE de 20 de haut allant de
@@ -887,8 +883,7 @@ local function majEntete(cadre)
 			texture = GetInventoryItemTexture("player", ContainerIDToInventoryID(id))
 		end
 		portrait:SetTexture(texture)
-		-- Pas de rognage : le trou du metal decoupe le rond, comme le masque
-		-- de la source le fait sur l'icone entiere.
+		-- Pas de rognage : c'est la fenetre, posee par-dessus, qui decoupe.
 		portrait:SetTexCoord(0, 1, 0, 1)
 	end
 end

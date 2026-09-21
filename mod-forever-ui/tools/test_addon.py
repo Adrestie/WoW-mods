@@ -17,8 +17,13 @@ MOCK = """
 local recorded = { messages = {}, portraits = 0 }
 _G.RECORDED = recorded
 
+-- L'ordre de creation des regions decide de leur ordre de dessin a
+-- l'interieur d'un calque : le harnais le garde pour pouvoir le verifier.
+REGIONS_CREEES = 0
+
 local function newRegion(kind)
-    local r = { kind = kind, shown = true, points = {} }
+    REGIONS_CREEES = REGIONS_CREEES + 1
+    local r = { kind = kind, shown = true, points = {}, rang = REGIONS_CREEES }
     function r:SetTexture(a, b, c, d) self.texture = a; self.color = {a,b,c,d} end
     function r:GetTexture() return self.texture end
     function r:SetHorizTile(v) self.tile = v end
@@ -1162,20 +1167,23 @@ def main():
         assert (pt[4], pt[5]) == (x, y), "%s ne suit pas HeldBagLayout" % cle
         assert t.layer == "OVERLAY", "HeldBagLayout declare %s en OVERLAY" % cle
 
-    # Le portrait passe SOUS le metal, dont le trou lui sert de masque : il
-    # est cree apres le fond, dans le meme calque, donc au-dessus de lui, et
-    # le metal est en BORDER, donc au-dessus de lui.
+    # Le portrait passe DERRIERE la fenetre, qui le masque : il est cree
+    # AVANT l'art du panneau, dans le meme calque que son fond -- deux
+    # regions d'un meme calque ne sont ordonnees que par leur ordre de
+    # creation, tout ce qui suit le recouvre.
     assert g["ContainerFrame1Portrait"].alpha == 0, "l'ancien portrait doit s'effacer"
     portrait = sac.foreverPortrait
     pt = portrait.points[1]
     fond = list(sac.foreverPanel.fond.values())[0]
     print("portrait : %dx%d en %s, %s sur %s (%.0f, %.0f)" % (
         portrait.width, portrait.height, portrait.layer, pt[1], pt[3], pt[4], pt[5]))
-    assert portrait.width == 20, "le carre doit remplir le trou de 18 sans deborder du metal"
-    assert pt[3] == "TOPLEFT" and pt[4] == 14 and pt[5] == -17,         "le portrait n'est pas centre sur le trou de l'anneau"
-    assert portrait.layer == fond.layer, "le portrait doit etre dans le calque du fond"
+    assert portrait.width == 36 and portrait.height == 36,         "SetPortraitTextureSizeAndOffset donne 36 : la taille d'origine est gardee"
+    assert pt[1] == "TOPLEFT" and pt[3] == "TOPLEFT" and pt[4] == -4 and pt[5] == 1,         "le portrait n'est pas a (-4, 1) du TOPLEFT, la place de la source"
+    assert portrait.layer == fond.layer == "BACKGROUND",         "le portrait doit etre dans le calque du fond, qui le recouvre"
+    print("   cree en %d, le fond en %d : tout ce qui suit le recouvre" % (
+        portrait.rang, fond.rang))
+    assert portrait.rang < fond.rang,         "le portrait doit etre cree AVANT le fond, sinon il passe devant"
     assert sac.foreverPanel.coinHautGauche.layer == "OVERLAY",         "HeldBagLayout declare ses morceaux en OVERLAY"
-    assert portrait.layer == "BACKGROUND", "le portrait reste sous le metal, son masque"
 
     # UpdateName / UpdateMiscellaneousFrames : le nom et l'icone viennent du
     # sac, et se refont a chaque passage du client.
