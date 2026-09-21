@@ -67,63 +67,65 @@
 -- =====================================================================
 -- REGLAGES DE L'INTERFACE DES SACS
 --
--- Tout se calcule a partir de ces nombres : changez-en un, la fenetre se
--- refait. La valeur de camelot est rappelee en face de chacun.
+-- LA FENETRE SE CONSTRUIT DE BAS EN HAUT. Chaque bande a sa taille, chaque
+-- ecart separe deux bandes voisines, et la fenetre fait la somme. Aucune
+-- position n'est ecrite en dur : changez une taille ou un ecart, tout ce
+-- qui est au-dessus remonte et la fenetre grandit d'autant.
+--
+--     margeHaut
+--     bande du titre              titreHauteur
+--     ecartRechercheTitre
+--     ligne de recherche          la plus haute de champHauteur, triHauteur
+--     ecartGrilleRecherche
+--     la grille                   rangees x emplacement + ecartCases
+--     ecartBourseGrille
+--     la bourse                   bourseHauteur
+--     margeBas
+--
+-- Un sac porte n'a ni bourse ni ligne de recherche : ses deux bandes
+-- disparaissent, et les ecarts qui les entourent se rejoignent.
 --
 -- En jeu, pour essayer sans rien reinstaller :
---     /fui sacs                    affiche les valeurs et les mesures
+--     /fui sacs                    affiche les bandes mesurees et les reglages
 --     /fui sacs emplacement 44     change une valeur et refait la fenetre
--- Quand le reglage vous convient, il se fige dans ce bloc.
+-- Quand le reglage convient, il se fige dans ce bloc.
+--
+-- Les valeurs par defaut redonnent la fenetre de camelot, mesuree sur
+-- docs/reference/camelot_sac_principal.png : 179 x 263 pour 16 cases.
 local R = {
-	-- les emplacements
-	emplacement = 37,       -- camelot 37 : cote d'une case
-	ecartCases = 5,         -- camelot 5  : entre deux cases, dans les deux sens
-	colonnes = 4,           -- camelot 4  : nombre de colonnes
+	-- LES CASES
+	emplacement = 37,           -- camelot 37 : cote d'une case
+	ecartCases = 5,             -- camelot 5  : entre deux cases, dans les deux sens
+	colonnes = 4,               -- camelot 4
 
-	-- la grille dans la fenetre
-	margeCote = 8,          -- camelot 8  : entre la grille et le bord
-	margeBas = 9,           -- camelot 9  : sous la grille, sacs portes
+	-- LES BANDES, DE BAS EN HAUT
+	margeBas = 8,               -- camelot 8  : sous la bande la plus basse
+	bourseHauteur = 13,         -- camelot 13
+	ecartBourseGrille = 3,      -- entre la bourse et la grille
+	ecartGrilleRecherche = 15,  -- entre la grille et la ligne de recherche
+	champLargeur = 96,          -- camelot 96
+	champHauteur = 18,          -- camelot 18
+	triLargeur = 28,            -- camelot 28
+	triHauteur = 26,            -- camelot 26
+	ecartRechercheTitre = 14,   -- entre la ligne de recherche et le titre
+	titreHauteur = 20,          -- la bande de titre du panneau
+	margeHaut = 0,              -- au-dessus du titre
 
-	-- les bandes du haut
-	entete = 48,            -- camelot 48 : titre et portrait
-	bandeRecherche = 30,    -- camelot 30 : hauteur ajoutee sur le sac a dos
+	-- LES COTES
+	margeCote = 8,              -- camelot 8 : entre la grille et les bords
 
-	-- le champ de recherche
-	champLargeur = 96,      -- camelot 96
-	champHauteur = 18,      -- camelot 18
-	champX = 42,            -- camelot 42 : depuis le bord gauche
-	champY = -37,           -- camelot -37 : depuis le haut
-
-	-- le bouton de tri
-	triLargeur = 28,        -- camelot 28
-	triHauteur = 26,        -- camelot 26
-	triX = -9,              -- camelot -9 : depuis le bord droit
-	triY = -34,             -- camelot -34 : depuis le haut
-
-	-- la bourse et son encadre
-	bourseHauteur = 13,     -- camelot 13
-	bourseCadre = 17,       -- camelot 17 : l'encadre deborde de la bourse
-	bourseCote = 8,         -- camelot 8  : marge gauche et droite
-	bourseBas = 8,          -- camelot 8  : au-dessus du bord inferieur
-
-	-- le bouton de fermeture
-	fermeture = 24,         -- camelot 24
-	fermetureX = 1,         -- camelot 1
-	fermetureY = 0,         -- camelot 0
-
-	-- le portrait, dans l'anneau du coin
+	-- LES DECORS DU CADRE. Poses aux coins de la fenetre, ils ne comptent
+	-- pas dans la pile et n'influent donc pas sur la hauteur.
+	bourseCadre = 17,           -- camelot 17 : l'encadre deborde de la bourse
+	fermeture = 24,             -- camelot 24
+	fermetureX = 1,
+	fermetureY = 0,
 	portrait = 34,
 	portraitX = 13.5,
 	portraitY = -14,
 
-	-- LA GRILLE EST COLLEE EN BAS. Ce nombre la remonte : c'est la distance
-	-- entre le bas de la fenetre et le bas de la grille. A 24, la derniere
-	-- rangee se pose 1 px au-dessus de l'encadre de la bourse
-	-- (8 du bord + 13 de bourse + 2 de debord + 1). La fenetre suit.
-	grilleBas = 24,
-
-	-- l'ensemble
-	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
+	-- L'ENSEMBLE
+	echelle = 1,                -- 1 = taille de camelot ; 1.25 = un quart de plus
 }
 ForeverUI = ForeverUI or {}
 ForeverUI.BagsSettings = R
@@ -675,6 +677,46 @@ boutonTri:SetScript("OnLeave", function()
 	GameTooltip:Hide()
 end)
 
+-- ---------------------------------------------------------------- la pile
+-- La ligne de recherche est aussi haute que sa plus haute piece.
+local function hauteurRecherche()
+	return math.max(R.champHauteur, R.triHauteur)
+end
+
+-- OU COMMENCE CHAQUE BANDE, mesure depuis le BAS de la fenetre. Une seule
+-- fonction empile, et tout le monde s'y rapporte : la fenetre prend la
+-- hauteur de la pile, chaque piece se pose sur le bas de sa bande. C'est
+-- ce qui garantit que la fenetre suit toujours son contenu.
+local function pile(cadre)
+	local taille = cadre.size or 0
+	local sacADos = cadre:GetID() == 0
+	local p = { sacADos = sacADos }
+
+	p.rangees = math.ceil(taille / R.colonnes)
+	p.largeurGrille = R.colonnes * R.emplacement + (R.colonnes - 1) * R.ecartCases
+	p.hauteurGrille = p.rangees * R.emplacement + (p.rangees - 1) * R.ecartCases
+
+	local y = R.margeBas
+	if sacADos then
+		p.bourse = y
+		y = y + R.bourseHauteur + R.ecartBourseGrille
+	end
+
+	p.grille = y
+	y = y + p.hauteurGrille + R.ecartGrilleRecherche
+
+	if sacADos then
+		p.recherche = y
+		y = y + hauteurRecherche()
+	end
+
+	y = y + R.ecartRechercheTitre
+	p.titre = y
+	p.hauteur = y + R.titreHauteur + R.margeHaut
+	p.largeur = p.largeurGrille + 2 * R.margeCote
+	return p
+end
+
 -- RELEVE -- ContainerFrameMixin:UpdateSearchBox : les deux ne se montrent que
 -- sur le sac principal, le champ en TOPLEFT (42, -37) et le bouton en
 -- TOPRIGHT (-9, -34).
@@ -697,18 +739,22 @@ local function poserOutils()
 		return
 	end
 
+	-- Les deux partagent une bande de la pile : le champ cale a gauche, le
+	-- bouton cale a droite, tous deux poses sur le bas de la bande.
+	local bas = pile(hote).recherche or 0
+
 	champ:SetParent(hote)
 	champ:ClearAllPoints()
-	champ:SetPoint("TOPLEFT", hote, "TOPLEFT", R.champX, R.champY)
 	champ:SetWidth(R.champLargeur)
 	champ:SetHeight(R.champHauteur)
+	champ:SetPoint("BOTTOMLEFT", hote, "BOTTOMLEFT", R.margeCote, bas)
 	champ:Show()
 
 	boutonTri:SetParent(hote)
 	boutonTri:ClearAllPoints()
-	boutonTri:SetPoint("TOPRIGHT", hote, "TOPRIGHT", R.triX, R.triY)
 	boutonTri:SetWidth(R.triLargeur)
 	boutonTri:SetHeight(R.triHauteur)
+	boutonTri:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", -R.margeCote, bas)
 	boutonTri:Show()
 end
 
@@ -754,35 +800,26 @@ local function poserGrille(cadre)
 	end
 
 	local nom = cadre:GetName()
-	local colonnes = R.colonnes
-	local rangees = math.ceil(taille / colonnes)
-	local largeurGrille = colonnes * R.emplacement + (colonnes - 1) * R.ecartCases
-	local hauteurGrille = rangees * R.emplacement + (rangees - 1) * R.ecartCases
-	local sacADos = cadre:GetID() == 0
+	local p = pile(cadre)
 	local bourse = _G[nom .. "MoneyFrame"]
 
-	-- La grille est collee en bas : grilleBas la remonte sur le sac a dos,
-	-- margeBas sur un sac porte, qui n'a pas de bourse.
-	local basGrille = sacADos and R.grilleBas or R.margeBas
-
-	-- Au-dessus : la bande de titre, plus celle du champ de recherche sur le
-	-- sac a dos.
-	local hautGrille = R.entete + (sacADos and R.bandeRecherche or 0)
-
+	-- La fenetre ne fait que prendre la mesure de sa pile.
 	cadre:SetScale(R.echelle)
-	cadre:SetWidth(largeurGrille + 2 * R.margeCote)
-	cadre:SetHeight(hautGrille + hauteurGrille + basGrille)
+	cadre:SetWidth(p.largeur)
+	cadre:SetHeight(p.hauteur)
 
-	if sacADos and bourse then
+	if p.bourse and bourse then
 		habillerBourse(bourse)
 		bourse:ClearAllPoints()
-		bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", R.bourseCote, R.bourseBas)
-		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -R.bourseCote, R.bourseBas)
+		bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", R.margeCote, p.bourse)
+		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -R.margeCote, p.bourse)
 		bourse:Show()
 	end
 
 	-- Toute la grille est reposee : 3.3.5 enchaine ses boutons avec ses
-	-- propres ecarts, et la taille d'une case est desormais un reglage.
+	-- propres ecarts, et la taille d'une case est un reglage. Seule la
+	-- premiere case tient a la fenetre, sur le bas de sa bande ; les autres
+	-- s'accrochent a leur voisine.
 	for index = 1, taille do
 		local bouton = _G[nom .. "Item" .. index]
 		if bouton then
@@ -790,12 +827,10 @@ local function poserGrille(cadre)
 			bouton:SetHeight(R.emplacement)
 			bouton:ClearAllPoints()
 			if index == 1 then
-				-- La grille se pose sur le bas de la fenetre : la bourse a sa
-				-- propre place et ne la porte plus.
 				bouton:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
-					-R.margeCote, basGrille)
-			elseif math.fmod(index - 1, colonnes) == 0 then
-				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - colonnes)],
+					-R.margeCote, p.grille)
+			elseif math.fmod(index - 1, R.colonnes) == 0 then
+				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - R.colonnes)],
 					"TOPRIGHT", 0, R.ecartCases)
 			else
 				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - 1)],
@@ -868,36 +903,42 @@ ForeverUI.BagsDebug = function()
 	local premier = _G[nom .. "Item1"]
 	local dernier = _G[nom .. "Item" .. math.max(1, (cadre.size or 1))]
 	local bourse = _G[nom .. "MoneyFrame"]
+	local p = pile(cadre)
 
-	local haut = cadre:GetTop() or 0
+	-- Les bandes telles qu'elles sont MESUREES en jeu, depuis le bas de la
+	-- fenetre : a comparer avec la pile calculee juste en dessous.
 	local bas = cadre:GetBottom() or 0
-	local hautGrille = (dernier and dernier:GetTop()) or 0
-	local basGrille = (premier and premier:GetBottom()) or 0
+	local mesure = function(piece)
+		if not piece or not piece:GetBottom() then
+			return -1
+		end
+		return piece:GetBottom() - bas
+	end
 
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r sac : %d cases, %d rangees | cadre %.0f x %.0f (echelle %.2f)",
-		cadre.size or 0, math.ceil((cadre.size or 0) / COLONNES),
-		cadre:GetWidth(), cadre:GetHeight(), cadre:GetScale()))
+		"|cff66ccffForeverUI|r sac : %d cases, %d rangees | fenetre %.0f x %.0f (echelle %.2f)",
+		cadre.size or 0, p.rangees, cadre:GetWidth(), cadre:GetHeight(), cadre:GetScale()))
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   entete %.0f | grille %.0f | sous la grille %.0f | bourse %.0f de haut, %.0f du bas",
-		haut - hautGrille, hautGrille - basGrille, basGrille - bas,
-		bourse and bourse:GetHeight() or 0,
-		bourse and ((bourse:GetBottom() or 0) - bas) or 0))
+		"   pile calculee : bourse %s | grille %d (%d de haut) | recherche %s | titre %d | total %d",
+		tostring(p.bourse), p.grille, p.hauteurGrille, tostring(p.recherche),
+		p.titre, p.hauteur))
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   cases habillees %d | case %.0f x %.0f | recherche visible=%s",
+		"   mesure en jeu : bourse %.0f | grille %.0f | recherche %.0f | tri %.0f",
+		mesure(bourse), mesure(premier), mesure(champ), mesure(boutonTri)))
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"   cases habillees %d | case %.0f x %.0f | derniere rangee a %.0f | recherche visible=%s",
 		#cadres, premier and premier:GetWidth() or 0, premier and premier:GetHeight() or 0,
-		tostring(champ:IsShown())))
+		mesure(dernier), tostring(champ:IsShown())))
 
-	local ordre = {
-		"emplacement", "ecartCases", "colonnes", "margeCote", "margeBas",
-		"entete", "bandeRecherche", "champLargeur", "champHauteur", "champX", "champY",
-		"triLargeur", "triHauteur", "triX", "triY",
-		"bourseHauteur", "bourseCadre", "bourseCote", "bourseBas", "ecartGrilleBourse",
-		"fermeture", "fermetureX", "fermetureY", "portrait", "portraitX", "portraitY",
-		"echelle",
-	}
+	-- Tous les reglages, par ordre alphabetique : la liste ne peut pas se
+	-- demoder quand un reglage apparait ou disparait.
+	local cles = {}
+	for cle in pairs(R) do
+		table.insert(cles, cle)
+	end
+	table.sort(cles)
 	local ligne = ""
-	for _, cle in ipairs(ordre) do
+	for _, cle in ipairs(cles) do
 		ligne = ligne .. string.format("%s=%s  ", cle, tostring(R[cle]))
 		if string.len(ligne) > 80 then
 			DEFAULT_CHAT_FRAME:AddMessage("   " .. ligne)

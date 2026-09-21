@@ -103,6 +103,23 @@ Elle montre aussi deux choses à garder en tête :
 | Ordre du rangement | catégorie selon `GetAuctionItemClasses`, puis qualité décroissante, nom, taille de pile | `C_Container.SortBags` est écrit dans le client : son ordre n'est pas lisible. **CHOIX ASSUMÉ** |
 | Rythme du rangement | un déplacement toutes les 0,1 s, 400 au maximum | chaque échange doit être confirmé par le serveur avant le suivant, sinon la case est encore verrouillée |
 
+**La fenêtre se construit de bas en haut.** camelot place ses morceaux à des
+décalages absolus depuis le haut du cadre (`TOPLEFT (42, -37)` pour le champ,
+`TOPRIGHT (-9, -34)` pour le tri), et fixe la hauteur du cadre à part. Deux
+sources de vérité : changer une taille ne déplaçait rien, et la fenêtre ne
+suivait plus son contenu. Ici une seule fonction, `pile()`, empile les bandes
+depuis le bas — bourse, grille, ligne de recherche, titre — chacune séparée de
+la suivante par un écart nommé. La fenêtre prend la hauteur de la pile, chaque
+morceau se pose sur le bas de sa bande, et **aucune position n'est écrite en
+dur**. Un sac porté n'a ni bourse ni recherche : ces deux bandes disparaissent
+et les écarts qui les entouraient se rejoignent.
+
+Les valeurs par défaut redonnent les mesures de camelot :
+8 + 13 (bourse) + 3 + 163 (grille) + 15 + 26 (recherche) + 14 + 20 (titre)
+= **262**, pour 263 mesurés sur la capture. Tout se règle en jeu avec
+`/fui sacs <réglage> <valeur>`, et `/fui sacs` affiche la pile calculée en
+regard de la pile mesurée.
+
 ---
 
 ## 2. Ce que 3.3.5 ne sait pas faire
