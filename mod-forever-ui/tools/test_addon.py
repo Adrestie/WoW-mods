@@ -1142,10 +1142,22 @@ def main():
     ppt = premier.points[len(list(premier.points.values()))]
     bourse = g.ContainerFrame1MoneyFrame
     bpt = bourse.points[len(list(bourse.points.values()))]
-    print("fenetre du sac a dos : %d x %d (178 x 263 : 163 de grille + 57 + 30 + 13)" % (
+    # Tout se calcule a partir des reglages : 4 x 37 + 3 x 5 de grille, 8 de
+    # marge de chaque cote, 48 d'entete plus 30 pour la bande de recherche,
+    # et sous la grille la bourse (8 + 13), son encadre qui deborde de 2, et
+    # 1 d'ecart.
+    print("fenetre du sac a dos : %d x %d (179 x 265 selon les reglages)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height))
-    assert g.ContainerFrame1.width == 178, "la fenetre n'a pas la largeur de camelot"
-    assert g.ContainerFrame1.height == 263, "la fenetre n'a pas la hauteur de camelot"
+    assert g.ContainerFrame1.width == 179, "la largeur ne suit pas les reglages"
+    assert g.ContainerFrame1.height == 265, "la hauteur ne suit pas les reglages"
+
+    # un reglage change, la fenetre suit
+    g.ForeverUI.BagsSet("emplacement", 44)
+    print("   emplacement a 44 -> fenetre %d x %d, case %d" % (
+        g.ContainerFrame1.width, g.ContainerFrame1.height, g.ContainerFrame1Item1.width))
+    assert g.ContainerFrame1.width == 4 * 44 + 3 * 5 + 16, "la largeur ne suit pas la taille des cases"
+    assert g.ContainerFrame1Item1.width == 44, "la case n'a pas change de taille"
+    g.ForeverUI.BagsSet("emplacement", 37)
 
     print("   premier bouton : %s sur %s (%s, %s) -- il pose sur la bourse" % (
         ppt[1], ppt[3], ppt[4], ppt[5]))
@@ -1177,7 +1189,7 @@ def main():
         print("      %2d emplacements (%d rangees) -> %d de haut (%d attendu)" % (
             taille, rangees, g.ContainerFrame2.height, attendu))
         assert g.ContainerFrame2.height == attendu, "la fenetre ne suit pas son contenu"
-        assert g.ContainerFrame2.width == 178, "la largeur ne doit pas bouger"
+        assert g.ContainerFrame2.width == 179, "la largeur ne doit pas bouger"
     g.ContainerFrame2.id = 0
 
     # le contour suit la qualite de l'objet

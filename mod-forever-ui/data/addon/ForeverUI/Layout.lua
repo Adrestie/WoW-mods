@@ -237,7 +237,8 @@ SLASH_FOREVERUI1 = "/fui"
 SLASH_FOREVERUI2 = "/foreverui"
 
 SlashCmdList["FOREVERUI"] = function(message)
-	local command, argument = string.match(message or "", "^(%S*)%s*(%S*)$")
+	local command, argument = string.match(message or "", "^(%S*)%s*(.*)$")
+	argument = argument or ""
 	command = string.lower(command or "")
 
 	if command == "" or command == "edit" then
@@ -272,7 +273,10 @@ SlashCmdList["FOREVERUI"] = function(message)
 			say("aucun diagnostic des barres d etat disponible.")
 		end
 	elseif command == "sacs" then
-		if ForeverUI.BagsDebug then
+		local cle, valeur = string.match(argument, "^(%S+)%s+(%S+)$")
+		if cle and ForeverUI.BagsSet then
+			ForeverUI.BagsSet(cle, valeur)
+		elseif ForeverUI.BagsDebug then
 			ForeverUI.BagsDebug()
 		else
 			say("aucun diagnostic des sacs disponible.")

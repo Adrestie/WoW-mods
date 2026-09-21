@@ -65,66 +65,78 @@
 --   nom et la taille de la pile. CHOIX ASSUME, faute de source.
 
 -- =====================================================================
--- POUR AGRANDIR LA FENETRE DES SACS : CE NOMBRE, ET LUI SEUL.
--- 1 = la taille de camelot. 1.25 = un quart plus grand, et tout suit :
--- emplacements, icones, textes, encadrement, champ de recherche.
--- C'est ainsi que le client moderne s'y prend lui-meme
--- (ContainerFrameMixin, CONTAINER_SCALE) : il met la fenetre a l'echelle
--- plutot que de changer ses mesures.
-local ECHELLE = 1
+-- REGLAGES DE L'INTERFACE DES SACS
+--
+-- Tout se calcule a partir de ces nombres : changez-en un, la fenetre se
+-- refait. La valeur de camelot est rappelee en face de chacun.
+--
+-- En jeu, pour essayer sans rien reinstaller :
+--     /fui sacs                    affiche les valeurs et les mesures
+--     /fui sacs emplacement 44     change une valeur et refait la fenetre
+-- Quand le reglage vous convient, il se fige dans ce bloc.
+local R = {
+	-- les emplacements
+	emplacement = 37,       -- camelot 37 : cote d'une case
+	ecartCases = 5,         -- camelot 5  : entre deux cases, dans les deux sens
+	colonnes = 4,           -- camelot 4  : nombre de colonnes
+
+	-- la grille dans la fenetre
+	margeCote = 8,          -- camelot 8  : entre la grille et le bord
+	margeBas = 9,           -- camelot 9  : sous la grille, sacs portes
+
+	-- les bandes du haut
+	entete = 48,            -- camelot 48 : titre et portrait
+	bandeRecherche = 30,    -- camelot 30 : hauteur ajoutee sur le sac a dos
+
+	-- le champ de recherche
+	champLargeur = 96,      -- camelot 96
+	champHauteur = 18,      -- camelot 18
+	champX = 42,            -- camelot 42 : depuis le bord gauche
+	champY = -37,           -- camelot -37 : depuis le haut
+
+	-- le bouton de tri
+	triLargeur = 28,        -- camelot 28
+	triHauteur = 26,        -- camelot 26
+	triX = -9,              -- camelot -9 : depuis le bord droit
+	triY = -34,             -- camelot -34 : depuis le haut
+
+	-- la bourse et son encadre
+	bourseHauteur = 13,     -- camelot 13
+	bourseCadre = 17,       -- camelot 17 : l'encadre deborde de la bourse
+	bourseCote = 8,         -- camelot 8  : marge gauche et droite
+	bourseBas = 8,          -- camelot 8  : au-dessus du bord inferieur
+	ecartGrilleBourse = 1,  -- entre la derniere rangee et l'encadre
+
+	-- le bouton de fermeture
+	fermeture = 24,         -- camelot 24
+	fermetureX = 1,         -- camelot 1
+	fermetureY = 0,         -- camelot 0
+
+	-- le portrait, dans l'anneau du coin
+	portrait = 34,
+	portraitX = 13.5,
+	portraitY = -14,
+
+	-- l'ensemble
+	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
+}
+ForeverUI = ForeverUI or {}
+ForeverUI.BagsSettings = R
 -- =====================================================================
 
 local NB_CADRES = NUM_CONTAINER_FRAMES or 13
 local SACS = { 0, 1, 2, 3, 4 }          -- sac a dos et les quatre sacs portes
 
-local EMPLACEMENT = 37                  -- taille d'un bouton d'objet
-local RECHERCHE_W, RECHERCHE_H = 96, 18
-local TRI_W, TRI_H = 28, 26
-
 -- Lua 5.1 lit les antislashs comme des echappements : on pose le separateur
 -- en clair.
 local SEP = string.char(92)
 local SURVOL_CARRE = "Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square"
-
--- LA MISE EN PAGE EST REFAITE ICI.
---
--- 3.3.5 taille sa fenetre sur ses propres images de fond et colle la grille a
--- droite (premier bouton a -12 du bord). Ces images ont disparu avec
--- l'habillage : la fenetre est donc mesuree a partir de ce qu'elle contient,
--- et la grille centree.
---   entete    la bande de titre, plus la bande du champ de recherche pour le
---             sac a dos (le champ est pose de -37 a -55)
---   grille    quatre colonnes, pas de 42 x 41 pour des boutons de 37
---   bourse    sous la grille, dans la fenetre
-local COLONNES = 4
-local ECART = 5                 -- ITEM_SPACING_X et _Y
-local LARGEUR_CADRE = 178       -- CONTAINER_WIDTH de camelot (192 en 3.3.5)
-local REMPLISSAGE = 9 + 48      -- GetPaddingHeight
-local REMPLISSAGE_RECHERCHE = 30
-local MARGE_BAS = 9             -- GetFirstButtonOffsetY
-local BOURSE_H = 13
-local BOURSE_BAS, BOURSE_COTE = 8, 8
-
--- MESURE SUR LA CAPTURE DU VRAI CLIENT (docs/reference). A l'echelle 4/3 de
--- cette capture, la grille fait 217 px pour les 163 unites de camelot, un
--- emplacement 49 px pour 37, le pas 56 px pour 42, et la fenetre 411 px pour
--- les 305 unites que donne la formule sur cinq rangees. Les chiffres du code
--- de camelot sont donc les bons : rien a ajouter.
-
--- L'encadre de la bourse depasse d'elle de deux pixels en haut comme en bas
--- (17 de haut pour une bourse de 13). La derniere rangee se pose 1 px
--- au-dessus de cet encadre.
-local BORDURE_BOURSE_H, BORDURE_BOURSE_BOUT = 17, 8
-local BORDURE_DEPASSE = (BORDURE_BOURSE_H - BOURSE_H) / 2
-local AIR_GRILLE_BOURSE = 1
-
 local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
 
 -- MESURE SUR LA CAPTURE. camelot pose un cadre sur CHAQUE case, pleine ou
 -- vide : gris sombre, bords entre 25 et 49, coins vers 100. L'image porte ces
 -- memes valeurs a 255 et 140 : la teinte vaut donc 0,39. La couleur de
--- qualite ne prend le relais qu'a partir de peu commun -- les objets communs
--- de la capture gardent le cadre gris.
+-- qualite ne prend le relais qu'a partir de peu commun.
 local CADRE_GRIS = 0.39
 local QUALITE_TEINTEE = 2
 
@@ -215,9 +227,9 @@ local function habillerCadre(cadre)
 	local portrait = _G[nom .. "Portrait"]
 	if portrait then
 		portrait:ClearAllPoints()
-		portrait:SetWidth(34)
-		portrait:SetHeight(34)
-		portrait:SetPoint("CENTER", cadre, "TOPLEFT", 13.5, -14)
+		portrait:SetWidth(R.portrait)
+		portrait:SetHeight(R.portrait)
+		portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
 		portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		portrait:SetDrawLayer("OVERLAY")
 	end
@@ -235,10 +247,10 @@ local function habillerCadre(cadre)
 	-- panneaux modernes (UIPanelCloseButtonNoScripts, atlas RedButton-Exit).
 	local fermer = _G[nom .. "CloseButton"]
 	if fermer then
-		fermer:SetWidth(24)
-		fermer:SetHeight(24)
+		fermer:SetWidth(R.fermeture)
+		fermer:SetHeight(R.fermeture)
 		fermer:ClearAllPoints()
-		fermer:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", 1, 0)
+		fermer:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", R.fermetureX, R.fermetureY)
 		for atlas, methode in pairs({ ["redbutton-exit"] = "GetNormalTexture",
 			["redbutton-exit-pressed"] = "GetPushedTexture",
 			["redbutton-exit-disabled"] = "GetDisabledTexture",
@@ -518,8 +530,8 @@ end
 
 -- ------------------------------------------- le champ et le bouton de tri
 local champ = CreateFrame("EditBox", "ForeverUIBagSearchBox", UIParent, "InputBoxTemplate")
-champ:SetWidth(RECHERCHE_W)
-champ:SetHeight(RECHERCHE_H)
+champ:SetWidth(R.champLargeur)
+champ:SetHeight(R.champHauteur)
 champ:SetAutoFocus(false)
 champ:SetMaxLetters(15)
 champ:SetTextInsets(16, 20, 0, 0)
@@ -595,8 +607,8 @@ champ:SetScript("OnChar", function(self)
 end)
 
 local boutonTri = CreateFrame("Button", "ForeverUIBagSortButton", UIParent)
-boutonTri:SetWidth(TRI_W)
-boutonTri:SetHeight(TRI_H)
+boutonTri:SetWidth(R.triLargeur)
+boutonTri:SetHeight(R.triHauteur)
 boutonTri:Hide()
 
 -- PIEGE 3.3.5. SetNormalTexture et ses soeurs ne prennent qu'un CHEMIN de
@@ -682,13 +694,16 @@ local function poserOutils()
 
 	champ:SetParent(hote)
 	champ:ClearAllPoints()
-	champ:SetPoint("TOPLEFT", hote, "TOPLEFT", 42, -37)
-	champ:SetWidth(RECHERCHE_W)
+	champ:SetPoint("TOPLEFT", hote, "TOPLEFT", R.champX, R.champY)
+	champ:SetWidth(R.champLargeur)
+	champ:SetHeight(R.champHauteur)
 	champ:Show()
 
 	boutonTri:SetParent(hote)
 	boutonTri:ClearAllPoints()
-	boutonTri:SetPoint("TOPRIGHT", hote, "TOPRIGHT", -9, -34)
+	boutonTri:SetPoint("TOPRIGHT", hote, "TOPRIGHT", R.triX, R.triY)
+	boutonTri:SetWidth(R.triLargeur)
+	boutonTri:SetHeight(R.triHauteur)
 	boutonTri:Show()
 end
 
@@ -698,21 +713,21 @@ local function habillerBourse(bourse)
 		return
 	end
 
-	bourse:SetHeight(BOURSE_H)
+	bourse:SetHeight(R.bourseHauteur)
 
 	local gauche = bourse:CreateTexture(nil, "BACKGROUND")
 	if not ForeverUI.SetAtlas(gauche, "common-coinbox-left", true) then
 		gauche:Hide()
 		return
 	end
-	gauche:SetWidth(BORDURE_BOURSE_BOUT)
-	gauche:SetHeight(BORDURE_BOURSE_H)
+	gauche:SetWidth(R.bourseCadre / 2)
+	gauche:SetHeight(R.bourseCadre)
 	gauche:SetPoint("LEFT", bourse, "LEFT", 0, 0)
 
 	local droite = bourse:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(droite, "common-coinbox-right", true)
-	droite:SetWidth(BORDURE_BOURSE_BOUT)
-	droite:SetHeight(BORDURE_BOURSE_H)
+	droite:SetWidth(R.bourseCadre / 2)
+	droite:SetHeight(R.bourseCadre)
 	droite:SetPoint("RIGHT", bourse, "RIGHT", 0, 0)
 
 	local milieu = bourse:CreateTexture(nil, "BACKGROUND")
@@ -734,48 +749,59 @@ local function poserGrille(cadre)
 	end
 
 	local nom = cadre:GetName()
-	local rangees = math.ceil(taille / COLONNES)
-	local hauteurGrille = rangees * EMPLACEMENT + (rangees - 1) * ECART
+	local colonnes = R.colonnes
+	local rangees = math.ceil(taille / colonnes)
+	local largeurGrille = colonnes * R.emplacement + (colonnes - 1) * R.ecartCases
+	local hauteurGrille = rangees * R.emplacement + (rangees - 1) * R.ecartCases
 	local sacADos = cadre:GetID() == 0
-
-	cadre:SetWidth(LARGEUR_CADRE)
-	-- Le client pose sa propre echelle dans updateContainerFrameAnchors (il
-	-- retrecit les sacs quand l'ecran est court) ; on repasse derriere lui.
-	cadre:SetScale(ECHELLE)
-
 	local bourse = _G[nom .. "MoneyFrame"]
-	local hauteur = hauteurGrille + REMPLISSAGE
+
+	-- L'encadre de la bourse deborde d'elle, moitie en haut, moitie en bas.
+	local depassement = (R.bourseCadre - R.bourseHauteur) / 2
+
+	-- Ce qui se trouve sous la grille : la marge seule pour un sac porte,
+	-- la bourse et son encadre pour le sac a dos.
+	local basGrille = R.margeBas
 	if sacADos then
-		hauteur = hauteur + REMPLISSAGE_RECHERCHE + BOURSE_H
+		basGrille = R.bourseBas + R.bourseHauteur + depassement + R.ecartGrilleBourse
 	end
-	cadre:SetHeight(hauteur)
+	local entete = R.entete + (sacADos and R.bandeRecherche or 0)
+
+	cadre:SetScale(R.echelle)
+	cadre:SetWidth(largeurGrille + 2 * R.margeCote)
+	cadre:SetHeight(entete + hauteurGrille + basGrille)
 
 	if sacADos and bourse then
 		habillerBourse(bourse)
 		bourse:ClearAllPoints()
-		bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", BOURSE_COTE, BOURSE_BAS)
-		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -BOURSE_COTE, BOURSE_BAS)
+		bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", R.bourseCote, R.bourseBas)
+		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -R.bourseCote, R.bourseBas)
 		bourse:Show()
 	end
 
-	local premier = _G[nom .. "Item1"]
-	if premier then
-		premier:ClearAllPoints()
-		if sacADos and bourse then
-			premier:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT", 0,
-				BORDURE_DEPASSE + AIR_GRILLE_BOURSE)
-		else
-			premier:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -7, MARGE_BAS)
-		end
-	end
-
-	-- 3.3.5 empile les rangees avec 4 px ; camelot en met 5.
-	for index = COLONNES + 1, taille, COLONNES do
+	-- Toute la grille est reposee : 3.3.5 enchaine ses boutons avec ses
+	-- propres ecarts, et la taille d'une case est desormais un reglage.
+	for index = 1, taille do
 		local bouton = _G[nom .. "Item" .. index]
-		local dessous = _G[nom .. "Item" .. (index - COLONNES)]
-		if bouton and dessous then
+		if bouton then
+			bouton:SetWidth(R.emplacement)
+			bouton:SetHeight(R.emplacement)
 			bouton:ClearAllPoints()
-			bouton:SetPoint("BOTTOMRIGHT", dessous, "TOPRIGHT", 0, ECART)
+			if index == 1 then
+				if sacADos and bourse then
+					bouton:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT", 0,
+						depassement + R.ecartGrilleBourse)
+				else
+					bouton:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
+						-R.margeCote, R.margeBas)
+				end
+			elseif math.fmod(index - 1, colonnes) == 0 then
+				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - colonnes)],
+					"TOPRIGHT", 0, R.ecartCases)
+			else
+				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - 1)],
+					"BOTTOMLEFT", -R.ecartCases, 0)
+			end
 		end
 	end
 end
@@ -812,8 +838,8 @@ if hooksecurefunc then
 	-- Le client remet son echelle a chaque reagencement des sacs.
 	hooksecurefunc("updateContainerFrameAnchors", function()
 		for _, cadre in ipairs(cadres) do
-			if cadre:GetScale() ~= ECHELLE then
-				cadre:SetScale(ECHELLE)
+			if cadre:GetScale() ~= R.echelle then
+				cadre:SetScale(R.echelle)
 			end
 		end
 	end)
@@ -827,6 +853,15 @@ veilleur:SetScript("OnEvent", function()
 	poserOutils()
 	Recherche.Tout()
 end)
+
+-- Refaire toute la mise en page apres un changement de reglage.
+function ForeverUI.BagsApply()
+	for _, cadre in ipairs(cadres) do
+		poserGrille(cadre)
+	end
+	poserOutils()
+	Recherche.Tout()
+end
 
 ForeverUI.BagsDebug = function()
 	local cadre = ContainerFrame1
@@ -853,4 +888,42 @@ ForeverUI.BagsDebug = function()
 		"   cases habillees %d | case %.0f x %.0f | recherche visible=%s",
 		#cadres, premier and premier:GetWidth() or 0, premier and premier:GetHeight() or 0,
 		tostring(champ:IsShown())))
+
+	local ordre = {
+		"emplacement", "ecartCases", "colonnes", "margeCote", "margeBas",
+		"entete", "bandeRecherche", "champLargeur", "champHauteur", "champX", "champY",
+		"triLargeur", "triHauteur", "triX", "triY",
+		"bourseHauteur", "bourseCadre", "bourseCote", "bourseBas", "ecartGrilleBourse",
+		"fermeture", "fermetureX", "fermetureY", "portrait", "portraitX", "portraitY",
+		"echelle",
+	}
+	local ligne = ""
+	for _, cle in ipairs(ordre) do
+		ligne = ligne .. string.format("%s=%s  ", cle, tostring(R[cle]))
+		if string.len(ligne) > 80 then
+			DEFAULT_CHAT_FRAME:AddMessage("   " .. ligne)
+			ligne = ""
+		end
+	end
+	if ligne ~= "" then
+		DEFAULT_CHAT_FRAME:AddMessage("   " .. ligne)
+	end
+end
+
+-- Changer un reglage en jeu, pour essayer avant de le figer dans le fichier.
+function ForeverUI.BagsSet(cle, valeur)
+	if R[cle] == nil then
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r reglage inconnu : " .. tostring(cle))
+		return false
+	end
+	local nombre = tonumber(valeur)
+	if not nombre then
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r valeur attendue : un nombre")
+		return false
+	end
+	R[cle] = nombre
+	ForeverUI.BagsApply()
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"|cff66ccffForeverUI|r sacs : %s = %s", cle, tostring(nombre)))
+	return true
 end
