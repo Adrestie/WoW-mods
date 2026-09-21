@@ -21,6 +21,7 @@ TargetFrame.lua
 CastBar.lua
 ActionBar.lua
 StanceBar.lua
+PetBar.lua
 BottomBar.lua
 StatusBars.lua
 Bags.lua

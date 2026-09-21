@@ -270,6 +270,50 @@ redimensionné ni déplacé en combat.
 
 ---
 
+### 1.10 La barre du familier
+
+Relevée de `mainline/PetActionBar.xml`, `shared/PetActionBar.lua`,
+`SmallActionButtonMixin` et `AutoCastTemplates`. Le bouton est le même petit
+bouton que les postures — 30 × 30, écart 2, cadre 35 × 35, états à
+31,6 × 30,9, raccourci et quantité aux mêmes places, quatre états centrés pour
+la raison donnée en 1.9.
+
+Ce qui lui est propre :
+
+| Pièce | Valeur | Source |
+|---|---|---|
+| Anneau d'autolancement | cadre de 31 × 31 centré à (0,5 ; −0,5) | `SmallActionButtonMixin_OnLoad` |
+| Coins | `UI-HUD-ActionBar-PetAutoCast-Corners`, couvre l'anneau | `AutoCastOverlayTemplate` |
+| Fourmis | `UI-HUD-ActionBar-PetAutoCast-Ants`, déborde de 5 px, tourne de −360° en 4 s, en boucle | idem |
+| Coins visibles | dès que l'autolancement est **possible** | `UpdateButtonState` |
+| Fourmis visibles | seulement quand il est **actif** | `AutoCastOverlayMixin:UpdateShineAnim` |
+| Action active | bouton coché | `UpdateButtonState` |
+| Action d'attaque | clignote, et son coché tombe à **0,5** d'alpha | idem — « à pleine alpha on croirait une capacité de plus sélectionnée » |
+| Action inutilisable | icône teintée à 0,4 | `GetPetActionSlotUsable` |
+| Sans texture | icône masquée | `UpdateButtonState` |
+| Barre visible | si `PetHasActionBar()` **et** `UnitIsVisible("pet")` | `PetActionBarMixin:OnEvent` |
+
+**Le piège des signatures, deuxième fois.** `GetPetActionInfo` rend
+`(nom, texture, isToken, active, autoPossible, autoActif, sortID)` chez le
+client moderne et **`(nom, sous-texte, texture, isToken, active, autoPossible,
+autoActif)`** en 3.3.5 : un champ de plus au deuxième rang. Recopier la source
+au mot près prendrait le sous-texte (« Rang 5 ») pour la texture. Le faux client
+suit la signature de 3.3.5 et le harnais le vérifie sur une action qui a un
+sous-texte.
+
+`isToken` se comporte pareil dans les deux clients : le nom et la texture sont
+alors des **clés de variables globales**, pas des valeurs, et il faut les
+résoudre — `_G[texture]`.
+
+**Non reproduit.** Le masque de l'anneau (`UI-HUD-ActionBar-PetAutoCast-Mask`) :
+ce client ne sait pas masquer une texture. La rotation des fourmis, elle, est
+rendue : la source emploie un groupe d'animation, et `Texture:SetRotation`
+existe en 3.3.5 — l'angle se déroule dans un `OnUpdate`, à la même vitesse. La
+marque de surbrillance (`SpellHighlightTexture`, atlas `bags-newitem`) n'a pas
+d'équivalent : `HasPetActionHighlightMark` n'existe pas en 3.3.5.
+
+---
+
 ---
 
 ## 2. Ce que 3.3.5 ne sait pas faire

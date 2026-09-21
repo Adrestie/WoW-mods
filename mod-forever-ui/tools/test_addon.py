@@ -28,6 +28,10 @@ local function newRegion(kind)
     function r:GetTexture() return self.texture end
     function r:SetHorizTile(v) self.tile = v end
     function r:SetTexCoord(u1, u2, v1, v2) self.texcoord = {u1, u2, v1, v2} end
+    -- SetRotation existe bien dans ce client : il figure dans la table des
+    -- methodes de Texture relevee dans Wow.exe.
+    function r:SetRotation(angle) self.rotation = angle end
+    function r:GetRotation() return self.rotation or 0 end
     function r:SetWidth(w) self.width = w end
     function r:GetWidth() return self.width or 0 end
     function r:GetHeight() return self.height or 0 end
@@ -270,6 +274,43 @@ function GetShapeshiftFormInfo(i)
     return f.texture, f.nom, f.active, f.lancable
 end
 function GetShapeshiftFormCooldown(i) return 0, 0, 0 end
+
+-- LE FAMILIER. 3.3.5 rend (nom, SOUS-TEXTE, texture, isToken, active,
+-- autoPossible, autoActif) : un champ de plus au deuxieme rang que le
+-- client moderne. Le faux client suit 3.3.5, sinon il laisserait passer
+-- la confusion entre le sous-texte et la texture.
+NUM_PET_ACTION_SLOTS = 10
+PET_ACTIONS = {
+    { nom = "Attaquer", texte = "", texture = "icone_attaque", cle = false,
+      active = true, autoPossible = false, autoActif = false, utilisable = true },
+    { nom = "Morsure", texte = "Rang 5", texture = "icone_morsure", cle = false,
+      active = false, autoPossible = true, autoActif = true, utilisable = true },
+    { nom = "PET_MODE_PASSIVE", texte = "", texture = "PET_TEXTURE_PASSIVE", cle = true,
+      active = false, autoPossible = false, autoActif = false, utilisable = false },
+}
+PET_TEXTURE_PASSIVE = "icone_passif_resolue"
+PET_MODE_PASSIVE = "Passif"
+PET_A_UNE_BARRE = true
+PET_VISIBLE = true
+function PetHasActionBar() return PET_A_UNE_BARRE end
+function UnitIsVisible(unite)
+    if unite == "pet" then return PET_VISIBLE end
+    return true
+end
+function GetPetActionInfo(i)
+    local a = PET_ACTIONS[i]
+    if not a then return nil end
+    return a.nom, a.texte, a.texture, a.cle, a.active, a.autoPossible, a.autoActif
+end
+function GetPetActionCooldown(i) return 0, 0, 0 end
+function GetPetActionSlotUsable(i)
+    local a = PET_ACTIONS[i]
+    return a and a.utilisable or false
+end
+function IsPetAttackAction(i)
+    local a = PET_ACTIONS[i]
+    return a and a.nom == "Attaquer" or false
+end
 function CombatFeedback_Initialize(self, text, height) self.feedbackText = text end
 function CombatFeedback_OnCombatEvent(self, event, flags, amount, kind) self.lastHit = amount end
 function CombatFeedback_OnUpdate(self, elapsed) end
@@ -424,6 +465,24 @@ end
 function ShapeshiftBar_Update() end
 function ShapeshiftBar_UpdateState() end
 
+-- la barre du familier du client : un cadre, dix boutons
+PetActionBarFrame = CreateFrame("Frame", "PetActionBarFrame", UIParent)
+for i = 1, NUM_PET_ACTION_SLOTS do
+    local nom = "PetActionButton" .. i
+    local b = CreateFrame("CheckButton", nom, PetActionBarFrame)
+    b:SetID(i)
+    _G[nom .. "Icon"] = b:CreateTexture(nom .. "Icon", "BORDER")
+    _G[nom .. "Cooldown"] = CreateFrame("Frame", nom .. "Cooldown", b)
+    _G[nom .. "AutoCastable"] = b:CreateTexture(nom .. "AutoCastable", "OVERLAY")
+    _G[nom .. "Shine"] = CreateFrame("Frame", nom .. "Shine", b)
+    _G[nom .. "Flash"] = b:CreateTexture(nom .. "Flash", "ARTWORK")
+    _G[nom .. "FloatingBG"] = b:CreateTexture(nom .. "FloatingBG", "BACKGROUND")
+    _G[nom .. "HotKey"] = b:CreateFontString(nom .. "HotKey", "ARTWORK")
+    _G[nom .. "Count"] = b:CreateFontString(nom .. "Count", "ARTWORK")
+end
+function PetActionBar_Update() end
+function PetActionBar_UpdateCooldowns() end
+
 -- l'inventaire simule : SACS[sac][emplacement] = { lien, nombre }
 SACS = { [0] = {}, [1] = {}, [2] = {}, [3] = {}, [4] = {} }
 TAILLES = { [0] = 4, [1] = 4, [2] = 0, [3] = 0, [4] = 0 }
@@ -515,8 +574,8 @@ def main():
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
-             "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "BottomBar.lua",
-             "StatusBars.lua", "Bags.lua"]
+             "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
+             "BottomBar.lua", "StatusBars.lua", "Bags.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -1210,6 +1269,76 @@ def main():
         g.ShapeshiftBarLeft.alpha == 0,
         g.ForeverUI.Layout.systems["postures"] is not None))
     assert g.ShapeshiftBarLeft.alpha == 0, "l art d epoque de la barre doit s effacer"
+
+    # -------------------------------------------- barre du familier
+    pet = g.ForeverUIPetBarHolder
+    p1 = g.PetActionButton1
+    print("familier : bouton %d x %d, porteur %d x %d, visible=%s" % (
+        p1.width, p1.height, pet.width, pet.height, pet.shown))
+    assert p1.width == 30 and p1.height == 30, "le bouton du familier fait 30"
+    assert pet.width == 10 * 30 + 9 * 2, "dix emplacements au pas de 32"
+    assert pet.shown, "la barre se montre quand le familier a la sienne"
+
+    pp = g.PetActionButton2.points[len(list(g.PetActionButton2.points.values()))]
+    assert pp[4] == 32, "le pas n est pas 30 + 2"
+
+    cadre = p1.foreverCadre
+    print("   cadre %.1f x %.1f en %s ancre %s | survol %.1f x %.1f | coche en %s" % (
+        cadre.width, cadre.height, cadre.layer, cadre.points[1][1],
+        p1._highlight.width, p1._highlight.height, p1._checked.blend))
+    assert cadre.width == 35 and cadre.points[1][1] == "CENTER"
+    assert abs(p1._highlight.width - 31.6) < 0.01 and p1._checked.blend == "ADD"
+
+    # UpdateButtonState : l attaque est active, cochee, et son coche tombe
+    # a 0,5 -- la source le dit en toutes lettres.
+    print("   attaque : cochee=%s, alpha du coche %.2f (0,5 attendu)" % (
+        p1.checked, p1._checked.alpha))
+    assert p1.checked, "l action active doit etre cochee"
+    assert abs(p1._checked.alpha - 0.5) < 0.01, "le coche de l attaque est a 0,5"
+
+    # LA SIGNATURE DE 3.3.5 : (nom, SOUS-TEXTE, texture, ...). Si le
+    # sous-texte etait pris pour la texture, l icone du rang 5 porterait
+    # "Rang 5".
+    i2 = g.PetActionButton2.foreverIcone
+    print("   icone 2 : %s (la texture, pas le sous-texte)" % i2.texture)
+    assert i2.texture == "icone_morsure", "le sous-texte a ete pris pour la texture"
+
+    # isToken : le nom et la texture sont des cles de variables globales.
+    i3 = g.PetActionButton3.foreverIcone
+    print("   icone 3 : %s (isToken : la cle est resolue)" % i3.texture)
+    assert i3.texture == "icone_passif_resolue", "une cle de token doit etre resolue"
+    assert [round(v, 2) for v in i3.vertex.values()] == [0.4, 0.4, 0.4], \
+        "une action inutilisable est grisee a 0,4"
+
+    # L anneau d autolancement : les coins des que c est possible, les
+    # fourmis seulement quand c est actif.
+    a1, a2 = g.PetActionButton1.foreverAnneau, g.PetActionButton2.foreverAnneau
+    print("   anneau : action 1 possible=%s | action 2 possible=%s, fourmis=%s" % (
+        a1.shown, a2.shown, a2.fourmis.shown))
+    assert not a1.shown, "pas d anneau quand l autolancement est impossible"
+    assert a2.shown and a2.fourmis.shown, "anneau et fourmis quand il est actif"
+    assert a2.width == 31 and a2.points[1][4] == 0.5 and a2.points[1][5] == -0.5, \
+        "l anneau fait 31 et se centre a (0,5 ; -0,5)"
+    fo = a2.fourmis.points[1]
+    assert fo[4] == -5 and fo[5] == 5, "les fourmis debordent de 5 px"
+
+    # la rotation : -360 degres en 4 secondes
+    avant = a2.angle
+    a2.scripts.OnUpdate(a2, 1.0)
+    tour = abs(a2.angle - avant)
+    print("   rotation : %.3f radian en une seconde (%.3f attendu)" % (
+        tour, 2 * 3.14159265 / 4))
+    assert abs(tour - 2 * 3.14159265 / 4) < 0.001, "un tour doit prendre 4 secondes"
+
+    # sans familier, la barre disparait
+    lua.execute("PET_A_UNE_BARRE = false")
+    g.ForeverUI.PetBar.Apply()
+    print("   sans familier : visible=%s (masquee attendue)" % pet.shown)
+    assert not pet.shown, "la barre doit disparaitre sans familier"
+    lua.execute("PET_A_UNE_BARRE = true")
+    g.ForeverUI.PetBar.Apply()
+    assert pet.shown
+    assert g.ForeverUI.Layout.systems["familier"] is not None
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu
