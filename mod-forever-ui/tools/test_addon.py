@@ -1178,14 +1178,14 @@ def main():
     eBas = g.ForeverUI.AtlasEntry("ui-frame-metal-cornerbottomleft")
     hautCoin, basCoin = eHaut[7], eBas[7]
     coinBas = sac.foreverPanel.coinBasGauche
-    for hauteur, cas in ((263, "sac a dos"), (94, "trousseau, une rangee")):
+    for hauteur, cas in ((269, "sac a dos"), (100, "trousseau, une rangee")):
         sac.SetHeight(sac, hauteur)
         g.ForeverUI.UpdatePanelCorners(sac)
         debord = max(0, min(hautCoin + basCoin - hauteur - 16 - 3, basCoin))
         print("   coin du bas, %-22s hauteur %3d -> rogne de %2d, reste %d" % (
             cas, hauteur, debord, coinBas.height))
         assert abs(coinBas.height - (basCoin - debord)) < 0.01,             "le coin du bas n'est pas rogne comme ClipNineSliceBottomCorner"
-    sac.SetHeight(sac, 263)
+    sac.SetHeight(sac, 269)
     g.ForeverUI.UpdatePanelCorners(sac)
 
     portrait = sac.foreverPortrait
@@ -1261,8 +1261,8 @@ def main():
     tri = g.ForeverUIBagSortButton
 
     GRILLE = 4 * 37 + 3 * 5                     # 163
-    HAUTEUR = GRILLE + (9 + 48 + 30) + 13       # 263, la fenetre de camelot
-    print("fenetre du sac a dos : %d x %d (178 x %d : CalculateHeight de camelot)" % (
+    HAUTEUR = GRILLE + (15 + 48 + 30) + 13      # 269 : 263 de camelot, + 6 remontes
+    print("fenetre du sac a dos : %d x %d (178 x %d : CalculateHeight, + 6 remontes)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height, HAUTEUR))
     assert g.ContainerFrame1.width == 178, "CalculateWidth() vaut CONTAINER_WIDTH"
     assert g.ContainerFrame1.height == HAUTEUR, "CalculateHeight() n'est pas respectee"
@@ -1280,7 +1280,7 @@ def main():
     point, _, _, x, y = ancre(bourse)
     print("   bourse : %s (%s, %s), %d de haut, encadree=%s" % (
         point, x, y, bourse.height, bourse.foreverBorde == True))
-    assert x == -8 and y == 8, "la bourse n'est pas a la place de UpdateCurrencyFrames"
+    assert x == -8 and y == 14, "la bourse doit etre remontee de 6"
     assert bourse.height == 13, "UpdateMoneyFrame pose 13"
     assert bourse.foreverBorde, "la bourse n'a pas son encadre"
 
@@ -1309,7 +1309,7 @@ def main():
         g.ContainerFrame1.size = taille
         g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame1)
         grille = rangees * 37 + (rangees - 1) * 5
-        attendu = grille + (9 + 48 + 30) + 13
+        attendu = grille + (15 + 48 + 30) + 13
         print("      %2d cases (%d rangees) -> %d de haut (%d attendu)" % (
             taille, rangees, g.ContainerFrame1.height, attendu))
         assert g.ContainerFrame1.height == attendu, "le sac a dos ne suit pas son contenu"
@@ -1323,15 +1323,15 @@ def main():
         g.ContainerFrame2.id = 1
         g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
         grille = rangees * 37 + (rangees - 1) * 5
-        attendu = grille + 9 + 48
+        attendu = grille + 15 + 48
         print("      %2d cases (%d rangees) -> %d de haut (%d attendu)" % (
             taille, rangees, g.ContainerFrame2.height, attendu))
         assert g.ContainerFrame2.height == attendu, "un sac porte ne suit pas son contenu"
         assert g.ContainerFrame2.width == 178, "la largeur est une constante"
-        # ContainerFrameMixin:GetInitialItemAnchor -- (-7, 9) sur le cadre
+        # ContainerFrameMixin:GetInitialItemAnchor, remonte de 6 : (-7, 15)
         point, _, pointCible, x, y = ancre(g["ContainerFrame2Item1"])
-        assert (point, pointCible, x, y) == ("BOTTOMRIGHT", "BOTTOMRIGHT", -7, 9), \
-            "un sac porte pose sa grille en (-7, 9) sur le cadre"
+        assert (point, pointCible, x, y) == ("BOTTOMRIGHT", "BOTTOMRIGHT", -7, 15), \
+            "un sac porte pose sa grille en (-7, 15) sur le cadre"
     g.ContainerFrame2.id = 0
 
     # LE CLIENT NE PEUT PLUS DEFAIRE LA TAILLE. 3.3.5 repose ses morceaux dans

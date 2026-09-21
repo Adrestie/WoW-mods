@@ -105,7 +105,13 @@ local R = {
 	largeur = 178,          -- CONTAINER_WIDTH
 
 	-- LE CALCUL DE LA HAUTEUR
-	premierBoutonY = 9,     -- GetFirstButtonOffsetY()
+	-- ECART ASSUME. camelot donne 9 a GetFirstButtonOffsetY(), mais avec son
+	-- art de metal pose ici, le bord interieur du bas remonte a 7,5 du bord
+	-- du cadre : il ne restait que 1,5 sous la derniere rangee, contre 7,5 a
+	-- gauche et 6 a droite (mesure en jeu, echelle 4/3). Les 6 de plus
+	-- egalisent l'espace des quatre cotes ; la fenetre grandit d'autant,
+	-- puisque la formule de la hauteur compte ce nombre.
+	premierBoutonY = 15,    -- camelot 9
 	premierBoutonX = -7,    -- GetInitialItemAnchor()
 	entete = 48,            -- GetPaddingHeight() : "titlebar and attic"
 	bandeRecherche = 30,    -- le meme, + 30 sur le sac a dos
@@ -113,7 +119,7 @@ local R = {
 	-- LA BOURSE, et la grille qui s'y accroche sur le sac a dos
 	bourseHauteur = 13,     -- UpdateMoneyFrame()
 	bourseCote = 8,         -- UpdateCurrencyFrames()
-	bourseBas = 8,          -- UpdateCurrencyFrames()
+	bourseBas = 14,         -- camelot 8, remonte des memes 6
 	ecartBourseGrille = 4,  -- ContainerFrameBackpackMixin:GetInitialItemAnchor()
 	bourseCadre = 17,       -- l'encadre de camelot deborde de la bourse
 

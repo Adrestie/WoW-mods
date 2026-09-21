@@ -103,6 +103,7 @@ Elle montre aussi deux choses à garder en tête :
 | Ce que la recherche compare | nom, type et sous-type de l'objet | le client moderne fait la comparaison lui-même (`C_Container.SetItemSearch`) et sait aussi reconnaître la qualité ou l'emplacement d'équipement |
 | Ordre du rangement | catégorie selon `GetAuctionItemClasses`, puis qualité décroissante, nom, taille de pile | `C_Container.SortBags` est écrit dans le client : son ordre n'est pas lisible. **CHOIX ASSUMÉ** |
 | Rythme du rangement | un déplacement toutes les 0,1 s, 400 au maximum | chaque échange doit être confirmé par le serveur avant le suivant, sinon la case est encore verrouillée |
+| Espace sous la grille | `GetFirstButtonOffsetY()` passe de 9 à **15**, et la bourse de 8 à **14** | avec l'art de métal de camelot posé ici, le bord intérieur du bas remonte à 7,5 du bord du cadre : il ne restait que **1,5** sous la dernière rangée, contre 7,5 à gauche et 6 à droite (mesuré en jeu, échelle 4/3 confirmée par le pas des cases — 56 px écran pour 42 logiques). Les 6 de plus égalisent l'espace des quatre côtés. La fenêtre grandit d'autant, la formule de la hauteur comptant ce nombre : 269 pour le sac à dos, 226 pour un sac porté de 16 cases |
 
 **La fenêtre suit son contenu par un CALCUL, pas par un empilement.** Recopié
 de `ContainerFrameMixin` (`blizzard_uipanels_game/mainline/containerframe.lua`,
