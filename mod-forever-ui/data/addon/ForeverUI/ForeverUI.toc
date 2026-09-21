@@ -11,6 +11,7 @@ UIAtlas_03_barre_action.lua
 UIAtlas_04_cadres_unite.lua
 UIAtlas_05_feuille_perso.lua
 UIAtlas_06_complements.lua
+UIAtlas_07_petites_feuilles.lua
 
 AtlasUtil.lua
 Layout.lua

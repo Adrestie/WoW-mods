@@ -26,7 +26,14 @@ L'art d'interface du client est dans Data/enus/locale-enus.mpq, pas dans les
 archives communes : mpq.open_client ne le voit pas, il faut ouvrir l'archive
 de langue directement.
 
-Il lit, il ne sait pas ecrire.
+Il lit, et il sait ecrire une seule forme : BLP2 non compresse en BGRA
+(encodage 3), sans mipmap -- exactement celle qu'ont les feuilles deja
+versees dans le patch et que le client affiche sans broncher.
+
+CE QUE LE CLIENT N'AFFICHE PAS. Une feuille de 2048 de large sort en bruit
+(vu le 2026-09-22 sur uiactionbarfx et son anneau d'autolancement) : toutes
+celles qu'il affiche correctement font 1024 au plus. D'ou l'encodeur, qui
+permet de retailler un morceau de feuille en une petite image a part.
 """
 import struct
 
@@ -125,3 +132,33 @@ def decoder(donnees):
 
     return largeur, hauteur, bytes(px), dict(encodage=encodage, profAlpha=profAlpha,
                                              encAlpha=encAlpha, mips=mips)
+
+
+# L'en-tete BLP2 fait 148 octets, suivis de 1024 octets de palette -- presents
+# meme en BGRA, ou ils ne servent pas. Les donnees commencent donc a 1172.
+DEBUT_DONNEES = 148 + 1024
+
+
+def encoder(largeur, hauteur, rgba):
+    """Ecrit un BLP2 non compresse en BGRA, sans mipmap.
+
+    rgba : une suite d'octets R, V, B, A, ligne par ligne depuis le haut.
+    """
+    assert len(rgba) == largeur * hauteur * 4, "taille d'image incoherente"
+
+    entete = bytearray(DEBUT_DONNEES)
+    entete[0:4] = b"BLP2"
+    struct.pack_into("<I", entete, 4, 1)            # type : non compresse
+    entete[8] = 3                                   # encodage : BGRA
+    entete[9] = 8                                   # profondeur d'alpha
+    entete[10] = 8                                  # encodage d'alpha
+    entete[11] = 0                                  # aucun mipmap
+    struct.pack_into("<II", entete, 12, largeur, hauteur)
+    struct.pack_into("<I", entete, 20, DEBUT_DONNEES)          # mipOffsets[0]
+    struct.pack_into("<I", entete, 84, largeur * hauteur * 4)  # mipSizes[0]
+
+    corps = bytearray(largeur * hauteur * 4)
+    for i in range(largeur * hauteur):
+        r, v, b, a = rgba[i*4:i*4+4]
+        corps[i*4:i*4+4] = bytes((b, v, r, a))
+    return bytes(entete) + bytes(corps)

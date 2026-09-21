@@ -593,7 +593,8 @@ def main():
 
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
-             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua",
+             "UIAtlas_07_petites_feuilles.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua"]
@@ -1342,6 +1343,12 @@ def main():
         "l anneau fait 31 et se centre a (0,5 ; -0,5)"
     fo = a2.fourmis.points[1]
     assert fo[4] == -5 and fo[5] == 5, "les fourmis debordent de 5 px"
+
+    # L'anneau vient d'une PETITE feuille : le client rend en bruit celle de
+    # 2048 de large dont ces elements sortent a l'origine.
+    print("   feuille de l'anneau : %s" % a2.fourmis.texture)
+    assert "petautocast" in (a2.fourmis.texture or "").lower(),         "l anneau doit venir de la petite feuille"
+    assert "uiactionbarfx" not in (a2.fourmis.texture or "").lower(),         "la feuille de 2048 sort en bruit sur ce client"
 
     # la rotation : -360 degres en 4 secondes
     avant = a2.angle
