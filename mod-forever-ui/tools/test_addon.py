@@ -408,6 +408,8 @@ function GetContainerItemInfo(sac, emplacement)
 end
 -- Le nom d'un sac vient du client : bag 0 = le mot traduit, les autres
 -- portent le nom de l'objet qu'ils sont.
+function GetScreenWidth() return 1920 end
+function GetScreenHeight() return 1080 end
 KEYRING_CONTAINER = -2
 NOMS_DE_SACS = { [0] = "Sac a dos", [-2] = "Trousseau de cles",
                  [1] = "Sac en tisse-givre", [2] = "Sac de mineur" }
@@ -1150,19 +1152,19 @@ def main():
         ", ".join(sorted(k for k in dict(panneau).keys() if str(k).startswith("coin")))))
     assert panneau.coinHautGauche is not None and panneau.bordBas is not None
 
-    # Le portrait est desormais dans un CADRE FILS, comme PortraitContainer :
-    # le fond du panneau est en BACKGROUND et le couvrait.
+    # Le portrait passe SOUS le metal, dont le trou lui sert de masque : il
+    # est cree apres le fond, dans le meme calque, donc au-dessus de lui, et
+    # le metal est en BORDER, donc au-dessus de lui.
     assert g["ContainerFrame1Portrait"].alpha == 0, "l'ancien portrait doit s'effacer"
-    anneau = sac.foreverAnneau
     portrait = sac.foreverPortrait
-    pt = anneau.points[1]
-    print("portrait : %dx%d dans un cadre fils (niveau +%d), %s sur %s (%.1f, %.1f), rogne a %.2f" % (
-        anneau.width, anneau.height,
-        anneau.GetFrameLevel(anneau) - sac.GetFrameLevel(sac),
-        pt[1], pt[3], pt[4], pt[5], portrait.texcoord[1]))
-    assert anneau.width == 36, "SetPortraitTextureSizeAndOffset donne 36"
-    assert pt[3] == "TOPLEFT" and abs(pt[4] - 13.5) < 0.01
-    assert anneau.GetFrameLevel(anneau) > sac.GetFrameLevel(sac),         "le portrait doit passer au-dessus du fond"
+    pt = portrait.points[1]
+    fond = list(sac.foreverPanel.fond.values())[0]
+    print("portrait : %dx%d en %s, %s sur %s (%.0f, %.0f)" % (
+        portrait.width, portrait.height, portrait.layer, pt[1], pt[3], pt[4], pt[5]))
+    assert portrait.width == 20, "le carre doit remplir le trou de 18 sans deborder du metal"
+    assert pt[3] == "TOPLEFT" and pt[4] == 14 and pt[5] == -17,         "le portrait n'est pas centre sur le trou de l'anneau"
+    assert portrait.layer == fond.layer, "le portrait doit etre dans le calque du fond"
+    assert sac.foreverPanel.coinHautGauche.layer != portrait.layer,         "le metal doit etre dans un calque au-dessus, c'est lui le masque"
 
     # UpdateName / UpdateMiscellaneousFrames : le nom et l'icone viennent du
     # sac, et se refont a chaque passage du client.
@@ -1175,7 +1177,9 @@ def main():
     assert titre.points[1][4] == 35, "SetTitleOffsets(35) donne 35 a gauche"
     assert titre.points[2][4] == -24, "la valeur par defaut a droite est -24"
     assert titre.justify == "CENTER", "le titre se centre dans son conteneur"
-    print("   portrait du sac a dos : %s" % portrait.texture)
+    print("   portrait du sac a dos : %s, rognage %s (aucun : le metal masque)" % (
+        portrait.texture, [round(v, 2) for v in portrait.texcoord.values()]))
+    assert [round(v, 2) for v in portrait.texcoord.values()] == [0, 1, 0, 1],         "l'icone n'est pas rognee : c'est le trou du metal qui la decoupe"
     assert portrait.texture and portrait.texture.lower().find("inv_misc_bag_08") >= 0,         "le sac a dos porte Inv_misc_bag_08"
 
     sac.id = 1
@@ -1324,6 +1328,25 @@ def main():
     veille.scripts.OnUpdate(veille, 0.01)
     print("   rien n'a bouge : defaite %d fois (0 attendu)" % (g.ContainerFrame1.foreverDefaite or 0))
     assert (g.ContainerFrame1.foreverDefaite or 0) == 0, "le rattrapage repose une taille deja bonne"
+
+    # L'EMPILEMENT -- UpdateContainerFrameAnchors : CONTAINER_SPACING vaut 8
+    # entre deux sacs, le premier se pose a 10 du bord droit et 85 du bas.
+    g.ContainerFrame2.id = 1
+    g.ContainerFrame2.size = 16
+    g.ContainerFrame2.Show(g.ContainerFrame2)
+    g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
+    lua.execute('ContainerFrame1.bags = { "ContainerFrame1", "ContainerFrame2" }')
+    g.HOOKS["updateContainerFrameAnchors"]()
+
+    p1 = g.ContainerFrame1.points[len(list(g.ContainerFrame1.points.values()))]
+    p2 = g.ContainerFrame2.points[len(list(g.ContainerFrame2.points.values()))]
+    print("   empilement : premier %s (%s, %s) | second %s sur %s (%s, %s)" % (
+        p1[1], p1[4], p1[5], p2[1], p2[3], p2[4], p2[5]))
+    assert (p1[1], p1[4], p1[5]) == ("BOTTOMRIGHT", -10, 85),         "le premier sac n'est pas a 10 du bord droit et 85 du bas"
+    assert (p2[1], p2[3], p2[4], p2[5]) == ("BOTTOMRIGHT", "TOPRIGHT", 0, 8),         "les sacs ne sont pas espaces de CONTAINER_SPACING"
+    g.ContainerFrame2.Hide(g.ContainerFrame2)
+    g.ContainerFrame2.id = 0
+    lua.execute("ContainerFrame1.bags = nil")
 
     # Un reglage change, la fenetre suit.
     g.ForeverUI.BagsSet("emplacement", 44)

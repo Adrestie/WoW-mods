@@ -134,9 +134,22 @@ local R = {
 	fermeture = 24,
 	fermetureX = 1,
 	fermetureY = 0,
-	portrait = 36,          -- SetPortraitTextureSizeAndOffset(36, -4, 1)
-	portraitX = 13.5,
-	portraitY = -14,
+	-- LE PORTRAIT. camelot le pose en 36, AU-DESSUS du metal, et le rend rond
+	-- avec PortraitContainer.CircleMask. 3.3.5 n'a pas de masque : on le passe
+	-- SOUS le metal, dont le trou joue le masque. Le trou de
+	-- ui-frame-portraitmetal-cornertopleftsmall fait 18 de diametre une fois
+	-- dessine ; un carre de 20 le remplit (bords a 10 > 9) et ses coins, a
+	-- 14,1 du centre, restent caches par le metal opaque jusqu'a 19,5. La
+	-- rondeur est donc celle de l'art de camelot, et l'icone n'est pas rognee.
+	portrait = 20,
+	portraitX = 14,         -- le centre du portrait de la source : -4 + 36/2
+	portraitY = -17,        -- 1 - 36/2 ; le trou mesure est a (13,9 ; -17,7)
+
+	-- L'EMPILEMENT DES SACS -- UpdateContainerFrameAnchors, lignes 1372-1401
+	ecartSacs = 8,          -- CONTAINER_SPACING
+	ecartColonnes = -11,    -- le saut de colonne
+	bordDroit = 10,         -- GetInitialContainerFrameOffsetX, hors barres
+	bordBas = 85,           -- CONTAINER_OFFSET_Y
 
 	-- L'ENSEMBLE
 	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
@@ -254,25 +267,20 @@ local function habillerCadre(cadre)
 	-- de diametre -- la taille que la source donne au portrait. 3.3.5 n'a pas
 	-- de masque : l'icone est rognee pour tenir dans le rond.
 	--
-	-- La source le range dans PortraitContainer, un CADRE FILS. On fait
-	-- pareil, et pour une raison precise : le fond du panneau est en
-	-- BACKGROUND comme le portrait du client, et deux regions d'un meme
-	-- calque ne sont ordonnees que par leur ordre de creation -- le fond,
-	-- cree apres, couvrait donc le portrait.
+	-- La texture est creee APRES SetPanelArt et dans le MEME calque que son
+	-- fond : deux regions d'un meme calque ne sont ordonnees que par leur
+	-- ordre de creation, elle passe donc au-dessus du fond -- ce qui manquait
+	-- au portrait du client, cree au chargement -- et reste sous le metal,
+	-- qui est en BORDER et lui sert de masque.
 	local ancien = _G[nom .. "Portrait"]
 	if ancien then
 		ancien:SetAlpha(0)
 	end
 
-	local anneau = CreateFrame("Frame", nil, cadre)
-	anneau:SetFrameLevel(cadre:GetFrameLevel() + 3)
-	anneau:SetWidth(R.portrait)
-	anneau:SetHeight(R.portrait)
-	anneau:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
-	local portrait = anneau:CreateTexture(nil, "ARTWORK")
-	portrait:SetAllPoints(anneau)
-	portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	cadre.foreverAnneau = anneau
+	local portrait = cadre:CreateTexture(nil, "BACKGROUND")
+	portrait:SetWidth(R.portrait)
+	portrait:SetHeight(R.portrait)
+	portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
 	cadre.foreverPortrait = portrait
 
 	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
@@ -862,7 +870,9 @@ local function majEntete(cadre)
 			texture = GetInventoryItemTexture("player", ContainerIDToInventoryID(id))
 		end
 		portrait:SetTexture(texture)
-		portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		-- Pas de rognage : le trou du metal decoupe le rond, comme le masque
+		-- de la source le fait sur l'icone entiere.
+		portrait:SetTexCoord(0, 1, 0, 1)
 	end
 end
 
@@ -932,6 +942,72 @@ local function poserGrille(cadre)
 	end
 end
 
+-- RELEVE -- UpdateContainerFrameAnchors (containerframe.lua, 1372-1401).
+-- Les sacs s'empilent du bas vers le haut, CONTAINER_SPACING entre deux, et
+-- passent en colonne a gauche quand l'ecran est plein.
+local function largeurBarresDroite()
+	-- EditModeUtil:GetRightActionBarWidth() n'existe pas en 3.3.5 : ses
+	-- barres de droite sont MultiBarRight et MultiBarLeft.
+	local largeur = 0
+	for _, nomBarre in ipairs({ "MultiBarRight", "MultiBarLeft" }) do
+		local barre = _G[nomBarre]
+		if barre and barre:IsShown() then
+			largeur = largeur + barre:GetWidth()
+		end
+	end
+	return largeur
+end
+
+local function sacsOuverts()
+	-- Le client tient l'ordre d'empilement dans ContainerFrame1.bags, ce que
+	-- la source lit avec GetBagsShown.
+	local liste = {}
+	if ContainerFrame1 and ContainerFrame1.bags then
+		for _, nomCadre in ipairs(ContainerFrame1.bags) do
+			local cadre = _G[nomCadre]
+			if cadre and cadre:IsShown() then
+				table.insert(liste, cadre)
+			end
+		end
+	end
+	if #liste == 0 then
+		for _, cadre in ipairs(cadres) do
+			if cadre:IsShown() and (cadre.size or 0) > 0 then
+				table.insert(liste, cadre)
+			end
+		end
+	end
+	return liste
+end
+
+local function poserSacs()
+	local hauteurEcran = GetScreenHeight() / R.echelle
+	local decalageX = (largeurBarresDroite() + R.bordDroit) / R.echelle
+	local decalageY = R.bordBas / R.echelle
+	local libre = hauteurEcran - decalageY
+	local precedent, premierDeColonne
+
+	for index, cadre in ipairs(sacsOuverts()) do
+		cadre:SetScale(R.echelle)
+		cadre:ClearAllPoints()
+		if index == 1 then
+			cadre:SetPoint("BOTTOMRIGHT", cadre:GetParent(), "BOTTOMRIGHT",
+				-decalageX, decalageY)
+			premierDeColonne = cadre
+		elseif libre < cadre:GetHeight() then
+			libre = hauteurEcran - decalageY
+			cadre:SetPoint("BOTTOMRIGHT", premierDeColonne, "BOTTOMLEFT",
+				R.ecartColonnes, 0)
+			premierDeColonne = cadre
+		else
+			cadre:SetPoint("BOTTOMRIGHT", precedent, "TOPRIGHT", 0, R.ecartSacs)
+		end
+		precedent = cadre
+		libre = libre - cadre:GetHeight()
+	end
+end
+ForeverUI.BagsStack = poserSacs
+
 -- LE RATTRAPAGE. 3.3.5 repose la taille de ses cadres de sac a des moments
 -- que les accroches ne couvrent pas toutes (le client ouvre, ferme et
 -- reagence ses treize cadres entre eux). Un seul passage a l'image suivante
@@ -942,6 +1018,7 @@ local rattrapage = CreateFrame("Frame", "ForeverUIBagsRecheck")
 rattrapage:Hide()
 rattrapage:SetScript("OnUpdate", function(self)
 	self:Hide()
+	local refaire = false
 	for _, cadre in ipairs(cadres) do
 		if cadre:IsShown() and (cadre.size or 0) > 1 then
 			local m = mesures(cadre)
@@ -949,8 +1026,13 @@ rattrapage:SetScript("OnUpdate", function(self)
 				or math.abs(cadre:GetWidth() - m.largeur) > 0.5 then
 				cadre.foreverDefaite = (cadre.foreverDefaite or 0) + 1
 				poserGrille(cadre)
+				refaire = true
 			end
 		end
+	end
+	if refaire then
+		-- Une hauteur a change : l'empilement en depend.
+		poserSacs()
 	end
 end)
 
@@ -1005,6 +1087,9 @@ if hooksecurefunc then
 				poserGrille(cadre)
 			end
 		end
+		-- Le client vient d'empiler ses sacs avec SES ecarts ; on repose
+		-- ceux de camelot par-dessus.
+		poserSacs()
 		demanderRattrapage()
 	end)
 end

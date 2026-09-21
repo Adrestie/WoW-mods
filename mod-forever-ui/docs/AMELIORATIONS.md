@@ -96,7 +96,7 @@ Elle montre aussi deux choses à garder en tête :
 | Point | Ce qui est fait | Pourquoi |
 |---|---|---|
 | Grille du sac à dos | descendue de 12 px, et le cadre grandi d'autant | 3.3.5 commence sa grille 48 px sous le haut du cadre, et le champ de recherche de camelot occupe cette bande (-37 à -55) |
-| Portrait du sac | icône carrée de 36 x 36, rognée à 8 % et posée dans l'anneau | 3.3.5 n'a pas de `MaskTexture` ; la source masque un portrait de 62 x 62 en rond. Taille et principe repris de `SetPortraitTextureSizeAndOffset(36, −4, 1)` et de `PortraitContainer`, un cadre fils |
+| Portrait du sac | carré de 20 x 20 posé **sous** le métal, non rogné | camelot pose 36 x 36 **au-dessus** du métal et le rend rond avec `PortraitContainer.CircleMask` ; 3.3.5 n'a pas de `MaskTexture`. Le trou de `ui-frame-portraitmetal-cornertopleftsmall` fait 18 de diamètre une fois dessiné : c'est lui qui sert de masque. Un carré de 20 le remplit (bords à 10 > 9) et ses coins, à 14,1 du centre, restent sous le métal opaque jusqu'à 19,5. **Conséquence assumée : le portrait paraît plus petit que chez camelot** — 18 de rond au lieu de 36 |
 | Icône du trousseau | `Interface\ContainerFrame\KeyRing-Bag-Icon` | `UpdateMiscellaneousFrames` demande `Interface/Icons/ui-hud-actionbar-keyring`, qui n'existe pas en 3.3.5 |
 | Bouton de fermeture | celui de 3.3.5, à sa place d'origine | la source emploie `UIPanelCloseButtonDefaultAnchors`, non relevé |
 | Son du tri | aucun | la source joue `SOUNDKIT.UI_BAG_SORTING_01`, qui n'existe pas en 3.3.5 |
@@ -175,6 +175,22 @@ repasse derrière nous.
   comme c'était fait, le dessine **au-dessus** de l'icône en 3.3.5 : les objets
   disparaissaient derrière leur propre emplacement. L'art doré d'époque est
   simplement effacé.
+
+**L'empilement de plusieurs sacs** est recopié de `UpdateContainerFrameAnchors`
+(lignes 1372-1401) : `CONTAINER_SPACING = 8` entre deux sacs
+(`BOTTOMRIGHT` sur le `TOPRIGHT` du précédent, +8), premier sac à
+`GetInitialContainerFrameOffsetX()` (10, plus la largeur des barres d'action de
+droite) du bord droit et `CONTAINER_OFFSET_Y` (85) du bas, saut de colonne à
+(−11, 0) sur le `BOTTOMLEFT` du premier sac de la colonne précédente. 3.3.5
+emploie ses propres écarts, plus serrés : ses sacs se chevauchaient de quelques
+pixels. `EditModeUtil:GetRightActionBarWidth()` n'existant pas, la largeur est
+prise sur `MultiBarRight` et `MultiBarLeft` quand elles sont affichées.
+
+**Écart connu, non corrigé :** `HeldBagLayout` place ses coins en
+`TopLeft (−13, 16)`, `TopRight (4, 16)`, `BottomLeft (−13, −3)`,
+`BottomRight (4, −3)`, tous en `OVERLAY`. `AtlasUtil.PANNEAU_COINS` emploie
+`(2, 16)` et `(−13/2, −8)`, en `BORDER`. Le rendu a été validé en jeu avec ces
+valeurs ; elles ne seront pas touchées sans accord.
 
 **Non reproduit :** `NineSliceUtil.UpdateCornerCropping(self, height)`, que
 `UpdateFrameSize` appelle pour rogner les coins d'une fenêtre trop courte. Sans
