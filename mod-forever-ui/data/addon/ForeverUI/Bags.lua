@@ -261,13 +261,20 @@ local function habillerCadre(cadre)
 		end
 	end
 
-	-- LE PORTRAIT PASSE DERRIERE LA FENETRE, et c'est elle qui le masque.
-	-- Il est donc cree AVANT l'art du panneau, dans le meme calque que son
-	-- fond : deux regions d'un meme calque ne sont ordonnees que par leur
-	-- ordre de creation, tout ce qui suit le recouvre. Le fond est opaque, le
-	-- metal est en OVERLAY, et le trou de l'anneau est le seul endroit par ou
-	-- l'icone se voit. Elle garde sa taille (36) et sa place (-4, 1), celles
-	-- de SetPortraitTextureSizeAndOffset.
+	ForeverUI.SetPanelArt(cadre)
+
+	-- L'ICONE SE GLISSE ENTRE LE FOND ET LE CONTOUR. Elle est donc creee
+	-- APRES l'art du panneau, dans le meme calque que son fond -- deux
+	-- regions d'un meme calque ne sont ordonnees que par leur ordre de
+	-- creation, celle-ci passe donc au-dessus -- et le metal, en OVERLAY,
+	-- reste au-dessus d'elle.
+	--
+	-- L'ordre compte : sous le fond, qui est OPAQUE, l'icone ne se verrait
+	-- meme pas par le trou de l'anneau. C'est le contour seul qui la
+	-- decoupe, exactement comme le cadre de sac de 3.3.5 decoupe la sienne
+	-- (UI-Bag-4x4.blp porte un trou circulaire de 32 px, rien n'y est
+	-- masque). Taille et place sont celles de la source :
+	-- SetPortraitTextureSizeAndOffset(36, -4, 1).
 	local ancien = _G[nom .. "Portrait"]
 	if ancien then
 		ancien:SetAlpha(0)
@@ -278,8 +285,6 @@ local function habillerCadre(cadre)
 	portrait:SetHeight(R.portrait)
 	portrait:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.portraitX, R.portraitY)
 	cadre.foreverPortrait = portrait
-
-	ForeverUI.SetPanelArt(cadre)
 
 	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
 	-- avec 35, et le modele TitleContainer : un CADRE de 20 de haut allant de

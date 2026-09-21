@@ -1167,10 +1167,10 @@ def main():
         assert (pt[4], pt[5]) == (x, y), "%s ne suit pas HeldBagLayout" % cle
         assert t.layer == "OVERLAY", "HeldBagLayout declare %s en OVERLAY" % cle
 
-    # Le portrait passe DERRIERE la fenetre, qui le masque : il est cree
-    # AVANT l'art du panneau, dans le meme calque que son fond -- deux
-    # regions d'un meme calque ne sont ordonnees que par leur ordre de
-    # creation, tout ce qui suit le recouvre.
+    # Le portrait se glisse ENTRE le fond et le contour : cree APRES le fond
+    # et dans son calque, donc au-dessus de lui ; le metal est en OVERLAY,
+    # donc au-dessus du portrait. Sous le fond, qui est opaque, il ne se
+    # verrait meme pas par le trou de l'anneau.
     assert g["ContainerFrame1Portrait"].alpha == 0, "l'ancien portrait doit s'effacer"
     portrait = sac.foreverPortrait
     pt = portrait.points[1]
@@ -1180,9 +1180,9 @@ def main():
     assert portrait.width == 36 and portrait.height == 36,         "SetPortraitTextureSizeAndOffset donne 36 : la taille d'origine est gardee"
     assert pt[1] == "TOPLEFT" and pt[3] == "TOPLEFT" and pt[4] == -4 and pt[5] == 1,         "le portrait n'est pas a (-4, 1) du TOPLEFT, la place de la source"
     assert portrait.layer == fond.layer == "BACKGROUND",         "le portrait doit etre dans le calque du fond, qui le recouvre"
-    print("   cree en %d, le fond en %d : tout ce qui suit le recouvre" % (
+    print("   cree en %d, le fond en %d : il passe au-dessus du fond" % (
         portrait.rang, fond.rang))
-    assert portrait.rang < fond.rang,         "le portrait doit etre cree AVANT le fond, sinon il passe devant"
+    assert portrait.rang > fond.rang,         "le portrait doit etre cree APRES le fond, sinon le fond opaque le cache"
     assert sac.foreverPanel.coinHautGauche.layer == "OVERLAY",         "HeldBagLayout declare ses morceaux en OVERLAY"
 
     # UpdateName / UpdateMiscellaneousFrames : le nom et l'icone viennent du
