@@ -1193,11 +1193,13 @@ def main():
 
     contour = g.ContainerFrame1Item4.foreverContour
     vide = g.ContainerFrame1Item3.foreverContour
-    print("   contour : case pleine visible=%s teinte=%s | case vide visible=%s" % (
-        contour.shown, [round(v, 2) for v in contour.vertex.values()] if contour.vertex else None,
-        vide.shown))
-    assert contour.shown, "un objet n'a pas de contour"
-    assert not vide.shown, "une case vide a un contour"
+    gris = [round(v, 2) for v in vide.vertex.values()] if vide.vertex else None
+    teinte = [round(v, 2) for v in contour.vertex.values()] if contour.vertex else None
+    print("   contour : case pleine %s | case vide %s (les deux visibles : %s et %s)" % (
+        teinte, gris, contour.shown, vide.shown))
+    assert contour.shown and vide.shown, "camelot pose un cadre sur chaque case"
+    assert gris and abs(gris[0] - 0.39) < 0.01, "la case vide n'a pas le gris de la capture"
+    assert teinte and teinte != gris, "la qualite ne teinte pas le cadre"
 
     # le champ et le bouton de tri ne se montrent que sur le sac principal
     g.ForeverUI.BagsLayout()

@@ -110,6 +110,14 @@ local AIR_GRILLE_BOURSE = 1
 
 local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
 
+-- MESURE SUR LA CAPTURE. camelot pose un cadre sur CHAQUE case, pleine ou
+-- vide : gris sombre, bords entre 25 et 49, coins vers 100. L'image porte ces
+-- memes valeurs a 255 et 140 : la teinte vaut donc 0,39. La couleur de
+-- qualite ne prend le relais qu'a partir de peu commun -- les objets communs
+-- de la capture gardent le cadre gris.
+local CADRE_GRIS = 0.39
+local QUALITE_TEINTEE = 2
+
 local RANGER = BAG_CLEANUP_BAGS or "Ranger les sacs"
 local RANGER_AIDE = BAG_CLEANUP_BAGS_DESCRIPTION
 	or "Reunit les piles et remet les objets en ordre."
@@ -156,7 +164,7 @@ local function habillerBouton(bouton)
 	local contour = bouton:CreateTexture(nil, "OVERLAY")
 	contour:SetTexture(CADRE_QUALITE)
 	contour:SetAllPoints(bouton)
-	contour:Hide()
+	contour:SetVertexColor(CADRE_GRIS, CADRE_GRIS, CADRE_GRIS)
 	bouton.foreverContour = contour
 
 	-- Le voile de recherche : la source le declare sur le bouton d'objet
@@ -296,16 +304,19 @@ function Recherche.Appliquer(cadre)
 				bouton.foreverVoile:Hide()
 			end
 
+			-- Le cadre est toujours la ; seule sa teinte change, et seulement
+			-- a partir de peu commun.
 			local contour = bouton.foreverContour
 			if contour then
 				local qualite = select(4, GetContainerItemInfo(sac, emplacement))
-				local couleur = qualite and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[qualite]
-				if lien and couleur then
+				local couleur = lien and qualite and qualite >= QUALITE_TEINTEE
+					and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[qualite]
+				if couleur then
 					contour:SetVertexColor(couleur.r, couleur.g, couleur.b)
-					contour:Show()
 				else
-					contour:Hide()
+					contour:SetVertexColor(CADRE_GRIS, CADRE_GRIS, CADRE_GRIS)
 				end
+				contour:Show()
 			end
 		end
 	end

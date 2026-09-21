@@ -225,13 +225,22 @@ end
 --      camelot/NineSliceLayoutOverrides.lua (coin haut droit x -2, coins bas
 --      y = -8).
 --
--- PANEL_BACKGROUND_COLOR est une couleur du client, absente du code extrait :
--- elle est MESUREE dans l'art, au point ou le fond deborde sous le coin de
--- metal (0, 0, 0, 168/255).
+-- PANEL_BACKGROUND_COLOR est une couleur du client, absente du code extrait.
+-- Elle est MESUREE sur la capture du vrai client (docs/reference) : le fond
+-- d'un panneau y vaut (16, 14, 12) et il est OPAQUE -- le decor ne passe pas
+-- au travers. Un fond translucide fait virer au bleu les ecarts entre les
+-- cases d'un sac, ce qui a ete le premier ecart visible.
 --
 -- Les bords sont ETIRES et non paves : une texture d'atlas en pavage etale la
 -- feuille entiere.
-local PANNEAU_FOND = { 0, 0, 0, 168 / 255 }
+local PANNEAU_FOND = { 16 / 255, 14 / 255, 12 / 255, 1 }
+
+-- L'art de metal se pose en BORDER et non en OVERLAY comme chez le client
+-- moderne : celui-ci range son portrait et son titre dans des cadres fils a
+-- niveau eleve, alors que 3.3.5 en fait de simples regions du cadre
+-- (portrait en BACKGROUND, titre en ARTWORK). En OVERLAY, le metal les
+-- recouvrait tous les deux.
+local PANNEAU_COUCHE = "BORDER"
 
 local PANNEAU_COINS = {
 	{ cle = "coinHautGauche", nom = "ui-frame-portraitmetal-cornertopleftsmall",
@@ -278,7 +287,7 @@ function ForeverUI.SetPanelArt(frame)
 
 	-- 2. l'encadrement de metal
 	for _, coin in ipairs(PANNEAU_COINS) do
-		local texture = frame:CreateTexture(nil, "OVERLAY")
+		local texture = frame:CreateTexture(nil, PANNEAU_COUCHE)
 		if ForeverUI.SetAtlas(texture, coin.nom) then
 			texture:SetPoint(coin.point, frame, coin.point, coin.x, coin.y)
 			p[coin.cle] = texture
@@ -288,7 +297,7 @@ function ForeverUI.SetPanelArt(frame)
 	end
 
 	local function bord(nom, point1, cible1, relatif1, point2, cible2, relatif2)
-		local texture = frame:CreateTexture(nil, "OVERLAY")
+		local texture = frame:CreateTexture(nil, PANNEAU_COUCHE)
 		if not ForeverUI.SetAtlas(texture, nom) then
 			texture:Hide()
 			return nil
