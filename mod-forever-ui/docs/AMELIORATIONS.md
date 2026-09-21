@@ -220,6 +220,22 @@ lui, un sac d'une seule rangée voit ses coins de métal se chevaucher.
 | `SetNormalTexture` et ses sœurs n'acceptent qu'un **chemin** | leur passer un objet texture, comme le fait le client moderne, lève une erreur -- et une erreur au premier niveau d'un fichier abandonne **tout ce qui suit**. C'est ce qui a rendu `Bags.lua` inopérant sans rien afficher : l'habillage était appelé après le bouton de tri | poser le chemin de la feuille, puis régler l'atlas sur la texture que le bouton vient de créer ; le faux client lève maintenant la même erreur |
 | Pas de `SetTextureSliceMargins` | la découpe en neuf est faite à la main dans `AtlasUtil.lua`, avec des marges mesurées sur l'image | rien à faire, mais toute nouvelle image encadrée demande de remesurer |
 
+**Le client d'origine fait exactement cela pour ses propres sacs.** Vérifié
+le 2026-09-22 en décodant `Interface\ContainerFrame\UI-Bag-4x4.blp`
+(rangé dans `Data/enus/locale-enus.mpq`, et non dans les archives communes)
+avec `tools/foreverui/blp.py` : le cadre du sac de 3.3.5 porte un **trou
+circulaire** d'environ 32 px dans son coin haut gauche, et l'icône carrée est
+simplement posée derrière. Les icônes rondes des sacs d'origine ne sont donc
+pas masquées — c'est l'art qui découpe. Même mécanisme ici, avec l'anneau de
+camelot.
+
+L'anneau de camelot, mesuré au pixel sur `uiframemetal2xc60` à la taille où il
+est dessiné (95 x 95) : métal opaque, puis un **dégradé** de chaque côté, puis
+le trou. Trou net ≈ 20 px, ≈ 28 px en comptant le dégradé, qui laisse aussi
+passer l'icône — ce qui correspond au rond visible sur
+`docs/reference/camelot_sac_principal.png`. Une première mesure n'avait retenu
+que le cœur totalement transparent et annonçait 18 : c'était faux.
+
 **Le seul masque de ce client est celui de la minimap.** Vérifié dans
 `Wow.exe` le 2026-09-22 : la table des méthodes de `Texture` s'arrête à
 `SetAlphaGradient, Set/GetVertTile, Set/GetHorizTile, Set/GetNonBlocking,
