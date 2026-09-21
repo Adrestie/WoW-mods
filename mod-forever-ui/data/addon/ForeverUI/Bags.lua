@@ -578,23 +578,51 @@ boutonTri:SetWidth(TRI_W)
 boutonTri:SetHeight(TRI_H)
 boutonTri:Hide()
 
-local triNormale = boutonTri:CreateTexture(nil, "ARTWORK")
-ForeverUI.SetAtlas(triNormale, "bags-button-autosort-up", true)
-triNormale:SetAllPoints(boutonTri)
-boutonTri:SetNormalTexture(triNormale)
+-- PIEGE 3.3.5. SetNormalTexture et ses soeurs ne prennent qu'un CHEMIN de
+-- fichier ; leur passer un objet texture, comme le fait le client moderne,
+-- leve une erreur -- et une erreur au premier niveau d'un fichier abandonne
+-- TOUT ce qui suit. On pose donc le chemin de la feuille, puis on regle
+-- l'atlas sur la texture que le bouton vient de creer.
+local function poserEtat(bouton, poser, obtenir, atlas, largeur, hauteur, add)
+	local e = ForeverUI.AtlasEntry(atlas)
+	if not e then
+		return nil
+	end
 
-local triEnfoncee = boutonTri:CreateTexture(nil, "ARTWORK")
-ForeverUI.SetAtlas(triEnfoncee, "bags-button-autosort-down", true)
-triEnfoncee:SetAllPoints(boutonTri)
-boutonTri:SetPushedTexture(triEnfoncee)
+	bouton[poser](bouton, e[1])
+	local texture = bouton[obtenir](bouton)
+	if not texture then
+		return nil
+	end
 
-local triSurvol = boutonTri:CreateTexture(nil, "HIGHLIGHT")
-triSurvol:SetTexture(SURVOL_CARRE)
-triSurvol:SetBlendMode("ADD")
-triSurvol:SetWidth(24)
-triSurvol:SetHeight(23)
-triSurvol:SetPoint("CENTER")
-boutonTri:SetHighlightTexture(triSurvol)
+	ForeverUI.SetAtlas(texture, atlas, true)
+	texture:ClearAllPoints()
+	if largeur then
+		texture:SetWidth(largeur)
+		texture:SetHeight(hauteur)
+		texture:SetPoint("CENTER")
+	else
+		texture:SetAllPoints(bouton)
+	end
+	if add then
+		texture:SetBlendMode("ADD")
+	end
+	return texture
+end
+
+poserEtat(boutonTri, "SetNormalTexture", "GetNormalTexture", "bags-button-autosort-up")
+poserEtat(boutonTri, "SetPushedTexture", "GetPushedTexture", "bags-button-autosort-down")
+
+-- Le survol est un fichier du client, pas un element d'atlas : 24 x 23 centre.
+boutonTri:SetHighlightTexture(SURVOL_CARRE)
+local triSurvol = boutonTri:GetHighlightTexture()
+if triSurvol then
+	triSurvol:SetBlendMode("ADD")
+	triSurvol:ClearAllPoints()
+	triSurvol:SetWidth(24)
+	triSurvol:SetHeight(23)
+	triSurvol:SetPoint("CENTER")
+end
 
 boutonTri:SetScript("OnClick", function()
 	Tri.Lancer()

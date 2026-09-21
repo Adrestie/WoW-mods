@@ -114,9 +114,21 @@ function CreateFrame(kind, name, parent, template)
     function f:HasFocus() return self.focused end
     function f:SetFocus() self.focused = true end
     function f:ClearFocus() self.focused = false end
-    function f:SetNormalTexture(t) self._normal = t end
-    function f:SetPushedTexture(t) self._pushed = t end
-    function f:SetHighlightTexture(t) self._highlight = t end
+    -- 3.3.5 n'accepte qu'un CHEMIN : un objet texture y leve une erreur, et
+    -- le faux client doit lever la meme, sinon il laisse passer un fichier
+    -- qui mourra en jeu.
+    local function poserTexture(self, cle, valeur)
+        if type(valeur) == "table" then
+            error("SetTexture attend un chemin, pas un objet (piege 3.3.5)")
+        end
+        if not self[cle] then self[cle] = newRegion("texture") end
+        self[cle].texture = valeur
+        return self[cle]
+    end
+    function f:SetNormalTexture(v) return poserTexture(self, "_normal", v) end
+    function f:SetPushedTexture(v) return poserTexture(self, "_pushed", v) end
+    function f:SetHighlightTexture(v) return poserTexture(self, "_highlight", v) end
+    function f:SetDisabledTexture(v) return poserTexture(self, "_disabled", v) end
     function f:SetJustifyH(j) self.justify = j end
     function f:SetAttribute(k, v) self.attributes[k] = v end
     function f:GetAttribute(k) return self.attributes[k] end
