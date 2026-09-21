@@ -807,13 +807,28 @@ veilleur:SetScript("OnEvent", function()
 end)
 
 ForeverUI.BagsDebug = function()
-	local ouverts = 0
-	for _, cadre in ipairs(cadres) do
-		if cadre:IsShown() then
-			ouverts = ouverts + 1
-		end
-	end
+	local cadre = ContainerFrame1
+	local nom = cadre:GetName()
+	local premier = _G[nom .. "Item1"]
+	local dernier = _G[nom .. "Item" .. math.max(1, (cadre.size or 1))]
+	local bourse = _G[nom .. "MoneyFrame"]
+
+	local haut = cadre:GetTop() or 0
+	local bas = cadre:GetBottom() or 0
+	local hautGrille = (dernier and dernier:GetTop()) or 0
+	local basGrille = (premier and premier:GetBottom()) or 0
+
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r sacs : %d cadres habilles, %d ouverts | recherche \"%s\" | champ visible=%s | tri actif=%s",
-		#cadres, ouverts, Recherche.texte, tostring(champ:IsShown()), tostring(Tri.actif)))
+		"|cff66ccffForeverUI|r sac : %d cases, %d rangees | cadre %.0f x %.0f (echelle %.2f)",
+		cadre.size or 0, math.ceil((cadre.size or 0) / COLONNES),
+		cadre:GetWidth(), cadre:GetHeight(), cadre:GetScale()))
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"   entete %.0f | grille %.0f | sous la grille %.0f | bourse %.0f de haut, %.0f du bas",
+		haut - hautGrille, hautGrille - basGrille, basGrille - bas,
+		bourse and bourse:GetHeight() or 0,
+		bourse and ((bourse:GetBottom() or 0) - bas) or 0))
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"   cases habillees %d | case %.0f x %.0f | recherche visible=%s",
+		#cadres, premier and premier:GetWidth() or 0, premier and premier:GetHeight() or 0,
+		tostring(champ:IsShown())))
 end
