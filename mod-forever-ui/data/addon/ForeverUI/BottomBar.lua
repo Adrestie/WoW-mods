@@ -525,9 +525,12 @@ local function mesurerRangee()
 	local hautSacs = MICRO_Y + BAGS_OFFSET_Y + BAG_SIZE + 6
 
 	ForeverUI.BottomRow = {
-		-- bords interieurs des deux embouts : les 30 px de recouvrement
-		gauche = barreGauche + 30,
-		droite = sacsGauche + sacs:GetWidth() - 30,
+		-- D'un bout a l'autre des trois blocs : du bord gauche de la barre
+		-- d'action au bord droit de la barre des sacs. Les embouts debordent
+		-- de 30 px de chaque cote, mais ce qui se pose au-dessus s'aligne sur
+		-- les blocs, pas sur les griffons.
+		gauche = barreGauche,
+		droite = sacsGauche + sacs:GetWidth(),
 		haut = math.max(hautBarre, hautMicro, hautSacs),
 	}
 end

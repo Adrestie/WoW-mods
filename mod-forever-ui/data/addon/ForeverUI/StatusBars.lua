@@ -10,12 +10,16 @@
 --   toutes les deux de la meme facon.
 --
 -- camelot/StatusTrackingBarConstants.lua
---   priorites : Experience 0, Reputation 2. Le gestionnaire trie par priorite
---   DECROISSANTE (StatusTrackingManager:UpdateBarsShown), donc la reputation
---   prend le conteneur principal -- celui du bas -- et l'experience le
---   secondaire, pose STATUS_BAR_2_ANCHOR_OFFSET_Y = 17 plus haut, soit
---   exactement une hauteur de conteneur : les deux barres se touchent.
---   Ici l'image camelot fait 13 de haut : les barres se touchent donc a 13.
+--   Les deux conteneurs sont distants de STATUS_BAR_2_ANCHOR_OFFSET_Y = 17,
+--   soit exactement une hauteur de conteneur : les deux barres se touchent.
+--   Ici l'image camelot fait 13 de haut, l'ecart est donc de 13.
+--
+--   ORDRE : OBSERVE EN JEU, et non deduit du code. Les priorites du fichier
+--   (Experience 0, Reputation 2) triees par ordre decroissant mettraient la
+--   reputation dans le conteneur du bas et l'experience au-dessus ; le jeu
+--   montre l'inverse -- la reputation en haut, l'experience en dessous.
+--   Comme pour la lueur de menace du cadre joueur, ce que le client affiche
+--   prime sur la lecture de la fonction.
 --
 -- shared/ReputationBar.lua
 --   le remplissage depend de l'attitude : rouge pour hai et hostile, orange
@@ -28,9 +32,10 @@
 --   reputation : GetWatchedFactionInfo() rend nom, attitude, min, max, valeur ;
 --                la barre disparait quand aucune faction n'est suivie.
 --
--- PLACEMENT. Les deux barres vont d'un embout a l'autre et se posent sur le
--- haut de la rangee, mesure par BottomBar (ForeverUI.BottomRow). Elles restent
--- deplacables separement, comme tout le reste.
+-- PLACEMENT. Les deux barres ont la longueur de la rangee du bas -- barre
+-- d'action, micro-menu et sacs alignes -- et se posent sur son point le plus
+-- haut, mesure par BottomBar (ForeverUI.BottomRow). Elles restent deplacables
+-- separement, comme tout le reste.
 
 local HAUTEUR = 13   -- hauteur de l'image camelot (1020 x 13)
 
@@ -163,8 +168,9 @@ local function majReputation()
 end
 
 -- ------------------------------------------------------------- placement
--- Les deux barres vont d'un embout a l'autre, et se touchent : la reputation
--- pose sur la rangee, l'experience juste au-dessus.
+-- Les deux barres font la longueur de la rangee -- barre d'action, micro-menu
+-- et sacs alignes -- et se touchent : l'experience pose sur la rangee, la
+-- reputation juste au-dessus.
 local function poser()
 	local rangee = ForeverUI.BottomRow
 	if not rangee then
@@ -177,8 +183,8 @@ local function poser()
 	experience:SetWidth(largeur)
 	reputation:SetWidth(largeur)
 
-	ForeverUI.Layout.SetDefaults("reputationbar", "BOTTOM", "BOTTOM", centre, rangee.haut)
-	ForeverUI.Layout.SetDefaults("experiencebar", "BOTTOM", "BOTTOM", centre, rangee.haut + HAUTEUR)
+	ForeverUI.Layout.SetDefaults("experiencebar", "BOTTOM", "BOTTOM", centre, rangee.haut)
+	ForeverUI.Layout.SetDefaults("reputationbar", "BOTTOM", "BOTTOM", centre, rangee.haut + HAUTEUR)
 end
 
 local veilleur = CreateFrame("Frame")
@@ -200,8 +206,8 @@ veilleur:SetScript("OnEvent", function(_self, event)
 	majReputation()
 end)
 
-ForeverUI.Layout.Register(reputation, "reputationbar", "Barre de reputation", "BOTTOM", "BOTTOM", 0, 54)
-ForeverUI.Layout.Register(experience, "experiencebar", "Barre d'experience", "BOTTOM", "BOTTOM", 0, 67)
+ForeverUI.Layout.Register(experience, "experiencebar", "Barre d'experience", "BOTTOM", "BOTTOM", 0, 54)
+ForeverUI.Layout.Register(reputation, "reputationbar", "Barre de reputation", "BOTTOM", "BOTTOM", 0, 67)
 poser()
 majExperience()
 majReputation()

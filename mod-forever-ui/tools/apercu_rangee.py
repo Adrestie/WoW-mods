@@ -196,14 +196,14 @@ poser(etire("ui-hud-actionbar-gryphon-right-c60", GRYPHON_W, GRYPHON_H),
 
 # ------------------------------------------- barres d experience et de reputation
 BARRE_H = 13
-barres_gauche = gryphon_g_droite
-barres_largeur = gryphon_d_gauche - gryphon_g_droite
+barres_gauche = barre_gauche
+barres_largeur = (sacs_gauche + SACS_W) - barre_gauche
 haut_rangee = max(barre_bas + BOUTON + 6, micro_bas + MICRO_H + 8, sacs_bas + BOUTON + 6)
 
-rep_bas = haut_rangee
-xp_bas = rep_bas + BARRE_H
-for bas, remplissage in ((rep_bas, "ui-hud-experiencebar-fill-reputation-camelot"),
-                         (xp_bas, "ui-hud-experiencebar-fill-experience-camelot")):
+xp_bas = haut_rangee
+rep_bas = xp_bas + BARRE_H
+for bas, remplissage in ((xp_bas, "ui-hud-experiencebar-fill-experience-camelot"),
+                         (rep_bas, "ui-hud-experiencebar-fill-reputation-camelot")):
     poser(etire("ui-hud-experiencebar-background-camelot", barres_largeur, BARRE_H),
           barres_gauche, bas)
     part = etire(remplissage, barres_largeur, BARRE_H)
@@ -215,8 +215,8 @@ poser(etire("ui-hud-actionbar-gryphon-left-c60", GRYPHON_W, GRYPHON_H),
       gryphon_g_droite - GRYPHON_W, gryphon_bas)
 poser(etire("ui-hud-actionbar-gryphon-right-c60", GRYPHON_W, GRYPHON_H),
       gryphon_d_gauche, gryphon_bas)
-print("barres : %.1f -> %.1f, bas a %d et %d, haut de la barre d xp a %d" % (
-    barres_gauche, barres_gauche + barres_largeur, rep_bas, xp_bas, xp_bas + BARRE_H))
+print("barres : %.1f -> %.1f, experience a %d, reputation a %d, haut a %d" % (
+    barres_gauche, barres_gauche + barres_largeur, xp_bas, rep_bas, rep_bas + BARRE_H))
 
 sortie = os.path.join(BASE, "apercu_rangee.png")
 toile.save(sortie)

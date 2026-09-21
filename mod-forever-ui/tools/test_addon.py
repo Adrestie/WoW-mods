@@ -886,14 +886,23 @@ def main():
     print("rangee : %.1f -> %.1f (%.1f de large), haut %.0f" % (
         rangee.gauche, rangee.droite, largeur, rangee.haut))
     assert abs(xp.width - largeur) < 0.01 and abs(rep.width - largeur) < 0.01, (
-        "les barres ne vont pas d'un embout a l'autre")
+        "les barres ne font pas la longueur de la rangee")
+
+    # la rangee va du bord gauche de la barre d'action au bord droit des sacs
+    barre = g.ForeverUI.Layout.systems["actionbar"].defaults
+    sacsdef = g.ForeverUI.Layout.systems["sacs"].defaults
+    gauche_barre = barre.x - g.ForeverUIActionBarHolder.width
+    droite_sacs = sacsdef.x + g.ForeverUIBagsBar.width
+    print("bloc de gauche a %.1f, bloc de droite a %.1f" % (gauche_barre, droite_sacs))
+    assert abs(rangee.gauche - gauche_barre) < 0.01, "la rangee ne part pas du bord de la barre"
+    assert abs(rangee.droite - droite_sacs) < 0.01, "la rangee ne finit pas au bord des sacs"
 
     dxp = g.ForeverUI.Layout.systems["experiencebar"].defaults
     drep = g.ForeverUI.Layout.systems["reputationbar"].defaults
-    print("reputation posee a y=%.0f, experience a y=%.0f (13 d'ecart, elles se touchent)" % (
-        drep.y, dxp.y))
-    assert drep.y == rangee.haut, "la reputation ne pose pas sur la rangee"
-    assert dxp.y - drep.y == 13, "les deux barres ne se touchent pas"
+    print("experience posee a y=%.0f, reputation a y=%.0f (13 d'ecart, elles se touchent)" % (
+        dxp.y, drep.y))
+    assert dxp.y == rangee.haut, "l'experience ne pose pas sur la rangee"
+    assert drep.y - dxp.y == 13, "la reputation n'est pas juste au-dessus de l'experience"
     assert abs(dxp.x - (rangee.gauche + rangee.droite) / 2) < 0.01
 
     g.STATE.level = 80
