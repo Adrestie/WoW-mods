@@ -1146,10 +1146,16 @@ def main():
     # marge de chaque cote, 48 d'entete plus 30 pour la bande de recherche,
     # et sous la grille la bourse (8 + 13), son encadre qui deborde de 2, et
     # 1 d'ecart.
-    print("fenetre du sac a dos : %d x %d (179 x 265 selon les reglages)" % (
+    # grille centree : 78 d'air au-dessus (entete 48 + bande 30) et autant en
+    # dessous, pour 163 de grille.
+    print("fenetre du sac a dos : %d x %d (179 x 319, grille centree)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height))
     assert g.ContainerFrame1.width == 179, "la largeur ne suit pas les reglages"
-    assert g.ContainerFrame1.height == 265, "la hauteur ne suit pas les reglages"
+    assert g.ContainerFrame1.height == 319, "la grille n'est pas centree en hauteur"
+
+    premier_bas = g.ContainerFrame1Item1.points[len(list(g.ContainerFrame1Item1.points.values()))][5]
+    print("   air sous la grille : %s (autant que l'entete)" % premier_bas)
+    assert premier_bas == 78, "l'air sous la grille n'egale pas l'entete"
 
     # un reglage change, la fenetre suit
     g.ForeverUI.BagsSet("emplacement", 44)
@@ -1161,8 +1167,7 @@ def main():
 
     print("   premier bouton : %s sur %s (%s, %s) -- il pose sur la bourse" % (
         ppt[1], ppt[3], ppt[4], ppt[5]))
-    assert ppt[3] == "TOPRIGHT" and ppt[4] == 0 and ppt[5] == 3, (
-        "la derniere rangee n'est pas a 1 px de l'encadre de la bourse")
+    assert ppt[3] == "BOTTOMRIGHT", "la grille ne se pose pas sur le bas de la fenetre"
 
     rangee2 = g.ContainerFrame1Item5
     r2 = rangee2.points[len(list(rangee2.points.values()))]
@@ -1185,7 +1190,7 @@ def main():
         g.ContainerFrame2:SetID(1) if False else None
         g.ContainerFrame2.id = 1          # un sac porte, pas le sac a dos
         g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
-        attendu = rangees * 37 + (rangees - 1) * 5 + 57
+        attendu = rangees * 37 + (rangees - 1) * 5 + 2 * 48
         print("      %2d emplacements (%d rangees) -> %d de haut (%d attendu)" % (
             taille, rangees, g.ContainerFrame2.height, attendu))
         assert g.ContainerFrame2.height == attendu, "la fenetre ne suit pas son contenu"

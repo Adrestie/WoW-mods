@@ -117,6 +117,10 @@ local R = {
 	portraitX = 13.5,
 	portraitY = -14,
 
+	-- la grille dans la hauteur
+	grilleCentree = 1,      -- 1 = autant d'air au-dessus qu'en dessous de la
+	                        -- grille ; 0 = serree comme chez camelot
+
 	-- l'ensemble
 	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
 }
@@ -759,17 +763,27 @@ local function poserGrille(cadre)
 	-- L'encadre de la bourse deborde d'elle, moitie en haut, moitie en bas.
 	local depassement = (R.bourseCadre - R.bourseHauteur) / 2
 
-	-- Ce qui se trouve sous la grille : la marge seule pour un sac porte,
-	-- la bourse et son encadre pour le sac a dos.
+	-- Ce qu'il faut au minimum sous la grille : la marge seule pour un sac
+	-- porte, la bourse et son encadre pour le sac a dos.
 	local basGrille = R.margeBas
 	if sacADos then
 		basGrille = R.bourseBas + R.bourseHauteur + depassement + R.ecartGrilleBourse
 	end
-	local entete = R.entete + (sacADos and R.bandeRecherche or 0)
+
+	-- Ce qu'il faut au-dessus : la bande de titre, plus celle du champ de
+	-- recherche sur le sac a dos.
+	local hautGrille = R.entete + (sacADos and R.bandeRecherche or 0)
+
+	-- Grille centree : on prend la plus grande des deux et on la met des deux
+	-- cotes. La fenetre grandit d'autant, la bourse garde sa place en bas.
+	if R.grilleCentree == 1 then
+		local air = math.max(hautGrille, basGrille)
+		hautGrille, basGrille = air, air
+	end
 
 	cadre:SetScale(R.echelle)
 	cadre:SetWidth(largeurGrille + 2 * R.margeCote)
-	cadre:SetHeight(entete + hauteurGrille + basGrille)
+	cadre:SetHeight(hautGrille + hauteurGrille + basGrille)
 
 	if sacADos and bourse then
 		habillerBourse(bourse)
@@ -788,13 +802,10 @@ local function poserGrille(cadre)
 			bouton:SetHeight(R.emplacement)
 			bouton:ClearAllPoints()
 			if index == 1 then
-				if sacADos and bourse then
-					bouton:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT", 0,
-						depassement + R.ecartGrilleBourse)
-				else
-					bouton:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
-						-R.margeCote, R.margeBas)
-				end
+				-- La grille se pose sur le bas de la fenetre : la bourse a sa
+				-- propre place et ne la porte plus.
+				bouton:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
+					-R.margeCote, basGrille)
 			elseif math.fmod(index - 1, colonnes) == 0 then
 				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - colonnes)],
 					"TOPRIGHT", 0, R.ecartCases)
