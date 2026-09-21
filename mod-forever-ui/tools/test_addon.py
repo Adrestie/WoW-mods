@@ -1287,11 +1287,11 @@ def main():
     # SetSearchBoxPoint / UpdateSearchBox -- ancres en HAUT, comme la source
     point, _, pointCible, x, y = ancre(champ)
     print("   champ : %s sur %s (%s, %s), %d de large" % (point, pointCible, x, y, champ.width))
-    assert (point, x, y) == ("TOPLEFT", 42, -37), "SetSearchBoxPoint vaut TOPLEFT (42, -37)"
+    assert (point, x, y) == ("TOPLEFT", 42, -43), "le champ redescend de 6 : TOPLEFT (42, -43)"
     assert champ.width == 96, "SetSearchBoxPoint pose 96 de large"
     point, _, _, x, y = ancre(tri)
     print("   tri   : %s (%s, %s)" % (point, x, y))
-    assert (point, x, y) == ("TOPRIGHT", -9, -34), "UpdateSearchBox vaut TOPRIGHT (-9, -34)"
+    assert (point, x, y) == ("TOPRIGHT", -9, -40), "le tri redescend de 6 : TOPRIGHT (-9, -40)"
 
     rangee2 = g.ContainerFrame1Item5
     print("   ecart entre rangees : %s (ITEM_SPACING_Y = 5)" % ancre(rangee2)[4])
@@ -1448,8 +1448,8 @@ def main():
     pt2 = tri.points[len(list(tri.points.values()))]
     print("champ ancre %s (%s, %s) | tri ancre %s (%s, %s)" % (
         pc[1], pc[4], pc[5], pt2[1], pt2[4], pt2[5]))
-    assert (pc[1], pc[4], pc[5]) == ("TOPLEFT", 42, -37), "le champ n'est pas a la place de la source"
-    assert (pt2[1], pt2[4], pt2[5]) == ("TOPRIGHT", -9, -34), "le tri n'est pas a la place de la source"
+    assert (pc[1], pc[4], pc[5]) == ("TOPLEFT", 42, -43), "le champ n'est pas a sa place"
+    assert (pt2[1], pt2[4], pt2[5]) == ("TOPRIGHT", -9, -40), "le tri n'est pas a sa place"
 
     # la recherche : le pain reste, l'epee se voile
     lua.execute("""

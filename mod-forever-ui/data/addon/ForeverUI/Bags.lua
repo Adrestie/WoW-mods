@@ -124,14 +124,17 @@ local R = {
 	bourseCadre = 17,       -- l'encadre de camelot deborde de la bourse
 
 	-- LE COMBLE
+	-- Le champ et le tri redescendent des 6 dont la grille est remontee :
+	-- ancres en haut, ils suivaient sinon le bord superieur, qui s'est
+	-- eloigne d'autant.
 	champLargeur = 96,      -- SetSearchBoxPoint()
 	champHauteur = 18,
 	champX = 42,
-	champY = -37,
+	champY = -43,           -- camelot -37
 	triLargeur = 28,
 	triHauteur = 26,
 	triX = -9,              -- UpdateSearchBox()
-	triY = -34,
+	triY = -40,             -- camelot -34
 
 	-- LES DECORS DU CADRE
 	titreGauche = 35,       -- SetTitleOffsets(35) : le bord gauche du titre
