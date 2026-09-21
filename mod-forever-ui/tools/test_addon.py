@@ -30,6 +30,15 @@ local function newRegion(kind)
     function r:SetTexCoord(u1, u2, v1, v2) self.texcoord = {u1, u2, v1, v2} end
     -- SetRotation existe bien dans ce client : il figure dans la table des
     -- methodes de Texture relevee dans Wow.exe.
+    -- GetObjectType : le vrai client le donne sur toute region, et du code
+    -- s'en sert pour trier les textures d'un cadre. Sans lui, le faux
+    -- client laissait passer un balayage qui ne balayait rien.
+    function r:GetObjectType()
+        if self.kind == "texture" then return "Texture" end
+        if self.kind == "fontstring" then return "FontString" end
+        return "Frame"
+    end
+    function r:IsObjectType(t) return self:GetObjectType() == t end
     function r:SetRotation(angle) self.rotation = angle end
     function r:GetRotation() return self.rotation or 0 end
     function r:SetWidth(w) self.width = w end
@@ -63,6 +72,7 @@ function CreateFrame(kind, name, parent, template)
     f.name = name
     f.parent = parent
     f.template = template
+    f.regions = {}          -- pour GetRegions : les textures du cadre lui-meme
     f.scripts = {}
     f.events = {}
     f.attributes = {}
@@ -152,7 +162,15 @@ function CreateFrame(kind, name, parent, template)
     function f:GetAttribute(k) return self.attributes[k] end
     function f:StartMoving() self.moving = true end
     function f:StopMovingOrSizing() self.moving = false end
-    function f:CreateTexture(n, layer) local t = newRegion("texture"); t.layer = layer; t.owner = self; return t end
+    function f:CreateTexture(n, layer)
+        local t = newRegion("texture"); t.layer = layer; t.owner = self
+        table.insert(self.regions, t)
+        return t
+    end
+    -- lupa tourne en Lua 5.5, ou unpack n'est plus global ; le jeu est en
+    -- 5.1, ou il l'est. Le faux client accepte les deux.
+    function f:GetRegions() return (table.unpack or unpack)(self.regions) end
+    function f:GetNumRegions() return #self.regions end
     function f:CreateFontString(n, layer, font)
         local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self; return t
     end
@@ -467,6 +485,9 @@ function ShapeshiftBar_UpdateState() end
 
 -- la barre du familier du client : un cadre, dix boutons
 PetActionBarFrame = CreateFrame("Frame", "PetActionBarFrame", UIParent)
+-- l'art d'epoque : les deux morceaux glissants qui encadrent la barre
+SlidingActionBarTexture0 = PetActionBarFrame:CreateTexture("SlidingActionBarTexture0", "ARTWORK")
+SlidingActionBarTexture1 = PetActionBarFrame:CreateTexture("SlidingActionBarTexture1", "ARTWORK")
 for i = 1, NUM_PET_ACTION_SLOTS do
     local nom = "PetActionButton" .. i
     local b = CreateFrame("CheckButton", nom, PetActionBarFrame)
@@ -1339,6 +1360,16 @@ def main():
     g.ForeverUI.PetBar.Apply()
     assert pet.shown
     assert g.ForeverUI.Layout.systems["familier"] is not None
+
+    # L'art d'epoque de la barre s'efface -- on balaie les regions du cadre
+    # plutot que de se fier aux noms.
+    print("   art d'epoque : morceau 0 alpha=%s, morceau 1 alpha=%s" % (
+        g.SlidingActionBarTexture0.alpha, g.SlidingActionBarTexture1.alpha))
+    assert g.SlidingActionBarTexture0.alpha == 0 and g.SlidingActionBarTexture1.alpha == 0,         "l art d epoque de la barre du familier doit disparaitre"
+    tardive = g.PetActionBarFrame.CreateTexture(g.PetActionBarFrame, None, "ARTWORK")
+    g.ForeverUI.PetBar.Apply()
+    print("   une texture ajoutee apres coup : alpha=%s" % tardive.alpha)
+    assert tardive.alpha == 0, "le balayage doit aussi prendre ce qui arrive ensuite"
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu

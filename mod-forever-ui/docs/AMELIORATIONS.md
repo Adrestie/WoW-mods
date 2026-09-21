@@ -305,6 +305,13 @@ sous-texte.
 alors des **clés de variables globales**, pas des valeurs, et il faut les
 résoudre — `_G[texture]`.
 
+**L'art d'époque de la barre est effacé** : 3.3.5 encadre sa barre de familier
+de deux morceaux glissants, `SlidingActionBarTexture0` et `1`. Plutôt que de se
+fier à leurs noms, **toutes les régions du cadre lui-même** passent à alpha 0 —
+les boutons sont des cadres fils, pas des régions, ils ne sont donc pas touchés.
+Le balayage est rejoué à chaque habillage, donc une texture que le client
+ajouterait ensuite disparaît aussi.
+
 **Non reproduit.** Le masque de l'anneau (`UI-HUD-ActionBar-PetAutoCast-Mask`) :
 ce client ne sait pas masquer une texture. La rotation des fourmis, elle, est
 rendue : la source emploie un groupe d'animation, et `Texture:SetRotation`

@@ -216,10 +216,29 @@ local function habiller(bouton)
 	bouton.foreverSkinned = true
 end
 
+-- L'ART D'EPOQUE DE LA BARRE. 3.3.5 encadre sa barre de familier de deux
+-- morceaux glissants, SlidingActionBarTexture0 et 1. On ne se fie pas a
+-- leurs noms : TOUTES les regions du cadre lui-meme s'effacent, les boutons
+-- etant des cadres fils et non des regions -- ils ne sont donc pas touches.
+local function effacerArtDepoque()
+	local barre = PetActionBarFrame
+	if not barre or not barre.GetNumRegions then
+		return
+	end
+
+	local regions = { barre:GetRegions() }
+	for _, region in ipairs(regions) do
+		if region and region.GetObjectType and region:GetObjectType() == "Texture" then
+			region:SetAlpha(0)
+		end
+	end
+end
+
 local function habillerTout()
 	for index = 1, nombreDeBoutons do
 		habiller(_G["PetActionButton" .. index])
 	end
+	effacerArtDepoque()
 end
 
 -- La barre se montre si le familier a une barre ET s'il est visible.
