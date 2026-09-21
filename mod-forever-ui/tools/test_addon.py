@@ -1172,13 +1172,32 @@ def main():
     # donc au-dessus du portrait. Sous le fond, qui est opaque, il ne se
     # verrait meme pas par le trou de l'anneau.
     assert g["ContainerFrame1Portrait"].alpha == 0, "l'ancien portrait doit s'effacer"
+    # NineSliceUtil.UpdateCornerCropping : sur une fenetre plus courte que
+    # ses deux coins empiles, le coin du BAS est rogne par le haut.
+    eHaut = g.ForeverUI.AtlasEntry("ui-frame-portraitmetal-cornertopleftsmall")
+    eBas = g.ForeverUI.AtlasEntry("ui-frame-metal-cornerbottomleft")
+    hautCoin, basCoin = eHaut[7], eBas[7]
+    coinBas = sac.foreverPanel.coinBasGauche
+    for hauteur, cas in ((263, "sac a dos"), (94, "trousseau, une rangee")):
+        sac.SetHeight(sac, hauteur)
+        g.ForeverUI.UpdatePanelCorners(sac)
+        debord = max(0, min(hautCoin + basCoin - hauteur - 16 - 3, basCoin))
+        print("   coin du bas, %-22s hauteur %3d -> rogne de %2d, reste %d" % (
+            cas, hauteur, debord, coinBas.height))
+        assert abs(coinBas.height - (basCoin - debord)) < 0.01,             "le coin du bas n'est pas rogne comme ClipNineSliceBottomCorner"
+    sac.SetHeight(sac, 263)
+    g.ForeverUI.UpdatePanelCorners(sac)
+
     portrait = sac.foreverPortrait
     pt = portrait.points[1]
     fond = list(sac.foreverPanel.fond.values())[0]
     print("portrait : %dx%d en %s, %s sur %s (%.0f, %.0f)" % (
         portrait.width, portrait.height, portrait.layer, pt[1], pt[3], pt[4], pt[5]))
-    assert portrait.width == 36 and portrait.height == 36,         "SetPortraitTextureSizeAndOffset donne 36 : la taille d'origine est gardee"
-    assert pt[1] == "TOPLEFT" and pt[3] == "TOPLEFT" and pt[4] == -4 and pt[5] == 1,         "le portrait n'est pas a (-4, 1) du TOPLEFT, la place de la source"
+    # 28 : la seule taille dont les bords couvrent le degrade de l'anneau
+    # (>= 28,6 / 2 de demi-cote) et dont les coins tombent dans son metal
+    # opaque (<= 20,4 du centre). Mesure sur l'art de camelot.
+    assert portrait.width == 28 and portrait.height == 28,         "l'icone doit tenir dans l'anneau : 28"
+    assert pt[1] == "CENTER" and pt[3] == "TOPLEFT" and pt[4] == 14 and pt[5] == -17,         "l'icone doit etre centree sur l'anneau, a (14, -17)"
     assert portrait.layer == fond.layer == "BACKGROUND",         "le portrait doit etre dans le calque du fond, qui le recouvre"
     print("   cree en %d, le fond en %d : il passe au-dessus du fond" % (
         portrait.rang, fond.rang))

@@ -136,15 +136,25 @@ local R = {
 	fermeture = 24,
 	fermetureX = 1,
 	fermetureY = 0,
-	-- LE PORTRAIT, a sa taille et a sa place d'origine :
-	-- SetPortraitTextureSizeAndOffset(36, -4, 1). camelot le rend rond avec
+	-- LE PORTRAIT. camelot le pose en 36 et le rend rond avec
 	-- PortraitContainer.CircleMask ; ce client ne sait pas masquer une
-	-- texture, alors l'icone passe DERRIERE la fenetre et c'est la fenetre
-	-- qui la masque -- le fond opaque cache tout, le trou de l'anneau laisse
-	-- passer le rond. Aucun rognage, aucune taille inventee.
-	portrait = 36,          -- SetPortraitTextureSizeAndOffset(36, ...)
-	portraitX = -4,         -- ... (..., -4, 1), depuis le TOPLEFT du cadre
-	portraitY = 1,
+	-- texture, c'est donc l'anneau qui decoupe -- comme le cadre de sac de
+	-- 3.3.5 decoupe le sien (UI-Bag-4x4.blp a un trou circulaire, rien n'y
+	-- est masque).
+	--
+	-- L'anneau, MESURE au pixel a la taille ou il est dessine : trou net
+	-- jusqu'a 10,3 du centre, degrade jusqu'a 14,3, metal OPAQUE de 14,3 a
+	-- 20,4, transparent au-dela. Pour qu'un carre disparaisse entierement,
+	-- ses coins doivent tomber dans le metal opaque et ses bords couvrir le
+	-- degrade :
+	--     cote / 2 >= 14,3            couvre tout le trou     -> cote >= 28,6
+	--     (cote / 2) x racine(2) <= 20,4  coins caches        -> cote <= 28,8
+	-- Une seule taille tient dans les deux : 28. Elle donne le meme rond
+	-- visible que camelot, dont le disque mesure 28 sur la capture de
+	-- reference -- son portrait de 36 est masque, seul son coeur se voit.
+	portrait = 28,
+	portraitX = 14,         -- le centre de l'anneau, mesure sur son art
+	portraitY = -17,        -- et le centre du portrait de la source
 
 	-- L'EMPILEMENT DES SACS -- UpdateContainerFrameAnchors, lignes 1372-1401
 	ecartSacs = 8,          -- CONTAINER_SPACING
@@ -283,7 +293,7 @@ local function habillerCadre(cadre)
 	local portrait = cadre:CreateTexture(nil, "BACKGROUND")
 	portrait:SetWidth(R.portrait)
 	portrait:SetHeight(R.portrait)
-	portrait:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.portraitX, R.portraitY)
+	portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
 	cadre.foreverPortrait = portrait
 
 	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
@@ -868,10 +878,17 @@ end
 -- ContainerFrameBackpackMixin:GetInitialItemAnchor + UpdateCurrencyFrames.
 -- RELEVE -- ContainerFrameMixin:UpdateName et UpdateMiscellaneousFrames.
 local function majEntete(cadre)
-	-- UpdateName : le nom vient du SAC, il n'est jamais ecrit ici.
+	-- UpdateName : le nom vient du SAC, il n'est jamais ecrit ici. Le
+	-- trousseau n'en a pas -- GetBagName(-2) ne rend rien -- et on reprend
+	-- alors celui que le client a pose sur son propre titre.
 	local titre = cadre.foreverTitre
-	if titre and GetBagName then
-		titre:SetText(GetBagName(cadre:GetID()) or "")
+	if titre then
+		local nomDuSac = GetBagName and GetBagName(cadre:GetID())
+		if not nomDuSac or nomDuSac == "" then
+			local ancienTitre = _G[cadre:GetName() .. "Name"]
+			nomDuSac = ancienTitre and ancienTitre:GetText() or ""
+		end
+		titre:SetText(nomDuSac)
 	end
 
 	-- UpdateMiscellaneousFrames : sac a dos, trousseau, ou l'icone de l'objet
@@ -909,6 +926,12 @@ local function poserGrille(cadre)
 	cadre:SetScale(R.echelle)
 	cadre:SetWidth(m.largeur)
 	cadre:SetHeight(m.hauteur)
+
+	-- UpdateFrameSize appelle NineSliceUtil.UpdateCornerCropping juste apres
+	-- SetSize : sur une fenetre courte, les coins se chevauchent sinon.
+	if ForeverUI.UpdatePanelCorners then
+		ForeverUI.UpdatePanelCorners(cadre)
+	end
 
 	-- TEMOIN. On relit la hauteur DANS LA FOULEE. Deux cas se distinguent
 	-- ainsi, et un seul chiffre les separe :

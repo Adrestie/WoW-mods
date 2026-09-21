@@ -328,5 +328,52 @@ function ForeverUI.SetPanelArt(frame)
 	end
 
 	frame.foreverPanel = p
+	ForeverUI.UpdatePanelCorners(frame)
 	return p
+end
+
+-- RELEVE -- NineSliceUtil.UpdateCornerCropping et ClipNineSliceBottomCorner
+-- (blizzard_sharedxml/nineslice.lua).
+--
+--   debord = hauteurCoinHaut + hauteurCoinBas - hauteurCadre
+--            - decalageHaut - (-decalageBas)
+--
+-- Quand une fenetre est plus courte que ses deux coins empiles, le coin du
+-- BAS est rogne PAR LE HAUT de cet excedent : ses coordonnees de texture
+-- remontent d'autant et sa hauteur diminue. Sans cela les deux coins se
+-- chevauchent et le bord gauche, tendu entre eux, se retrouve dessine a
+-- l'envers en travers du cadre -- ce qui barrait l'anneau du trousseau.
+function ForeverUI.UpdatePanelCorners(frame)
+	local p = frame.foreverPanel
+	if not p then
+		return
+	end
+
+	local hautGauche, basGauche
+	for _, coin in ipairs(PANNEAU_COINS) do
+		if coin.cle == "coinHautGauche" then hautGauche = coin end
+		if coin.cle == "coinBasGauche" then basGauche = coin end
+	end
+
+	local eHaut = ForeverUI.AtlasEntry(hautGauche.nom)
+	local eBas = ForeverUI.AtlasEntry(basGauche.nom)
+	if not (eHaut and eBas) then
+		return
+	end
+
+	local debord = eHaut[7] + eBas[7] - frame:GetHeight() - hautGauche.y - (-basGauche.y)
+
+	for _, coin in ipairs(PANNEAU_COINS) do
+		if coin.point == "BOTTOMLEFT" or coin.point == "BOTTOMRIGHT" then
+			local texture = p[coin.cle]
+			local e = ForeverUI.AtlasEntry(coin.nom)
+			if texture and e then
+				local rogne = math.max(0, math.min(debord, e[7]))
+				local hauteurUV = e[5] - e[4]
+				texture:SetTexCoord(e[2], e[3], e[4] + (rogne / e[7]) * hauteurUV, e[5])
+				texture:SetWidth(e[6])
+				texture:SetHeight(e[7] - rogne)
+			end
+		end
+	end
 end

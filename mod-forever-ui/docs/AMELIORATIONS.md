@@ -96,7 +96,7 @@ Elle montre aussi deux choses à garder en tête :
 | Point | Ce qui est fait | Pourquoi |
 |---|---|---|
 | Grille du sac à dos | descendue de 12 px, et le cadre grandi d'autant | 3.3.5 commence sa grille 48 px sous le haut du cadre, et le champ de recherche de camelot occupe cette bande (-37 à -55) |
-| Portrait du sac | 36 x 36 en (−4, 1), sa taille et sa place d'origine, mais **derrière** la fenêtre | `SetPortraitTextureSizeAndOffset(36, −4, 1)` est respecté ; seul le masquage diffère. camelot arrondit avec `PortraitContainer.CircleMask` et pose le portrait au-dessus du métal ; ce client ne sait pas masquer une texture (voir §2), alors l'icône se glisse **entre le fond et le contour** : créée après l'art du panneau et dans le même calque que son fond, elle passe au-dessus de lui, et le métal en `OVERLAY` reste au-dessus d'elle. C'est le contour seul qui la découpe. Sous le fond, qui est opaque, elle ne se verrait même pas par le trou de l'anneau |
+| Portrait du sac | 28 x 28 centré sur l'anneau, en (14, −17), entre le fond et le contour | camelot pose 36 x 36 et arrondit avec `PortraitContainer.CircleMask` ; ce client ne sait pas masquer une texture (voir §2), c'est donc l'anneau qui découpe. L'anneau mesuré au pixel, à la taille où il est dessiné : trou net jusqu'à 10,3 du centre, dégradé jusqu'à 14,3, métal opaque de 14,3 à 20,4, transparent au-delà. Pour qu'un carré disparaisse : demi-côté ≥ 14,3 (il couvre tout le trou) et diagonale ≤ 20,4 (ses coins sont cachés) — soit un côté entre 28,6 et 28,8. **28 est la seule taille qui tienne.** Elle donne le même rond visible que camelot, dont le disque mesure 28 sur la capture de référence. À 36, les coins dépassaient de l'anneau |
 | Icône du trousseau | `Interface\ContainerFrame\KeyRing-Bag-Icon` | `UpdateMiscellaneousFrames` demande `Interface/Icons/ui-hud-actionbar-keyring`, qui n'existe pas en 3.3.5 |
 | Bouton de fermeture | celui de 3.3.5, à sa place d'origine | la source emploie `UIPanelCloseButtonDefaultAnchors`, non relevé |
 | Son du tri | aucun | la source joue `SOUNDKIT.UI_BAG_SORTING_01`, qui n'existe pas en 3.3.5 |
@@ -157,7 +157,9 @@ repasse derrière nous.
 
 - `UpdateName` → `SetTitle(C_Container.GetBagName(bagID))`. Le nom est donc lu
   sur le sac à chaque mise à jour (`GetBagName` en 3.3.5) : aucun mot n'est
-  écrit dans le code, et un sac porté affiche le nom de l'objet qu'il est.
+  écrit dans le code, et un sac porté affiche le nom de l'objet qu'il est. Le
+  trousseau fait exception — `GetBagName(-2)` ne rend rien — et reprend alors
+  le titre que le client a posé lui-même.
 - `TitledPanelMixin:SetTitleOffsets`, que `ContainerFrame` appelle avec **35** :
   le conteneur du titre va de 35 à la largeur moins 24, le texte y est centré,
   à 5 px sous son haut placé à −1. Le titre n'est donc **pas** centré sur la
@@ -203,9 +205,20 @@ masque (voir plus haut) ; les boutons d'objet, la bourse, le champ de recherche
 et le bouton de fermeture sont déjà des cadres fils et passent devant sans rien
 changer.
 
-**Non reproduit :** `NineSliceUtil.UpdateCornerCropping(self, height)`, que
-`UpdateFrameSize` appelle pour rogner les coins d'une fenêtre trop courte. Sans
-lui, un sac d'une seule rangée voit ses coins de métal se chevaucher.
+**`NineSliceUtil.UpdateCornerCropping` est reproduit**, avec la formule de
+`ClipNineSliceBottomCorner` :
+
+```
+débord = hauteurCoinHaut + hauteurCoinBas − hauteurCadre − décalageHaut − (−décalageBas)
+```
+
+Au-delà de zéro, le coin du **bas** est rogné par le haut de cet excédent : ses
+coordonnées de texture remontent d'autant et sa hauteur diminue. Sans cela, sur
+une fenêtre plus courte que ses deux coins empilés — le trousseau, une seule
+rangée, 94 de haut contre 100 + 95 de coins — les deux coins se chevauchent et
+le bord gauche, tendu entre eux, se retrouve dessiné en travers du cadre. C'est
+la barre dorée qui coupait l'anneau du trousseau. Recalculé à chaque
+changement de hauteur, comme `UpdateFrameSize` le fait.
 
 ---
 
