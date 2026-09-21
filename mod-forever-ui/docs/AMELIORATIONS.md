@@ -184,13 +184,19 @@ lui-même, ce qui arrêtait le lot entier et masquait la vraie cause. La
 déclaration est remontée avant le `try`. Cette correction disparaîtra aussi à
 la prochaine mise à jour du logiciel.
 
-### 4.6 Le faux client n'est pas le jeu
+### 4.6 Le faux client n'est pas le jeu, et l'aperçu composé ne l'était pas non plus
 
 `tools/test_addon.py` charge l'addon dans un bouchon Lua : il attrape les
-erreurs de syntaxe, les noms faux, les tailles fausses. Il ne dit rien du rendu,
-de l'ordre de dessin ni du comportement des cadres protégés. L'aperçu composé
-(`tools/apercu_rangee.py`) comble une partie du manque, mais rien ne remplace
-l'essai en jeu.
+erreurs de syntaxe, les noms faux, les tailles fausses. Il ne dit rien du
+rendu, de l'ordre de dessin ni du comportement des cadres protégés.
+
+Des scripts composaient l'art en Python pour «voir» le résultat avant de le
+poser en jeu. **Ils ont été retirés le 2026-09-21** : une telle image ne
+prouve que l'arithmétique. Elle ignore l'ordre de dessin réel, ce que le
+client pose par-dessus, l'échelle finale et les calques -- elle a montré
+comme justes des fenêtres que le jeu montrait fausses. **Ce à quoi une chose
+ressemble se juge en jeu, et nulle part ailleurs** ; `docs/reference/` garde
+les captures du vrai client pour la comparaison.
 
 ---
 

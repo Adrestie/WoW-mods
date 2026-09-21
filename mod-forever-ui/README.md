@@ -33,9 +33,6 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
     tools/test_addon.py       a mock client that loads the addon and checks it
     tools/ajouter_feuilles.py brings an atlas sheet in with its preview, and
                               regenerates the atlas table
-    tools/apercu_rangee.py    composes the bottom row as a picture, to look at
-                              it before trying it in game
-    tools/apercu_sacs.py      the same for the backpack window
 
 ## Working on it
 
@@ -64,6 +61,14 @@ Before delivering anything, run the mock client -- it loads the whole addon and
 checks the measurements taken from the reference:
 
     python tools/test_addon.py
+
+It checks numbers, nothing else. **What a thing looks like is settled in the
+game, and only there.** Composing the art in Python and looking at the picture
+was tried and thrown away: such a picture only proves the arithmetic, since it
+knows nothing of draw order, of what the client draws over it, or of the scale
+it ends up at -- it showed windows as correct that the game showed wrong. The
+screenshots under `docs/reference/` are the other half: they are the real
+client, and they are what a result is compared against.
 
 ## Where the reference comes from
 
