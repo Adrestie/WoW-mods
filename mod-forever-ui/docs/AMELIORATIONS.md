@@ -96,7 +96,7 @@ Elle montre aussi deux choses à garder en tête :
 | Point | Ce qui est fait | Pourquoi |
 |---|---|---|
 | Grille du sac à dos | descendue de 12 px, et le cadre grandi d'autant | 3.3.5 commence sa grille 48 px sous le haut du cadre, et le champ de recherche de camelot occupe cette bande (-37 à -55) |
-| Portrait du sac | carré de 20 x 20 posé **sous** le métal, non rogné | camelot pose 36 x 36 **au-dessus** du métal et le rend rond avec `PortraitContainer.CircleMask` ; 3.3.5 n'a pas de `MaskTexture`. Le trou de `ui-frame-portraitmetal-cornertopleftsmall` fait 18 de diamètre une fois dessiné : c'est lui qui sert de masque. Un carré de 20 le remplit (bords à 10 > 9) et ses coins, à 14,1 du centre, restent sous le métal opaque jusqu'à 19,5. **Conséquence assumée : le portrait paraît plus petit que chez camelot** — 18 de rond au lieu de 36 |
+| Portrait du sac | carré de 20 x 20 posé **sous** le métal, non rogné | camelot pose 36 x 36 **au-dessus** du métal et le rend rond avec `PortraitContainer.CircleMask`. Ce client ne sait pas masquer une texture (voir §2). Le trou de `ui-frame-portraitmetal-cornertopleftsmall` fait 18 de diamètre une fois dessiné : c'est lui qui sert de masque. Un carré de 20 le remplit (bords à 10 > 9) et ses coins, à 14,1 du centre, restent sous le métal opaque jusqu'à 19,5. **Conséquence assumée : le portrait paraît plus petit que chez camelot** — 18 de rond au lieu de 36 |
 | Icône du trousseau | `Interface\ContainerFrame\KeyRing-Bag-Icon` | `UpdateMiscellaneousFrames` demande `Interface/Icons/ui-hud-actionbar-keyring`, qui n'existe pas en 3.3.5 |
 | Bouton de fermeture | celui de 3.3.5, à sa place d'origine | la source emploie `UIPanelCloseButtonDefaultAnchors`, non relevé |
 | Son du tri | aucun | la source joue `SOUNDKIT.UI_BAG_SORTING_01`, qui n'existe pas en 3.3.5 |
@@ -213,12 +213,27 @@ lui, un sac d'une seule rangée voit ses coins de métal se chevaucher.
 
 | Manque | Conséquence | Contournement possible |
 |---|---|---|
-| Pas de `MaskTexture` | les icônes restent carrées là où la référence les arrondit ; ce sont les coins pleins du cadre qui rattrapent | découper des images pré-arrondies, ou vivre avec |
+| Aucun masque sur une texture | les icônes restent carrées là où la référence les arrondit ; ce sont les pleins du cadre qui découpent le rond | découper des images pré-arrondies, ou vivre avec |
 | Pas de sous-niveaux de texture | l'ordre de dessin ne tient qu'à l'ordre de création, et un `SetTexture` tardif peut le changer | ce qui doit rester devant est dans un cadre fils, niveau +1 |
 | Pas de `SetShown` | partout des `if ... then Show() else Hide() end` | rien à faire |
 | Pas d'animations d'atlas (flipbook) | les barres d'état n'ont ni éclat de gain, ni animation de passage de niveau | les images existent (`*-flipbook`), il faudrait un `OnUpdate` qui déroule les vignettes, comme c'est déjà fait pour le sommeil du cadre joueur |
 | `SetNormalTexture` et ses sœurs n'acceptent qu'un **chemin** | leur passer un objet texture, comme le fait le client moderne, lève une erreur -- et une erreur au premier niveau d'un fichier abandonne **tout ce qui suit**. C'est ce qui a rendu `Bags.lua` inopérant sans rien afficher : l'habillage était appelé après le bouton de tri | poser le chemin de la feuille, puis régler l'atlas sur la texture que le bouton vient de créer ; le faux client lève maintenant la même erreur |
 | Pas de `SetTextureSliceMargins` | la découpe en neuf est faite à la main dans `AtlasUtil.lua`, avec des marges mesurées sur l'image | rien à faire, mais toute nouvelle image encadrée demande de remesurer |
+
+**Le seul masque de ce client est celui de la minimap.** Vérifié dans
+`Wow.exe` le 2026-09-22 : la table des méthodes de `Texture` s'arrête à
+`SetAlphaGradient, Set/GetVertTile, Set/GetHorizTile, Set/GetNonBlocking,
+IsDesaturated, SetDesaturated, SetRotation, Set/GetTexCoord, Set/GetTexture,
+Show, Hide, Set/GetAlpha, SetGradientAlpha, SetGradient, Set/GetVertexColor,
+Set/GetBlendMode, Set/GetDrawLayer, GetObjectType, IsObjectType`. `SetMask`,
+`AddMaskTexture` et `CreateMaskTexture` sont **absents du binaire**, et il n'y
+a pas d'élément XML `MaskTexture`. Le seul `SetMaskTexture` présent est
+`Minimap:SetMaskTexture("file")` — une méthode du widget **Minimap**, voisine
+de `SetBlipTexture` et `SetIconTexture`, avec `Textures\MinimapMask` par
+défaut. Elle arrondit la minimap, et rien d'autre : une icône d'objet ne peut
+pas y passer. C'est utilisable le jour où la minimap sera reproduite, pas
+avant.
+
 
 ---
 
