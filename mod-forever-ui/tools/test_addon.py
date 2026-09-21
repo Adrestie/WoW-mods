@@ -1167,10 +1167,10 @@ def main():
         assert (pt[4], pt[5]) == (x, y), "%s ne suit pas HeldBagLayout" % cle
         assert t.layer == "OVERLAY", "HeldBagLayout declare %s en OVERLAY" % cle
 
-    # Le portrait se glisse ENTRE le fond et le contour : cree APRES le fond
-    # et dans son calque, donc au-dessus de lui ; le metal est en OVERLAY,
-    # donc au-dessus du portrait. Sous le fond, qui est opaque, il ne se
-    # verrait meme pas par le trou de l'anneau.
+    # Le portrait est en BORDER : le fond est en BACKGROUND et le metal en
+    # OVERLAY, donc il est toujours entre les deux, quel que soit l'ordre de
+    # creation. Depuis le calque du fond, le corps de celui-ci -- ancre a 20
+    # px du haut -- passait devant lui et coupait l'anneau.
     assert g["ContainerFrame1Portrait"].alpha == 0, "l'ancien portrait doit s'effacer"
     # NineSliceUtil.UpdateCornerCropping : sur une fenetre plus courte que
     # ses deux coins empiles, le coin du BAS est rogne par le haut.
@@ -1193,15 +1193,11 @@ def main():
     fond = list(sac.foreverPanel.fond.values())[0]
     print("portrait : %dx%d en %s, %s sur %s (%.0f, %.0f)" % (
         portrait.width, portrait.height, portrait.layer, pt[1], pt[3], pt[4], pt[5]))
-    # 28 : la seule taille dont les bords couvrent le degrade de l'anneau
-    # (>= 28,6 / 2 de demi-cote) et dont les coins tombent dans son metal
-    # opaque (<= 20,4 du centre). Mesure sur l'art de camelot.
-    assert portrait.width == 28 and portrait.height == 28,         "l'icone doit tenir dans l'anneau : 28"
-    assert pt[1] == "CENTER" and pt[3] == "TOPLEFT" and pt[4] == 14 and pt[5] == -17,         "l'icone doit etre centree sur l'anneau, a (14, -17)"
-    assert portrait.layer == fond.layer == "BACKGROUND",         "le portrait doit etre dans le calque du fond, qui le recouvre"
-    print("   cree en %d, le fond en %d : il passe au-dessus du fond" % (
-        portrait.rang, fond.rang))
-    assert portrait.rang > fond.rang,         "le portrait doit etre cree APRES le fond, sinon le fond opaque le cache"
+    assert portrait.width == 36 and portrait.height == 36,         "SetPortraitTextureSizeAndOffset(36, ...) : la taille d'origine"
+    assert pt[1] == "TOPLEFT" and pt[3] == "TOPLEFT" and pt[4] == -4 and pt[5] == 1,         "SetPortraitTextureSizeAndOffset(..., -4, 1) : la place d'origine"
+    print("   calques : fond %s, portrait %s, metal %s" % (
+        fond.layer, portrait.layer, sac.foreverPanel.coinHautGauche.layer))
+    assert fond.layer == "BACKGROUND" and portrait.layer == "BORDER",         "le portrait doit etre dans un calque au-dessus du fond, pas dans le sien"
     assert sac.foreverPanel.coinHautGauche.layer == "OVERLAY",         "HeldBagLayout declare ses morceaux en OVERLAY"
 
     # UpdateName / UpdateMiscellaneousFrames : le nom et l'icone viennent du
