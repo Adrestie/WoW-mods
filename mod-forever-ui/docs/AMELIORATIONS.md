@@ -70,6 +70,27 @@ libre est à droite des dix boutons — du côté où le micro-menu s'allonge.
 est remplacée par le cadre du sac en mélange additif, comme sur les boutons
 d'action. La référence ne dit rien sur ce point précis.
 
+### 1.7bis Ce que la capture de référence confirme
+
+`docs/reference/camelot_rangee_du_bas.png` est une capture du vrai client
+camelot, fournie le 2026-09-21. Elle confirme point par point la rangée du
+bas telle qu'elle est posée ici : raccourci en haut à DROITE de chaque
+emplacement, bloc de pagination à gauche par-dessus le griffon, séparateurs
+entre emplacements, pattes du griffon sur le bas de la barre, barre de
+réputation AU-DESSUS de celle d'expérience, les deux longues comme la rangée.
+
+Elle montre aussi deux choses à garder en tête :
+
+- le micro-menu de camelot affiche onze boutons -- portrait, métiers, sorts,
+  talents, legs, quêtes, guilde, groupe, collections, boutique, menu du jeu --
+  et **pas** de bouton d'aide : celui-ci est bien caché, comme le XML le dit.
+  Les trois boutons de 3.3.5 sans équivalent (succès, JcJ, aide) restent donc
+  des ajouts, traités au 1.1 ;
+- la barre des sacs de camelot compte **sept** cases : le trousseau et le sac
+  à composants, tous deux au cadre sombre, puis quatre sacs et le sac à dos au
+  cadre doré. L'emplacement du sac à composants a été retiré sur demande (1.6) ;
+  la barre en compte six.
+
 ### 1.8 Les sacs : ce qui s'écarte de la source
 
 | Point | Ce qui est fait | Pourquoi |

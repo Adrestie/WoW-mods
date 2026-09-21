@@ -34,11 +34,18 @@ SORTIE = os.path.join(RACINE, "docs", "apercu")
 os.makedirs(SORTIE, exist_ok=True)
 ATLAS = Atlas()
 
-# 3.3.5 : CONTAINER_WIDTH, BACKPACK_HEIGHT, NUM_CONTAINER_COLUMNS
-LARGEUR, HAUTEUR = 192, 252   # BACKPACK_HEIGHT + le decalage de la grille
-DECALAGE = 12
+# La mise en page que Bags.lua calcule : entete, grille, bourse, marge.
 COLONNES, EMPLACEMENT = 4, 37
 PAS_X, PAS_Y = 42, 41
+RANGEES = 4
+ENTETE = 60          # bande de titre + bande du champ de recherche
+BOURSE = 24 + 8      # la bourse et son air
+MARGE_BAS = 9
+GRILLE_H = RANGEES * PAS_Y - (PAS_Y - EMPLACEMENT)
+GRILLE_L = COLONNES * EMPLACEMENT + (COLONNES - 1) * (PAS_X - EMPLACEMENT)
+LARGEUR = 192
+HAUTEUR = ENTETE + GRILLE_H + BOURSE + MARGE_BAS
+MARGE_COTE = (LARGEUR - GRILLE_L) / 2.0
 
 # camelot : HeldBagLayout, avec les corrections de NineSliceLayoutOverrides
 COINS = (
@@ -72,11 +79,13 @@ for nom, cote, bord in (("uiframebackground-nineslice-cornerbottomleft", "gauche
 # 3.3.5 : le premier bouton en BOTTOMRIGHT (-12, -208) du haut du cadre, puis
 # -5 vers la gauche et +4 vers le haut d'une rangee a l'autre.
 slot = ATLAS.image("bags-item-slot64", EMPLACEMENT, EMPLACEMENT)
-for rangee in range(4):
+contour = ATLAS.image("ui-hud-actionbar-iconframe-bags", EMPLACEMENT, EMPLACEMENT)
+for rangee in range(RANGEES):
     for colonne in range(COLONNES):
-        x = LARGEUR - 12 - EMPLACEMENT - colonne * PAS_X
-        y = 208 + DECALAGE - EMPLACEMENT - rangee * PAS_Y
+        x = LARGEUR - MARGE_COTE - EMPLACEMENT - colonne * PAS_X
+        y = ENTETE + rangee * PAS_Y
         poser(slot, x, y)
+        poser(contour, x, y)
 
 # ------------------------------------------------------------ l'encadrement
 places = {}
@@ -113,6 +122,9 @@ poser(tri, LARGEUR - 9 - 28, 34)
 dessin.ellipse([MARGE + 13.5 - 17, MARGE + 14 - 17, MARGE + 13.5 + 17, MARGE + 14 + 17],
                fill=(60, 45, 30, 255))
 dessin.text((MARGE + 90, MARGE + 6), "Sac a dos", fill=(255, 210, 140, 255))
+
+dessin.text((MARGE + LARGEUR - 80, MARGE + HAUTEUR - 26), "12g 34a 56c",
+            fill=(255, 220, 150, 255))
 
 chemin = os.path.join(SORTIE, "apercu_sacs.png")
 toile.save(chemin)

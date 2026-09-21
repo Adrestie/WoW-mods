@@ -55,10 +55,21 @@ local TRI_W, TRI_H = 28, 26
 local SEP = string.char(92)
 local SURVOL_CARRE = "Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square"
 
--- Le sac a dos de 3.3.5 commence sa grille 48 px sous le haut du cadre ; le
--- champ de recherche de camelot occupe justement cette bande (-37 a -55). On
--- descend donc la grille, et le cadre grandit d'autant.
-local DECALAGE_SAC_A_DOS = 12
+-- LA MISE EN PAGE EST REFAITE ICI.
+--
+-- 3.3.5 taille sa fenetre sur ses propres images de fond et colle la grille a
+-- droite (premier bouton a -12 du bord). Ces images ont disparu avec
+-- l'habillage : la fenetre est donc mesuree a partir de ce qu'elle contient,
+-- et la grille centree.
+--   entete    la bande de titre, plus la bande du champ de recherche pour le
+--             sac a dos (le champ est pose de -37 a -55)
+--   grille    quatre colonnes, pas de 42 x 41 pour des boutons de 37
+--   bourse    sous la grille, dans la fenetre
+local COLONNES = NUM_CONTAINER_COLUMNS or 4
+local PAS_X, PAS_Y = 42, 41
+local ENTETE_SAC_A_DOS = 60
+local ENTETE_SAC = 32
+local MARGE_BAS = 9
 
 local RANGER = BAG_CLEANUP_BAGS or "Ranger les sacs"
 local RANGER_AIDE = BAG_CLEANUP_BAGS_DESCRIPTION
@@ -98,6 +109,19 @@ local function habillerBouton(bouton)
 		icone:ClearAllPoints()
 		icone:SetAllPoints(bouton)
 		icone:SetTexCoord(0, 1, 0, 1)
+		icone:SetDrawLayer("BORDER")
+	end
+
+	-- Le contour. La source ne pose que le fond d'une case vide
+	-- (bags-item-slot64), qui disparait des qu'un objet occupe la case : les
+	-- emplacements n'ont alors plus de bord. On ajoute donc le cadre des sacs,
+	-- celui-la meme que porte la barre des sacs.
+	local contour = bouton:CreateTexture(nil, "ARTWORK")
+	if ForeverUI.SetAtlas(contour, "ui-hud-actionbar-iconframe-bags", true) then
+		contour:SetAllPoints(bouton)
+		bouton.foreverContour = contour
+	else
+		contour:Hide()
 	end
 
 	-- Le voile de recherche : la source le declare sur le bouton d'objet
@@ -544,28 +568,47 @@ local function poserOutils()
 	boutonTri:Show()
 end
 
--- RELEVE -- 3.3.5 ContainerFrame_GenerateFrame : pour le sac a dos, le premier
--- bouton se pose en BOTTOMRIGHT (-12, -208) du HAUT du cadre, la bourse en
--- TOPRIGHT (-2, -216), et le cadre fait BACKPACK_HEIGHT. On descend les trois
--- de la meme quantite pour degager la bande du champ de recherche.
-local function descendreSacADos(cadre)
-	if cadre:GetID() ~= 0 then
-		return
+-- RELEVE -- 3.3.5 ContainerFrame_GenerateFrame : le premier bouton porte le
+-- coin BAS DROIT de la grille, les suivants s'enchainent vers la gauche puis
+-- vers le haut. Deplacer ce seul bouton deplace donc toute la grille.
+local function poserGrille(cadre)
+	local taille = cadre.size or 0
+	if taille <= 1 then
+		return                      -- le cadeau a un seul emplacement garde sa forme
 	end
 
 	local nom = cadre:GetName()
-	cadre:SetHeight((BACKPACK_HEIGHT or 240) + DECALAGE_SAC_A_DOS)
+	local rangees = math.ceil(taille / COLONNES)
+	local hauteurGrille = rangees * PAS_Y - (PAS_Y - EMPLACEMENT)
+	local largeurGrille = COLONNES * EMPLACEMENT + (COLONNES - 1) * (PAS_X - EMPLACEMENT)
+	local marge = ((CONTAINER_WIDTH or 192) - largeurGrille) / 2
+
+	local sacADos = cadre:GetID() == 0
+	local entete = sacADos and ENTETE_SAC_A_DOS or ENTETE_SAC
+
+	-- La bourse ne s'affiche que sur le sac a dos, et doit tenir DANS la
+	-- fenetre : on lui reserve sa hauteur sous la grille.
+	local bourse = _G[nom .. "MoneyFrame"]
+	local placeBourse = 0
+	if sacADos and bourse then
+		local hauteur = bourse:GetHeight()
+		if not hauteur or hauteur < 1 then
+			hauteur = 24
+		end
+		placeBourse = hauteur + 8
+	end
+
+	cadre:SetHeight(entete + hauteurGrille + placeBourse + MARGE_BAS)
 
 	local premier = _G[nom .. "Item1"]
 	if premier then
 		premier:ClearAllPoints()
-		premier:SetPoint("BOTTOMRIGHT", cadre, "TOPRIGHT", -12, -208 - DECALAGE_SAC_A_DOS)
+		premier:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -marge, placeBourse + MARGE_BAS)
 	end
 
-	local bourse = _G[nom .. "MoneyFrame"]
-	if bourse then
+	if sacADos and bourse then
 		bourse:ClearAllPoints()
-		bourse:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", -2, -216 - DECALAGE_SAC_A_DOS)
+		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -12, 8)
 	end
 end
 
@@ -585,7 +628,7 @@ if hooksecurefunc then
 	-- Le client repose ses propres morceaux a chaque ouverture de sac.
 	hooksecurefunc("ContainerFrame_GenerateFrame", function(cadre)
 		habillerCadre(cadre)
-		descendreSacADos(cadre)
+		poserGrille(cadre)
 		poserOutils()
 		Recherche.Tout()
 	end)

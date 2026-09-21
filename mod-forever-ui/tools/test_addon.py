@@ -321,6 +321,8 @@ KeyRingButton:Hide()
 NUM_CONTAINER_FRAMES = 13
 MAX_CONTAINER_ITEMS = 36
 NUM_BAG_SLOTS = 4
+CONTAINER_WIDTH = 192
+NUM_CONTAINER_COLUMNS = 4
 SEARCH = "Rechercher"
 BAG_CLEANUP_BAGS = nil
 for i = 1, NUM_CONTAINER_FRAMES do
@@ -330,6 +332,8 @@ for i = 1, NUM_CONTAINER_FRAMES do
     c:SetID(0)
     _G[nom .. "Portrait"] = c:CreateTexture(nom .. "Portrait", "BACKGROUND")
     _G[nom .. "Name"] = c:CreateFontString(nom .. "Name", "ARTWORK")
+    local bourse = CreateFrame("Frame", nom .. "MoneyFrame", c)
+    bourse:SetHeight(24)
     for _, suffixe in ipairs({ "BackgroundTop", "BackgroundMiddle1", "BackgroundMiddle2",
                               "BackgroundBottom", "Background1Slot" }) do
         _G[nom .. suffixe] = c:CreateTexture(nom .. suffixe, "ARTWORK")
@@ -1108,6 +1112,27 @@ def main():
         bouton._normal.texture is not None, bouton.foreverVoile is not None))
     assert bouton.foreverVoile is not None, "le voile de recherche manque"
     assert bouton._normal.allPoints, "l'emplacement ne couvre pas le bouton"
+
+    # la mise en page : fenetre mesuree, grille centree, bourse dedans
+    g.ContainerFrame1.size = 16
+    g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame1)
+    premier = g.ContainerFrame1Item1
+    ppt = premier.points[len(list(premier.points.values()))]
+    bourse = g.ContainerFrame1MoneyFrame
+    bpt = bourse.points[len(list(bourse.points.values()))]
+    print("fenetre du sac a dos : %d de haut (60 d'entete + 160 de grille + 32 de bourse + 9)" % (
+        g.ContainerFrame1.height))
+    print("   grille centree : premier bouton %s (%s, %s) -- marge de %.1f de chaque cote" % (
+        ppt[1], ppt[4], ppt[5], -ppt[4]))
+    print("   bourse : %s (%s, %s), dans la fenetre" % (bpt[1], bpt[4], bpt[5]))
+    assert g.ContainerFrame1.height == 261, "la fenetre n'a pas la hauteur de son contenu"
+    assert abs(ppt[4] + 14.5) < 0.01, "la grille n'est pas centree"
+    assert ppt[5] == 41, "la grille ne laisse pas la place a la bourse"
+    assert bpt[1] == "BOTTOMRIGHT" and bpt[5] == 8, "la bourse sort de la fenetre"
+
+    contour = g.ContainerFrame1Item1.foreverContour
+    print("   contour d'emplacement : %s" % (contour is not None))
+    assert contour is not None, "les emplacements n'ont pas de contour"
 
     # le champ et le bouton de tri ne se montrent que sur le sac principal
     g.ForeverUI.BagsLayout()

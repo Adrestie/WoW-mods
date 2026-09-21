@@ -28,6 +28,7 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
     data/art/interface/       the .blp that go into the client patch, each with
                               a .png beside it to see what it holds
     docs/AMELIORATIONS.md     what is known to be improvable, and why
+    docs/reference/           screenshots of the real thing, to check against
     tools/deployer.py         puts the addon in a client and the art in patch-Z
     tools/test_addon.py       a mock client that loads the addon and checks it
     tools/ajouter_feuilles.py brings an atlas sheet in with its preview, and
