@@ -27,7 +27,14 @@ local function newRegion(kind)
     function r:SetTexture(a, b, c, d) self.texture = a; self.color = {a,b,c,d} end
     function r:GetTexture() return self.texture end
     function r:SetHorizTile(v) self.tile = v end
-    function r:SetTexCoord(u1, u2, v1, v2) self.texcoord = {u1, u2, v1, v2} end
+    function r:SetTexCoord(a, b, c, d, e, f, g, h)
+        if e then
+            -- la forme a huit arguments : les quatre coins, un par un
+            self.texcoord8 = {a, b, c, d, e, f, g, h}
+        else
+            self.texcoord = {a, b, c, d}
+        end
+    end
     -- SetRotation existe bien dans ce client : il figure dans la table des
     -- methodes de Texture relevee dans Wow.exe.
     -- GetObjectType : le vrai client le donne sur toute region, et du code
@@ -1350,13 +1357,26 @@ def main():
     assert "petautocast" in (a2.fourmis.texture or "").lower(),         "l anneau doit venir de la petite feuille"
     assert "uiactionbarfx" not in (a2.fourmis.texture or "").lower(),         "la feuille de 2048 sort en bruit sur ce client"
 
-    # la rotation : -360 degres en 4 secondes
+    # LA ROTATION : -360 degres en 4 secondes, et surtout par la forme a HUIT
+    # arguments de SetTexCoord. SetRotation recalculerait les coordonnees sur
+    # l'image entiere et la texture montrerait toute la feuille.
     avant = a2.angle
     a2.scripts.OnUpdate(a2, 1.0)
     tour = abs(a2.angle - avant)
     print("   rotation : %.3f radian en une seconde (%.3f attendu)" % (
         tour, 2 * 3.14159265 / 4))
     assert abs(tour - 2 * 3.14159265 / 4) < 0.001, "un tour doit prendre 4 secondes"
+
+    coins = a2.fourmis.texcoord8
+    assert coins is not None, "la rotation doit passer par les huit coordonnees"
+    assert a2.fourmis.rotation is None, "SetRotation effacerait le rectangle d'atlas"
+    valeurs = [round(v, 4) for v in coins.values()]
+    u1, u2 = round(a2.uv[1], 4), round(a2.uv[2], 4)
+    print("   coins tournes : %s" % valeurs)
+    assert min(valeurs) >= -0.001 and max(valeurs) <= 1.001,         "les coins doivent rester dans la feuille"
+    # a un quart de tour, les coins sortent du rectangle d'origine : c est
+    # pour cela que l element est seul au milieu de sa feuille.
+    assert min(valeurs) < u1 + 0.001 or max(valeurs) > u2 - 0.001,         "la rotation doit balayer au-dela du rectangle, d ou la marge"
 
     # sans familier, la barre disparait
     lua.execute("PET_A_UNE_BARRE = false")

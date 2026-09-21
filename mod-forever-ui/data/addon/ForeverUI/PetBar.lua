@@ -110,9 +110,39 @@ local function poserEtat(texture, atlas, largeur, hauteur, add)
 	texture:SetBlendMode(add and "ADD" or "BLEND")
 end
 
+-- PIEGE. SetRotation existe dans ce client, mais il RECALCULE les
+-- coordonnees de texture sur l'image entiere et efface donc le rectangle
+-- d'atlas : la texture se met a montrer toute la feuille. C'est ce qui
+-- affichait les deux sprites de l'anneau l'un a cote de l'autre.
+--
+-- On tourne donc par la forme A HUIT ARGUMENTS de SetTexCoord, que le
+-- client accepte -- "SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)",
+-- dit son propre message d'usage. Elle donne les quatre coins un par un, et
+-- reste donc dans le rectangle de l'element.
+--
+-- Ses coins balaient le carre CIRCONSCRIT, 1,41 fois le cote : l'element
+-- doit etre seul au milieu de sa feuille, avec de la marge. C'est ce que
+-- prepare tools/petite_feuille.py.
+local function tournerAtlas(texture, u1, u2, v1, v2, angle)
+	local cu, cv = (u1 + u2) / 2, (v1 + v2) / 2
+	local hu, hv = (u2 - u1) / 2, (v2 - v1) / 2
+	local cosinus, sinus = math.cos(angle), math.sin(angle)
+
+	local function coin(x, y)
+		return cu + hu * (x * cosinus - y * sinus),
+			cv + hv * (x * sinus + y * cosinus)
+	end
+
+	local ULx, ULy = coin(-1, -1)
+	local LLx, LLy = coin(-1, 1)
+	local URx, URy = coin(1, -1)
+	local LRx, LRy = coin(1, 1)
+	texture:SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)
+end
+
 -- L'anneau d'autolancement. La source le fait tourner par un groupe
--- d'animation ; 3.3.5 n'en a pas sur une texture, mais il a SetRotation :
--- on deroule l'angle nous-memes, a la meme vitesse.
+-- d'animation ; 3.3.5 n'en a pas sur une texture, on deroule donc l'angle
+-- nous-memes, a la meme vitesse.
 local function monterAnneau(bouton)
 	local anneau = CreateFrame("Frame", nil, bouton)
 	anneau:SetWidth(ANNEAU)
@@ -130,6 +160,10 @@ local function monterAnneau(bouton)
 	fourmis:SetPoint("BOTTOMRIGHT", anneau, "BOTTOMRIGHT", ANTS_DEBORD, -ANTS_DEBORD)
 	fourmis:Hide()
 
+	-- Le rectangle de l'element, garde pour le faire tourner sans le perdre.
+	local e = ForeverUI.AtlasEntry(ATLAS.fourmis)
+	anneau.uv = e and { e[2], e[3], e[4], e[5] } or nil
+
 	anneau.angle = 0
 	anneau:SetScript("OnUpdate", function(self, elapse)
 		if not fourmis:IsShown() then
@@ -140,7 +174,10 @@ local function monterAnneau(bouton)
 		if self.angle < -2 * math.pi then
 			self.angle = self.angle + 2 * math.pi
 		end
-		fourmis:SetRotation(self.angle)
+		if self.uv then
+			tournerAtlas(fourmis, self.uv[1], self.uv[2], self.uv[3], self.uv[4],
+				self.angle)
+		end
 	end)
 
 	anneau:Hide()

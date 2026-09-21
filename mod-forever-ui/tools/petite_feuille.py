@@ -14,20 +14,23 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-"""Retailler des elements d'atlas en une petite feuille que le client affiche.
+"""Retailler des elements d'atlas dans une petite feuille a eux.
 
-POURQUOI. Le client 3.3.5 rend en BRUIT une feuille de 2048 de large : vu le
-2026-09-22 sur interface/foreverui/hud/uiactionbarfx (2048 x 1024), dont
-l'anneau d'autolancement du familier sortait illisible. Toutes les feuilles
-que l'addon affiche correctement font 1024 au plus. Le fichier lui-meme est
-bon -- relu avec foreverui.blp, il est identique a son apercu PNG.
+POURQUOI. Un element qu'on fait TOURNER ne peut pas rester dans une grande
+feuille partagee. La rotation se fait par SetTexCoord a huit arguments, dont
+les quatre coins balaient le carre CIRCONSCRIT a l'element -- 1,41 fois son
+cote. Tout ce qui se trouve autour dans la feuille entre alors dans le cadre :
+c'est ainsi que l'anneau d'autolancement du familier montrait ses deux sprites
+a la fois, le 2026-09-22.
+
+L'element tournant est donc pose SEUL et AU MILIEU de sa feuille, avec de la
+marge transparente tout autour.
 
 CE QUE FAIT L'OUTIL. Il decoupe les elements demandes dans l'apercu PNG de
-leur grande feuille, les range cote a cote dans une image en puissance de
-deux, ecrit le .blp (BGRA non compresse, la forme des autres feuilles) avec
-son apercu .png, et genere une table d'atlas qui REDEFINIT ces noms. Elle se
-charge en dernier : UIAtlas.data est une table plate, la derniere definition
-gagne.
+leur grande feuille, les range dans une image en puissance de deux, ecrit le
+.blp (BGRA non compresse, la forme des autres feuilles) avec son apercu .png,
+et genere une table d'atlas qui REDEFINIT ces noms. Elle se charge en dernier :
+UIAtlas.data est une table plate, la derniere definition gagne.
 
 USAGE
     python tools/petite_feuille.py
@@ -54,14 +57,22 @@ TABLE = os.path.join(ADDON, "UIAtlas_07_petites_feuilles.lua")
 
 # Chaque petite feuille : son chemin (sous interface/ForeverUI/), sa taille,
 # et les noms d'atlas qu'elle reprend.
+# "centre" : l'element est pose au MILIEU, avec de la marge transparente
+# autour. C'est indispensable a tout element qu'on fera TOURNER : la
+# rotation se fait par SetTexCoord a huit arguments, dont les quatre coins
+# balaient le carre circonscrit -- 1,41 fois le cote. Sans marge, la
+# rotation irait chercher les pixels du voisin.
 FEUILLES = [
     {
-        "chemin": "hud/petautocast",
+        "chemin": "hud/petautocastants",
         "taille": 128,
-        "elements": [
-            "ui-hud-actionbar-petautocast-ants",
-            "ui-hud-actionbar-petautocast-corners",
-        ],
+        "centre": True,
+        "elements": ["ui-hud-actionbar-petautocast-ants"],
+    },
+    {
+        "chemin": "hud/petautocastcorners",
+        "taille": 64,
+        "elements": ["ui-hud-actionbar-petautocast-corners"],
     },
 ]
 
@@ -96,6 +107,7 @@ def construire(feuille, entrees):
     cote = feuille["taille"]
     image = Image.new("RGBA", (cote, cote), (0, 0, 0, 0))
     poses, x = [], 0
+    centre = feuille.get("centre")
 
     for nom in feuille["elements"]:
         e = entrees.get(nom)
@@ -114,12 +126,22 @@ def construire(feuille, entrees):
         morceau = grande.crop(boite)
         l, h = morceau.size
 
-        if x + l > cote or h > cote:
-            raise SystemExit("%s ne tient pas dans %d : %d x %d" % (nom, cote, l, h))
+        if centre:
+            besoin = int(round(l * 1.4143))
+            if besoin > cote:
+                raise SystemExit(
+                    "%s tourne sur %d : il faut une feuille de %d au moins"
+                    % (nom, l, besoin))
+            px, py = (cote - l) // 2, (cote - h) // 2
+        else:
+            if x + l > cote or h > cote:
+                raise SystemExit("%s ne tient pas dans %d : %d x %d" % (nom, cote, l, h))
+            px, py = x, 0
 
-        image.paste(morceau, (x, 0))
-        poses.append((nom, x, 0, l, h, e["taille"]))
-        print("   %-42s %3d x %-3d pose en (%d, 0)" % (nom, l, h, x))
+        image.paste(morceau, (px, py))
+        poses.append((nom, px, py, l, h, e["taille"]))
+        marge = centre and "  (centre, marge de %d pour la rotation)" % px or ""
+        print("   %-42s %3d x %-3d pose en (%d, %d)%s" % (nom, l, h, px, py, marge))
         x += l
 
     return image, poses
@@ -130,11 +152,12 @@ def main():
     lignes = [
         "-- 07_petites_feuilles : des elements retailles a part.",
         "--",
-        "-- POURQUOI. Le client rend en BRUIT une feuille de 2048 de large : toutes",
-        "-- celles qu'il affiche correctement font 1024 au plus. Les elements repris",
-        "-- ici viennent d'une trop grande feuille et ont ete recoupes dans une petite",
-        "-- par tools/petite_feuille.py. Ce fichier se charge EN DERNIER : UIAtlas.data",
-        "-- est une table plate, sa definition gagne sur celle d'origine.",
+        "-- POURQUOI. Un element qu'on fait tourner ne peut pas rester dans une",
+        "-- grande feuille partagee : la rotation balaie le carre circonscrit, et tout",
+        "-- ce qui l'entoure entre dans le cadre. Ces elements ont donc ete recoupes",
+        "-- seuls, au milieu de leur feuille, par tools/petite_feuille.py. Ce fichier",
+        "-- se charge EN DERNIER : UIAtlas.data est une table plate, sa definition",
+        "-- gagne sur celle d'origine.",
         "",
         "UIAtlas = UIAtlas or { sheets = {}, data = {} }",
         "",

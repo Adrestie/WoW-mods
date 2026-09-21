@@ -1,20 +1,22 @@
 -- 07_petites_feuilles : des elements retailles a part.
 --
--- POURQUOI. Le client rend en BRUIT une feuille de 2048 de large : toutes
--- celles qu'il affiche correctement font 1024 au plus. Les elements repris
--- ici viennent d'une trop grande feuille et ont ete recoupes dans une petite
--- par tools/petite_feuille.py. Ce fichier se charge EN DERNIER : UIAtlas.data
--- est une table plate, sa definition gagne sur celle d'origine.
+-- POURQUOI. Un element qu'on fait tourner ne peut pas rester dans une
+-- grande feuille partagee : la rotation balaie le carre circonscrit, et tout
+-- ce qui l'entoure entre dans le cadre. Ces elements ont donc ete recoupes
+-- seuls, au milieu de leur feuille, par tools/petite_feuille.py. Ce fichier
+-- se charge EN DERNIER : UIAtlas.data est une table plate, sa definition
+-- gagne sur celle d'origine.
 
 UIAtlas = UIAtlas or { sheets = {}, data = {} }
 
 local S = {
-	[1] = "interface\\ForeverUI\\hud\\petautocast", -- 128 x 128
+	[1] = "interface\\ForeverUI\\hud\\petautocastants", -- 128 x 128
+	[2] = "interface\\ForeverUI\\hud\\petautocastcorners", -- 64 x 64
 }
 
 local D = {
-	["ui-hud-actionbar-petautocast-ants"] = {1, 0.000000, 0.601562, 0.000000, 0.601562, 77, 77},
-	["ui-hud-actionbar-petautocast-corners"] = {1, 0.601562, 0.960938, 0.000000, 0.359375, 46, 46},
+	["ui-hud-actionbar-petautocast-ants"] = {1, 0.195312, 0.796875, 0.195312, 0.796875, 77, 77},
+	["ui-hud-actionbar-petautocast-corners"] = {2, 0.000000, 0.718750, 0.000000, 0.718750, 46, 46},
 }
 
 for i, chemin in pairs(S) do UIAtlas.sheets[chemin] = true end
