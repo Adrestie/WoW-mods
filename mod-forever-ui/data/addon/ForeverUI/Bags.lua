@@ -64,6 +64,16 @@
 --   emploie pour ses categories (GetAuctionItemClasses), puis la qualite, le
 --   nom et la taille de la pile. CHOIX ASSUME, faute de source.
 
+-- =====================================================================
+-- POUR AGRANDIR LA FENETRE DES SACS : CE NOMBRE, ET LUI SEUL.
+-- 1 = la taille de camelot. 1.25 = un quart plus grand, et tout suit :
+-- emplacements, icones, textes, encadrement, champ de recherche.
+-- C'est ainsi que le client moderne s'y prend lui-meme
+-- (ContainerFrameMixin, CONTAINER_SCALE) : il met la fenetre a l'echelle
+-- plutot que de changer ses mesures.
+local ECHELLE = 1
+-- =====================================================================
+
 local NB_CADRES = NUM_CONTAINER_FRAMES or 13
 local SACS = { 0, 1, 2, 3, 4 }          -- sac a dos et les quatre sacs portes
 
@@ -729,6 +739,9 @@ local function poserGrille(cadre)
 	local sacADos = cadre:GetID() == 0
 
 	cadre:SetWidth(LARGEUR_CADRE)
+	-- Le client pose sa propre echelle dans updateContainerFrameAnchors (il
+	-- retrecit les sacs quand l'ecran est court) ; on repasse derriere lui.
+	cadre:SetScale(ECHELLE)
 
 	local bourse = _G[nom .. "MoneyFrame"]
 	local hauteur = hauteurGrille + REMPLISSAGE
@@ -794,6 +807,15 @@ if hooksecurefunc then
 
 	hooksecurefunc("ContainerFrame_OnHide", function()
 		poserOutils()
+	end)
+
+	-- Le client remet son echelle a chaque reagencement des sacs.
+	hooksecurefunc("updateContainerFrameAnchors", function()
+		for _, cadre in ipairs(cadres) do
+			if cadre:GetScale() ~= ECHELLE then
+				cadre:SetScale(ECHELLE)
+			end
+		end
 	end)
 end
 

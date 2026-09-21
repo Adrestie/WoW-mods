@@ -423,6 +423,7 @@ end
 function ContainerFrame_GenerateFrame() end
 function ContainerFrame_Update() end
 function ContainerFrame_OnHide() end
+function updateContainerFrameAnchors() end
 function ToggleBag() end
 
 HOOKS = {}
