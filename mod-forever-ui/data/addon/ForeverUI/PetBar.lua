@@ -62,6 +62,14 @@ local NB_BOUTONS = 10
 local GRISE = 0.4                       -- action inutilisable
 local COCHE_ATTAQUE = 0.5               -- alpha du coche sur l'attaque
 
+-- LA PLACE PAR DEFAUT. La barre se pose juste au-dessus de la barre de
+-- reputation, sur le meme bord gauche que la barre d'action. Si la barre
+-- des postures est la, la barre du familier passe A SA DROITE, separee
+-- d'elle par la largeur de deux de ses icones.
+local BORD_GAUCHE = -587.5              -- le bord gauche de la barre d'action
+local RANGEE = 84                       -- au-dessus de la reputation
+local ECART_BARRES = 2 * TAILLE         -- deux icones entre les deux barres
+
 local ATLAS = {
 	normal = "ui-hud-actionbar-iconframe",
 	pushed = "ui-hud-actionbar-iconframe-down",
@@ -249,6 +257,18 @@ local function familierPresent()
 	return UnitIsVisible and UnitIsVisible("pet") and true or false
 end
 
+-- La place par defaut se recalcule : elle depend de la barre des postures,
+-- qui va et vient avec les formes du personnage. SetDefaults ne repose le
+-- cadre que si l'utilisateur ne l'a pas deja deplace lui-meme.
+local function posePardefaut()
+	local x = BORD_GAUCHE
+	local postures = ForeverUI.StanceBar and ForeverUI.StanceBar.Holder
+	if postures and postures:IsShown() then
+		x = x + postures:GetWidth() + ECART_BARRES
+	end
+	ForeverUI.Layout.SetDefaults("familier", "BOTTOMLEFT", "BOTTOM", x, RANGEE)
+end
+
 local function poser()
 	if not familierPresent() then
 		porteur:Hide()
@@ -274,6 +294,7 @@ local function poser()
 	end
 
 	porteur:Show()
+	posePardefaut()
 end
 
 -- RELEVE -- PetActionButtonMixin:UpdateButtonState.
@@ -376,6 +397,10 @@ veilleur:RegisterEvent("PET_BAR_UPDATE_USABLE")
 veilleur:RegisterEvent("PET_UI_UPDATE")
 veilleur:RegisterEvent("PLAYER_CONTROL_LOST")
 veilleur:RegisterEvent("PLAYER_CONTROL_GAINED")
+-- Les formes changent la largeur de la barre des postures, donc la place
+-- de celle-ci. StanceBar.lua est charge avant : son gestionnaire passe en
+-- premier, et la largeur est deja bonne quand on la lit.
+veilleur:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
 veilleur:SetScript("OnEvent", tout)
 
 tout()
@@ -384,4 +409,5 @@ tout()
 -- /fui. Par defaut la barre du familier se pose au-dessus de celle des
 -- postures, sur le meme bord gauche.
 ForeverUI.Layout.Register(porteur, "familier", "Barre du familier",
-	"BOTTOMLEFT", "BOTTOM", -587.5, 120)
+	"BOTTOMLEFT", "BOTTOM", BORD_GAUCHE, RANGEE)
+posePardefaut()

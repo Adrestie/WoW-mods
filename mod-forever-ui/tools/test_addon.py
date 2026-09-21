@@ -1361,6 +1361,27 @@ def main():
     assert pet.shown
     assert g.ForeverUI.Layout.systems["familier"] is not None
 
+    # LA PLACE : juste au-dessus de la reputation, et a droite des postures
+    # quand elles sont la, separee d'elles par deux icones.
+    postures = g.ForeverUIStanceBarHolder
+    pp = pet.points[len(list(pet.points.values()))]
+    attendu = -587.5 + postures.width + 2 * 30
+    print("   place : %s (%.1f, %.1f) | postures larges de %d -> %.1f attendu" % (
+        pp[1], pp[4], pp[5], postures.width, attendu))
+    assert pp[5] == 84, "la barre doit etre juste au-dessus de la reputation"
+    assert abs(pp[4] - attendu) < 0.01, "elle doit se decaler de deux icones apres les postures"
+
+    # sans posture, elle revient sur le bord gauche
+    lua.execute("FORMES_2 = FORMES; FORMES = {}")
+    g.ForeverUI.StanceBar.Apply()
+    g.ForeverUI.PetBar.Apply()
+    pp = pet.points[len(list(pet.points.values()))]
+    print("   sans posture : x=%.1f (-587,5 attendu)" % pp[4])
+    assert abs(pp[4] + 587.5) < 0.01, "sans postures elle reprend le bord gauche"
+    lua.execute("FORMES = FORMES_2")
+    g.ForeverUI.StanceBar.Apply()
+    g.ForeverUI.PetBar.Apply()
+
     # L'art d'epoque de la barre s'efface -- on balaie les regions du cadre
     # plutot que de se fier aux noms.
     print("   art d'epoque : morceau 0 alpha=%s, morceau 1 alpha=%s" % (

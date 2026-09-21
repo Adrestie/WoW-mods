@@ -305,6 +305,14 @@ sous-texte.
 alors des **clés de variables globales**, pas des valeurs, et il faut les
 résoudre — `_G[texture]`.
 
+**La place par défaut** : juste au-dessus de la barre de réputation (y = 84),
+sur le même bord gauche que la barre d'action. Si la barre des postures est
+affichée, la barre du familier passe **à sa droite**, séparée d'elle par la
+largeur de **deux de ses icônes** (60). La place se recalcule à chaque mise à
+jour — les formes vont et viennent, donc la largeur de la barre des postures
+aussi — et `Layout.SetDefaults` ne repose le cadre que si l'utilisateur ne l'a
+pas déjà déplacé lui-même.
+
 **L'art d'époque de la barre est effacé** : 3.3.5 encadre sa barre de familier
 de deux morceaux glissants, `SlidingActionBarTexture0` et `1`. Plutôt que de se
 fier à leurs noms, **toutes les régions du cadre lui-même** passent à alpha 0 —
