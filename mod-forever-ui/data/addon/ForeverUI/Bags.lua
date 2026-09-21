@@ -95,11 +95,11 @@ local MARGE_BAS = 9             -- GetFirstButtonOffsetY
 local BOURSE_H = 13
 local BOURSE_BAS, BOURSE_COTE = 8, 8
 
--- AIR EN PLUS, sur le sac a dos. Les chiffres de camelot donnent une fenetre
--- etriquee sur ce client. La hauteur ajoutee va TOUTE dans l'entete : la
--- fenetre etant tenue par son bas, la grille ne bouge pas d'un pixel a
--- l'ecran, c'est le haut qui monte. UN SEUL NOMBRE A REGLER.
-local AIR = 30
+-- MESURE SUR LA CAPTURE DU VRAI CLIENT (docs/reference). A l'echelle 4/3 de
+-- cette capture, la grille fait 217 px pour les 163 unites de camelot, un
+-- emplacement 49 px pour 37, le pas 56 px pour 42, et la fenetre 411 px pour
+-- les 305 unites que donne la formule sur cinq rangees. Les chiffres du code
+-- de camelot sont donc les bons : rien a ajouter.
 
 -- L'encadre de la bourse depasse d'elle de deux pixels en haut comme en bas
 -- (17 de haut pour une bourse de 13). La derniere rangee se pose 1 px
@@ -211,6 +211,30 @@ local function habillerCadre(cadre)
 		titre:SetPoint("TOPLEFT", cadre, "TOPLEFT", 58, -6)
 		titre:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", -24, -6)
 		titre:SetJustifyH("CENTER")
+	end
+
+	-- Le bouton de fermeture : 24 x 24, TOPRIGHT (1, 0), le X rouge des
+	-- panneaux modernes (UIPanelCloseButtonNoScripts, atlas RedButton-Exit).
+	local fermer = _G[nom .. "CloseButton"]
+	if fermer then
+		fermer:SetWidth(24)
+		fermer:SetHeight(24)
+		fermer:ClearAllPoints()
+		fermer:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", 1, 0)
+		for atlas, methode in pairs({ ["redbutton-exit"] = "GetNormalTexture",
+			["redbutton-exit-pressed"] = "GetPushedTexture",
+			["redbutton-exit-disabled"] = "GetDisabledTexture",
+			["redbutton-highlight"] = "GetHighlightTexture" }) do
+			local texture = fermer[methode] and fermer[methode](fermer)
+			if texture then
+				ForeverUI.SetAtlas(texture, atlas, true)
+				texture:ClearAllPoints()
+				texture:SetAllPoints(fermer)
+				if atlas == "redbutton-highlight" then
+					texture:SetBlendMode("ADD")
+				end
+			end
+		end
 	end
 
 	for index = 1, MAX_CONTAINER_ITEMS do
@@ -670,7 +694,7 @@ local function poserGrille(cadre)
 	local bourse = _G[nom .. "MoneyFrame"]
 	local hauteur = hauteurGrille + REMPLISSAGE
 	if sacADos then
-		hauteur = hauteur + REMPLISSAGE_RECHERCHE + BOURSE_H + AIR
+		hauteur = hauteur + REMPLISSAGE_RECHERCHE + BOURSE_H
 	end
 	cadre:SetHeight(hauteur)
 

@@ -41,3 +41,6 @@ interface/common/commonsearch.blp
 
 # encadre de la bourse
 interface/common/commoncoinbox.blp
+
+# bouton de fermeture rouge des panneaux
+interface/buttons/redbuttonsc60.blp

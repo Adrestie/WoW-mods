@@ -339,6 +339,7 @@ for i = 1, NUM_CONTAINER_FRAMES do
     c:SetID(0)
     _G[nom .. "Portrait"] = c:CreateTexture(nom .. "Portrait", "BACKGROUND")
     _G[nom .. "Name"] = c:CreateFontString(nom .. "Name", "ARTWORK")
+    CreateFrame("Button", nom .. "CloseButton", c)
     local bourse = CreateFrame("Frame", nom .. "MoneyFrame", c)
     bourse:SetHeight(24)
     for _, suffixe in ipairs({ "BackgroundTop", "BackgroundMiddle1", "BackgroundMiddle2",
@@ -1128,10 +1129,10 @@ def main():
     ppt = premier.points[len(list(premier.points.values()))]
     bourse = g.ContainerFrame1MoneyFrame
     bpt = bourse.points[len(list(bourse.points.values()))]
-    print("fenetre du sac a dos : %d x %d (178 x 293 : tout l'air va dans l'entete)" % (
+    print("fenetre du sac a dos : %d x %d (178 x 263 : 163 de grille + 57 + 30 + 13)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height))
     assert g.ContainerFrame1.width == 178, "la fenetre n'a pas la largeur de camelot"
-    assert g.ContainerFrame1.height == 293, "la fenetre n'a pas la hauteur voulue"
+    assert g.ContainerFrame1.height == 263, "la fenetre n'a pas la hauteur de camelot"
 
     print("   premier bouton : %s sur %s (%s, %s) -- il pose sur la bourse" % (
         ppt[1], ppt[3], ppt[4], ppt[5]))
@@ -1172,6 +1173,12 @@ def main():
         ContainerFrame1.size = 16
     """)
     g.ForeverUI.BagSearch.Tout()
+    fermer = g.ContainerFrame1CloseButton
+    fpt = fermer.points[len(list(fermer.points.values()))]
+    print("   fermeture : %d x %d, %s (%s, %s)" % (fermer.width, fermer.height, fpt[1], fpt[4], fpt[5]))
+    assert fermer.width == 24 and fermer.height == 24, "le bouton de fermeture n'est pas en 24 x 24"
+    assert fpt[4] == 1 and fpt[5] == 0, "le bouton de fermeture n'est pas au coin"
+
     contour = g.ContainerFrame1Item4.foreverContour
     vide = g.ContainerFrame1Item3.foreverContour
     print("   contour : case pleine visible=%s teinte=%s | case vide visible=%s" % (
