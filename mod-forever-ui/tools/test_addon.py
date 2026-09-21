@@ -1132,10 +1132,10 @@ def main():
 
     cadre = b1.foreverCadre
     pc = cadre.points[1]
-    print("   cadre : %s %.1f x %.1f en %s, ancre %s" % (
+    print("   cadre : %s %.1f x %.1f en %s, ancre %s (centre sur le bouton)" % (
         cadre.texture and "pose" or "absent", cadre.width, cadre.height, cadre.layer, pc[1]))
     assert cadre.width == 35 and cadre.height == 35, "UpdateButtonArt ramene le petit cadre a 35"
-    assert cadre.layer == "OVERLAY" and pc[1] == "TOPLEFT"
+    assert cadre.layer == "OVERLAY" and pc[1] == "CENTER",         "un cadre de 35 sur un bouton de 30 doit etre centre, pas ancre TOPLEFT"
     assert b1._normal.alpha == 0, "la texture normale du client doit rester muette"
 
     survol, coche = b1._highlight, b1._checked

@@ -252,6 +252,16 @@ paraîtraient actives, et aucune lançable. Le harnais vérifie explicitement
 qu'une forme active est cochée et qu'une forme non lançable est grisée, pour
 que l'inversion ne puisse pas revenir.
 
+**L'ancrage des quatre états est centré, pas `TOPLEFT`.** La source les ancre
+en `TOPLEFT`. Sur le grand bouton cela tombe juste — un cadre de 46 × 45 sur un
+bouton de 45 × 45 est centré à un demi-pixel près. Sur le petit, le même
+ancrage met un cadre de 35 sur un bouton de 30 : il déborde de 5 à droite et en
+bas, son trou se décale de 2,5 et mord l'icône d'un côté. Le trou du cadre,
+mesuré sur l'art (élément de 47 × 46, bordure opaque de 5 px à gauche, 4 à
+droite, 6 en haut, 5 en bas), vaut 35,2 × 34,2 à la taille d'atlas, soit **26,6
+une fois le cadre ramené à 35**. Centré, il tombe dans l'icône de 30 avec 1,7 de
+marge partout ; décalé, il en sort — et l'icône paraît plus petite qu'elle n'est.
+
 **Écarts assumés.** Le mode édition n'existe pas : la position se règle par
 `/fui`, et la barre s'aligne par défaut sur le bord gauche de la barre
 d'action, au-dessus des barres d'expérience et de réputation. Les boutons du

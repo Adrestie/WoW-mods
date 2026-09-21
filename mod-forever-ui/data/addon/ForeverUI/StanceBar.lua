@@ -83,6 +83,17 @@ local function taireNormale(bouton)
 	end
 end
 
+-- ECART ASSUME SUR L'ANCRAGE. La source ancre les quatre etats en TOPLEFT.
+-- Sur le GRAND bouton cela tombe juste : un cadre de 46 x 45 sur un bouton
+-- de 45 x 45 est centre a un demi-pixel pres. Sur le PETIT, le meme ancrage
+-- met un cadre de 35 sur un bouton de 30 : il deborde de 5 a droite et en
+-- bas, donc son trou se decale de 2,5 et mord l'icone d'un cote.
+--
+-- Le trou du cadre, mesure sur l'art (element de 47 x 46, bordure opaque de
+-- 5 px a gauche et 4 a droite, 6 en haut et 5 en bas), vaut 35,2 x 34,2 a la
+-- taille d'atlas, soit 26,6 une fois le cadre ramene a 35. Centre, ce trou
+-- tombe dans l'icone de 30 avec 1,7 de marge partout ; decale, il en sort.
+-- Les etats sont donc CENTRES sur le bouton.
 local function poserEtat(texture, atlas, largeur, hauteur, add)
 	if not texture then
 		return
@@ -92,7 +103,7 @@ local function poserEtat(texture, atlas, largeur, hauteur, add)
 	texture:SetWidth(largeur)
 	texture:SetHeight(hauteur)
 	texture:ClearAllPoints()
-	texture:SetPoint("TOPLEFT", 0, 0)
+	texture:SetPoint("CENTER", 0, 0)
 	texture:SetBlendMode(add and "ADD" or "BLEND")
 end
 
@@ -133,7 +144,7 @@ local function habiller(bouton)
 	end
 
 	-- Notre cadre, hors d'atteinte du client, la ou la source met sa
-	-- NormalTexture : en OVERLAY, 35 x 35, ancre TOPLEFT.
+	-- NormalTexture : en OVERLAY, 35 x 35, centre (voir poserEtat).
 	local cadre = bouton:CreateTexture(nil, "OVERLAY")
 	poserEtat(cadre, ATLAS.normal, CADRE_L, CADRE_H)
 	bouton.foreverCadre = cadre
