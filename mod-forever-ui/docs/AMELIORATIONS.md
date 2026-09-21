@@ -103,22 +103,45 @@ Elle montre aussi deux choses à garder en tête :
 | Ordre du rangement | catégorie selon `GetAuctionItemClasses`, puis qualité décroissante, nom, taille de pile | `C_Container.SortBags` est écrit dans le client : son ordre n'est pas lisible. **CHOIX ASSUMÉ** |
 | Rythme du rangement | un déplacement toutes les 0,1 s, 400 au maximum | chaque échange doit être confirmé par le serveur avant le suivant, sinon la case est encore verrouillée |
 
-**La fenêtre se construit de bas en haut.** camelot place ses morceaux à des
-décalages absolus depuis le haut du cadre (`TOPLEFT (42, -37)` pour le champ,
-`TOPRIGHT (-9, -34)` pour le tri), et fixe la hauteur du cadre à part. Deux
-sources de vérité : changer une taille ne déplaçait rien, et la fenêtre ne
-suivait plus son contenu. Ici une seule fonction, `pile()`, empile les bandes
-depuis le bas — bourse, grille, ligne de recherche, titre — chacune séparée de
-la suivante par un écart nommé. La fenêtre prend la hauteur de la pile, chaque
-morceau se pose sur le bas de sa bande, et **aucune position n'est écrite en
-dur**. Un sac porté n'a ni bourse ni recherche : ces deux bandes disparaissent
-et les écarts qui les entouraient se rejoignent.
+**La fenêtre suit son contenu par un CALCUL, pas par un empilement.** Recopié
+de `ContainerFrameMixin` (`blizzard_uipanels_game/mainline/containerframe.lua`,
+lignes 945-981) :
 
-Les valeurs par défaut redonnent les mesures de camelot :
-8 + 13 (bourse) + 3 + 163 (grille) + 15 + 26 (recherche) + 14 + 20 (titre)
-= **262**, pour 263 mesurés sur la capture. Tout se règle en jeu avec
-`/fui sacs <réglage> <valeur>`, et `/fui sacs` affiche la pile calculée en
-regard de la pile mesurée.
+```
+CalculateWidth()       = CONTAINER_WIDTH = 178      -- une constante
+CalculateHeight()      = rangées×37 + (rangées−1)×5 + comble + extra
+GetPaddingHeight()     = GetFirstButtonOffsetY() (9) + 48
+                         + 30 sur le sac à dos (champ de recherche)
+CalculateExtraHeight() = 0 ; + la hauteur de la bourse sur le sac à dos
+```
+
+Sac à dos, 16 cases : 163 + 87 + 13 = **263**. Sac porté, 16 cases : 163 + 57 =
+**220**. Les deux correspondent à la capture de référence. La largeur ne se
+déduit **pas** de la grille : c'est une constante, et la grille y laisse 8 px à
+gauche pour 7 à droite (`GetInitialItemAnchor` vaut `-7`).
+
+Le comble (titre, champ de recherche, bouton de tri) est ancré **en haut**, à
+hauteur fixe — `SetSearchBoxPoint` pose `TOPLEFT (42, −37)` et `UpdateSearchBox`
+pose le tri en `TOPRIGHT (−9, −34)`. Ce n'est pas ce qui empêche la fenêtre de
+s'adapter : l'adaptation vient de la formule. Une tentative de tout empiler
+depuis le bas a été écrite puis retirée le 2026-09-21 — elle donnait 262 au lieu
+de 263 et s'écartait de la source sans rien résoudre.
+
+Seule la grille du **sac à dos** part de la bourse
+(`ContainerFrameBackpackMixin:GetInitialItemAnchor` : `BOTTOMRIGHT` de la bourse,
+`TOPRIGHT`, (0, 4)) ; un sac porté part du cadre, en (−7, 9).
+
+**Ce que 3.3.5 impose en plus.** Le client repose ses propres morceaux dans
+`ContainerFrame_Update` et dans `updateContainerFrameAnchors`, tous deux appelés
+bien après `ContainerFrame_GenerateFrame`. La mise en page est donc rejouée
+depuis ces deux fonctions et à chaque `BAG_UPDATE`, sans quoi la taille d'origine
+revient dès le premier objet ramassé. `/fui sacs` affiche, pour chaque sac
+ouvert, la hauteur calculée en regard de celle que le cadre porte réellement, et
+dit **DESACCORD** si quelque chose est repassé derrière nous.
+
+**Non reproduit :** `NineSliceUtil.UpdateCornerCropping(self, height)`, que
+`UpdateFrameSize` appelle pour rogner les coins d'une fenêtre trop courte. Sans
+lui, un sac d'une seule rangée voit ses coins de métal se chevaucher.
 
 ---
 

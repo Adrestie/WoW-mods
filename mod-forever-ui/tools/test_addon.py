@@ -356,6 +356,9 @@ for i = 1, NUM_CONTAINER_FRAMES do
     local c = CreateFrame("Frame", nom, UIParent)
     c.size = 16
     c:SetID(0)
+    -- Un cadre de sac est masque tant qu'il n'a pas ete ouvert : le jeu ne
+    -- les montre pas tous les treize.
+    c:Hide()
     _G[nom .. "Portrait"] = c:CreateTexture(nom .. "Portrait", "BACKGROUND")
     _G[nom .. "Name"] = c:CreateFontString(nom .. "Name", "ARTWORK")
     CreateFrame("Button", nom .. "CloseButton", c)
@@ -723,7 +726,7 @@ def main():
     print("ancien cadre de runes    : visible=%s | neutralise=%s | OnShow accroche=%s" % (
         ancien.shown, ancien.foreverSuppressed, ancien.hooks is not None))
     assert not ancien.shown, "l'ancien cadre de runes reste affiche sous le notre"
-    ancien:Show() if False else ancien.Show(ancien)
+    ancien.Show(ancien)          # pas d'appel a deux points en Python
     ancien.hooks.OnShow(ancien)
     print("   s'il se reaffiche      : remasque=%s" % (not ancien.shown))
     assert not ancien.shown, "l'ancien cadre revient des qu'il se reaffiche"
@@ -1142,100 +1145,125 @@ def main():
     assert bouton.foreverVoile is not None, "le voile de recherche manque"
     assert bouton._normal.allPoints, "l'emplacement ne couvre pas le bouton"
 
-    # LA PILE. La fenetre se construit de bas en haut ; on verifie que
-    # chaque bande commence la ou la somme des reglages la place, et que la
-    # fenetre vaut exactement cette somme.
+    # LA FORMULE DE CAMELOT, recopiee de ContainerFrameMixin :
+    #   hauteur = rangees x 37 + (rangees-1) x 5 + comble + extra
+    #   comble  = GetFirstButtonOffsetY() 9 + 48, + 30 sur le sac a dos
+    #   extra   = la bourse (13) sur le sac a dos, 0 ailleurs
+    #   largeur = CONTAINER_WIDTH, une constante
+    # Le client montre le cadre au bout de ContainerFrame_GenerateFrame ;
+    # le faux client n'appelle que nos accroches, on ouvre donc le sac ici.
+    g.ContainerFrame1.Show(g.ContainerFrame1)   # pas d'appel a deux points en Python
     g.ContainerFrame1.size = 16
     g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame1)
     g.ForeverUI.BagsLayout()
 
-    def bas_de(piece):
-        """Le decalage vertical de la derniere ancre posee sur la piece."""
-        return piece.points[len(list(piece.points.values()))][5]
+    def ancre(piece):
+        """La derniere ancre posee : (point, cible, pointCible, x, y)."""
+        pt = piece.points[len(list(piece.points.values()))]
+        return pt[1], pt[2], pt[3], pt[4], pt[5]
 
     premier = g.ContainerFrame1Item1
     bourse = g.ContainerFrame1MoneyFrame
     champ = g.ForeverUIBagSearchBox
     tri = g.ForeverUIBagSortButton
 
-    GRILLE = 4 * 37 + 3 * 5                 # 163, quatre rangees de quatre
-    BANDES = (
-        ("bourse", bourse, 8),                              # margeBas
-        ("grille", premier, 8 + 13 + 3),                    # + bourse + ecart
-        ("recherche", champ, 8 + 13 + 3 + GRILLE + 15),     # + grille + ecart
-        ("tri", tri, 8 + 13 + 3 + GRILLE + 15),             # meme bande
-    )
-    HAUTEUR = 8 + 13 + 3 + GRILLE + 15 + 26 + 14 + 20       # 262
-
-    print("fenetre du sac a dos : %d x %d (179 x %d : la somme des bandes)" % (
+    GRILLE = 4 * 37 + 3 * 5                     # 163
+    HAUTEUR = GRILLE + (9 + 48 + 30) + 13       # 263, la fenetre de camelot
+    print("fenetre du sac a dos : %d x %d (178 x %d : CalculateHeight de camelot)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height, HAUTEUR))
-    assert g.ContainerFrame1.width == 179, "la largeur ne suit pas les reglages"
-    assert g.ContainerFrame1.height == HAUTEUR, "la fenetre ne vaut pas la somme des bandes"
+    assert g.ContainerFrame1.width == 178, "CalculateWidth() vaut CONTAINER_WIDTH"
+    assert g.ContainerFrame1.height == HAUTEUR, "CalculateHeight() n'est pas respectee"
 
-    for nom, piece, attendu in BANDES:
-        print("   %-10s pose a %3d du bas (%d attendu)" % (nom, bas_de(piece), attendu))
-        assert bas_de(piece) == attendu, "la bande %s n'est pas a sa place" % nom
-    assert premier.points[1][3] == "BOTTOMRIGHT", "la grille ne part pas du bas de la fenetre"
+    # ContainerFrameBackpackMixin:GetInitialItemAnchor -- la grille du sac a
+    # dos s'accroche a la BOURSE, pas au cadre.
+    point, cible, pointCible, x, y = ancre(premier)
+    print("   premiere case : %s sur %s de %s (%s, %s)" % (
+        point, pointCible, cible.name if hasattr(cible, "name") else cible, x, y))
+    assert point == "BOTTOMRIGHT" and pointCible == "TOPRIGHT", \
+        "la grille du sac a dos ne s'accroche pas au-dessus de la bourse"
+    assert x == 0 and y == 4, "GetInitialItemAnchor du sac a dos vaut (0, 4)"
 
-    # Un ecart change : tout ce qui est AU-DESSUS remonte d'autant, ce qui est
-    # en dessous ne bouge pas, et la fenetre grandit d'autant. C'est la
-    # promesse de la construction de bas en haut.
-    g.ForeverUI.BagsSet("ecartGrilleRecherche", 25)
-    print("   ecartGrilleRecherche 15 -> 25 : grille a %d, recherche a %d, fenetre %d" % (
-        bas_de(premier), bas_de(champ), g.ContainerFrame1.height))
-    assert bas_de(premier) == 24, "la grille a bouge alors qu'elle est sous l'ecart"
-    assert bas_de(champ) == 8 + 13 + 3 + GRILLE + 25, "la recherche n'a pas remonte"
-    assert g.ContainerFrame1.height == HAUTEUR + 10, "la fenetre n'a pas suivi l'ecart"
-    g.ForeverUI.BagsSet("ecartGrilleRecherche", 15)
+    # UpdateCurrencyFrames -- BOTTOMLEFT (8, 8) / BOTTOMRIGHT (-8, 8)
+    point, _, _, x, y = ancre(bourse)
+    print("   bourse : %s (%s, %s), %d de haut, encadree=%s" % (
+        point, x, y, bourse.height, bourse.foreverBorde == True))
+    assert x == -8 and y == 8, "la bourse n'est pas a la place de UpdateCurrencyFrames"
+    assert bourse.height == 13, "UpdateMoneyFrame pose 13"
+    assert bourse.foreverBorde, "la bourse n'a pas son encadre"
 
-    # Une bande change de taille : meme resultat.
-    g.ForeverUI.BagsSet("bourseHauteur", 23)
-    print("   bourseHauteur 13 -> 23 : bourse a %d, grille a %d, fenetre %d" % (
-        bas_de(bourse), bas_de(premier), g.ContainerFrame1.height))
-    assert bas_de(bourse) == 8, "la bourse est la bande du bas, elle ne bouge pas"
-    assert bas_de(premier) == 34, "la grille n'a pas remonte avec la bourse"
-    assert g.ContainerFrame1.height == HAUTEUR + 10, "la fenetre n'a pas suivi la bourse"
-    g.ForeverUI.BagsSet("bourseHauteur", 13)
-    assert g.ContainerFrame1.height == HAUTEUR, "le retour au reglage ne refait pas la fenetre"
+    # SetSearchBoxPoint / UpdateSearchBox -- ancres en HAUT, comme la source
+    point, _, pointCible, x, y = ancre(champ)
+    print("   champ : %s sur %s (%s, %s), %d de large" % (point, pointCible, x, y, champ.width))
+    assert (point, x, y) == ("TOPLEFT", 42, -37), "SetSearchBoxPoint vaut TOPLEFT (42, -37)"
+    assert champ.width == 96, "SetSearchBoxPoint pose 96 de large"
+    point, _, _, x, y = ancre(tri)
+    print("   tri   : %s (%s, %s)" % (point, x, y))
+    assert (point, x, y) == ("TOPRIGHT", -9, -34), "UpdateSearchBox vaut TOPRIGHT (-9, -34)"
 
-    # Une case change de taille : la grille et la fenetre suivent dans les
-    # deux sens.
-    g.ForeverUI.BagsSet("emplacement", 44)
-    print("   emplacement 37 -> 44 : fenetre %d x %d, case %d" % (
-        g.ContainerFrame1.width, g.ContainerFrame1.height, premier.width))
-    assert g.ContainerFrame1.width == 4 * 44 + 3 * 5 + 16, "la largeur ne suit pas la case"
-    assert g.ContainerFrame1.height == HAUTEUR - GRILLE + 4 * 44 + 3 * 5, \
-        "la hauteur ne suit pas la case"
-    assert premier.width == 44, "la case n'a pas change de taille"
-    g.ForeverUI.BagsSet("emplacement", 37)
+    rangee2 = g.ContainerFrame1Item5
+    print("   ecart entre rangees : %s (ITEM_SPACING_Y = 5)" % ancre(rangee2)[4])
+    assert ancre(rangee2)[4] == 5, "l'ecart entre rangees n'est pas ITEM_SPACING_Y"
 
-    # /fui sacs doit s'executer : c'est la seule facon de relire la pile en
+    # /fui sacs doit s'executer : c'est la seule facon de relire la formule en
     # jeu, et une erreur y passait inapercue jusqu'ici.
     g.ForeverUI.BagsDebug()
 
-    rangee2 = g.ContainerFrame1Item5
-    print("   ecart entre rangees : %s (5 attendu, 4 en 3.3.5)" % bas_de(rangee2))
-    assert bas_de(rangee2) == 5, "l'ecart entre rangees n'est pas celui de camelot"
+    # LA FENETRE SUIT SON CONTENU. C'est le nombre de rangees qui entre dans
+    # CalculateHeight : on change la taille du sac et la hauteur doit suivre,
+    # pour le sac a dos comme pour un sac porte.
+    print("   le sac a dos suit son contenu :")
+    for taille, rangees in ((16, 4), (20, 5), (24, 6), (28, 7), (36, 9)):
+        g.ContainerFrame1.size = taille
+        g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame1)
+        grille = rangees * 37 + (rangees - 1) * 5
+        attendu = grille + (9 + 48 + 30) + 13
+        print("      %2d cases (%d rangees) -> %d de haut (%d attendu)" % (
+            taille, rangees, g.ContainerFrame1.height, attendu))
+        assert g.ContainerFrame1.height == attendu, "le sac a dos ne suit pas son contenu"
+        assert g.ContainerFrame1.width == 178, "la largeur est une constante"
+    g.ContainerFrame1.size = 16
+    g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame1)
 
-    print("   bourse : %d de haut, encadree=%s" % (bourse.height, bourse.foreverBorde == True))
-    assert bourse.height == 13, "la bourse n'a pas la hauteur de camelot"
-    assert bourse.foreverBorde, "la bourse n'a pas son encadre"
-
-    # UN SAC PORTE n'a ni bourse ni recherche : ses deux bandes disparaissent
-    # de la pile et la fenetre se raccourcit d'autant.
-    print("   la fenetre suit son contenu (sac porte, sans bourse ni recherche) :")
+    print("   un sac porte suit son contenu (ni bourse ni recherche) :")
     for taille, rangees in ((4, 1), (8, 2), (16, 4), (20, 5), (36, 9)):
         g.ContainerFrame2.size = taille
         g.ContainerFrame2.id = 1
         g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
         grille = rangees * 37 + (rangees - 1) * 5
-        attendu = 8 + grille + 15 + 14 + 20         # margeBas, grille, les deux ecarts, titre
-        print("      %2d emplacements (%d rangees) -> %d de haut (%d attendu)" % (
+        attendu = grille + 9 + 48
+        print("      %2d cases (%d rangees) -> %d de haut (%d attendu)" % (
             taille, rangees, g.ContainerFrame2.height, attendu))
-        assert g.ContainerFrame2.height == attendu, "la fenetre ne suit pas son contenu"
-        assert g.ContainerFrame2.width == 179, "la largeur ne doit pas bouger"
-        assert bas_de(g["ContainerFrame2Item1"]) == 8, "la grille d'un sac porte pose sur margeBas"
+        assert g.ContainerFrame2.height == attendu, "un sac porte ne suit pas son contenu"
+        assert g.ContainerFrame2.width == 178, "la largeur est une constante"
+        # ContainerFrameMixin:GetInitialItemAnchor -- (-7, 9) sur le cadre
+        point, _, pointCible, x, y = ancre(g["ContainerFrame2Item1"])
+        assert (point, pointCible, x, y) == ("BOTTOMRIGHT", "BOTTOMRIGHT", -7, 9), \
+            "un sac porte pose sa grille en (-7, 9) sur le cadre"
     g.ContainerFrame2.id = 0
+
+    # LE CLIENT NE PEUT PLUS DEFAIRE LA TAILLE. 3.3.5 repose ses morceaux dans
+    # ContainerFrame_Update et dans updateContainerFrameAnchors ; on verifie
+    # qu'un passage du client y est bien rattrape.
+    g.ContainerFrame1.height = 1
+    g.ContainerFrame1.width = 1
+    g.HOOKS["ContainerFrame_Update"](g.ContainerFrame1)
+    print("   apres un passage du client : %d x %d (rattrape)" % (
+        g.ContainerFrame1.width, g.ContainerFrame1.height))
+    assert g.ContainerFrame1.height == HAUTEUR, "ContainerFrame_Update ne rattrape pas la taille"
+
+    g.ContainerFrame1.height = 1
+    g.HOOKS["updateContainerFrameAnchors"]()
+    print("   apres un reagencement du client : %d de haut (rattrape)" % g.ContainerFrame1.height)
+    assert g.ContainerFrame1.height == HAUTEUR, "le reagencement ne rattrape pas la taille"
+
+    # Un reglage change, la fenetre suit.
+    g.ForeverUI.BagsSet("emplacement", 44)
+    print("   emplacement 37 -> 44 : fenetre %d x %d, case %d" % (
+        g.ContainerFrame1.width, g.ContainerFrame1.height, premier.width))
+    assert g.ContainerFrame1.height == HAUTEUR - GRILLE + 4 * 44 + 3 * 5, \
+        "la hauteur ne suit pas la taille des cases"
+    assert premier.width == 44, "la case n'a pas change de taille"
+    g.ForeverUI.BagsSet("emplacement", 37)
 
     # le contour suit la qualite de l'objet
     lua.execute("""
@@ -1272,9 +1300,8 @@ def main():
     pt2 = tri.points[len(list(tri.points.values()))]
     print("champ ancre %s (%s, %s) | tri ancre %s (%s, %s)" % (
         pc[1], pc[4], pc[5], pt2[1], pt2[4], pt2[5]))
-    assert pc[1] == "BOTTOMLEFT" and pc[4] == 8, "le champ ne cale pas a gauche de sa bande"
-    assert pt2[1] == "BOTTOMRIGHT" and pt2[4] == -8, "le tri ne cale pas a droite de sa bande"
-    assert pc[5] == pt2[5], "les deux ne sont pas sur la meme bande"
+    assert (pc[1], pc[4], pc[5]) == ("TOPLEFT", 42, -37), "le champ n'est pas a la place de la source"
+    assert (pt2[1], pt2[4], pt2[5]) == ("TOPRIGHT", -9, -34), "le tri n'est pas a la place de la source"
 
     # la recherche : le pain reste, l'epee se voile
     lua.execute("""
