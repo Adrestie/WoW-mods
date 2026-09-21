@@ -1151,6 +1151,16 @@ def main():
         len(list(panneau.fond.values())),
         ", ".join(sorted(k for k in dict(panneau).keys() if str(k).startswith("coin")))))
     assert panneau.coinHautGauche is not None and panneau.bordBas is not None
+    # HeldBagLayout, au pixel pres : chaque coin porte son decalage, et les
+    # huit morceaux sont en OVERLAY.
+    COINS = {"coinHautGauche": (-13, 16), "coinHautDroit": (4, 16),
+             "coinBasGauche": (-13, -3), "coinBasDroit": (4, -3)}
+    for cle, (x, y) in sorted(COINS.items()):
+        t = panneau[cle]
+        pt = t.points[1]
+        print("   %-15s %s (%s, %s) en %s" % (cle, pt[1], pt[4], pt[5], t.layer))
+        assert (pt[4], pt[5]) == (x, y), "%s ne suit pas HeldBagLayout" % cle
+        assert t.layer == "OVERLAY", "HeldBagLayout declare %s en OVERLAY" % cle
 
     # Le portrait passe SOUS le metal, dont le trou lui sert de masque : il
     # est cree apres le fond, dans le meme calque, donc au-dessus de lui, et
@@ -1164,19 +1174,26 @@ def main():
     assert portrait.width == 20, "le carre doit remplir le trou de 18 sans deborder du metal"
     assert pt[3] == "TOPLEFT" and pt[4] == 14 and pt[5] == -17,         "le portrait n'est pas centre sur le trou de l'anneau"
     assert portrait.layer == fond.layer, "le portrait doit etre dans le calque du fond"
-    assert sac.foreverPanel.coinHautGauche.layer != portrait.layer,         "le metal doit etre dans un calque au-dessus, c'est lui le masque"
+    assert sac.foreverPanel.coinHautGauche.layer == "OVERLAY",         "HeldBagLayout declare ses morceaux en OVERLAY"
+    assert portrait.layer == "BACKGROUND", "le portrait reste sous le metal, son masque"
 
     # UpdateName / UpdateMiscellaneousFrames : le nom et l'icone viennent du
     # sac, et se refont a chaque passage du client.
     g.HOOKS["ContainerFrame_GenerateFrame"](sac)
-    titre = g["ContainerFrame1Name"]
-    print("titre : \"%s\" (du client, pas du code) | ancre %s (%s) a %s (%s)" % (
-        titre.text, titre.points[1][1], titre.points[1][4],
-        titre.points[2][1], titre.points[2][4]))
+    assert g["ContainerFrame1Name"].alpha == 0, "l'ancien titre doit s'effacer"
+    bande = sac.foreverBandeTitre
+    titre = sac.foreverTitre
+    b1, b2 = bande.points[1], bande.points[2]
+    print("titre : \"%s\" (du sac, pas du code) | bande %s (%s) a %s (%s), %d de haut, niveau +%d" % (
+        titre.text, b1[1], b1[4], b2[1], b2[4], bande.height,
+        bande.GetFrameLevel(bande) - sac.GetFrameLevel(sac)))
     assert titre.text == "Sac a dos", "le nom ne vient pas de GetBagName"
-    assert titre.points[1][4] == 35, "SetTitleOffsets(35) donne 35 a gauche"
-    assert titre.points[2][4] == -24, "la valeur par defaut a droite est -24"
+    assert b1[4] == 35 and b1[5] == -1, "SetTitleOffsets(35) : TOPLEFT (35, -1)"
+    assert b2[4] == -24 and b2[5] == -1, "la valeur par defaut a droite est -24"
+    assert bande.height == 20, "TitleContainer fait 20 de haut"
+    assert titre.points[1][5] == -5, "TitleText est ancre TOP (0, -5) dans son conteneur"
     assert titre.justify == "CENTER", "le titre se centre dans son conteneur"
+    assert bande.GetFrameLevel(bande) > sac.GetFrameLevel(sac),         "le titre doit etre un cadre fils : le metal est en OVERLAY"
     print("   portrait du sac a dos : %s, rognage %s (aucun : le metal masque)" % (
         portrait.texture, [round(v, 2) for v in portrait.texcoord.values()]))
     assert [round(v, 2) for v in portrait.texcoord.values()] == [0, 1, 0, 1],         "l'icone n'est pas rognee : c'est le trou du metal qui la decoupe"

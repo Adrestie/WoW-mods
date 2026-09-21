@@ -186,11 +186,22 @@ emploie ses propres écarts, plus serrés : ses sacs se chevauchaient de quelque
 pixels. `EditModeUtil:GetRightActionBarWidth()` n'existant pas, la largeur est
 prise sur `MultiBarRight` et `MultiBarLeft` quand elles sont affichées.
 
-**Écart connu, non corrigé :** `HeldBagLayout` place ses coins en
-`TopLeft (−13, 16)`, `TopRight (4, 16)`, `BottomLeft (−13, −3)`,
-`BottomRight (4, −3)`, tous en `OVERLAY`. `AtlasUtil.PANNEAU_COINS` emploie
-`(2, 16)` et `(−13/2, −8)`, en `BORDER`. Le rendu a été validé en jeu avec ces
-valeurs ; elles ne seront pas touchées sans accord.
+**`HeldBagLayout` est recopié au pixel près** : `TopLeft (−13, 16)`,
+`TopRight (4, 16)`, `BottomLeft (−13, −3)`, `BottomRight (4, −3)`, et les huit
+morceaux en **`OVERLAY`**. Les valeurs approchées d'avant (`(2, 16)`,
+`(−13/2, −8)`, en `BORDER`) sont abandonnées.
+
+Le calque a une conséquence : en `OVERLAY`, le métal couvre **toute région du
+cadre lui-même**. La source s'en accommode parce qu'elle range ce qui doit
+rester visible dans des **cadres fils** — `TitleContainer` à `frameLevel` 510,
+`PortraitContainer` — et un cadre fils se dessine au-dessus des régions de son
+parent quel que soit leur calque. Le titre est donc reproduit tel quel : un
+cadre de 20 de haut, de 35 à la largeur moins 24, posé à −1, contenant un
+`FontString` ancré `TOP (0, −5)`, `LEFT` et `RIGHT`. Le titre du client, simple
+région, s'efface. Le portrait, lui, reste **sous** le métal, qui lui sert de
+masque (voir plus haut) ; les boutons d'objet, la bourse, le champ de recherche
+et le bouton de fermeture sont déjà des cadres fils et passent devant sans rien
+changer.
 
 **Non reproduit :** `NineSliceUtil.UpdateCornerCropping(self, height)`, que
 `UpdateFrameSize` appelle pour rogner les coins d'une fenêtre trop courte. Sans

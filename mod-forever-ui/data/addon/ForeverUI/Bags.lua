@@ -130,7 +130,9 @@ local R = {
 	-- LES DECORS DU CADRE
 	titreGauche = 35,       -- SetTitleOffsets(35) : le bord gauche du titre
 	titreDroite = -24,      -- la valeur par defaut de SetTitleOffsets
-	titreHaut = -6,         -- le conteneur a -1, le texte a -5 dedans
+	titreConteneur = -1,    -- TitleContainer : TOPLEFT / TOPRIGHT a -1
+	titreBande = 20,        -- sa hauteur
+	titreTexte = -5,        -- TitleText : TOP (0, -5) dans le conteneur
 	fermeture = 24,
 	fermetureX = 1,
 	fermetureY = 0,
@@ -271,7 +273,7 @@ local function habillerCadre(cadre)
 	-- fond : deux regions d'un meme calque ne sont ordonnees que par leur
 	-- ordre de creation, elle passe donc au-dessus du fond -- ce qui manquait
 	-- au portrait du client, cree au chargement -- et reste sous le metal,
-	-- qui est en BORDER et lui sert de masque.
+	-- qui est en OVERLAY et lui sert de masque.
 	local ancien = _G[nom .. "Portrait"]
 	if ancien then
 		ancien:SetAlpha(0)
@@ -284,17 +286,32 @@ local function habillerCadre(cadre)
 	cadre.foreverPortrait = portrait
 
 	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
-	-- avec 35 : le conteneur du titre va de 35 a la largeur moins 24, et son
-	-- texte y est centre, a 5 px de son haut place a -1. Le titre n'est donc
-	-- PAS centre sur la fenetre : il l'est entre le portrait et le bouton de
-	-- fermeture, dont la largeur est ainsi prise en compte.
-	local titre = _G[nom .. "Name"]
-	if titre then
-		titre:ClearAllPoints()
-		titre:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.titreGauche, R.titreHaut)
-		titre:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", R.titreDroite, R.titreHaut)
-		titre:SetJustifyH("CENTER")
+	-- avec 35, et le modele TitleContainer : un CADRE de 20 de haut allant de
+	-- 35 a la largeur moins 24, pose a -1, contenant un TitleText ancre TOP
+	-- (0, -5), LEFT et RIGHT. Le titre n'est donc PAS centre sur la fenetre :
+	-- il l'est entre le portrait et le bouton de fermeture, dont la largeur
+	-- est ainsi prise en compte.
+	--
+	-- C'est un cadre FILS, et il le faut : le metal de HeldBagLayout est en
+	-- OVERLAY et couvrirait une simple region du cadre. Le titre du client,
+	-- qui en est une, s'efface.
+	local ancienTitre = _G[nom .. "Name"]
+	if ancienTitre then
+		ancienTitre:SetAlpha(0)
 	end
+
+	local bandeTitre = CreateFrame("Frame", nil, cadre)
+	bandeTitre:SetFrameLevel(cadre:GetFrameLevel() + 2)
+	bandeTitre:SetHeight(R.titreBande)
+	bandeTitre:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.titreGauche, R.titreConteneur)
+	bandeTitre:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", R.titreDroite, R.titreConteneur)
+	local titre = bandeTitre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	titre:SetPoint("TOP", bandeTitre, "TOP", 0, R.titreTexte)
+	titre:SetPoint("LEFT", bandeTitre, "LEFT")
+	titre:SetPoint("RIGHT", bandeTitre, "RIGHT")
+	titre:SetJustifyH("CENTER")
+	cadre.foreverBandeTitre = bandeTitre
+	cadre.foreverTitre = titre
 
 	-- Le bouton de fermeture : 24 x 24, TOPRIGHT (1, 0), le X rouge des
 	-- panneaux modernes (UIPanelCloseButtonNoScripts, atlas RedButton-Exit).
@@ -851,7 +868,7 @@ end
 -- RELEVE -- ContainerFrameMixin:UpdateName et UpdateMiscellaneousFrames.
 local function majEntete(cadre)
 	-- UpdateName : le nom vient du SAC, il n'est jamais ecrit ici.
-	local titre = _G[cadre:GetName() .. "Name"]
+	local titre = cadre.foreverTitre
 	if titre and GetBagName then
 		titre:SetText(GetBagName(cadre:GetID()) or "")
 	end

@@ -235,22 +235,27 @@ end
 -- feuille entiere.
 local PANNEAU_FOND = { 16 / 255, 14 / 255, 12 / 255, 1 }
 
--- L'art de metal se pose en BORDER et non en OVERLAY comme chez le client
--- moderne : celui-ci range son portrait et son titre dans des cadres fils a
--- niveau eleve, alors que 3.3.5 en fait de simples regions du cadre
--- (portrait en BACKGROUND, titre en ARTWORK). En OVERLAY, le metal les
--- recouvrait tous les deux.
-local PANNEAU_COUCHE = "BORDER"
+-- RELEVE -- HeldBagLayout (blizzard_sharedxml/mainline/nineslicelayouts.lua) :
+-- les huit morceaux sont declares en OVERLAY, et chaque coin porte son
+-- decalage. Tout est recopie ici tel quel.
+--
+-- Ce que cela impose : en OVERLAY, le metal couvre toute region du cadre
+-- lui-meme. La source s'en accommode parce qu'elle range le titre et le
+-- portrait dans des CADRES FILS (TitleContainer a frameLevel 510,
+-- PortraitContainer) -- un cadre fils se dessine au-dessus des regions de
+-- son parent, quel que soit leur calque. Les appelants doivent donc en
+-- faire autant pour tout ce qui doit rester visible.
+local PANNEAU_COUCHE = "OVERLAY"
 
 local PANNEAU_COINS = {
 	{ cle = "coinHautGauche", nom = "ui-frame-portraitmetal-cornertopleftsmall",
 	  point = "TOPLEFT", x = -13, y = 16 },
 	{ cle = "coinHautDroit", nom = "ui-frame-metal-cornertopright",
-	  point = "TOPRIGHT", x = 2, y = 16 },
+	  point = "TOPRIGHT", x = 4, y = 16 },
 	{ cle = "coinBasGauche", nom = "ui-frame-metal-cornerbottomleft",
-	  point = "BOTTOMLEFT", x = -13, y = -8 },
+	  point = "BOTTOMLEFT", x = -13, y = -3 },
 	{ cle = "coinBasDroit", nom = "ui-frame-metal-cornerbottomright",
-	  point = "BOTTOMRIGHT", x = 2, y = -8 },
+	  point = "BOTTOMRIGHT", x = 4, y = -3 },
 }
 
 function ForeverUI.SetPanelArt(frame)
