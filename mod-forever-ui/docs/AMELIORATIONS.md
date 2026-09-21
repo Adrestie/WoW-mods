@@ -134,10 +134,23 @@ Seule la grille du **sac à dos** part de la bourse
 **Ce que 3.3.5 impose en plus.** Le client repose ses propres morceaux dans
 `ContainerFrame_Update` et dans `updateContainerFrameAnchors`, tous deux appelés
 bien après `ContainerFrame_GenerateFrame`. La mise en page est donc rejouée
-depuis ces deux fonctions et à chaque `BAG_UPDATE`, sans quoi la taille d'origine
-revient dès le premier objet ramassé. `/fui sacs` affiche, pour chaque sac
-ouvert, la hauteur calculée en regard de celle que le cadre porte réellement, et
-dit **DESACCORD** si quelque chose est repassé derrière nous.
+depuis ces deux fonctions et à chaque `BAG_UPDATE`.
+
+Cela n'a pas suffi : mesuré en jeu le 2026-09-21, le cadre portait **178 × 240**
+là où la formule donne 178 × 263. La largeur passait, la hauteur non — donc un
+`SetHeight` tardif, après toutes les accroches (240 = 4 rangées × 41 + 76, le
+pas de 3.3.5). Un **rattrapage** a donc été ajouté : un cadre nommé
+`ForeverUIBagsRecheck`, réveillé par les accroches, relit la mesure au premier
+`OnUpdate` et la repose si elle a bougé, puis se rendort. Il ne se réveille
+jamais lui-même : il ne peut donc pas tourner en boucle contre le client.
+
+`/fui sacs` affiche, pour chaque sac ouvert, la hauteur calculée en regard de
+celle que le cadre porte, dit **DESACCORD** le cas échéant, et ajoute alors un
+témoin : la hauteur relue *dans la foulée* du `SetHeight`, le nombre de fois où
+elle a été défaite, et la liste des ancrages du cadre. Deux causes se séparent
+ainsi sans supposition — relecture immédiate fausse = ce sont les ancrages qui
+imposent la hauteur ; relecture bonne mais valeur fausse ensuite = quelqu'un
+repasse derrière nous.
 
 **Non reproduit :** `NineSliceUtil.UpdateCornerCropping(self, height)`, que
 `UpdateFrameSize` appelle pour rogner les coins d'une fenêtre trop courte. Sans

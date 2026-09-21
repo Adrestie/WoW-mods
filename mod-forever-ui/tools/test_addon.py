@@ -150,6 +150,12 @@ function CreateFrame(kind, name, parent, template)
         if not p then return nil end
         return p[1], p[2], p[3], p[4], p[5]
     end
+    function f:GetNumPoints()
+        local n = 0
+        for _ in pairs(self.points) do n = n + 1 end
+        return n
+    end
+    function f:GetName() return self.name end
     if name then _G[name] = f end
     table.insert(frames, f)
     return f
@@ -1256,6 +1262,28 @@ def main():
     print("   apres un reagencement du client : %d de haut (rattrape)" % g.ContainerFrame1.height)
     assert g.ContainerFrame1.height == HAUTEUR, "le reagencement ne rattrape pas la taille"
 
+    # LE RATTRAPAGE A L'IMAGE SUIVANTE. Le jeu a montre 240 la ou la formule
+    # donne 263 : quelque chose repose la taille apres toutes les accroches.
+    # On rejoue ce cas -- la taille est defaite APRES notre passage -- et le
+    # rattrapage doit la remettre au premier OnUpdate.
+    g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame1)
+    g.ContainerFrame1.height = 240              # le client repasse derriere nous
+    veille = g.ForeverUIBagsRecheck
+    print("   le client defait la hauteur (240), rattrapage demande=%s" % veille.shown)
+    assert veille.shown, "le rattrapage n'a pas ete demande"
+    veille.scripts.OnUpdate(veille, 0.01)
+    print("   a l'image suivante : %d de haut, defaite %d fois, rattrapage rendormi=%s" % (
+        g.ContainerFrame1.height, g.ContainerFrame1.foreverDefaite or 0, not veille.shown))
+    assert g.ContainerFrame1.height == HAUTEUR, "le rattrapage n'a pas remis la mesure"
+    assert not veille.shown, "le rattrapage doit se rendormir, pas tourner a chaque image"
+
+    # Et quand rien n'a bouge, il ne touche a rien.
+    g.ContainerFrame1.foreverDefaite = 0
+    veille.Show(veille)
+    veille.scripts.OnUpdate(veille, 0.01)
+    print("   rien n'a bouge : defaite %d fois (0 attendu)" % (g.ContainerFrame1.foreverDefaite or 0))
+    assert (g.ContainerFrame1.foreverDefaite or 0) == 0, "le rattrapage repose une taille deja bonne"
+
     # Un reglage change, la fenetre suit.
     g.ForeverUI.BagsSet("emplacement", 44)
     print("   emplacement 37 -> 44 : fenetre %d x %d, case %d" % (
@@ -1330,7 +1358,7 @@ def main():
     """)
     g.ForeverUI.BagSort.Lancer()
     tic = g.ForeverUI.BagSort
-    horloge = [f for f in g.FRAMES.values() if f.scripts and f.scripts.OnUpdate][-1]
+    horloge = g.ForeverUIBagSortTicker          # nomme, plus de "le dernier cree"
     for _ in range(60):
         if not tic.actif:
             break

@@ -515,7 +515,7 @@ end
 local MAX_ETAPES = 400
 local tempsDepuisEtape = 0
 
-local horloge = CreateFrame("Frame")
+local horloge = CreateFrame("Frame", "ForeverUIBagSortTicker")
 horloge:Hide()
 horloge:SetScript("OnUpdate", function(self, elapsed)
 	tempsDepuisEtape = tempsDepuisEtape + elapsed
@@ -808,6 +808,16 @@ local function poserGrille(cadre)
 	cadre:SetWidth(m.largeur)
 	cadre:SetHeight(m.hauteur)
 
+	-- TEMOIN. On relit la hauteur DANS LA FOULEE. Deux cas se distinguent
+	-- ainsi, et un seul chiffre les separe :
+	--   la relecture ne rend pas ce qu'on vient de poser -> ce sont les
+	--     ancrages du cadre qui decident de sa hauteur, SetHeight est ignore
+	--   la relecture est bonne mais /fui sacs montre autre chose plus tard
+	--     -> quelqu'un repose la taille apres nous
+	cadre.foreverDemande = m.hauteur
+	cadre.foreverRelue = cadre:GetHeight()
+	cadre.foreverAncrages = cadre:GetNumPoints()
+
 	-- UpdateCurrencyFrames() : la bourse se pose avant la grille, qui
 	-- s'accroche a elle.
 	if m.sacADos and bourse then
@@ -847,6 +857,33 @@ local function poserGrille(cadre)
 	end
 end
 
+-- LE RATTRAPAGE. 3.3.5 repose la taille de ses cadres de sac a des moments
+-- que les accroches ne couvrent pas toutes (le client ouvre, ferme et
+-- reagence ses treize cadres entre eux). Un seul passage a l'image suivante
+-- relit la mesure et la repose si elle a bouge ; il ne se redemande que
+-- depuis les accroches, jamais depuis lui-meme, donc il ne tourne pas en
+-- boucle contre le client.
+local rattrapage = CreateFrame("Frame", "ForeverUIBagsRecheck")
+rattrapage:Hide()
+rattrapage:SetScript("OnUpdate", function(self)
+	self:Hide()
+	for _, cadre in ipairs(cadres) do
+		if cadre:IsShown() and (cadre.size or 0) > 1 then
+			local m = mesures(cadre)
+			if math.abs(cadre:GetHeight() - m.hauteur) > 0.5
+				or math.abs(cadre:GetWidth() - m.largeur) > 0.5 then
+				cadre.foreverDefaite = (cadre.foreverDefaite or 0) + 1
+				poserGrille(cadre)
+			end
+		end
+	end
+end)
+
+local function demanderRattrapage()
+	rattrapage:Show()
+end
+ForeverUI.BagsRecheck = demanderRattrapage
+
 ForeverUI.BagsLayout = poserOutils
 
 -- ------------------------------------------------------------- accroches
@@ -866,6 +903,7 @@ if hooksecurefunc then
 		poserGrille(cadre)
 		poserOutils()
 		Recherche.Tout()
+		demanderRattrapage()
 	end)
 
 	-- ContainerFrame_Update est rappele a chaque mise a jour de sac. Le
@@ -874,6 +912,7 @@ if hooksecurefunc then
 	hooksecurefunc("ContainerFrame_Update", function(cadre)
 		poserGrille(cadre)
 		Recherche.Appliquer(cadre)
+		demanderRattrapage()
 	end)
 
 	hooksecurefunc("ContainerFrame_OnHide", function()
@@ -891,10 +930,11 @@ if hooksecurefunc then
 				poserGrille(cadre)
 			end
 		end
+		demanderRattrapage()
 	end)
 end
 
-local veilleur = CreateFrame("Frame")
+local veilleur = CreateFrame("Frame", "ForeverUIBagsWatcher")
 veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
 veilleur:RegisterEvent("BAG_UPDATE")
 veilleur:SetScript("OnEvent", function()
@@ -906,6 +946,7 @@ veilleur:SetScript("OnEvent", function()
 	end
 	poserOutils()
 	Recherche.Tout()
+	demanderRattrapage()
 end)
 
 -- Refaire toute la mise en page apres un changement de reglage.
@@ -938,7 +979,29 @@ ForeverUI.BagsDebug = function()
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				"   calcule %d x %d = grille %d + comble %d + extra %d | le cadre porte %.0f x %.0f  %s",
 				m.largeur, m.hauteur, m.grille, m.comble, m.extra, reelleL, reelleH,
-				accord and "|cff44ff44ACCORD|r" or "|cffff4444DESACCORD : le client repose la taille|r"))
+				accord and "|cff44ff44ACCORD|r" or "|cffff4444DESACCORD|r"))
+
+			if not accord then
+				-- Le temoin dit LEQUEL des deux cas on tient.
+				DEFAULT_CHAT_FRAME:AddMessage(string.format(
+					"   temoin : pose %s, relu aussitot %s, defaite %s fois -> %s",
+					tostring(cadre.foreverDemande), tostring(cadre.foreverRelue),
+					tostring(cadre.foreverDefaite or 0),
+					(cadre.foreverRelue and cadre.foreverDemande
+						and math.abs(cadre.foreverRelue - cadre.foreverDemande) < 0.5)
+						and "|cffff4444quelqu'un repose la taille APRES nous|r"
+						or "|cffff4444les ancrages du cadre imposent sa hauteur|r"))
+
+				local lignes = string.format("   %d ancrage(s) :", cadre:GetNumPoints())
+				for index = 1, cadre:GetNumPoints() do
+					local point, cible, pointCible, x, y = cadre:GetPoint(index)
+					lignes = lignes .. string.format(" [%s sur %s de %s, %d, %d]",
+						tostring(point), tostring(pointCible),
+						cible and (cible.GetName and cible:GetName() or "?") or "l'ecran",
+						x or 0, y or 0)
+				end
+				DEFAULT_CHAT_FRAME:AddMessage(lignes)
+			end
 		end
 	end
 
