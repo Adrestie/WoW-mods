@@ -105,7 +105,6 @@ local R = {
 	bourseCadre = 17,       -- camelot 17 : l'encadre deborde de la bourse
 	bourseCote = 8,         -- camelot 8  : marge gauche et droite
 	bourseBas = 8,          -- camelot 8  : au-dessus du bord inferieur
-	ecartGrilleBourse = 1,  -- entre la derniere rangee et l'encadre
 
 	-- le bouton de fermeture
 	fermeture = 24,         -- camelot 24
@@ -117,9 +116,11 @@ local R = {
 	portraitX = 13.5,
 	portraitY = -14,
 
-	-- la grille dans la hauteur
-	grilleCentree = 1,      -- 1 = autant d'air au-dessus qu'en dessous de la
-	                        -- grille ; 0 = serree comme chez camelot
+	-- LA GRILLE EST COLLEE EN BAS. Ce nombre la remonte : c'est la distance
+	-- entre le bas de la fenetre et le bas de la grille. A 24, la derniere
+	-- rangee se pose 1 px au-dessus de l'encadre de la bourse
+	-- (8 du bord + 13 de bourse + 2 de debord + 1). La fenetre suit.
+	grilleBas = 24,
 
 	-- l'ensemble
 	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
@@ -760,26 +761,13 @@ local function poserGrille(cadre)
 	local sacADos = cadre:GetID() == 0
 	local bourse = _G[nom .. "MoneyFrame"]
 
-	-- L'encadre de la bourse deborde d'elle, moitie en haut, moitie en bas.
-	local depassement = (R.bourseCadre - R.bourseHauteur) / 2
+	-- La grille est collee en bas : grilleBas la remonte sur le sac a dos,
+	-- margeBas sur un sac porte, qui n'a pas de bourse.
+	local basGrille = sacADos and R.grilleBas or R.margeBas
 
-	-- Ce qu'il faut au minimum sous la grille : la marge seule pour un sac
-	-- porte, la bourse et son encadre pour le sac a dos.
-	local basGrille = R.margeBas
-	if sacADos then
-		basGrille = R.bourseBas + R.bourseHauteur + depassement + R.ecartGrilleBourse
-	end
-
-	-- Ce qu'il faut au-dessus : la bande de titre, plus celle du champ de
-	-- recherche sur le sac a dos.
+	-- Au-dessus : la bande de titre, plus celle du champ de recherche sur le
+	-- sac a dos.
 	local hautGrille = R.entete + (sacADos and R.bandeRecherche or 0)
-
-	-- Grille centree : on prend la plus grande des deux et on la met des deux
-	-- cotes. La fenetre grandit d'autant, la bourse garde sa place en bas.
-	if R.grilleCentree == 1 then
-		local air = math.max(hautGrille, basGrille)
-		hautGrille, basGrille = air, air
-	end
 
 	cadre:SetScale(R.echelle)
 	cadre:SetWidth(largeurGrille + 2 * R.margeCote)

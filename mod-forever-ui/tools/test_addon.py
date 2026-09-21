@@ -1146,16 +1146,23 @@ def main():
     # marge de chaque cote, 48 d'entete plus 30 pour la bande de recherche,
     # et sous la grille la bourse (8 + 13), son encadre qui deborde de 2, et
     # 1 d'ecart.
-    # grille centree : 78 d'air au-dessus (entete 48 + bande 30) et autant en
-    # dessous, pour 163 de grille.
-    print("fenetre du sac a dos : %d x %d (179 x 319, grille centree)" % (
+    # la grille est collee en bas, remontee de grilleBas : 78 d'entete,
+    # 163 de grille, 24 dessous.
+    print("fenetre du sac a dos : %d x %d (179 x 265, grille collee en bas)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height))
     assert g.ContainerFrame1.width == 179, "la largeur ne suit pas les reglages"
-    assert g.ContainerFrame1.height == 319, "la grille n'est pas centree en hauteur"
+    assert g.ContainerFrame1.height == 265, "la hauteur ne suit pas les reglages"
 
     premier_bas = g.ContainerFrame1Item1.points[len(list(g.ContainerFrame1Item1.points.values()))][5]
-    print("   air sous la grille : %s (autant que l'entete)" % premier_bas)
-    assert premier_bas == 78, "l'air sous la grille n'egale pas l'entete"
+    print("   la grille est a %s du bas" % premier_bas)
+    assert premier_bas == 24, "la grille n'est pas posee a grilleBas du bas"
+
+    g.ForeverUI.BagsSet("grilleBas", 40)
+    hauteur = g.ContainerFrame1.height
+    bas = g.ContainerFrame1Item1.points[len(list(g.ContainerFrame1Item1.points.values()))][5]
+    print("   grilleBas a 40 -> grille a %s du bas, fenetre %s de haut" % (bas, hauteur))
+    assert bas == 40 and hauteur == 281, "grilleBas ne remonte pas la grille"
+    g.ForeverUI.BagsSet("grilleBas", 24)
 
     # un reglage change, la fenetre suit
     g.ForeverUI.BagsSet("emplacement", 44)
@@ -1190,7 +1197,7 @@ def main():
         g.ContainerFrame2:SetID(1) if False else None
         g.ContainerFrame2.id = 1          # un sac porte, pas le sac a dos
         g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
-        attendu = rangees * 37 + (rangees - 1) * 5 + 2 * 48
+        attendu = rangees * 37 + (rangees - 1) * 5 + 48 + 9
         print("      %2d emplacements (%d rangees) -> %d de haut (%d attendu)" % (
             taille, rangees, g.ContainerFrame2.height, attendu))
         assert g.ContainerFrame2.height == attendu, "la fenetre ne suit pas son contenu"
