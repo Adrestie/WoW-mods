@@ -128,10 +128,13 @@ local R = {
 	triY = -34,
 
 	-- LES DECORS DU CADRE
+	titreGauche = 35,       -- SetTitleOffsets(35) : le bord gauche du titre
+	titreDroite = -24,      -- la valeur par defaut de SetTitleOffsets
+	titreHaut = -6,         -- le conteneur a -1, le texte a -5 dedans
 	fermeture = 24,
 	fermetureX = 1,
 	fermetureY = 0,
-	portrait = 34,
+	portrait = 36,          -- SetPortraitTextureSizeAndOffset(36, -4, 1)
 	portraitX = 13.5,
 	portraitY = -14,
 
@@ -150,6 +153,14 @@ local SACS = { 0, 1, 2, 3, 4 }          -- sac a dos et les quatre sacs portes
 local SEP = string.char(92)
 local SURVOL_CARRE = "Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square"
 local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
+
+-- RELEVE -- ContainerFrameMixin:UpdateMiscellaneousFrames : le sac a dos
+-- porte Inv_misc_bag_08, le trousseau une icone a lui, et un sac porte
+-- montre l'icone de l'objet qu'il est.
+local PORTRAIT_SAC_A_DOS = "Interface" .. SEP .. "Icons" .. SEP .. "INV_Misc_Bag_08"
+-- ECART : camelot demande "Interface/Icons/ui-hud-actionbar-keyring", qui
+-- n'existe pas en 3.3.5 ; le client y range son trousseau ici.
+local PORTRAIT_TROUSSEAU = "Interface" .. SEP .. "ContainerFrame" .. SEP .. "KeyRing-Bag-Icon"
 
 -- MESURE SUR LA CAPTURE. camelot pose un cadre sur CHAQUE case, pleine ou
 -- vide : gris sombre, bords entre 25 et 49, coins vers 100. L'image porte ces
@@ -174,13 +185,13 @@ local function habillerBouton(bouton)
 
 	local nom = bouton:GetName()
 
-	-- Le cadre dore de 3.3.5 laisse la place a l'emplacement moderne, qui est
-	-- le fond d'une case vide chez camelot (emptyBackgroundAtlas).
+	-- RELEVE -- SetItemButtonTexture_Base (itembuttontemplate.lua) : quand la
+	-- case est vide, emptyBackgroundAtlas est pose SUR L'ICONE elle-meme, et
+	-- non derriere. Il n'y a jamais deux textures superposees. L'art dore de
+	-- 3.3.5, lui, s'efface : camelot n'a pas de cadre autour d'une case.
 	local normale = bouton:GetNormalTexture()
 	if normale then
-		ForeverUI.SetAtlas(normale, "bags-item-slot64", true)
-		normale:ClearAllPoints()
-		normale:SetAllPoints(bouton)
+		normale:SetAlpha(0)
 	end
 
 	local survol = bouton:GetHighlightTexture()
@@ -239,25 +250,41 @@ local function habillerCadre(cadre)
 	ForeverUI.SetPanelArt(cadre)
 
 	-- Le portrait se pose dans l'anneau du coin haut gauche. L'anneau est
-	-- centre a 13,5 px du bord gauche et 14 px sous le haut (mesure sur
-	-- l'image du coin), son trou fait 36 de diametre. 3.3.5 n'a pas de
-	-- masque : l'icone est rognee pour tenir dans le rond.
-	local portrait = _G[nom .. "Portrait"]
-	if portrait then
-		portrait:ClearAllPoints()
-		portrait:SetWidth(R.portrait)
-		portrait:SetHeight(R.portrait)
-		portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
-		portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-		portrait:SetDrawLayer("OVERLAY")
+	-- centre a 13,5 px du bord gauche et 14 px sous le haut, son trou fait 36
+	-- de diametre -- la taille que la source donne au portrait. 3.3.5 n'a pas
+	-- de masque : l'icone est rognee pour tenir dans le rond.
+	--
+	-- La source le range dans PortraitContainer, un CADRE FILS. On fait
+	-- pareil, et pour une raison precise : le fond du panneau est en
+	-- BACKGROUND comme le portrait du client, et deux regions d'un meme
+	-- calque ne sont ordonnees que par leur ordre de creation -- le fond,
+	-- cree apres, couvrait donc le portrait.
+	local ancien = _G[nom .. "Portrait"]
+	if ancien then
+		ancien:SetAlpha(0)
 	end
 
-	-- Le titre : centre dans la bande du haut, entre 58 et la largeur moins 24.
+	local anneau = CreateFrame("Frame", nil, cadre)
+	anneau:SetFrameLevel(cadre:GetFrameLevel() + 3)
+	anneau:SetWidth(R.portrait)
+	anneau:SetHeight(R.portrait)
+	anneau:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
+	local portrait = anneau:CreateTexture(nil, "ARTWORK")
+	portrait:SetAllPoints(anneau)
+	portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	cadre.foreverAnneau = anneau
+	cadre.foreverPortrait = portrait
+
+	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
+	-- avec 35 : le conteneur du titre va de 35 a la largeur moins 24, et son
+	-- texte y est centre, a 5 px de son haut place a -1. Le titre n'est donc
+	-- PAS centre sur la fenetre : il l'est entre le portrait et le bouton de
+	-- fermeture, dont la largeur est ainsi prise en compte.
 	local titre = _G[nom .. "Name"]
 	if titre then
 		titre:ClearAllPoints()
-		titre:SetPoint("TOPLEFT", cadre, "TOPLEFT", 58, -6)
-		titre:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", -24, -6)
+		titre:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.titreGauche, R.titreHaut)
+		titre:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", R.titreDroite, R.titreHaut)
 		titre:SetJustifyH("CENTER")
 	end
 
@@ -329,6 +356,25 @@ end
 
 -- Le voile de recherche ET le contour de qualite se decident au meme moment :
 -- les deux dependent de ce que la case contient.
+-- RELEVE -- SetItemButtonTexture_Base : une seule texture porte soit l'objet,
+-- soit le fond de case vide. 3.3.5 masque l'icone d'une case vide ; on la
+-- remontre avec l'element d'atlas, et on rend ses coordonnees pleines des
+-- qu'un objet revient.
+local function poserIcone(bouton, texture)
+	local icone = _G[bouton:GetName() .. "IconTexture"]
+	if not icone then
+		return
+	end
+
+	if texture then
+		icone:SetTexture(texture)
+		icone:SetTexCoord(0, 1, 0, 1)
+	else
+		ForeverUI.SetAtlas(icone, "bags-item-slot64", true)
+	end
+	icone:Show()
+end
+
 function Recherche.Appliquer(cadre)
 	local nom = cadre:GetName()
 	local sac = cadre:GetID()
@@ -337,6 +383,7 @@ function Recherche.Appliquer(cadre)
 		if bouton and bouton.foreverVoile then
 			local emplacement = bouton:GetID()
 			local lien = GetContainerItemLink(sac, emplacement)
+			poserIcone(bouton, GetContainerItemInfo(sac, emplacement))
 
 			if lien and not Recherche.Correspond(lien) then
 				bouton.foreverVoile:Show()
@@ -793,7 +840,35 @@ end
 -- RELEVE -- ContainerFrameMixin:UpdateFrameSize, GetInitialItemAnchor,
 -- GetAnchorLayout (grille BottomRightToTopLeft) et, pour le sac a dos,
 -- ContainerFrameBackpackMixin:GetInitialItemAnchor + UpdateCurrencyFrames.
+-- RELEVE -- ContainerFrameMixin:UpdateName et UpdateMiscellaneousFrames.
+local function majEntete(cadre)
+	-- UpdateName : le nom vient du SAC, il n'est jamais ecrit ici.
+	local titre = _G[cadre:GetName() .. "Name"]
+	if titre and GetBagName then
+		titre:SetText(GetBagName(cadre:GetID()) or "")
+	end
+
+	-- UpdateMiscellaneousFrames : sac a dos, trousseau, ou l'icone de l'objet
+	-- que le sac est.
+	local portrait = cadre.foreverPortrait
+	if portrait then
+		local id = cadre:GetID()
+		local texture
+		if id == 0 then
+			texture = PORTRAIT_SAC_A_DOS
+		elseif id == (KEYRING_CONTAINER or -2) then
+			texture = PORTRAIT_TROUSSEAU
+		elseif ContainerIDToInventoryID then
+			texture = GetInventoryItemTexture("player", ContainerIDToInventoryID(id))
+		end
+		portrait:SetTexture(texture)
+		portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	end
+end
+
 local function poserGrille(cadre)
+	majEntete(cadre)
+
 	local taille = cadre.size or 0
 	if taille <= 1 then
 		return                      -- le cadeau a un seul emplacement garde sa forme

@@ -406,6 +406,17 @@ function GetContainerItemInfo(sac, emplacement)
     local o = OBJETS[case.lien]
     return "icone", case.nombre, false, (o and o.qualite) or 1, false
 end
+-- Le nom d'un sac vient du client : bag 0 = le mot traduit, les autres
+-- portent le nom de l'objet qu'ils sont.
+KEYRING_CONTAINER = -2
+NOMS_DE_SACS = { [0] = "Sac a dos", [-2] = "Trousseau de cles",
+                 [1] = "Sac en tisse-givre", [2] = "Sac de mineur" }
+function GetBagName(id) return NOMS_DE_SACS[id] end
+function ContainerIDToInventoryID(id) return 19 + id end
+function GetInventoryItemTexture(unite, emplacement)
+    if emplacement == 20 then return "icone_du_sac_1" end
+    return nil
+end
 function GetItemInfo(lien)
     local o = OBJETS[lien]
     if not o then return nil end
@@ -1139,17 +1150,47 @@ def main():
         ", ".join(sorted(k for k in dict(panneau).keys() if str(k).startswith("coin")))))
     assert panneau.coinHautGauche is not None and panneau.bordBas is not None
 
-    portrait = g["ContainerFrame1Portrait"]
-    pt = portrait.points[1]
-    print("portrait : %dx%d, %s sur %s (%.1f, %.1f), rogne a %.2f" % (
-        portrait.width, portrait.height, pt[1], pt[3], pt[4], pt[5], portrait.texcoord[1]))
-    assert portrait.width == 34 and pt[3] == "TOPLEFT" and abs(pt[4] - 13.5) < 0.01
+    # Le portrait est desormais dans un CADRE FILS, comme PortraitContainer :
+    # le fond du panneau est en BACKGROUND et le couvrait.
+    assert g["ContainerFrame1Portrait"].alpha == 0, "l'ancien portrait doit s'effacer"
+    anneau = sac.foreverAnneau
+    portrait = sac.foreverPortrait
+    pt = anneau.points[1]
+    print("portrait : %dx%d dans un cadre fils (niveau +%d), %s sur %s (%.1f, %.1f), rogne a %.2f" % (
+        anneau.width, anneau.height,
+        anneau.GetFrameLevel(anneau) - sac.GetFrameLevel(sac),
+        pt[1], pt[3], pt[4], pt[5], portrait.texcoord[1]))
+    assert anneau.width == 36, "SetPortraitTextureSizeAndOffset donne 36"
+    assert pt[3] == "TOPLEFT" and abs(pt[4] - 13.5) < 0.01
+    assert anneau.GetFrameLevel(anneau) > sac.GetFrameLevel(sac),         "le portrait doit passer au-dessus du fond"
+
+    # UpdateName / UpdateMiscellaneousFrames : le nom et l'icone viennent du
+    # sac, et se refont a chaque passage du client.
+    g.HOOKS["ContainerFrame_GenerateFrame"](sac)
+    titre = g["ContainerFrame1Name"]
+    print("titre : \"%s\" (du client, pas du code) | ancre %s (%s) a %s (%s)" % (
+        titre.text, titre.points[1][1], titre.points[1][4],
+        titre.points[2][1], titre.points[2][4]))
+    assert titre.text == "Sac a dos", "le nom ne vient pas de GetBagName"
+    assert titre.points[1][4] == 35, "SetTitleOffsets(35) donne 35 a gauche"
+    assert titre.points[2][4] == -24, "la valeur par defaut a droite est -24"
+    assert titre.justify == "CENTER", "le titre se centre dans son conteneur"
+    print("   portrait du sac a dos : %s" % portrait.texture)
+    assert portrait.texture and portrait.texture.lower().find("inv_misc_bag_08") >= 0,         "le sac a dos porte Inv_misc_bag_08"
+
+    sac.id = 1
+    g.HOOKS["ContainerFrame_GenerateFrame"](sac)
+    print("   sac porte : titre \"%s\", portrait %s" % (titre.text, portrait.texture))
+    assert titre.text == "Sac en tisse-givre", "un sac porte prend le nom de l'objet"
+    assert portrait.texture == "icone_du_sac_1", "un sac porte prend l'icone de l'objet"
+    sac.id = 0
+    g.HOOKS["ContainerFrame_GenerateFrame"](sac)
 
     bouton = g["ContainerFrame1Item1"]
-    print("emplacement : fond=%s | voile de recherche=%s" % (
-        bouton._normal.texture is not None, bouton.foreverVoile is not None))
+    print("emplacement : art dore efface (alpha %s) | voile de recherche=%s" % (
+        bouton._normal.alpha, bouton.foreverVoile is not None))
     assert bouton.foreverVoile is not None, "le voile de recherche manque"
-    assert bouton._normal.allPoints, "l'emplacement ne couvre pas le bouton"
+    assert bouton._normal.alpha == 0,         "l'art de 3.3.5 doit s'effacer : pose sur la NormalTexture il couvrait l'icone"
 
     # LA FORMULE DE CAMELOT, recopiee de ContainerFrameMixin :
     #   hauteur = rangees x 37 + (rangees-1) x 5 + comble + extra
@@ -1304,6 +1345,20 @@ def main():
     print("   fermeture : %d x %d, %s (%s, %s)" % (fermer.width, fermer.height, fpt[1], fpt[4], fpt[5]))
     assert fermer.width == 24 and fermer.height == 24, "le bouton de fermeture n'est pas en 24 x 24"
     assert fpt[4] == 1 and fpt[5] == 0, "le bouton de fermeture n'est pas au coin"
+
+    # SetItemButtonTexture_Base : UNE seule texture. Case pleine = l'icone de
+    # l'objet, coordonnees pleines ; case vide = l'element d'atlas, sur la
+    # meme texture. Rien ne se superpose, sinon l'icone passe derriere.
+    pleine = g.ContainerFrame1Item4IconTexture
+    vide2 = g.ContainerFrame1Item3IconTexture
+    print("   icone : case pleine %s %s | case vide %s %s" % (
+        pleine.texture, [round(v, 2) for v in pleine.texcoord.values()],
+        vide2.texture and vide2.texture.split(chr(92))[-1],
+        [round(v, 3) for v in vide2.texcoord.values()]))
+    assert pleine.texture == "icone" and pleine.shown, "la case pleine montre l'objet"
+    assert [round(v, 2) for v in pleine.texcoord.values()] == [0, 1, 0, 1],         "l'icone d'un objet prend toute la texture"
+    assert vide2.shown and vide2.texture != "icone", "la case vide montre le fond d'emplacement"
+    assert "foreverui" in vide2.texture.lower(),         "le fond d'une case vide est la feuille d'atlas, pas une texture du client"
 
     contour = g.ContainerFrame1Item4.foreverContour
     vide = g.ContainerFrame1Item3.foreverContour

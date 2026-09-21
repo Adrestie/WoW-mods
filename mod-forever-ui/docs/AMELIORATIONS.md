@@ -96,7 +96,8 @@ Elle montre aussi deux choses à garder en tête :
 | Point | Ce qui est fait | Pourquoi |
 |---|---|---|
 | Grille du sac à dos | descendue de 12 px, et le cadre grandi d'autant | 3.3.5 commence sa grille 48 px sous le haut du cadre, et le champ de recherche de camelot occupe cette bande (-37 à -55) |
-| Portrait du sac | icône carrée de 34 x 34, rognée à 8 % et posée dans l'anneau | 3.3.5 n'a pas de `MaskTexture` ; la source masque un portrait de 62 x 62 en rond |
+| Portrait du sac | icône carrée de 36 x 36, rognée à 8 % et posée dans l'anneau | 3.3.5 n'a pas de `MaskTexture` ; la source masque un portrait de 62 x 62 en rond. Taille et principe repris de `SetPortraitTextureSizeAndOffset(36, −4, 1)` et de `PortraitContainer`, un cadre fils |
+| Icône du trousseau | `Interface\ContainerFrame\KeyRing-Bag-Icon` | `UpdateMiscellaneousFrames` demande `Interface/Icons/ui-hud-actionbar-keyring`, qui n'existe pas en 3.3.5 |
 | Bouton de fermeture | celui de 3.3.5, à sa place d'origine | la source emploie `UIPanelCloseButtonDefaultAnchors`, non relevé |
 | Son du tri | aucun | la source joue `SOUNDKIT.UI_BAG_SORTING_01`, qui n'existe pas en 3.3.5 |
 | Ce que la recherche compare | nom, type et sous-type de l'objet | le client moderne fait la comparaison lui-même (`C_Container.SetItemSearch`) et sait aussi reconnaître la qualité ou l'emplacement d'équipement |
@@ -151,6 +152,29 @@ elle a été défaite, et la liste des ancrages du cadre. Deux causes se sépare
 ainsi sans supposition — relecture immédiate fausse = ce sont les ancrages qui
 imposent la hauteur ; relecture bonne mais valeur fausse ensuite = quelqu'un
 repasse derrière nous.
+
+**Le nom, le titre, le portrait et les icônes** viennent tous de la source :
+
+- `UpdateName` → `SetTitle(C_Container.GetBagName(bagID))`. Le nom est donc lu
+  sur le sac à chaque mise à jour (`GetBagName` en 3.3.5) : aucun mot n'est
+  écrit dans le code, et un sac porté affiche le nom de l'objet qu'il est.
+- `TitledPanelMixin:SetTitleOffsets`, que `ContainerFrame` appelle avec **35** :
+  le conteneur du titre va de 35 à la largeur moins 24, le texte y est centré,
+  à 5 px sous son haut placé à −1. Le titre n'est donc **pas** centré sur la
+  fenêtre — il l'est entre le portrait et le bouton de fermeture, dont la
+  largeur entre ainsi dans le calcul (centre à 94,5 pour une fenêtre de 178).
+- `UpdateMiscellaneousFrames` → sac à dos `Inv_misc_bag_08`, trousseau son
+  icône propre, sac porté `GetInventoryItemTexture` de l'objet. Le portrait est
+  posé dans un **cadre fils** de niveau supérieur, comme `PortraitContainer` :
+  le fond du panneau est en `BACKGROUND` comme le portrait du client et, deux
+  régions d'un même calque n'étant ordonnées que par leur ordre de création, le
+  fond — créé après — le couvrait entièrement.
+- `SetItemButtonTexture_Base` → **une seule texture par case** : l'icône de
+  l'objet, ou `bags-item-slot64` quand la case est vide, sur cette même icône.
+  Il n'y a jamais de fond derrière. Poser l'emplacement sur la `NormalTexture`,
+  comme c'était fait, le dessine **au-dessus** de l'icône en 3.3.5 : les objets
+  disparaissaient derrière leur propre emplacement. L'art doré d'époque est
+  simplement effacé.
 
 **Non reproduit :** `NineSliceUtil.UpdateCornerCropping(self, height)`, que
 `UpdateFrameSize` appelle pour rogner les coins d'une fenêtre trop courte. Sans
