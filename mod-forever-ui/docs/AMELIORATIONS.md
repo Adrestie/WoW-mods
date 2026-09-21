@@ -222,6 +222,44 @@ le bord gauche, tendu entre eux, se retrouve dessiné en travers du cadre. C'est
 la barre dorée qui coupait l'anneau du trousseau. Recalculé à chaque
 changement de hauteur, comme `UpdateFrameSize` le fait.
 
+### 1.9 La barre des postures
+
+Relevée de `mainline/StanceBar.xml`, `shared/StanceBar.lua`,
+`SmallActionButtonTemplate` et `SmallActionButtonMixin` :
+
+| Pièce | Valeur | Source |
+|---|---|---|
+| Bouton | 30 × 30 | `SmallActionButtonTemplate` |
+| Écart | 2, soit un pas de 32 | `minButtonPadding` |
+| Disposition | une rangée, 10 boutons au plus, vers la droite | `isHorizontal`, `numRows 1`, `numButtons 10`, `addButtonsToRight` |
+| Cadre normal / enfoncé | `-IconFrame` et `-IconFrame-Down`, **35 × 35**, en `OVERLAY`, `TOPLEFT` | `SmallActionButtonMixin:UpdateButtonArt` |
+| Survol, coché, bordure, éclat | **31,6 × 30,9**, `TOPLEFT` | `SmallActionButtonMixin_OnLoad` |
+| Coché | le survol en mélange `ADD` | `ActionButtonTemplate.xml` |
+| Emplacement vide | `-IconFrame-Background` + `-IconFrame-Slot` | `BaseActionButtonMixin:UpdateButtonArt` |
+| Raccourci | `TOPRIGHT (−3, −4)` | `hotkeyX` / `hotkeyY` |
+| Quantité | `BOTTOMRIGHT (−3, 1)` | `SmallActionButtonMixin_OnLoad` |
+| Recharge | `TOPLEFT (1,7 ; −1,7)` / `BOTTOMRIGHT (−1 ; 1)` sur l'icône | idem |
+| Forme active | le bouton est **coché** | `StanceBarMixin:UpdateState` |
+| Forme non lançable | icône teintée à **0,4** | idem |
+| Barre masquée | tant que `GetNumShapeshiftForms()` vaut 0 | `StanceBarMixin:Update` / `ShouldShow` |
+
+**Le piège, et il est sérieux :** `GetShapeshiftFormInfo` ne rend pas la même
+chose dans les deux clients. Le moderne donne
+`(texture, isActive, isCastable, spellID)`, **3.3.5 donne
+`(texture, nom, isActive, isCastable)`**. Recopier la source au mot près
+prendrait le nom de la forme pour son état actif : toutes les formes
+paraîtraient actives, et aucune lançable. Le harnais vérifie explicitement
+qu'une forme active est cochée et qu'une forme non lançable est grisée, pour
+que l'inversion ne puisse pas revenir.
+
+**Écarts assumés.** Le mode édition n'existe pas : la position se règle par
+`/fui`, et la barre s'aligne par défaut sur le bord gauche de la barre
+d'action, au-dessus des barres d'expérience et de réputation. Les boutons du
+client sont sécurisés : ils sont rhabillés, jamais recréés, et rien n'est
+redimensionné ni déplacé en combat.
+
+---
+
 ---
 
 ## 2. Ce que 3.3.5 ne sait pas faire

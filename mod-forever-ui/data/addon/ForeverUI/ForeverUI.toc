@@ -20,6 +20,7 @@ PlayerRunes.lua
 TargetFrame.lua
 CastBar.lua
 ActionBar.lua
+StanceBar.lua
 BottomBar.lua
 StatusBars.lua
 Bags.lua

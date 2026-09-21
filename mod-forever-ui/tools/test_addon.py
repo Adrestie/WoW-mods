@@ -90,6 +90,8 @@ function CreateFrame(kind, name, parent, template)
     end
     function f:SetButtonState(state) self.buttonState = state end
     function f:GetButtonState() return self.buttonState or "NORMAL" end
+    function f:SetChecked(v) self.checked = v and true or false end
+    function f:GetChecked() return self.checked end
     function f:GetCheckedTexture()
         if not self._checked then self._checked = newRegion("texture") end
         return self._checked
@@ -251,6 +253,23 @@ function NoPlayTime() return STATE.noPlayTime end
 function GetRuneCooldown(i) return STATE.runeStart, STATE.runeDuration, STATE.runeReady end
 function GetRuneType(i) return STATE.runeType end
 function CooldownFrame_SetTimer(cd, start, duration, enable) cd.timer = {start, duration, enable} end
+
+-- LES POSTURES. 3.3.5 rend (texture, NOM, active, lancable) la ou le client
+-- moderne rend (texture, active, lancable, sort) : le faux client suit la
+-- signature de 3.3.5, sinon il laisserait passer l'inversion.
+NUM_SHAPESHIFT_SLOTS = 10
+FORMES = {
+    { texture = "forme_ours", nom = "Forme d'ours", active = false, lancable = true },
+    { texture = "forme_felin", nom = "Forme de felin", active = true, lancable = true },
+    { texture = "forme_voyage", nom = "Forme de voyage", active = false, lancable = false },
+}
+function GetNumShapeshiftForms() return #FORMES end
+function GetShapeshiftFormInfo(i)
+    local f = FORMES[i]
+    if not f then return nil end
+    return f.texture, f.nom, f.active, f.lancable
+end
+function GetShapeshiftFormCooldown(i) return 0, 0, 0 end
 function CombatFeedback_Initialize(self, text, height) self.feedbackText = text end
 function CombatFeedback_OnCombatEvent(self, event, flags, amount, kind) self.lastHit = amount end
 function CombatFeedback_OnUpdate(self, elapsed) end
@@ -386,6 +405,25 @@ for i = 1, NUM_CONTAINER_FRAMES do
     end
 end
 
+-- la barre des postures du client : un cadre, dix boutons
+ShapeshiftBarFrame = CreateFrame("Frame", "ShapeshiftBarFrame", UIParent)
+for _, suffixe in ipairs({ "Left", "Middle", "Right" }) do
+    _G["ShapeshiftBar" .. suffixe] = ShapeshiftBarFrame:CreateTexture(
+        "ShapeshiftBar" .. suffixe, "ARTWORK")
+end
+for i = 1, NUM_SHAPESHIFT_SLOTS do
+    local nom = "ShapeshiftButton" .. i
+    local b = CreateFrame("CheckButton", nom, ShapeshiftBarFrame)
+    b:SetID(i)
+    _G[nom .. "Icon"] = b:CreateTexture(nom .. "Icon", "BORDER")
+    _G[nom .. "Cooldown"] = CreateFrame("Frame", nom .. "Cooldown", b)
+    _G[nom .. "FloatingBG"] = b:CreateTexture(nom .. "FloatingBG", "BACKGROUND")
+    _G[nom .. "HotKey"] = b:CreateFontString(nom .. "HotKey", "ARTWORK")
+    _G[nom .. "Count"] = b:CreateFontString(nom .. "Count", "ARTWORK")
+end
+function ShapeshiftBar_Update() end
+function ShapeshiftBar_UpdateState() end
+
 -- l'inventaire simule : SACS[sac][emplacement] = { lien, nombre }
 SACS = { [0] = {}, [1] = {}, [2] = {}, [3] = {}, [4] = {} }
 TAILLES = { [0] = 4, [1] = 4, [2] = 0, [3] = 0, [4] = 0 }
@@ -477,7 +515,8 @@ def main():
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
-             "CastBar.lua", "ActionBar.lua", "BottomBar.lua", "StatusBars.lua", "Bags.lua"]
+             "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "BottomBar.lua",
+             "StatusBars.lua", "Bags.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -1075,6 +1114,102 @@ def main():
     print("ancien fond du client efface : %s | porteur enregistre : %s" % (
         g["MainMenuBarTexture0"].alpha == 0,
         g.ForeverUI.Layout.systems["actionbar"] is not None))
+
+    # ------------------------------------------------ barre des postures
+    porteur = g.ForeverUIStanceBarHolder
+    b1 = g.ShapeshiftButton1
+    print("posture : bouton %d x %d (SmallActionButtonTemplate : 30)" % (b1.width, b1.height))
+    assert b1.width == 30 and b1.height == 30, "le bouton de posture fait 30"
+
+    p2 = g.ShapeshiftButton2.points[len(list(g.ShapeshiftButton2.points.values()))]
+    print("   pas entre boutons : %d (32 attendu : 30 + minButtonPadding 2)" % p2[4])
+    assert p2[4] == 32, "le pas n est pas 30 + 2"
+
+    print("   porteur : %d x %d pour %d formes, visible=%s" % (
+        porteur.width, porteur.height, g.GetNumShapeshiftForms(), porteur.shown))
+    assert porteur.width == 3 * 30 + 2 * 2, "la barre ne fait pas la largeur de ses formes"
+    assert porteur.shown, "la barre doit se montrer des qu il y a une forme"
+
+    cadre = b1.foreverCadre
+    pc = cadre.points[1]
+    print("   cadre : %s %.1f x %.1f en %s, ancre %s" % (
+        cadre.texture and "pose" or "absent", cadre.width, cadre.height, cadre.layer, pc[1]))
+    assert cadre.width == 35 and cadre.height == 35, "UpdateButtonArt ramene le petit cadre a 35"
+    assert cadre.layer == "OVERLAY" and pc[1] == "TOPLEFT"
+    assert b1._normal.alpha == 0, "la texture normale du client doit rester muette"
+
+    survol, coche = b1._highlight, b1._checked
+    print("   survol %.1f x %.1f en %s | coche %.1f x %.1f en %s" % (
+        survol.width, survol.height, survol.blend,
+        coche.width, coche.height, coche.blend))
+    for region, nom in ((survol, "survol"), (coche, "coche")):
+        assert abs(region.width - 31.6) < 0.01 and abs(region.height - 30.9) < 0.01, \
+            "SmallActionButtonMixin pose %s en 31,6 x 30,9" % nom
+    assert coche.blend == "ADD", "le coche est le survol en melange ADD"
+    assert survol.blend == "BLEND"
+
+    print("   emplacement vide : fond=%s + art=%s" % (
+        b1.foreverFond is not None, b1.foreverEmplacement is not None))
+    assert b1.foreverFond is not None and b1.foreverEmplacement is not None
+
+    raccourci = g["ShapeshiftButton1HotKey"].points[1]
+    quantite = g["ShapeshiftButton1Count"].points[1]
+    print("   raccourci %s (%s, %s) | quantite %s (%s, %s)" % (
+        raccourci[1], raccourci[4], raccourci[5], quantite[1], quantite[4], quantite[5]))
+    assert (raccourci[1], raccourci[4], raccourci[5]) == ("TOPRIGHT", -3, -4)
+    assert (quantite[1], quantite[4], quantite[5]) == ("BOTTOMRIGHT", -3, 1)
+
+    recharge = g["ShapeshiftButton1Cooldown"]
+    r1, r2 = recharge.points[1], recharge.points[2]
+    print("   recharge : %s (%s, %s) et %s (%s, %s)" % (
+        r1[1], r1[4], r1[5], r2[1], r2[4], r2[5]))
+    assert (r1[4], r1[5]) == (1.7, -1.7) and (r2[4], r2[5]) == (-1, 1), \
+        "la recharge n est pas en retrait de l icone comme dans la source"
+
+    # LA SIGNATURE DE 3.3.5. GetShapeshiftFormInfo rend ici
+    # (texture, NOM, active, lancable) ; lire la source au mot pres
+    # prendrait le nom pour l etat actif.
+    i1 = g.ShapeshiftButton1.foreverIcone
+    i2 = g.ShapeshiftButton2.foreverIcone
+    i3 = g.ShapeshiftButton3.foreverIcone
+    print("   formes : 1 cochee=%s | 2 cochee=%s (active) | 3 teinte %s (non lancable)" % (
+        g.ShapeshiftButton1.checked, g.ShapeshiftButton2.checked,
+        [round(v, 2) for v in i3.vertex.values()] if i3.vertex else None))
+    assert i1.texture == "forme_ours", "l icone ne prend pas la texture de la forme"
+    assert not g.ShapeshiftButton1.checked and g.ShapeshiftButton2.checked, \
+        "c est la forme ACTIVE qui est cochee"
+    assert [round(v, 2) for v in i3.vertex.values()] == [0.4, 0.4, 0.4], \
+        "une forme non lancable est grisee a 0,4"
+    assert [round(v, 2) for v in i2.vertex.values()] == [1, 1, 1], \
+        "une forme lancable reste blanche"
+
+    # Sans forme, la barre disparait -- StanceBarMixin:ShouldShow.
+    lua.execute("FORMES_GARDEES = FORMES; FORMES = {}")
+    g.ForeverUI.StanceBar.Apply()
+    print("   sans aucune forme : visible=%s (masquee attendue)" % porteur.shown)
+    assert not porteur.shown, "la barre doit disparaitre quand il n y a aucune forme"
+    lua.execute("FORMES = FORMES_GARDEES")
+    g.ForeverUI.StanceBar.Apply()
+    assert porteur.shown
+
+    # En combat on ne touche a rien : cadres securises.
+    g.STATE.inLockdown = True
+    largeur = porteur.width
+    lua.execute("table.insert(FORMES, { texture = 'x', nom = 'x', active = false, lancable = true })")
+    g.ForeverUI.StanceBar.Apply()
+    print("   une forme de plus en combat : largeur %d (inchangee)" % porteur.width)
+    assert porteur.width == largeur, "rien ne doit bouger en combat"
+    g.STATE.inLockdown = False
+    g.ForeverUI.StanceBar.Apply()
+    print("   apres le combat : largeur %d pour 4 formes" % porteur.width)
+    assert porteur.width == 4 * 30 + 3 * 2, "la barre doit se refaire a la sortie du combat"
+    lua.execute("table.remove(FORMES)")
+    g.ForeverUI.StanceBar.Apply()
+
+    print("   ancien art efface : %s | porteur enregistre : %s" % (
+        g.ShapeshiftBarLeft.alpha == 0,
+        g.ForeverUI.Layout.systems["postures"] is not None))
+    assert g.ShapeshiftBarLeft.alpha == 0, "l art d epoque de la barre doit s effacer"
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu
