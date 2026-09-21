@@ -230,6 +230,25 @@ le bord gauche, tendu entre eux, se retrouve dessiné en travers du cadre. C'est
 la barre dorée qui coupait l'anneau du trousseau. Recalculé à chaque
 changement de hauteur, comme `UpdateFrameSize` le fait.
 
+### 1.8bis La barre bonus
+
+Celle qui **remplace** la barre de sorts quand le joueur change de posture
+(`BonusActionBarFrame`, `BonusActionButton1..12`). 3.3.5 la montre à une
+position à elle, d'où un décalage visible.
+
+Ses douze boutons sont donc posés sur **le même porteur** que la barre de
+sorts, aux mêmes places : la barre de remplacement suit alors la position du
+porteur, **y compris celle que le joueur a choisie** par `/fui`. Rien n'est
+reparenté — un bouton reste enfant de la barre du client, donc il suit sa
+visibilité (posture, véhicule, possession) ; seul son ancrage change.
+
+Deux conséquences assumées : la barre bonus de 3.3.5 **glisse** à l'écran en se
+déplaçant, or des boutons ancrés au porteur ne glissent plus — ils paraissent ;
+et son art d'époque (deux morceaux glissants) est effacé par le même balayage
+de régions que celui de la barre du familier.
+
+---
+
 ### 1.9 La barre des postures
 
 Relevée de `mainline/StanceBar.xml`, `shared/StanceBar.lua`,

@@ -471,6 +471,27 @@ for i = 1, NUM_CONTAINER_FRAMES do
     end
 end
 
+-- la barre bonus du client : celle qui remplace la barre de sorts quand le
+-- joueur change de posture, avec son art glissant
+BonusActionBarFrame = CreateFrame("Frame", "BonusActionBarFrame", UIParent)
+BonusActionBarTexture0 = BonusActionBarFrame:CreateTexture("BonusActionBarTexture0", "ARTWORK")
+BonusActionBarTexture1 = BonusActionBarFrame:CreateTexture("BonusActionBarTexture1", "ARTWORK")
+for i = 1, 12 do
+    local nom = "BonusActionButton" .. i
+    local b = CreateFrame("CheckButton", nom, BonusActionBarFrame)
+    b:SetID(i)
+    _G[nom .. "Icon"] = b:CreateTexture(nom .. "Icon", "BORDER")
+    _G[nom .. "IconTexture"] = _G[nom .. "Icon"]
+    _G[nom .. "Cooldown"] = CreateFrame("Frame", nom .. "Cooldown", b)
+    _G[nom .. "NormalTexture"] = b:CreateTexture(nom .. "NormalTexture", "ARTWORK")
+    _G[nom .. "HotKey"] = b:CreateFontString(nom .. "HotKey", "ARTWORK")
+    _G[nom .. "Count"] = b:CreateFontString(nom .. "Count", "ARTWORK")
+    _G[nom .. "Name"] = b:CreateFontString(nom .. "Name", "ARTWORK")
+    _G[nom .. "Border"] = b:CreateTexture(nom .. "Border", "OVERLAY")
+    _G[nom .. "Flash"] = b:CreateTexture(nom .. "Flash", "ARTWORK")
+    _G[nom .. "FloatingBG"] = b:CreateTexture(nom .. "FloatingBG", "BACKGROUND")
+end
+
 -- la barre des postures du client : un cadre, dix boutons
 ShapeshiftBarFrame = CreateFrame("Frame", "ShapeshiftBarFrame", UIParent)
 for _, suffixe in ipairs({ "Left", "Middle", "Right" }) do
@@ -1198,6 +1219,32 @@ def main():
     assert page.width == 17 and page.height == 34
     assert ph[4] == -4 and ph[5] == 9, "le bloc de pagination n est pas a gauche de la barre"
     assert ph_haut[5] == 10 and g.ActionBarDownButton.points[1][5] == -10
+    # LA BARRE BONUS -- celle qui remplace la barre de sorts quand le joueur
+    # change de posture -- prend exactement la meme place, donc suit aussi la
+    # position que le joueur a choisie pour le porteur.
+    principal = g.ActionButton3.points[len(list(g.ActionButton3.points.values()))]
+    bonus = g.BonusActionButton3.points[len(list(g.BonusActionButton3.points.values()))]
+    print("barre bonus : bouton 3 en %s (%s, %s) | barre de sorts en %s (%s, %s)" % (
+        bonus[1], bonus[4], bonus[5], principal[1], principal[4], principal[5]))
+    assert (bonus[1], bonus[4], bonus[5]) == (principal[1], principal[4], principal[5]),         "la barre bonus doit se poser exactement sur la barre de sorts"
+    assert bonus[2].name == principal[2].name == "ForeverUIActionBarHolder",         "les deux doivent s ancrer au meme porteur"
+    assert g.BonusActionButton1.width == 45, "ses boutons ont la taille des autres"
+    print("   art d'epoque de la barre bonus : %s et %s" % (
+        g.BonusActionBarTexture0.alpha, g.BonusActionBarTexture1.alpha))
+    assert g.BonusActionBarTexture0.alpha == 0 and g.BonusActionBarTexture1.alpha == 0,         "l art glissant d epoque doit disparaitre"
+
+    # le porteur deplace : la barre bonus suit, puisqu'elle y est ancree.
+    # On rend ensuite EXACTEMENT les valeurs d'avant -- la rangee du bas les
+    # recalcule au chargement, elles ne valent pas celles de Register.
+    avant = g.ForeverUI.Layout.systems["actionbar"].defaults
+    garde = (avant.point, avant.relativePoint, avant.x, avant.y)
+    g.ForeverUI.Layout.SetDefaults("actionbar", "BOTTOMRIGHT", "BOTTOM", -100, 200)
+    g.HOOKS["ActionButton_Update"](g.ActionButton1)
+    apres = g.BonusActionButton3.points[len(list(g.BonusActionButton3.points.values()))]
+    print("   porteur deplace : la barre bonus reste ancree a lui (%s)" % apres[1])
+    assert apres[2].name == "ForeverUIActionBarHolder",         "elle doit rester ancree au porteur, pas a l ecran"
+    g.ForeverUI.Layout.SetDefaults("actionbar", garde[0], garde[1], garde[2], garde[3])
+
     print("ancien fond du client efface : %s | porteur enregistre : %s" % (
         g["MainMenuBarTexture0"].alpha == 0,
         g.ForeverUI.Layout.systems["actionbar"] is not None))

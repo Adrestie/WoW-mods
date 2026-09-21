@@ -285,26 +285,39 @@ end
 local leftCap = createEndCap("ForeverUIActionBarLeftCap", "ui-hud-actionbar-gryphon-left", "BOTTOMRIGHT", "BOTTOMLEFT", 30)
 local rightCap = createEndCap("ForeverUIActionBarRightCap", "ui-hud-actionbar-gryphon-right", "BOTTOMLEFT", "BOTTOMRIGHT", -30)
 
+-- LA BARRE BONUS PREND LA MEME PLACE. Quand le joueur change de posture,
+-- 3.3.5 montre BonusActionBarFrame par-dessus la barre principale, a une
+-- position a lui -- d'ou le decalage. Ses douze boutons sont donc poses sur
+-- LE MEME PORTEUR, aux memes places : la barre de remplacement suit alors
+-- la position du porteur, y compris celle que le joueur a choisie par /fui.
+--
+-- On ne reparente rien : un bouton reste enfant de la barre du client, donc
+-- il suit sa visibilite (posture, vehicule, possession). Seul son ancrage
+-- change. La barre bonus de 3.3.5 glisse a l'ecran en se deplacant : ancres
+-- au porteur, ses boutons ne glissent plus, ils paraissent.
+local BARRES_POSEES = { "ActionButton", "BonusActionButton" }
+
 local function layoutButtons()
 	if InCombatLockdown() then
 		return
 	end
 
-	for index = 1, BUTTON_COUNT do
-		local button = _G["ActionButton" .. index]
-		if button then
-			-- On ne reparente pas : le bouton reste enfant de la barre du
-			-- client, donc il suit sa visibilite (vehicule, possession). Seul
-			-- son ancrage change.
-			button:ClearAllPoints()
-			button:SetPoint("LEFT", holder, "LEFT", (index - 1) * BUTTON_PITCH, 0)
+	for _, prefixe in ipairs(BARRES_POSEES) do
+		for index = 1, BUTTON_COUNT do
+			local button = _G[prefixe .. index]
+			if button then
+				button:ClearAllPoints()
+				button:SetPoint("LEFT", holder, "LEFT", (index - 1) * BUTTON_PITCH, 0)
 
-			if index > 1 and not dividers[index] then
-				local divider = ForeverUI.CreateDivider(holder, holder:GetFrameLevel() + 1)
-				divider:SetPoint("TOP", button, "TOP", 0, 0)
-				divider:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
-				divider:SetPoint("RIGHT", button, "LEFT", 5, 0)
-				dividers[index] = divider
+				-- Les separateurs appartiennent au porteur : une seule serie
+				-- suffit, posee sur la barre principale.
+				if prefixe == "ActionButton" and index > 1 and not dividers[index] then
+					local divider = ForeverUI.CreateDivider(holder, holder:GetFrameLevel() + 1)
+					divider:SetPoint("TOP", button, "TOP", 0, 0)
+					divider:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
+					divider:SetPoint("RIGHT", button, "LEFT", 5, 0)
+					dividers[index] = divider
+				end
 			end
 		end
 	end
@@ -323,7 +336,26 @@ local OLD_ART = {
 	"MainMenuBarTexture%d", "MainMenuXPBarTexture%d", "MainMenuMaxLevelBar%d",
 }
 
+-- L'art d'epoque de la barre bonus : deux morceaux glissants. On ne se fie
+-- pas a leurs noms -- toutes les regions du cadre lui-meme s'effacent, les
+-- boutons etant des cadres fils et non des regions.
+local function effacerArtBonus()
+	local barre = BonusActionBarFrame
+	if not barre or not barre.GetRegions then
+		return
+	end
+
+	local regions = { barre:GetRegions() }
+	for _, region in ipairs(regions) do
+		if region and region.GetObjectType and region:GetObjectType() == "Texture" then
+			region:SetAlpha(0)
+		end
+	end
+end
+
 local function hideOldBarArt()
+	effacerArtBonus()
+
 	for _, modele in ipairs(OLD_ART) do
 		for index = 0, 3 do
 			local texture = _G[string.format(modele, index)]
