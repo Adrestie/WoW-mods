@@ -1128,15 +1128,15 @@ def main():
     ppt = premier.points[len(list(premier.points.values()))]
     bourse = g.ContainerFrame1MoneyFrame
     bpt = bourse.points[len(list(bourse.points.values()))]
-    print("fenetre du sac a dos : %d x %d (178 x 263 attendu : 163 de grille + 57 + 30 + 13)" % (
+    print("fenetre du sac a dos : %d x %d (178 x 293 : tout l'air va dans l'entete)" % (
         g.ContainerFrame1.width, g.ContainerFrame1.height))
     assert g.ContainerFrame1.width == 178, "la fenetre n'a pas la largeur de camelot"
-    assert g.ContainerFrame1.height == 263, "la fenetre n'a pas la hauteur de camelot"
+    assert g.ContainerFrame1.height == 293, "la fenetre n'a pas la hauteur voulue"
 
     print("   premier bouton : %s sur %s (%s, %s) -- il pose sur la bourse" % (
         ppt[1], ppt[3], ppt[4], ppt[5]))
-    assert ppt[3] == "TOPRIGHT" and ppt[4] == 0 and ppt[5] == 4, (
-        "la grille ne pose pas sur la bourse")
+    assert ppt[3] == "TOPRIGHT" and ppt[4] == 0 and ppt[5] == 3, (
+        "la derniere rangee n'est pas a 1 px de l'encadre de la bourse")
 
     rangee2 = g.ContainerFrame1Item5
     r2 = rangee2.points[len(list(rangee2.points.values()))]
@@ -1151,6 +1151,20 @@ def main():
         bourse.foreverBorde == True))
     assert bourse.height == 13, "la bourse n'a pas la hauteur de camelot"
     assert bourse.foreverBorde, "la bourse n'a pas son encadre"
+
+    # la fenetre suit le nombre d'emplacements
+    print("   la fenetre suit son contenu :")
+    for taille, rangees in ((4, 1), (8, 2), (16, 4), (20, 5), (36, 9)):
+        g.ContainerFrame2.size = taille
+        g.ContainerFrame2:SetID(1) if False else None
+        g.ContainerFrame2.id = 1          # un sac porte, pas le sac a dos
+        g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
+        attendu = rangees * 37 + (rangees - 1) * 5 + 57
+        print("      %2d emplacements (%d rangees) -> %d de haut (%d attendu)" % (
+            taille, rangees, g.ContainerFrame2.height, attendu))
+        assert g.ContainerFrame2.height == attendu, "la fenetre ne suit pas son contenu"
+        assert g.ContainerFrame2.width == 178, "la largeur ne doit pas bouger"
+    g.ContainerFrame2.id = 0
 
     # le contour suit la qualite de l'objet
     lua.execute("""

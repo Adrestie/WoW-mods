@@ -41,12 +41,13 @@ LARGEUR = 178                       # CONTAINER_WIDTH
 REMPLISSAGE = 9 + 48                # GetPaddingHeight
 REMPLISSAGE_RECHERCHE = 30          # la bande du champ, sur le sac a dos
 BOURSE_H, BOURSE_BAS, BOURSE_COTE = 13, 8, 8
+AIR = 30                            # air ajoute, moitie haut moitie bas
 GRILLE_H = RANGEES * EMPLACEMENT + (RANGEES - 1) * ECART
 GRILLE_L = COLONNES * EMPLACEMENT + (COLONNES - 1) * ECART
-HAUTEUR = GRILLE_H + REMPLISSAGE + REMPLISSAGE_RECHERCHE + BOURSE_H
+HAUTEUR = GRILLE_H + REMPLISSAGE + REMPLISSAGE_RECHERCHE + BOURSE_H + AIR
 MARGE_COTE = BOURSE_COTE            # la grille s'aligne sur la bourse
 PAS_X = PAS_Y = EMPLACEMENT + ECART
-ENTETE = HAUTEUR - BOURSE_BAS - BOURSE_H - 4 - GRILLE_H
+ENTETE = HAUTEUR - BOURSE_BAS - BOURSE_H - (4 + AIR / 2) - GRILLE_H
 
 # camelot : HeldBagLayout, avec les corrections de NineSliceLayoutOverrides
 COINS = (

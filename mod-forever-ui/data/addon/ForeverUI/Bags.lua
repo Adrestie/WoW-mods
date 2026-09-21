@@ -94,7 +94,19 @@ local REMPLISSAGE_RECHERCHE = 30
 local MARGE_BAS = 9             -- GetFirstButtonOffsetY
 local BOURSE_H = 13
 local BOURSE_BAS, BOURSE_COTE = 8, 8
+
+-- AIR EN PLUS, sur le sac a dos. Les chiffres de camelot donnent une fenetre
+-- etriquee sur ce client. La hauteur ajoutee va TOUTE dans l'entete : la
+-- fenetre etant tenue par son bas, la grille ne bouge pas d'un pixel a
+-- l'ecran, c'est le haut qui monte. UN SEUL NOMBRE A REGLER.
+local AIR = 30
+
+-- L'encadre de la bourse depasse d'elle de deux pixels en haut comme en bas
+-- (17 de haut pour une bourse de 13). La derniere rangee se pose 1 px
+-- au-dessus de cet encadre.
 local BORDURE_BOURSE_H, BORDURE_BOURSE_BOUT = 17, 8
+local BORDURE_DEPASSE = (BORDURE_BOURSE_H - BOURSE_H) / 2
+local AIR_GRILLE_BOURSE = 1
 
 local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
 
@@ -658,7 +670,7 @@ local function poserGrille(cadre)
 	local bourse = _G[nom .. "MoneyFrame"]
 	local hauteur = hauteurGrille + REMPLISSAGE
 	if sacADos then
-		hauteur = hauteur + REMPLISSAGE_RECHERCHE + BOURSE_H
+		hauteur = hauteur + REMPLISSAGE_RECHERCHE + BOURSE_H + AIR
 	end
 	cadre:SetHeight(hauteur)
 
@@ -674,7 +686,8 @@ local function poserGrille(cadre)
 	if premier then
 		premier:ClearAllPoints()
 		if sacADos and bourse then
-			premier:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT", 0, 4)
+			premier:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT", 0,
+				BORDURE_DEPASSE + AIR_GRILLE_BOURSE)
 		else
 			premier:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -7, MARGE_BAS)
 		end
