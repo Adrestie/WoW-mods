@@ -96,6 +96,28 @@ local function silenceNormalTexture(button)
 	end
 end
 
+-- PIEGE 3.3.5. Ce n'est pas le fond de l'emplacement que le client masque,
+-- c'est LE BOUTON ENTIER : ActionButton_HideGrid le cache des que le
+-- compteur showgrid retombe a zero, et ce compteur ne monte que le temps
+-- d'un glisser-deposer (evenements ACTIONBAR_SHOWGRID / _HIDEGRID). Un
+-- emplacement vide disparait donc, et notre art avec lui.
+--
+-- On maintient le compteur a 1 : le client garde alors ses boutons vides
+-- affiches de lui-meme. Le Show de secours ne sert que si le bouton etait
+-- deja masque, et jamais en combat -- afficher un cadre securise y est
+-- interdit. Ce qui aurait ete masque pendant un combat revient a la sortie,
+-- PLAYER_REGEN_ENABLED etant deja surveille.
+local function garderGrille(button)
+	if not button or button:GetAttribute("statehidden") then
+		return
+	end
+
+	button.showgrid = math.max(button.showgrid or 0, 1)
+	if not button:IsShown() and not InCombatLockdown() then
+		button:Show()
+	end
+end
+
 local function skinButton(button)
 	if not button or button.foreverSkinned then
 		return
@@ -197,6 +219,7 @@ local function skinButton(button)
 		cooldown:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -3, 3)
 	end
 
+	garderGrille(button)
 	button.foreverSkinned = true
 end
 
@@ -353,7 +376,9 @@ end
 local function skinAll()
 	for _, prefix in ipairs(BARS) do
 		for index = 1, BUTTON_COUNT do
-			skinButton(_G[prefix .. index])
+			local button = _G[prefix .. index]
+			skinButton(button)
+			garderGrille(button)
 		end
 	end
 	hideOldBarArt()
@@ -365,6 +390,7 @@ if hooksecurefunc then
 	hooksecurefunc("ActionButton_Update", function(self)
 		if self and self.foreverSkinned then
 			silenceNormalTexture(self)
+			garderGrille(self)
 		end
 	end)
 
@@ -374,9 +400,11 @@ if hooksecurefunc then
 		end
 	end)
 
+	-- C'est ici que le bouton vide disparaissait.
 	hooksecurefunc("ActionButton_HideGrid", function(self)
 		if self and self.foreverSkinned then
 			silenceNormalTexture(self)
+			garderGrille(self)
 		end
 	end)
 end

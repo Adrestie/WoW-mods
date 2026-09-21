@@ -628,6 +628,7 @@ def main():
     g.STATE.inLockdown = True
     g.SlashCmdList["FOREVERUI"]("")
     print("mode edition refuse en combat : %s" % (not g.ForeverUI.Layout.editing))
+    g.STATE.inLockdown = False          # sinon tout ce qui suit tourne en combat
 
     # 10. etats : repos, combat, vehicule
     def etat(resting, combat, vehicle):
@@ -998,6 +999,30 @@ def main():
         g.HOOKS["ActionButton_Update"](bouton)
     print("apres une mise a jour du client : alpha=%.2f" % bouton._normal.alpha)
     assert bouton._normal.alpha == 0, "l'habillage ne survit pas a ActionButton_Update"
+
+    # L'EMPLACEMENT VIDE RESTE AFFICHE. 3.3.5 ne masque pas le fond mais LE
+    # BOUTON : ActionButton_HideGrid le cache des que showgrid retombe a
+    # zero, et ce compteur ne monte que le temps d'un glisser-deposer.
+    print("fond d'emplacement : %s + %s" % (
+        bouton.foreverBackground is not None, bouton.foreverSlot is not None))
+    assert bouton.foreverBackground is not None and bouton.foreverSlot is not None
+    bouton.Hide(bouton)
+    bouton.showgrid = 0
+    g.HOOKS["ActionButton_HideGrid"](bouton)
+    print("apres ActionButton_HideGrid : visible=%s, showgrid=%s" % (
+        bouton.shown, bouton.showgrid))
+    assert bouton.shown, "le bouton vide doit rester affiche"
+    assert (bouton.showgrid or 0) >= 1, "le compteur doit rester a 1"
+
+    # en combat on ne touche pas a un cadre securise
+    g.STATE.inLockdown = True
+    bouton.Hide(bouton)
+    g.HOOKS["ActionButton_HideGrid"](bouton)
+    print("meme chose en combat        : visible=%s (on n'y touche pas)" % bouton.shown)
+    assert not bouton.shown, "afficher un cadre securise en combat est interdit"
+    g.STATE.inLockdown = False
+    g.HOOKS["ActionButton_HideGrid"](bouton)
+    assert bouton.shown, "il doit revenir a la sortie du combat"
 
     # aucun bord de barre en pavage : cela etalerait la feuille d'atlas entiere
     for piece in (g.ForeverUI.ActionBarBorder,):
