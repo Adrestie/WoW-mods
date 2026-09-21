@@ -136,13 +136,24 @@ local R = {
 	fermeture = 24,
 	fermetureX = 1,
 	fermetureY = 0,
-	-- LE PORTRAIT, a sa taille et a sa place d'origine :
-	-- SetPortraitTextureSizeAndOffset(36, -4, 1). camelot le rend rond avec
-	-- PortraitContainer.CircleMask ; ici il n'est pas encore masque -- ses
-	-- coins depassent donc de l'anneau. RESTE A FAIRE.
-	portrait = 36,
-	portraitX = -4,
-	portraitY = 1,
+	-- LE PORTRAIT, a la maniere du client 3.3.5. Celui-ci ne masque JAMAIS
+	-- une icone : pour ses boutons de minimap il pose un anneau par-dessus
+	-- (MiniMap-TrackingBorder, une couronne opaque a trou transparent),
+	-- dessine l'icone assez petite pour tenir dans le trou, et la ROGNE de
+	-- sa bordure. C'est l'anneau qui fait le rond.
+	--
+	-- Ici l'anneau est celui de camelot, mesure au pixel a la taille ou il
+	-- est dessine : trou net jusqu'a 10,3 du centre, degrade jusqu'a 14,3,
+	-- metal OPAQUE de 14,3 a 20,4. Pour qu'un carre disparaisse, ses bords
+	-- doivent couvrir le degrade et ses coins tomber dans le metal :
+	--     cote / 2 >= 14,3               -> cote >= 28,6
+	--     (cote / 2) x racine(2) <= 20,4 -> cote <= 28,8
+	-- 28 est la seule taille qui tienne, et ses coins finissent SOUS le
+	-- metal -- mieux que les boutons de minimap, dont les coins flottent
+	-- dans le trou.
+	portrait = 28,
+	portraitX = 14,         -- le centre de l'anneau, mesure sur son art
+	portraitY = -17,        -- et le centre du portrait de la source
 
 	-- L'EMPILEMENT DES SACS -- UpdateContainerFrameAnchors, lignes 1372-1401
 	ecartSacs = 8,          -- CONTAINER_SPACING
@@ -169,6 +180,10 @@ local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SE
 -- RELEVE -- ContainerFrameMixin:UpdateMiscellaneousFrames : le sac a dos
 -- porte Inv_misc_bag_08, le trousseau une icone a lui, et un sac porte
 -- montre l'icone de l'objet qu'il est.
+-- RELEVE -- le rognage que le client applique a toute icone posee dans un
+-- anneau : une icone fait 64 px et porte 4 px de bordure sombre.
+local BORDURE_ICONE = 4 / 64
+
 local PORTRAIT_SAC_A_DOS = "Interface" .. SEP .. "Icons" .. SEP .. "INV_Misc_Bag_08"
 -- ECART : camelot demande "Interface/Icons/ui-hud-actionbar-keyring", qui
 -- n'existe pas en 3.3.5 ; le client y range son trousseau ici.
@@ -287,7 +302,7 @@ local function habillerCadre(cadre)
 	local portrait = cadre:CreateTexture(nil, "BORDER")
 	portrait:SetWidth(R.portrait)
 	portrait:SetHeight(R.portrait)
-	portrait:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.portraitX, R.portraitY)
+	portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
 	cadre.foreverPortrait = portrait
 
 	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
@@ -899,8 +914,12 @@ local function majEntete(cadre)
 			texture = GetInventoryItemTexture("player", ContainerIDToInventoryID(id))
 		end
 		portrait:SetTexture(texture)
-		-- Pas de rognage : c'est la fenetre, posee par-dessus, qui decoupe.
-		portrait:SetTexCoord(0, 1, 0, 1)
+		-- LE ROGNAGE DU CLIENT. Une icone de WoW est un carre de 64 px
+		-- borde de 4 px sombres ; 4 / 64 = 0,0625. Le client retire cette
+		-- bordure partout ou il pose une icone dans un anneau, ce qui fait
+		-- remplir le disque par le dessin au lieu de son cadre.
+		portrait:SetTexCoord(BORDURE_ICONE, 1 - BORDURE_ICONE,
+			BORDURE_ICONE, 1 - BORDURE_ICONE)
 	end
 end
 

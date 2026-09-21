@@ -1193,8 +1193,10 @@ def main():
     fond = list(sac.foreverPanel.fond.values())[0]
     print("portrait : %dx%d en %s, %s sur %s (%.0f, %.0f)" % (
         portrait.width, portrait.height, portrait.layer, pt[1], pt[3], pt[4], pt[5]))
-    assert portrait.width == 36 and portrait.height == 36,         "SetPortraitTextureSizeAndOffset(36, ...) : la taille d'origine"
-    assert pt[1] == "TOPLEFT" and pt[3] == "TOPLEFT" and pt[4] == -4 and pt[5] == 1,         "SetPortraitTextureSizeAndOffset(..., -4, 1) : la place d'origine"
+    # La methode du client : l'icone tient dans le trou de l'anneau, et ses
+    # coins tombent sous le metal opaque (14,3 a 20,4 du centre).
+    assert portrait.width == 28 and portrait.height == 28,         "l'icone doit tenir dans l'anneau : 28"
+    assert pt[1] == "CENTER" and pt[3] == "TOPLEFT" and pt[4] == 14 and pt[5] == -17,         "l'icone doit etre centree sur l'anneau, a (14, -17)"
     print("   calques : fond %s, portrait %s, metal %s" % (
         fond.layer, portrait.layer, sac.foreverPanel.coinHautGauche.layer))
     assert fond.layer == "BACKGROUND" and portrait.layer == "BORDER",         "le portrait doit etre dans un calque au-dessus du fond, pas dans le sien"
@@ -1217,9 +1219,9 @@ def main():
     assert titre.points[1][5] == -5, "TitleText est ancre TOP (0, -5) dans son conteneur"
     assert titre.justify == "CENTER", "le titre se centre dans son conteneur"
     assert bande.GetFrameLevel(bande) > sac.GetFrameLevel(sac),         "le titre doit etre un cadre fils : le metal est en OVERLAY"
-    print("   portrait du sac a dos : %s, rognage %s (aucun : le metal masque)" % (
+    print("   portrait du sac a dos : %s, rognage %s (la bordure de 4 px)" % (
         portrait.texture, [round(v, 2) for v in portrait.texcoord.values()]))
-    assert [round(v, 2) for v in portrait.texcoord.values()] == [0, 1, 0, 1],         "l'icone n'est pas rognee : c'est le trou du metal qui la decoupe"
+    assert [round(v, 4) for v in portrait.texcoord.values()] == [0.0625, 0.9375, 0.0625, 0.9375],         "l'icone doit etre rognee de sa bordure de 4 px, comme le client le fait"
     assert portrait.texture and portrait.texture.lower().find("inv_misc_bag_08") >= 0,         "le sac a dos porte Inv_misc_bag_08"
 
     sac.id = 1
