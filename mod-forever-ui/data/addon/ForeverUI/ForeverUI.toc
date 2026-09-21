@@ -1,0 +1,24 @@
+## Interface: 30300
+## Title: ForeverUI
+## Notes: Interface moderne portee sur 3.3.5 : atlas adresses par SetTexCoord, positions modifiables.
+## Version: 1.2
+## SavedVariables: ForeverUIDB
+
+UIAtlas.lua
+UIAtlas_01_selection_perso.lua
+UIAtlas_02_creation_perso.lua
+UIAtlas_03_barre_action.lua
+UIAtlas_04_cadres_unite.lua
+UIAtlas_05_feuille_perso.lua
+UIAtlas_06_complements.lua
+
+AtlasUtil.lua
+Layout.lua
+PlayerFrame.lua
+PlayerFrameExtras.lua
+PlayerRunes.lua
+TargetFrame.lua
+CastBar.lua
+ActionBar.lua
+BottomBar.lua
+StatusBars.lua

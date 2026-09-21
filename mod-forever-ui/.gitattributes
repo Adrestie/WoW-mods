@@ -1,0 +1,11 @@
+# Line endings that survive a clone on any system: text files normalised,
+# binaries left alone. The .blp are the client art, the .png beside them are
+# previews for human eyes, both are binary.
+* text=auto
+*.sh text eol=lf
+*.bat text eol=crlf
+*.lua text eol=lf
+*.toc text eol=lf
+*.blp -text
+*.png -text
+*.mpq -text

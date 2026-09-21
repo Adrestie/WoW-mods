@@ -1,0 +1,993 @@
+# -*- coding: utf-8 -*-
+"""Charge l'addon ForeverUI dans un faux client WoW (lupa) et verifie son comportement.
+
+Ce n'est pas le jeu : c'est un bouchon des seules fonctions que l'addon appelle.
+Il attrape ce qu'un client attraperait au chargement -- erreur de syntaxe, nom
+de fonction faux, champ nil -- sans avoir a lancer WoW.
+"""
+import io, os, sys
+import lupa
+
+# Le depot est la source : c'est lui qu'on charge, pas la copie du client.
+RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ADDON = os.path.join(RACINE, "data", "addon", "ForeverUI")
+
+MOCK = """
+-- ---------------------------------------------------------------- faux client
+local recorded = { messages = {}, portraits = 0 }
+_G.RECORDED = recorded
+
+local function newRegion(kind)
+    local r = { kind = kind, shown = true, points = {} }
+    function r:SetTexture(a, b, c, d) self.texture = a; self.color = {a,b,c,d} end
+    function r:GetTexture() return self.texture end
+    function r:SetHorizTile(v) self.tile = v end
+    function r:SetTexCoord(u1, u2, v1, v2) self.texcoord = {u1, u2, v1, v2} end
+    function r:SetWidth(w) self.width = w end
+    function r:GetWidth() return self.width or 0 end
+    function r:GetHeight() return self.height or 0 end
+    function r:SetHeight(h) self.height = h end
+    function r:SetPoint(...) table.insert(self.points, {...}) end
+    function r:SetAllPoints(...) self.allPoints = true end
+    function r:ClearAllPoints() self.points = {} end
+    function r:Show() self.shown = true end
+    function r:Hide() self.shown = false end
+    function r:IsShown() return self.shown end
+    function r:SetText(t) self.text = t end
+    function r:GetText() return self.text end
+    function r:SetJustifyH(j) self.justify = j end
+    function r:SetFontObject(o) self.font = o end
+    function r:SetHorizTile(v) self.tile = v end
+    function r:SetVertexColor(a, b, c) self.vertex = {a, b, c} end
+    function r:SetAlpha(a) self.alpha = a end
+    function r:GetAlpha() return self.alpha or 1 end
+    function r:SetDrawLayer() end
+    function r:SetBlendMode(m) self.blend = m end
+    return r
+end
+
+local frames = {}
+_G.FRAMES = frames
+
+function CreateFrame(kind, name, parent, template)
+    local f = newRegion("frame")
+    f.name = name
+    f.parent = parent
+    f.template = template
+    f.scripts = {}
+    f.events = {}
+    f.attributes = {}
+    function f:SetScript(event, fn) self.scripts[event] = fn end
+    function f:HookScript(event, fn)
+        self.hooks = self.hooks or {}
+        self.hooks[event] = fn
+    end
+    function f:GetScript(event) return self.scripts[event] end
+    function f:GetName() return self.name end
+    function f:RegisterEvent(e) self.events[e] = true end
+    function f:UnregisterAllEvents() self.events = {} end
+    function f:RegisterForDrag() end
+    function f:RegisterForClicks() end
+    function f:EnableMouse() end
+    function f:SetMovable() end
+    function f:SetClampedToScreen() end
+    function f:GetNormalTexture()
+        if not self._normal then self._normal = newRegion("texture") end
+        return self._normal
+    end
+    function f:GetPushedTexture()
+        if not self._pushed then self._pushed = newRegion("texture") end
+        return self._pushed
+    end
+    function f:GetDisabledTexture()
+        if not self._disabled then self._disabled = newRegion("texture") end
+        return self._disabled
+    end
+    function f:SetButtonState(state) self.buttonState = state end
+    function f:GetButtonState() return self.buttonState or "NORMAL" end
+    function f:GetCheckedTexture()
+        if not self._checked then self._checked = newRegion("texture") end
+        return self._checked
+    end
+    function f:GetHighlightTexture()
+        if not self._highlight then self._highlight = newRegion("texture") end
+        return self._highlight
+    end
+    function f:SetParent(p) self.parent = p end
+    function f:GetParent() return self.parent end
+    function f:GetWidth() return self.width or 0 end
+    function f:GetHeight() return self.height or 0 end
+    function f:IsShown() return self.shown end
+    function f:SetFrameStrata(s) self.strata = s end
+    function f:SetFrameLevel(l) self.frameLevel = l end
+    function f:SetScale(v) self.scale = v end
+    function f:GetScale() return self.scale or 1 end
+    function f:GetFrameLevel() return self.frameLevel or 1 end
+    function f:SetHitRectInsets(...) self.hitRect = {...} end
+    function f:SetAttribute(k, v) self.attributes[k] = v end
+    function f:GetAttribute(k) return self.attributes[k] end
+    function f:StartMoving() self.moving = true end
+    function f:StopMovingOrSizing() self.moving = false end
+    function f:CreateTexture(n, layer) local t = newRegion("texture"); t.layer = layer; t.owner = self; return t end
+    function f:CreateFontString(n, layer, font)
+        local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self; return t
+    end
+    function f:GetPoint(index)
+        local p = self.points[index or 1]
+        if not p then return nil end
+        return p[1], p[2], p[3], p[4], p[5]
+    end
+    if name then _G[name] = f end
+    table.insert(frames, f)
+    return f
+end
+
+UIParent = CreateFrame("Frame", "UIParent")
+DEFAULT_CHAT_FRAME = { AddMessage = function(self, msg) table.insert(recorded.messages, msg) end }
+
+-- le cadre d'origine que l'addon doit neutraliser
+PlayerFrame = CreateFrame("Button", "PlayerFrame", UIParent)
+PlayerFrame.events = { PLAYER_ENTERING_WORLD = true, UNIT_HEALTH = true }
+PlayerFrameDropDown = CreateFrame("Frame", "PlayerFrameDropDown", UIParent)
+
+-- etat simule du joueur
+STATE = { health = 50, healthMax = 100, power = 30, powerMax = 100,
+          powerType = 1, powerToken = "RAGE", level = 80, name = "Papota",
+          combat = false, inLockdown = false, resting = false, leader = false,
+          vehicle = false, time = 0, threat = 0, threatWarning = true, dead = false,
+          hasTarget = false, targetHostile = false, targetsMe = false,
+          className = "Chevalier de la mort", classToken = "DEATHKNIGHT",
+          isPlayer = false, classification = "normal", reaction = 2,
+          selection = { 1.0, 0.0, 0.0 }, tapped = false, tappedByPlayer = false,
+          pvp = false, ffa = false, faction = "Alliance",
+          raidMembers = 0, subgroup = 3,
+          partialPlayTime = false, noPlayTime = false,
+          runeStart = 0, runeDuration = 10, runeReady = true, runeType = 1,
+          casting = false, channeling = false, spellName = "Eclair",
+          castStart = 0, castEnd = 2, notInterruptible = false,
+          xp = 500, xpMax = 1000, rested = 200 ,
+          faction_suivie = "Les Fils de Hodir", faction_attitude = 5,
+          faction_min = 3000, faction_max = 9000, faction_valeur = 6000,
+          cvars = { playerStatusText = "0", statusTextPercentage = "0" } }
+
+function UnitHealth(unit) return STATE.health end
+function UnitHealthMax(unit) return STATE.healthMax end
+function UnitPower(unit, kind) return STATE.power end
+function UnitPowerMax(unit, kind) return STATE.powerMax end
+function UnitPowerType(unit) return STATE.powerType, STATE.powerToken end
+function UnitName(unit) return STATE.name end
+function UnitLevel(unit) return STATE.level end
+function UnitAffectingCombat(unit) return STATE.combat end
+function InCombatLockdown() return STATE.inLockdown end
+function SetPortraitTexture(texture, unit)
+    recorded.portraits = recorded.portraits + 1
+    texture.portraitOf = unit
+end
+function ToggleDropDownMenu() end
+function IsResting() return STATE.resting end
+function UnitThreatSituation(unit) return STATE.threat end
+function IsThreatWarningEnabled() return STATE.threatWarning end
+function UnitIsDeadOrGhost(unit) return STATE.dead end
+function UnitExists(unit) return STATE.hasTarget end
+function UnitCanAttack(a, b) return STATE.targetHostile end
+function UnitIsUnit(a, b)
+    if a == "targettarget" and b == "player" then return STATE.targetsMe end
+    return a == b
+end
+function GetThreatStatusColor(status)
+    if status == 3 then return 1.0, 0.0, 0.0 end
+    if status == 2 then return 1.0, 0.6, 0.0 end
+    if status == 1 then return 1.0, 1.0, 0.47 end
+    return 0.69, 0.69, 0.69
+end
+function IsPartyLeader() return STATE.leader end
+function UnitHasVehicleUI(unit) return STATE.vehicle end
+function GetTime() return STATE.time end
+function GetCVar(name) return STATE.cvars[name] end
+function GetCVarBool(name) return STATE.cvars[name] == "1" end
+
+-- ------------------------------------------------- bouchons supplementaires
+function UnitClass(unit) return STATE.className, STATE.classToken end
+function UnitIsPlayer(unit) return STATE.isPlayer end
+function UnitSelectionColor(unit)
+    return STATE.selection[1], STATE.selection[2], STATE.selection[3]
+end
+function UnitIsTapped(unit) return STATE.tapped end
+function UnitIsTappedByPlayer(unit) return STATE.tappedByPlayer end
+function UnitPlayerControlled(unit) return STATE.isPlayer end
+function UnitClassification(unit) return STATE.classification end
+function UnitReaction(a, b) return STATE.reaction end
+function UnitIsPVP(unit) return STATE.pvp end
+function UnitIsPVPFreeForAll(unit) return STATE.ffa end
+function UnitFactionGroup(unit) return STATE.faction end
+function GetNumRaidMembers() return STATE.raidMembers end
+function GetRaidRosterInfo(i) return STATE.name, 0, STATE.subgroup end
+function PartialPlayTime() return STATE.partialPlayTime end
+function NoPlayTime() return STATE.noPlayTime end
+function GetRuneCooldown(i) return STATE.runeStart, STATE.runeDuration, STATE.runeReady end
+function GetRuneType(i) return STATE.runeType end
+function CooldownFrame_SetTimer(cd, start, duration, enable) cd.timer = {start, duration, enable} end
+function CombatFeedback_Initialize(self, text, height) self.feedbackText = text end
+function CombatFeedback_OnCombatEvent(self, event, flags, amount, kind) self.lastHit = amount end
+function CombatFeedback_OnUpdate(self, elapsed) end
+function RegisterUnitWatch(f) f.unitWatch = true end
+function ToggleDropDownMenu() end
+GameTooltip = { SetOwner = function() end, SetText = function() end, Hide = function() end }
+RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
+                      DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 } }
+GROUP = "Groupe"
+PLAYTIME_TIRED = "Temps de jeu fatigue"
+PLAYTIME_UNHEALTHY = "Temps de jeu malsain"
+TargetFrame = CreateFrame("Button", "TargetFrame", UIParent)
+TargetFrameDropDown = CreateFrame("Frame", "TargetFrameDropDown", UIParent)
+ComboFrame = CreateFrame("Frame", "ComboFrame", UIParent)
+
+function UnitCastingInfo(unit)
+    if not STATE.casting then return nil end
+    return STATE.spellName, nil, STATE.spellName, "icone", STATE.castStart * 1000,
+           STATE.castEnd * 1000, false, 1, STATE.notInterruptible
+end
+function UnitChannelInfo(unit)
+    if not STATE.channeling then return nil end
+    return STATE.spellName, nil, STATE.spellName, "icone", STATE.castStart * 1000,
+           STATE.castEnd * 1000, false, STATE.notInterruptible
+end
+function GetWatchedFactionInfo()
+    if not STATE.faction_suivie then return nil end
+    return STATE.faction_suivie, STATE.faction_attitude, STATE.faction_min,
+           STATE.faction_max, STATE.faction_valeur
+end
+ReputationWatchBar = CreateFrame("Frame", "ReputationWatchBar", UIParent)
+function UnitXP(unit) return STATE.xp end
+function UnitXPMax(unit) return STATE.xpMax end
+function GetXPExhaustion() return STATE.rested end
+MAX_PLAYER_LEVEL = 80
+FAILED = "Echec"
+INTERRUPTED = "Interrompu"
+CastingBarFrame = CreateFrame("StatusBar", "CastingBarFrame", UIParent)
+MainMenuExpBar = CreateFrame("StatusBar", "MainMenuExpBar", UIParent)
+ExhaustionTick = CreateFrame("Frame", "ExhaustionTick", UIParent)
+RuneFrame = CreateFrame("Frame", "RuneFrame", UIParent)
+
+-- la barre d'action du client, telle que l'addon la trouve
+MainMenuBar = CreateFrame("Frame", "MainMenuBar", UIParent)
+MainMenuBarLeftEndCap = UIParent:CreateTexture(nil, "ARTWORK")
+MainMenuBarRightEndCap = UIParent:CreateTexture(nil, "ARTWORK")
+MainMenuBarPageNumber = UIParent:CreateFontString(nil, "OVERLAY")
+for i = 0, 3 do
+    _G["MainMenuBarTexture" .. i] = UIParent:CreateTexture(nil, "ARTWORK")
+    _G["MainMenuXPBarTexture" .. i] = UIParent:CreateTexture(nil, "ARTWORK")
+    _G["MainMenuMaxLevelBar" .. i] = UIParent:CreateTexture(nil, "ARTWORK")
+end
+MainMenuBarExpText = UIParent:CreateFontString(nil, "OVERLAY")
+ActionBarUpButton = CreateFrame("Button", "ActionBarUpButton", UIParent)
+ActionBarDownButton = CreateFrame("Button", "ActionBarDownButton", UIParent)
+NumberFontNormalSmallGray = "NumberFontNormalSmallGray"
+NumberFontNormal = "NumberFontNormal"
+GameFontHighlightSmallOutline = "GameFontHighlightSmallOutline"
+for i = 1, 12 do
+    local b = CreateFrame("CheckButton", "ActionButton" .. i, MainMenuBar)
+    _G["ActionButton" .. i .. "Icon"] = b:CreateTexture(nil, "ARTWORK")
+    _G["ActionButton" .. i .. "Border"] = b:CreateTexture(nil, "OVERLAY")
+    _G["ActionButton" .. i .. "Flash"] = b:CreateTexture(nil, "ARTWORK")
+    _G["ActionButton" .. i .. "FloatingBG"] = b:CreateTexture(nil, "BACKGROUND")
+    _G["ActionButton" .. i .. "HotKey"] = b:CreateFontString(nil, "OVERLAY")
+    _G["ActionButton" .. i .. "Count"] = b:CreateFontString(nil, "OVERLAY")
+    _G["ActionButton" .. i .. "Name"] = b:CreateFontString(nil, "OVERLAY")
+    _G["ActionButton" .. i .. "Cooldown"] = CreateFrame("Cooldown", "ActionButton" .. i .. "Cooldown", b)
+end
+-- le bas de l'ecran du client : micro-menu, sacs, trousseau
+MainMenuBarArtFrame = CreateFrame("Frame", "MainMenuBarArtFrame", MainMenuBar)
+MainMenuBarArtFrame:SetFrameLevel(2)
+local MICROS = { "CharacterMicroButton", "SpellbookMicroButton", "TalentMicroButton",
+                 "AchievementMicroButton", "QuestLogMicroButton", "SocialsMicroButton",
+                 "PVPMicroButton", "LFDMicroButton", "MainMenuMicroButton",
+                 "HelpMicroButton" }
+for _, nom in ipairs(MICROS) do
+    local b = CreateFrame("Button", nom, MainMenuBarArtFrame)
+    b:SetWidth(28)
+    b:SetHeight(58)
+end
+MicroButtonPortrait = CharacterMicroButton:CreateTexture("MicroButtonPortrait", "OVERLAY")
+PVPMicroButtonTexture = PVPMicroButton:CreateTexture("PVPMicroButtonTexture", "OVERLAY")
+MainMenuBarPerformanceBar = MainMenuMicroButton:CreateTexture("MainMenuBarPerformanceBar", "OVERLAY")
+function UpdateMicroButtons() end
+
+for _, nom in ipairs({ "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot",
+                       "CharacterBag2Slot", "CharacterBag3Slot" }) do
+    local b = CreateFrame("CheckButton", nom, MainMenuBarArtFrame)
+    _G[nom .. "IconTexture"] = b:CreateTexture(nom .. "IconTexture", "BORDER")
+    _G[nom .. "Count"] = b:CreateFontString(nom .. "Count", "OVERLAY")
+end
+KeyRingButton = CreateFrame("CheckButton", "KeyRingButton", MainMenuBarArtFrame)
+KeyRingButton:Hide()
+
+HOOKS = {}
+function hooksecurefunc(nom, fn) HOOKS[nom] = fn end
+function ActionButton_Update() end
+function ActionButton_ShowGrid() end
+function ActionButton_HideGrid() end
+SlashCmdList = {}
+"""
+
+
+def main():
+    lua = lupa.LuaRuntime(unpack_returned_tuples=True)
+    lua.execute(MOCK)
+
+    ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
+             "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
+             "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
+             "CastBar.lua", "ActionBar.lua", "BottomBar.lua", "StatusBars.lua"]
+
+    # l'ordre du .toc fait foi : on verifie qu'il correspond
+    toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
+    listes = [l.strip() for l in toc.splitlines() if l.strip() and not l.startswith("##")]
+    assert listes == ordre, "l'ordre du toc a change : %s" % listes
+
+    echecs = []
+    for fn in ordre:
+        source = io.open(os.path.join(ADDON, fn), encoding="utf-8").read()
+        try:
+            lua.execute(source)
+        except Exception as exc:
+            echecs.append((fn, str(exc).split("\n")[0]))
+    if echecs:
+        for fn, err in echecs:
+            print("  ECHEC %-34s %s" % (fn, err))
+        sys.exit("chargement interrompu")
+    print("chargement : %d fichiers, aucune erreur" % len(ordre))
+
+    g = lua.globals()
+
+    # 1. tables d'atlas
+    n = sum(1 for _ in g.UIAtlas.data.items())
+    print("entrees d'atlas chargees : %d" % n)
+
+    # 2. enregistrement de la position
+    system = g.ForeverUI.Layout.systems["playerframe"]
+    d = system.defaults
+    print("systeme enregistre : %s | defaut %s/%s %s,%s" % (system.label, d.point, d.relativePoint, d.x, d.y))
+    frame = g.ForeverUIPlayerFrame
+    pt = frame.points[1]
+    print("ancrage applique : %s -> %s (%s, %s)" % (pt[1], pt[3], pt[4], pt[5]))
+
+    # 3. evenement d'entree en jeu
+    frame.scripts.OnEvent(frame, "PLAYER_ENTERING_WORLD")
+    print("apres PLAYER_ENTERING_WORLD :")
+    print("   nom      : %s" % frame.nameText.text)
+    print("   niveau   : %s" % frame.levelText.text)
+    print("   portrait : %d appel(s) a SetPortraitTexture" % g.RECORDED.portraits)
+    print("   art      : %s" % frame.art.texture)
+    hp = frame.healthFill
+    print("   vie 50%%  : largeur %s, texcoord u %.6f -> %.6f (visible: %s)" % (
+        hp.width, hp.texcoord[1], hp.texcoord[2], hp.shown))
+    pw = frame.powerFill
+    print("   rage 30%% : largeur %s, hauteur %s (visible: %s)" % (pw.width, pw.height, pw.shown))
+    print("   PlayerFrame d'origine : %d evenement(s), visible=%s" % (
+        sum(1 for _ in g.PlayerFrame.events.items()), g.PlayerFrame.shown))
+
+    # 3b. le niveau doit vivre dans un cadre fils, place au-dessus du cadre
+    holder = frame.levelText.owner
+    niveau_cadre = frame.frameLevel or 1
+    print("   niveau   : porte par un cadre fils = %s, son niveau %s contre %s" % (
+        holder is not frame, holder.frameLevel, niveau_cadre))
+    assert holder is not frame, "le niveau est reste dans le cadre principal"
+    assert holder.frameLevel > niveau_cadre, "le cadre du niveau n'est pas au-dessus"
+
+    # 4. vie a zero : le client refuse une largeur nulle, la texture doit disparaitre
+    g.STATE.health = 0
+    frame.scripts.OnEvent(frame, "UNIT_HEALTH", "player")
+    print("vie a 0 : texture de vie visible = %s" % frame.healthFill.shown)
+
+    # 5. un evenement pour une autre unite ne doit rien changer
+    g.STATE.health = 100
+    frame.scripts.OnEvent(frame, "UNIT_HEALTH", "target")
+    print("UNIT_HEALTH sur 'target' ignore : texture toujours masquee = %s" % (not frame.healthFill.shown))
+
+    # 6. l'art du cadre ne change jamais ; la lueur est celle de la menace
+    avant = [frame.art.texcoord[i] for i in (1, 2, 3, 4)]
+    g.STATE.combat = True
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_DISABLED")
+    apres = [frame.art.texcoord[i] for i in (1, 2, 3, 4)]
+    print("art du cadre inchange en combat : %s" % (avant == apres))
+    assert avant == apres, "l'art du cadre a ete remplace"
+    couleur = frame.threatGlow.vertex
+    print("engage sans etre pris pour cible : visible=%s alpha=%.2f couleur=(%.2f, %.2f, %.2f)" % (
+        frame.threatGlow.shown, frame.threatGlow.alpha, couleur[1], couleur[2], couleur[3]))
+    assert frame.threatGlow.shown, "pas de lueur alors que le joueur est en combat"
+    faible = frame.threatGlow.alpha
+
+    g.STATE.threat = 3
+    frame.scripts.OnEvent(frame, "UNIT_THREAT_SITUATION_UPDATE")
+    couleur = frame.threatGlow.vertex
+    fort = frame.threatGlow.alpha
+    print("pris pour cible par un ennemi    : visible=%s alpha=%.2f couleur=(%.2f, %.2f, %.2f)" % (
+        frame.threatGlow.shown, fort, couleur[1], couleur[2], couleur[3]))
+    assert fort > faible, "la lueur ne se renforce pas quand l'ennemi vous vise"
+    assert (couleur[1], couleur[2], couleur[3]) == (1.0, 0.0, 0.0), "la lueur n'est pas rouge"
+
+    g.STATE.threat = 1
+    frame.scripts.OnEvent(frame, "UNIT_THREAT_SITUATION_UPDATE")
+    print("menace haute sans etre la cible  : alpha=%.2f (niveau discret attendu)" % frame.threatGlow.alpha)
+
+    g.STATE.dead = True
+    frame.scripts.OnEvent(frame, "UNIT_THREAT_SITUATION_UPDATE")
+    print("joueur mort                      : visible=%s" % frame.threatGlow.shown)
+    g.STATE.dead = False
+
+    g.STATE.threat = 0
+    g.STATE.combat = False
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_ENABLED")
+    print("hors combat, sans menace         : visible=%s" % frame.threatGlow.shown)
+    assert not frame.threatGlow.shown, "la lueur reste allumee hors combat"
+
+    # 6b. serveur sans donnees de menace : la lueur forte doit quand meme venir
+    g.STATE.threat = 0          # le serveur ne dit rien
+    g.STATE.combat = True
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_DISABLED")   # le joueur est engage
+    g.STATE.hasTarget, g.STATE.targetHostile, g.STATE.targetsMe = True, True, False
+    frame.scripts.OnEvent(frame, "PLAYER_TARGET_CHANGED")
+    engage = frame.threatGlow.alpha
+    print("sans menace, cible qui ne vise pas : alpha=%.2f" % engage)
+    g.STATE.targetsMe = True
+    frame.scripts.OnEvent(frame, "PLAYER_TARGET_CHANGED")
+    vise = frame.threatGlow.alpha
+    print("sans menace, la cible me vise      : alpha=%.2f" % vise)
+    assert vise > engage, "la lueur ne se renforce pas quand la cible vise le joueur"
+
+    # la relecture periodique doit suffire, meme sans aucun evenement
+    g.STATE.targetsMe = False
+    frame.scripts.OnUpdate(frame, 0.4)
+    print("apres relecture periodique         : alpha=%.2f (retour au discret)" % frame.threatGlow.alpha)
+    assert frame.threatGlow.alpha == engage, "la relecture periodique ne redescend pas"
+
+    g.STATE.hasTarget, g.STATE.targetHostile, g.STATE.targetsMe = False, False, False
+    g.STATE.combat = False
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_ENABLED")
+
+    # 7. mode edition et deplacement
+    g.SlashCmdList["FOREVERUI"]("")
+    overlay = g.ForeverUI.Layout.systems["playerframe"].overlay
+    print("mode edition : %s, surface creee = %s" % (g.ForeverUI.Layout.editing, overlay is not None))
+    overlay.scripts.OnDragStart()
+    frame.points = lua.eval("{}")
+    frame.SetPoint(frame, "CENTER", g.UIParent, "CENTER", 120, -40)
+    overlay.scripts.OnDragStop()
+    saved = g.ForeverUIDB.positions["playerframe"]
+    print("position retenue apres deplacement : %s/%s %s,%s" % (saved.point, saved.relativePoint, saved.x, saved.y))
+    g.SlashCmdList["FOREVERUI"]("")
+    print("mode edition apres seconde bascule : %s" % g.ForeverUI.Layout.editing)
+
+    # 8. remise par defaut
+    g.SlashCmdList["FOREVERUI"]("reset")
+    reste = g.ForeverUIDB.positions["playerframe"]
+    pt = frame.points[len(list(frame.points.items()))]
+    print("apres reset : position sauvegardee = %s, ancrage = %s (%s, %s)" % (reste, pt[1], pt[4], pt[5]))
+
+    # 9. combat : le mode edition doit refuser
+    g.STATE.inLockdown = True
+    g.SlashCmdList["FOREVERUI"]("")
+    print("mode edition refuse en combat : %s" % (not g.ForeverUI.Layout.editing))
+
+    # 10. etats : repos, combat, vehicule
+    def etat(resting, combat, vehicle):
+        g.STATE.resting, g.STATE.combat, g.STATE.vehicle = resting, combat, vehicle
+        frame.scripts.OnEvent(frame, "PLAYER_ENTER_COMBAT" if combat else "PLAYER_LEAVE_COMBAT")
+        frame.scripts.OnEvent(frame, "PLAYER_UPDATE_RESTING")
+        return (frame.statusTexture.shown, frame.statusTexture.vertex, frame.combatIcon.shown,
+                frame.restTexture.shown)
+
+    shown, vertex, icon, rest = etat(True, False, False)
+    print("repos    : voile=%s couleur=(%.2f, %.2f, %.2f) icone combat=%s sommeil=%s" % (
+        shown, vertex[1], vertex[2], vertex[3], icon, rest))
+    shown, vertex, icon, rest = etat(False, True, False)
+    print("combat   : voile=%s couleur=(%.2f, %.2f, %.2f) icone=%s sommeil=%s" % (
+        shown, vertex[1], vertex[2], vertex[3], icon, rest))
+    shown, vertex, icon, rest = etat(False, False, False)
+    print("ni repos ni combat : voile=%s icone=%s sommeil=%s" % (shown, icon, rest))
+    shown, vertex, icon, rest = etat(True, True, True)
+    print("vehicule : voile=%s icone=%s sommeil=%s (tout doit etre masque)" % (shown, icon, rest))
+    print("voile    : melange = %s (ADD attendu, sinon le rouge delave le cadre)"
+          % frame.statusTexture.blend)
+
+    # 10b. les deux drapeaux du client, distincts
+    etat(False, False, False)
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_ENABLED")
+    frame.scripts.OnEvent(frame, "PLAYER_ENTER_COMBAT")
+    print("clic droit sur un ennemi (frappe seule) : voile=%s icone=%s ornement=%s" % (
+        frame.statusTexture.shown, frame.combatIcon.shown, frame.cornerIcon.shown))
+    assert frame.statusTexture.shown and frame.combatIcon.shown, "la frappe n'allume rien"
+
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_DISABLED")
+    frame.scripts.OnEvent(frame, "PLAYER_LEAVE_COMBAT")
+    print("frappe finie, toujours sur la liste    : voile=%s icone=%s" % (
+        frame.statusTexture.shown, frame.combatIcon.shown))
+    assert frame.combatIcon.shown, "l'icone disparait alors que le combat dure"
+    assert frame.statusTexture.shown, "le voile s'eteint avant la fin du combat"
+
+    frame.scripts.OnEvent(frame, "PLAYER_REGEN_ENABLED")
+    print("sorti de combat                        : voile=%s icone=%s ornement=%s" % (
+        frame.statusTexture.shown, frame.combatIcon.shown, frame.cornerIcon.shown))
+    assert not frame.statusTexture.shown and not frame.combatIcon.shown, "le combat ne se termine pas"
+    assert frame.cornerIcon.shown, "l'ornement de coin ne revient pas"
+    assert frame.statusTexture.blend == "ADD", "le voile n est pas en mode additif"
+    assert frame.combatGlow is None, "la lueur de combat traine encore"
+
+    # 11. animation du sommeil : la vignette doit rester dans l'element
+    g.STATE.vehicle = False
+    etat(True, False, False)
+    entry = g.UIAtlas.data["ui-hud-unitframe-player-rest-flipbook"]
+    u1, u2, v1, v2 = entry[2], entry[3], entry[4], entry[5]
+    vues = set()
+    for pas in range(60):
+        g.STATE.time = pas * 0.0357
+        frame.scripts.OnUpdate(frame, 0.0357)
+        c = frame.restTexture.texcoord
+        assert u1 - 1e-9 <= c[1] and c[2] <= u2 + 1e-9, "vignette hors de l'element en largeur"
+        assert v1 - 1e-9 <= c[3] and c[4] <= v2 + 1e-9, "vignette hors de l'element en hauteur"
+        vues.add((round(c[1], 6), round(c[3], 6)))
+    print("sommeil  : %d vignettes distinctes, toutes dans l'element (42 au total)" % len(vues))
+    print("voile    : transparence pulsee a %.3f" % frame.statusTexture.alpha)
+
+    # 12. texte des barres, suivant le reglage du client
+    g.STATE.health, g.STATE.healthMax = 50, 100
+    frame.scripts.OnEvent(frame, "UNIT_HEALTH", "player")
+    print("texte, reglage a 0 sans survol : visible=%s" % frame.healthText.shown)
+    frame.scripts.OnEnter(frame)
+    print("texte au survol                : vie=%s | ressource=%s" % (
+        frame.healthText.text, frame.powerText.text))
+    frame.scripts.OnLeave(frame)
+    g.STATE.cvars["playerStatusText"] = "1"
+    frame.scripts.OnEvent(frame, "CVAR_UPDATE")
+    print("texte, reglage a 1             : visible=%s | vie=%s" % (
+        frame.healthText.shown, frame.healthText.text))
+    g.STATE.cvars["statusTextPercentage"] = "1"
+    frame.scripts.OnEvent(frame, "CVAR_UPDATE")
+    print("texte en pourcentage           : vie=%s" % frame.healthText.text)
+
+    # 13. icone de chef de groupe
+    g.STATE.leader = True
+    frame.scripts.OnEvent(frame, "PARTY_LEADER_CHANGED")
+    avec = frame.leaderIcon.shown
+    g.STATE.leader = False
+    frame.scripts.OnEvent(frame, "PARTY_LEADER_CHANGED")
+    g.SlashCmdList["FOREVERUI"]("debug")
+    print("icone de chef : visible quand chef=%s | masquee sinon=%s" % (
+        avec, not frame.leaderIcon.shown))
+
+
+
+    # ---------------------------------------------------------- accessoires
+    extras = g.ForeverUI.PlayerFrameExtras
+    g.STATE.pvp = True
+    extras.updatePvP()
+    print("icone PvP (Alliance)     : cercle=%s icone=%s" % (
+        extras.pvpCircle.shown, extras.pvpIcon.shown))
+    assert extras.pvpCircle.shown and extras.pvpIcon.shown, "l'icone PvP ne s'affiche pas"
+    g.STATE.pvp = False
+    extras.updatePvP()
+    print("PvP desactive            : cercle=%s" % extras.pvpCircle.shown)
+
+    g.STATE.raidMembers, g.STATE.name = 10, "Papota"
+    extras.updateGroup()
+    print("indicateur de groupe     : visible=%s texte=%s" % (
+        extras.groupIndicator.shown, extras.groupText.text))
+    g.STATE.raidMembers = 0
+    extras.updateGroup()
+    print("hors raid                : visible=%s" % extras.groupIndicator.shown)
+
+    g.STATE.partialPlayTime = True
+    extras.updatePlayTime()
+    print("temps de jeu fatigue     : visible=%s" % extras.playTime.shown)
+    g.STATE.partialPlayTime = False
+    extras.updatePlayTime()
+    print("temps de jeu normal      : visible=%s" % extras.playTime.shown)
+
+    # ---------------------------------------------------------------- runes
+    runes = g.ForeverUI.RuneButtons
+    nb = sum(1 for _ in runes.values())
+    ancien = g.RuneFrame
+    print("ancien cadre de runes    : visible=%s | neutralise=%s | OnShow accroche=%s" % (
+        ancien.shown, ancien.foreverSuppressed, ancien.hooks is not None))
+    assert not ancien.shown, "l'ancien cadre de runes reste affiche sous le notre"
+    ancien:Show() if False else ancien.Show(ancien)
+    ancien.hooks.OnShow(ancien)
+    print("   s'il se reaffiche      : remasque=%s" % (not ancien.shown))
+    assert not ancien.shown, "l'ancien cadre revient des qu'il se reaffiche"
+
+    print("runes construites        : %d" % nb)
+    assert nb == 6, "il faut six runes"
+    bouton = runes[1]
+
+    def alphas():
+        return dict(fond_actif=bouton.bgActive.alpha, fond_eteint=bouton.bgInactive.alpha,
+                    crane_actif=bouton.runeActive.alpha, crane_eteint=bouton.runeInactive.alpha,
+                    degrade=bouton.runeGrad.alpha, traits=bouton.runeLines.alpha)
+
+    g.STATE.runeReady = True
+    g.ForeverUI.RuneBar.scripts.OnEvent(g.ForeverUI.RuneBar, "RUNE_POWER_UPDATE", 1)
+    pret = alphas()
+    print("rune prete               : %s" % pret)
+    assert pret["fond_actif"] == 1 and pret["crane_actif"] == 1, "la rune prete n'est pas allumee"
+    assert pret["fond_eteint"] == 0 and pret["crane_eteint"] == 0, "les calques eteints restent visibles"
+    assert pret["degrade"] == 0 and pret["traits"] == 0, "un calque de recharge reste allume quand la rune est prete"
+
+    g.STATE.runeReady = False
+    g.ForeverUI.RuneBar.scripts.OnEvent(g.ForeverUI.RuneBar, "RUNE_POWER_UPDATE", 1)
+    recharge = alphas()
+    print("rune en recharge         : %s | minuterie=%s" % (recharge, bouton.cooldown.timer is not None))
+    assert recharge["fond_actif"] == 0 and recharge["crane_actif"] == 0, "la rune reste allumee en recharge"
+    assert abs(recharge["crane_eteint"] - 0.4) < 1e-6, "le crane eteint doit etre a 0,4"
+    assert abs(recharge["degrade"] - 0.3) < 1e-6 and abs(recharge["traits"] - 0.3) < 1e-6,         "degrade et traits doivent etre a 0,3 pendant la recharge"
+
+    # aucun calque additif : la source les declare tous en BLEND
+    for nom in ("bgActive", "bgInactive", "runeActive", "runeInactive", "runeGrad", "runeLines", "shadow"):
+        assert bouton[nom].blend is None, "le calque %s est en melange additif" % nom
+    print("melanges                 : aucun calque additif, conforme au XML")
+
+    g.STATE.runeReady = True
+    g.ForeverUI.RuneBar.scripts.OnEvent(g.ForeverUI.RuneBar, "RUNE_POWER_UPDATE", 1)
+    print("art du cadre joueur      : %s" % frame.art.texture)
+
+    # ------------------------------------------------------ cadre de cible
+    cible = g.ForeverUITargetFrame
+    print("cadre de cible : surveille par le client=%s | systeme enregistre=%s" % (
+        cible.unitWatch, g.ForeverUI.Layout.systems["targetframe"] is not None))
+    g.STATE.hasTarget = True
+    g.STATE.health, g.STATE.healthMax = 80, 100
+    cible.scripts.OnEvent(cible, "PLAYER_TARGET_CHANGED")
+    print("   nom=%s niveau=%s vie=%.0f%% (largeur %.0f)" % (
+        cible.nameText.text, cible.levelText.text,
+        (cible.healthFill.width or 0) / 126.0 * 100, cible.healthFill.width or 0))
+    assert cible.healthFill.shown, "la barre de vie de la cible est vide"
+    couleur = cible.reputation.vertex
+    print("   bandeau de reputation  : (%.2f, %.2f, %.2f) -- c'est lui qui porte la reaction" % (
+        couleur[1], couleur[2], couleur[3]))
+    assert (couleur[1], couleur[2], couleur[3]) == (1.0, 0.0, 0.0), "le bandeau ne prend pas la couleur de selection"
+
+    g.STATE.tapped, g.STATE.tappedByPlayer = True, False
+    cible.scripts.OnEvent(cible, "UNIT_FACTION", "target")
+    gris = cible.reputation.vertex
+    portrait_gris = cible.portrait.vertex
+    print("   cible verrouillee      : bandeau=(%.2f, %.2f, %.2f) portrait=(%.2f, %.2f, %.2f)" % (
+        gris[1], gris[2], gris[3], portrait_gris[1], portrait_gris[2], portrait_gris[3]))
+    assert gris[1] == 0.5 and portrait_gris[1] == 0.5, "rien ne grise quand la cible est verrouillee"
+    g.STATE.tapped = False
+    cible.scripts.OnEvent(cible, "UNIT_FACTION", "target")
+
+    g.STATE.classification = "minus"
+    cible.scripts.OnEvent(cible, "UNIT_CLASSIFICATION_CHANGED", "target")
+    art_minus = tuple(round(cible.art.texcoord[i], 6) for i in (1, 2, 3, 4))
+    g.STATE.classification = "rare"
+    cible.scripts.OnEvent(cible, "UNIT_CLASSIFICATION_CHANGED", "target")
+    art_rare = tuple(round(cible.art.texcoord[i], 6) for i in (1, 2, 3, 4))
+    g.STATE.classification = "normal"
+    cible.scripts.OnEvent(cible, "UNIT_CLASSIFICATION_CHANGED", "target")
+    art_normal = tuple(round(cible.art.texcoord[i], 6) for i in (1, 2, 3, 4))
+
+    # l'elite ne change pas le cadre mais l'anneau du portrait
+    anneaux = {}
+    for classe in ("normal", "elite", "rareelite", "worldboss", "rare"):
+        g.STATE.classification = classe
+        cible.scripts.OnEvent(cible, "UNIT_CLASSIFICATION_CHANGED", "target")
+        anneaux[classe] = (cible.classRing.shown,
+                           tuple(round(cible.classRing.texcoord[i], 6) for i in (1, 2, 3, 4))
+                           if cible.classRing.texcoord else None)
+    print("   anneau : ordinaire=%s elite=%s rare elite=%s boss=%s" % (
+        anneaux["normal"][0], anneaux["elite"][0], anneaux["rareelite"][0], anneaux["worldboss"][0]))
+    assert not anneaux["normal"][0], "un monstre ordinaire ne doit pas porter d'anneau"
+    assert anneaux["elite"][0] and anneaux["worldboss"][0], "l'elite et le boss doivent porter un anneau"
+    assert anneaux["elite"][1] != anneaux["rareelite"][1], "elite et rare elite portent le meme anneau"
+    assert anneaux["elite"][1] != anneaux["worldboss"][1], "elite et boss portent le meme anneau"
+    g.STATE.classification = "normal"
+    cible.scripts.OnEvent(cible, "UNIT_CLASSIFICATION_CHANGED", "target")
+    print("   art par classification : negligeable v=%.4f | rare v=%.4f | ordinaire v=%.4f" % (
+        art_minus[2], art_rare[2], art_normal[2]))
+    assert len({art_minus, art_rare, art_normal}) == 3, \
+        "les trois classifications doivent donner trois arts differents"
+
+
+    # la geometrie des barres suit la classification, comme CheckClassification
+    g.STATE.classification = "minus"
+    cible.scripts.OnEvent(cible, "PLAYER_TARGET_CHANGED")
+    print("   creature negligeable   : vie a 80%% = %.0f px sur 125, ressource visible=%s" % (
+        cible.healthFill.width or 0, cible.powerFill.shown))
+    assert not cible.powerFill.shown, "la ressource doit disparaitre sur une creature negligeable"
+    g.STATE.classification = "normal"
+    cible.scripts.OnEvent(cible, "PLAYER_TARGET_CHANGED")
+    print("   cible ordinaire        : vie a 80%% = %.0f px sur 126, ressource visible=%s" % (
+        cible.healthFill.width or 0, cible.powerFill.shown))
+    assert cible.powerFill.shown, "la ressource doit revenir sur une cible ordinaire"
+
+
+
+    # ------------------------------------------------ barre d'incantation
+    barre = g.ForeverUICastBar
+    g.STATE.time = 100.0
+    g.STATE.casting = True
+    g.STATE.castStart, g.STATE.castEnd = 100.0, 102.0
+    barre.scripts.OnEvent(barre, "UNIT_SPELLCAST_START", "player")
+    print("incantation lancee       : visible=%s sort=%s" % (barre.shown, barre.spellText.text))
+    assert barre.shown, "la barre d'incantation ne s'affiche pas"
+
+    g.STATE.time = 101.0                      # moitie du sort
+    barre.scripts.OnUpdate(barre, 0.1)
+    moitie = barre.fill.width
+    print("a mi-parcours            : largeur=%.1f sur 209 | reste=%s" % (moitie, barre.timeText.text))
+    assert 95 < moitie < 115, "le remplissage ne suit pas la progression"
+
+    g.STATE.time = 102.5                      # depassement : la barre se ferme
+    barre.scripts.OnUpdate(barre, 0.1)
+    print("sort termine             : visible=%s" % barre.shown)
+
+    # canalisation : le remplissage descend
+    g.STATE.casting, g.STATE.channeling = False, True
+    g.STATE.castStart, g.STATE.castEnd = 200.0, 204.0
+    g.STATE.time = 200.0
+    barre.scripts.OnEvent(barre, "UNIT_SPELLCAST_CHANNEL_START", "player")
+    g.STATE.time = 201.0
+    barre.scripts.OnUpdate(barre, 0.1)
+    debut = barre.fill.width
+    g.STATE.time = 203.0
+    barre.scripts.OnUpdate(barre, 0.1)
+    fin = barre.fill.width
+    print("canalisation             : largeur %.1f puis %.1f (elle doit descendre)" % (debut, fin))
+    assert fin < debut, "une canalisation doit se vider"
+
+    barre.scripts.OnEvent(barre, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
+    g.STATE.channeling = False
+    print("canalisation arretee     : visible=%s" % barre.shown)
+
+    g.STATE.casting = True
+    g.STATE.castStart, g.STATE.castEnd = 300.0, 302.0
+    g.STATE.time = 300.0
+    barre.scripts.OnEvent(barre, "UNIT_SPELLCAST_START", "player")
+    barre.scripts.OnEvent(barre, "UNIT_SPELLCAST_INTERRUPTED", "player")
+    print("sort interrompu          : visible=%s texte=%s" % (barre.shown, barre.spellText.text))
+    g.STATE.time = 302.0
+    barre.scripts.OnUpdate(barre, 0.1)
+    print("apres la pause           : visible=%s" % barre.shown)
+    g.STATE.casting = False
+
+    # --------------------------------- barres d'experience et de reputation
+    xp = g.ForeverUIExperienceBar
+    rep = g.ForeverUIReputationBar
+    g.STATE.level = 40
+    g.ForeverUI.StatusBarsUpdate()
+    print("experience a 50%%         : visible=%s acquis=%.0f repose=%.0f texte=%s" % (
+        xp.shown, xp.remplissage.width or 0, xp.repos.width or 0, xp.texte.text))
+    assert xp.remplissage.shown and xp.repos.shown, "les remplissages d'experience sont absents"
+    assert xp.repos.width > xp.remplissage.width, "la part reposee doit depasser l'acquis"
+
+    print("reputation amicale       : visible=%s rempli=%.0f sur %.0f texte=%s" % (
+        rep.shown, rep.remplissage.width or 0, rep.width, rep.texte.text))
+    assert rep.shown and rep.remplissage.shown, "la barre de reputation est vide"
+    assert abs(rep.remplissage.width - rep.width * 0.5) < 0.01, "la reputation n'est pas a moitie"
+    # les huit teintes vivent sur la MEME feuille : c'est le rectangle lu qui
+    # change, pas le fichier.
+    vert = tuple(rep.remplissage.texcoord.values())
+    g.STATE.faction_attitude = 3
+    g.ForeverUI.StatusBarsUpdate()
+    orange = tuple(rep.remplissage.texcoord.values())
+    print("attitude inamicale       : rectangle lu different = %s" % (orange != vert))
+    assert orange != vert, "la teinte ne suit pas l'attitude"
+
+    g.STATE.faction_suivie = None
+    g.ForeverUI.StatusBarsUpdate()
+    print("aucune faction suivie    : visible=%s (la barre doit disparaitre)" % rep.shown)
+    assert not rep.shown, "la barre de reputation reste sans faction suivie"
+    g.STATE.faction_suivie = "Les Fils de Hodir"
+    g.STATE.faction_attitude = 5
+    g.ForeverUI.StatusBarsUpdate()
+
+    # les deux barres vont d'un embout a l'autre, et se touchent
+    rangee = g.ForeverUI.BottomRow
+    largeur = rangee.droite - rangee.gauche
+    print("rangee : %.1f -> %.1f (%.1f de large), haut %.0f" % (
+        rangee.gauche, rangee.droite, largeur, rangee.haut))
+    assert abs(xp.width - largeur) < 0.01 and abs(rep.width - largeur) < 0.01, (
+        "les barres ne vont pas d'un embout a l'autre")
+
+    dxp = g.ForeverUI.Layout.systems["experiencebar"].defaults
+    drep = g.ForeverUI.Layout.systems["reputationbar"].defaults
+    print("reputation posee a y=%.0f, experience a y=%.0f (13 d'ecart, elles se touchent)" % (
+        drep.y, dxp.y))
+    assert drep.y == rangee.haut, "la reputation ne pose pas sur la rangee"
+    assert dxp.y - drep.y == 13, "les deux barres ne se touchent pas"
+    assert abs(dxp.x - (rangee.gauche + rangee.droite) / 2) < 0.01
+
+    g.STATE.level = 80
+    g.ForeverUI.StatusBarsUpdate()
+    print("niveau maximum           : visible=%s (la barre doit disparaitre)" % xp.shown)
+    assert not xp.shown, "la barre d'experience reste au niveau maximum"
+    assert rep.shown, "la reputation doit rester quand l'experience disparait"
+    g.STATE.level = 80
+
+
+
+    # --------------------------------------------------- barre d'action
+    bouton = g.ActionButton1
+    icone = g["ActionButton1Icon"]
+    print("bouton d'action : %d x %d (45 attendu, 36 sur 3.3.5 d'origine)" % (
+        bouton.width, bouton.height))
+    assert bouton.width == 45 and bouton.height == 45, "le bouton ne fait pas la taille de camelot"
+    assert icone.allPoints, "l'icone ne remplit pas le bouton"
+    assert icone.texcoord[1] == 0 and icone.texcoord[2] == 1, "l'icone est rognee alors que la source la laisse entiere"
+
+    for nom, region, add in (("cadre", bouton.foreverFrame, False), ("enfonce", bouton._pushed, False),
+                             ("survol", bouton._highlight, False), ("coche", bouton._checked, True)):
+        assert region.width == 46 and region.height == 45, "l'etat %s n'est pas en 46 x 45" % nom
+        attendu = "ADD" if add else "BLEND"
+        assert region.blend == attendu, "l'etat %s devrait etre en %s" % (nom, attendu)
+    print("quatre etats    : 46 x 45, coche en ADD, le reste en BLEND")
+
+    # la texture normale du client doit rester muette : il la reecrit sans cesse
+    print("texture normale du client : alpha=%.2f (0 attendu)" % bouton._normal.alpha)
+    assert bouton._normal.alpha == 0, "la texture normale du client n'est pas neutralisee"
+    g.ActionButton_Update(bouton)
+    if g.HOOKS["ActionButton_Update"]:
+        g.HOOKS["ActionButton_Update"](bouton)
+    print("apres une mise a jour du client : alpha=%.2f" % bouton._normal.alpha)
+    assert bouton._normal.alpha == 0, "l'habillage ne survit pas a ActionButton_Update"
+
+    # aucun bord de barre en pavage : cela etalerait la feuille d'atlas entiere
+    for piece in (g.ForeverUI.ActionBarBorder,):
+        pass
+    print("bords de barre : etires, jamais paves")
+
+    pas = None
+    for i in (1, 2):
+        b = g["ActionButton" + str(i)]
+        pt = b.points[len(list(b.points.items()))]
+        if i == 1:
+            depart = pt[4]
+        else:
+            pas = pt[4] - depart
+    print("pas entre boutons : %s (47 attendu : 45 + 2 de marge)" % pas)
+    assert pas == 47, "l'espacement ne suit pas minButtonPadding = 2"
+
+    hk = g["ActionButton1HotKey"]
+    ct = g["ActionButton1Count"]
+    nm = g["ActionButton1Name"]
+    print("raccourci %sx%s %s | quantite %s | nom %sx%s %s" % (
+        hk.width, hk.height, hk.font, ct.font, nm.width, nm.height, nm.font))
+    assert hk.width == 32 and hk.height == 10 and hk.justify == "RIGHT"
+    assert nm.width == 36 and nm.height == 10
+
+    cd = g["ActionButton1Cooldown"]
+    coins = [cd.points[i] for i in (1, 2)]
+    print("recharge : %s %s puis %s %s (retrait de 3 px)" % (
+        coins[0][1], coins[0][4], coins[1][1], coins[1][4]))
+    assert coins[0][4] == 3 and coins[1][4] == -3, "la recharge n'est pas en retrait de 3 px"
+
+    print("embouts : gauche %dx%d, droite %dx%d (154 x 95 attendu)" % (
+        g.ForeverUI.ActionBarEndCaps.left.width, g.ForeverUI.ActionBarEndCaps.left.height,
+        g.ForeverUI.ActionBarEndCaps.right.width, g.ForeverUI.ActionBarEndCaps.right.height))
+    assert g.ForeverUI.ActionBarEndCaps.left.width == 154, "embout gauche a la mauvaise taille"
+
+    for nom in ("MainMenuBarTexture0", "MainMenuXPBarTexture0", "MainMenuMaxLevelBar0",
+                "MainMenuBarLeftEndCap", "MainMenuBarRightEndCap", "MainMenuBarExpText"):
+        assert g[nom].alpha == 0, "%s reste visible sous la nouvelle barre" % nom
+    print("anciens morceaux effaces : corps, barre d'xp, version niveau max, embouts, texte")
+    print("fleches de page habillees : %s" % (g.ActionBarUpButton.foreverSkinned == True))
+    page = g.ForeverUIActionBarPage
+    ph = page.points[1]
+    ph_haut = g.ActionBarUpButton.points[1]
+    print("bloc de pagination : %d x %d, %s sur %s (%s, %s) | fleche haut centree a y=%s" % (
+        page.width, page.height, ph[1], ph[3], ph[4], ph[5], ph_haut[5]))
+    assert page.width == 17 and page.height == 34
+    assert ph[4] == -4 and ph[5] == 9, "le bloc de pagination n est pas a gauche de la barre"
+    assert ph_haut[5] == 10 and g.ActionBarDownButton.points[1][5] == -10
+    print("ancien fond du client efface : %s | porteur enregistre : %s" % (
+        g["MainMenuBarTexture0"].alpha == 0,
+        g.ForeverUI.Layout.systems["actionbar"] is not None))
+
+    # ------------------------------------------------- bas de l'ecran
+    micro = g.ForeverUIMicroMenu
+    print("micro-menu : %d x %d pour %d boutons" % (
+        micro.width, micro.height, len(list(g.ForeverUI.MicroButtons.values()))))
+    assert micro.width == 322, "le micro-menu ne fait pas 275 + 47 de rallonge"
+    assert micro.height == 40
+
+    b1, b2 = g.CharacterMicroButton, g.SpellbookMicroButton
+    print("bouton de micro-menu : %d x %d (32 x 46 : l'ouverture du cadre ; 28 x 58 d'origine)" % (
+        b1.width, b1.height))
+    assert b1.width == 32 and b1.height == 46, "le bouton ne remplit pas l'ouverture du cadre"
+    assert micro.height == 40, "le bandeau ne doit pas changer de hauteur"
+    entree0 = list(g.ForeverUI.MicroButtons.values())[0]
+    assert entree0.fond.allPoints, "le fond ne suit pas la taille du bouton"
+    pp0 = g.MicroButtonPortrait
+    assert pp0.width == 18 and pp0.height == 26, "le portrait n'a plus sa taille d'origine"
+    assert b1.hitRect and b1.hitRect[3] == 0, "les 18 px inertes du haut sont restes"
+    print("premier bouton a %s du bord gauche du bandeau (0 attendu)" % b1.points[1][4])
+    assert b1.points[1][4] == 0, "les boutons ne sont pas serres a gauche"
+    pas = b2.points[1][4] - b1.points[1][4]
+    print("pas du micro-menu : %s (27 attendu : 32 - 5 de chevauchement)" % pas)
+    assert pas == 27, "childXPadding = -5 n'est pas respecte"
+
+    porte = g.MainMenuMicroButton
+    assert porte.frameLevel > b1.frameLevel, "le bouton de droite ne passe pas devant"
+
+    # le fond change quand le bouton est enfonce, comme SetPushed le fait
+    entree = list(g.ForeverUI.MicroButtons.values())[0]
+    print("fond au repos : up visible=%s, down visible=%s" % (
+        entree.fond.shown, entree.fondEnfonce.shown))
+    assert entree.fond.shown and not entree.fondEnfonce.shown
+    g.CharacterMicroButton.buttonState = "PUSHED"
+    g.HOOKS["UpdateMicroButtons"]()
+    print("apres enfoncement : up visible=%s, down visible=%s, ombre enfoncee=%s" % (
+        entree.fond.shown, entree.fondEnfonce.shown,
+        entree.ombreEnfoncee and entree.ombreEnfoncee.shown))
+    assert not entree.fond.shown and entree.fondEnfonce.shown, "le fond enfonce ne prend pas le relais"
+    g.CharacterMicroButton.buttonState = "NORMAL"
+    g.HOOKS["UpdateMicroButtons"]()
+
+    # le portrait reprend le rognage de camelot
+    pp = g.MicroButtonPortrait
+    print("portrait : rogne a (%.4f, %.4f, %.4f, %.4f), %d x %d centre" % (
+        pp.texcoord[1], pp.texcoord[2], pp.texcoord[3], pp.texcoord[4], pp.width, pp.height))
+    assert abs(pp.texcoord[1] - 0.2) < 1e-6 and abs(pp.texcoord[4] - 0.9) < 1e-6
+    assert pp.points[1][1] == "CENTER"
+
+    # ----------------------------------------------------- barre des sacs
+    sacs = g.ForeverUIBagsBar
+    print("barre des sacs : %d x %d (268 x 45 attendu : 5 x 45 + 33 + 5 x 2)" % (
+        sacs.width, sacs.height))
+    assert sacs.width == 268 and sacs.height == 45
+
+    dos = g.MainMenuBarBackpackButton
+    sac0 = g.CharacterBag0Slot
+    print("sac a dos %d x %d, ancre %s sur %s | sac 1 decale de %s" % (
+        dos.width, dos.height, dos.points[1][1], dos.points[1][3], sac0.points[1][4]))
+    assert dos.width == 45 and dos.height == 45
+    assert sac0.points[1][4] == -2, "bagPadding = 2 n'est pas respecte"
+    assert dos._normal.width == 46 and dos._normal.height == 46, "le cadre du sac n'est pas en 46 x 46"
+    assert dos._highlight.blend == "ADD", "le survol du sac n'est pas en ADD"
+
+    trousseau = g.KeyRingButton
+    print("trousseau : %d x %d, visible=%s, cadre %d de large" % (
+        trousseau.width, trousseau.height, trousseau.shown, trousseau._normal.width))
+    assert trousseau.width == 33 and trousseau.height == 45
+    assert trousseau.shown, "camelot garde toujours le trousseau dans la barre"
+
+    assert g.ForeverUIBagsFiller is None, "l emplacement decoratif est encore construit"
+
+    cellules = list(g.ForeverUI.BagsCells.values())
+    separateurs = [v for v in g.ForeverUI.BagsDividers.values()]
+    print("cellules : %d | separateurs : %d (un de moins que de cellules)" % (
+        len(cellules), len(separateurs)))
+    assert len(cellules) == 6, "la barre des sacs ne compte pas six cellules"
+    assert len(separateurs) == 5
+
+    # ------------------------------------------------- la rangee complete
+    for nom, attendu in (("micromenu", (116.5, 6)), ("actionbar", (-49, 2)), ("sacs", (284.5, 2))):
+        d = g.ForeverUI.Layout.systems[nom].defaults
+        print("%-10s : %s sur %s (%.1f, %.1f)" % (nom, d.point, d.relativePoint, d.x, d.y))
+        assert abs(d.x - attendu[0]) < 1e-6 and abs(d.y - attendu[1]) < 1e-6, (
+            "position par defaut fausse pour %s" % nom)
+
+    embout = g.ForeverUI.ActionBarEndCaps.right
+    pt = embout.points[1]
+    print("embout droit : %s sur %s (%s, %s)" % (pt[1], pt[3], pt[4], pt[5]))
+    assert pt[1] == "BOTTOMLEFT" and pt[3] == "BOTTOMRIGHT", "l'embout droit n'est pas cale par le bas"
+    assert pt[4] == -30 and pt[5] == 0, "l'embout droit ne tient pas au bord des sacs"
+    gauche = g.ForeverUI.ActionBarEndCaps.left.points[1]
+    print("embout gauche : %s sur %s (%s, %s)" % (gauche[1], gauche[3], gauche[4], gauche[5]))
+    assert gauche[1] == "BOTTOMRIGHT" and gauche[3] == "BOTTOMLEFT" and gauche[5] == 0
+
+    # ------------------------------------------------ cible de la cible
+    totcadre = g.ForeverUITargetOfTarget
+    g.STATE.hasTarget = True
+    totcadre.scripts.OnEvent(totcadre, "PLAYER_TARGET_CHANGED")
+    print("cible de la cible : nom=%s vie visible=%s surveillee=%s" % (
+        totcadre.nameText.text, totcadre.healthFill.shown, totcadre.unitWatch))
+    assert totcadre.healthFill.shown, "la vie de la cible de la cible est vide"
+
+    print("\nmessages du chat :")
+    for msg in g.RECORDED.messages.values():
+        print("   %s" % msg)
+
+
+main()

@@ -1,0 +1,130 @@
+-- 05_feuille_perso : table d'atlas pour client 3.3.5
+-- genere depuis manifeste_interface.json (client wow_classic_beta 1.60.1.69893)
+-- usage : UIAtlas.Apply(texture, "nom-de-l-atlas")
+
+UIAtlas = UIAtlas or { sheets = {}, data = {} }
+
+local S = {
+	[1] = "interface\\ForeverUI\\characterselection\\timerunningglues", -- 2048 x 2048
+	[2] = "interface\\ForeverUI\\common\\commonbuttontertiaryc60", -- 256 x 256
+	[3] = "interface\\ForeverUI\\common\\commonframedividerc60", -- 16 x 64
+	[4] = "interface\\ForeverUI\\common\\commoninsideframec60", -- 128 x 128
+	[5] = "interface\\ForeverUI\\characterframe\\equipmentmanager", -- 32 x 32
+	[6] = "interface\\ForeverUI\\professions\\professionsfxgearaugmentation", -- 1024 x 1024
+	[7] = "interface\\ForeverUI\\professions\\professionsfxgearaugmentationmask", -- 512 x 512
+	[8] = "interface\\ForeverUI\\helpframe\\helptip", -- 128 x 32
+	[9] = "interface\\ForeverUI\\characterselection\\timerunningglueslegion", -- 2048 x 1024
+	[10] = "interface\\ForeverUI\\paperdollinfoframe\\paperdollinfopart1c60", -- 1024 x 1024
+	[11] = "interface\\ForeverUI\\paperdollinfoframe\\paperdollinfopart2c60", -- 1024 x 1024
+}
+
+local D = {
+	["character-emptysocket"] = {1, 0.413574, 0.423828, 0.234863, 0.245117, 21, 21},
+	["common-button-tertiary-depressed-hover"] = {2, 0.003906, 0.183594, 0.429688, 0.562500, 46, 34},
+	["common-button-tertiary-depressed-normal"] = {2, 0.003906, 0.183594, 0.570312, 0.703125, 46, 34},
+	["common-button-tertiary-depressed-normal-glow"] = {2, 0.003906, 0.203125, 0.003906, 0.156250, 51, 39},
+	["common-button-tertiary-depressed-normal-glow-purple"] = {2, 0.210938, 0.410156, 0.003906, 0.156250, 51, 39},
+	["common-button-tertiary-depressed-normal-purple"] = {2, 0.417969, 0.617188, 0.003906, 0.156250, 51, 39},
+	["common-button-tertiary-disabled"] = {2, 0.003906, 0.183594, 0.710938, 0.843750, 46, 34},
+	["common-button-tertiary-disabled-small"] = {2, 0.210938, 0.464844, 0.164062, 0.261719, 65, 25},
+	["common-button-tertiary-hover"] = {2, 0.003906, 0.183594, 0.851562, 0.984375, 46, 34},
+	["common-button-tertiary-hover-small"] = {2, 0.472656, 0.726562, 0.164062, 0.261719, 65, 25},
+	["common-button-tertiary-normal"] = {2, 0.191406, 0.371094, 0.429688, 0.562500, 46, 34},
+	["common-button-tertiary-normal-electrified"] = {2, 0.625000, 0.824219, 0.003906, 0.156250, 51, 39},
+	["common-button-tertiary-normal-pending-fx"] = {2, 0.003906, 0.203125, 0.164062, 0.316406, 51, 39},
+	["common-button-tertiary-normal-small"] = {2, 0.734375, 0.988281, 0.164062, 0.261719, 65, 25},
+	["common-button-tertiary-pressed"] = {2, 0.191406, 0.371094, 0.570312, 0.703125, 46, 34},
+	["common-button-tertiary-pressed-small"] = {2, 0.003906, 0.257812, 0.324219, 0.421875, 65, 25},
+	["common-button-tertiary-selected"] = {2, 0.191406, 0.371094, 0.710938, 0.843750, 46, 34},
+	["common-button-tertiary-selected-small"] = {2, 0.265625, 0.519531, 0.324219, 0.421875, 65, 25},
+	["common-button-tertiary-square-depressed-hover"] = {2, 0.832031, 0.964844, 0.003906, 0.136719, 34, 34},
+	["common-button-tertiary-square-depressed-normal"] = {2, 0.191406, 0.324219, 0.851562, 0.984375, 34, 34},
+	["common-button-tertiary-square-disabled"] = {2, 0.378906, 0.511719, 0.429688, 0.562500, 34, 34},
+	["common-button-tertiary-square-hover"] = {2, 0.378906, 0.511719, 0.570312, 0.703125, 34, 34},
+	["common-button-tertiary-square-normal"] = {2, 0.378906, 0.511719, 0.710938, 0.843750, 34, 34},
+	["common-button-tertiary-square-pressed"] = {2, 0.378906, 0.511719, 0.851562, 0.984375, 34, 34},
+	["common-button-tertiary-square-selected"] = {2, 0.519531, 0.652344, 0.429688, 0.562500, 34, 34},
+	["common-framedivider"] = {3, 0.062500, 0.750000, 0.015625, 0.796875, 11, 50},
+	["common-insideframe"] = {4, 0.007812, 0.843750, 0.007812, 0.843750, 107, 107},
+	["equipmentmanager-spec-border"] = {5, 0.031250, 0.906250, 0.031250, 0.906250, 28, 28},
+	["gearenchant_iconborder"] = {6, 0.000977, 0.071289, 0.815430, 0.885742, 72, 72},
+	["gearenchantfx_charui_darkgold"] = {6, 0.000977, 0.405273, 0.000977, 0.406250, 414, 415},
+	["gearenchantfx_charui_frame"] = {6, 0.407227, 0.634766, 0.363281, 0.678711, 233, 323},
+	["gearenchantfx_charui_gold"] = {6, 0.000977, 0.405273, 0.408203, 0.813477, 414, 415},
+	["gearenchantfx_charui_mask"] = {7, 0.000000, 1.000000, 0.000000, 1.000000, 512, 512},
+	["gearenchantfx_charui_sparkles"] = {6, 0.407227, 0.771484, 0.000977, 0.361328, 373, 369},
+	["helptip-arrow"] = {8, 0.007812, 0.515625, 0.031250, 0.906250, 65, 28},
+	["timerunning-glues-active-event"] = {1, 0.661133, 0.878906, 0.153809, 0.227051, 446, 150},
+	["timerunning-glues-active-event-hover"] = {1, 0.265625, 0.483398, 0.417969, 0.491211, 446, 150},
+	["timerunning-glues-active-event-pressed"] = {1, 0.265625, 0.483398, 0.492188, 0.565430, 446, 150},
+	["timerunning-glues-convert-icon"] = {9, 0.253906, 0.275879, 0.528320, 0.570312, 45, 43},
+	["timerunning-glues-icon"] = {1, 0.397461, 0.412598, 0.234863, 0.250000, 31, 31},
+	["timerunning-glues-icon-small"] = {1, 0.413574, 0.416992, 0.246094, 0.251953, 7, 12},
+	["timerunning-infographic-background"] = {1, 0.000488, 0.396484, 0.000488, 0.263672, 811, 539},
+	["timerunning-infographic-background-legion"] = {9, 0.000488, 0.396484, 0.000977, 0.526367, 811, 538},
+	["timerunning-infographic-bullet"] = {1, 0.397461, 0.409180, 0.250977, 0.262695, 24, 24},
+	["timerunning-infographic-logo-cn"] = {1, 0.661133, 0.925293, 0.000488, 0.152832, 541, 312},
+	["timerunning-infographic-logo-en"] = {1, 0.000488, 0.264648, 0.264648, 0.416992, 541, 312},
+	["timerunning-infographic-logo-fx"] = {1, 0.265625, 0.529785, 0.264648, 0.416992, 541, 312},
+	["timerunning-infographic-logo-fx-legion"] = {9, 0.397461, 0.661621, 0.000977, 0.305664, 541, 312},
+	["timerunning-infographic-logo-legion-cn"] = {9, 0.397461, 0.661621, 0.307617, 0.612305, 541, 312},
+	["timerunning-infographic-logo-legion-en"] = {9, 0.662598, 0.926758, 0.000977, 0.305664, 541, 312},
+	["timerunning-infographic-logo-legion-tw"] = {9, 0.397461, 0.661621, 0.614258, 0.918945, 541, 312},
+	["timerunning-infographic-logo-tw"] = {1, 0.530762, 0.794922, 0.264648, 0.416992, 541, 312},
+	["timerunning-infographic-mop-logo"] = {1, 0.000488, 0.264648, 0.417969, 0.570312, 541, 312},
+	["timerunning-infographic-rewards"] = {1, 0.397461, 0.660156, 0.000488, 0.233887, 538, 478},
+	["timerunning-infographic-rewards-legion"] = {9, 0.000488, 0.252930, 0.528320, 0.994141, 517, 477},
+	["ui-character-info-button-pullside"] = {10, 0.090820, 0.110352, 0.000977, 0.042969, 20, 43},
+	["ui-character-info-button-pullside-open"] = {10, 0.133789, 0.153320, 0.000977, 0.042969, 20, 43},
+	["ui-character-info-button-pullside-pressed"] = {10, 0.112305, 0.131836, 0.000977, 0.042969, 20, 43},
+	["ui-character-info-button-pullup"] = {10, 0.155273, 0.197266, 0.000977, 0.020508, 43, 20},
+	["ui-character-info-button-pullup-open"] = {10, 0.155273, 0.197266, 0.022461, 0.041992, 43, 20},
+	["ui-character-info-button-pullup-pressed"] = {10, 0.046875, 0.088867, 0.000977, 0.020508, 43, 20},
+	["ui-character-info-deathknight-bg"] = {11, 0.000977, 0.228516, 0.456055, 0.830078, 233, 383},
+	["ui-character-info-demonhunter-bg"] = {11, 0.391602, 0.619141, 0.000977, 0.375000, 233, 383},
+	["ui-character-info-druid-bg"] = {11, 0.621094, 0.848633, 0.000977, 0.375000, 233, 383},
+	["ui-character-info-gearslot"] = {10, 0.000977, 0.054688, 0.898438, 0.952148, 55, 55},
+	["ui-character-info-gearslot-arrow"] = {10, 0.046875, 0.079102, 0.022461, 0.044922, 33, 23},
+	["ui-character-info-gearslotsmall"] = {10, 0.218750, 0.261719, 0.000977, 0.043945, 44, 44},
+	["ui-character-info-general-bg"] = {11, 0.000977, 0.389648, 0.000977, 0.454102, 398, 464},
+	["ui-character-info-hunter-bg"] = {11, 0.391602, 0.619141, 0.376953, 0.750977, 233, 383},
+	["ui-character-info-icon-add"] = {10, 0.199219, 0.216797, 0.000977, 0.018555, 18, 18},
+	["ui-character-info-icon-delete"] = {10, 0.464844, 0.489258, 0.000977, 0.023438, 25, 23},
+	["ui-character-info-icon-settings"] = {10, 0.491211, 0.515625, 0.020508, 0.042969, 25, 23},
+	["ui-character-info-icon-tick"] = {10, 0.517578, 0.541992, 0.020508, 0.042969, 25, 23},
+	["ui-character-info-itemlevel-bounce"] = {10, 0.263672, 0.462891, 0.000977, 0.021484, 204, 21},
+	["ui-character-info-line-bounce"] = {10, 0.491211, 0.699219, 0.000977, 0.018555, 213, 18},
+	["ui-character-info-line-bounce2"] = {10, 0.481445, 0.689453, 0.056641, 0.079102, 213, 23},
+	["ui-character-info-mage-bg"] = {10, 0.000977, 0.228516, 0.046875, 0.420898, 233, 383},
+	["ui-character-info-monk-bg"] = {10, 0.000977, 0.228516, 0.472656, 0.846680, 233, 383},
+	["ui-character-info-outfitcard"] = {10, 0.000977, 0.159180, 0.422852, 0.470703, 162, 49},
+	["ui-character-info-outfitcard-hover"] = {10, 0.000977, 0.159180, 0.848633, 0.896484, 162, 49},
+	["ui-character-info-outfitcard-selected"] = {10, 0.056641, 0.214844, 0.898438, 0.946289, 162, 49},
+	["ui-character-info-outfiticon-frame"] = {10, 0.000977, 0.044922, 0.000977, 0.044922, 45, 45},
+	["ui-character-info-paladin-bg"] = {10, 0.230469, 0.458008, 0.483398, 0.857422, 233, 383},
+	["ui-character-info-priest-bg"] = {10, 0.459961, 0.687500, 0.107422, 0.481445, 233, 383},
+	["ui-character-info-racebg-overlay"] = {10, 0.230469, 0.281250, 0.046875, 0.105469, 52, 60},
+	["ui-character-info-resistance-arcane"] = {11, 0.000977, 0.033203, 0.832031, 0.864258, 33, 33},
+	["ui-character-info-resistance-fire"] = {11, 0.000977, 0.033203, 0.866211, 0.898438, 33, 33},
+	["ui-character-info-resistance-frost"] = {11, 0.000977, 0.033203, 0.900391, 0.932617, 33, 33},
+	["ui-character-info-resistance-nature"] = {11, 0.000977, 0.033203, 0.934570, 0.966797, 33, 33},
+	["ui-character-info-resistance-shadow"] = {11, 0.035156, 0.067383, 0.832031, 0.864258, 33, 33},
+	["ui-character-info-rogue-bg"] = {10, 0.689453, 0.916992, 0.483398, 0.857422, 233, 383},
+	["ui-character-info-scrollfader"] = {10, 0.701172, 0.889648, 0.009766, 0.033203, 193, 24},
+	["ui-character-info-scrollline"] = {10, 0.701172, 0.906250, 0.000977, 0.007812, 210, 7},
+	["ui-character-info-scrollline-long"] = {10, 0.283203, 0.658203, 0.046875, 0.054688, 384, 8},
+	["ui-character-info-shaman-bg"] = {10, 0.230469, 0.458008, 0.107422, 0.481445, 233, 383},
+	["ui-character-info-stat-bg"] = {11, 0.621094, 0.848633, 0.376953, 0.750977, 233, 383},
+	["ui-character-info-stat-stonebg"] = {10, 0.459961, 0.687500, 0.859375, 0.942383, 233, 85},
+	["ui-character-info-stat-stonebg2"] = {10, 0.230469, 0.458008, 0.859375, 0.973633, 233, 117},
+	["ui-character-info-stattab"] = {10, 0.161133, 0.202148, 0.422852, 0.463867, 42, 42},
+	["ui-character-info-stattab-selected"] = {10, 0.161133, 0.202148, 0.848633, 0.889648, 42, 42},
+	["ui-character-info-title"] = {10, 0.283203, 0.479492, 0.056641, 0.087891, 201, 32},
+	["ui-character-info-warlock-bg"] = {10, 0.689453, 0.916992, 0.107422, 0.481445, 233, 383},
+	["ui-character-info-warrior-bg"] = {10, 0.459961, 0.687500, 0.483398, 0.857422, 233, 383},
+}
+
+for name, entry in pairs(D) do
+	entry[1] = S[entry[1]]
+	UIAtlas.data[name] = entry
+end

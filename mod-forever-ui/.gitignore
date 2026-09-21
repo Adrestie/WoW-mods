@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# What the preview script composes while working: rebuilt on demand from
+# data/art, never a source.
+docs/apercu/*.png
