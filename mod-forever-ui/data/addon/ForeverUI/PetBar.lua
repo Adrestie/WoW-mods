@@ -15,12 +15,12 @@
 --   (1,7 ; -1,7) et (-1 ; 1) ; cadre normal et enfonce ramenes a 35 x 35 ;
 --   AutoCastOverlay en 31 x 31, centre a (0,5 ; -0,5).
 --
--- mainline/AutoCastTemplates.xml et .lua
---   l'anneau d'autolancement : Corners (UI-HUD-ActionBar-PetAutoCast-Corners)
---   couvre tout le cadre ; Shine (UI-HUD-ActionBar-PetAutoCast-Ants) deborde
---   de 5 px de chaque cote et TOURNE de -360 degres en 4 secondes, en
---   boucle. Corners parait des que l'autolancement est POSSIBLE, Shine
---   seulement quand il est ACTIF (ShowAutoCastEnabled / UpdateShineAnim).
+-- L'AUTOLANCEMENT N'EST PAS REPRIS DE LA SOURCE. AutoCastTemplates n'existe
+-- que dans mainline/, et seuls camelot/ et shared/ font foi : camelot garde
+-- ici le comportement d'origine. On laisse donc au client sa bordure
+-- scintillante ($parentAutoCastable) et ses quatre etincelles tournantes
+-- ($parentShine), qu'il allume et eteint lui-meme dans PetActionBar_Update.
+-- Elles sont seulement mises a l'echelle du bouton, qui passe de 36 a 30.
 --
 -- shared/PetActionBar.lua, PetActionButtonMixin:UpdateButtonState
 --   l'icone prend la texture de l'action ; si isToken, le nom et la texture
@@ -42,8 +42,6 @@
 --   Les quatre etats sont CENTRES et non ancres TOPLEFT : un cadre de 35 sur
 --   un bouton de 30 deborde de 5, et son trou sortirait de l'icone. Voir
 --   StanceBar.lua, ou le calcul est detaille.
---   Le masque de l'anneau (UI-HUD-ActionBar-PetAutoCast-Mask) n'est pas
---   reproduit : ce client ne sait pas masquer une texture.
 --   La marque de surbrillance (SpellHighlightTexture, atlas bags-newitem)
 --   n'existe pas en 3.3.5 : HasPetActionHighlightMark n'y est pas.
 --   Les boutons sont SECURISES : rhabilles, jamais recrees, et rien n'est
@@ -54,11 +52,9 @@ local ECART = 2                         -- minButtonPadding
 local PAS = TAILLE + ECART              -- 32
 local CADRE_L, CADRE_H = 35, 35         -- NormalTexture et PushedTexture
 local ETAT_L, ETAT_H = 31.6, 30.9       -- survol, coche, bordure, eclat
-local ANNEAU = 31                       -- AutoCastOverlay
-local ANNEAU_X, ANNEAU_Y = 0.5, -0.5
-local ANTS_DEBORD = 5                   -- Shine : 5 px de plus de chaque cote
-local ANTS_TOUR = 4                     -- une rotation complete en 4 secondes
 local NB_BOUTONS = 10
+local TAILLE_ORIGINE = 36               -- le bouton de 3.3.5
+local AUTOCAST_BORDURE = 58             -- sa bordure d'autolancement
 local GRISE = 0.4                       -- action inutilisable
 local COCHE_ATTAQUE = 0.5               -- alpha du coche sur l'attaque
 
@@ -77,8 +73,6 @@ local ATLAS = {
 	flash = "ui-hud-actionbar-iconframe-flash",
 	slot = "ui-hud-actionbar-iconframe-slot",
 	background = "ui-hud-actionbar-iconframe-background",
-	coins = "ui-hud-actionbar-petautocast-corners",
-	fourmis = "ui-hud-actionbar-petautocast-ants",
 }
 
 local nombreDeBoutons = NUM_PET_ACTION_SLOTS or NB_BOUTONS
@@ -110,83 +104,6 @@ local function poserEtat(texture, atlas, largeur, hauteur, add)
 	texture:SetBlendMode(add and "ADD" or "BLEND")
 end
 
--- PIEGE. SetRotation existe dans ce client, mais il RECALCULE les
--- coordonnees de texture sur l'image entiere et efface donc le rectangle
--- d'atlas : la texture se met a montrer toute la feuille. C'est ce qui
--- affichait les deux sprites de l'anneau l'un a cote de l'autre.
---
--- On tourne donc par la forme A HUIT ARGUMENTS de SetTexCoord, que le
--- client accepte -- "SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)",
--- dit son propre message d'usage. Elle donne les quatre coins un par un, et
--- reste donc dans le rectangle de l'element.
---
--- Ses coins balaient le carre CIRCONSCRIT, 1,41 fois le cote : l'element
--- doit etre seul au milieu de sa feuille, avec de la marge. C'est ce que
--- prepare tools/petite_feuille.py.
-local function tournerAtlas(texture, u1, u2, v1, v2, angle)
-	local cu, cv = (u1 + u2) / 2, (v1 + v2) / 2
-	local hu, hv = (u2 - u1) / 2, (v2 - v1) / 2
-	local cosinus, sinus = math.cos(angle), math.sin(angle)
-
-	local function coin(x, y)
-		return cu + hu * (x * cosinus - y * sinus),
-			cv + hv * (x * sinus + y * cosinus)
-	end
-
-	local ULx, ULy = coin(-1, -1)
-	local LLx, LLy = coin(-1, 1)
-	local URx, URy = coin(1, -1)
-	local LRx, LRy = coin(1, 1)
-	texture:SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)
-end
-
--- L'anneau d'autolancement. La source le fait tourner par un groupe
--- d'animation ; 3.3.5 n'en a pas sur une texture, on deroule donc l'angle
--- nous-memes, a la meme vitesse.
-local function monterAnneau(bouton)
-	local anneau = CreateFrame("Frame", nil, bouton)
-	anneau:SetWidth(ANNEAU)
-	anneau:SetHeight(ANNEAU)
-	anneau:SetPoint("CENTER", bouton, "CENTER", ANNEAU_X, ANNEAU_Y)
-	anneau:SetFrameLevel(bouton:GetFrameLevel() + 1)
-
-	local coins = anneau:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(coins, ATLAS.coins, true)
-	coins:SetAllPoints(anneau)
-
-	local fourmis = anneau:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(fourmis, ATLAS.fourmis, true)
-	fourmis:SetPoint("TOPLEFT", anneau, "TOPLEFT", -ANTS_DEBORD, ANTS_DEBORD)
-	fourmis:SetPoint("BOTTOMRIGHT", anneau, "BOTTOMRIGHT", ANTS_DEBORD, -ANTS_DEBORD)
-	fourmis:Hide()
-
-	-- Le rectangle de l'element, garde pour le faire tourner sans le perdre.
-	local e = ForeverUI.AtlasEntry(ATLAS.fourmis)
-	anneau.uv = e and { e[2], e[3], e[4], e[5] } or nil
-
-	anneau.angle = 0
-	anneau:SetScript("OnUpdate", function(self, elapse)
-		if not fourmis:IsShown() then
-			return
-		end
-		-- -360 degres en ANTS_TOUR secondes, soit -2 pi radians.
-		self.angle = self.angle - (2 * math.pi * (elapse or 0) / ANTS_TOUR)
-		if self.angle < -2 * math.pi then
-			self.angle = self.angle + 2 * math.pi
-		end
-		if self.uv then
-			tournerAtlas(fourmis, self.uv[1], self.uv[2], self.uv[3], self.uv[4],
-				self.angle)
-		end
-	end)
-
-	anneau:Hide()
-	anneau.coins = coins
-	anneau.fourmis = fourmis
-	bouton.foreverAnneau = anneau
-	return anneau
-end
-
 local function habiller(bouton)
 	if not bouton or bouton.foreverSkinned then
 		return
@@ -197,16 +114,30 @@ local function habiller(bouton)
 	bouton:SetHeight(TAILLE)
 	taireNormale(bouton)
 
-	-- L'art d'epoque de l'autolancement s'efface : le notre le remplace.
-	for _, suffixe in ipairs({ "AutoCastable", "FloatingBG" }) do
-		local texture = _G[nom .. suffixe]
-		if texture then
-			texture:SetAlpha(0)
-		end
+	local flottant = _G[nom .. "FloatingBG"]
+	if flottant then
+		flottant:SetAlpha(0)
 	end
-	local brillance = _G[nom .. "Shine"]
-	if brillance then
-		brillance:Hide()
+
+	-- L'AUTOLANCEMENT RESTE CELUI DU CLIENT. AutoCastTemplates n'existe que
+	-- dans mainline/, et seuls camelot/ et shared/ font foi : camelot garde
+	-- donc ici le comportement d'origine, sa bordure scintillante et ses
+	-- quatre etincelles tournantes. On n'y touche pas -- on les met
+	-- seulement a l'echelle du bouton, qui passe de 36 a 30.
+	local echelle = TAILLE / TAILLE_ORIGINE
+	local scintillante = _G[nom .. "AutoCastable"]
+	if scintillante then
+		scintillante:SetWidth(AUTOCAST_BORDURE * echelle)
+		scintillante:SetHeight(AUTOCAST_BORDURE * echelle)
+	end
+	-- Les etincelles ne se redimensionnent pas : le client les pose lui-meme
+	-- autour du cadre, a une taille fixe, et AutoCastShine_OnUpdate les
+	-- deplace sans les retailler. Changer la taille du cadre laissait donc
+	-- des etincelles trop grosses tournant sur un cercle trop petit. On met
+	-- le cadre a l'ECHELLE : tout ce qu'il contient suit, tailles et orbite.
+	local etincelles = _G[nom .. "Shine"]
+	if etincelles then
+		etincelles:SetScale(echelle)
 	end
 
 	local fond = bouton:CreateTexture(nil, "BACKGROUND")
@@ -257,7 +188,6 @@ local function habiller(bouton)
 		quantite:SetPoint("BOTTOMRIGHT", bouton, "BOTTOMRIGHT", -3, 1)
 	end
 
-	monterAnneau(bouton)
 	bouton.foreverSkinned = true
 end
 
@@ -374,20 +304,6 @@ local function majEtat()
 				bouton:SetChecked(1)
 			else
 				bouton:SetChecked(nil)
-			end
-
-			local anneau = bouton.foreverAnneau
-			if anneau then
-				if autoPossible then
-					anneau:Show()
-				else
-					anneau:Hide()
-				end
-				if autoActif and autoPossible then
-					anneau.fourmis:Show()
-				else
-					anneau.fourmis:Hide()
-				end
 			end
 
 			local recharge = bouton.foreverRecharge

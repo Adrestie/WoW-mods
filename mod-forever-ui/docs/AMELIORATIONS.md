@@ -9,6 +9,14 @@ sait pas faire, ou où l'outillage mérite mieux.
 
 ## 1. Écarts assumés par rapport à la référence
 
+**RÈGLE DE LECTURE DES SOURCES.** Seuls les dossiers `camelot/` et `shared/`
+de chaque addon font foi. Un fichier qui n'existe que dans `mainline/` n'est
+**pas** une source : c'est un point à trancher avec l'utilisateur, pas à adopter
+en silence. L'anneau d'autolancement du familier a été écrit depuis
+`mainline/AutoCastTemplates` et il a fallu le retirer — camelot y garde le
+comportement de 3.3.5.
+
+
 ### 1.1 Trois boutons du micro-menu n'ont pas d'image
 
 La référence a retiré ces boutons, l'atlas ne fournit donc pas leur jeu
@@ -282,11 +290,7 @@ Ce qui lui est propre :
 
 | Pièce | Valeur | Source |
 |---|---|---|
-| Anneau d'autolancement | cadre de 31 × 31 centré à (0,5 ; −0,5) | `SmallActionButtonMixin_OnLoad` |
-| Coins | `UI-HUD-ActionBar-PetAutoCast-Corners`, couvre l'anneau | `AutoCastOverlayTemplate` |
-| Fourmis | `UI-HUD-ActionBar-PetAutoCast-Ants`, déborde de 5 px, tourne de −360° en 4 s, en boucle | idem |
-| Coins visibles | dès que l'autolancement est **possible** | `UpdateButtonState` |
-| Fourmis visibles | seulement quand il est **actif** | `AutoCastOverlayMixin:UpdateShineAnim` |
+| Autolancement | **celui du client**, mis à l'échelle du bouton | voir ci-dessous |
 | Action active | bouton coché | `UpdateButtonState` |
 | Action d'attaque | clignote, et son coché tombe à **0,5** d'alpha | idem — « à pleine alpha on croirait une capacité de plus sélectionnée » |
 | Action inutilisable | icône teintée à 0,4 | `GetPetActionSlotUsable` |
@@ -320,12 +324,26 @@ les boutons sont des cadres fils, pas des régions, ils ne sont donc pas touché
 Le balayage est rejoué à chaque habillage, donc une texture que le client
 ajouterait ensuite disparaît aussi.
 
-**Non reproduit.** Le masque de l'anneau (`UI-HUD-ActionBar-PetAutoCast-Mask`) :
-ce client ne sait pas masquer une texture. La rotation des fourmis, elle, est
-rendue : la source emploie un groupe d'animation, et `Texture:SetRotation`
-existe en 3.3.5 — l'angle se déroule dans un `OnUpdate`, à la même vitesse. La
-marque de surbrillance (`SpellHighlightTexture`, atlas `bags-newitem`) n'a pas
-d'équivalent : `HasPetActionHighlightMark` n'existe pas en 3.3.5.
+**L'autolancement garde le comportement d'origine.** `AutoCastTemplates`
+n'existe que dans `mainline/`, et **seuls `camelot/` et `shared/` font foi** :
+camelot ne remplace donc pas ici l'anneau du client. La bordure scintillante
+(`$parentAutoCastable`) et les quatre étincelles tournantes (`$parentShine`)
+restent celles de 3.3.5, allumées et éteintes par `PetActionBar_Update` ; elles
+sont seulement mises à l'échelle du bouton, qui passe de 36 à 30 : la bordure
+de 58 devient 48,3, et le cadre des étincelles reçoit `SetScale(30/36)`.
+
+**L'échelle, pas la taille.** Redimensionner le cadre des étincelles ne suffit
+pas : le client les pose lui-même à une taille fixe et `AutoCastShine_OnUpdate`
+les déplace sans les retailler. On obtenait des étincelles trop grosses tournant
+sur un cercle trop petit. `SetScale` sur le cadre fait suivre tout ce qu'il
+contient — tailles et orbite.
+
+Un anneau repris de `mainline` (coins + fourmis tournantes) avait été écrit
+puis **retiré** : c'était une lecture d'une saveur qui ne s'applique pas.
+
+**Non reproduit.** La marque de surbrillance (`SpellHighlightTexture`, atlas
+`bags-newitem`) n'a pas d'équivalent : `HasPetActionHighlightMark` n'existe pas
+en 3.3.5.
 
 ---
 
@@ -341,7 +359,7 @@ d'équivalent : `HasPetActionHighlightMark` n'existe pas en 3.3.5.
 | Un bouton d'action vide est **caché**, pas seulement son fond | `ActionButton_HideGrid` masque le bouton entier dès que son compteur `showgrid` retombe à zéro, et ce compteur ne monte que le temps d'un glisser-déposer (`ACTIONBAR_SHOWGRID` / `_HIDEGRID`). L'art d'emplacement vide de camelot disparaissait avec lui | maintenir `showgrid` à 1 : le client garde alors ses boutons vides affichés de lui-même. Un `Show` de secours si le bouton était déjà masqué, **jamais en combat** — afficher un cadre sécurisé y est interdit ; ce qui est masqué pendant un combat revient à la sortie, `PLAYER_REGEN_ENABLED` étant surveillé |
 | Pas d'animations d'atlas (flipbook) | les barres d'état n'ont ni éclat de gain, ni animation de passage de niveau | les images existent (`*-flipbook`), il faudrait un `OnUpdate` qui déroule les vignettes, comme c'est déjà fait pour le sommeil du cadre joueur |
 | `SetNormalTexture` et ses sœurs n'acceptent qu'un **chemin** | leur passer un objet texture, comme le fait le client moderne, lève une erreur -- et une erreur au premier niveau d'un fichier abandonne **tout ce qui suit**. C'est ce qui a rendu `Bags.lua` inopérant sans rien afficher : l'habillage était appelé après le bouton de tri | poser le chemin de la feuille, puis régler l'atlas sur la texture que le bouton vient de créer ; le faux client lève maintenant la même erreur |
-| `SetRotation` efface le rectangle d'atlas | il recalcule les coordonnées de texture sur l'image **entière** : la texture se met alors à montrer toute la feuille. C'est ce qui affichait les deux sprites de l'anneau d'autolancement côte à côte | tourner par la forme à **huit arguments** de `SetTexCoord` — `SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)`, que le message d'usage du client donne lui-même. Elle nomme les quatre coins et reste donc dans le rectangle de l'élément. Ses coins balaient le carré **circonscrit** (1,41 fois le côté) : l'élément tournant doit être **seul et centré** dans sa feuille, avec de la marge — c'est ce que prépare `tools/petite_feuille.py` |
+| `SetRotation` efface le rectangle d'atlas | il recalcule les coordonnées de texture sur l'image **entière** : la texture montre alors toute la feuille, et non l'élément voulu | tourner par la forme à huit arguments de `SetTexCoord` — `SetTexCoord(ULx, ULy, LLx, LLy, URx, URy, LRx, LRy)`, que le message d'usage du client donne lui-même. Ses coins balaient le carré circonscrit (1,41 fois le côté) : l'élément doit alors être seul et centré dans sa feuille. **Aucun élément ne tourne aujourd'hui** ; la note reste pour le jour où l'un le fera |
 | Pas de `SetTextureSliceMargins` | la découpe en neuf est faite à la main dans `AtlasUtil.lua`, avec des marges mesurées sur l'image | rien à faire, mais toute nouvelle image encadrée demande de remesurer |
 
 **Le client d'origine fait exactement cela pour ses propres sacs.** Vérifié

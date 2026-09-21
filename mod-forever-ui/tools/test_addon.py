@@ -600,8 +600,7 @@ def main():
 
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
-             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua",
-             "UIAtlas_07_petites_feuilles.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua"]
@@ -1339,44 +1338,18 @@ def main():
     assert [round(v, 2) for v in i3.vertex.values()] == [0.4, 0.4, 0.4], \
         "une action inutilisable est grisee a 0,4"
 
-    # L anneau d autolancement : les coins des que c est possible, les
-    # fourmis seulement quand c est actif.
-    a1, a2 = g.PetActionButton1.foreverAnneau, g.PetActionButton2.foreverAnneau
-    print("   anneau : action 1 possible=%s | action 2 possible=%s, fourmis=%s" % (
-        a1.shown, a2.shown, a2.fourmis.shown))
-    assert not a1.shown, "pas d anneau quand l autolancement est impossible"
-    assert a2.shown and a2.fourmis.shown, "anneau et fourmis quand il est actif"
-    assert a2.width == 31 and a2.points[1][4] == 0.5 and a2.points[1][5] == -0.5, \
-        "l anneau fait 31 et se centre a (0,5 ; -0,5)"
-    fo = a2.fourmis.points[1]
-    assert fo[4] == -5 and fo[5] == 5, "les fourmis debordent de 5 px"
-
-    # L'anneau vient d'une PETITE feuille : le client rend en bruit celle de
-    # 2048 de large dont ces elements sortent a l'origine.
-    print("   feuille de l'anneau : %s" % a2.fourmis.texture)
-    assert "petautocast" in (a2.fourmis.texture or "").lower(),         "l anneau doit venir de la petite feuille"
-    assert "uiactionbarfx" not in (a2.fourmis.texture or "").lower(),         "la feuille de 2048 sort en bruit sur ce client"
-
-    # LA ROTATION : -360 degres en 4 secondes, et surtout par la forme a HUIT
-    # arguments de SetTexCoord. SetRotation recalculerait les coordonnees sur
-    # l'image entiere et la texture montrerait toute la feuille.
-    avant = a2.angle
-    a2.scripts.OnUpdate(a2, 1.0)
-    tour = abs(a2.angle - avant)
-    print("   rotation : %.3f radian en une seconde (%.3f attendu)" % (
-        tour, 2 * 3.14159265 / 4))
-    assert abs(tour - 2 * 3.14159265 / 4) < 0.001, "un tour doit prendre 4 secondes"
-
-    coins = a2.fourmis.texcoord8
-    assert coins is not None, "la rotation doit passer par les huit coordonnees"
-    assert a2.fourmis.rotation is None, "SetRotation effacerait le rectangle d'atlas"
-    valeurs = [round(v, 4) for v in coins.values()]
-    u1, u2 = round(a2.uv[1], 4), round(a2.uv[2], 4)
-    print("   coins tournes : %s" % valeurs)
-    assert min(valeurs) >= -0.001 and max(valeurs) <= 1.001,         "les coins doivent rester dans la feuille"
-    # a un quart de tour, les coins sortent du rectangle d'origine : c est
-    # pour cela que l element est seul au milieu de sa feuille.
-    assert min(valeurs) < u1 + 0.001 or max(valeurs) > u2 - 0.001,         "la rotation doit balayer au-dela du rectangle, d ou la marge"
+    # L'AUTOLANCEMENT RESTE CELUI DU CLIENT. AutoCastTemplates n'existe que
+    # dans mainline/, et seuls camelot/ et shared/ font foi : camelot garde
+    # ici sa bordure scintillante et ses etincelles, qu'il allume lui-meme.
+    # On ne fait que les mettre a l'echelle du bouton, 30 au lieu de 36.
+    bordure = g["PetActionButton1AutoCastable"]
+    etincelles = g["PetActionButton1Shine"]
+    print("   autolancement du client : bordure %.1f (58 x 30/36) | etincelles a l echelle %.3f" % (
+        bordure.width, etincelles.GetScale(etincelles)))
+    assert abs(bordure.width - 58 * 30 / 36.0) < 0.01,         "la bordure d origine doit suivre l echelle du bouton"
+    assert abs(etincelles.GetScale(etincelles) - 30 / 36.0) < 0.001,         "les etincelles se mettent a l echelle, elles ne se redimensionnent pas"
+    assert bordure.alpha != 0, "la bordure du client ne doit plus etre effacee"
+    assert g.PetActionButton1.foreverAnneau is None,         "l anneau maison est retire : camelot garde ici le comportement d origine"
 
     # sans familier, la barre disparait
     lua.execute("PET_A_UNE_BARRE = false")
