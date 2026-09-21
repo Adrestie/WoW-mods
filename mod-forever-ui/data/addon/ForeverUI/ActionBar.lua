@@ -51,6 +51,8 @@ local BUTTON_PITCH = BUTTON_SIZE + BUTTON_PADDING
 local FRAME_WIDTH, FRAME_HEIGHT = 46, 45      -- taille des quatre etats
 local BUTTON_COUNT = 12
 local END_CAP_WIDTH, END_CAP_HEIGHT = 154, 95
+local DESCENTE_EMBOUT = -2      -- releve a l'ecran : le bas de l'image tombe
+                                -- 2 px sous le bas de la barre
 
 local ATLAS = {
 	normal = "ui-hud-actionbar-iconframe",
@@ -231,7 +233,7 @@ local function createEndCap(nom, atlas, point, relPoint, decalageX)
 	local cap = CreateFrame("Frame", nom, holder)
 	cap:SetWidth(END_CAP_WIDTH)
 	cap:SetHeight(END_CAP_HEIGHT)
-	cap:SetPoint(point, holder, relPoint, decalageX, 0)
+	cap:SetPoint(point, holder, relPoint, decalageX, DESCENTE_EMBOUT)
 	-- RELEVE -- camelot/MainMenuBarEndCaps.xml : frameLevel 100. L'embout passe
 	-- DEVANT les boutons, dont le niveau est celui du cadre du client.
 	cap:SetFrameLevel(holder:GetFrameLevel() + 10)
@@ -255,7 +257,8 @@ end
 -- a +5 du milieu d'une barre de 45 pour 95 de haut -- meme resultat). La barre
 -- etant a 2 px du bas de l'ecran, ces 20 px tombent hors de l'ecran : les
 -- pattes du griffon disparaissent et la barre vient mordre sa tete. On cale
--- donc le BAS de l'image sur le BAS de la barre, comme le jeu le montre.
+-- donc le BAS de l'image sur le BAS de la barre, comme le jeu le montre --
+-- puis 2 px plus bas, valeur relevee a l'ecran.
 local leftCap = createEndCap("ForeverUIActionBarLeftCap", "ui-hud-actionbar-gryphon-left", "BOTTOMRIGHT", "BOTTOMLEFT", 30)
 local rightCap = createEndCap("ForeverUIActionBarRightCap", "ui-hud-actionbar-gryphon-right", "BOTTOMLEFT", "BOTTOMRIGHT", -30)
 

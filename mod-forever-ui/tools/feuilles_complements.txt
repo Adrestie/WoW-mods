@@ -38,3 +38,6 @@ interface/containerframe/bagsitemslot2xc60.blp
 
 # champ de recherche : loupe et bouton d'effacement
 interface/common/commonsearch.blp
+
+# encadre de la bourse
+interface/common/commoncoinbox.blp

@@ -544,7 +544,8 @@ local function poserEmbouts()
 	end
 
 	embouts.right:ClearAllPoints()
-	embouts.right:SetPoint("BOTTOMLEFT", sacs, "BOTTOMRIGHT", -30, 0)
+	-- Meme descente de 2 px que l'embout gauche (voir ActionBar.lua).
+	embouts.right:SetPoint("BOTTOMLEFT", sacs, "BOTTOMRIGHT", -30, -2)
 end
 
 local function toutPoser()

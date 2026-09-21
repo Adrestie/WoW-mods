@@ -1,0 +1,9 @@
+# Fichiers du client moderne qui ne sont PAS des feuilles d'atlas : une image,
+# un nom, rien a decouper. Ils entrent dans l'atelier comme les feuilles, avec
+# leur apercu, mais ne donnent aucune entree de table.
+
+# l'icone du sac a dos, que camelot donne au bouton du sac principal
+interface/icons/ui-hud-actionbar-bag.blp
+
+# le cadre teinte par la qualite, pose sur chaque objet d'un sac
+interface/common/whiteiconframe.blp

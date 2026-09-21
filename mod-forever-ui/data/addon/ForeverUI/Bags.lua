@@ -4,12 +4,33 @@
 -- sacs se sert du fichier commun (camelot/ContainerFrame.lua ne fait qu'une
 -- chose : recadrer le masque rond du portrait).
 --
+-- mainline/ContainerFrame.lua -- LA GEOMETRIE, chiffre par chiffre
+--   CONTAINER_WIDTH = 178, ITEM_SPACING_X = ITEM_SPACING_Y = 5, quatre
+--   colonnes, boutons de 37.
+--   ContainerFrameMixin:GetFirstButtonOffsetY = 9
+--   ContainerFrameMixin:GetPaddingHeight = 9 + 48, et +30 pour le sac a dos
+--   (la bande du champ de recherche)
+--   ContainerFrameMixin:CalculateHeight = hauteur des rangees + ce
+--   remplissage + CalculateExtraHeight, qui vaut la hauteur de la bourse pour
+--   le sac a dos.
+--   sac ordinaire : premier bouton BOTTOMRIGHT (-7, 9) du cadre.
+--   sac a dos     : bourse BOTTOMLEFT (8, 8) et BOTTOMRIGHT (-8, 8), haute de
+--                   13 ; premier bouton BOTTOMRIGHT sur le TOPRIGHT de la
+--                   bourse, decale de (0, 4).
+--   bourse        : ContainerFrameCurrencyBorderTemplate, haut de 17, bouts
+--                   de 8 x 17 (common-coinbox-left et -right) et milieu tendu.
+--
 -- mainline/ContainerFrame.xml
 --   cadre           ContainerFrameTemplate herite de PortraitFrameFlatTemplate :
 --                   fond plat + encadrement de metal en neuf tranches, jeu
 --                   HeldBagLayout. Monte par ForeverUI.SetPanelArt.
 --   emplacement     ContainerFrameItemButtonTemplate, 37 x 37, fond d'un
 --                   emplacement vide = bags-item-slot64.
+--
+-- shared/ItemButtonTemplate.lua : SetItemButtonQuality_Base
+--   Le contour d'un objet, c'est IconBorder : Interface\Common\WhiteIconFrame
+--   teinte par la couleur de qualite de l'objet. Une case vide n'en a pas ;
+--   c'est son fond qui se voit.
 --   champ           BagItemSearchBox, 96 x 18, 15 lettres, TOPLEFT (42, -37)
 --                   du sac principal (ContainerFrameMixin:SetSearchBoxPoint).
 --   bouton de tri   BagItemAutoSortButton, 28 x 26, TOPRIGHT (-9, -34),
@@ -65,11 +86,17 @@ local SURVOL_CARRE = "Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Sq
 --             sac a dos (le champ est pose de -37 a -55)
 --   grille    quatre colonnes, pas de 42 x 41 pour des boutons de 37
 --   bourse    sous la grille, dans la fenetre
-local COLONNES = NUM_CONTAINER_COLUMNS or 4
-local PAS_X, PAS_Y = 42, 41
-local ENTETE_SAC_A_DOS = 60
-local ENTETE_SAC = 32
-local MARGE_BAS = 9
+local COLONNES = 4
+local ECART = 5                 -- ITEM_SPACING_X et _Y
+local LARGEUR_CADRE = 178       -- CONTAINER_WIDTH de camelot (192 en 3.3.5)
+local REMPLISSAGE = 9 + 48      -- GetPaddingHeight
+local REMPLISSAGE_RECHERCHE = 30
+local MARGE_BAS = 9             -- GetFirstButtonOffsetY
+local BOURSE_H = 13
+local BOURSE_BAS, BOURSE_COTE = 8, 8
+local BORDURE_BOURSE_H, BORDURE_BOURSE_BOUT = 17, 8
+
+local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
 
 local RANGER = BAG_CLEANUP_BAGS or "Ranger les sacs"
 local RANGER_AIDE = BAG_CLEANUP_BAGS_DESCRIPTION
@@ -112,17 +139,13 @@ local function habillerBouton(bouton)
 		icone:SetDrawLayer("BORDER")
 	end
 
-	-- Le contour. La source ne pose que le fond d'une case vide
-	-- (bags-item-slot64), qui disparait des qu'un objet occupe la case : les
-	-- emplacements n'ont alors plus de bord. On ajoute donc le cadre des sacs,
-	-- celui-la meme que porte la barre des sacs.
-	local contour = bouton:CreateTexture(nil, "ARTWORK")
-	if ForeverUI.SetAtlas(contour, "ui-hud-actionbar-iconframe-bags", true) then
-		contour:SetAllPoints(bouton)
-		bouton.foreverContour = contour
-	else
-		contour:Hide()
-	end
+	-- Le contour d'un objet : WhiteIconFrame teinte par sa qualite, comme
+	-- SetItemButtonQuality_Base le fait. Une case vide n'en a pas.
+	local contour = bouton:CreateTexture(nil, "OVERLAY")
+	contour:SetTexture(CADRE_QUALITE)
+	contour:SetAllPoints(bouton)
+	contour:Hide()
+	bouton.foreverContour = contour
 
 	-- Le voile de recherche : la source le declare sur le bouton d'objet
 	-- lui-meme, noir a 80 %, sur toute la surface.
@@ -220,17 +243,33 @@ function Recherche.Correspond(lien)
 	return false
 end
 
+-- Le voile de recherche ET le contour de qualite se decident au meme moment :
+-- les deux dependent de ce que la case contient.
 function Recherche.Appliquer(cadre)
 	local nom = cadre:GetName()
 	local sac = cadre:GetID()
 	for index = 1, cadre.size or 0 do
 		local bouton = _G[nom .. "Item" .. index]
 		if bouton and bouton.foreverVoile then
-			local lien = GetContainerItemLink(sac, bouton:GetID())
+			local emplacement = bouton:GetID()
+			local lien = GetContainerItemLink(sac, emplacement)
+
 			if lien and not Recherche.Correspond(lien) then
 				bouton.foreverVoile:Show()
 			else
 				bouton.foreverVoile:Hide()
+			end
+
+			local contour = bouton.foreverContour
+			if contour then
+				local qualite = select(4, GetContainerItemInfo(sac, emplacement))
+				local couleur = qualite and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[qualite]
+				if lien and couleur then
+					contour:SetVertexColor(couleur.r, couleur.g, couleur.b)
+					contour:Show()
+				else
+					contour:Hide()
+				end
 			end
 		end
 	end
@@ -568,9 +607,41 @@ local function poserOutils()
 	boutonTri:Show()
 end
 
+-- L'encadre de la bourse : deux bouts et un milieu tendu, 17 de haut.
+local function habillerBourse(bourse)
+	if not bourse or bourse.foreverBorde then
+		return
+	end
+
+	bourse:SetHeight(BOURSE_H)
+
+	local gauche = bourse:CreateTexture(nil, "BACKGROUND")
+	if not ForeverUI.SetAtlas(gauche, "common-coinbox-left", true) then
+		gauche:Hide()
+		return
+	end
+	gauche:SetWidth(BORDURE_BOURSE_BOUT)
+	gauche:SetHeight(BORDURE_BOURSE_H)
+	gauche:SetPoint("LEFT", bourse, "LEFT", 0, 0)
+
+	local droite = bourse:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(droite, "common-coinbox-right", true)
+	droite:SetWidth(BORDURE_BOURSE_BOUT)
+	droite:SetHeight(BORDURE_BOURSE_H)
+	droite:SetPoint("RIGHT", bourse, "RIGHT", 0, 0)
+
+	local milieu = bourse:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(milieu, "_common-coinbox-center", true)
+	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT")
+	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT")
+
+	bourse.foreverBorde = true
+end
+
 -- RELEVE -- 3.3.5 ContainerFrame_GenerateFrame : le premier bouton porte le
 -- coin BAS DROIT de la grille, les suivants s'enchainent vers la gauche puis
--- vers le haut. Deplacer ce seul bouton deplace donc toute la grille.
+-- vers le haut, avec 4 px entre deux rangees. camelot en met 5 : on repose
+-- donc aussi le premier bouton de chaque rangee.
 local function poserGrille(cadre)
 	local taille = cadre.size or 0
 	if taille <= 1 then
@@ -579,36 +650,44 @@ local function poserGrille(cadre)
 
 	local nom = cadre:GetName()
 	local rangees = math.ceil(taille / COLONNES)
-	local hauteurGrille = rangees * PAS_Y - (PAS_Y - EMPLACEMENT)
-	local largeurGrille = COLONNES * EMPLACEMENT + (COLONNES - 1) * (PAS_X - EMPLACEMENT)
-	local marge = ((CONTAINER_WIDTH or 192) - largeurGrille) / 2
-
+	local hauteurGrille = rangees * EMPLACEMENT + (rangees - 1) * ECART
 	local sacADos = cadre:GetID() == 0
-	local entete = sacADos and ENTETE_SAC_A_DOS or ENTETE_SAC
 
-	-- La bourse ne s'affiche que sur le sac a dos, et doit tenir DANS la
-	-- fenetre : on lui reserve sa hauteur sous la grille.
+	cadre:SetWidth(LARGEUR_CADRE)
+
 	local bourse = _G[nom .. "MoneyFrame"]
-	local placeBourse = 0
-	if sacADos and bourse then
-		local hauteur = bourse:GetHeight()
-		if not hauteur or hauteur < 1 then
-			hauteur = 24
-		end
-		placeBourse = hauteur + 8
+	local hauteur = hauteurGrille + REMPLISSAGE
+	if sacADos then
+		hauteur = hauteur + REMPLISSAGE_RECHERCHE + BOURSE_H
 	end
+	cadre:SetHeight(hauteur)
 
-	cadre:SetHeight(entete + hauteurGrille + placeBourse + MARGE_BAS)
+	if sacADos and bourse then
+		habillerBourse(bourse)
+		bourse:ClearAllPoints()
+		bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", BOURSE_COTE, BOURSE_BAS)
+		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -BOURSE_COTE, BOURSE_BAS)
+		bourse:Show()
+	end
 
 	local premier = _G[nom .. "Item1"]
 	if premier then
 		premier:ClearAllPoints()
-		premier:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -marge, placeBourse + MARGE_BAS)
+		if sacADos and bourse then
+			premier:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT", 0, 4)
+		else
+			premier:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -7, MARGE_BAS)
+		end
 	end
 
-	if sacADos and bourse then
-		bourse:ClearAllPoints()
-		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -12, 8)
+	-- 3.3.5 empile les rangees avec 4 px ; camelot en met 5.
+	for index = COLONNES + 1, taille, COLONNES do
+		local bouton = _G[nom .. "Item" .. index]
+		local dessous = _G[nom .. "Item" .. (index - COLONNES)]
+		if bouton and dessous then
+			bouton:ClearAllPoints()
+			bouton:SetPoint("BOTTOMRIGHT", dessous, "TOPRIGHT", 0, ECART)
+		end
 	end
 end
 

@@ -47,6 +47,7 @@ OUTILS = os.path.join(RACINE, "tools")
 ART = os.path.join(RACINE, "data", "art")
 ADDON = os.path.join(RACINE, "data", "addon", "ForeverUI")
 LISTE = os.path.join(OUTILS, "feuilles_complements.txt")
+LISTE_SIMPLE = os.path.join(OUTILS, "fichiers_simples.txt")
 INDEX = os.path.join(OUTILS, "atlas_dump.json")
 PREFIXE = "ForeverUI"
 BS = chr(92)
@@ -71,13 +72,24 @@ def _logique(nom):
     return "-".join(parts)
 
 
-def feuilles_voulues():
+def _lire(liste):
     voulues = []
-    for ligne in io.open(LISTE, encoding="utf-8"):
+    for ligne in io.open(liste, encoding="utf-8"):
         ligne = ligne.split("#")[0].strip()
         if ligne:
             voulues.append(ligne.lower())
     return voulues
+
+
+def feuilles_voulues():
+    return _lire(LISTE)
+
+
+def fichiers_simples():
+    """Des images a part entiere : elles entrent, mais ne sont pas decoupees."""
+    if not os.path.exists(LISTE_SIMPLE):
+        return []
+    return _lire(LISTE_SIMPLE)
 
 
 def chemin_atelier(feuille, extension=".blp"):
@@ -199,7 +211,8 @@ def regenerer_table(voulues):
 
 def main():
     voulues = feuilles_voulues()
-    exporter(voulues)
+    simples = fichiers_simples()
+    exporter(voulues + simples)
     regenerer_table(voulues)
     print("l'atelier est a jour ; poser dans le client avec tools/deployer.py")
 

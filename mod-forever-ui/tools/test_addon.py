@@ -322,6 +322,13 @@ NUM_CONTAINER_FRAMES = 13
 MAX_CONTAINER_ITEMS = 36
 NUM_BAG_SLOTS = 4
 CONTAINER_WIDTH = 192
+ITEM_QUALITY_COLORS = {
+    [0] = { r = 0.62, g = 0.62, b = 0.62 },
+    [1] = { r = 1.00, g = 1.00, b = 1.00 },
+    [2] = { r = 0.12, g = 1.00, b = 0.00 },
+    [3] = { r = 0.00, g = 0.44, b = 0.87 },
+    [4] = { r = 0.64, g = 0.21, b = 0.93 },
+}
 NUM_CONTAINER_COLUMNS = 4
 SEARCH = "Rechercher"
 BAG_CLEANUP_BAGS = nil
@@ -367,7 +374,8 @@ end
 function GetContainerItemInfo(sac, emplacement)
     local case = SACS[sac] and SACS[sac][emplacement]
     if not case then return nil end
-    return "icone", case.nombre, false, 1, false
+    local o = OBJETS[case.lien]
+    return "icone", case.nombre, false, (o and o.qualite) or 1, false
 end
 function GetItemInfo(lien)
     local o = OBJETS[lien]
@@ -1083,10 +1091,10 @@ def main():
     pt = embout.points[1]
     print("embout droit : %s sur %s (%s, %s)" % (pt[1], pt[3], pt[4], pt[5]))
     assert pt[1] == "BOTTOMLEFT" and pt[3] == "BOTTOMRIGHT", "l'embout droit n'est pas cale par le bas"
-    assert pt[4] == -30 and pt[5] == 0, "l'embout droit ne tient pas au bord des sacs"
+    assert pt[4] == -30 and pt[5] == -2, "l'embout droit ne tient pas au bord des sacs"
     gauche = g.ForeverUI.ActionBarEndCaps.left.points[1]
     print("embout gauche : %s sur %s (%s, %s)" % (gauche[1], gauche[3], gauche[4], gauche[5]))
-    assert gauche[1] == "BOTTOMRIGHT" and gauche[3] == "BOTTOMLEFT" and gauche[5] == 0
+    assert gauche[1] == "BOTTOMRIGHT" and gauche[3] == "BOTTOMLEFT" and gauche[5] == -2
 
     # ------------------------------------------------------- les sacs
     sac = g.ContainerFrame1
@@ -1120,19 +1128,43 @@ def main():
     ppt = premier.points[len(list(premier.points.values()))]
     bourse = g.ContainerFrame1MoneyFrame
     bpt = bourse.points[len(list(bourse.points.values()))]
-    print("fenetre du sac a dos : %d de haut (60 d'entete + 160 de grille + 32 de bourse + 9)" % (
-        g.ContainerFrame1.height))
-    print("   grille centree : premier bouton %s (%s, %s) -- marge de %.1f de chaque cote" % (
-        ppt[1], ppt[4], ppt[5], -ppt[4]))
-    print("   bourse : %s (%s, %s), dans la fenetre" % (bpt[1], bpt[4], bpt[5]))
-    assert g.ContainerFrame1.height == 261, "la fenetre n'a pas la hauteur de son contenu"
-    assert abs(ppt[4] + 14.5) < 0.01, "la grille n'est pas centree"
-    assert ppt[5] == 41, "la grille ne laisse pas la place a la bourse"
-    assert bpt[1] == "BOTTOMRIGHT" and bpt[5] == 8, "la bourse sort de la fenetre"
+    print("fenetre du sac a dos : %d x %d (178 x 263 attendu : 163 de grille + 57 + 30 + 13)" % (
+        g.ContainerFrame1.width, g.ContainerFrame1.height))
+    assert g.ContainerFrame1.width == 178, "la fenetre n'a pas la largeur de camelot"
+    assert g.ContainerFrame1.height == 263, "la fenetre n'a pas la hauteur de camelot"
 
-    contour = g.ContainerFrame1Item1.foreverContour
-    print("   contour d'emplacement : %s" % (contour is not None))
-    assert contour is not None, "les emplacements n'ont pas de contour"
+    print("   premier bouton : %s sur %s (%s, %s) -- il pose sur la bourse" % (
+        ppt[1], ppt[3], ppt[4], ppt[5]))
+    assert ppt[3] == "TOPRIGHT" and ppt[4] == 0 and ppt[5] == 4, (
+        "la grille ne pose pas sur la bourse")
+
+    rangee2 = g.ContainerFrame1Item5
+    r2 = rangee2.points[len(list(rangee2.points.values()))]
+    print("   ecart entre rangees : %s (5 attendu, 4 en 3.3.5)" % r2[5])
+    assert r2[5] == 5, "l'ecart entre rangees n'est pas celui de camelot"
+
+    print("   bourse : %d de haut, %s (%s, %s) et %s (%s, %s), encadree=%s" % (
+        bourse.height, bpt[1], bpt[4], bpt[5],
+        bourse.points[len(list(bourse.points.values()))][1],
+        bourse.points[len(list(bourse.points.values()))][4],
+        bourse.points[len(list(bourse.points.values()))][5],
+        bourse.foreverBorde == True))
+    assert bourse.height == 13, "la bourse n'a pas la hauteur de camelot"
+    assert bourse.foreverBorde, "la bourse n'a pas son encadre"
+
+    # le contour suit la qualite de l'objet
+    lua.execute("""
+        SACS[0][4] = { lien = "|cff0070dd|Hitem:2|h[Epee]|h|r", nombre = 1 }
+        ContainerFrame1.size = 16
+    """)
+    g.ForeverUI.BagSearch.Tout()
+    contour = g.ContainerFrame1Item4.foreverContour
+    vide = g.ContainerFrame1Item3.foreverContour
+    print("   contour : case pleine visible=%s teinte=%s | case vide visible=%s" % (
+        contour.shown, [round(v, 2) for v in contour.vertex.values()] if contour.vertex else None,
+        vide.shown))
+    assert contour.shown, "un objet n'a pas de contour"
+    assert not vide.shown, "une case vide a un contour"
 
     # le champ et le bouton de tri ne se montrent que sur le sac principal
     g.ForeverUI.BagsLayout()

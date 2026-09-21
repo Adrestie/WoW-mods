@@ -34,18 +34,19 @@ SORTIE = os.path.join(RACINE, "docs", "apercu")
 os.makedirs(SORTIE, exist_ok=True)
 ATLAS = Atlas()
 
-# La mise en page que Bags.lua calcule : entete, grille, bourse, marge.
-COLONNES, EMPLACEMENT = 4, 37
-PAS_X, PAS_Y = 42, 41
+# La geometrie de camelot, celle que Bags.lua calcule.
+COLONNES, EMPLACEMENT, ECART = 4, 37, 5
 RANGEES = 4
-ENTETE = 60          # bande de titre + bande du champ de recherche
-BOURSE = 24 + 8      # la bourse et son air
-MARGE_BAS = 9
-GRILLE_H = RANGEES * PAS_Y - (PAS_Y - EMPLACEMENT)
-GRILLE_L = COLONNES * EMPLACEMENT + (COLONNES - 1) * (PAS_X - EMPLACEMENT)
-LARGEUR = 192
-HAUTEUR = ENTETE + GRILLE_H + BOURSE + MARGE_BAS
-MARGE_COTE = (LARGEUR - GRILLE_L) / 2.0
+LARGEUR = 178                       # CONTAINER_WIDTH
+REMPLISSAGE = 9 + 48                # GetPaddingHeight
+REMPLISSAGE_RECHERCHE = 30          # la bande du champ, sur le sac a dos
+BOURSE_H, BOURSE_BAS, BOURSE_COTE = 13, 8, 8
+GRILLE_H = RANGEES * EMPLACEMENT + (RANGEES - 1) * ECART
+GRILLE_L = COLONNES * EMPLACEMENT + (COLONNES - 1) * ECART
+HAUTEUR = GRILLE_H + REMPLISSAGE + REMPLISSAGE_RECHERCHE + BOURSE_H
+MARGE_COTE = BOURSE_COTE            # la grille s'aligne sur la bourse
+PAS_X = PAS_Y = EMPLACEMENT + ECART
+ENTETE = HAUTEUR - BOURSE_BAS - BOURSE_H - 4 - GRILLE_H
 
 # camelot : HeldBagLayout, avec les corrections de NineSliceLayoutOverrides
 COINS = (
@@ -79,13 +80,15 @@ for nom, cote, bord in (("uiframebackground-nineslice-cornerbottomleft", "gauche
 # 3.3.5 : le premier bouton en BOTTOMRIGHT (-12, -208) du haut du cadre, puis
 # -5 vers la gauche et +4 vers le haut d'une rangee a l'autre.
 slot = ATLAS.image("bags-item-slot64", EMPLACEMENT, EMPLACEMENT)
-contour = ATLAS.image("ui-hud-actionbar-iconframe-bags", EMPLACEMENT, EMPLACEMENT)
+cadre_qualite = Image.open(os.path.join(
+    RACINE, "data", "art", "interface", "ForeverUI", "common", "whiteiconframe.png")
+).convert("RGBA").resize((EMPLACEMENT, EMPLACEMENT), Image.LANCZOS)
 for rangee in range(RANGEES):
     for colonne in range(COLONNES):
         x = LARGEUR - MARGE_COTE - EMPLACEMENT - colonne * PAS_X
         y = ENTETE + rangee * PAS_Y
         poser(slot, x, y)
-        poser(contour, x, y)
+        poser(cadre_qualite, x, y)     # teinte par la qualite en jeu
 
 # ------------------------------------------------------------ l'encadrement
 places = {}
@@ -123,7 +126,15 @@ dessin.ellipse([MARGE + 13.5 - 17, MARGE + 14 - 17, MARGE + 13.5 + 17, MARGE + 1
                fill=(60, 45, 30, 255))
 dessin.text((MARGE + 90, MARGE + 6), "Sac a dos", fill=(255, 210, 140, 255))
 
-dessin.text((MARGE + LARGEUR - 80, MARGE + HAUTEUR - 26), "12g 34a 56c",
+# la bourse et son encadre
+bas_bourse = HAUTEUR - BOURSE_BAS - BOURSE_H
+gauche_b = ATLAS.image("common-coinbox-left", 8, 17)
+droite_b = ATLAS.image("common-coinbox-right", 8, 17)
+poser(gauche_b, BOURSE_COTE, bas_bourse - 2)
+poser(droite_b, LARGEUR - BOURSE_COTE - 8, bas_bourse - 2)
+poser(ATLAS.image("_common-coinbox-center", LARGEUR - 2 * BOURSE_COTE - 16, 17),
+      BOURSE_COTE + 8, bas_bourse - 2)
+dessin.text((MARGE + LARGEUR - 78, MARGE + bas_bourse + 2), "12g 34a 56c",
             fill=(255, 220, 150, 255))
 
 chemin = os.path.join(SORTIE, "apercu_sacs.png")

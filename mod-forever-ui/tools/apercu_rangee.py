@@ -103,7 +103,7 @@ GRYPHON_W, GRYPHON_H = 154, 95
 gryphon_g_droite = barre_gauche + 30
 gryphon_d_gauche = sacs_gauche + SACS_W - 30
 # les embouts sont cales par le bas : bas de l image = bas de la barre
-gryphon_bas = barre_bas
+gryphon_bas = barre_bas - 2      # les embouts descendent de 2 px
 gryphon_centre_y = gryphon_bas + GRYPHON_H / 2.0
 
 X0 = gryphon_g_droite - GRYPHON_W - 10
