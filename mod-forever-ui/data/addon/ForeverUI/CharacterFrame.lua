@@ -112,11 +112,22 @@ local TITRE_BANDE = 20
 local NIVEAU_Y = -54
 local NIVEAU_LARGEUR, NIVEAU_HAUTEUR = 220, 20
 
--- LES FLECHES DU MODELE, centrees dans le volet gauche. La capture les
--- montre en haut, a 29 sous le bord du volet ; leur milieu tombe sur celui
--- du volet.
-local ROTATION_Y = -29
+-- LES FLECHES DU MODELE, centrees dans le volet gauche : leur milieu tombe
+-- sur celui du volet, mesure a 276 sur la capture contre 275 pour le volet.
+-- Leur hauteur est un REGLAGE, pas un releve -- la capture montre trois
+-- boutons la ou 3.3.5 en a deux, et ils n'ont pas la meme taille.
+local ROTATION_Y = -12
 local ROTATION_ECART = 4
+
+-- LE MODELE remonte d'autant dans son volet. Reglage lui aussi : la source
+-- fait remplir tout le volet a sa scene, mais sa camera n'est pas celle de
+-- 3.3.5, qui cadre le personnage plus bas.
+local MODELE_Y = 24
+
+-- LE PANNEAU DES RESISTANCES se decale vers la droite. On garde son
+-- ancrage d'origine et on n'y ajoute que ce decalage, sinon chaque passage
+-- le pousserait un peu plus loin.
+local RESISTANCES_X = 30
 
 local FERMETURE = 24
 local FERMETURE_X, FERMETURE_Y = 1, 0
@@ -403,8 +414,8 @@ local function poserModele()
 	end
 
 	modele:ClearAllPoints()
-	modele:SetPoint("TOPLEFT", voletGauche, "TOPLEFT", 0, 0)
-	modele:SetPoint("BOTTOMRIGHT", voletGauche, "BOTTOMRIGHT", 0, 0)
+	modele:SetPoint("TOPLEFT", voletGauche, "TOPLEFT", 0, MODELE_Y)
+	modele:SetPoint("BOTTOMRIGHT", voletGauche, "BOTTOMRIGHT", 0, MODELE_Y)
 
 	-- Les fleches de rotation : centrees sur le volet, cote a cote.
 	local gauche = _G["CharacterModelFrameRotateLeftButton"]
@@ -420,6 +431,25 @@ local function poserModele()
 		droite:SetPoint("TOP", voletGauche, "TOP", demi, ROTATION_Y)
 		droite:SetFrameLevel(modele:GetFrameLevel() + 2)
 	end
+end
+
+-- Le panneau des resistances, decale vers la droite. Son ancrage d'origine
+-- est garde a part : on repart toujours de lui, jamais de la position
+-- courante, qui derive a chaque passage.
+local function poserResistances()
+	local cadre = _G["CharacterResistanceFrame"]
+	if not cadre or not cadre.GetPoint or cadre:GetNumPoints() == 0 then
+		return
+	end
+
+	if not cadre.foreverAncrage then
+		local point, cible, pointCible, x, y = cadre:GetPoint(1)
+		cadre.foreverAncrage = { point, cible, pointCible, x or 0, y or 0 }
+	end
+
+	local a = cadre.foreverAncrage
+	cadre:ClearAllPoints()
+	cadre:SetPoint(a[1], a[2], a[3], a[4] + RESISTANCES_X, a[5])
 end
 
 -- La ligne du niveau, de la race et de la classe.
@@ -565,6 +595,7 @@ local function habiller()
 	poserTitre(cadre)
 	poserFermeture(cadre)
 	poserModele()
+	poserResistances()
 	poserNiveau()
 	poserEmplacements()
 	poserOnglets(cadre)

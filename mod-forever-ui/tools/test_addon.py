@@ -522,6 +522,8 @@ for i = 1, 5 do
     _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
     t:CreateTexture(nom .. "Fond", "ARTWORK")
 end
+CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
+CharacterResistanceFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -60, -80)
 ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
 ReputationFrame:Hide()
 function CharacterFrame_ShowSubFrame() end
@@ -1694,9 +1696,21 @@ def main():
     assert fg[4] < 0 and fd[4] > 0, "la gauche a gauche, la droite a droite"
 
     modele = g.CharacterModelFrame.points[1]
-    print("   modele : %s sur %s (il occupe le volet gauche)" % (modele[1], modele[3]))
-    assert modele[1] == "TOPLEFT" and modele[2].name == "ForeverUICharacterLeftPane", \
-        "le modele occupe tout le volet gauche"
+    print("   modele : %s sur %s, remonte de %s dans son volet" % (
+        modele[1], modele[3], modele[5]))
+    assert modele[1] == "TOPLEFT" and modele[2].name == "ForeverUICharacterLeftPane",         "le modele occupe le volet gauche"
+    assert modele[5] == 24, "il est remonte dans son volet"
+
+    # Le panneau des resistances se decale, et UNE SEULE FOIS : on repart
+    # toujours de son ancrage d origine, jamais de la position courante.
+    res = g.CharacterResistanceFrame
+    x1 = res.points[len(list(res.points.values()))][4]
+    g.ForeverUI.CharacterSheet.Apply()
+    g.ForeverUI.CharacterSheet.Apply()
+    x2 = res.points[len(list(res.points.values()))][4]
+    print("   resistances : %s, puis %s apres deux passages de plus" % (x1, x2))
+    assert x1 == -60 + 30, "le decalage est de 30 vers la droite"
+    assert x1 == x2, "le decalage ne doit pas deriver a chaque passage"
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu
