@@ -2827,6 +2827,17 @@ def main():
     assert cases[1].points[1][5] == -2, "BOTTOMLEFT (0, -2)"
     assert all(c.shown for c in cases), "les trois paraissent pour une faction"
 
+    # LES EPEES N APPARTIENNENT QU A LA GUERRE : les deux autres cases
+    # portent checkmark-minimal, comme la source le declare.
+    print("   coches : guerre=%s | inactive=%s | barre=%s" % (
+        cases[0].foreverCoche.texture, cases[1].foreverCoche.texture,
+        cases[2].foreverCoche.texture))
+    assert "SwordCheck" in (cases[0].foreverCoche.texture or ""),         "At War garde ses deux epees"
+    for c in (cases[1], cases[2]):
+        assert "SwordCheck" not in (c.foreverCoche.texture or ""),         "Move to Inactive et Show as Experience Bar prennent une coche"
+        assert c.foreverCoche.points[1][1] == "CENTER",         "checkmark-minimal se centre sur la case"
+    assert cases[0].foreverCoche.width == 32,         "la coche de guerre fait 32, posee a (3, -5)"
+
     # UN EN-TETE N A PAS DE DETAIL.
     lua.execute("SetSelectedFaction(1)")
     g.ForeverUI.ReputationDetail()

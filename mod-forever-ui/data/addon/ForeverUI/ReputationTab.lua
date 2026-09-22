@@ -780,6 +780,7 @@ local CASE_INTITULE_L = 158
 local CASE_INTITULE_X = 2
 
 local ATLAS_CASE = "checkbox-minimal"
+local ATLAS_COCHE = "checkmark-minimal"
 local ATLAS_SEPARATEUR = "ui-character-info-scrollline"
 local COCHE = "Interface\\Buttons\\UI-CheckBox-SwordCheck"
 local COCHE_COTE = 32
@@ -790,13 +791,23 @@ local detail
 -- LES TROIS CASES DU CLIENT, reposees et rhabillees. Leur logique reste la
 -- leur : ce sont elles qui declarent la guerre, rangent une faction parmi
 -- les inactives, ou la suivent sur la barre du bas.
+-- LES EPEES N'APPARTIENNENT QU'A LA GUERRE.
+--
+-- RELEVE -- camelot/ReputationFrame.xml, les trois CheckButton. Toutes ont
+-- le meme fond, checkbox-minimal, mais pas la meme coche :
+--   AtWarCheckbox          Interface/Buttons/UI-CheckBox-SwordCheck, 32 x 32
+--                          posee a TOPLEFT (3, -5) -- deux epees croisees
+--   MakeInactiveCheckbox   checkmark-minimal
+--   WatchFactionCheckbox   checkmark-minimal
+-- Les deux dernieres ont aussi checkmark-minimal-disabled quand la case est
+-- grisee ; 3.3.5 n'en grise aucune ici, on n'en a pas besoin.
 local CASES = {
-	{ nom = "ReputationDetailAtWarCheckBox", rouge = true },
+	{ nom = "ReputationDetailAtWarCheckBox", rouge = true, epees = true },
 	{ nom = "ReputationDetailInactiveCheckBox" },
 	{ nom = "ReputationDetailMainScreenCheckBox" },
 }
 
-local function habillerCase(case, rouge)
+local function habillerCase(case, rouge, epees)
 	if not case or case.foreverHabillee then
 		return
 	end
@@ -816,13 +827,19 @@ local function habillerCase(case, rouge)
 	ForeverUI.SetAtlas(fond, ATLAS_CASE)
 	fond:SetPoint("CENTER", case, "CENTER", 0, 0)
 
-	-- LA COCHE EST UN FICHIER, pas un atlas : camelot lui donne
-	-- UI-CheckBox-SwordCheck, que 3.3.5 possede deja.
+	-- LA COCHE. Celle de la guerre est un FICHIER -- deux epees croisees,
+	-- UI-CheckBox-SwordCheck, que 3.3.5 possede deja -- posee en 32 a
+	-- (3, -5). Les deux autres sont un atlas, checkmark-minimal, centre.
 	local coche = case:CreateTexture(nil, "OVERLAY")
-	coche:SetTexture(COCHE)
-	coche:SetWidth(COCHE_COTE)
-	coche:SetHeight(COCHE_COTE)
-	coche:SetPoint("TOPLEFT", case, "TOPLEFT", COCHE_X, COCHE_Y)
+	if epees then
+		coche:SetTexture(COCHE)
+		coche:SetWidth(COCHE_COTE)
+		coche:SetHeight(COCHE_COTE)
+		coche:SetPoint("TOPLEFT", case, "TOPLEFT", COCHE_X, COCHE_Y)
+	else
+		ForeverUI.SetAtlas(coche, ATLAS_COCHE)
+		coche:SetPoint("CENTER", case, "CENTER", 0, 0)
+	end
 	case.foreverCoche = coche
 
 	local intitule = _G[case:GetName() .. "Text"]
@@ -1021,7 +1038,7 @@ local function monterDetail(hote)
 	for _, decrit in ipairs(CASES) do
 		local case = _G[decrit.nom]
 		if case then
-			habillerCase(case, decrit.rouge)
+			habillerCase(case, decrit.rouge, decrit.epees)
 			case:SetParent(cadre)
 			case:ClearAllPoints()
 			if precedente then
