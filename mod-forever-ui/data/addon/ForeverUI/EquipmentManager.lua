@@ -63,7 +63,20 @@ local BOUTON_L, BOUTON_H = 99, 28
 local BOUTON_Y, BOUTON_ECART = 20, 50
 local NOUVEAU_L, NOUVEAU_H = 180, 34
 local NOUVEAU_Y, NOUVEAU_ICONE_X = 50, 13
-local BORDURE = { 1, 1, -4, 2 }
+-- LA BORDURE SE DECOUPE, ELLE NE S'ETIRE PAS. common-insideframe fait
+-- 107 x 107 et porte un MOTIF dans chaque angle : tendue sur les 233 x 379
+-- du panneau, elle est multipliee par deux en largeur et par trois et demi
+-- en hauteur, et tout se brouille.
+--
+-- Mesure sur l'art : le filet occupe 2..12 et 94..104 sur les deux axes, et
+-- le motif d'angle s'arrete a 19 -- des x = 20 le profil n'est plus que le
+-- filet. Le coin vaut donc 20, ce qui laisse une bande centrale de 67.
+--
+-- Les marges viennent de camelot, qui ancre sa bordure en TOPLEFT (1, 1) et
+-- BOTTOMRIGHT (-4, 2) : converties dans la convention du decoupage -- de
+-- combien l'image deborde du cadre -- cela donne -1, 1, -4, -2.
+local BORDURE_COIN = 20
+local BORDURE_MARGES = { -1, 1, -4, -2 }
 
 local ATLAS_FOND = "ui-character-info-outfitcard"
 local ATLAS_SURVOL = "ui-character-info-outfitcard-hover"
@@ -254,10 +267,8 @@ local function monter(volet)
 	panneau:SetPoint("BOTTOMRIGHT", volet, "BOTTOMRIGHT", 0, 0)
 	panneau:SetFrameLevel(volet:GetFrameLevel() + 3)
 
-	local bordure = panneau:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(bordure, ATLAS_BORDURE, true)
-	bordure:SetPoint("TOPLEFT", panneau, "TOPLEFT", BORDURE[1], BORDURE[2])
-	bordure:SetPoint("BOTTOMRIGHT", panneau, "BOTTOMRIGHT", BORDURE[3], BORDURE[4])
+	panneau.bordure = ForeverUI.CreateNineSlice(panneau, ATLAS_BORDURE,
+		BORDURE_COIN, BORDURE_MARGES, "BORDER")
 
 	local trait = panneau:CreateTexture(nil, "BORDER")
 	ForeverUI.SetAtlas(trait, ATLAS_TRAIT)

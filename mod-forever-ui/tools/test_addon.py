@@ -2631,6 +2631,16 @@ def main():
     assert g.GearManagerDialog.parent.name == "ForeverUIEquipmentPane",         "la fenetre du client passe dans le volet, elle n est pas recreee"
     assert not g.GearManagerDialog.title.shown, "son art de fenetre s efface"
 
+    # La bordure est decoupee : 107 x 107 tendus sur 233 x 379 se brouillent.
+    tranches = list(pane.bordure.values())
+    coin = tranches[0]
+    print("   bordure : %d tranches, coin %dx%d a (%s, %s)" % (
+        len(tranches), coin.width, coin.height,
+        coin.points[1][4], coin.points[1][5]))
+    assert len(tranches) == 9, "neuf tranches, comme le fond des menus"
+    assert coin.width == 20 and coin.height == 20,         "le motif d angle s arrete a 19 : coin de 20"
+    assert (coin.points[1][4], coin.points[1][5]) == (1, 1),         "camelot ancre sa bordure en TOPLEFT (1, 1)"
+
     lua.execute("GearManagerDialog_Update()")
     g.ForeverUI.EquipmentPane.Apply()
     carte = g.GearSetButton1

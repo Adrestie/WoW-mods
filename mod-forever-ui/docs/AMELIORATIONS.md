@@ -677,6 +677,7 @@ toujours le client qui tient la liste, la sélection et les infobulles.
 | **Delete gardé** | camelot efface un ensemble par le menu de sa carte, menu que 3.3.5 n'a pas. Le bouton du client est **conservé** plutôt que de retirer la seule façon d'effacer un ensemble ; il est masqué par défaut au-dessus de Save, à replacer sur décision. |
 | **La coche** | `GetEquipmentSetInfo` ne dit pas si un ensemble est porté. Elle se calcule depuis `GetEquipmentSetLocations` : porté quand chaque pièce est sur le joueur et hors des sacs. |
 | **Pas de barre de défilement** | `MinimalScrollBar` n'est pas portée. La liste défile à la **molette**, et le trait de camelot marque son bas. |
+| **Bordure découpée** | camelot tend `common-insideframe` d'un coin à l'autre. L'image fait 107 × 107 et porte un **motif dans chaque angle** : tendue sur les 233 × 379 du panneau, elle est multipliée par deux en largeur et trois et demi en hauteur, et tout se brouille. Neuf tranches, coin de **20** — mesuré sur l'art : le filet occupe 2..12 et 94..104, le motif d'angle s'arrête à 19. |
 
 **Le système de panneaux reprend la main, il faut repasser derrière.**
 `GearManagerDialog_OnShow` appelle `UpdateUIPanelPositions(CharacterFrame)`
