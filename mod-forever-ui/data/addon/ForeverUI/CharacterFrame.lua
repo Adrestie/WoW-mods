@@ -860,6 +860,17 @@ local function habillerSelecteur(selecteur)
 	intitule:SetPoint("CENTER", selecteur, "CENTER", 0, 1)
 	selecteur.foreverIntitule = intitule
 
+	-- LA LISTE TOMBE SOUS LE BOUTON, SANS DECALAGE.
+	--
+	-- Sans ancrage donne, ToggleDropDownMenu accroche la liste a
+	-- "<nom>Left" -- la piece doree du menu deroulant, que nous avons
+	-- justement masquee -- d'ou un decalage. UIDropDownMenu_SetAnchor est
+	-- l'entree que le client prevoit pour cela : le TOPLEFT de la liste sur
+	-- le BOTTOMLEFT du bouton, sans ecart.
+	if UIDropDownMenu_SetAnchor then
+		UIDropDownMenu_SetAnchor(selecteur, 0, 0, "TOPLEFT", selecteur, "BOTTOMLEFT")
+	end
+
 	-- La fleche du client s'efface : toute la barre ouvre le menu.
 	local bouton = nom and _G[nom .. "Button"]
 	if bouton then

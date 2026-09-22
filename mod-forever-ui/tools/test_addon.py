@@ -280,6 +280,10 @@ function UIDropDownMenu_Initialize(cadre)
         cadre:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)
     end
 end
+function UIDropDownMenu_SetAnchor(cadre, x, y, point, relatif, pointRelatif)
+    cadre.xOffset, cadre.yOffset = x, y
+    cadre.point, cadre.relativeTo, cadre.relativePoint = point, relatif, pointRelatif
+end
 function ToggleDropDownMenu() end
 function IsResting() return STATE.resting end
 function UnitThreatSituation(unit) return STATE.threat end
@@ -1990,6 +1994,13 @@ def main():
     print("   liste ouverte : presse=%s, normal=%s" % (
         presse[0].shown, normal[0].shown))
     assert presse[0].shown and not normal[0].shown, "presse tant que la liste est la"
+    print("   ancrage de la liste : %s sur %s de %s, ecart (%s, %s)" % (
+        sel.point, sel.relativePoint, sel.relativeTo and sel.relativeTo.name,
+        sel.xOffset, sel.yOffset))
+    assert (sel.point, sel.relativePoint) == ("TOPLEFT", "BOTTOMLEFT"),         "la liste tombe sous le bouton, cale a gauche"
+    assert sel.xOffset == 0 and sel.yOffset == 0, "sans ecart"
+    assert sel.relativeTo.name == "PlayerStatFrameLeftDropDown",         "sur le bouton, pas sur sa piece doree que nous avons masquee"
+
     # Le client retaille le selecteur a chaque ouverture du menu.
     lua.execute('UIDropDownMenu_Initialize(PlayerStatFrameLeftDropDown)')
     g.ForeverUI.CharacterStatTabsSize(g.PlayerStatFrameLeftDropDown)

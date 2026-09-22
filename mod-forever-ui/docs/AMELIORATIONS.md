@@ -523,6 +523,13 @@ Le banc ne l'a pas vu parce que son `HookScript` acceptait `nil`. Il refuse
 désormais tout greffon qui n'est pas une fonction, comme le vrai.
 
 
+**La liste tombe sous le bouton, sans décalage.** Sans ancrage donné,
+`ToggleDropDownMenu` accroche la liste à `"<nom>Left"` — la pièce dorée du
+menu déroulant, **que nous avons justement masquée** — d'où un décalage vers
+la droite. `UIDropDownMenu_SetAnchor` est l'entrée que le client prévoit pour
+cela : `TOPLEFT` de la liste sur le `BOTTOMLEFT` du bouton, sans écart.
+
+
 **Le client retaille le sélecteur à chaque ouverture du menu.**
 `UIDropDownMenu_InitializeHelper` finit par
 `frame:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)`. Cette constante, nous
