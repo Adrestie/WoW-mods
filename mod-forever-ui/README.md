@@ -7,17 +7,30 @@ needs. The art comes from a modern client, read sheet by sheet, and is served
 to 3.3.5 the way the modern client serves it -- one texture, a rectangle read
 inside it -- because 3.3.5 has no `SetAtlas`.
 
-| What is rebuilt | State |
-|---|---|
-| Player frame, its portrait, threat and combat states, vehicle art | done |
-| Death knight runes | done |
-| Target frame, classification rings, target of target | done |
-| Cast bar | done |
-| Action bar, page block, end caps | done |
-| Micro menu, bags bar | done |
-| Experience and reputation bars | done |
-| Bags: panel, slots, search box, sort button | done |
-| Minimap, chat, tooltips, auras, party and raid frames, panels | not started |
+One section is one whole piece of the interface. A section is `done` when the
+game has shown it right and it has been accepted, which also makes it a piece
+nothing else is allowed to disturb.
+
+| Section | What it holds | State |
+|---|---|---|
+| Player frame | Frame and portrait, health and power bars, rest and combat states, threat, vehicle art, PvP icon, raid subgroup indicator, play time, incoming damage, and the death knight rune bar. | done |
+| Target frame | Frame and portrait, health and power bars, the reputation band, and the art each classification calls for: ordinary, minus, rare, elite and rare elite dragons, world boss ring. | done |
+| Cast bar | Standard, channelled and uninterruptable casts, the interrupted state and the shield. | done |
+| Action bar | The 45 x 45 button and all of its states, the page number block, the two gryphon end caps. The button art reaches every action button the client carries, the secondary bars included. | done |
+| Stance bar | Forms, auras and aspects on the 30 x 30 small button. | done |
+| Pet bar | The familiar's ten buttons, same small button as the stances. | done |
+| Micro menu and bags bar | The ten micro buttons, and beside them the backpack, the four bag slots and the keyring. | done |
+| Experience and reputation bars | Both bars, their fills, and the reputation colour per standing. | done |
+| Bags | Panel, slots, search box, sort button, round portrait in its ring. | done |
+| Character sheet | The 631 x 484 window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, the twelve stat lines and their two category selectors; and in the right pane the two tabs it opens on -- character stats, and the equipment manager: set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet. | done, except the pane's collapse to 398 and the reputation / skills / PvP / currency tabs |
+| Dropdown lists | `DropDownList1` and `DropDownList2`, which every menu in the game opens: background, rows, font, check box and tick, width aligned on the menu that opened it. | done |
+| Minimap | -- | not started |
+| Chat | -- | not started |
+| Tooltips | -- | not started |
+| Buffs and debuffs | -- | not started |
+| Party and raid frames | -- | not started |
+| Spellbook and talents | -- | not started |
+| Character select and creation | -- | not started |
 
 Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
 `/fui reset` puts a piece -- or all of them -- back where the reference puts it.
