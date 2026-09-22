@@ -2629,6 +2629,16 @@ def main():
     assert g.ReputationBar2ReputationBar.shown, "l entree, si"
     assert pb[1] == "RIGHT" and (pb[4], pb[5]) == (-8, -1),         "ReputationHeaderTemplate pose son StateIcon a RIGHT (-8, -1)"
     assert bouton.foreverIcone.shown, "et la fleche parait sur un en-tete"
+    # UNE TEXTURE SANS TAILLE S ETALE. Le troisieme argument de SetAtlas veut
+    # dire "ne touche pas a la taille" : sans dimension ni second ancrage, le
+    # trait de liste couvrait tout le volet.
+    print("   fleche %d x %d | traits de liste : %s" % (
+        bouton.foreverIcone.width or 0, bouton.foreverIcone.height or 0,
+        [(t.width, t.height) for t in g.ReputationFrame.regions.values()
+         if t.width == 384]))
+    assert bouton.foreverIcone.width == 13,         "common-button-list-plus fait 13 de large, pas la taille du bouton"
+    traits = [t for t in g.ReputationFrame.regions.values() if t.width == 384]
+    assert len(traits) == 2 and all(t.height == 8 for t in traits),         "les deux traits font 384 x 8, leur taille d atlas"
     assert not g.ReputationBar2ExpandOrCollapseButton.foreverIcone.shown,         "pas sur une entree"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.

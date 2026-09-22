@@ -128,8 +128,10 @@ local function habillerBouton(bouton, replie, entete)
 	end
 
 	-- Le plus et le moins n'ont pas la meme taille -- 13 x 13 et 13 x 4 --
-	-- et se posent tous deux au centre du bouton.
-	ForeverUI.SetAtlas(bouton.foreverIcone, replie and ATLAS_PLUS or ATLAS_MOINS, true)
+	-- et se posent tous deux au centre du bouton, CHACUN A LA SIENNE : le
+	-- troisieme argument de SetAtlas veut dire "ne touche pas a la taille",
+	-- et ne vaut que si on la pose soi-meme juste apres.
+	ForeverUI.SetAtlas(bouton.foreverIcone, replie and ATLAS_PLUS or ATLAS_MOINS)
 	bouton.foreverIcone:ClearAllPoints()
 	bouton.foreverIcone:SetPoint("CENTER", bouton, "CENTER", 0, 0)
 	bouton.foreverIcone:Show()
@@ -350,14 +352,20 @@ local function monter(hote)
 		end
 
 		-- LES DEUX TRAITS, en haut et en bas de la liste.
+		--
+		-- SANS LE TROISIEME ARGUMENT. Il veut dire "ne touche pas a la
+		-- taille" -- il ne vaut donc que si on la pose soi-meme juste apres.
+		-- Pose ici sur des textures sans dimension ni second ancrage, il
+		-- laissait le trait s'etaler sur TOUT le volet : une immense bande
+		-- doree par-dessus l'ecran.
 		local premiere = _G["ReputationBar1"]
 		if premiere then
 			local haut = cadre:CreateTexture(nil, "ARTWORK")
-			ForeverUI.SetAtlas(haut, ATLAS_TRAIT, true)
+			ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
 			haut:SetPoint("CENTER", premiere, "TOP", 0, 0)
 
 			local bas = cadre:CreateTexture(nil, "ARTWORK")
-			ForeverUI.SetAtlas(bas, ATLAS_TRAIT, true)
+			ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
 			bas:SetPoint("CENTER", hote, "BOTTOMLEFT",
 				LISTE_X + largeur / 2, LISTE_Y2)
 		end
