@@ -2291,10 +2291,12 @@ def main():
     # Le familier n a pas d icone chez camelot : il garde son texte.
     assert g.CharacterFrameTab2Text.shown, "aucune source pour l onglet du familier"
 
-    print("   onglet du personnage : portrait=%s, texte masque=%s" % (
-        o1.foreverIcone.portraitOf, not g.CharacterFrameTab1Text.shown))
-    assert o1.foreverIcone.portraitOf == "player",         "l onglet du personnage porte le portrait, comme la source"
-    assert abs(o1.foreverIcone.texcoord[1] - 0.03125) < 1e-6,         "rogne a 0,03125 comme UpdateCharacterModeTabPortrait"
+    print("   onglet du personnage : icone=%s, texte masque=%s" % (
+        o1.foreverIcone.texture.split(chr(92))[-1], not g.CharacterFrameTab1Text.shown))
+    # A LA DEMANDE, et non d apres la source : camelot y met le portrait.
+    assert o1.foreverIcone.texture == "Interface" + chr(92) + "ForeverUI" + chr(92)         + "TabIcons" + chr(92) + "ClassIcon_" + g.STATE.classToken,         "l onglet du personnage porte l icone de SA classe, cuite comme les autres"
+    assert not g.CharacterFrameTab1Text.shown, "et le mot s en va"
+    assert abs(o1.foreverIcone.texcoord[1] - 0.03125) < 1e-6,         "le rognage reste : la cuisson a ete calculee en le supposant"
 
     # LE NIVEAU, LA RACE ET LA CLASSE : dans le volet droit, la ou la source
     # met PaperDollLevelInfo.

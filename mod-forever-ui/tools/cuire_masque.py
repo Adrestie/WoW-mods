@@ -79,6 +79,12 @@ ICONES = [
     "inv_sidetab_stats_c60.blp",
 ]
 
+# L'onglet du personnage porte l'icone de SA classe : un fichier par
+# classe, cuit comme les autres.
+ICONES += ["classicon_%s.blp" % c for c in (
+    "deathknight", "druid", "hunter", "mage", "paladin",
+    "priest", "rogue", "shaman", "warlock", "warrior")]
+
 ONGLET_L, ONGLET_H = 55.0, 55.0
 MASQUE_L, MASQUE_H = 55.0, 60.0
 ICONE = 50.0

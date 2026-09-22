@@ -276,6 +276,19 @@ local ONGLET_ICONES = {
 -- client, une chaine l'un des notres.
 local ORDRE_ONGLETS = { 1, 2, 3, 4, "pvp", 5, "stats" }
 
+-- L'ONGLET DU PERSONNAGE PORTE L'ICONE DE SA CLASSE.
+--
+-- A LA DEMANDE, et non d'apres la source : camelot y met le PORTRAIT du
+-- joueur -- CHARACTER_MODE_TAB_ICONS laisse la premiere entree a nil, et
+-- UpdateCharacterModeTabPortrait pose SetPortraitTexture. Une icone de
+-- classe demande un fichier par classe, cuit au masque comme les autres.
+--
+-- Le second retour de UnitClass rend le jeton en capitales -- WARRIOR,
+-- DEATHKNIGHT -- et c'est lui qui nomme le fichier. La casse est sans
+-- importance : une archive adresse ses fichiers par un condense insensible
+-- a la casse.
+local ONGLET_CLASSE = "Interface\\ForeverUI\\TabIcons\\ClassIcon_"
+
 -- CE QU'OUVRE CHAQUE ONGLET. Les cinq premiers viennent de
 -- CharacterFrameTab_OnClick ; les deux autres sont les notres. C'est par
 -- cette table qu'on sait lequel est actif.
@@ -1972,18 +1985,20 @@ local function poserOnglets(cadre)
 	empilerOnglets()
 	majOngletActif()
 
-	-- L'onglet du personnage porte le portrait du joueur, rogne comme le
-	-- fait UpdateCharacterModeTabPortrait.
+	-- L'onglet du personnage porte l'icone de sa classe.
 	local premier = onglets[1]
-	if premier and premier.foreverIcone and SetPortraitTexture then
-		-- SetPortraitTexture repose le rognage : il faut le remettre apres.
-		SetPortraitTexture(premier.foreverIcone, "player")
+	local _, jeton = UnitClass("player")
+	if premier and premier.foreverIcone and jeton then
+		premier.foreverIcone:SetTexture(ONGLET_CLASSE .. jeton)
+		-- Le rognage doit rester : la cuisson du masque a ete calculee en le
+		-- supposant. L'enlever decalerait l'image sous son propre masque.
 		premier.foreverIcone:SetTexCoord(PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET,
 			PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET)
 		premier.foreverIcone:Show()
 		local texte = _G["CharacterFrameTab1Text"]
 		if texte then
 			texte:Hide()
+			texte:SetText("")
 		end
 	end
 end

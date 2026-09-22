@@ -31,3 +31,17 @@ interface/icons/unknown_8197104.blp => interface/icons/inv_sidetab_stats_c60.blp
 # des icones d'onglet. Il entre donc dans l'atelier pour que cette cuisson se
 # refasse sans wow.export.
 interface/common/commonsidetabmask2xc60.blp
+
+# LES DIX CLASSES DE 3.3.5. A LA DEMANDE, et non d'apres la source :
+# camelot met le PORTRAIT du joueur sur l'onglet du personnage. Une
+# icone de classe demande un fichier par classe, cuit comme les autres.
+interface/icons/classicon_deathknight.blp
+interface/icons/classicon_druid.blp
+interface/icons/classicon_hunter.blp
+interface/icons/classicon_mage.blp
+interface/icons/classicon_paladin.blp
+interface/icons/classicon_priest.blp
+interface/icons/classicon_rogue.blp
+interface/icons/classicon_shaman.blp
+interface/icons/classicon_warlock.blp
+interface/icons/classicon_warrior.blp
