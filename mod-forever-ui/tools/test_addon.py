@@ -837,6 +837,49 @@ PetPaperDollFrame = CreateFrame("Frame", "PetPaperDollFrame", CharacterFrame)
 PetPaperDollFrame:Hide()
 SkillFrame = CreateFrame("Frame", "SkillFrame", CharacterFrame)
 SkillFrame:Hide()
+-- L ECRAN DES COMPETENCES de 3.3.5 : douze lignes posees d avance, que
+-- SkillFrame_UpdateSkills repose a chaque passage.
+SKILLS_TO_DISPLAY = 12
+for i = 1, SKILLS_TO_DISPLAY do
+    CreateFrame("Frame", "SkillRankFrame" .. i, SkillFrame)
+    CreateFrame("Button", "SkillTypeLabel" .. i, SkillFrame)
+end
+-- nom, entete, deplie, rang, points temporaires, bonus, rang maximal,
+-- abandonnable, cout d un pas, cout d un rang, niveau minimal, type de
+-- cout, DESCRIPTION -- treize valeurs.
+COMPETENCES = {
+    { nom = "Armes", entete = true },
+    { nom = "Epees", rang = 150, maxi = 300, bonus = 0, desc = "Maniement des epees." },
+    { nom = "Haches", rang = 75, maxi = 300, bonus = 5, desc = "Maniement des haches." },
+    { nom = "Metiers", entete = true },
+    { nom = "Couture", rang = 225, maxi = 300, bonus = 0, desc = "L art de coudre." },
+}
+function _competences()
+    local liste, saute = {}, nil
+    for _, c in ipairs(COMPETENCES) do
+        if saute and not c.entete then
+            -- avale : son en-tete est replie
+        else
+            saute = nil
+            liste[#liste + 1] = c
+            if c.entete and c.replie then saute = true end
+        end
+    end
+    return liste
+end
+function GetNumSkillLines() return #_competences() end
+function GetSkillLineInfo(i)
+    local c = _competences()[i]
+    if not c then return nil end
+    return c.nom, c.entete or false, not c.replie, c.rang or 0, 0, c.bonus or 0,
+           c.maxi or 0, false, 0, 0, 0, 0, c.desc or ""
+end
+function ExpandSkillHeader(i) _competences()[i].replie = false end
+function CollapseSkillHeader(i) _competences()[i].replie = true end
+COMPETENCE_CHOISIE = 0
+function SetSelectedSkill(i) COMPETENCE_CHOISIE = i end
+function GetSelectedSkill() return COMPETENCE_CHOISIE end
+function SkillFrame_UpdateSkills() end
 TokenFrame = CreateFrame("Frame", "TokenFrame", CharacterFrame)
 TokenFrame:Hide()
 -- L ECRAN DE REPUTATION de 3.3.5 : quinze lignes posees une fois dans le
@@ -1185,7 +1228,7 @@ def main():
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
-             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua",
+             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua",
              "IconPicker.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
@@ -2879,6 +2922,58 @@ def main():
     print("   apres un repli et un depli : marquee = %s (choisie %s)" % (
         marquees, choisi))
     assert marquees == [choisi], "la marque reste sur la meme faction"
+
+    # L ONGLET DES COMPETENCES : le meme ecran que la reputation, en bleu.
+    g.CharacterFrame_ShowSubFrame("SkillFrame")
+    g.ForeverUI.Panes.ShowGroup("SkillFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+
+    s1, s2 = g.ForeverUISkillRow1, g.ForeverUISkillRow2
+    ps1 = s1.points[len(list(s1.points.values()))]
+    print("   competences : en-tete h=%d (%s, %s) | entree h=%d, nom x=%s, barre %d" % (
+        s1.height, ps1[4], ps1[5], s2.height, s2.nom.points[1][4], s2.barre.width))
+    assert s1.height == 26, "SkillsHeaderTemplate fait 26, pas 28 comme la reputation"
+    assert s2.height == 30, "SkillsEntryTemplate"
+    assert (ps1[4], ps1[5]) == (10, -10), "marge de 10 sur les deux axes"
+    assert s2.nom.points[1][4] == 2,         "SkillsEntryTemplate : LEFT x = 2, il n y a pas d AccountWideIcon"
+    assert s2.barre.width == 160 and s2.barre.height == 29, "SkillsBarTemplate"
+    assert s2.barre.points[1][4] == -3, "RIGHT x = -3"
+
+    # LA BARRE EST BLEUE PAR SON SPRITE, pas par une teinte.
+    print("   remplissage : %s, large de %s" % (
+        s2.barre.remplissage.texture, s2.barre.remplissage.width))
+    assert "statbarfillblue" in (s2.barre.remplissage.texture or ""),         "SetFillTextureByColorType(Blue) : le bleu vient du sprite"
+    assert s2.barre.remplissage.width == 160 * 0.5, "150 sur 300"
+    assert s2.barre.texte.text == "150 / 300", "rang / maximum"
+
+    # UN BONUS s ecrit entre parentheses, en vert.
+    s3 = g.ForeverUISkillRow3
+    print("   avec bonus : \"%s\"" % s3.barre.texte.text)
+    assert "(+5)" in s3.barre.texte.text, "rang (+bonus) / maximum"
+
+    # LE DETAIL : titre, jauge de 180, description.
+    sd = g.ForeverUISkillDetail
+    print("   detail : titre=\"%s\", jauge %d, description=\"%s\"" % (
+        sd.titre.text, sd.jauge.width, sd.description.text))
+    assert sd.titre.text == "Epees",         "SelectFirstSkillIfNoneSelected : la premiere qui n est pas un en-tete"
+    assert sd.jauge.width == 180, "RankBar : 180 x 29"
+    assert "epees" in sd.description.text, "la description, 13e valeur de GetSkillLineInfo"
+
+    # REPLIER un en-tete raccourcit la liste, comme pour la reputation.
+    avant = [l.nom.text for l in g.ForeverUI.SkillsTab.Rows.values() if l.shown]
+    s1.scripts.OnClick(s1)
+    apres = [l.nom.text for l in g.ForeverUI.SkillsTab.Rows.values() if l.shown]
+    print("   repli d Armes : %s -> %s" % (avant, apres))
+    assert apres == ["Armes", "Metiers", "Couture"], "ses deux competences s en vont"
+    s1.scripts.OnClick(s1)
+
+    # CLIQUER une competence la choisit, et le detail suit.
+    s3 = g.ForeverUISkillRow3
+    s3.scripts.OnClick(s3)
+    print("   clic sur Haches : detail=\"%s\", survol %.2f" % (
+        sd.titre.text, s3.survol.alpha))
+    assert sd.titre.text == "Haches", "le detail suit le clic"
+    assert abs(s3.survol.alpha - 0.20) < 1e-6, "et la ligne est marquee"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):

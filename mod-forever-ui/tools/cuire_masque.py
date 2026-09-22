@@ -296,8 +296,14 @@ JAUGE_SORTIE_L, JAUGE_SORTIE_H = 512, 32
 
 MASQUE_JAUGE = os.path.join(ART, "common", "commonstatbarmaskc60.blp")
 REMPLISSAGE = os.path.join(ART, "common", "commonstatbarc60.blp")
-# common-stat-bar-white, dans sa feuille
-REMPLISSAGE_RECT = (0.003906, 0.941406, 0.406250, 0.523438)
+# LES REMPLISSAGES, dans leur feuille. camelot en a quatre --
+# SetFillTextureByColorType : rouge, vert, bleu, blanc. La reputation teinte
+# le blanc par FACTION_BAR_COLORS ; les competences prennent le BLEU tel
+# quel, UpdateBarColor n'y posant que du blanc.
+REMPLISSAGES = {
+    "statbarfill": (0.003906, 0.941406, 0.406250, 0.523438),      # white
+    "statbarfillblue": (0.003906, 0.941406, 0.007812, 0.125000),  # blue
+}
 SORTIE_JAUGE = os.path.join(ART, "bars")
 
 
@@ -313,7 +319,7 @@ def _decoupe(x, longueur, coin, source):
     return (coin + milieu * (source - 2.0 * coin)) / source
 
 
-def cuire_jauge():
+def cuire_jauge(nom, rect):
     if not os.path.exists(MASQUE_JAUGE) or not os.path.exists(REMPLISSAGE):
         print("   le masque ou la feuille de jauge manque")
         return None
@@ -321,7 +327,7 @@ def cuire_jauge():
     ml, mh, mpix = _lire(MASQUE_JAUGE)
     fl, fh, fpix = _lire(REMPLISSAGE)
 
-    u1, u2, v1, v2 = REMPLISSAGE_RECT
+    u1, u2, v1, v2 = rect
     largeur, hauteur = JAUGE_SORTIE_L, JAUGE_SORTIE_H
     pixels = bytearray(largeur * hauteur * 4)
 
@@ -346,7 +352,7 @@ def cuire_jauge():
             m = _alpha_du_masque(mx, my, ml, mh, mpix)
             pixels[base + 3] = int(a * m / 255.0 + 0.5)
 
-    cible = os.path.join(SORTIE_JAUGE, "statbarfill.blp")
+    cible = os.path.join(SORTIE_JAUGE, nom + ".blp")
     _ecrire(cible, largeur, hauteur, pixels)
     return cible
 
@@ -369,10 +375,11 @@ def main():
                                   os.path.getsize(cible)))
         faits += 1
 
-    jauge = cuire_jauge()
-    if jauge:
-        print("   %-60s %8d o" % (os.path.relpath(jauge, RACINE),
-                                  os.path.getsize(jauge)))
+    for nom in sorted(REMPLISSAGES):
+        jauge = cuire_jauge(nom, REMPLISSAGES[nom])
+        if jauge:
+            print("   %-60s %8d o" % (os.path.relpath(jauge, RACINE),
+                                      os.path.getsize(jauge)))
 
     print("%d icone(s) cuite(s) ; poser dans le client avec tools/deployer.py" % faits)
 

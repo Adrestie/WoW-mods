@@ -30,4 +30,5 @@ Bags.lua
 CharacterFrame.lua
 EquipmentManager.lua
 ReputationTab.lua
+SkillsTab.lua
 IconPicker.lua

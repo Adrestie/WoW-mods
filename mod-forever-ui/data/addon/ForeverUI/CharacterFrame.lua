@@ -1384,7 +1384,7 @@ local ECRAN_PERSONNAGE = "PaperDollFrame"
 local ECRANS_SIMPLES = {
 	{ groupe = "PetPaperDollFrame", id = "familier" },
 	{ groupe = "ReputationFrame", id = "reputation", module = "ReputationTab" },
-	{ groupe = "SkillFrame", id = "competences" },
+	{ groupe = "SkillFrame", id = "competences", module = "SkillsTab" },
 	{ groupe = "TokenFrame", id = "monnaie" },
 }
 
