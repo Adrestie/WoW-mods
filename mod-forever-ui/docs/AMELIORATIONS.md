@@ -529,6 +529,13 @@ déclenchait rien, et un greffon cassé serait passé inaperçu. Il enveloppe
 désormais vraiment — l'originale, puis le greffon, et les valeurs rendues sont
 celles de l'originale.
 
+**Les quatre emplacements de la rangée du bas ont la même taille.** camelot
+pose celui de distance en 27 avec `UI-Character-Info-GearSlotSmall`, comme
+les munitions. Il porte pourtant, selon la classe, une **arme à distance ou
+une relique** — des objets de même rang que les deux armes de mêlée. Écart
+assumé, sur demande : main droite, main gauche, relique et distance font tous
+40. Les munitions gardent le petit emplacement de la source.
+
 **L'écart entre emplacements est désormais dissymétrique.** La source n'en
 donne qu'un, **6**, pour les deux sens. À la demande, les deux colonnes sont
 resserrées de 2 px (`ECART_VERTICAL` = 4) ; la rangée des armes garde le 6 de

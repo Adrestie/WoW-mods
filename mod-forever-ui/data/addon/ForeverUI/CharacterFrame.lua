@@ -120,8 +120,14 @@ local ECART_VERTICAL = ECART - 2
 local GAUCHE_X, GAUCHE_Y = 24, -60
 local DROITE_X, DROITE_Y = -20, -60
 local ARME_X, ARME_Y = -60, 30
-local PETIT = 27
+local PETIT = 27                        -- ne sert plus qu'aux munitions
 local MUNITIONS_ECART = 19
+
+-- ECART ASSUME, sur demande. camelot pose l'emplacement de distance en 27
+-- avec UI-Character-Info-GearSlotSmall, comme les munitions. Il porte
+-- pourtant, selon la classe, une arme a distance OU une relique -- des
+-- objets de meme rang que les deux armes de melee. Les quatre emplacements
+-- de la rangee prennent donc la meme taille que les autres.
 
 local PIERRE_HAUTEUR = 85               -- UI-Character-Info-Stat-StoneBG
 local SEPARATEUR = 11
@@ -586,9 +592,7 @@ local function poserEmplacements()
 
 	precedent = nil
 	for index, nom in ipairs(RANGEE_ARMES) do
-		local cote = (nom == "Ranged") and PETIT or EMPLACEMENT
-		local art = (nom == "Ranged") and ATLAS.petitEmplacement or ATLAS.emplacement
-		local bouton = habillerEmplacement(nom, cote, art)
+		local bouton = habillerEmplacement(nom, EMPLACEMENT, ATLAS.emplacement)
 		if bouton then
 			bouton:ClearAllPoints()
 			if index == 1 then

@@ -1783,11 +1783,14 @@ def main():
     arme = g.CharacterMainHandSlot.points[1]
     distance = g.CharacterRangedSlot
     munitions = g.CharacterAmmoSlot
-    print("   armes : principale %s (%s, %s) | distance %d | munitions a +%s" % (
-        arme[1], arme[4], arme[5], distance.width, munitions.points[1][4]))
+    secondaire = g.CharacterSecondaryHandSlot
+    print("   armes : principale %s (%s, %s) | rangee %d/%d/%d | munitions %d a +%s" % (
+        arme[1], arme[4], arme[5], g.CharacterMainHandSlot.width, secondaire.width,
+        distance.width, munitions.width, munitions.points[1][4]))
     assert (arme[1], arme[4], arme[5]) == ("BOTTOM", -60, 30), \
         "l arme principale se pose au bas du volet gauche, a (-60, 30)"
-    assert distance.width == 27 and munitions.width == 27, "distance et munitions font 27"
+    assert g.CharacterMainHandSlot.width == secondaire.width == distance.width == 40,         "les quatre emplacements de la rangee ont la meme taille, a la demande"
+    assert munitions.width == 27, "les munitions gardent le petit emplacement de la source"
     assert munitions.points[1][4] == 19, "les munitions sont a 19 de la distance"
 
     # LE TITRE ET LA FERMETURE, dans la barre du haut.
