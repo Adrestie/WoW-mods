@@ -643,19 +643,15 @@ local function monter(hote)
 				-- qui remplit ensuite la description et l'etat des trois
 				-- cases, dans ReputationFrame_Update, et seulement si son
 				-- cadre de detail est visible.
-				choisie = self.factionNom
-				if SetSelectedFaction then
-					SetSelectedFaction(self.factionIndex)
-				end
+				-- CHOISIR UNE FACTION, c'est le dire au CLIENT : c'est lui
+				-- qui remplit ensuite la description et l'etat des trois
+				-- cases, dans ReputationFrame_Update, et seulement si son
+				-- cadre de detail est visible.
 				local cadre = _G["ReputationDetailFrame"]
 				if cadre then
 					cadre:Show()
 				end
-				if ReputationFrame_Update then
-					ReputationFrame_Update()
-				else
-					poserListe()
-				end
+				ForeverUI.ReputationSelect(self.factionNom)
 			end
 		end)
 		lignes[index] = ligne
@@ -882,22 +878,66 @@ local function montrerCases(etat)
 	end
 end
 
--- LE DETAIL SE REMPLIT DEPUIS LA FACTION CHOISIE.
+-- LE DETAIL SUIT LE NOM, PAS L'INDICE.
+--
+-- Cocher "Move to Inactive" appelle SetFactionInactive(GetSelectedFaction()),
+-- qui DEPLACE la faction dans le bloc des inactives. Le client renumerote
+-- alors tout, et l'indice retenu designe une autre ligne -- la reputation
+-- paraissait deselectionnee. Le nom, lui, ne bouge pas : c'est donc lui
+-- qu'on garde, et l'indice se retrouve a chaque passage. On le repose au
+-- client au passage, pour que ses trois cases agissent sur la bonne faction.
+local function indiceDe(nom)
+	if not nom then
+		return nil
+	end
+	for rang = 1, (GetNumFactions and GetNumFactions()) or 0 do
+		if GetFactionInfo(rang) == nom then
+			return rang
+		end
+	end
+	return nil
+end
+
+local function viderDetail()
+	detail.titre:SetText("")
+	detail.sousTitre:SetText("")
+	detail.description:SetText("")
+	detail.separateur:Hide()
+	detail.jauge:Hide()
+	montrerCases(false)
+end
+
+local dernieresDonnees
+
 local function majDetail()
 	if not detail then
 		return
 	end
 
-	local index = GetSelectedFaction and GetSelectedFaction()
-	local donnees = index and index > 0 and lireFaction(index) or nil
+	-- RIEN DE CHOISI : le volet est vide.
+	if not choisie then
+		dernieresDonnees = nil
+		viderDetail()
+		return
+	end
+
+	local index = indiceDe(choisie)
+	local donnees
+	if index then
+		if SetSelectedFaction and GetSelectedFaction
+			and GetSelectedFaction() ~= index then
+			SetSelectedFaction(index)
+		end
+		donnees = lireFaction(index)
+		dernieresDonnees = donnees
+	else
+		-- La faction a quitte la liste -- rangee parmi les inactives, ou son
+		-- bloc replie. On garde ce qu'on montrait plutot que de vider.
+		donnees = dernieresDonnees
+	end
 
 	if not donnees or donnees.entete then
-		detail.titre:SetText("")
-		detail.sousTitre:SetText("")
-		detail.description:SetText("")
-		detail.separateur:Hide()
-		detail.jauge:Hide()
-		montrerCases(false)
+		viderDetail()
 		return
 	end
 
@@ -918,6 +958,22 @@ local function majDetail()
 	suivreCases()
 end
 ForeverUI.ReputationDetail = majDetail
+
+-- CHOISIR, OU NE PLUS RIEN CHOISIR. Passer nil vide le volet droit : c'est
+-- l'etat de depart, et celui auquel on revient si la faction disparait.
+local function choisir(nom)
+	choisie = nom
+	local index = indiceDe(nom)
+	if index and SetSelectedFaction then
+		SetSelectedFaction(index)
+	end
+	if ReputationFrame_Update then
+		ReputationFrame_Update()
+	else
+		poserListe()
+	end
+end
+ForeverUI.ReputationSelect = choisir
 
 local function monterDetail(hote)
 	if detail then

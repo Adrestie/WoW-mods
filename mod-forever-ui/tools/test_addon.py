@@ -2838,15 +2838,35 @@ def main():
         assert c.foreverCoche.points[1][1] == "CENTER",         "checkmark-minimal se centre sur la case"
     assert cases[0].foreverCoche.width == 32,         "la coche de guerre fait 32, posee a (3, -5)"
 
-    # UN EN-TETE N A PAS DE DETAIL.
-    lua.execute("SetSelectedFaction(1)")
-    g.ForeverUI.ReputationDetail()
-    print("   en-tete choisi : titre=\"%s\", cases visibles=%s" % (
-        detail.titre.text, [c.shown for c in cases]))
-    assert detail.titre.text == "", "un en-tete n a pas de detail"
-    assert not any(c.shown for c in cases), "ni ses options"
-    lua.execute("SetSelectedFaction(3)")
-    g.ForeverUI.ReputationDetail()
+    # RIEN DE CHOISI : LE VOLET EST VIDE.
+    g.ForeverUI.ReputationSelect(None)
+    print("   rien de choisi : titre=\"%s\", jauge=%s, cases=%s" % (
+        detail.titre.text, detail.jauge.shown, [c.shown for c in cases]))
+    assert detail.titre.text == "" and detail.description.text == "",         "sans faction choisie, le volet droit est vide"
+    assert not detail.jauge.shown and not detail.separateur.shown,         "ni jauge ni separateur"
+    assert not any(c.shown for c in cases), "ni les trois options"
+
+    # COCHER "MOVE TO INACTIVE" NE DOIT PAS DESELECTIONNER.
+    #
+    # SetFactionInactive DEPLACE la faction : le client renumerote, et
+    # l indice retenu designerait une autre ligne. Le nom, lui, ne bouge pas.
+    g.ForeverUI.ReputationSelect("Darnassus")
+    assert detail.titre.text == "Darnassus"
+    lua.execute("""
+        -- le client range Darnassus ailleurs : tout se renumerote
+        local garde = table.remove(TOUTES, 3)
+        table.insert(TOUTES, garde)
+    """)
+    g.ReputationFrame_Update()
+    print("   apres renumerotation : titre=\"%s\", indice du client=%d" % (
+        detail.titre.text, g.GetSelectedFaction()))
+    assert detail.titre.text == "Darnassus",         "le detail suit le NOM, pas l indice"
+    assert g.GetFactionInfo(g.GetSelectedFaction())[0] == "Darnassus",         "et l indice du client est repose sur la bonne faction"
+    lua.execute("""
+        local garde = table.remove(TOUTES)
+        table.insert(TOUTES, 3, garde)
+    """)
+    g.ForeverUI.ReputationSelect("Darnassus")
 
     # LA SELECTION SE RETIENT PAR LE NOM : un repli renumerote les factions,
     # un indice suivrait la mauvaise ligne.
