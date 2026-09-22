@@ -62,3 +62,9 @@ interface/macroframe/macropopupc60.blp
 interface/macroframe/macropopupverticalc60.blp
 interface/buttons/minimalscrollbarproportionalc60.blp
 interface/buttons/minimalscrollbarverticalc60.blp
+
+# l'onglet de reputation : la barre coloree de camelot
+# (ColoredProgressBarTemplate) et le bouton deplier/replier de ses
+# en-tetes de liste
+interface/common/commonstatbarc60.blp
+interface/common/commonbuttonlistc60.blp

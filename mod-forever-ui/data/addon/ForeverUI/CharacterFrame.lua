@@ -1383,7 +1383,7 @@ end
 local ECRAN_PERSONNAGE = "PaperDollFrame"
 local ECRANS_SIMPLES = {
 	{ groupe = "PetPaperDollFrame", id = "familier" },
-	{ groupe = "ReputationFrame", id = "reputation" },
+	{ groupe = "ReputationFrame", id = "reputation", module = "ReputationTab" },
 	{ groupe = "SkillFrame", id = "competences" },
 	{ groupe = "TokenFrame", id = "monnaie" },
 }
@@ -1418,6 +1418,14 @@ local function declarerContenus()
 		Panes.Register({
 			hote = "gauche", groupe = ecran.groupe, id = ecran.id,
 			construire = function(hote)
+				-- UN ECRAN PEUT AVOIR SON PROPRE MODULE. La reputation a le
+				-- sien ; les autres se contentent, pour l'instant, d'etre
+				-- bornes a l'hote.
+				local module = ForeverUI[ecran.module or ""]
+				if module and module.Build then
+					return module.Build(hote)
+				end
+
 				local cadre = _G[ecran.groupe]
 				if not cadre then
 					return nil, {}

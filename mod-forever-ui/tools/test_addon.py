@@ -208,6 +208,12 @@ function CreateFrame(kind, name, parent, template)
     function f:SetPushedTexture(v) return poserTexture(self, "_pushed", v) end
     function f:SetHighlightTexture(v) return poserTexture(self, "_highlight", v) end
     function f:SetDisabledTexture(v) return poserTexture(self, "_disabled", v) end
+    -- Une StatusBar porte une valeur et des bornes.
+    function f:SetMinMaxValues(mini, maxi) self.mini, self.maxi = mini, maxi end
+    function f:GetMinMaxValues() return self.mini or 0, self.maxi or 0 end
+    function f:SetValue(v) self.value = v end
+    function f:GetValue() return self.value or 0 end
+    function f:SetStatusBarTexture(t) self.barTexture = t end
     function f:SetJustifyH(j) self.justify = j end
     function f:SetAttribute(k, v) self.attributes[k] = v end
     function f:GetAttribute(k) return self.attributes[k] end
@@ -829,6 +835,55 @@ SkillFrame = CreateFrame("Frame", "SkillFrame", CharacterFrame)
 SkillFrame:Hide()
 TokenFrame = CreateFrame("Frame", "TokenFrame", CharacterFrame)
 TokenFrame:Hide()
+-- L ECRAN DE REPUTATION de 3.3.5 : quinze lignes posees une fois dans le
+-- XML, que ReputationFrame_Update ne fait que remplir.
+NUM_FACTIONS_DISPLAYED = 15
+REPUTATIONFRAME_FACTIONHEIGHT = 26
+REPUTATIONFRAME_ROWSPACING = 23
+FACTION_BAR_COLORS = {
+    [1] = { r = 0.8, g = 0.3, b = 0.2 }, [4] = { r = 0.9, g = 0.7, b = 0.0 },
+    [8] = { r = 0.0, g = 0.6, b = 0.1 },
+}
+ReputationFrameFactionLabel = ReputationFrame:CreateFontString(
+    "ReputationFrameFactionLabel", "BACKGROUND")
+ReputationFrameStandingLabel = ReputationFrame:CreateFontString(
+    "ReputationFrameStandingLabel", "BACKGROUND")
+ReputationFrameTopTreeTexture = ReputationFrame:CreateTexture(
+    "ReputationFrameTopTreeTexture", "OVERLAY")
+ReputationFrameTopTreeTexture2 = ReputationFrame:CreateTexture(
+    "ReputationFrameTopTreeTexture2", "OVERLAY")
+ReputationFrame:CreateTexture("ReputationFrameVieilArt", "BACKGROUND")
+ReputationListScrollFrame = CreateFrame("Frame", "ReputationListScrollFrame",
+                                        ReputationFrame)
+function FauxScrollFrame_GetOffset() return 0 end
+for i = 1, 15 do
+    local n = "ReputationBar" .. i
+    local r = CreateFrame("Button", n, ReputationFrame)
+    r:SetWidth(295)
+    r:SetHeight(20)
+    _G[n .. "ExpandOrCollapseButton"] = CreateFrame("Button",
+        n .. "ExpandOrCollapseButton", r)
+    local b = CreateFrame("StatusBar", n .. "ReputationBar", r)
+    b:SetWidth(101)
+    b:SetHeight(13)
+    b:SetMinMaxValues(0, 1000)
+    b:SetValue(250)
+    _G[n .. "FactionName"] = r:CreateFontString(n .. "FactionName", "ARTWORK")
+    _G[n .. "ReputationBarFactionStanding"] = b:CreateFontString(
+        n .. "ReputationBarFactionStanding", "ARTWORK")
+    for _, suffixe in ipairs({ "LeftLine", "BottomLine", "Background" }) do
+        _G[n .. suffixe] = r:CreateTexture(n .. suffixe, "BACKGROUND")
+    end
+end
+FACTIONS = { { nom = "Orgrimmar", standing = 8 }, { nom = "Darnassus", standing = 4 } }
+function GetNumFactions() return #FACTIONS end
+function GetFactionInfo(i)
+    local f = FACTIONS[i]
+    if not f then return nil end
+    return f.nom, "", f.standing, 0, 1000, 250
+end
+function ReputationFrame_Update() end
+
 -- LA FENETRE PvP de 3.3.5 : un cadre a part, toplevel, fils d UIParent.
 PVPParentFrame = CreateFrame("Frame", "PVPParentFrame", UIParent)
 PVPParentFrame:SetWidth(384)
@@ -1052,7 +1107,7 @@ def main():
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
-             "CharacterFrame.lua", "EquipmentManager.lua",
+             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua",
              "IconPicker.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
@@ -2520,6 +2575,42 @@ def main():
     assert pr2[2].name == "ForeverUICharacterLeftPane",         "LES BARRES DE REPUTATION SONT BORNEES AU VOLET GAUCHE"
     assert g.ReputationFrame.shown, "et l ecran de reputation, lui, parait"
     assert perso.foreverRepli.shown,         "le volet existe sur cet onglet : il reste repliable"
+
+    # L ONGLET DE REPUTATION, repris du code de camelot.
+    lua.execute("ForeverUICharacterLeftPane:SetHeight(464)")
+    g.CharacterFrame_ShowSubFrame("ReputationFrame")
+    g.ForeverUI.Panes.ShowGroup("ReputationFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+
+    r1, r2 = g.ReputationBar1, g.ReputationBar2
+    p1 = r1.points[len(list(r1.points.values()))]
+    print("   reputation : ligne %d x %d, premiere en (%s, %s) de %s, pas %d" % (
+        r1.width, r1.height, p1[4], p1[5], p1[2].name,
+        g.REPUTATIONFRAME_FACTIONHEIGHT))
+    assert r1.height == 30, "ReputationEntryTemplate fait 30 de haut"
+    assert r1.width == 464 - 101, "de LISTE_X a LISTE_X2 : 398 - 10 - 25 = 363"
+    assert (p1[4], p1[5]) == (10, -40), "TOPLEFT du volet (10, -40), comme camelot"
+    p2 = r2.points[len(list(r2.points.values()))]
+    assert p2[2].name == "ReputationBar1" and p2[3] == "BOTTOMLEFT",         "les lignes s empilent"
+    assert g.REPUTATIONFRAME_FACTIONHEIGHT == 30,         "le client pagine sur le meme pas que nous"
+    print("   lignes qui tiennent : %d (le client en annoncait 15)" % (
+        g.NUM_FACTIONS_DISPLAYED))
+    assert 1 <= g.NUM_FACTIONS_DISPLAYED <= 15,         "recalcule pour le volet, au lieu de deborder"
+
+    barre = g.ReputationBar1ReputationBar
+    print("   barre : %d x %d, fond=%s" % (
+        barre.width, barre.height, barre.foreverFond is not None))
+    assert barre.width == 160 and barre.height == 29,         "ReputationBarTemplate : 160 x 29"
+    assert barre.foreverFond and barre.foreverRemplissage,         "fond common-stat-bar-bg et remplissage teinte"
+
+    # Le client remplit, nous teignons : le greffon suit son passage.
+    g.ReputationFrame_Update()
+    rem = barre.foreverRemplissage
+    print("   remplissage : largeur %s, couleur %s" % (
+        rem.width, rem.vertexColor and rem.vertexColor[1]))
+    assert rem.width and rem.width > 0, "la fraction vient de la StatusBar du client"
+    assert g.ReputationFrameFactionLabel.alpha == 0,         "les intitules de colonne de 3.3.5 s effacent"
+    assert g.ReputationBar1LeftLine.alpha == 0,         "les lignes d arborescence aussi : camelot n en a pas"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):
