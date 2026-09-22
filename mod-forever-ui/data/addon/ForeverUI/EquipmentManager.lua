@@ -146,6 +146,75 @@ local REPOS, SURVOL = 0.5, 1.0
 
 local panneau, decalage = nil, 0
 
+-- MODIFIER UN ENSEMBLE : CE QUE 3.3.5 PERMET, ET COMMENT.
+--
+-- Ce client n'a PAS de ModifyEquipmentSet -- verifie dans Wow.exe. Il n'a
+-- que SaveEquipmentSet(nom, icone), qui enregistre L'EQUIPEMENT PORTE sous
+-- ce nom, et DeleteEquipmentSet(nom). Changer le nom ou l'icone sans
+-- toucher a la liste d'objets est donc impossible directement.
+--
+-- LE CHEMIN RETENU, sur decision : equiper l'ancien ensemble -- l'equipement
+-- porte DEVIENT alors sa liste -- l'enregistrer sous le nouveau nom et la
+-- nouvelle icone, effacer l'ancien, et remettre le nouveau a la place de
+-- l'ancien dans la liste. Les objets sont ainsi conserves a l'identique.
+--
+-- Deux consequences assumees :
+--   * le personnage change reellement d'equipement le temps de l'operation ;
+--   * elle est ASYNCHRONE -- UseEquipmentSet rend la main avant la fin, et
+--     c'est EQUIPMENT_SWAP_FINISHED(termine, nom) qui l'annonce. Si
+--     l'ensemble est deja porte, rien n'est a equiper et on enchaine.
+--
+-- L'ORDRE D'AFFICHAGE est tenu par nous : 3.3.5 n'a aucun moyen de replacer
+-- un ensemble dans sa liste, l'ordre du client etant celui de creation. Le
+-- notre vit dans ForeverUIDB, et c'est lui qui pose les cartes.
+local edition
+local EDITION_DELAI = 10                -- secondes avant d'abandonner
+
+local function ordreRetenu()
+	ForeverUIDB = ForeverUIDB or {}
+	ForeverUIDB.ordreEnsembles = ForeverUIDB.ordreEnsembles or {}
+	return ForeverUIDB.ordreEnsembles
+end
+
+local function rangDe(nom)
+	for rang, connu in ipairs(ordreRetenu()) do
+		if connu == nom then
+			return rang
+		end
+	end
+	return nil
+end
+
+-- Les ensembles du client, dans NOTRE ordre ; ceux qu'on ne connait pas
+-- encore prennent la fin de la liste.
+local function ensemblesOrdonnes()
+	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
+	local parNom, dans = {}, {}
+	for index = 1, total do
+		local nom = GetEquipmentSetInfo(index)
+		if nom then
+			parNom[nom] = index
+		end
+	end
+
+	local liste = {}
+	for _, nom in ipairs(ordreRetenu()) do
+		if parNom[nom] then
+			liste[#liste + 1] = parNom[nom]
+			dans[nom] = true
+		end
+	end
+	for index = 1, total do
+		local nom = GetEquipmentSetInfo(index)
+		if nom and not dans[nom] then
+			liste[#liste + 1] = index
+			ordreRetenu()[#ordreRetenu() + 1] = nom
+		end
+	end
+	return liste
+end
+ForeverUI.EquipmentSetsOrder = ensemblesOrdonnes
+
 -- QUEL ENSEMBLE EST PORTE. Deux questions, et je n'en avais traite
 -- qu'une, mal.
 --
@@ -357,18 +426,8 @@ local function habillerCarte(bouton)
 			if not carte.name or carte.name == "" then
 				return
 			end
-			-- On choisit d'abord l'ensemble : c'est de lui que le client
-			-- tire le nom et l'icone de la fenetre, et c'est son nom que
-			-- son Okay retrouvera pour ecraser au lieu de creer.
-			local dialogue = _G["GearManagerDialog"]
-			if dialogue then
-				dialogue.selectedSetName = carte.name
-				if GearManagerDialog_Update then
-					GearManagerDialog_Update()
-				end
-			end
-			if GearManagerDialogSaveSet_OnClick then
-				GearManagerDialogSaveSet_OnClick(_G["GearManagerDialogSaveSet"])
+			if ForeverUI.EquipmentSetEdit then
+				ForeverUI.EquipmentSetEdit(carte.name)
 			end
 		end)
 	bouton.foreverEditer:SetPoint("RIGHT", bouton.foreverSupprimer, "LEFT",
@@ -417,11 +476,28 @@ local function poserCartes()
 		decalage = math.max(0, total - place)
 	end
 
+	-- NOTRE ORDRE, pas celui du client : le bouton d'indice i porte
+	-- l'ensemble i, mais c'est nous qui decidons ou il se pose.
+	local ordre = ensemblesOrdonnes()
+	local rangDuBouton = {}
+	for position, index in ipairs(ordre) do
+		rangDuBouton[index] = position
+	end
+
 	local precedent
+	local parRang = {}
 	for index, bouton in ipairs(dialogue.buttons) do
 		habillerCarte(bouton)
-		local rang = index - decalage
-		if index <= total and rang >= 1 and rang <= place then
+		if rangDuBouton[index] then
+			parRang[rangDuBouton[index]] = bouton
+		end
+	end
+
+	for position = 1, #dialogue.buttons do
+		local bouton = parRang[position]
+		local index = position
+		local rang = position - decalage
+		if bouton and index <= total and rang >= 1 and rang <= place then
 			bouton:ClearAllPoints()
 			if precedent then
 				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, 0)
@@ -445,7 +521,14 @@ local function poserCartes()
 					bouton.foreverCoche:Hide()
 				end
 			end
-		else
+		elseif bouton then
+			bouton:Hide()
+		end
+	end
+
+	-- Les cartes sans ensemble ne s'affichent pas.
+	for index, bouton in ipairs(dialogue.buttons) do
+		if not rangDuBouton[index] then
 			bouton:Hide()
 		end
 	end
@@ -638,4 +721,163 @@ if hooksecurefunc then
 			hooksecurefunc(nom, function() habiller() end)
 		end
 	end
+end
+
+-- ============================================== modifier un ensemble
+--
+-- Le flux, dans l'ordre : equiper l'ancien, enregistrer sous le nouveau nom
+-- et la nouvelle icone, effacer l'ancien, le remplacer a sa place dans la
+-- liste. Voir le releve en tete de fichier pour le pourquoi.
+local attenteEdition = CreateFrame("Frame", "ForeverUIEquipmentEdit")
+attenteEdition:Hide()
+
+local function remplacerDansOrdre(ancien, nouveau)
+    local ordre = ordreRetenu()
+    for rang, connu in ipairs(ordre) do
+        if connu == ancien then
+            ordre[rang] = nouveau
+            return
+        end
+    end
+    ordre[#ordre + 1] = nouveau
+end
+
+local function terminerEdition()
+    local e = edition
+    edition = nil
+    attenteEdition:Hide()
+    if not e then
+        return
+    end
+
+    if SaveEquipmentSet then
+        SaveEquipmentSet(e.nom, e.icone)
+    end
+    if e.nom ~= e.ancien and DeleteEquipmentSet then
+        DeleteEquipmentSet(e.ancien)
+        remplacerDansOrdre(e.ancien, e.nom)
+    end
+
+    ForeverUIDB = ForeverUIDB or {}
+    if ForeverUIDB.ensembleEquipe == e.ancien then
+        ForeverUIDB.ensembleEquipe = e.nom
+    end
+
+    local dialogue = _G["GearManagerDialog"]
+    if dialogue then
+        dialogue.selectedSetName = e.nom
+    end
+    if GearManagerDialog_Update then
+        GearManagerDialog_Update()
+    end
+    poserCartes()
+end
+ForeverUI.EquipmentSetEditFinish = terminerEdition
+
+attenteEdition:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
+attenteEdition:SetScript("OnEvent", function(self, evenement, termine, nom)
+    if edition and termine and nom == edition.ancien then
+        terminerEdition()
+    end
+end)
+
+-- Si le remplacement n'aboutit pas -- combat, piece verrouillee -- on
+-- abandonne plutot que de laisser une edition en suspens.
+attenteEdition:SetScript("OnUpdate", function(self, ecoule)
+    if not edition then
+        self:Hide()
+        return
+    end
+    edition.reste = (edition.reste or EDITION_DELAI) - (ecoule or 0)
+    if edition.reste <= 0 then
+        edition = nil
+        self:Hide()
+        if UIErrorsFrame then
+            UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
+        end
+    end
+end)
+
+local function lancerEdition(nom, icone)
+    if not edition then
+        return
+    end
+    edition.nom = nom
+    edition.icone = icone
+
+    -- Deja porte : rien a equiper, on enchaine.
+    if piecesEnPlace(edition.ancien) then
+        terminerEdition()
+        return
+    end
+
+    if UseEquipmentSet then
+        UseEquipmentSet(edition.ancien)
+    end
+    edition.reste = EDITION_DELAI
+    attenteEdition:Show()
+end
+
+-- LE OKAY DE LA FENETRE EST REPRIS, pas greffe. Un greffon passerait APRES
+-- le client, qui aurait deja enregistre l'equipement porte sous ce nom --
+-- c'est-a-dire tout sauf ce qu'on veut. Hors edition, on lui rend la main
+-- telle quelle.
+local function reprendreOkay()
+    local okay = _G["GearManagerDialogPopupOkay"]
+    if not okay or okay.foreverOkay then
+        return
+    end
+
+    okay:SetScript("OnClick", function(self, bouton, enfonce)
+        local popup = _G["GearManagerDialogPopup"]
+        if edition and popup and popup.name then
+            local _, indiceIcone = GetEquipmentSetIconInfo(popup.selectedIcon)
+            popup:Hide()
+            lancerEdition(popup.name, indiceIcone)
+            return
+        end
+        if GearManagerDialogPopupOkay_OnClick then
+            GearManagerDialogPopupOkay_OnClick(self, bouton, enfonce)
+        end
+    end)
+    okay.foreverOkay = true
+end
+ForeverUI.EquipmentSetEditReclaim = reprendreOkay
+
+-- Ouvrir la fenetre sur un ensemble : c'est l'engrenage qui appelle.
+function ForeverUI.EquipmentSetEdit(nom)
+    if not nom or nom == "" then
+        return
+    end
+
+    local dialogue = _G["GearManagerDialog"]
+    if dialogue then
+        dialogue.selectedSetName = nom
+        if GearManagerDialog_Update then
+            GearManagerDialog_Update()
+        end
+    end
+
+    edition = { ancien = nom }
+    reprendreOkay()
+
+    if GearManagerDialogSaveSet_OnClick then
+        GearManagerDialogSaveSet_OnClick(_G["GearManagerDialogSaveSet"])
+    end
+
+    -- Le nom est pose explicitement : le client ne remplit son champ que
+    -- dans RecalculateGearManagerDialogPopup, appele par le seul OnShow.
+    local champ = _G["GearManagerDialogPopupEditBox"]
+    if champ then
+        champ:SetText(nom)
+    end
+end
+
+-- Fermee autrement -- Annuler, Echap -- l'edition est abandonnee.
+if hooksecurefunc and type(GearManagerDialogPopup_OnHide) == "function" then
+    hooksecurefunc("GearManagerDialogPopup_OnHide", function()
+        if edition and not attenteEdition:IsShown() then
+            edition = nil
+        end
+    end)
 end

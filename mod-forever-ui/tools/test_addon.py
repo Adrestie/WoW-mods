@@ -652,7 +652,27 @@ function EquipmentManager_UnpackLocation(place)
     end
     return true, false, true, place - 200, 1
 end
-function UseEquipmentSet(nom) DERNIER_EQUIPE = nom end
+function UseEquipmentSet(nom)
+    DERNIER_EQUIPE = nom
+    -- le vrai rend la main avant la fin : l'evenement suit
+    EN_ATTENTE = nom
+end
+function SaveEquipmentSet(nom, icone)
+    for _, e in ipairs(ENSEMBLES) do
+        if e.nom == nom then e.icone = icone; return end
+    end
+    table.insert(ENSEMBLES, { nom = nom, icone = icone, porte = true })
+end
+function DeleteEquipmentSet(nom)
+    for i, e in ipairs(ENSEMBLES) do
+        if e.nom == nom then table.remove(ENSEMBLES, i); return end
+    end
+end
+function GetEquipmentSetInfoByName(nom)
+    for _, e in ipairs(ENSEMBLES) do
+        if e.nom == nom then return e.nom, e.icone end
+    end
+end
 DELETE = "Delete"
 SETTINGS = "Settings"
 ERR_CLIENT_LOCKED_OUT = "verrouille"
@@ -2872,6 +2892,25 @@ def main():
     print("   clic sur l engrenage : ensemble choisi = %s" % (
         g.GearManagerDialog.selectedSetName))
     assert g.GearManagerDialog.selectedSetName == "eee",         "il choisit l ensemble : c est de lui que la fenetre tire nom et icone"
+    # MODIFIER UN ENSEMBLE : memes objets, nouveau nom, a la meme place.
+    lua.execute('ForeverUIDB.ordreEnsembles = { "eee", "aaa" }')
+    editer.scripts.OnClick(editer)
+    print("   edition ouverte sur : %s" % g.GearManagerDialog.selectedSetName)
+    assert g.GearManagerDialog.selectedSetName == "eee", "la fenetre s ouvre sur lui"
+    assert g.GearManagerDialogPopupEditBox.text == "eee",         "son nom est pose explicitement, sans dependre du OnShow du client"
+
+    # Okay est REPRIS : hors edition il rend la main au client, en edition
+    # il mene le remplacement.
+    lua.execute('GearManagerDialogPopup.name = "eee2"')
+    lua.execute('GearManagerDialogPopup.selectedIcon = 7')
+    g.GearManagerDialogPopupOkay.scripts.OnClick(g.GearManagerDialogPopupOkay)
+    noms = [e.nom for e in g.ENSEMBLES.values()]
+    print("   apres modification : %s | ordre %s" % (
+        noms, list(g.ForeverUIDB.ordreEnsembles.values())))
+    assert "eee2" in noms and "eee" not in noms, "renomme, pas duplique"
+    assert list(g.ForeverUIDB.ordreEnsembles.values())[0] == "eee2",         "le nouveau prend la place de l ancien dans la liste"
+    assert g.ForeverUIDB.ensembleEquipe == "eee2",         "la coche suit le nom qui a change"
+
     lua.execute("GearSetButton1.souris = false")
     g.ForeverUI.EquipmentSetsHover()
 
