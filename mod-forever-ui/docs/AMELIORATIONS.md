@@ -565,9 +565,21 @@ n'a pas — elles se jugent donc à l'œil, d'où **`/fui modele`** :
 /fui modele position defaut    rend la position au client
 ```
 
-Le réglage se repose **à chaque passage de l'habillage** : le client refait son
-modèle quand le personnage change d'apparence et tout repart à zéro.
-`UNIT_MODEL_CHANGED` est écouté pour cette raison.
+**Le modèle se charge après coup, et repart à zéro.**
+`PaperDollFrame_OnShow` appelle `CharacterModelFrame:SetUnit("player")`, qui
+lance un chargement **asynchrone**. Le réglage posé juste après s'applique à
+un modèle qui n'est pas encore là : la fin du chargement remet la
+transformation à zéro et le personnage ressort du cadre. Symptôme typique —
+**la même commande tapée à la main tient**, parce que le modèle est alors
+déjà chargé.
+
+Le réglage est donc reposé à chaque image pendant **1,5 s** après chaque
+passage de l'habillage (`ForeverUICharacterModelRecheck`), puis le
+rattrapage se rendort. **Sans condition** : rien ne garantit que
+`GetPosition` rende ce que le moteur dessine vraiment, donc on ne compare
+pas, on repose. C'est le même rattrapage que pour la hauteur des sacs.
+`UNIT_MODEL_CHANGED` est écouté pour relancer la fenêtre quand le personnage
+change d'apparence.
 
 **Le séparateur des volets passe devant l'encadrement.** L'habillage de la
 fenêtre vit dans un cadre fils à `NIVEAU_ART` (+5) ; le séparateur, posé au

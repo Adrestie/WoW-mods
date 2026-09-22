@@ -562,6 +562,50 @@ end
 
 ForeverUI.ModeleReglage = { echelle = MODELE_ECHELLE, position = MODELE_POSITION }
 
+-- LE MODELE SE CHARGE APRES COUP, ET REPART A ZERO.
+--
+-- PaperDollFrame_OnShow appelle CharacterModelFrame:SetUnit("player"), qui
+-- lance un chargement ASYNCHRONE. Notre reglage, pose juste apres, s'applique
+-- a un modele qui n'est pas encore la : la fin du chargement remet la
+-- transformation a zero et le personnage ressort du cadre. La meme commande
+-- tapee a la main tient, elle, parce que le modele est deja charge -- c'est
+-- exactement ce qu'on observait.
+--
+-- On repose donc le reglage pendant une seconde et demie apres chaque
+-- passage, a chaque image. Sans condition : rien ne garantit que GetPosition
+-- rende ce que le moteur dessine vraiment, donc on ne compare pas, on
+-- repose. C'est le meme rattrapage que pour la hauteur des sacs.
+local MODELE_RATTRAPAGE = 1.5
+
+local rattrapageModele = CreateFrame("Frame", "ForeverUICharacterModelRecheck")
+rattrapageModele:Hide()
+rattrapageModele.reste = 0
+
+local function appliquerReglageModele()
+	local modele = _G["CharacterModelFrame"]
+	if not modele then
+		return
+	end
+
+	local reglage = ForeverUI.ModeleReglage
+	if modele.SetModelScale and reglage.echelle then
+		modele:SetModelScale(reglage.echelle)
+	end
+	if modele.SetPosition and reglage.position then
+		modele:SetPosition(reglage.position[1], reglage.position[2], reglage.position[3])
+	end
+end
+
+rattrapageModele:SetScript("OnUpdate", function(self, ecoule)
+	appliquerReglageModele()
+	self.reste = self.reste - (ecoule or 0)
+	if self.reste <= 0 then
+		self:Hide()
+	end
+end)
+
+ForeverUI.ModeleRattrapage = rattrapageModele
+
 local function poserModele()
 	local modele = CharacterModelFrame
 	if not modele then
@@ -572,15 +616,11 @@ local function poserModele()
 	modele:SetPoint("TOPLEFT", voletGauche, "TOPLEFT", 0, MODELE_Y)
 	modele:SetPoint("BOTTOMRIGHT", voletGauche, "BOTTOMRIGHT", 0, MODELE_Y)
 
-	-- A reposer a chaque passage : le client refait son modele quand le
-	-- personnage change d'apparence, et le reglage repart alors a zero.
-	local reglage = ForeverUI.ModeleReglage
-	if modele.SetModelScale and reglage.echelle then
-		modele:SetModelScale(reglage.echelle)
-	end
-	if modele.SetPosition and reglage.position then
-		modele:SetPosition(reglage.position[1], reglage.position[2], reglage.position[3])
-	end
+	-- Tout de suite, puis a chaque image le temps que le modele finisse
+	-- d'arriver.
+	appliquerReglageModele()
+	rattrapageModele.reste = MODELE_RATTRAPAGE
+	rattrapageModele:Show()
 
 	-- Les fleches de rotation : centrees sur le volet, cote a cote.
 	local gauche = _G["CharacterModelFrameRotateLeftButton"]

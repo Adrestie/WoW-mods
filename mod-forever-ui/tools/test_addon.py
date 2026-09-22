@@ -1707,6 +1707,23 @@ def main():
     assert posInitiale == [-6.5, 0, 0], "la profondeur retenue"
     assert g.CharacterModelFrame.modelScale is None,         "nil veut dire qu on ne touche pas a l echelle, pas qu on la remet a 1"
 
+    # Le modele se charge APRES coup et repart a zero : le reglage se repose
+    # a chaque image pendant une seconde et demie.
+    rattrapage = g.ForeverUICharacterModelRecheck
+    print("   rattrapage du modele : demande=%s, reste %.2f s" % (
+        rattrapage.shown, rattrapage.reste))
+    assert rattrapage.shown, "il doit tourner juste apres l habillage"
+    lua.execute("CharacterModelFrame.pos = nil")   # le chargement a tout efface
+    rattrapage.scripts.OnUpdate(rattrapage, 0.1)
+    repose = list(g.CharacterModelFrame.pos.values())
+    print("   apres une image : position reposee %s" % repose)
+    assert repose == [-6.5, 0, 0], "le rattrapage doit reposer le reglage"
+
+    for _ in range(20):
+        rattrapage.scripts.OnUpdate(rattrapage, 0.1)
+    print("   apres deux secondes : encore actif = %s" % rattrapage.shown)
+    assert not rattrapage.shown, "il doit se rendormir, pas tourner sans fin"
+
     # Les deux leviers se reglent en jeu : rien ne se releve dans la source,
     # ils se jugent a l oeil.
     g.SlashCmdList["FOREVERUI"]("modele echelle 0.55")
