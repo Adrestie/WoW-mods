@@ -237,6 +237,9 @@ function InCombatLockdown() return STATE.inLockdown end
 function SetPortraitTexture(texture, unit)
     recorded.portraits = recorded.portraits + 1
     texture.portraitOf = unit
+    -- le vrai client pose bien une texture : le faux aussi, sinon un code
+    -- qui la relit croit l'avoir ratee
+    texture.texture = "portrait:" .. tostring(unit)
 end
 function ToggleDropDownMenu() end
 function IsResting() return STATE.resting end
@@ -479,6 +482,8 @@ for _, coin in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
         "CharacterFrame" .. coin, "ARTWORK")
 end
 CharacterModelFrame = CreateFrame("Frame", "CharacterModelFrame", CharacterFrame)
+PaperDollFrame = CreateFrame("Frame", "PaperDollFrame", CharacterFrame)
+PaperDollFrameTexture = PaperDollFrame:CreateTexture("PaperDollFrameTexture", "ARTWORK")
 EMPLACEMENTS_PERSO = {
     "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist",
     "Hands", "Waist", "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1",
@@ -1520,6 +1525,39 @@ def main():
     assert pd[1] == "TOPLEFT" and pd[3] == "TOPRIGHT", \
         "le volet droit s accroche a la droite du gauche"
     assert g.CharacterFrameTopLeft.alpha == 0, "l art d epoque doit disparaitre"
+    assert g.PaperDollFrameTexture.alpha == 0,         "l art d epoque des sous-cadres aussi : ce sont des cadres fils"
+
+    # L'ART DU PANNEAU PASSE AU-DESSUS DES VOLETS. Les volets sont des cadres
+    # fils : ils recouvrent toute region de leur parent. L'art vit donc dans
+    # un cadre fils de niveau superieur, comme le NineSlice de la source.
+    habillage = perso.foreverHabillage
+    print("   habillage : cadre fils de niveau +%d (volets a +%d)" % (
+        habillage.GetFrameLevel(habillage) - perso.GetFrameLevel(perso),
+        gauche.GetFrameLevel(gauche) - perso.GetFrameLevel(perso)))
+    assert habillage is not None, "l art doit vivre dans son propre cadre fils"
+    assert habillage.GetFrameLevel(habillage) > gauche.GetFrameLevel(gauche),         "l art doit passer au-dessus des volets"
+    assert perso.foreverPanel.coinHautGaucheAtlas == "ui-frame-portraitmetal-cornertopleft",         "PortraitFrameTemplate prend le grand anneau, pas celui des sacs"
+
+    # LE PORTRAIT : le balayage efface celui du client, on pose le notre.
+    portrait = perso.foreverPortrait
+    pp = portrait.points[1]
+    print("   portrait : %d x %d, %s sur %s (%s, %s), texture=%s" % (
+        portrait.width, portrait.height, pp[1], pp[3], pp[4], pp[5],
+        portrait.portraitOf))
+    assert portrait.width == 44, "44 : ses coins tombent juste sous le metal de l anneau"
+    assert pp[4] == 25 and pp[5] == -22.5, "il se centre sur le trou mesure de l anneau"
+    assert portrait.portraitOf == "player", "l anneau ne doit pas rester vide"
+
+    # Le fond du volet droit remplit son volet au lieu de s arreter a 383.
+    fondDroit = droit.regions[1]
+    print("   fond du volet droit : couvre tout le volet = %s" % (fondDroit.allPoints and True))
+    assert fondDroit.allPoints, "le fond du volet droit doit remplir son volet"
+
+    # Le separateur est en trois tranches : embouts a leur taille, milieu tire.
+    sep = droit.separateur
+    print("   separateur : trois tranches (embouts de %d)" % sep.haut.height)
+    assert sep.haut is not None and sep.milieu is not None and sep.bas is not None,         "le separateur doit etre en trois tranches, ses embouts s etalaient"
+    assert sep.haut.height == 4 and sep.bas.height == 4
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot

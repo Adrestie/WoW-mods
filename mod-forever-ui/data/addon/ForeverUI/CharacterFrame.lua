@@ -59,6 +59,23 @@ local ARME_X, ARME_Y = -60, 30          -- BOTTOM du volet gauche
 local PETIT = 27                        -- distance et munitions
 local MUNITIONS_ECART = 19
 local SEPARATEUR = 11                   -- common-framedivider
+local SEPARATEUR_EMBOUT = 4             -- ses deux embouts, mesures sur l'art
+local NIVEAU_HABILLAGE = 5              -- l'art passe au-dessus des volets
+local PORTRAIT = 44                     -- voir le calcul plus bas
+local PORTRAIT_X, PORTRAIT_Y = 25, -22.5
+
+-- RELEVE -- PortraitFrameBaseTemplate : layoutType = "PortraitFrameTemplate".
+-- Cette mise en page ne differe de celle des sacs QUE par son coin haut
+-- gauche : un anneau plus large, pour un portrait de 62.
+local COIN_PORTRAIT = "ui-frame-portraitmetal-cornertopleft"
+
+-- Les cadres du client dont l'art d'epoque doit disparaitre : le cadre
+-- lui-meme n'en porte qu'une partie.
+local ANCIENS_CADRES = {
+	"CharacterFrame", "PaperDollFrame", "PetPaperDollFrame", "SkillFrame",
+	"ReputationFrame", "HonorFrame", "TokenFrame", "PaperDollItemsFrame",
+	"CharacterAttributesFrame", "CharacterResistanceFrame",
+}
 
 local ATLAS = {
 	fondGauche = "ui-character-info-general-bg",
@@ -79,18 +96,23 @@ local RANGEE_ARMES = { "MainHand", "SecondaryHand", "Ranged" }
 
 local voletGauche, voletDroit
 
--- Toutes les regions du cadre lui-meme s'effacent : l'art d'epoque de la
--- feuille est fait de quatre quartiers, et on ne se fie pas a leurs noms.
--- Les sous-cadres sont des cadres fils, ils ne sont pas touches.
-local function effacerArtDepoque(cadre)
-	if not cadre or not cadre.GetRegions then
-		return
-	end
-
-	local regions = { cadre:GetRegions() }
-	for _, region in ipairs(regions) do
-		if region and region.GetObjectType and region:GetObjectType() == "Texture" then
-			region:SetAlpha(0)
+-- L'art d'epoque ne tient pas qu'au cadre : la feuille de 3.3.5 le repartit
+-- sur ses sous-cadres, qui sont des cadres fils et echappent donc a un
+-- balayage du seul CharacterFrame. On balaie la liste.
+--
+-- Le portrait du client y passe aussi -- c'est une region du cadre. On en
+-- pose un a nous, plus bas, sinon l'anneau reste vide.
+local function effacerArtDepoque()
+	for _, nom in ipairs(ANCIENS_CADRES) do
+		local cadre = _G[nom]
+		if cadre and cadre.GetRegions then
+			local regions = { cadre:GetRegions() }
+			for _, region in ipairs(regions) do
+				if region and region.GetObjectType
+					and region:GetObjectType() == "Texture" then
+					region:SetAlpha(0)
+				end
+			end
 		end
 	end
 end
@@ -116,23 +138,55 @@ local function monterVolets(cadre)
 	voletDroit:SetPoint("TOPLEFT", voletGauche, "TOPRIGHT", 0, 0)
 	voletDroit:SetPoint("BOTTOMLEFT", voletGauche, "BOTTOMRIGHT", 0, 0)
 
+	-- La source declare ce fond SANS ancrage : il remplit son volet. Pose a
+	-- sa taille d'atlas (233 x 383) il laisserait 81 px nus en bas, le volet
+	-- en faisant 464.
 	local fondDroit = voletDroit:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fondDroit, ATLAS.fondDroit)
-	fondDroit:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", 0, 0)
+	ForeverUI.SetAtlas(fondDroit, ATLAS.fondDroit, true)
+	fondDroit:SetAllPoints(voletDroit)
 
 	local pierre = voletDroit:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(pierre, ATLAS.pierreDroite)
 	pierre:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", 0, 0)
 	voletDroit.pierre = pierre
 
-	-- Le separateur des deux volets, tendu sur toute la hauteur.
-	local separateur = voletDroit:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(separateur, ATLAS.separateur, true)
+	-- Le separateur des deux volets. Son element porte un embout a chaque
+	-- bout : tendu tel quel sur 464 px, ils s'etalent. Trois tranches.
+	local separateur = ForeverUI.CreateVerticalDivider(voletDroit, ATLAS.separateur,
+		SEPARATEUR_EMBOUT, voletDroit:GetFrameLevel() + 1)
 	separateur:SetWidth(SEPARATEUR)
 	separateur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", -6, -1)
 	separateur:SetPoint("BOTTOMLEFT", voletDroit, "BOTTOMLEFT", -6, 0)
+	voletDroit.separateur = separateur
 
 	ForeverUI.CharacterPanes = { gauche = voletGauche, droit = voletDroit }
+end
+
+-- LE PORTRAIT. La source le pose en 62 x 62 dans PortraitContainer, un
+-- cadre fils de niveau 400, et l'arrondit par un masque. Ici c'est le trou
+-- de l'anneau qui decoupe, comme sur les sacs.
+--
+-- L'anneau de ce coin, MESURE au pixel a la taille ou il est dessine :
+-- transparent jusqu'a 13 du centre, degrade jusqu'a 23, metal opaque de 24
+-- a 31. Aucune taille ne couvre le degrade (il faudrait 46) tout en cachant
+-- ses coins (il faudrait 43,8) : on prend 44, dont les coins tombent a 31,1
+-- -- juste sous le metal -- et dont les bords s'arretent dans le degrade,
+-- ou l'anneau est de toute facon a demi transparent. Le trou mesure place
+-- son centre a (25 ; -22,5) du coin du cadre, la ou la source met le sien
+-- a (26 ; -24).
+local function poserPortrait(cadre)
+	local hote = cadre.foreverHabillage or cadre
+	if not cadre.foreverPortrait then
+		local portrait = hote:CreateTexture(nil, "BACKGROUND")
+		portrait:SetWidth(PORTRAIT)
+		portrait:SetHeight(PORTRAIT)
+		portrait:SetPoint("CENTER", hote, "TOPLEFT", PORTRAIT_X, PORTRAIT_Y)
+		cadre.foreverPortrait = portrait
+	end
+
+	if SetPortraitTexture then
+		SetPortraitTexture(cadre.foreverPortrait, "player")
+	end
 end
 
 -- RELEVE -- PaperDollItemSlotButtonTemplate : 40 x 40, et son cadre est
@@ -251,11 +305,22 @@ local function habiller()
 	cadre:SetHeight(HAUTEUR)
 
 	if not cadre.foreverSkinned then
-		effacerArtDepoque(cadre)
+		-- L'ORDRE COMPTE. Les volets sont des cadres fils : ils se dessinent
+		-- au-dessus de toute region de leur parent. L'art du panneau doit
+		-- donc vivre dans un cadre fils de niveau superieur, comme le
+		-- NineSlice de la source -- sinon les fonds des volets recouvrent le
+		-- metal, debordent sur le bord droit et mangent l'anneau du portrait.
+		effacerArtDepoque()
 		monterVolets(cadre)
-		ForeverUI.SetPanelArt(cadre)
+		ForeverUI.SetPanelArt(cadre, {
+			coinHautGauche = COIN_PORTRAIT,
+			niveau = NIVEAU_HABILLAGE,
+		})
 		cadre.foreverSkinned = true
 	end
+
+	effacerArtDepoque()
+	poserPortrait(cadre)
 
 	if ForeverUI.UpdatePanelCorners then
 		ForeverUI.UpdatePanelCorners(cadre)

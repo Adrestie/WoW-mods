@@ -420,6 +420,38 @@ n'y a donc rien à trancher ici.
 | Munitions | `LEFT (+19)` de l'emplacement de distance |
 | Modèle | occupe tout le volet gauche, comme la `ModelScene` de la source |
 
+**L'ordre de dessin, corrigé après le premier essai en jeu.** Les volets sont
+des cadres fils : ils recouvrent **toute région de leur parent**. L'art du
+panneau posé sur le cadre lui-même se retrouvait donc sous eux — le contour ne
+collait plus aux fonds, le fond du volet droit débordait sur le bord droit et
+celui du volet gauche mangeait l'anneau du portrait. La source fait la même
+chose que ce qu'il fallait faire : son `NineSlice` est un **cadre fils**, et son
+`PortraitContainer` en est un autre, à `frameLevel` 400. `SetPanelArt` accepte
+donc une option `niveau` qui loge tout l'art dans un cadre fils au-dessus.
+
+Trois autres corrections du même essai :
+
+- **le coin haut gauche n'est pas celui des sacs.** `PortraitFrameBaseTemplate`
+  déclare `layoutType = "PortraitFrameTemplate"`, qui ne diffère de
+  `HeldBagLayout` que par lui : `UI-Frame-PortraitMetal-CornerTopLeft`, un
+  anneau plus large. `SetPanelArt` prend une option `coinHautGauche`.
+- **le portrait était vide** parce que le balayage de l'art d'époque efface
+  aussi celui du client — c'est une région du cadre. On en pose un à nous,
+  44 × 44 centré sur le trou mesuré de l'anneau (25 ; −22,5), rempli par
+  `SetPortraitTexture(…, "player")`. Le 44 vient du même calcul que sur les
+  sacs : l'anneau est transparent jusqu'à 13 du centre, en dégradé jusqu'à 23,
+  opaque de 24 à 31 ; aucune taille ne couvre le dégradé (46) tout en cachant
+  ses coins (43,8), donc 44, dont les coins tombent à 31,1.
+- **le fond du volet droit ne remplissait pas son volet** : la source le déclare
+  **sans ancrage**, ce qui veut dire qu'il remplit. Posé à sa taille d'atlas
+  (233 × 383) il laissait 81 px nus, le volet en faisant 464.
+- **le séparateur s'étalait** : `common-framedivider` porte un embout à chaque
+  extrémité, et l'étirer sur 464 px les répand. Il est découpé en trois
+  tranches par ses coordonnées de texture (`ForeverUI.CreateVerticalDivider`).
+- **l'art d'époque ne tient pas qu'au cadre** : la feuille de 3.3.5 le répartit
+  sur ses sous-cadres, qui échappent à un balayage du seul `CharacterFrame`. La
+  liste est balayée à chaque passage.
+
 **Écarts assumés.** `PaperDollItemSlotButton_OnLoad` pose l'arme principale à
 `(−60, 30)` quand l'emplacement de distance est montré et à `(−40, 30)` sinon,
 en masquant alors la distance : 3.3.5 montre toujours cet emplacement — arc,

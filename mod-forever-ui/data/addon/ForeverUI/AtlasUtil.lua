@@ -258,9 +258,28 @@ local PANNEAU_COINS = {
 	  point = "BOTTOMRIGHT", x = 4, y = -3 },
 }
 
-function ForeverUI.SetPanelArt(frame)
+-- OPTIONS.
+--   coinHautGauche : l'atlas du coin haut gauche. Les deux mises en page
+--     de la source ne different que par lui -- HeldBagLayout prend
+--     ...CornerTopLeftSmall, PortraitFrameTemplate prend ...CornerTopLeft,
+--     un anneau plus large pour un portrait de 62.
+--   niveau : quand il est donne, tout l'art se pose dans un CADRE FILS de
+--     ce niveau au-dessus du cadre. La source fait de meme -- son
+--     NineSlice est un cadre fils -- et il le faut des que le cadre porte
+--     d'autres cadres fils : ceux-ci se dessinent au-dessus de toute
+--     region de leur parent, et recouvriraient le metal.
+function ForeverUI.SetPanelArt(frame, options)
 	if frame.foreverPanel then
 		return frame.foreverPanel
+	end
+
+	options = options or {}
+	local hote = frame
+	if options.niveau then
+		hote = CreateFrame("Frame", nil, frame)
+		hote:SetAllPoints(frame)
+		hote:SetFrameLevel(frame:GetFrameLevel() + options.niveau)
+		frame.foreverHabillage = hote
 	end
 
 	local p = {}
@@ -268,41 +287,46 @@ function ForeverUI.SetPanelArt(frame)
 	-- 1. le fond plat
 	local r, v, b, a = PANNEAU_FOND[1], PANNEAU_FOND[2], PANNEAU_FOND[3], PANNEAU_FOND[4]
 
-	local basGauche = frame:CreateTexture(nil, "BACKGROUND")
+	local basGauche = hote:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(basGauche, "uiframebackground-nineslice-cornerbottomleft")
 	basGauche:SetVertexColor(r, v, b, a)
-	basGauche:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 3)
+	basGauche:SetPoint("BOTTOMLEFT", hote, "BOTTOMLEFT", 2, 3)
 
-	local basDroit = frame:CreateTexture(nil, "BACKGROUND")
+	local basDroit = hote:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(basDroit, "uiframebackground-nineslice-cornerbottomright")
 	basDroit:SetVertexColor(r, v, b, a)
-	basDroit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 3)
+	basDroit:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", -2, 3)
 
-	local bordBas = frame:CreateTexture(nil, "BACKGROUND")
+	local bordBas = hote:CreateTexture(nil, "BACKGROUND")
 	bordBas:SetTexture(r, v, b, a)
 	bordBas:SetPoint("TOPLEFT", basGauche, "TOPRIGHT")
 	bordBas:SetPoint("BOTTOMRIGHT", basDroit, "BOTTOMLEFT")
 
-	local corps = frame:CreateTexture(nil, "BACKGROUND")
+	local corps = hote:CreateTexture(nil, "BACKGROUND")
 	corps:SetTexture(r, v, b, a)
-	corps:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -20)
+	corps:SetPoint("TOPLEFT", hote, "TOPLEFT", 2, -20)
 	corps:SetPoint("BOTTOMRIGHT", basDroit, "TOPRIGHT")
 
 	p.fond = { basGauche, basDroit, bordBas, corps }
 
 	-- 2. l'encadrement de metal
 	for _, coin in ipairs(PANNEAU_COINS) do
-		local texture = frame:CreateTexture(nil, PANNEAU_COUCHE)
-		if ForeverUI.SetAtlas(texture, coin.nom) then
-			texture:SetPoint(coin.point, frame, coin.point, coin.x, coin.y)
+		local texture = hote:CreateTexture(nil, PANNEAU_COUCHE)
+		local nomAtlas = coin.nom
+		if coin.cle == "coinHautGauche" and options.coinHautGauche then
+			nomAtlas = options.coinHautGauche
+		end
+		if ForeverUI.SetAtlas(texture, nomAtlas) then
+			texture:SetPoint(coin.point, hote, coin.point, coin.x, coin.y)
 			p[coin.cle] = texture
+			p[coin.cle .. "Atlas"] = nomAtlas
 		else
 			texture:Hide()
 		end
 	end
 
 	local function bord(nom, point1, cible1, relatif1, point2, cible2, relatif2)
-		local texture = frame:CreateTexture(nil, PANNEAU_COUCHE)
+		local texture = hote:CreateTexture(nil, PANNEAU_COUCHE)
 		if not ForeverUI.SetAtlas(texture, nom) then
 			texture:Hide()
 			return nil
@@ -355,7 +379,7 @@ function ForeverUI.UpdatePanelCorners(frame)
 		if coin.cle == "coinBasGauche" then basGauche = coin end
 	end
 
-	local eHaut = ForeverUI.AtlasEntry(hautGauche.nom)
+	local eHaut = ForeverUI.AtlasEntry(p.coinHautGaucheAtlas or hautGauche.nom)
 	local eBas = ForeverUI.AtlasEntry(basGauche.nom)
 	if not (eHaut and eBas) then
 		return
@@ -376,4 +400,49 @@ function ForeverUI.UpdatePanelCorners(frame)
 			end
 		end
 	end
+end
+
+
+-- UN SEPARATEUR VERTICAL EN TROIS TRANCHES. common-framedivider fait 11 x 50
+-- et porte un EMBOUT a chaque extremite : l'etirer sur la hauteur d'un volet
+-- les etale sur des dizaines de pixels. On decoupe donc l'element en trois
+-- bandes par ses coordonnees de texture -- embout haut, milieu tire, embout
+-- bas -- comme le ferait un neuf-tranches.
+function ForeverUI.CreateVerticalDivider(parent, atlas, embout, niveau)
+	local e = ForeverUI.AtlasEntry(atlas)
+	local cadre = CreateFrame("Frame", nil, parent)
+	if not e then
+		cadre:Hide()
+		return cadre
+	end
+
+	embout = embout or 4
+	cadre:SetWidth(e[6])
+	cadre:SetFrameLevel(niveau or parent:GetFrameLevel())
+
+	local u1, u2, v1, v2, hauteur = e[2], e[3], e[4], e[5], e[7]
+	local partV = (v2 - v1) * (embout / hauteur)
+
+	local haut = cadre:CreateTexture(nil, "OVERLAY")
+	haut:SetTexture(e[1])
+	haut:SetTexCoord(u1, u2, v1, v1 + partV)
+	haut:SetHeight(embout)
+	haut:SetPoint("TOPLEFT", cadre, "TOPLEFT")
+	haut:SetPoint("TOPRIGHT", cadre, "TOPRIGHT")
+
+	local bas = cadre:CreateTexture(nil, "OVERLAY")
+	bas:SetTexture(e[1])
+	bas:SetTexCoord(u1, u2, v2 - partV, v2)
+	bas:SetHeight(embout)
+	bas:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT")
+	bas:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT")
+
+	local milieu = cadre:CreateTexture(nil, "OVERLAY")
+	milieu:SetTexture(e[1])
+	milieu:SetTexCoord(u1, u2, v1 + partV, v2 - partV)
+	milieu:SetPoint("TOPLEFT", haut, "BOTTOMLEFT")
+	milieu:SetPoint("BOTTOMRIGHT", bas, "TOPRIGHT")
+
+	cadre.haut, cadre.milieu, cadre.bas = haut, milieu, bas
+	return cadre
 end
