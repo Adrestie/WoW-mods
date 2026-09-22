@@ -510,6 +510,19 @@ l'en-tête de `CharacterStatFrameCategoryTemplate` (camelot) prend leur place :
 | Fond | `UI-Character-Info-Title` tendu du `TOPLEFT` au `BOTTOMRIGHT` | idem (`ui-character-info-title`, feuille 10) |
 | Intitulé | `GameFontHighlight` centré à (0, 1) | idem |
 
+**Une fonction locale appelée avant d'être écrite se résout en globale.**
+`habillerSelecteur` greffe `majEtatSelecteurs` sur la liste, et celle-ci
+n'est écrite que plus bas : à cet endroit son nom n'est pas encore une
+variable de portée, Lua le cherche donc dans les globales et trouve `nil` —
+`HookScript` répond alors *Usage: DropDownList1:HookScript("type",
+function)*. Une **déclaration anticipée** (`local majEtatSelecteurs` avant,
+`function majEtatSelecteurs()` ensuite) suffit : la fermeture voit la
+variable se remplir.
+
+Le banc ne l'a pas vu parce que son `HookScript` acceptait `nil`. Il refuse
+désormais tout greffon qui n'est pas une fonction, comme le vrai.
+
+
 **Le sélecteur est un bouton, plus un en-tête.** Écart assumé, sur demande :
 il portait `UI-Character-Info-Title`, l'en-tête de catégorie de camelot ; il
 prend désormais l'art de bouton `commonbuttontertiaryc60`, avec ses deux

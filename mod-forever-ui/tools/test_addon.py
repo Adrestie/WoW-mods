@@ -90,7 +90,13 @@ function CreateFrame(kind, name, parent, template)
     f.events = {}
     f.attributes = {}
     function f:SetScript(event, fn) self.scripts[event] = fn end
+    -- Le vrai REFUSE un greffon nil : "Usage: HookScript(type, function)".
+    -- Le banc l'acceptait, et laissait donc passer une fonction appelee
+    -- avant d'etre ecrite -- son nom s'y resolvant en globale.
     function f:HookScript(event, fn)
+        if type(fn) ~= "function" then
+            error("Usage: " .. tostring(self.name) .. ':HookScript("type", function)')
+        end
         self.hooks = self.hooks or {}
         self.hooks[event] = fn
     end

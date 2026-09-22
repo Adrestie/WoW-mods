@@ -822,6 +822,12 @@ end
 
 -- Un selecteur prend le fond et l'intitule de l'en-tete moderne. Le menu
 -- reste celui du client : c'est lui qui porte les categories et le calcul.
+-- DECLAREE AVANT D'ETRE ECRITE. habillerSelecteur la greffe sur la liste,
+-- et elle n'est ecrite que plus bas : sans cette ligne son nom s'y resout
+-- en GLOBALE, donc nil, et HookScript refuse le greffon. Declaree ici, elle
+-- devient une variable de portee que la fermeture voit se remplir.
+local majEtatSelecteurs
+
 local function habillerSelecteur(selecteur)
 	if selecteur.foreverIntitule then
 		return
@@ -882,7 +888,7 @@ end
 -- CloseDropDownMenus quand on clique ailleurs -- celle-la ne passe pas par
 -- la premiere. On se greffe donc sur le OnShow et le OnHide de la liste
 -- elle-meme, qui couvrent les deux.
-local function majEtatSelecteurs()
+function majEtatSelecteurs()
 	local liste = _G["DropDownList1"]
 	for _, groupe in ipairs(STAT_GROUPES) do
 		local selecteur = _G[groupe.selecteur]
