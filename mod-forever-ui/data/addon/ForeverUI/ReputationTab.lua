@@ -456,17 +456,37 @@ local function hauteurDe(donnees)
 	return ENTREE_H
 end
 
--- LES LIGNES DU CLIENT SE REMONTRENT SEULES.
+-- L'ECRAN DU CLIENT SE TAIT EN ENTIER, A CHAQUE PASSAGE.
 --
--- ReputationFrame_Update finit par factionRow:Show() sur chacune des
--- quinze : les masquer une fois, a la construction, ne suffit pas -- elles
--- reviennent au passage suivant, avec tout leur art d'epoque, et certaines
--- reputations semblaient alors echapper au theme. On repasse apres lui.
-local function masquerLignesDuClient()
-	for index = 1, 15 do
-		local vieille = _G["ReputationBar" .. index]
-		if vieille then
-			vieille:Hide()
+-- Deux raisons de repasser a chaque fois : ReputationFrame_Update finit par
+-- factionRow:Show() sur chacune de ses quinze lignes, et il remontre son
+-- art. Les masquer a la construction ne tient pas.
+--
+-- Et il ne s'agit pas que des lignes : ce cadre porte aussi sa liste a
+-- ascenseur, ses intitules de colonne et ses traits d'arborescence. Les
+-- enumerer serait une liste a tenir a jour et a oublier -- on masque donc
+-- TOUT ce qu'il porte et qui n'est pas a nous. GetRegions ne rend que les
+-- textures, GetChildren que les cadres fils : il faut les deux.
+--
+-- Le cadre de detail, lui, echappe au balayage : il a change de parent, il
+-- vit desormais dans le volet DROIT.
+local function etoufferEcranDuClient()
+	local cadre = _G["ReputationFrame"]
+	if not cadre then
+		return
+	end
+
+	for _, region in ipairs({ cadre:GetRegions() }) do
+		if region.Hide then
+			region:Hide()
+		end
+	end
+
+	if cadre.GetChildren then
+		for _, fils in ipairs({ cadre:GetChildren() }) do
+			if fils ~= panneau and fils.Hide then
+				fils:Hide()
+			end
 		end
 	end
 end
@@ -533,7 +553,7 @@ local function poserListe()
 		return
 	end
 
-	masquerLignesDuClient()
+	etoufferEcranDuClient()
 
 	local total = (GetNumFactions and GetNumFactions()) or 0
 	local posees = disposer()
@@ -589,19 +609,11 @@ local function monter(hote)
 		return nil, { cadre }
 	end
 
-	-- L'ART ET LES LIGNES DE 3.3.5 S'EN VONT. On ne garde du client que ce
-	-- cadre, comme support, et ses fonctions de lecture.
-	for _, region in ipairs({ cadre:GetRegions() }) do
-		if region.Hide then
-			region:Hide()
-		end
-	end
-	for index = 1, 15 do
-		local vieille = _G["ReputationBar" .. index]
-		if vieille then
-			vieille:Hide()
-			vieille:ClearAllPoints()
-		end
+	-- L'ART ET LES LIGNES DE 3.3.5 S'EN VONT : etoufferEcranDuClient s'en
+	-- charge a chaque passage, y compris au premier. On ne garde du client
+	-- que ce cadre, comme support, et ses fonctions de lecture.
+	if cadre.SetBackdrop then
+		cadre:SetBackdrop(nil)
 	end
 
 	local hauteur = hote:GetHeight() or 0
@@ -657,12 +669,14 @@ local function monter(hote)
 		lignes[index] = ligne
 	end
 
-	-- LES DEUX TRAITS, en haut et en bas de la liste.
-	local haut = cadre:CreateTexture(nil, "ARTWORK")
+	-- LES DEUX TRAITS VIVENT SUR NOTRE PANNEAU, et non sur le cadre du
+	-- client : celui-ci voit toutes ses regions masquees a chaque passage,
+	-- sans condition, et les notres y auraient disparu avec.
+	local haut = panneau:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
 	haut:SetPoint("CENTER", panneau, "TOP", 0, 0)
 
-	local bas = cadre:CreateTexture(nil, "ARTWORK")
+	local bas = panneau:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
 	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
 

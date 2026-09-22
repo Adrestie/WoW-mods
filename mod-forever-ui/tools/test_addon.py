@@ -929,6 +929,8 @@ ReputationFrameTopTreeTexture2 = ReputationFrame:CreateTexture(
 ReputationFrame:CreateTexture("ReputationFrameVieilArt", "BACKGROUND")
 ReputationListScrollFrame = CreateFrame("Frame", "ReputationListScrollFrame",
                                         ReputationFrame)
+ReputationFrameCollapseAll = CreateFrame("Button", "ReputationFrameCollapseAll",
+                                         ReputationFrame)
 function FauxScrollFrame_GetOffset() return 0 end
 for i = 1, 15 do
     local n = "ReputationBar" .. i
@@ -2791,10 +2793,20 @@ def main():
     print("   ecart : ligne 1 a %s, ligne 2 a %s (28 + 3 attendus)" % (y1, y2))
     assert y1 - y2 == 28 + 3, "elementSpacing = 3, apres une ligne de 28"
 
-    # LES LIGNES DU CLIENT SE REMONTRENT SEULES : on repasse apres lui.
-    g.ReputationBar1.Show(g.ReputationBar1)
+    # TOUT L ECRAN DU CLIENT SE TAIT, pas seulement ses lignes : sa liste a
+    # ascenseur, ses intitules de colonne, ses traits d arborescence.
+    for nom in ("ReputationBar1", "ReputationListScrollFrame",
+                "ReputationFrameCollapseAll"):
+        g[nom].Show(g[nom])
     g.ForeverUI.ReputationLayout()
-    assert not g.ReputationBar1.shown,         "ReputationFrame_Update les remontre : il faut les masquer a chaque passage"
+    restants = [n for n in ("ReputationBar1", "ReputationListScrollFrame",
+                            "ReputationFrameCollapseAll") if g[n].shown]
+    print("   ecran du client : %d morceau(x) encore visible(s)" % len(restants))
+    assert restants == [], "il en reste : %s" % restants
+    assert g.ForeverUIReputationList.shown, "mais notre panneau demeure"
+    assert g.ReputationDetailFrame.shown,         "et le cadre de detail aussi : il a change de parent, il vit a droite"
+    traits = [t for t in g.ForeverUIReputationList.regions.values() if t.width == 384]
+    assert len(traits) == 2,         "nos deux traits vivent sur notre panneau, hors d atteinte du balayage"
     assert r1.nom.font == "GameFontNormalLeft", "et son nom est en or"
     assert (pf[1], pf[4], pf[5]) == ("RIGHT", -8, -1), "StateIcon a RIGHT (-8, -1)"
     assert r1.fleche.width == 13, "common-button-list-minus, a sa taille d atlas"
