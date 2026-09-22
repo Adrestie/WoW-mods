@@ -1692,7 +1692,7 @@ def main():
     print("   portrait : %d x %d, %s sur %s (%s, %s), texture=%s" % (
         portrait.width, portrait.height, pp[1], pp[3], pp[4], pp[5],
         portrait.portraitOf))
-    assert portrait.width == 44, "44 : ses coins tombent juste sous le metal de l anneau"
+    assert portrait.width == 48,         "48 : sur ses axes il atteint 24, la ou le metal de l anneau est opaque"
     # Il se calcule depuis le coin haut gauche : (-18,5 ; 17) + (38 ; -38,5).
     assert pp[4] == 19.5 and pp[5] == -21.5,         "le portrait suit le trou de son anneau, porte par le coin de l encadrement"
     coinHG = perso.foreverPanel.coinHautGauche.points[1]

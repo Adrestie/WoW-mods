@@ -140,7 +140,7 @@ local ONGLET_ICONE = 32
 local ONGLET_ICONE_X = -3               -- GetIconAnchorOffsetsForTabArt
 local PORTRAIT_ONGLET = 0.03125         -- UpdateCharacterModeTabPortrait
 
-local PORTRAIT = 44                     -- voir le calcul plus bas
+local PORTRAIT = 48                     -- voir le calcul plus bas
 
 -- LE PORTRAIT SUIT SON ANNEAU. L'anneau est porte par le coin haut gauche
 -- de l'encadrement : deplacer ce coin deplace le trou, et un portrait pose
@@ -423,12 +423,26 @@ end
 
 -- LE PORTRAIT. La source le pose en 62 dans PortraitContainer et l'arrondit
 -- par un masque ; ici c'est le trou de l'anneau qui decoupe, comme sur les
--- sacs. Cet anneau, mesure au pixel a la taille ou il est dessine, est
--- transparent jusqu'a 13 du centre, en degrade jusqu'a 23, opaque de 24 a
--- 31. Aucune taille ne couvre le degrade (il faudrait 46) tout en cachant
--- ses coins (43,8) : 44, dont les coins tombent a 31,1, juste sous le
--- metal. Le trou mesure a son centre en (25 ; -22,5), la ou la source met
--- le sien a (26 ; -24).
+-- sacs.
+--
+-- PROFIL DE L'ANNEAU, mesure sur l'art a la taille ou il est dessine --
+-- rayon en pixels d'affichage, contre l'opacite :
+--
+--   0 a 12    transparent, c'est le trou
+--   13 a 25   degrade
+--   26 a 29   opaque
+--   30 a 32   retombee, rien au-dela
+--
+-- Un carre de cote C touche le rayon C/2 sur ses axes et C/2 x racine(2)
+-- dans ses angles. Aucune taille ne couvre le degrade tout en cachant ses
+-- angles : il faudrait C >= 52 pour les uns et C <= 41 pour les autres.
+--
+-- C = 48, A LA DEMANDE : sur les axes il atteint 24, la ou le metal est
+-- deja opaque a 86 % -- c'etait les "2 px de chaque cote" qui manquaient
+-- avec 44, qui s'arretait a 22, dans le degrade a moitie transparent. En
+-- contrepartie ses angles tombent a 33,9, au-dela de l'anneau : si leurs
+-- pointes se voient, 46 est le compromis (axes a 23, angles a 32,5, dans
+-- la retombee).
 local function poserPortrait(cadre)
 	local hote = cadre.foreverHabillage or cadre
 	if not cadre.foreverPortrait then
