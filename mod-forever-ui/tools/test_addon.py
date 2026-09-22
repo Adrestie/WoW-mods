@@ -61,6 +61,11 @@ local function newRegion(kind)
     function r:SetText(t) self.text = t end
     function r:GetText() return self.text end
     function r:SetJustifyH(j) self.justify = j end
+    function r:SetTextColor(rr, vv, bb, aa) self.textColor = {rr, vv, bb, aa} end
+    function r:GetTextColor()
+        local c = self.textColor or {1, 1, 1, 1}
+        return c[1], c[2], c[3], c[4]
+    end
     function r:SetFontObject(o) self.font = o end
     function r:SetHorizTile(v) self.tile = v end
     function r:SetVertexColor(a, b, c) self.vertex = {a, b, c} end
@@ -481,6 +486,12 @@ for _, coin in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
     _G["CharacterFrame" .. coin] = CharacterFrame:CreateTexture(
         "CharacterFrame" .. coin, "ARTWORK")
 end
+CharacterNameText = CharacterFrame:CreateFontString("CharacterNameText", "ARTWORK")
+CharacterFrameCloseButton = CreateFrame("Button", "CharacterFrameCloseButton", CharacterFrame)
+HIGHLIGHT_FONT_COLOR = { r = 1, g = 1, b = 1 }
+NORMAL_FONT_COLOR = { r = 1, g = 0.82, b = 0 }
+REPUTATION, CURRENCY, PVP, SKILLS = "Reputation", "Currency", "PvP", "Skills"
+function UnitPVPName(unite) return "Robert Polson" end
 CharacterModelFrame = CreateFrame("Frame", "CharacterModelFrame", CharacterFrame)
 PaperDollFrame = CreateFrame("Frame", "PaperDollFrame", CharacterFrame)
 PaperDollFrameTexture = PaperDollFrame:CreateTexture("PaperDollFrameTexture", "ARTWORK")
@@ -1597,6 +1608,27 @@ def main():
         "l arme principale se pose au bas du volet gauche, a (-60, 30)"
     assert distance.width == 27 and munitions.width == 27, "distance et munitions font 27"
     assert munitions.points[1][4] == 19, "les munitions sont a 19 de la distance"
+
+    # LE TITRE ET LA FERMETURE, dans la barre du haut.
+    bande = perso.foreverBandeTitre
+    titre = perso.foreverTitre
+    b1, b2 = bande.points[1], bande.points[2]
+    print("   titre : \"%s\", bande de %s a %s, texte a %s" % (
+        titre.text, b1[4], b2[4], titre.points[1][5]))
+    assert titre.text == "Robert Polson", "le titre est le nom du joueur"
+    assert b1[4] == 58 and b2[4] == -24,         "CharacterFrame n appelle pas SetTitleOffsets : les valeurs par defaut"
+    assert titre.points[1][5] == -5, "TitleText est a TOP (0, -5)"
+    assert titre.justify == "CENTER", "il se centre dans sa bande"
+    assert not g.CharacterNameText.shown, "le titre du client s efface"
+    assert bande.GetFrameLevel(bande) > habillage.GetFrameLevel(habillage),         "le titre passe au-dessus du metal, comme TitleContainer a 510"
+
+    fermer = g.CharacterFrameCloseButton
+    pf = fermer.points[1]
+    print("   fermeture : %d x %d, %s (%s, %s)" % (
+        fermer.width, fermer.height, pf[1], pf[4], pf[5]))
+    assert fermer.width == 24 and fermer.height == 24
+    assert (pf[1], pf[4], pf[5]) == ("TOPRIGHT", 1, 0),         "le bouton de fermeture va au coin haut droit"
+    assert fermer._normal.texture is not None, "il porte le X rouge des panneaux"
 
     # LES ONGLETS LATERAUX : en colonne a droite, DEHORS.
     barre = g.ForeverUICharacterModeTabs

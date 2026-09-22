@@ -419,6 +419,10 @@ n'y a donc rien à trancher ici.
 | Armes | arme principale au `BOTTOM (−60, 30)` du volet gauche, puis secondaire et distance à +6 ; distance et munitions en 27 × 27 avec `-GearSlotSmall` |
 | Munitions | `LEFT (+19)` de l'emplacement de distance |
 | Modèle | occupe tout le volet gauche, comme la `ModelScene` de la source |
+| Titre | bande de 58 à −24, texte centré à 5 px de son haut posé à −1 — `CharacterFrame` **n'appelle pas** `SetTitleOffsets`, il garde les valeurs par défaut du mixin ; son milieu tombe à 332,5 sur 631, ce que la capture confirme |
+| Titre affiché | le nom du joueur (`UnitPVPName`) en clair, ou l'intitulé du sous-cadre affiché en jaune — `characterFrameDisplayInfo` |
+| Fermeture | 24 × 24 au `TOPRIGHT (1, 0)`, le X rouge des panneaux modernes |
+| Onglets latéraux | `ModeTabs` 64 × 384 au `TOPRIGHT` du cadre, y −30 ; onglets 55 × 55 (`common-sidetab` fait 55 × 60 dont 5 de transparent), icône centrée à −3 |
 
 **L'ordre de dessin, corrigé après le premier essai en jeu.** Les volets sont
 des cadres fils : ils recouvrent **toute région de leur parent**. L'art du

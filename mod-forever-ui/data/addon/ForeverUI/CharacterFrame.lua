@@ -84,6 +84,39 @@ local PORTRAIT_ONGLET = 0.03125         -- UpdateCharacterModeTabPortrait
 local PORTRAIT = 44                     -- voir le calcul plus bas
 local PORTRAIT_X, PORTRAIT_Y = 25, -22.5
 
+-- LE TITRE. TitledPanelMixin:SetTitleOffsets pose le conteneur du titre en
+-- TOPLEFT (gauche, -1) et TOPRIGHT (droite, -1), avec son texte a TOP
+-- (0, -5). ContainerFrame l'appelle avec 35 ; CharacterFrame ne l'appelle
+-- PAS et garde donc les valeurs par defaut, 58 et -24. Le titre n'est donc
+-- pas centre sur la fenetre mais entre le portrait et le bouton de
+-- fermeture -- son milieu tombe a 332,5 sur 631, ce que la capture
+-- confirme. CharacterFrameMixin:OnLoad ajoute SetTitleMaxLinesAndHeight(1,
+-- 13) : une seule ligne.
+local TITRE_GAUCHE, TITRE_DROITE = 58, -24
+local TITRE_CONTENEUR, TITRE_TEXTE = -1, -5
+local TITRE_BANDE = 20
+
+-- RELEVE -- characterFrameDisplayInfo : le titre suit le sous-cadre
+-- affiche, et sa couleur avec. Par defaut c'est le nom du joueur, en
+-- clair ; les autres panneaux prennent leur intitule, en jaune.
+local TITRES = {
+	{ cadre = "ReputationFrame", texte = "REPUTATION" },
+	{ cadre = "TokenFrame", texte = "CURRENCY" },
+	{ cadre = "HonorFrame", texte = "PVP" },
+	{ cadre = "PVPFrame", texte = "PVP" },
+	{ cadre = "SkillFrame", texte = "SKILLS" },
+	{ cadre = "SkillsFrame", texte = "SKILLS" },
+}
+
+local FERMETURE = 24
+local FERMETURE_X, FERMETURE_Y = 1, 0
+local FERMETURE_ATLAS = {
+	{ atlas = "redbutton-exit", methode = "GetNormalTexture" },
+	{ atlas = "redbutton-exit-pressed", methode = "GetPushedTexture" },
+	{ atlas = "redbutton-exit-disabled", methode = "GetDisabledTexture" },
+	{ atlas = "redbutton-highlight", methode = "GetHighlightTexture" },
+}
+
 local COIN_PORTRAIT = "ui-frame-portraitmetal-cornertopleft"
 
 local ATLAS = {
@@ -200,6 +233,84 @@ local function poserPortrait(cadre)
 	if SetPortraitTexture then
 		SetPortraitTexture(cadre.foreverPortrait, "player")
 	end
+end
+
+-- LE TITRE, dans un cadre fils. La source range le sien dans
+-- TitleContainer, a frameLevel 510 : au-dessus du NineSlice, qui est a 400.
+-- Il le faut, le metal etant en OVERLAY sur son propre cadre.
+local function poserTitre(cadre)
+	if not cadre.foreverBandeTitre then
+		local ancien = _G["CharacterNameText"]
+		if ancien then
+			ancien:Hide()
+		end
+
+		local bande = CreateFrame("Frame", "ForeverUICharacterTitle", cadre)
+		bande:SetFrameLevel(cadre:GetFrameLevel() + NIVEAU_ART + 2)
+		bande:SetHeight(TITRE_BANDE)
+		bande:SetPoint("TOPLEFT", cadre, "TOPLEFT", TITRE_GAUCHE, TITRE_CONTENEUR)
+		bande:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", TITRE_DROITE, TITRE_CONTENEUR)
+
+		local texte = bande:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		texte:SetPoint("TOP", bande, "TOP", 0, TITRE_TEXTE)
+		texte:SetPoint("LEFT", bande, "LEFT")
+		texte:SetPoint("RIGHT", bande, "RIGHT")
+		texte:SetJustifyH("CENTER")
+		cadre.foreverBandeTitre = bande
+		cadre.foreverTitre = texte
+	end
+
+	local texte = cadre.foreverTitre
+	local intitule, couleur = nil, HIGHLIGHT_FONT_COLOR
+	for _, entree in ipairs(TITRES) do
+		local sousCadre = _G[entree.cadre]
+		if sousCadre and sousCadre.IsShown and sousCadre:IsShown() then
+			intitule = _G[entree.texte] or entree.texte
+			couleur = NORMAL_FONT_COLOR
+			break
+		end
+	end
+
+	if not intitule then
+		intitule = (UnitPVPName and UnitPVPName("player")) or UnitName("player")
+	end
+
+	texte:SetText(intitule or "")
+	if couleur then
+		texte:SetTextColor(couleur.r, couleur.g, couleur.b)
+	end
+end
+
+-- Le bouton de fermeture : celui du client, rhabille du X rouge des
+-- panneaux modernes et remis au coin haut droit.
+local function poserFermeture(cadre)
+	local fermer = _G["CharacterFrameCloseButton"]
+	if not fermer then
+		return
+	end
+
+	fermer:SetWidth(FERMETURE)
+	fermer:SetHeight(FERMETURE)
+	fermer:ClearAllPoints()
+	fermer:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", FERMETURE_X, FERMETURE_Y)
+	fermer:SetFrameLevel(cadre:GetFrameLevel() + NIVEAU_ART + 2)
+
+	if cadre.foreverFermetureHabillee then
+		return
+	end
+
+	for _, entree in ipairs(FERMETURE_ATLAS) do
+		local texture = fermer[entree.methode] and fermer[entree.methode](fermer)
+		if texture then
+			ForeverUI.SetAtlas(texture, entree.atlas, true)
+			texture:ClearAllPoints()
+			texture:SetAllPoints(fermer)
+			if entree.atlas == "redbutton-highlight" then
+				texture:SetBlendMode("ADD")
+			end
+		end
+	end
+	cadre.foreverFermetureHabillee = true
 end
 
 local function habillerEmplacement(nom, cote, atlasCadre)
@@ -409,6 +520,8 @@ local function habiller()
 		ForeverUI.UpdatePanelCorners(cadre)
 	end
 	poserPortrait(cadre)
+	poserTitre(cadre)
+	poserFermeture(cadre)
 	poserModele()
 	poserEmplacements()
 	poserOnglets(cadre)
