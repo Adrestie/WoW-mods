@@ -773,6 +773,7 @@ local JAUGE_DETAIL_L, JAUGE_DETAIL_H = 180, 29
 local JAUGE_DETAIL_Y = -6
 local DESCRIPTION_Y = -6
 local DESCRIPTION_X2 = -14
+local DESCRIPTION_Y2 = 6                -- ce qu'elle laisse au-dessus des cases
 local CASE = 26
 local CASE_X, CASE_ECART = -4, -2
 local CASE_INTITULE_L = 158
@@ -975,6 +976,10 @@ local function monterDetail(hote)
 	jauge.texte:SetJustifyH("CENTER")
 	detail.jauge = jauge
 
+	-- La hauteur du pied : trois cases et leurs deux ecarts. La description
+	-- s'arrete juste au-dessus.
+	local pied = 3 * CASE + 2 * (-CASE_ECART)
+
 	-- LA DESCRIPTION. Celle du client sert de SOURCE : on la masque et on
 	-- ecrit la notre, bornee au volet.
 	for _, nom in ipairs({ "ReputationDetailFactionDescription",
@@ -985,16 +990,34 @@ local function monterDetail(hote)
 		end
 	end
 
-	detail.description = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-	detail.description:SetPoint("TOP", jauge, "BOTTOM", 0, DESCRIPTION_Y)
-	detail.description:SetPoint("LEFT", cadre, "LEFT", 0, 0)
-	detail.description:SetPoint("RIGHT", cadre, "RIGHT", DESCRIPTION_X2, 0)
+	-- LA DESCRIPTION SE REPLIE DANS UNE BOITE, ET ELLE EST BLANCHE.
+	--
+	-- Deux corrections d'un meme geste.
+	--
+	-- LA COULEUR : camelot declare fontName = GameFontNormal sur son
+	-- ScrollingFontTemplate, mais cet objet de police est DORE en 3.3.5 --
+	-- c'est celui des titres. Le blanc y est GameFontHighlight, et c'est ce
+	-- que la reference montre.
+	--
+	-- LE REPLI : un texte n'a de quoi revenir a la ligne que s'il a une
+	-- BOITE. Ancre par son seul haut et ses deux cotes, il n'a pas de bas :
+	-- une description un peu longue n'avait nulle part ou aller et
+	-- disparaissait. On lui donne donc ses quatre bords -- du bas de la
+	-- jauge au haut des trois cases -- et il se replie dedans.
+	detail.description = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	detail.description:SetPoint("TOPLEFT", jauge, "BOTTOMLEFT", 0, DESCRIPTION_Y)
+	detail.description:SetPoint("TOPRIGHT", jauge, "BOTTOMRIGHT", 0, DESCRIPTION_Y)
+	detail.description:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", 0, pied + DESCRIPTION_Y2)
+	detail.description:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
+		DESCRIPTION_X2, pied + DESCRIPTION_Y2)
 	detail.description:SetJustifyH("LEFT")
 	detail.description:SetJustifyV("TOP")
+	if detail.description.SetWordWrap then
+		detail.description:SetWordWrap(true)
+	end
 
 	-- LE PIED : les trois cases, empilees depuis le bas du volet.
 	local precedente
-	local pied = 3 * CASE + 2 * (-CASE_ECART)
 	for _, decrit in ipairs(CASES) do
 		local case = _G[decrit.nom]
 		if case then

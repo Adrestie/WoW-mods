@@ -80,6 +80,10 @@ local function newRegion(kind)
         return c[1], c[2], c[3], c[4]
     end
     function r:SetFontObject(o) self.font = o end
+    -- Un texte ne revient a la ligne que s il a une boite : le faux client
+    -- retient ce reglage pour qu on puisse le verifier.
+    function r:SetWordWrap(v) self.wordWrap = (v ~= false) end
+    function r:SetJustifyV(j) self.justifyV = j end
     function r:SetHorizTile(v) self.tile = v end
     function r:SetVertexColor(a, b, c) self.vertex = {a, b, c} end
     function r:SetAlpha(a) self.alpha = a end
@@ -2796,6 +2800,14 @@ def main():
     assert detail.titre.width == 195 and detail.titre.justify == "CENTER",         "Title : large de 195, centre"
     assert detail.sousTitre.justify == "CENTER", "Subtitle : centre lui aussi"
     assert detail.description.text and "Description de" in detail.description.text,         "la description vient du client, par ReputationFrame_Update"
+    # BLANCHE, ET DANS UNE BOITE : sans bas, un texte un peu long n a nulle
+    # part ou se replier et disparait.
+    coins = [p[1] for p in detail.description.points.values()]
+    print("   description : police=%s, ancrages=%s, repli=%s" % (
+        detail.description.font, coins, detail.description.wordWrap))
+    assert detail.description.font == "GameFontHighlight",         "GameFontNormal est DORE en 3.3.5 : le blanc est GameFontHighlight"
+    assert "BOTTOMLEFT" in coins and "BOTTOMRIGHT" in coins,         "ses quatre bords, sinon le texte n a pas de boite"
+    assert detail.description.wordWrap is True, "et il se replie dedans"
 
     print("   jauge du detail : %d x %d, remplissage %s" % (
         detail.jauge.width, detail.jauge.height, detail.jauge.remplissage.width))
