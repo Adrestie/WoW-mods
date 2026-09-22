@@ -135,7 +135,7 @@ local MODELE_Y = 24
 -- scene, et ce client n'a ni SetCamDistanceScale ni SetPortraitZoom --
 -- verifie dans Wow.exe, seul SetModelScale y figure. C'est donc par lui
 -- qu'on recule le personnage. Valeur choisie a l'oeil, a la demande.
-local MODELE_ECHELLE = 0.9
+local MODELE_ECHELLE = 0.8
 
 -- LE PANNEAU DES RESISTANCES se decale vers la droite. On garde son
 -- ancrage d'origine et on n'y ajoute que ce decalage, sinon chaque passage

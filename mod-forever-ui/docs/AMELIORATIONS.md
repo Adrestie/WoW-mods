@@ -538,7 +538,7 @@ la source, et l'écart des munitions (19) ne bouge pas.
 personnage par une scène (`CharacterModelScene`) et la position de son
 acteur. 3.3.5 n'a pas de scène, et ce client n'a **ni `SetCamDistanceScale`
 ni `SetPortraitZoom`** — vérifié dans `Wow.exe`, où seul `SetModelScale`
-figure. Le personnage est donc reculé par `SetModelScale(0,9)` à la demande.
+figure. Le personnage est donc reculé par `SetModelScale(0,8)` à la demande.
 Valeur choisie à l'œil, pas relevée.
 
 Elle se repose **à chaque passage de l'habillage** : le client refait son
