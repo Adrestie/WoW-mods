@@ -909,6 +909,30 @@ function majEtatSelecteurs()
 end
 ForeverUI.CharacterStatTabsState = majEtatSelecteurs
 
+-- LE CLIENT RETAILLE LE SELECTEUR A CHAQUE OUVERTURE.
+--
+-- UIDropDownMenu_InitializeHelper finit par
+--   frame:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)
+-- Cette constante, nous l'avons portee a 20 pour les lignes de menu de
+-- camelot : le selecteur reprenait donc 40 des qu'on cliquait dessus. Elle
+-- est appelee par securecall depuis UIDropDownMenu_Initialize, donc un
+-- greffon sur celle-ci passe bien apres.
+local function reposerTailleSelecteur(cadre)
+	for _, groupe in ipairs(STAT_GROUPES) do
+		local selecteur = _G[groupe.selecteur]
+		if selecteur == cadre and selecteur.foreverTaille then
+			selecteur:SetWidth(selecteur.foreverTaille[1])
+			selecteur:SetHeight(selecteur.foreverTaille[2])
+			return
+		end
+	end
+end
+ForeverUI.CharacterStatTabsSize = reposerTailleSelecteur
+
+if hooksecurefunc and type(UIDropDownMenu_Initialize) == "function" then
+	hooksecurefunc("UIDropDownMenu_Initialize", reposerTailleSelecteur)
+end
+
 -- L'intitule d'une categorie : la CVar porte une CLE (PLAYERSTAT_BASE_STATS),
 -- le texte affichable est la globale du meme nom.
 local function ecrireCategorie(selecteur, cle)
@@ -968,9 +992,12 @@ local function poserStatistiques()
 			habillerSelecteur(selecteur)
 			ecrireCategorie(selecteur, GetCVar and GetCVar(groupe.cvar))
 
+			-- La taille est retenue : le client la reprend a chaque
+			-- ouverture du menu, et il faut pouvoir la reposer.
+			selecteur.foreverTaille = { largeur + 2 * STAT_ENTETE_DEBORD, STAT_ENTETE }
 			selecteur:SetFrameLevel(niveau)
-			selecteur:SetWidth(largeur + 2 * STAT_ENTETE_DEBORD)
-			selecteur:SetHeight(STAT_ENTETE)
+			selecteur:SetWidth(selecteur.foreverTaille[1])
+			selecteur:SetHeight(selecteur.foreverTaille[2])
 			selecteur:ClearAllPoints()
 			selecteur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT",
 				STAT_MARGE - STAT_ENTETE_DEBORD, y)

@@ -523,6 +523,19 @@ Le banc ne l'a pas vu parce que son `HookScript` acceptait `nil`. Il refuse
 désormais tout greffon qui n'est pas une fonction, comme le vrai.
 
 
+**Le client retaille le sélecteur à chaque ouverture du menu.**
+`UIDropDownMenu_InitializeHelper` finit par
+`frame:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)`. Cette constante, nous
+l'avons portée à **20** pour les lignes de menu de camelot : le sélecteur
+reprenait donc **40** dès qu'on cliquait dessus. Elle est appelée par
+`securecall` depuis `UIDropDownMenu_Initialize`, donc un greffon sur
+celle-ci passe bien après et repose la taille retenue.
+
+C'est le genre d'effet de bord qu'un réglage global entraîne : la hauteur
+de ligne des menus et la hauteur d'un bouton de menu déroulant sont la
+**même** constante dans 3.3.5.
+
+
 **Le sélecteur est un bouton, plus un en-tête.** Écart assumé, sur demande :
 il portait `UI-Character-Info-Title`, l'en-tête de catégorie de camelot ; il
 prend désormais l'art de bouton `commonbuttontertiaryc60`, avec ses deux

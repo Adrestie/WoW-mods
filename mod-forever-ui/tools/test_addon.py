@@ -273,6 +273,13 @@ function SetPortraitTexture(texture, unit)
     -- qui la relit croit l'avoir ratee
     texture.texture = "portrait:" .. tostring(unit)
 end
+-- Ce que fait le vrai : UIDropDownMenu_InitializeHelper finit par
+-- frame:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2).
+function UIDropDownMenu_Initialize(cadre)
+    if cadre and cadre.SetHeight then
+        cadre:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)
+    end
+end
 function ToggleDropDownMenu() end
 function IsResting() return STATE.resting end
 function UnitThreatSituation(unit) return STATE.threat end
@@ -1983,6 +1990,12 @@ def main():
     print("   liste ouverte : presse=%s, normal=%s" % (
         presse[0].shown, normal[0].shown))
     assert presse[0].shown and not normal[0].shown, "presse tant que la liste est la"
+    # Le client retaille le selecteur a chaque ouverture du menu.
+    lua.execute('UIDropDownMenu_Initialize(PlayerStatFrameLeftDropDown)')
+    g.ForeverUI.CharacterStatTabsSize(g.PlayerStatFrameLeftDropDown)
+    print("   apres ouverture du menu : %d x %d" % (sel.width, sel.height))
+    assert sel.width == 203 and sel.height == 34,         "UIDropDownMenu_InitializeHelper repose la hauteur : on repasse derriere"
+
     lua.execute('DropDownList1:Hide()')
     g.ForeverUI.CharacterStatTabsState()
     print("   liste fermee : presse=%s, normal=%s" % (presse[0].shown, normal[0].shown))
