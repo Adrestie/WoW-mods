@@ -933,6 +933,38 @@ Les sacs gardent la grille de 3.3.5 (quatre colonnes, boutons de 37, pas de
 `ForeverUI.SetPanelArt` est écrit pour servir à tous les panneaux à venir :
 feuille de personnage, livre de sorts, talents.
 
+### Défauts connus
+
+**Un sac peut sortir par le haut de l'écran.** Selon le nombre et la taille
+des sacs ouverts, le dernier de la pile passe au-dessus du bord supérieur.
+
+C'est une **reproduction fidèle d'un défaut de la source**.
+`UpdateContainerFrameAnchors` (mainline ; camelot ne la redéfinit pas)
+calcule la place restante ainsi :
+
+```
+libre = hauteurEcran / echelle - decalageY
+pour chaque sac :
+    1er            -> BOTTOMRIGHT du parent (-decalageX, decalageY)
+    libre < hauteur -> nouvelle colonne, BOTTOMRIGHT sur le BOTTOMLEFT
+                       du premier sac de la colonne courante, (-11, 0)
+    sinon          -> BOTTOMRIGHT sur le TOPRIGHT du précédent, (0, 8)
+    libre = libre - hauteur
+```
+
+`libre` est diminué de la **hauteur du sac seulement** : l'écart de 8 px
+empilé entre deux sacs n'est jamais compté. Pour *N* sacs dans une colonne,
+la pile réelle dépasse l'estimation de (*N* − 1) × 8, et le saut de colonne
+arrive donc trop tard. Aucune marge n'est gardée en haut non plus.
+
+`ForeverUI.BagsStack` reprend ce calcul à l'identique, et le rattrapage
+(`ForeverUIBagsRecheck`) rejoue bien l'empilement quand une hauteur change —
+ce n'est donc pas un défaut d'ordre, mais bien l'arithmétique de la source.
+
+Le corriger serait un **écart assumé** : retrancher aussi l'écart de 8 à
+chaque sac empilé, et éventuellement garder une marge haute. À décider, la
+fenêtre des sacs étant validée.
+
 **Le bouton du menu déroulant reste à reprendre.** La liste ouverte est
 maintenant à la DA de camelot ; le bouton fermé, lui, ne l'est pas encore. Ce
 qui est en place aujourd'hui est l'en-tête de catégorie
