@@ -920,6 +920,17 @@ local function monterDetail(hote)
 	cadre:ClearAllPoints()
 	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", VOLET_DROIT_X, VOLET_DROIT_Y)
 	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", VOLET_DROIT_X2, VOLET_DROIT_Y2)
+	-- LE FOND DE FENETRE N'EST PAS UNE REGION.
+	--
+	-- ReputationDetailFrame porte un <Backdrop> -- UI-DialogBox-Background et
+	-- UI-DialogBox-Border, avec ses marges et sa taille de tuile. Un fond de
+	-- ce type ne figure pas dans GetRegions : le balayage des textures ne
+	-- l'atteignait pas, et son cadre gris restait a l'ecran. Il s'enleve par
+	-- SetBackdrop(nil), comme celui des listes de menu.
+	if cadre.SetBackdrop then
+		cadre:SetBackdrop(nil)
+	end
+
 	for _, region in ipairs({ cadre:GetRegions() }) do
 		if region.GetObjectType and region:GetObjectType() == "Texture" then
 			region:SetAlpha(0)

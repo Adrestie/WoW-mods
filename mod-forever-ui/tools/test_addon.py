@@ -927,6 +927,9 @@ end
 -- ReputationFrame_Update qui le remplit, pour la faction choisie, et
 -- SEULEMENT s il est visible.
 ReputationDetailFrame = CreateFrame("Frame", "ReputationDetailFrame", UIParent)
+-- Il porte un <Backdrop>, qui n est PAS une region : le balayage des
+-- textures ne l atteint pas, seul SetBackdrop(nil) l enleve.
+ReputationDetailFrame:SetBackdrop({ bgFile = "UI-DialogBox-Background" })
 ReputationDetailFrame:Hide()
 ReputationDetailCloseButton = CreateFrame("Button", "ReputationDetailCloseButton",
                                           ReputationDetailFrame)
@@ -2786,6 +2789,8 @@ def main():
     print("   detail : %s sur %s (%s, %s), titre=\"%s\" sous-titre=\"%s\"" % (
         pd[1], pd[2].name, pd[4], pd[5], detail.titre.text, detail.sousTitre.text))
     assert pd[2].name == "ForeverUICharacterRightPane",         "le cadre du client devient notre volet droit"
+    print("   fond de fenetre : %s" % detail.backdrop)
+    assert detail.backdrop is None,         "le <Backdrop> de 3.3.5 n est pas une region : SetBackdrop(nil) seul l enleve"
     assert (pd[4], pd[5]) == (16, -14),         "CharacterFrameSidePaneTemplate : TOPLEFT (16, -14)"
     assert detail.titre.text == r3.nom.text, "le titre est la faction choisie"
     assert detail.titre.width == 195 and detail.titre.justify == "CENTER",         "Title : large de 195, centre"
