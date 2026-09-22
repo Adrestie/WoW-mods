@@ -829,6 +829,16 @@ SkillFrame = CreateFrame("Frame", "SkillFrame", CharacterFrame)
 SkillFrame:Hide()
 TokenFrame = CreateFrame("Frame", "TokenFrame", CharacterFrame)
 TokenFrame:Hide()
+-- LA FENETRE PvP de 3.3.5 : un cadre a part, toplevel, fils d UIParent.
+PVPParentFrame = CreateFrame("Frame", "PVPParentFrame", UIParent)
+PVPParentFrame:SetWidth(384)
+PVPParentFrame:SetHeight(512)
+PVPParentFrame:SetToplevel(true)
+PVPParentFrame:Hide()
+function TogglePVPFrame() end
+function ShowUIPanel(cadre) cadre:Show() end
+PVP = "JcJ"
+STATISTICS = "Statistiques"
 function CharacterFrame_ShowSubFrame(nom)
     for _, ecran in ipairs(CHARACTERFRAME_SUBFRAMES) do
         if ecran == nom then _G[ecran]:Show() else _G[ecran]:Hide() end
@@ -2245,8 +2255,7 @@ def main():
     assert p3[2].name == "CharacterFrameTab1",         "reputation doit suivre le personnage, pas le trou du familier"
     assert (p3[1], p3[3]) == ("TOPLEFT", "BOTTOMLEFT") and (p3[4], p3[5]) == (0, -2),         "et avec le meme espace que les autres : UpdateTabLayout pose (0, -2)"
     p4 = g.CharacterFrameTab4.points[len(list(g.CharacterFrameTab4.points.values()))]
-    p5 = g.CharacterFrameTab5.points[len(list(g.CharacterFrameTab5.points.values()))]
-    assert p4[2].name == "CharacterFrameTab3" and p5[2].name == "CharacterFrameTab4",         "competences et monnaie suivent a leur tour"
+    assert p4[2].name == "CharacterFrameTab3", "les competences suivent a leur tour"
 
     # Le familier revenu, la pile se referme.
     lua.execute("AVEC_FAMILIER = true")
@@ -2545,6 +2554,57 @@ def main():
              g.PlayerStatFrameLeft1.points[1][5])
     print("   apres vingt allers-retours : %s (avant %s)" % (str(apres), str(avant)))
     assert avant == apres, "aucune mesure ne doit deriver d un changement d onglet"
+
+    # LES DEUX ONGLETS QUE 3.3.5 N A PAS : PvP et statistiques.
+    pvp, stat = g.ForeverUICharacterTabPvP, g.ForeverUICharacterTabStats
+    print("   onglets crees : PvP icone=%s | statistiques icone=%s" % (
+        pvp.foreverIcone.texture.split(chr(92))[-1],
+        stat.foreverIcone.texture.split(chr(92))[-1]))
+    assert "Honor" in pvp.foreverIcone.texture, "l icone du PvP suit la faction"
+    assert "Stats" in stat.foreverIcone.texture, "INV_SideTab_Stats_c60"
+
+    # L ORDRE DE LA COLONNE suit camelot : le PvP entre competences et
+    # monnaie, les statistiques en dernier.
+    attendu = ["CharacterFrameTab1", "CharacterFrameTab2", "CharacterFrameTab3",
+               "CharacterFrameTab4", "ForeverUICharacterTabPvP",
+               "CharacterFrameTab5", "ForeverUICharacterTabStats"]
+    colonne, courant = [], None
+    for nom in attendu:
+        o = g[nom]
+        pt = o.points[len(list(o.points.values()))]
+        colonne.append((nom, pt[2].name if pt[2] else None))
+    print("   colonne : %s" % " -> ".join(n for n, _ in colonne))
+    for rang in range(1, len(attendu)):
+        assert colonne[rang][1] == attendu[rang - 1],             "%s doit suivre %s, il suit %s" % (attendu[rang], attendu[rang - 1],
+                                              colonne[rang][1])
+
+    # CLIQUER SUR LE PvP : les cinq ecrans du client s en vont, le notre vient.
+    pvp.scripts.OnClick(pvp)
+    visibles = [e for e in list(g.CHARACTERFRAME_SUBFRAMES.values()) if g[e].shown]
+    ppvp = g.PVPParentFrame.points[len(list(g.PVPParentFrame.points.values()))]
+    print("   clic PvP : ecrans du client visibles=%s, PVPParentFrame parent=%s "
+          "toplevel=%s, volet droit=%s" % (
+        visibles, g.PVPParentFrame.parent.name, g.PVPParentFrame.toplevel, droit.shown))
+    assert visibles == [], "aucun ecran du client ne reste"
+    assert g.PVPParentFrame.shown, "la fenetre PvP devient le contenu du volet"
+    assert g.PVPParentFrame.parent.name == "ForeverUICharacterLeftPane",         "elle cesse d etre une fenetre : elle passe dans le volet gauche"
+    assert g.PVPParentFrame.toplevel is False, "et ne se hisse plus au-dessus de tout"
+    assert ppvp[2].name == "ForeverUICharacterLeftPane", "bornee au volet"
+    assert droit.shown and perso.width == 631, "le volet droit reste, comme ailleurs"
+
+    # CLIQUER SUR LES STATISTIQUES : l ecran est vide, mais l onglet marche.
+    stat.scripts.OnClick(stat)
+    print("   clic statistiques : PvP visible=%s, volet droit=%s" % (
+        g.PVPParentFrame.shown, droit.shown))
+    assert not g.PVPParentFrame.shown, "le PvP s en va"
+    assert droit.shown, "le volet droit reste"
+
+    # REVENIR AU PERSONNAGE par un onglet du client : nos ecrans s en vont.
+    g.CharacterFrame_ShowSubFrame("PaperDollFrame")
+    g.ForeverUI.Panes.ShowGroup("PaperDollFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    assert not g.PVPParentFrame.shown, "le PvP ne survit pas a un onglet du client"
+    assert droit.pierre.shown, "et le mobilier du personnage revient"
 
     # LE TEMOIN de la bibliotheque.
     for ligne in g.ForeverUI.Panes.Report().values():

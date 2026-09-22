@@ -246,12 +246,12 @@ local ONGLET_ECART = -2
 --   PvP Alliance 8197097       PvP Horde    8197098
 --   statistiques 8197104
 --
--- NI LE PvP NI LES STATISTIQUES NE SONT VERSES : la feuille de 3.3.5 n'a
--- aucun de ces deux onglets. CHARACTERFRAME_SUBFRAMES en compte cinq --
--- personnage, familier, competences, reputation, monnaie -- et les
--- statistiques du jeu vivent dans AchievementFrameStats, une fenetre a part
--- que Blizzard_AchievementUI charge a la demande. Les construire ici est un
--- chantier, pas un reglage. Leurs identifiants sont notes pour ce jour-la.
+-- LE PvP ET LES STATISTIQUES SONT DES ONGLETS QUE NOUS CREONS :
+-- CHARACTERFRAME_SUBFRAMES n'en compte que cinq -- personnage, familier,
+-- competences, reputation, monnaie -- la ou camelot en a six.
+--
+-- L'ICONE DU PvP SUIT LA FACTION, comme SetupModeTabs le fait pour son
+-- quatrieme onglet.
 --
 -- L'ONGLET DU FAMILIER, lui, n'existe pas chez camelot : aucune icone n'est
 -- relevee pour lui, il garde son texte.
@@ -262,7 +262,24 @@ local ONGLET_ICONES = {
 	[3] = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Reputation2_c60",
 	[4] = "Interface\\ForeverUI\\Icons\\Ability_Racial_JackofAllTrades",
 	[5] = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Currency_c60",
+	pvp = {
+		Alliance = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Honor_Alliance_c60",
+		Horde = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Honor_Horde_c60",
+	},
+	stats = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Stats_c60",
 }
+
+-- L'ORDRE DE LA COLONNE. camelot va personnage, reputation, competences,
+-- PvP, monnaie, statistiques. 3.3.5 intercale le familier en deuxieme et
+-- ignore les deux derniers : on garde son ordre a lui et on insere les deux
+-- notres aux places que camelot leur donne. Un nombre designe un onglet du
+-- client, une chaine l'un des notres.
+local ORDRE_ONGLETS = { 1, 2, 3, 4, "pvp", 5, "stats" }
+
+-- Les deux ecrans que nous ouvrons. Ce ne sont pas des sous-cadres du
+-- client : leurs noms n'ont donc a etre uniques que chez nous.
+local ECRAN_PVP = "ForeverUIPvPPane"
+local ECRAN_STATS = "ForeverUIStatsPane"
 local ONGLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
 local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
@@ -1342,6 +1359,55 @@ local function declarerContenus()
 		})
 	end
 
+	-- LE PvP. 3.3.5 en fait une FENETRE -- PVPParentFrame, 384 x 512,
+	-- toplevel, fille d'UIParent -- la ou camelot en fait un onglet de la
+	-- feuille. On la reprend donc entierement : elle cesse d'etre une
+	-- fenetre et devient le contenu du volet gauche.
+	--
+	-- Reparenter est ici sans danger, a la difference des lignes de
+	-- statistiques ou des emplacements : ce cadre ne porte aucun de nos
+	-- reglages de niveau, il n'a donc rien a perdre. Et sans cela il
+	-- resterait au-dessus de tout, toplevel oblige.
+	--
+	-- SA MISE EN PAGE RESTE A FAIRE : il garde son propre encadrement de
+	-- fenetre et sa largeur d'origine. Il est seulement BORNE au volet --
+	-- haut et bas -- pour ne pas depasser de la feuille, qui est moins haute
+	-- que lui.
+	Panes.Register({
+		hote = "gauche", groupe = ECRAN_PVP, id = "pvp",
+		construire = function(hote)
+			local cadre = _G["PVPParentFrame"]
+			if not cadre then
+				return nil, {}
+			end
+			cadre:SetParent(hote)
+			if cadre.SetToplevel then
+				cadre:SetToplevel(false)
+			end
+			cadre:ClearAllPoints()
+			cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
+			cadre:SetPoint("BOTTOMLEFT", hote, "BOTTOMLEFT", 0, 0)
+			return nil, { cadre }
+		end,
+	})
+
+	-- LES STATISTIQUES. L'ecran reste a definir : 3.3.5 met les siennes dans
+	-- AchievementFrameStats, une fenetre a part que Blizzard_AchievementUI
+	-- charge a la demande, et rien n'a encore ete decide. L'onglet existe,
+	-- son volet gauche est vide.
+	Panes.Register({
+		hote = "gauche", groupe = ECRAN_STATS, id = "stats",
+		construire = function() return nil, {} end,
+	})
+
+	-- Les deux gardent leur volet droit, vide comme celui des autres onglets.
+	for _, groupe in ipairs({ ECRAN_PVP, ECRAN_STATS }) do
+		Panes.Register({
+			hote = "droit", groupe = groupe, id = groupe .. ".droit",
+			construire = function() return nil, {} end,
+		})
+	end
+
 	-- LE MOBILIER DU VOLET DROIT POUR LE PERSONNAGE : ce qui s'y trouve
 	-- quelle que soit la page ouverte, et qui n'a rien a faire sur les autres
 	-- onglets. La source masque exactement ces trois choses --
@@ -1427,6 +1493,44 @@ end
 
 if hooksecurefunc and type(_G["CharacterFrame_ShowSubFrame"]) == "function" then
 	hooksecurefunc("CharacterFrame_ShowSubFrame", suivreEcran)
+end
+
+-- OUVRIR UN ECRAN QUI N'EST PAS AU CLIENT.
+--
+-- CharacterFrame_ShowSubFrame ne connait que ses cinq cadres : l'appeler
+-- avec un nom qu'il ignore les masquerait tous et laisserait la feuille sans
+-- groupe. On fait donc les deux gestes nous-memes -- masquer les cinq, puis
+-- ouvrir le notre -- et le greffon sur sa fonction ne se declenche pas,
+-- puisqu'elle n'est pas appelee.
+local function ouvrirEcranPropre(groupe)
+	for _, nom in ipairs(CHARACTERFRAME_SUBFRAMES or {}) do
+		local cadre = _G[nom]
+		if cadre then
+			cadre:Hide()
+		end
+	end
+	ForeverUI.Panes.ShowGroup(groupe)
+	if ForeverUI.CharacterApplyPanes then
+		ForeverUI.CharacterApplyPanes(CharacterFrame)
+	end
+end
+ForeverUI.CharacterShowOwnScreen = ouvrirEcranPropre
+
+-- LA FENETRE PvP N'EXISTE PLUS : c'est un onglet. Sa touche et le bouton du
+-- micro-menu passent tous deux par TogglePVPFrame, qui finit sur
+-- ToggleFrame(PVPParentFrame) -- devenu sans effet visible, le cadre etant
+-- desormais un fils du volet. Le greffon leur rend leur sens : la feuille
+-- s'ouvre sur l'onglet PvP, comme chez camelot.
+if hooksecurefunc and type(_G["TogglePVPFrame"]) == "function" then
+	hooksecurefunc("TogglePVPFrame", function()
+		if not CharacterFrame then
+			return
+		end
+		if not CharacterFrame:IsShown() and ShowUIPanel then
+			ShowUIPanel(CharacterFrame)
+		end
+		ouvrirEcranPropre(ECRAN_PVP)
+	end)
 end
 
 -- LE REPLI. L'etat est retenu entre deux sessions, comme le CVar de camelot.
@@ -1588,8 +1692,9 @@ local function empilerOnglets()
 	end
 
 	local precedent
-	for _, onglet in ipairs(onglets) do
-		if onglet:IsShown() then
+	for _, cle in ipairs(ORDRE_ONGLETS) do
+		local onglet = onglets[cle]
+		if onglet and onglet:IsShown() then
 			onglet:ClearAllPoints()
 			if precedent then
 				onglet:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, ONGLET_ECART)
@@ -1604,6 +1709,72 @@ ForeverUI.CharacterStackTabs = empilerOnglets
 
 if hooksecurefunc and type(_G["PetPaperDollFrame_UpdateIsAvailable"]) == "function" then
 	hooksecurefunc("PetPaperDollFrame_UpdateIsAvailable", empilerOnglets)
+end
+
+-- UN ONGLET A NOUS, habille comme ceux du client : meme fond, meme survol,
+-- meme icone centree. Il n'a pas de texte -- il n'existe que parce que
+-- camelot lui donne une icone.
+local function creerOngletLateral(cle, nom, icone, infobulle, groupe)
+	if onglets[cle] then
+		return onglets[cle]
+	end
+
+	local onglet = CreateFrame("Button", nom, barreOnglets)
+	onglet:SetWidth(ONGLET_L)
+	onglet:SetHeight(ONGLET_H)
+
+	local fond = onglet:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(fond, ATLAS.onglet, true)
+	fond:SetAllPoints(onglet)
+	onglet.foreverFond = fond
+
+	local survol = onglet:CreateTexture(nil, "HIGHLIGHT")
+	ForeverUI.SetAtlas(survol, ATLAS.ongletSurvol, true)
+	survol:SetAllPoints(onglet)
+
+	local image = onglet:CreateTexture(nil, "ARTWORK")
+	image:SetWidth(ONGLET_ICONE)
+	image:SetHeight(ONGLET_ICONE)
+	image:SetPoint("CENTER", onglet, "CENTER", ONGLET_ICONE_X, 0)
+	image:SetTexture(icone)
+	onglet.foreverIcone = image
+
+	onglet:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(infobulle)
+		GameTooltip:Show()
+	end)
+	onglet:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	onglet:SetScript("OnClick", function()
+		if PlaySound then
+			PlaySound("igCharacterInfoTab")
+		end
+		ouvrirEcranPropre(groupe)
+	end)
+
+	onglet.foreverSkinned = true
+	onglets[cle] = onglet
+	return onglet
+end
+
+local function poserOngletsCrees()
+	if not barreOnglets then
+		return
+	end
+
+	local faction = (UnitFactionGroup and UnitFactionGroup("player")) or "Alliance"
+	creerOngletLateral("pvp", "ForeverUICharacterTabPvP",
+		ONGLET_ICONES.pvp[faction] or ONGLET_ICONES.pvp.Alliance,
+		PVP or "PvP", ECRAN_PVP)
+	creerOngletLateral("stats", "ForeverUICharacterTabStats",
+		ONGLET_ICONES.stats, STATISTICS or "Statistics", ECRAN_STATS)
+
+	-- La faction ne change pas en cours de partie, mais l'onglet peut etre
+	-- cree avant que le client l'ait rendue : on la repose a chaque passage.
+	if onglets.pvp and faction then
+		onglets.pvp.foreverIcone:SetTexture(
+			ONGLET_ICONES.pvp[faction] or ONGLET_ICONES.pvp.Alliance)
+	end
 end
 
 local function poserOnglets(cadre)
@@ -1675,6 +1846,7 @@ local function poserOnglets(cadre)
 		index = index + 1
 	end
 
+	poserOngletsCrees()
 	empilerOnglets()
 
 	-- L'onglet du personnage porte le portrait du joueur, rogne comme le

@@ -20,8 +20,8 @@ interface/icons/ability_racial_jackofalltrades.blp
 interface/icons/unknown_8197103.blp => interface/icons/inv_sidetab_reputation2_c60.blp
 interface/icons/unknown_8197078.blp => interface/icons/inv_sidetab_currency_c60.blp
 
-# PAS ENCORE VERSEES : la feuille de 3.3.5 n'a ni onglet PvP ni onglet des
-# statistiques. Leurs identifiants sont notes pour le jour ou elle en aura.
-#   interface/icons/unknown_8197097.blp => .../inv_sidetab_honor_alliance_c60.blp
-#   interface/icons/unknown_8197098.blp => .../inv_sidetab_honor_horde_c60.blp
-#   interface/icons/unknown_8197104.blp => .../inv_sidetab_stats_c60.blp
+# Les deux onglets que 3.3.5 n'a pas et que ForeverUI cree : PvP, dont
+# l'icone suit la faction, et les statistiques.
+interface/icons/unknown_8197097.blp => interface/icons/inv_sidetab_honor_alliance_c60.blp
+interface/icons/unknown_8197098.blp => interface/icons/inv_sidetab_honor_horde_c60.blp
+interface/icons/unknown_8197104.blp => interface/icons/inv_sidetab_stats_c60.blp
