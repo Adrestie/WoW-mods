@@ -588,6 +588,21 @@ for i = 1, 5 do
     _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
     t:CreateTexture(nom .. "Fond", "ARTWORK")
 end
+-- L ONGLET DU FAMILIER S EFFACE quand le personnage n en a pas, et le client
+-- rattache le suivant sur le LEFT du masque : sa reparation a lui, pensee
+-- pour une rangee horizontale. Repris tel quel de PetPaperDollFrame.lua.
+function PetPaperDollFrame_UpdateIsAvailable()
+    if not HasPetUI() then
+        PetPaperDollFrame.hidden = true
+        CharacterFrameTab2:Hide()
+        CharacterFrameTab3:SetPoint("LEFT", CharacterFrameTab2, "LEFT", 0, 0)
+    else
+        PetPaperDollFrame.hidden = nil
+        CharacterFrameTab2:Show()
+    end
+end
+AVEC_FAMILIER = true
+function HasPetUI() return AVEC_FAMILIER end
 -- les statistiques telles que le client les CHARGE (patch-enUS-2 et -3, le
 -- FrameXML d'origine) : deux groupes de six lignes StatFrameTemplate de
 -- 104 x 13, chacun coiffe de son UIDropDownMenuTemplate. La categorie
@@ -2218,6 +2233,28 @@ def main():
     assert o1.width == 55 and o1.height == 55
     p2 = o2.points[1]
     assert p2[1] == "TOPLEFT" and p2[3] == "BOTTOMLEFT", "ils s empilent"
+    # SANS FAMILIER, LES SUIVANTS REMONTENT. Un onglet masque mais toujours
+    # ancre laissait un trou de sa hauteur sous le personnage.
+    lua.execute("AVEC_FAMILIER = false")
+    g.PetPaperDollFrame_UpdateIsAvailable()
+    o3 = g.CharacterFrameTab3
+    p3 = o3.points[len(list(o3.points.values()))]
+    print("   sans familier : onglet 3 ancre %s sur %s de %s (%s, %s)" % (
+        p3[1], p3[3], p3[2].name, p3[4], p3[5]))
+    assert not g.CharacterFrameTab2.shown, "le client masque l onglet du familier"
+    assert p3[2].name == "CharacterFrameTab1",         "reputation doit suivre le personnage, pas le trou du familier"
+    assert (p3[1], p3[3]) == ("TOPLEFT", "BOTTOMLEFT") and (p3[4], p3[5]) == (0, 0),         "et avec le meme espace que les autres"
+    p4 = g.CharacterFrameTab4.points[len(list(g.CharacterFrameTab4.points.values()))]
+    p5 = g.CharacterFrameTab5.points[len(list(g.CharacterFrameTab5.points.values()))]
+    assert p4[2].name == "CharacterFrameTab3" and p5[2].name == "CharacterFrameTab4",         "competences et monnaie suivent a leur tour"
+
+    # Le familier revenu, la pile se referme.
+    lua.execute("AVEC_FAMILIER = true")
+    g.PetPaperDollFrame_UpdateIsAvailable()
+    p3 = o3.points[len(list(o3.points.values()))]
+    print("   familier revenu : onglet 3 ancre sur %s" % p3[2].name)
+    assert p3[2].name == "CharacterFrameTab2", "il reprend sa place derriere le familier"
+
     print("   onglet du personnage : portrait=%s, texte masque=%s" % (
         o1.foreverIcone.portraitOf, not g.CharacterFrameTab1Text.shown))
     assert o1.foreverIcone.portraitOf == "player",         "l onglet du personnage porte le portrait, comme la source"

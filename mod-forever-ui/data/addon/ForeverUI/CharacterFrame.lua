@@ -220,6 +220,7 @@ local ONGLET_VOLET_Y = -9               -- -4 du cadre des onglets, -5 du premie
 --
 -- Mesure sur UI-Character-Info-StatTab : sur ses 42, la bande de metal
 -- occupe 3..6 et 35..38, l'ouverture va donc de 7 a 34 -- 28 px, centres.
+local ONGLET_ECART = 0                  -- ils se touchent, comme chez camelot
 local ONGLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
 local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
@@ -1526,6 +1527,43 @@ end
 -- LES ONGLETS LATERAUX. camelot les met en colonne A DROITE, dehors : une
 -- barre de 64 x 384 ancree au TOPRIGHT du cadre, 30 px sous son haut. Les
 -- onglets du bas de 3.3.5 sont donc reposes la, empiles.
+--
+-- ON N'EMPILE QUE CEUX QUI SE VOIENT.
+--
+-- 3.3.5 masque l'onglet du familier quand le personnage n'en a pas :
+-- PetPaperDollFrame_UpdateIsAvailable fait CharacterFrameTab2:Hide(), puis
+-- rattache le suivant sur le LEFT du masque -- sa reparation a lui, pensee
+-- pour une rangee horizontale. En colonne, un onglet masque mais toujours
+-- ancre laissait un TROU de sa hauteur, et reputation, competences et
+-- monnaie flottaient sous le personnage au lieu de le suivre.
+--
+-- On chaine donc sur le precedent VISIBLE, et on refait la pile chaque fois
+-- que le client change cet etat -- c'est cette fonction-la, et elle seule,
+-- qui le decide.
+local function empilerOnglets()
+	if not barreOnglets then
+		return
+	end
+
+	local precedent
+	for _, onglet in ipairs(onglets) do
+		if onglet:IsShown() then
+			onglet:ClearAllPoints()
+			if precedent then
+				onglet:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, ONGLET_ECART)
+			else
+				onglet:SetPoint("TOPLEFT", barreOnglets, "TOPLEFT", 0, 0)
+			end
+			precedent = onglet
+		end
+	end
+end
+ForeverUI.CharacterStackTabs = empilerOnglets
+
+if hooksecurefunc and type(_G["PetPaperDollFrame_UpdateIsAvailable"]) == "function" then
+	hooksecurefunc("PetPaperDollFrame_UpdateIsAvailable", empilerOnglets)
+end
+
 local function poserOnglets(cadre)
 	if not barreOnglets then
 		barreOnglets = CreateFrame("Frame", "ForeverUICharacterModeTabs", cadre)
@@ -1578,20 +1616,15 @@ local function poserOnglets(cadre)
 			end
 
 			onglet.foreverSkinned = true
-			onglets[index] = onglet
 		end
 
 		onglet:SetWidth(ONGLET_L)
 		onglet:SetHeight(ONGLET_H)
-		onglet:ClearAllPoints()
-		if precedent then
-			onglet:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, 0)
-		else
-			onglet:SetPoint("TOPLEFT", barreOnglets, "TOPLEFT", 0, 0)
-		end
-		precedent = onglet
+		onglets[index] = onglet
 		index = index + 1
 	end
+
+	empilerOnglets()
 
 	-- L'onglet du personnage porte le portrait du joueur, rogne comme le
 	-- fait UpdateCharacterModeTabPortrait.
