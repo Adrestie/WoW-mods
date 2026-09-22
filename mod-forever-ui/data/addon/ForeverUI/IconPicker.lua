@@ -294,12 +294,17 @@ local function habillerCadre(popup)
 	local bas = piece("_macropopup-bottom-c60")
 	bas:SetPoint("BOTTOMLEFT", bg, "BOTTOMRIGHT")
 	bas:SetPoint("BOTTOMRIGHT", bd, "BOTTOMLEFT")
+	-- LES BANDES LATERALES GARDENT LEUR LARGEUR D'ATLAS. Les ancrer par
+	-- leurs deux coins opposes les etirerait jusqu'au coin voisin -- et le
+	-- coin BAS DROIT fait 174 de large, puisqu'il porte le socle des
+	-- boutons : la bande droite s'etalait sur 174 au lieu de 17. Deux
+	-- points du MEME cote suffisent, la largeur vient de l'image.
 	local gauche = piece("!macropopup-left-c60")
 	gauche:SetPoint("TOPLEFT", hg, "BOTTOMLEFT")
-	gauche:SetPoint("BOTTOMRIGHT", bg, "TOPRIGHT")
+	gauche:SetPoint("BOTTOMLEFT", bg, "TOPLEFT")
 	local droite = piece("!macropopup-right-c60")
 	droite:SetPoint("TOPRIGHT", hd, "BOTTOMRIGHT")
-	droite:SetPoint("BOTTOMLEFT", bd, "TOPLEFT")
+	droite:SetPoint("BOTTOMRIGHT", bd, "TOPRIGHT")
 
 	popup.foreverCadre = { hg, hd, bg, bd, haut, bas, gauche, droite }
 	popup.foreverFond = fond
@@ -311,6 +316,19 @@ local function habillerBarre()
 	local barre = _G["GearManagerDialogPopupScrollFrameScrollBar"]
 	if not barre or barre.foreverBarre then
 		return
+	end
+
+	-- L'ENCADREMENT DE LA BARRE N'EST PAS SUR LA BARRE. Le cadre de
+	-- defilement du client porte lui-meme deux textures de 30 de large --
+	-- le contour d'epoque de la glissiere -- qu'effacer les regions de la
+	-- seule barre laissait en place.
+	local cadre = _G["GearManagerDialogPopupScrollFrame"]
+	if cadre then
+		for _, region in ipairs({ cadre:GetRegions() }) do
+			if region.GetObjectType and region:GetObjectType() == "Texture" then
+				region:SetAlpha(0)
+			end
+		end
 	end
 
 	barre:SetWidth(BARRE_L)

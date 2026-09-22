@@ -2835,6 +2835,10 @@ def main():
         len(list(popup.foreverCadre.values())),
         g.GearManagerDialogPopupScrollFrameScrollBar.width))
     assert len(list(popup.foreverCadre.values())) == 8,         "SelectionFrameTemplate : quatre coins et quatre bords"
+    droite = list(popup.foreverCadre.values())[7]
+    pts = [droite.points[i] for i in sorted(droite.points.keys())]
+    print("   bande droite : %s et %s" % (pts[0][1], pts[1][1]))
+    assert pts[0][1] == "TOPRIGHT" and pts[1][1] == "BOTTOMRIGHT",         "deux points du meme cote : le coin bas droit fait 174, il l etirerait"
     assert g.GearManagerDialogPopupScrollFrameScrollBar.width == 8,         "MinimalScrollBar fait 8 de large"
     curseur = g.GearManagerDialogPopupScrollFrameScrollBarThumbTexture.texture or ""
     print("   curseur : %s" % curseur)
