@@ -469,7 +469,19 @@ end
 
 -- UN PASSAGE : empiler les lignes depuis le decalage, jusqu'a la marge du
 -- bas. Rend combien ont ete posees.
+-- ON S'ARRETE A GetNumFactions, PAS A CE QUE GetFactionInfo REPOND.
+--
+-- Les deux ne coincident pas : le client annonce neuf factions et repond
+-- encore a la dixieme -- l'en-tete "Inactive", hors du compte. Sa propre
+-- boucle le sait et teste factionIndex <= numFactions ; la notre ne le
+-- faisait pas, et posait une ligne de plus.
+--
+-- C'est ce qui rendait le repli incomprehensible : la liste raccourcit, mais
+-- nous continuions a lire au-dela du compte, ou le client rend des entrees
+-- d'un autre bloc. Un sous-en-tete paraissait alors hors de sa categorie,
+-- et vide.
 local function disposer()
+	local total = (GetNumFactions and GetNumFactions()) or 0
 	local hauteurUtile = (panneau:GetHeight() or 0)
 	if hauteurUtile < 50 then
 		hauteurUtile = VOLET_H + LISTE_Y - LISTE_Y2
@@ -484,7 +496,8 @@ local function disposer()
 	local y = MARGE
 	local posees = 0
 	for rang, ligne in ipairs(lignes) do
-		local donnees = lireFaction(decalage + rang)
+		local index = decalage + rang
+		local donnees = (index <= total) and lireFaction(index) or nil
 		local hauteur = donnees and hauteurDe(donnees) or 0
 		if donnees and y + hauteur <= hauteurUtile - MARGE then
 			local retrait = retraitDe(donnees)

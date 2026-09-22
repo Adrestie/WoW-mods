@@ -906,9 +906,16 @@ TOUTES = { { nom = "Classic", standing = 4, entete = true },
            { nom = "Alliance", standing = 5, entete = true, enfant = true, rep = true },
            { nom = "Darnassus", standing = 4, enfant = true },
            { nom = "Exodar", standing = 8, enfant = true } }
+-- AU-DELA DU COMPTE, LE CLIENT REPOND QUAND MEME. Releve en jeu : il
+-- annonce neuf factions et rend encore la dixieme, l en-tete "Inactive".
+-- Sa propre boucle s arrete a GetNumFactions ; le faux client reproduit ce
+-- piege, sinon l essai ne prouverait rien.
+HORS_COMPTE = { nom = "Inactive", standing = 1, entete = true }
 function GetNumFactions() return #_visibles() end
 function GetFactionInfo(i)
-    local f = _visibles()[i]
+    local vus = _visibles()
+    local f = vus[i]
+    if not f and i == #vus + 1 then f = HORS_COMPTE end
     if not f then return nil end
     -- nom, description, standingID, seuil, suivant, valeur, enGuerre,
     -- peutDeclarer, estEnTete, estReplie, ...
@@ -2619,6 +2626,12 @@ def main():
     g.ForeverUI.CharacterApplyPanes(perso)
 
     liste = g.ForeverUIReputationList
+    # LE CLIENT REPOND AU-DELA DE SON COMPTE : on s arrete au compte.
+    posees = [l.nom.text for l in g.ForeverUI.ReputationTab.Rows.values() if l.shown]
+    print("   posees : %s (le client en annonce %d, et repond a %d)" % (
+        posees, g.GetNumFactions(), g.GetNumFactions() + 1))
+    assert len(posees) == g.GetNumFactions(),         "une ligne par faction annoncee, pas une de plus"
+    assert "Inactive" not in posees, "l entree hors compte ne doit pas paraitre"
     pl = liste.points[1]
     rangs = g.ForeverUI.ReputationTab.Rows
     r1, r2 = g.ForeverUIReputationRow1, g.ForeverUIReputationRow2
@@ -2716,6 +2729,7 @@ def main():
     apres = [l.nom.text for l in rangs.values() if l.shown]
     print("   repli d Alliance : %s -> %s" % (avant, apres))
     assert apres == ["Classic", "Alliance"],         "ses deux enfants quittent la liste, le reste reste en place"
+    assert "Inactive" not in apres,         "on s arrete a GetNumFactions : le client repond au-dela, mais pas nous"
     assert r2.chevron.height == 13, "le plus prend la place du moins, a SA taille"
 
     r2.scripts.OnClick(r2)                  # on la redeploie
