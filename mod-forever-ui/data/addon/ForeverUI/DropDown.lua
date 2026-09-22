@@ -95,10 +95,12 @@ local FONDS = { "Backdrop", "MenuBackdrop" }
 local LISTE_MARGE = 25
 
 -- LA LARGEUR. Le client taille la liste sur son texte le plus long
--- (maxWidth + 25) ; camelot lui impose en plus un PLANCHER : la largeur du
--- bouton qui l'ouvre. Une liste plus etroite que son menu deroulant ne peut
--- donc plus arriver, et une entree plus longue que le bouton continue de
--- l'elargir -- c'est un minimum, pas une egalite.
+-- (maxWidth + 25) ; camelot lui impose un PLANCHER, la largeur du bouton
+-- qui l'ouvre (DropdownButtonMixin:RegisterMenu, SetMinimumWidth).
+--
+-- ECART ASSUME, sur demande : ici c'est une EGALITE, pas un plancher. La
+-- liste prend exactement la largeur de son bouton, meme quand une entree
+-- est plus longue -- auquel cas son texte se trouve serre.
 --
 -- Cela se joue a l'affichage de la liste : ToggleDropDownMenu retient le
 -- menu ouvert (UIDROPDOWNMENU_OPEN_MENU) AVANT de la montrer, et ne verifie
@@ -117,16 +119,16 @@ local function ajusterLargeur(liste)
 		return
 	end
 
-	local plancher = ouvreur:GetWidth()
-	if not plancher or plancher <= liste:GetWidth() then
+	local voulue = ouvreur:GetWidth()
+	if not voulue or voulue <= 0 or math.abs(liste:GetWidth() - voulue) < 0.5 then
 		return
 	end
 
-	liste:SetWidth(plancher)
+	liste:SetWidth(voulue)
 	for index = 1, (liste.numButtons or 0) do
 		local bouton = _G[liste:GetName() .. "Button" .. index]
 		if bouton then
-			bouton:SetWidth(plancher - LISTE_MARGE)
+			bouton:SetWidth(voulue - LISTE_MARGE)
 		end
 	end
 end
@@ -234,7 +236,7 @@ if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 end
 
 -- UIDropDownMenu_Refresh retaille la liste sur son texte (maxWidth + 25) et
--- effacerait le plancher : on le repose derriere elle.
+-- effacerait la largeur voulue : on la repose derriere elle.
 if hooksecurefunc and type(UIDropDownMenu_Refresh) == "function" then
 	hooksecurefunc("UIDropDownMenu_Refresh", function(cadre, valeur, niveau)
 		local liste = _G["DropDownList" .. (niveau or UIDROPDOWNMENU_MENU_LEVEL or 1)]

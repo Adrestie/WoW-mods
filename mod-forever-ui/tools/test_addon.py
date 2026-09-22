@@ -2673,12 +2673,13 @@ def main():
     assert liste.width == 203,         "camelot pose SetMinimumWidth(bouton:GetWidth()) : la liste suit son menu"
     assert b1.width == 203 - 25, "les lignes gardent l ecart de 25 du client"
 
-    # Une entree plus longue que le bouton continue d elargir : c est un
-    # plancher, pas une egalite.
+    # ECART ASSUME : c est une EGALITE, pas un plancher. Une liste plus
+    # large que son bouton est ramenee a sa largeur.
     lua.execute("DropDownList1:SetWidth(300) DropDownList1Button1:SetWidth(275)")
     liste.hooks.OnShow(liste)
-    print("   liste plus large que son menu : %d (inchangee)" % liste.width)
-    assert liste.width == 300, "un menu plus large que son bouton n est pas retreci"
+    print("   liste taillee a 300 -> %d (la largeur du menu)" % liste.width)
+    assert liste.width == 203, "la liste prend exactement la largeur de son bouton"
+    assert b1.width == 203 - 25, "les lignes suivent"
 
     # ------------------------------- gestionnaire d equipement
     pane = g.ForeverUIEquipmentPane

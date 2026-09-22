@@ -912,9 +912,11 @@ centrale de 32 sur les 68. Et les marges ne sont plus celles de camelot mais
 tomber le filet exactement sur le bord du cadre, donc sur la largeur du menu
 déroulant.
 
-**La largeur est un plancher, pas une égalité.** Camelot n'impose à la liste
-qu'un *minimum* — la largeur du bouton — et la laisse s'élargir si une
-entrée est plus longue. Il se pose à l'affichage de la liste :
+**La largeur est une égalité — écart assumé, sur demande.** Camelot n'impose
+à la liste qu'un *minimum* (`DropdownButtonMixin:RegisterMenu`,
+`SetMinimumWidth`) et la laisse s'élargir si une entrée est plus longue ; ici
+elle prend **exactement** la largeur de son bouton, quitte à serrer le texte
+d'une entrée plus longue. Il se pose à l'affichage de la liste :
 `ToggleDropDownMenu` retient le menu ouvert (`UIDROPDOWNMENU_OPEN_MENU`)
 **avant** de la montrer et ne vérifie qu'elle tient dans l'écran
 qu'**après** ; la largeur doit donc être acquise à ce moment-là, sinon le
