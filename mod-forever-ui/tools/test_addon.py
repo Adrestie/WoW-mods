@@ -2027,6 +2027,11 @@ def main():
     assert stats.icone.portraitOf == "player",         "PAPERDOLL_SIDEBARTAB_STATS : icon = nil, il prend le portrait"
     assert abs(stats.icone.texcoord[1] - 0.109375) < 1e-6,         "le rognage de la source"
     assert gear.icone.texture and "GearManager" in gear.icone.texture,         "PaperDollSidebarTabs.blp n existe pas ici : UI-GearManager-Button le remplace"
+    tc = list(gear.icone.texcoord.values())
+    print("   icone du gestionnaire rognee a (%.4f, %.4f, %.4f, %.4f)" % (
+        tc[0], tc[1], tc[2], tc[3]))
+    assert abs(tc[0] - 6 / 64) < 1e-6 and abs(tc[1] - 58 / 64) < 1e-6,         "le carre central : l art fait 52 de large pour 64 de haut"
+    assert abs(tc[2] - tc[0]) < 1e-6 and abs(tc[3] - tc[1]) < 1e-6,         "la meme plage sur les deux axes, sinon il reste rectangulaire"
     assert stats.choisi.shown and not gear.choisi.shown,         "l onglet des statistiques est celui qui est ouvert"
 
     print("   bouton d origine du gestionnaire masque : %s" % (not g.GearManagerToggleButton.shown))

@@ -177,6 +177,13 @@ local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
 local ONGLET_PORTRAIT_COORD = { 0.109375, 0.890625, 0.09375, 0.90625 }
 local ICONE_GESTIONNAIRE = "Interface\\PaperDollInfoFrame\\UI-GearManager-Button"
 
+-- L'ART DU GESTIONNAIRE EST PLUS HAUT QUE LARGE. Le fichier fait 64 x 64,
+-- mais son contenu opaque n'occupe que x 6..58 sur toute la hauteur : c'est
+-- un bouton de 52 x 64, qui parait donc rectangulaire dans un onglet carre.
+-- On en prend le carre central -- la meme plage sur les deux axes, 6..58,
+-- soit 52 x 52 -- comme l'onglet des statistiques rogne son portrait.
+local ICONE_GESTIONNAIRE_COORD = { 6 / 64, 58 / 64, 6 / 64, 58 / 64 }
+
 local PIERRE_HAUTEUR = 85               -- UI-Character-Info-Stat-StoneBG
 local SEPARATEUR = 11
 local SEPARATEUR_EMBOUT = 4             -- mesure sur l'art : 11 x 50, deux embouts
@@ -1053,6 +1060,9 @@ local function poserOngletsVolet()
 			"ForeverUICharacterGearTab", EQUIPMENT_MANAGER or "Equipment Manager",
 			function() choisir(false) end)
 		voletDroit.ongletEquipement.icone:SetTexture(ICONE_GESTIONNAIRE)
+		voletDroit.ongletEquipement.icone:SetTexCoord(
+			ICONE_GESTIONNAIRE_COORD[1], ICONE_GESTIONNAIRE_COORD[2],
+			ICONE_GESTIONNAIRE_COORD[3], ICONE_GESTIONNAIRE_COORD[4])
 
 		-- Les deux se touchent, comme chez camelot, et la paire est centree.
 		voletDroit.ongletStats:SetPoint("TOP", voletDroit, "TOP",
