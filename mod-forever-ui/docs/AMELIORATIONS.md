@@ -587,6 +587,31 @@ niveau du volet, passait dessous et se perdait sous le métal. Il prend un
 cran de plus que l'habillage — calculé depuis la constante et non depuis le
 cadre, puisque l'habillage n'existe pas encore quand les volets se montent.
 
+**La source ne s'arrête pas à `NineSliceLayouts`.** `PortraitFrameTemplate`
+donne les mêmes décalages que `HeldBagLayout` — haut gauche (−13, 16), haut
+droit (4, 16), bas gauche (−13, −3), bas droit (4, −3) — seul l'atlas du coin
+haut gauche diffère. Mais camelot **repasse ensuite sur toutes les mises en
+page** (`camelot/NineSliceLayoutOverrides.lua`), parce que, dans ses mots,
+« l'art fait pour Camelot ne fait pas la taille exacte de l'art standard et
+doit être décalé autrement » :
+
+| Pièce | Atlas | Correction | Résultat |
+|---|---|---|---|
+| `TopRightCorner` | `UI-Frame-Metal-CornerTopRight` | `x += −2` | 2 |
+| `BottomLeftCorner` | `UI-Frame-Metal-CornerBottomLeft` | `y = −8` (remplace) | −8 |
+| `BottomRightCorner` | `UI-Frame-Metal-CornerBottomRight` | `x += −2`, `y = −8` | 2, −8 |
+
+Nous prenions les valeurs **non corrigées** : les deux coins du bas étaient
+5 px trop haut, d'où un encadrement qui **n'allait pas jusqu'en bas de la
+fenêtre**, et les coins de droite 2 px trop à droite. `SetPanelArt` prend
+désormais une option `coins` pour ces décalages ; la feuille s'en sert, avec
+en plus **1 px de montée de tout l'encadrement** — celui-là n'est pas de la
+source, il a été jugé à l'écran (`PANNEAU_MONTEE`).
+
+⚠ **La même correction vaut pour la fenêtre des sacs**, que les overrides
+touchent aussi (`HeldBagLayout`). Elle est **validée**, donc laissée telle
+quelle : à reprendre sur accord.
+
 **À niveau de cadre égal, c'est le modèle qui reçoit le clic.** Chez le
 client, la scène du modèle tient entre les deux colonnes d'emplacements
 (233 × 215) : rien ne se recouvre. Camelot lui donne **tout le volet gauche**

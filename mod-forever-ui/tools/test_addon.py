@@ -1663,6 +1663,20 @@ def main():
     assert habillage.GetFrameLevel(habillage) > gauche.GetFrameLevel(gauche),         "l art doit passer au-dessus des volets"
     assert perso.foreverPanel.coinHautGaucheAtlas == "ui-frame-portraitmetal-cornertopleft",         "PortraitFrameTemplate prend le grand anneau, pas celui des sacs"
 
+    # L encadrement : camelot corrige ses mises en page APRES les avoir
+    # definies, et c est cette correction qui manquait -- les coins du bas
+    # etaient 5 px trop haut, l encadrement n allait pas jusqu en bas.
+    for cle, attendu in (("coinHautGauche", (-13, 17)), ("coinHautDroit", (2, 17)),
+                         ("coinBasGauche", (-13, -7)), ("coinBasDroit", (2, -7))):
+        pc = perso.foreverPanel[cle].points[1]
+        print("   %-15s (%s, %s)" % (cle, pc[4], pc[5]))
+        assert (pc[4], pc[5]) == attendu,             "%s : NineSliceLayoutOverrides, plus 1 px de montee" % cle
+
+    # Les sacs, eux, ne bougent pas : ils sont valides.
+    pb = g.ContainerFrame1.foreverPanel.coinBasGauche.points[1]
+    print("   sacs, coin bas gauche : (%s, %s) -- inchange" % (pb[4], pb[5]))
+    assert (pb[4], pb[5]) == (-13, -3), "la fenetre des sacs est validee, elle ne bouge pas"
+
     # LE FOND RESTE AU DERNIER PLAN. Monte avec le metal dans le cadre fils,
     # il recouvrait les volets : une region du cadre passe sous tous ses
     # cadres fils, c'est la place qu'il lui faut.

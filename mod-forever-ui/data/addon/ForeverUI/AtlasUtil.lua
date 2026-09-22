@@ -263,6 +263,10 @@ local PANNEAU_COINS = {
 --     de la source ne different que par lui -- HeldBagLayout prend
 --     ...CornerTopLeftSmall, PortraitFrameTemplate prend ...CornerTopLeft,
 --     un anneau plus large pour un portrait de 62.
+--   coins : { cle = { x = , y = } } -- remplace le decalage d'un coin. La
+--     source elle-meme s'en sert : camelot/NineSliceLayoutOverrides.lua
+--     repasse sur TOUTES les mises en page apres les avoir definies, parce
+--     que son art ne fait pas la meme taille que celui du jeu moderne.
 --   niveau : quand il est donne, LE METAL se pose dans un CADRE FILS de ce
 --     niveau au-dessus du cadre. La source fait de meme -- son NineSlice
 --     est un cadre fils -- et il le faut des que le cadre porte d'autres
@@ -323,7 +327,13 @@ function ForeverUI.SetPanelArt(frame, options)
 			nomAtlas = options.coinHautGauche
 		end
 		if ForeverUI.SetAtlas(texture, nomAtlas) then
-			texture:SetPoint(coin.point, hote, coin.point, coin.x, coin.y)
+			local x, y = coin.x, coin.y
+			local reglage = options.coins and options.coins[coin.cle]
+			if reglage then
+				x = reglage.x or x
+				y = reglage.y or y
+			end
+			texture:SetPoint(coin.point, hote, coin.point, x, y)
 			p[coin.cle] = texture
 			p[coin.cle .. "Atlas"] = nomAtlas
 		else

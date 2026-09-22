@@ -63,6 +63,34 @@ local VOLET_GAUCHE, VOLET_DROIT = 398, 233
 local COMBLE = 20                       -- les volets commencent sous le titre
 local NIVEAU_ART = 5                    -- l'art passe au-dessus des volets
 
+-- L'ENCADREMENT DE METAL, ET CE QUI MANQUAIT.
+--
+-- RELEVE -- NineSliceLayouts.PortraitFrameTemplate donne les memes
+-- decalages que HeldBagLayout : haut gauche (-13, 16), haut droit (4, 16),
+-- bas gauche (-13, -3), bas droit (4, -3). Seul l'atlas du coin haut gauche
+-- differe. Mais la source NE S'ARRETE PAS LA : camelot repasse ensuite sur
+-- TOUTES les mises en page (camelot/NineSliceLayoutOverrides.lua), parce que
+-- "l'art fait pour Camelot ne fait pas la taille exacte de l'art standard et
+-- doit etre decale autrement" -- ce sont ses mots.
+--
+--   coin haut droit (UI-Frame-Metal-CornerTopRight)      x += -2   ->  2
+--   coin bas gauche (UI-Frame-Metal-CornerBottomLeft)    y  = -8
+--   coin bas droit  (UI-Frame-Metal-CornerBottomRight)   x += -2, y = -8
+--
+-- Nous prenions les valeurs NON corrigees : les deux coins du bas etaient
+-- 5 px trop haut, d'ou un encadrement qui n'allait pas jusqu'en bas de la
+-- fenetre, et les coins de droite 2 px trop a droite.
+--
+-- PANNEAU_MONTEE est en plus, et n'est PAS de la source : 1 px de montee de
+-- tout l'encadrement, juge a l'ecran, a la demande.
+local PANNEAU_MONTEE = 1
+local PANNEAU_COINS = {
+	coinHautGauche = { x = -13, y = 16 + PANNEAU_MONTEE },
+	coinHautDroit = { x = 2, y = 16 + PANNEAU_MONTEE },
+	coinBasGauche = { x = -13, y = -8 + PANNEAU_MONTEE },
+	coinBasDroit = { x = 2, y = -8 + PANNEAU_MONTEE },
+}
+
 local EMPLACEMENT = 40
 
 -- L'ECART entre deux emplacements. La source n'en donne qu'un, 6, pour les
@@ -898,6 +926,7 @@ local function habiller()
 		monterVolets(cadre)
 		ForeverUI.SetPanelArt(cadre, {
 			coinHautGauche = COIN_PORTRAIT,
+			coins = PANNEAU_COINS,
 			niveau = NIVEAU_ART,
 		})
 		cadre.foreverSkinned = true
