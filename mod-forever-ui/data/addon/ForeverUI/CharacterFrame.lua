@@ -292,7 +292,11 @@ local ONGLET_ECRAN = {
 local ECRAN_PVP = "ForeverUIPvPPane"
 local ECRAN_STATS = "ForeverUIStatsPane"
 local ONGLET_ECRANS_CREES = { pvp = ECRAN_PVP, stats = ECRAN_STATS }
-local ONGLET_ICONE = 28
+-- L'icone des DEUX ONGLETS DU VOLET DROIT. A ne pas confondre avec celle
+-- des onglets lateraux, plus bas : les deux portaient le meme nom, et la
+-- seconde masquait la premiere pour tout ce qui suit -- les deux boutons du
+-- volet s'etaient donc agrandis avec elle, sans qu'on l'ait demande.
+local ONGLET_VOLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
 local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
 local ONGLET_PORTRAIT_COORD = { 0.109375, 0.890625, 0.09375, 0.90625 }
@@ -310,6 +314,7 @@ local SEPARATEUR = 11
 local SEPARATEUR_EMBOUT = 4             -- mesure sur l'art : 11 x 50, deux embouts
 
 local ONGLETS_L, ONGLETS_H = 64, 384    -- CharacterFrameModeTabs
+local ONGLETS_X = 1                     -- a la demande : un pixel vers la droite
 local ONGLETS_Y = -30
 local ONGLET_L, ONGLET_H = 55, 55       -- 55 x 60 moins 5 de transparent
 -- L'ICONE REMPLIT L'INTERIEUR DE L'ONGLET.
@@ -339,7 +344,7 @@ local ONGLET_L, ONGLET_H = 55, 55       -- 55 x 60 moins 5 de transparent
 -- L'ONGLET DU PERSONNAGE FAIT EXCEPTION : son icone est le portrait du
 -- joueur, pose par SetPortraitTexture a chaque changement d'apparence. Il
 -- n'y a pas de fichier a cuire, ses angles restent donc vifs.
-local ONGLET_ICONE = 50                 -- interiorExtent
+local ONGLET_LATERAL_ICONE = 50         -- interiorExtent
 local ONGLET_ICONE_X = -3               -- GetIconAnchorOffsetsForTabArt
 local PORTRAIT_ONGLET = 0.03125         -- UpdateIconInterior, et le portrait
 
@@ -1250,8 +1255,8 @@ local function creerOngletVolet(nom, infobulle, clic)
 	onglet:SetFrameLevel(voletDroit:GetFrameLevel() + 3)
 
 	local icone = onglet:CreateTexture(nil, "BACKGROUND")
-	icone:SetWidth(ONGLET_ICONE)
-	icone:SetHeight(ONGLET_ICONE)
+	icone:SetWidth(ONGLET_VOLET_ICONE)
+	icone:SetHeight(ONGLET_VOLET_ICONE)
 	icone:SetPoint("CENTER", onglet, "CENTER", 0, 0)
 	onglet.icone = icone
 
@@ -1805,8 +1810,8 @@ local function creerOngletLateral(cle, nom, icone, infobulle, groupe)
 	onglet.foreverFond = fond
 
 	local image = onglet:CreateTexture(nil, "ARTWORK")
-	image:SetWidth(ONGLET_ICONE)
-	image:SetHeight(ONGLET_ICONE)
+	image:SetWidth(ONGLET_LATERAL_ICONE)
+	image:SetHeight(ONGLET_LATERAL_ICONE)
 	image:SetPoint("CENTER", onglet, "CENTER", ONGLET_ICONE_X, 0)
 	image:SetTexCoord(PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET,
 		PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET)
@@ -1868,7 +1873,7 @@ local function poserOnglets(cadre)
 		barreOnglets = CreateFrame("Frame", "ForeverUICharacterModeTabs", cadre)
 		barreOnglets:SetWidth(ONGLETS_L)
 		barreOnglets:SetHeight(ONGLETS_H)
-		barreOnglets:SetPoint("TOPLEFT", cadre, "TOPRIGHT", 0, ONGLETS_Y)
+		barreOnglets:SetPoint("TOPLEFT", cadre, "TOPRIGHT", ONGLETS_X, ONGLETS_Y)
 	end
 
 	local precedent
@@ -1895,8 +1900,8 @@ local function poserOnglets(cadre)
 			onglet.foreverFond = fond
 
 			local icone = onglet:CreateTexture(nil, "ARTWORK")
-			icone:SetWidth(ONGLET_ICONE)
-			icone:SetHeight(ONGLET_ICONE)
+			icone:SetWidth(ONGLET_LATERAL_ICONE)
+			icone:SetHeight(ONGLET_LATERAL_ICONE)
 			icone:SetPoint("CENTER", onglet, "CENTER", ONGLET_ICONE_X, 0)
 			icone:SetTexCoord(PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET,
 				PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET)

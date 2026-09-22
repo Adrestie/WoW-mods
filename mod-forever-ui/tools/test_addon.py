@@ -2238,6 +2238,7 @@ def main():
         barre.width, barre.height, pb[1], pb[3], pb[4], pb[5]))
     assert barre.width == 64 and barre.height == 384, "ModeTabs fait 64 x 384"
     assert pb[1] == "TOPLEFT" and pb[3] == "TOPRIGHT" and pb[5] == -30,         "la barre se pose a droite du cadre, 30 sous son haut"
+    assert pb[4] == 1, "decalee d un pixel vers la droite, a la demande"
     print("   un onglet : %d x %d (55 x 55 : 55 x 60 moins 5 de transparent)" % (
         o1.width, o1.height))
     assert o1.width == 55 and o1.height == 55
@@ -2315,6 +2316,11 @@ def main():
     print("   icones : stats=%s rogne a %.6f | equipement=%s" % (
         stats.icone.portraitOf, stats.icone.texcoord[1], gear.icone.texture))
     assert stats.icone.portraitOf == "player",         "PAPERDOLL_SIDEBARTAB_STATS : icon = nil, il prend le portrait"
+    # LES DEUX NOMS SE RESSEMBLAIENT TROP : la taille des icones laterales
+    # avait masque celle des onglets du volet, qui s etaient agrandis avec.
+    print("   icones des onglets du volet : %d x %d" % (
+        stats.icone.width, gear.icone.width))
+    assert stats.icone.width == 28 and gear.icone.width == 28,         "ces deux-la font 28, et rien ne doit les entrainer"
     assert abs(stats.icone.texcoord[1] - 0.109375) < 1e-6,         "le rognage de la source"
     assert gear.icone.texture and "GearManager" in gear.icone.texture,         "PaperDollSidebarTabs.blp n existe pas ici : UI-GearManager-Button le remplace"
     tc = list(gear.icone.texcoord.values())
