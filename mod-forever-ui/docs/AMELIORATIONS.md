@@ -546,6 +546,63 @@ ils portent le glisser-déposer de l'équipement.
 
 ---
 
+### Les listes des menus déroulants
+
+**Un seul cadre pour tout le jeu.** 3.3.5 n'a que `DropDownList1` et
+`DropDownList2` (sous-menu), globaux : le menu des catégories de
+statistiques, un clic droit sur un joueur et la liste d'un panneau
+d'options passent tous par eux. Les rhabiller les rhabille tous, ce qui est
+aussi ce que fait camelot — `MenuVariants.GetDefaultMenuMixin` et
+`GetDefaultContextMenuMixin` rendent le même `MenuStyle1Mixin`.
+
+**Quelle saveur.** `Blizzard_Menu.toc` charge `Camelot\Menu.xml` pour
+camelot, mais ses gabarits viennent de `[Family]\MenuTemplates` et il n'y a
+pas de `camelot/`. Entre les deux familles présentes, la réponse se lit dans
+l'art : les atlas `common-dropdown-classic-*` que cite `classic/` n'existent
+**nulle part** dans l'index de ce client, tandis que les
+`common-dropdown-*` de `mainline/` ont tous leur variante `c60`. C'est donc
+la famille `mainline`, avec l'art `c60`.
+
+| Pièce | Ce que le client charge | Ce que fait camelot | Chez nous |
+|---|---|---|---|
+| Fond | deux `Backdrop` en cadres fils, montrés l'un ou l'autre selon `displayMode` : `UI-DialogBox-Background-Dark` et `UI-Tooltip-Background` | `common-dropdown-bg`, `TOPLEFT (−10, 3)` → `BOTTOMRIGHT (10, −3)`, alpha 0,925 | `common-dropdown-bg-c60`, mêmes décalages et même alpha |
+| Hauteur d'une ligne | 16 (`UIDROPDOWNMENU_BUTTON_HEIGHT`) | 20 (`DarkMenuElementTemplate`) | 20, constante comprise — le client s'en sert pour le pas ET pour la hauteur de la liste |
+| Police | `GameFontHighlightSmallLeft` | `GameFontHighlight`, blanc, justifié à gauche | `GameFontHighlightLeft` |
+| Coche | une seule texture, `UI-CheckBox-Check` 18 × 18 à `LEFT`, montrée si coché | la **case** `common-dropdown-ticksquare` toujours là, la **coche jaune** `common-dropdown-icon-checkmark-yellow` par-dessus si choisi | la case en `BORDER`, la coche du client repeinte en jaune et centrée dessus à (2, 1) |
+| Surbrillance | `UI-QuestTitleHighlight` en `ADD` | `MenuVariants.CreateHighlight` : **la même** | rien à faire |
+| Flèche de sous-menu | `ChatFrameExpandArrow` | `MenuVariants.CreateSubmenuArrow` : **la même** | rien à faire |
+
+**Retirer un fond, pas le masquer.** `ToggleDropDownMenu` montre l'un ou
+l'autre `Backdrop` à chaque ouverture, selon `displayMode` : un cadre masqué
+se relèverait au clic suivant. `SetBackdrop(nil)` le vide une fois pour
+toutes, et un cadre sans fond ne dessine rien.
+
+**La police se remet à chaque ligne.** `UIDropDownMenu_AddButton` repose
+`GameFontHighlightSmallLeft` à chaque appel (sauf `info.fontObject`), et
+c'est elle aussi qui sait si la ligne porte une case (`info.notCheckable`,
+qu'elle retient dans `button.notCheckable`). L'habillage se rejoue donc
+dans un `hooksecurefunc` sur elle, pas une fois pour toutes ; le rang de la
+ligne posée est `listFrame.numButtons`.
+
+**Écarts assumés.** Les marges de camelot sont dissymétriques (8 en haut, 15
+en bas) ; 3.3.5 n'a qu'une constante pour les deux,
+`UIDROPDOWNMENU_BORDER_HEIGHT`, et la sert deux fois — elle reste à 15. La
+case à cocher et la coche jaune n'ont pas de variante `c60` : leur art de
+base est celui que camelot montre. Enfin 3.3.5 ne distingue pas une case à
+cocher d'un bouton radio (un menu n'a que `info.checked`), donc la paire
+case + coche sert partout, là où camelot prendrait le rond
+(`common-dropdown-tickradial`) pour un choix unique.
+
+**Le piège des noms d'atlas.** `tools/ajouter_feuilles.py` inscrit chaque
+atlas sous son nom brut **et** sous son nom logique (sans suffixe de
+variante), premier arrivé premier servi, feuilles triées par nom. En versant
+`commondropdown.blp` à côté de `commondropdownc60.blp`, le nom logique
+`common-dropdown-bg` est donc allé à la feuille **de base**. Le code nomme
+la variante en clair, `common-dropdown-bg-c60`, pour ne rien laisser au
+hasard.
+
+---
+
 ---
 
 ## 2. Ce que 3.3.5 ne sait pas faire

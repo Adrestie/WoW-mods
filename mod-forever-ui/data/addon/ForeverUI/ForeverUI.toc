@@ -14,6 +14,7 @@ UIAtlas_06_complements.lua
 
 AtlasUtil.lua
 Layout.lua
+DropDown.lua
 PlayerFrame.lua
 PlayerFrameExtras.lua
 PlayerRunes.lua

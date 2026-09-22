@@ -116,6 +116,11 @@ function CreateFrame(kind, name, parent, template)
         if not self._disabled then self._disabled = newRegion("texture") end
         return self._disabled
     end
+    function f:SetBackdrop(b) self.backdrop = b end
+    function f:GetBackdrop() return self.backdrop end
+    function f:SetNormalFontObject(o) self.normalFont = o end
+    function f:SetHighlightFontObject(o) self.highlightFont = o end
+    function f:SetDisabledFontObject(o) self.disabledFont = o end
     function f:SetButtonState(state) self.buttonState = state end
     function f:GetButtonState() return self.buttonState or "NORMAL" end
     function f:SetChecked(v) self.checked = v and true or false end
@@ -710,6 +715,41 @@ function hooksecurefunc(nom, fn)
         end
     end
 end
+-- LES LISTES DES MENUS DEROULANTS. Le client n'en a que deux, globales,
+-- partagees par tous les menus du jeu. UIDropDownMenu_AddButton y pose une
+-- ligne, remet sa police et retient si elle porte une case a cocher.
+GameFontHighlightLeft = { police = "GameFontHighlightLeft" }
+GameFontHighlightSmallLeft = { police = "GameFontHighlightSmallLeft" }
+UIDROPDOWNMENU_BUTTON_HEIGHT = 16
+UIDROPDOWNMENU_BORDER_HEIGHT = 15
+for niveau = 1, 2 do
+    local nom = "DropDownList" .. niveau
+    local liste = CreateFrame("Button", nom, UIParent)
+    liste.numButtons = 0
+    for _, suffixe in ipairs({ "Backdrop", "MenuBackdrop" }) do
+        local fond = CreateFrame("Frame", nom .. suffixe, liste)
+        fond:SetBackdrop({ bgFile = "UI-DialogBox-Background-Dark" })
+    end
+    for i = 1, 8 do
+        local bouton = CreateFrame("Button", nom .. "Button" .. i, liste)
+        bouton:SetWidth(100)
+        bouton:SetHeight(16)
+        _G[nom .. "Button" .. i .. "Check"] = bouton:CreateTexture(
+            nom .. "Button" .. i .. "Check", "ARTWORK")
+        _G[nom .. "Button" .. i .. "Check"]:SetWidth(18)
+        _G[nom .. "Button" .. i .. "Check"]:SetHeight(18)
+    end
+end
+function UIDropDownMenu_AddButton(info, level)
+    level = level or 1
+    local liste = _G["DropDownList" .. level]
+    liste.numButtons = liste.numButtons + 1
+    local bouton = _G[liste:GetName() .. "Button" .. liste.numButtons]
+    bouton.notCheckable = info.notCheckable
+    bouton:SetNormalFontObject(GameFontHighlightSmallLeft)
+    bouton:SetHighlightFontObject(GameFontHighlightSmallLeft)
+    return bouton
+end
 function ActionButton_Update() end
 function ActionButton_ShowGrid() end
 function ActionButton_HideGrid() end
@@ -723,7 +763,8 @@ def main():
 
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
-             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "DropDown.lua",
+             "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
@@ -2285,6 +2326,45 @@ def main():
     print("cible de la cible : nom=%s vie visible=%s surveillee=%s" % (
         totcadre.nameText.text, totcadre.healthFill.shown, totcadre.unitWatch))
     assert totcadre.healthFill.shown, "la vie de la cible de la cible est vide"
+
+    # ------------------------------------ listes des menus deroulants
+    # Deux lignes : la premiere porte une case a cocher, la seconde non.
+    lua.execute("""
+        UIDropDownMenu_AddButton({ text = "Attributs" }, 1)
+        UIDropDownMenu_AddButton({ text = "Sans case", notCheckable = 1 }, 1)
+    """)
+    liste = g.DropDownList1
+    b1, b2 = g.DropDownList1Button1, g.DropDownList1Button2
+
+    print("liste de menu : fonds d epoque retires = %s et %s" % (
+        g.DropDownList1Backdrop.backdrop is None,
+        g.DropDownList1MenuBackdrop.backdrop is None))
+    assert g.DropDownList1Backdrop.backdrop is None,         "ToggleDropDownMenu remontrerait un cadre masque : le fond doit partir"
+    assert g.DropDownList1MenuBackdrop.backdrop is None
+
+    fond = liste.foreverFond
+    ph = fond.points[1]
+    pb = fond.points[2]
+    print("   fond : %s (%s, %s) -> %s (%s, %s), alpha %.3f" % (
+        ph[1], ph[4], ph[5], pb[1], pb[4], pb[5], fond.alpha))
+    assert fond.texture is not None, "le fond de camelot doit etre pose"
+    assert (ph[4], ph[5]) == (-10, 3) and (pb[4], pb[5]) == (10, -3),         "MenuStyle1Mixin:Generate pose le fond a (-10, 3) et (10, -3)"
+    assert abs(fond.alpha - 0.925) < 0.001, "alpha 0,925"
+
+    print("   ligne : %d de haut (20), police %s, pas %d" % (
+        b1.height, b1.normalFont.police, g.UIDROPDOWNMENU_BUTTON_HEIGHT))
+    assert b1.height == 20, "DarkMenuElementTemplate fait 20 de haut"
+    assert g.UIDROPDOWNMENU_BUTTON_HEIGHT == 20, "le pas suit la hauteur de ligne"
+    assert b1.normalFont.police == "GameFontHighlightLeft",         "le compositeur de camelot pose GameFontHighlight justifie a gauche"
+
+    coche = g.DropDownList1Button1Check
+    pc = coche.points[1]
+    print("   case : visible=%s | coche %dx%d %s sur la case (%s, %s)" % (
+        b1.foreverCase.shown, coche.width, coche.height, pc[1], pc[4], pc[5]))
+    assert b1.foreverCase.shown, "une ligne a cocher montre sa case"
+    assert not b2.foreverCase.shown, "une ligne notCheckable n en a pas"
+    assert (coche.width, coche.height) == (15, 14), "common-dropdown-icon-checkmark-yellow"
+    assert (pc[1], pc[4], pc[5]) == ("CENTER", 2, 1), "la coche se centre sur sa case a (2, 1)"
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

@@ -48,3 +48,9 @@ interface/buttons/redbuttonsc60.blp
 # onglets lateraux de la feuille du personnage (55 x 60, la variante
 # camelot est plus large que celle du client moderne)
 interface/common/commonsidetabc60.blp
+
+# listes des menus deroulants : le fond de camelot (variante c60) et, sur
+# la feuille de base qui n'a pas de variante c60, la case a cocher et sa
+# coche jaune
+interface/common/commondropdownc60.blp
+interface/common/commondropdown.blp
