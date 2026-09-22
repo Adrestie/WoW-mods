@@ -129,6 +129,43 @@ local MUNITIONS_ECART = 19
 -- objets de meme rang que les deux armes de melee. Les quatre emplacements
 -- de la rangee prennent donc la meme taille que les autres.
 
+-- LES DEUX ONGLETS DU VOLET DROIT.
+--
+-- RELEVE -- camelot/PaperDollFrame.xml. PaperDollSidebarTabs est un cadre de
+-- 233 x 85 ancre au TOP du volet droit, y = -4 ; il tient des CheckButton de
+-- 42 x 42 -- PaperDollSidebarTabTemplate -- dont le premier est au TOP
+-- (0, -5) et les autres colles a sa gauche et a sa droite. Chacun porte une
+-- Icon de 42 en BACKGROUND, le cadre UI-Character-Info-StatTab en BORDER a
+-- sa taille d'atlas, et UI-Character-Info-StatTab-Selected quand il est
+-- choisi.
+--
+-- RELEVE -- mainline/PaperDollFrameConstants.lua, la table que camelot
+-- charge (PAPERDOLL_SIDEBARS) :
+--   STATS             icon = nil, "Uses the character portrait", rogne a
+--                     0,109375 / 0,890625 / 0,09375 / 0,90625
+--   EQUIPMENTMANAGER  Interface\PaperDollInfoFrame\PaperDollSidebarTabs
+--                     rogne a 0,015625 / 0,53125 / 0,46875 / 0,60546875
+--   PET / TITLES      les autres onglets, hors sujet ici
+--
+-- CE QUI DIFFERE, ET POURQUOI.
+--   PaperDollSidebarTabs.blp N'EXISTE PAS dans ce client : l'onglet du
+--   gestionnaire prend donc UI-GearManager-Button, qui y est, et qui est
+--   justement l'icone de son bouton d'origine.
+--   Les chaines PAPERDOLL_SIDEBAR_STATS et PAPERDOLL_EQUIPMENTMANAGER n'y
+--   sont pas non plus. L'infobulle du premier onglet prend CHARACTER_INFO,
+--   la plus proche que ce client porte ; le second a EQUIPMENT_MANAGER, qui
+--   existe tel quel.
+--   Le client n'a pas d'onglets lateraux : ces deux-la sont crees. Le
+--   gestionnaire, lui, n'est pas recree -- l'onglet ouvre et ferme le
+--   GearManagerDialog du client, exactement comme le bouton d'origine, qui
+--   est masque.
+local ONGLET_VOLET = 42
+local ONGLET_VOLET_Y = -9               -- -4 du cadre des onglets, -5 du premier
+local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
+local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
+local ONGLET_PORTRAIT_COORD = { 0.109375, 0.890625, 0.09375, 0.90625 }
+local ICONE_GESTIONNAIRE = "Interface\\PaperDollInfoFrame\\UI-GearManager-Button"
+
 local PIERRE_HAUTEUR = 85               -- UI-Character-Info-Stat-StoneBG
 local SEPARATEUR = 11
 local SEPARATEUR_EMBOUT = 4             -- mesure sur l'art : 11 x 50, deux embouts
@@ -869,7 +906,108 @@ local function poserNiveau()
 
 	if source then
 		source:Hide()
-		voletDroit.ligneNiveau:SetText(source:GetText() or "")
+	end
+
+	-- SANS LA RACE, a la demande -- et c'est aussi ce que fait camelot :
+	-- son PaperDollFrame_SetLevel emploie PLAYER_LEVEL_NO_SPEC, qui ne
+	-- porte que le niveau et la classe. Cette chaine n'existe pas dans ce
+	-- client, dont le PLAYER_LEVEL vaut "Level %s %s %s" -- niveau, RACE,
+	-- classe. La ligne est donc recomposee a partir de deux chaines que le
+	-- client porte, UNIT_LEVEL_TEMPLATE et le nom de classe, plutot que
+	-- d'ecrire un format en dur qui ne tiendrait que dans une langue.
+	local niveau = UnitLevel and UnitLevel("player")
+	local classe = UnitClass and UnitClass("player")
+	local texte = ""
+	if niveau and classe then
+		texte = string.format(UNIT_LEVEL_TEMPLATE or "Level %d", niveau) .. " " .. classe
+	elseif source then
+		texte = source:GetText() or ""
+	end
+	voletDroit.ligneNiveau:SetText(texte)
+end
+
+-- Un onglet du volet droit : le cadre de camelot, une icone dessous, et une
+-- marque quand il est choisi. SetCheckedTexture ne prend qu'un CHEMIN dans
+-- ce client, jamais un rectangle d'atlas : la marque est donc une texture a
+-- nous, montree et cachee a la main.
+local function creerOngletVolet(nom, infobulle, clic)
+	local onglet = CreateFrame("Button", nom, voletDroit)
+	onglet:SetWidth(ONGLET_VOLET)
+	onglet:SetHeight(ONGLET_VOLET)
+	onglet:SetFrameLevel(voletDroit:GetFrameLevel() + 3)
+
+	local icone = onglet:CreateTexture(nil, "BACKGROUND")
+	icone:SetWidth(ONGLET_VOLET)
+	icone:SetHeight(ONGLET_VOLET)
+	icone:SetPoint("CENTER", onglet, "CENTER", 0, 0)
+	onglet.icone = icone
+
+	local choisi = onglet:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(choisi, ATLAS_ONGLET_VOLET_CHOISI)
+	choisi:SetPoint("CENTER", onglet, "CENTER", 0, 0)
+	choisi:Hide()
+	onglet.choisi = choisi
+
+	local cadre = onglet:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(cadre, ATLAS_ONGLET_VOLET)
+	cadre:SetPoint("CENTER", onglet, "CENTER", 0, 0)
+
+	onglet:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(infobulle)
+		GameTooltip:Show()
+	end)
+	onglet:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	if clic then
+		onglet:SetScript("OnClick", clic)
+	end
+
+	return onglet
+end
+
+local function poserOngletsVolet()
+	if not voletDroit then
+		return
+	end
+
+	if not voletDroit.ongletStats then
+		voletDroit.ongletStats = creerOngletVolet("ForeverUICharacterStatsTab",
+			CHARACTER_INFO or "Character Info", nil)
+		voletDroit.ongletStats.choisi:Show()
+
+		voletDroit.ongletEquipement = creerOngletVolet(
+			"ForeverUICharacterGearTab", EQUIPMENT_MANAGER or "Equipment Manager",
+			function()
+				if GearManagerDialog then
+					if GearManagerDialog:IsShown() then
+						GearManagerDialog:Hide()
+					else
+						GearManagerDialog:Show()
+					end
+				end
+			end)
+		voletDroit.ongletEquipement.icone:SetTexture(ICONE_GESTIONNAIRE)
+
+		-- Les deux se touchent, comme chez camelot, et la paire est centree.
+		voletDroit.ongletStats:SetPoint("TOP", voletDroit, "TOP",
+			-ONGLET_VOLET / 2, ONGLET_VOLET_Y)
+		voletDroit.ongletEquipement:SetPoint("LEFT", voletDroit.ongletStats,
+			"RIGHT", 0, 0)
+	end
+
+	-- Le portrait, rogne comme la source le demande. A reposer : le client
+	-- refait la texture a chaque changement d'apparence.
+	if SetPortraitTexture then
+		SetPortraitTexture(voletDroit.ongletStats.icone, "player")
+		voletDroit.ongletStats.icone:SetTexCoord(ONGLET_PORTRAIT_COORD[1],
+			ONGLET_PORTRAIT_COORD[2], ONGLET_PORTRAIT_COORD[3], ONGLET_PORTRAIT_COORD[4])
+	end
+
+	-- Le bouton d'origine du gestionnaire s'efface : c'est l'onglet qui
+	-- ouvre desormais son panneau.
+	local ancien = _G["GearManagerToggleButton"]
+	if ancien then
+		ancien:Hide()
 	end
 end
 
@@ -1007,6 +1145,7 @@ local function habiller()
 	poserResistances()
 	poserStatistiques()
 	poserNiveau()
+	poserOngletsVolet()
 	poserEmplacements()
 	poserOnglets(cadre)
 end

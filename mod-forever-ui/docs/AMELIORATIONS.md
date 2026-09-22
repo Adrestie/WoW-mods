@@ -609,6 +609,40 @@ niveau du volet, passait dessous et se perdait sous le métal. Il prend un
 cran de plus que l'habillage — calculé depuis la constante et non depuis le
 cadre, puisque l'habillage n'existe pas encore quand les volets se montent.
 
+**La ligne de niveau perd la race.** Le `PLAYER_LEVEL` de ce client vaut
+`"Level %s %s %s"` — niveau, **race**, classe. Camelot, lui, emploie
+`PLAYER_LEVEL_NO_SPEC`, qui ne porte que le niveau et la classe ; cette
+chaîne n'existe pas ici. La ligne est donc recomposée à partir de deux
+chaînes que le client porte — `UNIT_LEVEL_TEMPLATE` et le nom de classe —
+plutôt qu'avec un format écrit en dur qui ne tiendrait que dans une langue.
+
+**Les deux onglets du volet droit.** `PaperDollSidebarTabs` de camelot est un
+cadre de 233 × 85 ancré au `TOP` du volet droit à `y = −4`, tenant des
+`CheckButton` de **42 × 42** dont le premier est au `TOP (0, −5)`, les autres
+collés à ses côtés. Chacun porte une icône de 42 en `BACKGROUND`, le cadre
+`UI-Character-Info-StatTab` en `BORDER`, et `…-StatTab-Selected` quand il est
+choisi. Ici il y en a **deux**, centrés en paire.
+
+`PAPERDOLL_SIDEBARS` (que camelot charge depuis `mainline/`) donne les
+icônes :
+
+| Onglet | Source | Chez nous |
+|---|---|---|
+| Statistiques | `icon = nil`, « Uses the character portrait », rogné à 0,109375 / 0,890625 / 0,09375 / 0,90625 | identique |
+| Gestionnaire d'équipement | `Interface\PaperDollInfoFrame\PaperDollSidebarTabs`, rogné | ce fichier **n'existe pas** dans ce client : `UI-GearManager-Button` le remplace, qui y est et qui est justement l'icône du bouton d'origine |
+
+Les chaînes `PAPERDOLL_SIDEBAR_STATS` et `PAPERDOLL_EQUIPMENTMANAGER` sont
+absentes elles aussi : l'infobulle du premier prend `CHARACTER_INFO`, la plus
+proche que ce client porte ; le second a `EQUIPMENT_MANAGER`, qui existe tel
+quel.
+
+Le client n'a **pas** d'onglets latéraux, ces deux-là sont donc créés — mais
+le gestionnaire, lui, n'est pas recréé : l'onglet ouvre et ferme le
+`GearManagerDialog` du client, exactement comme `GearManagerToggleButton`,
+qui est masqué. `SetCheckedTexture` ne prend qu'un **chemin** dans ce client,
+jamais un rectangle d'atlas : la marque de sélection est donc une texture à
+nous, montrée et cachée à la main.
+
 **Le portrait suit son anneau, il ne se recale pas.** L'anneau est porté par
 le **coin haut gauche de l'encadrement** : déplacer ce coin déplace le trou,
 et un portrait posé en absolu se retrouve à côté — c'est ce qui est arrivé

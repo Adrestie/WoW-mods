@@ -254,6 +254,9 @@ function UnitPowerMax(unit, kind) return STATE.powerMax end
 function UnitPowerType(unit) return STATE.powerType, STATE.powerToken end
 function UnitName(unit) return STATE.name end
 function UnitLevel(unit) return STATE.level end
+UNIT_LEVEL_TEMPLATE = "Level %d"
+CHARACTER_INFO = "Character Info"
+EQUIPMENT_MANAGER = "Equipment Manager"
 function UnitAffectingCombat(unit) return STATE.combat end
 function InCombatLockdown() return STATE.inLockdown end
 function SetPortraitTexture(texture, unit)
@@ -565,6 +568,10 @@ for _, cote in ipairs({ "Left", "Right" }) do
         l:SetWidth(104); l:SetHeight(13)
     end
 end
+-- le gestionnaire d'equipement du client : un bouton et son panneau
+GearManagerToggleButton = CreateFrame("Button", "GearManagerToggleButton", CharacterFrame)
+GearManagerDialog = CreateFrame("Frame", "GearManagerDialog", UIParent)
+GearManagerDialog:Hide()
 CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
 CharacterResistanceFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -60, -80)
 ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
@@ -1925,11 +1932,41 @@ def main():
     niveau = droit.ligneNiveau
     pn = niveau.points[1]
     assert not g.CharacterLevelText.shown, "la ligne du client s efface"
-    assert niveau.text == g.CharacterLevelText.text,         "le texte vient du client, nous ne faisons que l afficher"
+    # SANS LA RACE : recompose depuis UNIT_LEVEL_TEMPLATE et le nom de
+    # classe, comme le PLAYER_LEVEL_NO_SPEC de camelot, que ce client n a pas.
+    print("   ligne de niveau : \"%s\" (le client disait \"%s\")" % (
+        niveau.text, g.CharacterLevelText.text))
+    attendu = "Level %d %s" % (g.STATE.level, g.STATE.className)
+    assert niveau.text == attendu, "niveau et classe, sans la race"
+    assert "Elfe" not in niveau.text, "la race ne doit plus y etre"
     print("   ligne de niveau : %s sur %s (%s, %s), large de %d, parent %s" % (
         pn[1], pn[3], pn[4], pn[5], niveau.width, niveau.parent and niveau.parent.name))
     assert pn[1] == "TOP" and pn[3] == "TOP", "elle se pose sous le haut du volet"
     assert pn[5] == -54, "PaperDollLevelInfo : -4 des onglets lateraux, -50 dessous"
+
+    # LES DEUX ONGLETS DU VOLET, au-dessus de la ligne de niveau.
+    stats, gear = droit.ongletStats, droit.ongletEquipement
+    ps, pg = stats.points[1], gear.points[1]
+    print("   onglets du volet : %dx%d, stats %s (%s, %s), equipement %s sur %s" % (
+        stats.width, stats.height, ps[1], ps[4], ps[5], pg[1], pg[3]))
+    assert stats.width == 42 and stats.height == 42,         "PaperDollSidebarTabTemplate fait 42 x 42"
+    assert (ps[1], ps[4], ps[5]) == ("TOP", -21, -9),         "la paire est centree, -4 du cadre des onglets et -5 du premier"
+    assert (pg[1], pg[3]) == ("LEFT", "RIGHT"), "les deux se touchent, comme chez camelot"
+
+    print("   icones : stats=%s rogne a %.6f | equipement=%s" % (
+        stats.icone.portraitOf, stats.icone.texcoord[1], gear.icone.texture))
+    assert stats.icone.portraitOf == "player",         "PAPERDOLL_SIDEBARTAB_STATS : icon = nil, il prend le portrait"
+    assert abs(stats.icone.texcoord[1] - 0.109375) < 1e-6,         "le rognage de la source"
+    assert gear.icone.texture and "GearManager" in gear.icone.texture,         "PaperDollSidebarTabs.blp n existe pas ici : UI-GearManager-Button le remplace"
+    assert stats.choisi.shown and not gear.choisi.shown,         "l onglet des statistiques est celui qui est ouvert"
+
+    print("   bouton d origine du gestionnaire masque : %s" % (not g.GearManagerToggleButton.shown))
+    assert not g.GearManagerToggleButton.shown, "c est l onglet qui ouvre le panneau"
+    gear.scripts.OnClick(gear)
+    print("   clic sur l onglet : panneau ouvert = %s" % g.GearManagerDialog.shown)
+    assert g.GearManagerDialog.shown, "l onglet ouvre le GearManagerDialog du client"
+    gear.scripts.OnClick(gear)
+    assert not g.GearManagerDialog.shown, "et le referme"
     assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
     assert niveau.owner.name == "ForeverUICharacterRightPane",         "elle appartient au volet : une region ne se reparente pas en 3.3.5"
     assert niveau.width == 220, "PaperDollLevelInfo fait 220 de large"
