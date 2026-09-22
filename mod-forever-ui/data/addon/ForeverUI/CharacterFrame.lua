@@ -327,7 +327,10 @@ local STAT_PAR_GROUPE = 6
 -- L'intitule ne se lit pas sur le bouton : la categorie choisie vit dans
 -- une CVar qui porte une CLE, et le texte est la globale du meme nom. Le
 -- client rappelle UpdatePaperdollStats(prefixe, cle) a chaque changement.
-local STAT_ENTETE = 40
+-- ECART ASSUME, sur demande : 34 et non 40. C'est la hauteur PROPRE de
+-- l'art de bouton (common-button-tertiary-normal, 46 x 34) : a cette taille
+-- la bande centrale du decoupage ne s'etire plus du tout en hauteur.
+local STAT_ENTETE = 34
 local STAT_ENTETE_DEBORD = 5
 -- LE SELECTEUR EST UN BOUTON, PAS UN EN-TETE.
 --

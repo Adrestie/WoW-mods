@@ -1955,7 +1955,7 @@ def main():
     psel = sel.points[len(list(sel.points.values()))]
     print("   selecteur : %d x %d, %s (%s, %s), visible=%s" % (
         sel.width, sel.height, psel[1], psel[4], psel[5], sel.shown))
-    assert sel.width == 203 and sel.height == 40,         "197 x 40 chez camelot, elargi au volet : ses lignes font 193 et il deborde de 5"
+    assert sel.width == 203 and sel.height == 34,         "la hauteur propre de l art de bouton ; elargi au volet, il deborde de 5"
     assert psel[4] == 15, "il deborde de 5 a gauche de ses lignes, posees a 20"
     assert sel.shown, "il doit etre visible"
     # Le selecteur est un bouton tertiaire decoupe, avec ses deux etats.
