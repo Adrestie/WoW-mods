@@ -232,17 +232,26 @@ local ONGLET_ECART = -2
 --   competences  Interface/ICONS/Ability_Racial_JackofAllTrades
 --   PvP          selon la faction : INV_SideTab_Honor_<Alliance|Horde>_c60
 --   monnaie      Interface/ICONS/INV_SideTab_Currency_c60
+--   statistiques Interface/ICONS/INV_SideTab_Stats_c60
+--
+-- La table en compte donc SIX, et non cinq : le premier releve omettait les
+-- statistiques.
 --
 -- DEUX D'ENTRE ELLES N'ONT PAS DE NOM DANS LE LISTFILE. Le code de camelot
 -- les nomme en clair, mais le listfile communautaire ne les identifie pas :
 -- elles n'existent que par leur FileDataID. Elles sont donc versees par cet
 -- identifiant et rangees sous le nom de la source --
 -- tools/fichiers_simples.txt porte la correspondance :
---   reputation  8197103        monnaie  8197078
---   PvP Alliance 8197097       PvP Horde 8197098
+--   reputation   8197103       monnaie      8197078
+--   PvP Alliance 8197097       PvP Horde    8197098
+--   statistiques 8197104
 --
--- LE PvP N'EST PAS VERSE : la feuille de 3.3.5 n'a pas cet onglet. Ses deux
--- identifiants sont notes ici pour le jour ou elle en aura un.
+-- NI LE PvP NI LES STATISTIQUES NE SONT VERSES : la feuille de 3.3.5 n'a
+-- aucun de ces deux onglets. CHARACTERFRAME_SUBFRAMES en compte cinq --
+-- personnage, familier, competences, reputation, monnaie -- et les
+-- statistiques du jeu vivent dans AchievementFrameStats, une fenetre a part
+-- que Blizzard_AchievementUI charge a la demande. Les construire ici est un
+-- chantier, pas un reglage. Leurs identifiants sont notes pour ce jour-la.
 --
 -- L'ONGLET DU FAMILIER, lui, n'existe pas chez camelot : aucune icone n'est
 -- relevee pour lui, il garde son texte.
