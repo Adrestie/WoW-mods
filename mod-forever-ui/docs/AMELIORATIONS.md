@@ -74,6 +74,14 @@ s'allume qu'au tutoriel, la première fois qu'on ramasse une clé. En 3.3.5 le
 trousseau est un élément permanent de la barre, et notre barre montre toujours
 sa cellule — un emplacement vide y serait faux.
 
+**À REVOIR PLUS TARD (noté le 2026-09-22).** Le trousseau n'est traité que pour
+son apparence : l'icône, le cadre étroit de 33 et sa place dans la barre. Le
+reste du `KeyRingMixin` n'est pas repris — `PutKeyInKeyRing`, `GetKeyRingSize`
+et son arrondi à quatre rangées, le tutoriel qui fait pulser le bouton, le
+voile de recherche d'inventaire, la rotation des textures quand la barre passe
+en vertical. La fenêtre du trousseau elle-même suit le chemin des sacs, sans
+traitement particulier.
+
 ### 1.6 Le sac à composants n'existe pas
 
 3.3.5 n'a pas ce sac. Sa place n'est plus tenue (elle l'a été un temps par un
@@ -386,6 +394,40 @@ puis **retiré** : c'était une lecture d'une saveur qui ne s'applique pas.
 **Non reproduit.** La marque de surbrillance (`SpellHighlightTexture`, atlas
 `bags-newitem`) n'a pas d'équivalent : `HasPetActionHighlightMark` n'existe pas
 en 3.3.5.
+
+---
+
+### 1.11 La feuille du personnage — jalon 1
+
+Le chantier est découpé. **Ce jalon** pose le cadre, ses deux volets et les
+emplacements d'équipement ; le volet droit (statistiques, onglets latéraux) et
+les autres onglets — réputation, compétences, PvP, devises — viendront ensuite.
+
+Relevé de `camelot/CharacterFrameConstants.lua`, `camelot/CharacterFrame.xml` et
+`camelot/PaperDollFrame.xml` — le dossier `camelot/` existe pour les trois, il
+n'y a donc rien à trancher ici.
+
+| Pièce | Valeur |
+|---|---|
+| Fenêtre | 631 × 484 (`CHARACTER_FRAME_WIDTH/HEIGHT`), repliée 398 |
+| Panneau | `PortraitFrameBaseTemplate` — la même famille que les sacs |
+| Volet gauche | 398 de large, `TOPLEFT (0, −20)` au `BOTTOMLEFT` du cadre, fond `UI-Character-Info-General-BG` (398 × 464) |
+| Volet droit | 233, accroché au `TOPRIGHT` du gauche, fonds `-Stat-BG` (233 × 383) et `-Stat-StoneBG` (233 × 85), séparateur `common-framedivider` de 11 posé à −6 |
+| Emplacement | 40 × 40, cadre `UI-Character-Info-GearSlot` à sa taille (55), centré |
+| Colonne gauche | `TOPLEFT (24, −60)` du volet gauche, écart 6 : tête, cou, épaules, dos, torse, chemise, tabard, poignets |
+| Colonne droite | `TOPRIGHT (−20, −60)`, même écart : mains, taille, jambes, pieds, 2 anneaux, 2 bijoux |
+| Armes | arme principale au `BOTTOM (−60, 30)` du volet gauche, puis secondaire et distance à +6 ; distance et munitions en 27 × 27 avec `-GearSlotSmall` |
+| Munitions | `LEFT (+19)` de l'emplacement de distance |
+| Modèle | occupe tout le volet gauche, comme la `ModelScene` de la source |
+
+**Écarts assumés.** `PaperDollItemSlotButton_OnLoad` pose l'arme principale à
+`(−60, 30)` quand l'emplacement de distance est montré et à `(−40, 30)` sinon,
+en masquant alors la distance : 3.3.5 montre toujours cet emplacement — arc,
+arme de jet ou relique selon la classe — donc la variante à −60 est la seule
+employée. Les onglets du bas de 3.3.5 restent en place pour l'instant ; camelot
+les met sur le côté (`CharacterFrameModeTabs`, 64 × 384), ce sera le jalon du
+volet droit. Rien n'est recréé : les emplacements sont des boutons du client,
+ils portent le glisser-déposer de l'équipement.
 
 ---
 

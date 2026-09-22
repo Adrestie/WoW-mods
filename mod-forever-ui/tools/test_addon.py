@@ -471,6 +471,28 @@ for i = 1, NUM_CONTAINER_FRAMES do
     end
 end
 
+-- la feuille du personnage du client : le cadre, son modele, ses vingt
+-- emplacements d'equipement, et l'art d'epoque en quatre quartiers
+CharacterFrame = CreateFrame("Frame", "CharacterFrame", UIParent)
+for _, coin in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
+    _G["CharacterFrame" .. coin] = CharacterFrame:CreateTexture(
+        "CharacterFrame" .. coin, "ARTWORK")
+end
+CharacterModelFrame = CreateFrame("Frame", "CharacterModelFrame", CharacterFrame)
+EMPLACEMENTS_PERSO = {
+    "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist",
+    "Hands", "Waist", "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1",
+    "MainHand", "SecondaryHand", "Ranged", "Ammo",
+}
+for _, nom in ipairs(EMPLACEMENTS_PERSO) do
+    local plein = "Character" .. nom .. "Slot"
+    local b = CreateFrame("Button", plein, CharacterFrame)
+    _G[plein .. "IconTexture"] = b:CreateTexture(plein .. "IconTexture", "BORDER")
+    _G[plein .. "NormalTexture"] = b:CreateTexture(plein .. "NormalTexture", "ARTWORK")
+end
+function CharacterFrame_ShowSubFrame() end
+function PaperDollFrame_OnShow() end
+
 -- la barre bonus du client : celle qui remplace la barre de sorts quand le
 -- joueur change de posture, avec son art glissant
 BonusActionBarFrame = CreateFrame("Frame", "BonusActionBarFrame", UIParent)
@@ -624,7 +646,8 @@ def main():
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Bags.lua"]
+             "BottomBar.lua", "StatusBars.lua", "Bags.lua",
+             "CharacterFrame.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -1480,6 +1503,52 @@ def main():
     g.ForeverUI.PetBar.Apply()
     print("   une texture ajoutee apres coup : alpha=%s" % tardive.alpha)
     assert tardive.alpha == 0, "le balayage doit aussi prendre ce qui arrive ensuite"
+
+    # ---------------------------------------- feuille du personnage
+    perso = g.CharacterFrame
+    gauche = g.ForeverUICharacterLeftPane
+    droit = g.ForeverUICharacterRightPane
+    print("feuille du personnage : %d x %d (631 x 484 attendu)" % (perso.width, perso.height))
+    assert perso.width == 631 and perso.height == 484, "CHARACTER_FRAME_WIDTH et _HEIGHT"
+    print("   volets : gauche %d, droit %d (398 + 233 = %d)" % (
+        gauche.width, droit.width, gauche.width + droit.width))
+    assert gauche.width == 398 and droit.width == 233
+    assert gauche.width + droit.width == perso.width, "les deux volets font la fenetre"
+    pg = gauche.points[1]
+    assert (pg[1], pg[4], pg[5]) == ("TOPLEFT", 0, -20), "le volet gauche part 20 sous le haut"
+    pd = droit.points[1]
+    assert pd[1] == "TOPLEFT" and pd[3] == "TOPRIGHT", \
+        "le volet droit s accroche a la droite du gauche"
+    assert g.CharacterFrameTopLeft.alpha == 0, "l art d epoque doit disparaitre"
+
+    tete = g.CharacterHeadSlot
+    cou = g.CharacterNeckSlot
+    print("   emplacement : %d x %d (40) | ecart %d (6)" % (
+        tete.width, tete.height, -cou.points[1][5]))
+    assert tete.width == 40 and tete.height == 40, "PaperDollItemSlotButtonTemplate : 40"
+    pt = tete.points[1]
+    assert (pt[1], pt[4], pt[5]) == ("TOPLEFT", 24, -60), "la colonne gauche part de (24, -60)"
+    assert cou.points[1][5] == -6, "les emplacements sont espaces de 6"
+
+    mains = g.CharacterHandsSlot.points[1]
+    print("   colonne droite : %s (%s, %s)" % (mains[1], mains[4], mains[5]))
+    assert (mains[1], mains[4], mains[5]) == ("TOPRIGHT", -20, -60), \
+        "la colonne droite part de (-20, -60)"
+
+    arme = g.CharacterMainHandSlot.points[1]
+    distance = g.CharacterRangedSlot
+    munitions = g.CharacterAmmoSlot
+    print("   armes : principale %s (%s, %s) | distance %d | munitions a +%s" % (
+        arme[1], arme[4], arme[5], distance.width, munitions.points[1][4]))
+    assert (arme[1], arme[4], arme[5]) == ("BOTTOM", -60, 30), \
+        "l arme principale se pose au bas du volet gauche, a (-60, 30)"
+    assert distance.width == 27 and munitions.width == 27, "distance et munitions font 27"
+    assert munitions.points[1][4] == 19, "les munitions sont a 19 de la distance"
+
+    modele = g.CharacterModelFrame.points[1]
+    print("   modele : %s sur %s (il occupe le volet gauche)" % (modele[1], modele[3]))
+    assert modele[1] == "TOPLEFT" and modele[2].name == "ForeverUICharacterLeftPane", \
+        "le modele occupe tout le volet gauche"
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu

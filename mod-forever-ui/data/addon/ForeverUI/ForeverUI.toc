@@ -25,3 +25,4 @@ PetBar.lua
 BottomBar.lua
 StatusBars.lua
 Bags.lua
+CharacterFrame.lua
