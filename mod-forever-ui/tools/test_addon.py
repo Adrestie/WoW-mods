@@ -56,7 +56,19 @@ local function newRegion(kind)
     function r:SetAllPoints(...) self.allPoints = true end
     function r:ClearAllPoints() self.points = {} end
     function r:Show() self.shown = true end
-    function r:Hide() self.shown = false end
+    -- Le vrai declenche le OnHide en se cachant. Le banc ne le faisait pas,
+    -- et laissait donc passer tout ce qui depend de ce que le client y
+    -- efface.
+    function r:Hide()
+        local avant = self.shown
+        self.shown = false
+        if avant and self.scripts and self.scripts.OnHide then
+            self.scripts.OnHide(self)
+        end
+        if avant and self.hooks and self.hooks.OnHide then
+            self.hooks.OnHide(self)
+        end
+    end
     function r:IsShown() return self.shown end
     function r:SetText(t) self.text = t end
     function r:GetText() return self.text end
@@ -657,7 +669,13 @@ function UseEquipmentSet(nom)
     -- le vrai rend la main avant la fin : l'evenement suit
     EN_ATTENTE = nom
 end
+-- Le vrai REFUSE un nom vide : "Usage: SaveEquipmentSet("setName",
+-- iconIndex)". Le banc l'acceptait, et laissait donc passer un nom lu
+-- apres la fermeture de la fenetre -- que le OnHide du client vide.
 function SaveEquipmentSet(nom, icone)
+    if type(nom) ~= "string" or nom == "" then
+        error('Usage: SaveEquipmentSet("setName", iconIndex)')
+    end
     for _, e in ipairs(ENSEMBLES) do
         if e.nom == nom then e.icone = icone; return end
     end
@@ -701,7 +719,12 @@ function GearManagerDialog_Update()
         end
     end
 end
-function GearManagerDialogSaveSet_OnClick() end
+-- Ce que fait le vrai : il MONTRE la fenetre. Sans cela, son Hide ne
+-- declenchait pas son OnHide, et le banc ne voyait pas ce que celui-ci
+-- efface.
+function GearManagerDialogSaveSet_OnClick()
+    GearManagerDialogPopup:Show()
+end
 -- La fenetre de choix d'icone du client : quinze boutons en grille de cinq,
 -- un champ de nom, un cadre de defilement et deux boutons.
 NUM_GEARSET_ICONS_PER_ROW = 5
@@ -739,6 +762,14 @@ function GetEquipmentSetIconInfo(i) return "icone-" .. tostring(i), i end
 function RecalculateGearManagerDialogPopup() RECALCULE = (RECALCULE or 0) + 1 end
 function GearManagerDialogPopup_OnShow() end
 function GearManagerDialogPopup_Update() end
+-- Ce que fait le vrai OnHide : il oublie le nom saisi.
+function GearManagerDialogPopup_OnHide()
+    GearManagerDialogPopup.name = nil
+    if GearManagerDialogPopupEditBox.SetText then
+        GearManagerDialogPopupEditBox:SetText("")
+    end
+end
+GearManagerDialogPopup:SetScript("OnHide", GearManagerDialogPopup_OnHide)
 function GearManagerDialog_OnShow()
     if GearManagerDialog.toplevel ~= false then
         GearManagerDialog:Raise()

@@ -168,6 +168,7 @@ local panneau, decalage = nil, 0
 -- un ensemble dans sa liste, l'ordre du client etant celui de creation. Le
 -- notre vit dans ForeverUIDB, et c'est lui qui pose les cartes.
 local edition
+local fermetureVoulue                   -- on ferme la fenetre nous-memes
 local EDITION_DELAI = 10                -- secondes avant d'abandonner
 
 local function ordreRetenu()
@@ -750,6 +751,10 @@ local function terminerEdition()
         return
     end
 
+    -- Le nom est indispensable : SaveEquipmentSet le refuse vide.
+    if not e.nom or e.nom == "" then
+        return
+    end
     if SaveEquipmentSet then
         SaveEquipmentSet(e.nom, e.icone)
     end
@@ -799,7 +804,8 @@ attenteEdition:SetScript("OnUpdate", function(self, ecoule)
 end)
 
 local function lancerEdition(nom, icone)
-    if not edition then
+    if not edition or not nom or nom == "" then
+        edition = nil
         return
     end
     edition.nom = nom
@@ -830,10 +836,22 @@ local function reprendreOkay()
 
     okay:SetScript("OnClick", function(self, bouton, enfonce)
         local popup = _G["GearManagerDialogPopup"]
-        if edition and popup and popup.name then
+        if edition and popup and popup.name and popup.name ~= "" then
+            -- LIRE AVANT DE FERMER. GearManagerDialogPopup_OnHide remet
+            -- popup.name a nil : lire le nom apres l'avoir cachee le rendait
+            -- vide, et SaveEquipmentSet refusait. Le meme OnHide abandonne
+            -- l'edition, d'ou le drapeau qui dit que la fermeture vient de
+            -- nous.
+            local nom = popup.name
             local _, indiceIcone = GetEquipmentSetIconInfo(popup.selectedIcon)
+            local enCours = edition
+
+            fermetureVoulue = true
             popup:Hide()
-            lancerEdition(popup.name, indiceIcone)
+            fermetureVoulue = nil
+
+            edition = enCours
+            lancerEdition(nom, indiceIcone)
             return
         end
         if GearManagerDialogPopupOkay_OnClick then
@@ -876,7 +894,7 @@ end
 -- Fermee autrement -- Annuler, Echap -- l'edition est abandonnee.
 if hooksecurefunc and type(GearManagerDialogPopup_OnHide) == "function" then
     hooksecurefunc("GearManagerDialogPopup_OnHide", function()
-        if edition and not attenteEdition:IsShown() then
+        if edition and not fermetureVoulue and not attenteEdition:IsShown() then
             edition = nil
         end
     end)
