@@ -61,7 +61,14 @@ local ECART = 10
 local MARGE = 5
 local PAS = ICONE + ECART
 
-local BAS_ECART = 16                    -- Okay et Cancel, au bas de la fenetre
+-- RELEVE -- SelectionFrameTemplate, qui porte justement cet encadrement :
+--   CancelButton  78 x 22, BOTTOMRIGHT (-11, 13)
+--   OkayButton    78 x 22, RIGHT sur le LEFT de Cancel, x = -2
+-- Ce sont les deux creux du coin bas droit de l'image : ils y tombent
+-- pile, et c'est la source qui le dit -- inutile de mesurer le socle.
+local BOUTON_BAS_L, BOUTON_BAS_H = 78, 22
+local BOUTON_BAS_X, BOUTON_BAS_Y = -11, 13
+local BOUTON_BAS_ECART = -2
 local BORD_DROIT = 17                   -- la largeur de !macropopup-right
 
 -- L'habillage : fond, encadrement et barre. Declares ici parce que la pose
@@ -227,12 +234,17 @@ local function poserFenetre(popup)
 	local okay = _G["GearManagerDialogPopupOkay"]
 	local annuler = _G["GearManagerDialogPopupCancel"]
 	if annuler then
+		annuler:SetWidth(BOUTON_BAS_L)
+		annuler:SetHeight(BOUTON_BAS_H)
 		annuler:ClearAllPoints()
-		annuler:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -BAS_ECART, BAS_ECART)
+		annuler:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT",
+			BOUTON_BAS_X, BOUTON_BAS_Y)
 	end
 	if okay and annuler then
+		okay:SetWidth(BOUTON_BAS_L)
+		okay:SetHeight(BOUTON_BAS_H)
 		okay:ClearAllPoints()
-		okay:SetPoint("RIGHT", annuler, "LEFT", -BAS_ECART, 0)
+		okay:SetPoint("RIGHT", annuler, "LEFT", BOUTON_BAS_ECART, 0)
 	end
 end
 

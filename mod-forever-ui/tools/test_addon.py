@@ -2858,6 +2858,16 @@ def main():
     assert tex.alpha != 0,         "il est une region de la barre : l effacement de l art d epoque l emportait"
     assert tex.width == 8 and tex.height == 36, "8 x 36, le curseur le plus court de la source"
 
+    annuler = g.GearManagerDialogPopupCancel
+    okay = g.GearManagerDialogPopupOkay
+    pa = annuler.points[len(list(annuler.points.values()))]
+    po = okay.points[len(list(okay.points.values()))]
+    print("   boutons du bas : %dx%d, cancel %s (%s, %s), okay %s sur %s %s" % (
+        annuler.width, annuler.height, pa[1], pa[4], pa[5], po[1], po[3], po[4]))
+    assert (annuler.width, annuler.height) == (78, 22), "SelectionFrameTemplate : 78 x 22"
+    assert (pa[1], pa[4], pa[5]) == ("BOTTOMRIGHT", -11, 13),         "les deux creux du socle, tels que la source les place"
+    assert (po[1], po[3], po[4]) == ("RIGHT", "LEFT", -2), "Okay a gauche de Cancel"
+
     choix = g.ForeverUIIconChoiceButton
     print("   choix courant : %dx%d, %s (%s, %s)" % (
         choix.width, choix.height, choix.points[1][1],
