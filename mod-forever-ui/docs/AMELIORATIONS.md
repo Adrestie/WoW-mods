@@ -65,6 +65,15 @@ lorsque le joueur a ramassé une clé (`showKeyring`). On force l'affichage pour
 que la rangée garde sa longueur. L'image change, elle, selon la variable :
 trousseau garni ou emplacement vide.
 
+**Son icône est toujours posée**, elle aussi. `KeyRingMixin:OnBagUpdate`
+(`camelot/mainmenubarbagbuttons.lua`) ne montre `UI-HUD-ActionBar-Keyring-Small`
+que si la CVar `showKeyring` est allumée, et prend sinon l'emplacement vide
+`UI-HUD-ActionBar-IconFrame-Slot-Small`. Cette condition vient d'un client où le
+trousseau n'est plus qu'un reste du passé, masqué par défaut : sa CVar ne
+s'allume qu'au tutoriel, la première fois qu'on ramasse une clé. En 3.3.5 le
+trousseau est un élément permanent de la barre, et notre barre montre toujours
+sa cellule — un emplacement vide y serait faux.
+
 ### 1.6 Le sac à composants n'existe pas
 
 3.3.5 n'a pas ce sac. Sa place n'est plus tenue (elle l'a été un temps par un

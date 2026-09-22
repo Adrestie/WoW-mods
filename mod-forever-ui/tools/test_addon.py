@@ -1547,6 +1547,16 @@ def main():
     print("trousseau : %d x %d, visible=%s, cadre %d de large" % (
         trousseau.width, trousseau.height, trousseau.shown, trousseau._normal.width))
     assert trousseau.width == 33 and trousseau.height == 45
+
+    # L'EMPLACEMENT DU TROUSSEAU PORTE SON ICONE. Toujours : en 3.3.5 le
+    # trousseau est permanent, alors que la condition de CVar de la source
+    # vient d'un client ou il n'est plus qu'un reste du passe, masque tant
+    # que le joueur n'a pas ramasse de cle.
+    icone = trousseau.regions[len(list(trousseau.regions.values()))]
+    print("   icone du trousseau : %s, %d x %d" % (
+        icone.texture and icone.texture.split(chr(92))[-1], icone.width, icone.height))
+    assert icone.texture is not None, "l emplacement du trousseau doit porter une icone"
+    assert icone.width == 27 and icone.height == 40,         "UI-HUD-ActionBar-Keyring-Small fait 27 x 40"
     assert trousseau.shown, "camelot garde toujours le trousseau dans la barre"
 
     assert g.ForeverUIBagsFiller is None, "l emplacement decoratif est encore construit"

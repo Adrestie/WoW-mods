@@ -429,9 +429,15 @@ local function habillerTrousseau()
 		iconeTrousseau:SetPoint("CENTER")
 	end
 
-	local avecCles = GetCVarBool and GetCVarBool("showKeyring")
-	ForeverUI.SetAtlas(iconeTrousseau,
-		avecCles and "ui-hud-actionbar-keyring-small" or "ui-hud-actionbar-iconframe-slot-small")
+	-- ECART ASSUME. KeyRingMixin:OnBagUpdate ne montre l'image du trousseau
+	-- que si la CVar showKeyring est allumee, et prend sinon l'emplacement
+	-- vide. Cette condition vient d'un client ou le trousseau est un reste
+	-- du passe, masque par defaut : sa CVar ne s'allume qu'au tutoriel, la
+	-- premiere fois qu'on ramasse une cle. En 3.3.5 le trousseau est un
+	-- element permanent de la barre, et notre barre montre toujours sa
+	-- cellule : un emplacement vide y serait faux. L'image du trousseau est
+	-- donc TOUJOURS posee.
+	ForeverUI.SetAtlas(iconeTrousseau, "ui-hud-actionbar-keyring-small")
 
 	-- camelot garde toujours ce bouton dans la barre ; 3.3.5 le laisse cache
 	-- tant que le joueur n'a pas ramasse de cle.
