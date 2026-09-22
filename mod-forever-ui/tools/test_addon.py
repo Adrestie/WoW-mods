@@ -923,7 +923,37 @@ function GetFactionInfo(i)
     return f.nom, "", f.standing, 0, 1000, 250, f.guerre or false, false,
            f.entete, f.replie or false, f.rep or false, false, f.enfant or false
 end
-function ReputationFrame_Update() end
+-- LE CADRE DE DETAIL de 3.3.5, avec ses trois cases. C est
+-- ReputationFrame_Update qui le remplit, pour la faction choisie, et
+-- SEULEMENT s il est visible.
+ReputationDetailFrame = CreateFrame("Frame", "ReputationDetailFrame", UIParent)
+ReputationDetailFrame:Hide()
+ReputationDetailCloseButton = CreateFrame("Button", "ReputationDetailCloseButton",
+                                          ReputationDetailFrame)
+ReputationDetailFactionName = ReputationDetailFrame:CreateFontString(
+    "ReputationDetailFactionName", "ARTWORK")
+ReputationDetailFactionDescription = ReputationDetailFrame:CreateFontString(
+    "ReputationDetailFactionDescription", "ARTWORK")
+for _, n in ipairs({ "ReputationDetailAtWarCheckBox",
+                     "ReputationDetailInactiveCheckBox",
+                     "ReputationDetailMainScreenCheckBox" }) do
+    local c = CreateFrame("CheckButton", n, ReputationDetailFrame)
+    _G[n .. "Text"] = c:CreateFontString(n .. "Text", "ARTWORK")
+end
+CHOISIE = 0
+function SetSelectedFaction(i) CHOISIE = i end
+function GetSelectedFaction() return CHOISIE end
+RED_FONT_COLOR = { r = 1, g = 0.1, b = 0.1 }
+GameFontNormalLarge = "GameFontNormalLarge"
+function IsFactionInactive() return false end
+function ReputationFrame_Update()
+    -- Comme le vrai : il n ecrit le detail que si son cadre est visible.
+    if not ReputationDetailFrame:IsShown() then return end
+    local f = _visibles()[CHOISIE]
+    if not f then return end
+    ReputationDetailFactionName:SetText(f.nom)
+    ReputationDetailFactionDescription:SetText("Description de " .. f.nom)
+end
 
 -- LA FENETRE PvP de 3.3.5 : un cadre a part, toplevel, fils d UIParent.
 PVPParentFrame = CreateFrame("Frame", "PVPParentFrame", UIParent)
@@ -2749,6 +2779,46 @@ def main():
         r3.survol.alpha, r3.nom.text))
     assert abs(r3.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
     assert abs(r1.survol.alpha) < 1e-6, "un en-tete n a pas de survol"
+
+    # LE VOLET DROIT : le detail de la faction choisie.
+    detail = g.ReputationDetailFrame
+    pd = detail.points[1]
+    print("   detail : %s sur %s (%s, %s), titre=\"%s\" sous-titre=\"%s\"" % (
+        pd[1], pd[2].name, pd[4], pd[5], detail.titre.text, detail.sousTitre.text))
+    assert pd[2].name == "ForeverUICharacterRightPane",         "le cadre du client devient notre volet droit"
+    assert (pd[4], pd[5]) == (16, -14),         "CharacterFrameSidePaneTemplate : TOPLEFT (16, -14)"
+    assert detail.titre.text == r3.nom.text, "le titre est la faction choisie"
+    assert detail.titre.width == 195 and detail.titre.justify == "CENTER",         "Title : large de 195, centre"
+    assert detail.sousTitre.justify == "CENTER", "Subtitle : centre lui aussi"
+    assert detail.description.text and "Description de" in detail.description.text,         "la description vient du client, par ReputationFrame_Update"
+
+    print("   jauge du detail : %d x %d, remplissage %s" % (
+        detail.jauge.width, detail.jauge.height, detail.jauge.remplissage.width))
+    assert detail.jauge.width == 180 and detail.jauge.height == 29,         "StandingBar : 180 x 29"
+    assert detail.jauge.remplissage.width == 180 * 0.25,         "la meme fraction que dans la liste, sur 180"
+
+    cases = [g[n] for n in ("ReputationDetailAtWarCheckBox",
+                            "ReputationDetailInactiveCheckBox",
+                            "ReputationDetailMainScreenCheckBox")]
+    pc = cases[0].points[1]
+    print("   cases : %d x %d, la premiere %s sur %s (%s, %s), visibles=%s" % (
+        cases[0].width, cases[0].height, pc[1], pc[3], pc[4], pc[5],
+        [c.shown for c in cases]))
+    assert all(c.width == 26 and c.height == 26 for c in cases), "26 x 26"
+    assert (pc[1], pc[3], pc[4]) == ("TOPLEFT", "BOTTOMLEFT", -4),         "la premiere se pose depuis le bas du volet, x = -4"
+    assert cases[1].points[1][2].name == cases[0].name,         "les suivantes s empilent sous elle"
+    assert cases[1].points[1][5] == -2, "BOTTOMLEFT (0, -2)"
+    assert all(c.shown for c in cases), "les trois paraissent pour une faction"
+
+    # UN EN-TETE N A PAS DE DETAIL.
+    lua.execute("SetSelectedFaction(1)")
+    g.ForeverUI.ReputationDetail()
+    print("   en-tete choisi : titre=\"%s\", cases visibles=%s" % (
+        detail.titre.text, [c.shown for c in cases]))
+    assert detail.titre.text == "", "un en-tete n a pas de detail"
+    assert not any(c.shown for c in cases), "ni ses options"
+    lua.execute("SetSelectedFaction(3)")
+    g.ForeverUI.ReputationDetail()
 
     # LA SELECTION SE RETIENT PAR LE NOM : un repli renumerote les factions,
     # un indice suivrait la mauvaise ligne.

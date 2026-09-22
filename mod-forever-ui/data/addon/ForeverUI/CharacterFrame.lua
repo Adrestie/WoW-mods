@@ -1498,13 +1498,20 @@ local function declarerContenus()
 		voletDroit.ligneNiveau,
 	})
 
-	-- LES QUATRE AUTRES ONGLETS gardent le volet droit, vide pour l'instant.
-	-- Une page declaree sans rien construire suffit a le dire : l'hote reste
-	-- ouvert, avec son fond et son separateur, et la fenetre sa largeur.
+	-- LES QUATRE AUTRES ONGLETS gardent le volet droit. Celui qui a un
+	-- module peut y mettre quelque chose -- la reputation y pose le detail
+	-- de la faction choisie ; les autres le laissent vide, ce qui suffit a
+	-- garder l'hote ouvert et la fenetre a sa largeur.
 	for _, ecran in ipairs(ECRANS_SIMPLES) do
 		Panes.Register({
 			hote = "droit", groupe = ecran.groupe, id = ecran.id .. ".droit",
-			construire = function() return nil, {} end,
+			construire = function(hote)
+				local module = ForeverUI[ecran.module or ""]
+				if module and module.BuildRight then
+					return module.BuildRight(hote)
+				end
+				return nil, {}
+			end,
 		})
 	end
 

@@ -263,8 +263,7 @@ end
 
 -- ----------------------------------------------------------- le remplissage
 
-local function poserBarre(ligne, donnees)
-	local barre = ligne.barre
+local function poserBarreDans(barre, donnees, largeur)
 	local fraction = 0
 	if donnees.maximum and donnees.maximum > 0 then
 		fraction = donnees.valeur / donnees.maximum
@@ -277,12 +276,12 @@ local function poserBarre(ligne, donnees)
 
 	-- SetFillPercent : largeur = fraction x largeur de barre, et la texture
 	-- rognee d'autant. Une largeur nulle est refusee par le client.
-	if fraction * BARRE_L < 1 then
+	if fraction * largeur < 1 then
 		barre.remplissage:Hide()
 	else
 		barre.remplissage:SetTexture(CHEMIN_REMPLISSAGE)
 		barre.remplissage:SetTexCoord(0, fraction, 0, 1)
-		barre.remplissage:SetWidth(BARRE_L * fraction)
+		barre.remplissage:SetWidth(largeur * fraction)
 		barre.remplissage:SetHeight(REMPLISSAGE_H)
 		barre.remplissage:Show()
 	end
@@ -293,6 +292,11 @@ local function poserBarre(ligne, donnees)
 	end
 
 	barre.texte:SetText(donnees.intitule or "")
+end
+
+-- Une ligne de la liste : sa barre fait 160.
+local function poserBarre(ligne, donnees)
+	poserBarreDans(ligne.barre, donnees, BARRE_L)
 end
 
 -- L'OPACITE DU SURVOL, telle que RefreshBackgroundHighlightOpacity la donne.
@@ -540,6 +544,12 @@ local function poserListe()
 	end
 
 	visibles = posees
+
+	-- Le detail suit la faction choisie. Il est ecrit plus bas : on passe
+	-- par le point publie, sinon son nom se resoudrait en globale.
+	if ForeverUI.ReputationDetail then
+		ForeverUI.ReputationDetail()
+	end
 end
 ForeverUI.ReputationLayout = poserListe
 
@@ -629,8 +639,23 @@ local function monter(hote)
 					CollapseFactionHeader(self.factionIndex)
 				end
 			else
+				-- CHOISIR UNE FACTION, c'est le dire au CLIENT : c'est lui
+				-- qui remplit ensuite la description et l'etat des trois
+				-- cases, dans ReputationFrame_Update, et seulement si son
+				-- cadre de detail est visible.
 				choisie = self.factionNom
-				poserListe()
+				if SetSelectedFaction then
+					SetSelectedFaction(self.factionIndex)
+				end
+				local cadre = _G["ReputationDetailFrame"]
+				if cadre then
+					cadre:Show()
+				end
+				if ReputationFrame_Update then
+					ReputationFrame_Update()
+				else
+					poserListe()
+				end
 			end
 		end)
 		lignes[index] = ligne
@@ -703,7 +728,283 @@ function ForeverUI.ReputationDebug()
 	end
 end
 
-ForeverUI.ReputationTab = { Build = monter, Rows = lignes }
+-- ===========================================================================
+-- LE VOLET DROIT : LE DETAIL DE LA FACTION CHOISIE
+--
+-- RELEVE -- camelot/CharacterFrame.xml, CharacterFrameSidePaneTemplate :
+--   le volet     TOPLEFT sur CharacterFrameRightPaneHost (16, -14)
+--                BOTTOMRIGHT sur le meme (-12, 14)
+--   Title        GameFontNormalMed3, large de 195, centre, au TOP
+--   Subtitle     GameFontHighlight, large de 195, centre, TOP du BOTTOM du
+--                titre, y = -3
+--   Divider      UI-Character-Info-ScrollLine, TOP du BOTTOM du sous-titre,
+--                y = -4
+--   Description  TOP du BOTTOM du separateur y = -6, LEFT, RIGHT x = -14,
+--                police GameFontNormal
+--   Footer       colle au bas du volet
+--
+-- RELEVE -- camelot/ReputationFrame.xml, ReputationDetailFrame :
+--   StandingBar        ReputationBarTemplate, 180 x 29, TOP du BOTTOM du
+--                      separateur, y = -6 : la description descend sous elle
+--   AtWarCheckbox      26 x 26, TOPLEFT du Footer (-4, 0). Intitule AT_WAR en
+--                      GameFontNormal, large de 158, a LEFT du RIGHT + 2, en
+--                      ROUGE. Fond checkbox-minimal ; coche
+--                      Interface/Buttons/UI-CheckBox-SwordCheck en 32 x 32
+--                      posee a TOPLEFT (3, -5).
+--   MakeInactiveCheckbox   sous la precedente, BOTTOMLEFT (0, -2)
+--   WatchFactionCheckbox   sous celle-la, meme ecart
+--
+-- CE QUE 3.3.5 DONNE. ReputationDetailFrame existe, avec les memes pieces :
+-- ReputationDetailFactionName, ...FactionDescription et trois cases --
+-- AtWar, Inactive, MainScreen. C'est ReputationFrame_Update qui les remplit,
+-- pour la faction que SetSelectedFaction designe, et SEULEMENT si le cadre
+-- est visible. On garde donc ces cadres, qui portent la logique du clic, et
+-- on ne fait que les reposer dans notre volet.
+--
+-- CE QUI DIFFERE : la description de camelot defile -- ScrollingFontTemplate,
+-- que 3.3.5 n'a pas. La notre est simplement bornee au volet.
+
+local VOLET_DROIT_X, VOLET_DROIT_Y = 16, -14
+local VOLET_DROIT_X2, VOLET_DROIT_Y2 = -12, 14
+local TITRE_L = 195
+local SOUS_TITRE_Y = -3
+local SEPARATEUR_Y = -4
+local JAUGE_DETAIL_L, JAUGE_DETAIL_H = 180, 29
+local JAUGE_DETAIL_Y = -6
+local DESCRIPTION_Y = -6
+local DESCRIPTION_X2 = -14
+local CASE = 26
+local CASE_X, CASE_ECART = -4, -2
+local CASE_INTITULE_L = 158
+local CASE_INTITULE_X = 2
+
+local ATLAS_CASE = "checkbox-minimal"
+local ATLAS_SEPARATEUR = "ui-character-info-scrollline"
+local COCHE = "Interface\\Buttons\\UI-CheckBox-SwordCheck"
+local COCHE_COTE = 32
+local COCHE_X, COCHE_Y = 3, -5
+
+local detail
+
+-- LES TROIS CASES DU CLIENT, reposees et rhabillees. Leur logique reste la
+-- leur : ce sont elles qui declarent la guerre, rangent une faction parmi
+-- les inactives, ou la suivent sur la barre du bas.
+local CASES = {
+	{ nom = "ReputationDetailAtWarCheckBox", rouge = true },
+	{ nom = "ReputationDetailInactiveCheckBox" },
+	{ nom = "ReputationDetailMainScreenCheckBox" },
+}
+
+local function habillerCase(case, rouge)
+	if not case or case.foreverHabillee then
+		return
+	end
+
+	case:SetWidth(CASE)
+	case:SetHeight(CASE)
+
+	for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+		"GetHighlightTexture", "GetCheckedTexture", "GetDisabledCheckedTexture" }) do
+		local texture = case[methode] and case[methode](case)
+		if texture then
+			texture:SetAlpha(0)
+		end
+	end
+
+	local fond = case:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(fond, ATLAS_CASE)
+	fond:SetPoint("CENTER", case, "CENTER", 0, 0)
+
+	-- LA COCHE EST UN FICHIER, pas un atlas : camelot lui donne
+	-- UI-CheckBox-SwordCheck, que 3.3.5 possede deja.
+	local coche = case:CreateTexture(nil, "OVERLAY")
+	coche:SetTexture(COCHE)
+	coche:SetWidth(COCHE_COTE)
+	coche:SetHeight(COCHE_COTE)
+	coche:SetPoint("TOPLEFT", case, "TOPLEFT", COCHE_X, COCHE_Y)
+	case.foreverCoche = coche
+
+	local intitule = _G[case:GetName() .. "Text"]
+	if intitule then
+		intitule:ClearAllPoints()
+		intitule:SetPoint("LEFT", case, "RIGHT", CASE_INTITULE_X, 0)
+		intitule:SetWidth(CASE_INTITULE_L)
+		intitule:SetJustifyH("LEFT")
+		if GameFontNormal then
+			intitule:SetFontObject(GameFontNormal)
+		end
+		if rouge and RED_FONT_COLOR then
+			intitule:SetTextColor(RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b)
+		end
+	end
+
+	case.foreverHabillee = true
+end
+
+-- La coche suit l'etat que le client vient de poser.
+local function suivreCases()
+	for _, decrit in ipairs(CASES) do
+		local case = _G[decrit.nom]
+		if case and case.foreverCoche then
+			if case:GetChecked() then
+				case.foreverCoche:Show()
+			else
+				case.foreverCoche:Hide()
+			end
+		end
+	end
+end
+
+local function montrerCases(etat)
+	for _, decrit in ipairs(CASES) do
+		local case = _G[decrit.nom]
+		if case then
+			if etat then case:Show() else case:Hide() end
+		end
+	end
+end
+
+-- LE DETAIL SE REMPLIT DEPUIS LA FACTION CHOISIE.
+local function majDetail()
+	if not detail then
+		return
+	end
+
+	local index = GetSelectedFaction and GetSelectedFaction()
+	local donnees = index and index > 0 and lireFaction(index) or nil
+
+	if not donnees or donnees.entete then
+		detail.titre:SetText("")
+		detail.sousTitre:SetText("")
+		detail.description:SetText("")
+		detail.separateur:Hide()
+		detail.jauge:Hide()
+		montrerCases(false)
+		return
+	end
+
+	detail.titre:SetText(donnees.nom or "")
+	detail.sousTitre:SetText(donnees.intitule or "")
+	detail.separateur:Show()
+
+	detail.jauge:Show()
+	poserBarreDans(detail.jauge, donnees, JAUGE_DETAIL_L)
+	detail.jauge.texte:SetText(donnees.progression or donnees.intitule or "")
+
+	-- La description vient du client : c'est ReputationFrame_Update qui la
+	-- pose, depuis GetFactionInfo, pour la faction choisie.
+	local source = _G["ReputationDetailFactionDescription"]
+	detail.description:SetText((source and source:GetText()) or "")
+
+	montrerCases(true)
+	suivreCases()
+end
+ForeverUI.ReputationDetail = majDetail
+
+local function monterDetail(hote)
+	if detail then
+		return detail, {}
+	end
+
+	local cadre = _G["ReputationDetailFrame"]
+	if not cadre or not hote then
+		return nil, {}
+	end
+
+	-- Le cadre du client devient notre volet : vide de son art de fenetre, et
+	-- etale sur la surface que camelot donne au sien.
+	cadre:SetParent(hote)
+	if cadre.SetToplevel then
+		cadre:SetToplevel(false)
+	end
+	cadre:ClearAllPoints()
+	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", VOLET_DROIT_X, VOLET_DROIT_Y)
+	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", VOLET_DROIT_X2, VOLET_DROIT_Y2)
+	for _, region in ipairs({ cadre:GetRegions() }) do
+		if region.GetObjectType and region:GetObjectType() == "Texture" then
+			region:SetAlpha(0)
+		end
+	end
+	local fermer = _G["ReputationDetailCloseButton"]
+	if fermer then
+		fermer:Hide()
+	end
+
+	detail = cadre
+
+	-- ECART ASSUME : camelot ecrit le titre en GameFontNormalMed3, un objet
+	-- de police que 3.3.5 n'a pas. GameFontNormalLarge est le plus proche
+	-- qu'il porte.
+	detail.titre = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	detail.titre:SetWidth(TITRE_L)
+	detail.titre:SetJustifyH("CENTER")
+	detail.titre:SetPoint("TOP", cadre, "TOP", 0, 0)
+
+	detail.sousTitre = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	detail.sousTitre:SetWidth(TITRE_L)
+	detail.sousTitre:SetJustifyH("CENTER")
+	detail.sousTitre:SetPoint("TOP", detail.titre, "BOTTOM", 0, SOUS_TITRE_Y)
+
+	detail.separateur = cadre:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(detail.separateur, ATLAS_SEPARATEUR)
+	detail.separateur:SetPoint("TOP", detail.sousTitre, "BOTTOM", 0, SEPARATEUR_Y)
+
+	-- LA JAUGE du volet : le meme gabarit que celles de la liste, en 180.
+	local jauge = CreateFrame("Frame", "ForeverUIReputationStanding", cadre)
+	jauge:SetWidth(JAUGE_DETAIL_L)
+	jauge:SetHeight(JAUGE_DETAIL_H)
+	jauge:SetPoint("TOP", detail.separateur, "BOTTOM", 0, JAUGE_DETAIL_Y)
+	ForeverUI.CreateNineSlice(jauge, ATLAS_BARRE_FOND, JAUGE_COIN,
+		{ 0, 0, 0, 0 }, "BACKGROUND")
+	jauge.remplissage = jauge:CreateTexture(nil, "BORDER")
+	jauge.remplissage:SetPoint("LEFT", jauge, "LEFT", 0, 0)
+	jauge.texte = jauge:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	jauge.texte:SetPoint("LEFT", jauge, "LEFT", 0, 0)
+	jauge.texte:SetPoint("RIGHT", jauge, "RIGHT", 0, 0)
+	jauge.texte:SetJustifyH("CENTER")
+	detail.jauge = jauge
+
+	-- LA DESCRIPTION. Celle du client sert de SOURCE : on la masque et on
+	-- ecrit la notre, bornee au volet.
+	for _, nom in ipairs({ "ReputationDetailFactionDescription",
+		"ReputationDetailFactionName" }) do
+		local piece = _G[nom]
+		if piece then
+			piece:Hide()
+		end
+	end
+
+	detail.description = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	detail.description:SetPoint("TOP", jauge, "BOTTOM", 0, DESCRIPTION_Y)
+	detail.description:SetPoint("LEFT", cadre, "LEFT", 0, 0)
+	detail.description:SetPoint("RIGHT", cadre, "RIGHT", DESCRIPTION_X2, 0)
+	detail.description:SetJustifyH("LEFT")
+	detail.description:SetJustifyV("TOP")
+
+	-- LE PIED : les trois cases, empilees depuis le bas du volet.
+	local precedente
+	local pied = 3 * CASE + 2 * (-CASE_ECART)
+	for _, decrit in ipairs(CASES) do
+		local case = _G[decrit.nom]
+		if case then
+			habillerCase(case, decrit.rouge)
+			case:SetParent(cadre)
+			case:ClearAllPoints()
+			if precedente then
+				case:SetPoint("TOPLEFT", precedente, "BOTTOMLEFT", 0, CASE_ECART)
+			else
+				case:SetPoint("TOPLEFT", cadre, "BOTTOMLEFT", CASE_X, pied)
+			end
+			precedente = case
+		end
+	end
+
+	cadre:Show()
+	majDetail()
+	return cadre, {}
+end
+
+ForeverUI.ReputationTab = { Build = monter, BuildRight = monterDetail, Rows = lignes }
 
 -- Le client annonce ses changements par UPDATE_FACTION et les traite dans
 -- ReputationFrame_Update : on se greffe dessus, ses donnees etant les notres.
