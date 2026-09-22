@@ -161,6 +161,17 @@ local MUNITIONS_ECART = 19
 --   est masque.
 local ONGLET_VOLET = 42
 local ONGLET_VOLET_Y = -9               -- -4 du cadre des onglets, -5 du premier
+
+-- L'ICONE TIENT DANS L'OUVERTURE DU CADRE, PAS DANS LE BOUTON.
+--
+-- camelot donne 42 a son Icon, soit tout le bouton. Ses icones a lui sont
+-- des rognages de PaperDollSidebarTabs, qui portent leur propre marge
+-- transparente ; un portrait, lui, remplit sa texture d'un bord a l'autre et
+-- ressort donc des angles arrondis du cadre.
+--
+-- Mesure sur UI-Character-Info-StatTab : sur ses 42, la bande de metal
+-- occupe 3..6 et 35..38, l'ouverture va donc de 7 a 34 -- 28 px, centres.
+local ONGLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
 local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
 local ONGLET_PORTRAIT_COORD = { 0.109375, 0.890625, 0.09375, 0.90625 }
@@ -840,6 +851,39 @@ local function ecrireCategorie(selecteur, cle)
 	end
 end
 
+-- LES STATISTIQUES SE MONTRENT ET SE CACHENT, au gre des deux onglets.
+--
+-- Au retour on ne rallume pas les lignes une a une : on les montre puis on
+-- laisse le client refaire son travail. UpdatePaperdollStats decide seul de
+-- la sixieme ligne -- il la montre, et la cache pour les categories qui
+-- n'ont que cinq statistiques -- et forcer la notre par-dessus ferait
+-- apparaitre une ligne vide.
+local function montrerStatistiques(afficher)
+	if not voletDroit then
+		return
+	end
+
+	voletDroit.statsMontrees = afficher and true or false
+
+	for _, groupe in ipairs(STAT_GROUPES) do
+		local selecteur = _G[groupe.selecteur]
+		if selecteur then
+			if afficher then selecteur:Show() else selecteur:Hide() end
+		end
+		for index = 1, STAT_PAR_GROUPE do
+			local ligne = _G[groupe.prefixe .. index]
+			if ligne then
+				if afficher then ligne:Show() else ligne:Hide() end
+			end
+		end
+	end
+
+	if afficher and PaperDollFrame_UpdateStats then
+		PaperDollFrame_UpdateStats()
+	end
+end
+ForeverUI.CharacterShowStats = montrerStatistiques
+
 -- Les statistiques, reposees dans le volet droit. Ce sont des cadres du
 -- client : on les deplace et on les elargit, on ne les recree pas -- ce
 -- sont eux qui portent les infobulles et les menus de categorie.
@@ -864,7 +908,13 @@ local function poserStatistiques()
 			selecteur:ClearAllPoints()
 			selecteur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT",
 				STAT_MARGE - STAT_ENTETE_DEBORD, y)
-			selecteur:Show()
+			-- Montre seulement si l'onglet des statistiques est celui
+			-- qui est ouvert : chaque passage de l'habillage repasse ici.
+			if voletDroit.statsMontrees == false then
+				selecteur:Hide()
+			else
+				selecteur:Show()
+			end
 			y = y - STAT_ENTETE
 		end
 
@@ -937,8 +987,8 @@ local function creerOngletVolet(nom, infobulle, clic)
 	onglet:SetFrameLevel(voletDroit:GetFrameLevel() + 3)
 
 	local icone = onglet:CreateTexture(nil, "BACKGROUND")
-	icone:SetWidth(ONGLET_VOLET)
-	icone:SetHeight(ONGLET_VOLET)
+	icone:SetWidth(ONGLET_ICONE)
+	icone:SetHeight(ONGLET_ICONE)
 	icone:SetPoint("CENTER", onglet, "CENTER", 0, 0)
 	onglet.icone = icone
 
@@ -971,21 +1021,37 @@ local function poserOngletsVolet()
 	end
 
 	if not voletDroit.ongletStats then
+		-- Les deux se comportent en onglets : celui qu'on ouvre ferme
+		-- l'autre. Le gestionnaire reste celui du client, on ne fait que
+		-- montrer et cacher son panneau.
+		local function choisir(statistiques)
+			if voletDroit.ongletStats then
+				if statistiques then
+					voletDroit.ongletStats.choisi:Show()
+					voletDroit.ongletEquipement.choisi:Hide()
+				else
+					voletDroit.ongletStats.choisi:Hide()
+					voletDroit.ongletEquipement.choisi:Show()
+				end
+			end
+			montrerStatistiques(statistiques)
+			if GearManagerDialog then
+				if statistiques then
+					GearManagerDialog:Hide()
+				else
+					GearManagerDialog:Show()
+				end
+			end
+		end
+
 		voletDroit.ongletStats = creerOngletVolet("ForeverUICharacterStatsTab",
-			CHARACTER_INFO or "Character Info", nil)
+			CHARACTER_INFO or "Character Info",
+			function() choisir(true) end)
 		voletDroit.ongletStats.choisi:Show()
 
 		voletDroit.ongletEquipement = creerOngletVolet(
 			"ForeverUICharacterGearTab", EQUIPMENT_MANAGER or "Equipment Manager",
-			function()
-				if GearManagerDialog then
-					if GearManagerDialog:IsShown() then
-						GearManagerDialog:Hide()
-					else
-						GearManagerDialog:Show()
-					end
-				end
-			end)
+			function() choisir(false) end)
 		voletDroit.ongletEquipement.icone:SetTexture(ICONE_GESTIONNAIRE)
 
 		-- Les deux se touchent, comme chez camelot, et la paire est centree.

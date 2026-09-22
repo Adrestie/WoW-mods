@@ -550,6 +550,7 @@ PLAYERSTAT_BASE_STATS = "Attributs"
 PLAYERSTAT_MELEE_COMBAT = "Corps a corps"
 PLAYERSTAT_DEFENSES = "Defenses"
 function UpdatePaperdollStats(prefixe, cle) end
+function PaperDollFrame_UpdateStats() end
 CharacterAttributesFrame = CreateFrame("Frame", "CharacterAttributesFrame", CharacterFrame)
 for _, cote in ipairs({ "Left", "Right" }) do
     -- UIDropDownMenuTemplate : 40 x 32, porte par un art qui le deborde,
@@ -1962,11 +1963,27 @@ def main():
 
     print("   bouton d origine du gestionnaire masque : %s" % (not g.GearManagerToggleButton.shown))
     assert not g.GearManagerToggleButton.shown, "c est l onglet qui ouvre le panneau"
+    # Ils se comportent en onglets : celui qu on ouvre ferme l autre.
     gear.scripts.OnClick(gear)
-    print("   clic sur l onglet : panneau ouvert = %s" % g.GearManagerDialog.shown)
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   clic gestionnaire : panneau=%s, stats visibles=%s, marque=%s" % (
+        g.GearManagerDialog.shown, any(lignes), gear.choisi.shown))
     assert g.GearManagerDialog.shown, "l onglet ouvre le GearManagerDialog du client"
-    gear.scripts.OnClick(gear)
-    assert not g.GearManagerDialog.shown, "et le referme"
+    assert not any(lignes), "et masque les statistiques"
+    assert not g.PlayerStatFrameLeftDropDown.shown, "les selecteurs aussi"
+    assert gear.choisi.shown and not stats.choisi.shown, "la marque passe sur lui"
+
+    # Un passage de l habillage ne doit pas les rallumer dans son dos.
+    g.ForeverUI.CharacterSheet.Apply()
+    assert not g.PlayerStatFrameLeftDropDown.shown,         "l habillage repasse ici a chaque evenement : il doit respecter l onglet"
+
+    stats.scripts.OnClick(stats)
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   clic statistiques : panneau=%s, stats visibles=%s, marque=%s" % (
+        g.GearManagerDialog.shown, all(lignes), stats.choisi.shown))
+    assert all(lignes) and g.PlayerStatFrameLeftDropDown.shown, "elles reviennent"
+    assert not g.GearManagerDialog.shown, "et le panneau du gestionnaire se ferme"
+    assert stats.choisi.shown and not gear.choisi.shown, "la marque revient sur lui"
     assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
     assert niveau.owner.name == "ForeverUICharacterRightPane",         "elle appartient au volet : une region ne se reparente pas en 3.3.5"
     assert niveau.width == 220, "PaperDollLevelInfo fait 220 de large"

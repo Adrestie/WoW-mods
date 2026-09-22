@@ -636,6 +636,27 @@ absentes elles aussi : l'infobulle du premier prend `CHARACTER_INFO`, la plus
 proche que ce client porte ; le second a `EQUIPMENT_MANAGER`, qui existe tel
 quel.
 
+**L'icône tient dans l'ouverture du cadre, pas dans le bouton.** camelot donne
+42 à son `Icon`, soit tout le bouton : ses icônes à lui sont des rognages de
+`PaperDollSidebarTabs`, qui portent leur propre marge transparente. Un
+portrait, lui, remplit sa texture d'un bord à l'autre et ressort donc des
+angles arrondis du cadre. Mesuré sur `UI-Character-Info-StatTab` : sur ses
+42, la bande de métal occupe 3..6 et 35..38, l'ouverture va donc de 7 à 34 —
+**28 px**, centrés. C'est la taille de l'icône.
+
+**Les deux onglets se comportent en onglets.** Celui qu'on ouvre ferme
+l'autre : le gestionnaire montre son panneau et **masque les statistiques**,
+les statistiques ferment le panneau et reviennent. Deux pièges :
+
+- au retour, on ne rallume pas les lignes une à une et on laisse le client
+  refaire son travail (`PaperDollFrame_UpdateStats`). `UpdatePaperdollStats`
+  décide seul de la **sixième ligne** — il la montre, et la cache pour les
+  catégories qui n'ont que cinq statistiques — et forcer la nôtre par-dessus
+  ferait apparaître une ligne vide ;
+- `poserStatistiques` repasse à chaque événement (équipement, ouverture,
+  niveau…) et y montrait les sélecteurs sans condition : il lit désormais
+  l'état de l'onglet, sinon les statistiques se rallumaient toutes seules.
+
 Le client n'a **pas** d'onglets latéraux, ces deux-là sont donc créés — mais
 le gestionnaire, lui, n'est pas recréé : l'onglet ouvre et ferme le
 `GearManagerDialog` du client, exactement comme `GearManagerToggleButton`,
