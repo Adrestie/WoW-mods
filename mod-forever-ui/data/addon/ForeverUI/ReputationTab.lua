@@ -1,346 +1,362 @@
 -- ForeverUI : l'onglet de reputation.
 --
--- RELEVE -- camelot/ReputationFrame.xml :
+-- POURQUOI NOS PROPRES LIGNES, ET NON CELLES DU CLIENT.
 --
---   ReputationFrame     setAllPoints, parent CharacterFrame, useParentLevel
---   la liste            TOPLEFT sur CharacterFrameLeftPaneHost (10, -40)
---                       BOTTOMRIGHT sur le meme (-25, 15)
---   deux traits         UI-Character-Info-ScrollLine-Long, centres sur le
---                       TOP et sur le BOTTOM de la liste
---   ReputationEntryTemplate      hauteur 30
---   ReputationHeaderTemplate     hauteur 28, bouton common-button-list-collapseExpand
---   ReputationSubHeaderTemplate  hauteur 22
---   ReputationBarTemplate        160 x 29, herite de ColoredProgressBarTemplate
---   son icone                    16 x 16, CENTER sur le LEFT de la barre (4, 0)
---   le nom                       du LEFT jusqu'au LEFT de la barre, x = -10
+-- Premiere tentative : reposer et rhabiller les quinze ReputationBar<i> de
+-- 3.3.5. Elle a echoue trois fois de suite, toujours de la meme facon --
+-- ReputationFrame_Update ne se contente pas de remplir, il REPOSE son art a
+-- chaque passage : SetNormalTexture sur les boutons, les AtWarHighlight
+-- additifs, les traits d'arborescence, la texture de la StatusBar. Chaque
+-- correction tenait jusqu'au passage suivant, et le clic en declenchait un.
 --
--- RELEVE -- camelot/SharedXML/progressbars/ColoredProgressBar.xml :
---   fond         common-stat-bar-bg
---   remplissage  common-stat-bar-white, hauteur 15, ancre LEFT, TEINTE
---   masque       common-stat-bar-Mask, qui arrondit les bouts du remplissage
+-- Les lignes sont donc les NOTRES, baties d'apres les gabarits de camelot et
+-- remplies depuis GetFactionInfo -- la seule chose que 3.3.5 apporte ici, et
+-- la seule dont on ait besoin. Le ReputationFrame du client ne sert plus que
+-- de support ; ses lignes sont retirees.
 --
--- CE QUE 3.3.5 DONNE EN FACE. ReputationFrame existe, avec quinze lignes
--- ReputationBar1..15 de 295 x 20 : un bouton deplier/replier de 13 a gauche,
--- une StatusBar de 101 x 13 a droite, le nom et l'intitule d'attitude. Les
--- lignes sont ancrees UNE FOIS dans le XML et ReputationFrame_Update ne fait
--- que les remplir : on peut donc les reposer une fois pour toutes.
+-- RELEVE -- camelot/ReputationFrame.xml et reputationframe.lua.
+--
+-- La liste, dans le volet gauche :
+--   TOPLEFT sur CharacterFrameLeftPaneHost (10, -40)
+--   BOTTOMRIGHT sur le meme (-25, 15)
+--   deux traits UI-Character-Info-ScrollLine-Long, centres sur son TOP et
+--   sur son BOTTOM
+--
+-- ReputationHeaderTemplate, hauteur 28 :
+--   fond        common-button-list-collapseExpand, sans ancrage donc etire
+--               sur toute la ligne
+--   StateIcon   common-button-list-plus ou -minus, RIGHT (-8, -1)
+--   nom         GameFontNormalLeft -- en or -- hauteur 15, LEFT x = 10
+--
+-- ReputationEntryTemplate, hauteur 30 :
+--   barre               ReputationBarTemplate, RIGHT x = -3
+--   AccountWideIcon     23 x 22, LEFT x = 2. Elle n'existe pas en 3.3.5,
+--                       mais c'est son bord droit -- x = 25 -- qui donne
+--                       l'origine du nom.
+--   nom                 GameFontHighlight -- en blanc -- hauteur 15, aligne
+--                       a gauche, de x = 25 au LEFT de la barre moins 10
+--   BackgroundHighlight trois tranches, cotes larges de 6 :
+--                       charactercreate-customize-dropdown-linemouseover-side
+--                       -- le droit retourne -- et -middle entre les deux.
+--                       RefreshBackgroundHighlightOpacity donne les alphas :
+--                       au repos 0 ; au survol 0,10 ; choisie 0,20. En
+--                       guerre 0,50 / 0,65 / 0,85, et teinte par
+--                       FACTION_AT_WAR_COLOR.
+--
+-- ReputationBarTemplate, 160 x 29, herite de ColoredProgressBarTemplate :
+--   fond          common-stat-bar-bg, sans ancrage donc etire sur la barre
+--   remplissage   common-stat-bar-white, hauteur 15, ancre LEFT. SetFillPercent
+--                 pose largeur = fraction x largeur de barre et rogne la
+--                 texture d'autant. UpdateBarColor la TEINTE avec
+--                 FACTION_BAR_COLORS[attitude].
+--   texte         GameFontHighlight, LEFT et RIGHT sur la barre, donc centre.
+--                 L'intitule d'attitude au repos ; au survol la progression,
+--                 par TryShowBarProgressText.
+--
+-- InitializeBarForStandardReputation : a l'attitude maximale la barre est
+-- pleine et n'a pas de texte de progression ; sinon la valeur se normalise
+-- entre le seuil courant et le suivant.
 --
 -- CE QUI DIFFERE, ET POURQUOI :
---   * 3.3.5 n'a pas de MaskTexture. Les bouts du remplissage restent donc
---     carres la ou camelot les arrondit. Le fond, lui, porte ses arrondis
---     dans son art : le defaut ne se voit qu'a barre pleine.
---   * Les trois hauteurs de camelot -- 30, 28, 22 -- supposent une liste qui
---     mesure chaque ligne. 3.3.5 a un PAS UNIQUE, que sa pagination utilise
---     pour savoir combien de lignes tiennent : on garde donc un seul pas,
---     celui des entrees.
---   * Le nombre de lignes affichees est une constante du client, calee sur
---     l'ancienne fenetre. Avec le pas de camelot, moins de lignes tiennent
---     dans le volet : on la recalcule au lieu de laisser deborder.
---   * Les lignes d'arborescence -- LeftLine, BottomLine, les deux
---     TopTreeTexture -- n'existent pas chez camelot, qui marque la hierarchie
---     par le retrait du nom. Elles s'effacent.
+--   * 3.3.5 n'a pas de MaskTexture : les bouts du remplissage restent carres.
+--   * Ni AccountWideIcon, ni Paragon, ni amitie : ces notions n'existent pas
+--     dans ce client. Seul le retrait qu'imposait la premiere est garde.
+--   * La barre de defilement reste a faire ; la molette suffit d'ici la.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
--- La liste, dans le volet gauche.
 local LISTE_X, LISTE_Y = 10, -40
 local LISTE_X2, LISTE_Y2 = -25, 15
 
-local LIGNE_HAUTEUR = 30                -- ReputationEntryTemplate
-local BARRE_L, BARRE_H = 160, 29        -- ReputationBarTemplate
-local REMPLISSAGE_H = 15                -- ColoredProgressBarTemplate
--- LE BOUTON DE L'EN-TETE EST A DROITE, ET CE N'EST PAS UNE PLAQUE.
---
--- ERREUR CORRIGEE : common-button-list-collapseExpand n'est pas une fleche,
--- c'est le FOND d'une ligne d'en-tete -- une plaque arrondie de 64 x 28 que
--- ReputationHeaderTemplate pose sans ancrage, donc etiree sur toute la
--- ligne. Posee a sa taille d'atlas sur un bouton de 20, elle recouvrait les
--- noms de reputation.
---
--- La vraie fleche est le StateIcon du meme gabarit, que ReputationHeaderMixin
--- remplit avec common-button-list-plus ou -minus, ancre RIGHT en (-8, -1).
--- Le nom, lui, est a LEFT x = 10.
-local BOUTON_X, BOUTON_Y = -8, -1       -- RIGHT de la ligne d'en-tete
-local BOUTON = 16
-local ENTETE_NOM_X = 10                 -- ReputationHeaderTemplate
-local NOM_X = 25                        -- AccountWideIcon : LEFT x=2, large de 23
-local NOM_ECART = -10                   -- du LEFT de la barre
+local ENTREE_H = 30                     -- ReputationEntryTemplate
+local ENTETE_H = 28                     -- ReputationHeaderTemplate
+local BARRE_L, BARRE_H = 160, 29
+local BARRE_X = -3                      -- RIGHT de la ligne
+local REMPLISSAGE_H = 15
 local NOM_H = 15
-local BARRE_X = -3                      -- RIGHT de la ligne, ReputationEntryTemplate
+local NOM_X = 25                        -- le bord droit de l'AccountWideIcon
+local NOM_ECART = -10                   -- du LEFT de la barre
+local ENTETE_NOM_X = 10
+local FLECHE_X, FLECHE_Y = -8, -1
+local FLECHE_PLACE = 16                 -- ce que le nom lui laisse
+local COTE = 6                          -- les tranches du survol
 
-local ATLAS_FOND = "common-stat-bar-bg"
-local ATLAS_REMPLISSAGE = "common-stat-bar-white"
+local ATLAS_BARRE_FOND = "common-stat-bar-bg"
+local ATLAS_BARRE_REMPLISSAGE = "common-stat-bar-white"
 local ATLAS_ENTETE = "common-button-list-collapseexpand"
 local ATLAS_PLUS = "common-button-list-plus"
 local ATLAS_MOINS = "common-button-list-minus"
 local ATLAS_TRAIT = "ui-character-info-scrollline-long"
+local ATLAS_SURVOL_COTE = "charactercreate-customize-dropdown-linemouseover-side"
+local ATLAS_SURVOL_MILIEU = "charactercreate-customize-dropdown-linemouseover-middle"
 
--- LA TAILLE DU VOLET NE SE MESURE PAS ICI.
---
--- Un contenu se batit a sa premiere ouverture, qui peut arriver AVANT que le
--- client ait pose la fenetre : GetHeight rend alors zero, et le calcul du
--- nombre de lignes donnerait n'importe quoi. Ces deux nombres sont ceux de
--- notre propre feuille -- 484 de haut moins les 20 du bandeau de titre, 398
--- de large -- donc des constantes, pas des mesures. La mesure sert quand
--- meme, quand elle est credible : elle suivra un jour un volet redimensionne.
+-- La taille du volet, par construction : un contenu se batit a sa premiere
+-- ouverture, qui peut preceder la pose de la fenetre. GetHeight rendrait
+-- alors zero.
 local VOLET_L, VOLET_H = 398, 464
 
--- L'art d'epoque de cet ecran : quatre morceaux de parchemin et deux
--- intitules de colonne, que camelot n'a pas.
-local ANCIENS = { "ReputationFrameFactionLabel", "ReputationFrameStandingLabel",
-                  "ReputationFrameTopTreeTexture", "ReputationFrameTopTreeTexture2" }
+local lignes = {}
+local panneau, decalage = nil, 0
+local choisie
 
-local monte = false
+-- --------------------------------------------------------------- une ligne
 
-local function balayerFond(cadre)
-	if not cadre or not cadre.GetRegions then
-		return
-	end
-	for _, region in ipairs({ cadre:GetRegions() }) do
-		if region.GetObjectType and region:GetObjectType() == "Texture" then
-			region:SetAlpha(0)
-		end
-	end
-end
-
--- LE BOUTON DEPLIER / REPLIER. 3.3.5 lui pose UI-PlusButton-Up ou
--- UI-MinusButton-Up a CHAQUE passage de ReputationFrame_Update : on greffe
--- donc apres lui, sinon il reprendrait la main.
-local function habillerBouton(bouton, replie, entete)
-	if not bouton then
-		return
-	end
-
-	if not bouton.foreverIcone then
-		bouton:SetWidth(BOUTON)
-		bouton:SetHeight(BOUTON)
-		bouton.foreverIcone = bouton:CreateTexture(nil, "OVERLAY")
-	end
-
-	-- L'ART DU CLIENT MEURT A CHAQUE PASSAGE, pas une fois pour toutes.
-	-- ReputationFrame_Update appelle SetNormalTexture(chemin) a chaque mise a
-	-- jour : l'image reprend alors sa taille declaree -- 16 x 16 ancree a
-	-- LEFT +3, pensee pour une ligne de 20 de haut -- et se superpose a la
-	-- notre. C'est ce qui deformait les plus et les moins.
-	for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
-		"GetHighlightTexture", "GetDisabledTexture" }) do
-		local texture = bouton[methode] and bouton[methode](bouton)
-		if texture then
-			texture:SetAlpha(0)
-		end
-	end
-
-	if not entete then
-		bouton.foreverIcone:Hide()
-		return
-	end
-
-	-- Le plus et le moins n'ont pas la meme taille -- 13 x 13 et 13 x 4 --
-	-- et se posent tous deux au centre du bouton, CHACUN A LA SIENNE : le
-	-- troisieme argument de SetAtlas veut dire "ne touche pas a la taille",
-	-- et ne vaut que si on la pose soi-meme juste apres.
-	ForeverUI.SetAtlas(bouton.foreverIcone, replie and ATLAS_PLUS or ATLAS_MOINS)
-	bouton.foreverIcone:ClearAllPoints()
-	bouton.foreverIcone:SetPoint("CENTER", bouton, "CENTER", 0, 0)
-	bouton.foreverIcone:Show()
-end
-
--- UNE LIGNE. Le contenu reste au client ; on ne fait que la reposer et
--- l'habiller.
-local function habillerLigne(index, largeur)
-	local ligne = _G["ReputationBar" .. index]
-	if not ligne then
-		return nil
-	end
-
+local function creerLigne(index, largeur)
+	local ligne = CreateFrame("Button", "ForeverUIReputationRow" .. index, panneau)
 	ligne:SetWidth(largeur)
-	ligne:SetHeight(LIGNE_HAUTEUR)
+	ligne:SetHeight(ENTREE_H)
 
-	-- Les lignes d'arborescence de 3.3.5 : camelot n'en a pas.
-	for _, suffixe in ipairs({ "LeftLine", "BottomLine", "Background" }) do
-		local piece = _G["ReputationBar" .. index .. suffixe]
-		if piece then
-			piece:SetAlpha(0)
-		end
+	-- LE FOND D'EN-TETE, etire sur la ligne comme le fait la source.
+	local plaque = ligne:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(plaque, ATLAS_ENTETE, true)
+	plaque:SetAllPoints(ligne)
+	plaque:Hide()
+	ligne.plaque = plaque
+
+	-- LE SURVOL D'UNE ENTREE : trois tranches, les cotes larges de 6.
+	local survol = CreateFrame("Frame", nil, ligne)
+	survol:SetAllPoints(ligne)
+	survol:SetAlpha(0)
+	ligne.survol = survol
+
+	local gauche = survol:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(gauche, ATLAS_SURVOL_COTE, true)
+	gauche:SetWidth(COTE)
+	gauche:SetPoint("TOPLEFT", survol, "TOPLEFT", 0, 0)
+	gauche:SetPoint("BOTTOMLEFT", survol, "BOTTOMLEFT", 0, 0)
+
+	local droite = survol:CreateTexture(nil, "BACKGROUND")
+	if ForeverUI.SetAtlas(droite, ATLAS_SURVOL_COTE, true) then
+		-- La source la retourne : TexCoords left = 1, right = 0.
+		local e = ForeverUI.AtlasEntry(ATLAS_SURVOL_COTE)
+		droite:SetTexCoord(e[3], e[2], e[4], e[5])
 	end
+	droite:SetWidth(COTE)
+	droite:SetPoint("TOPRIGHT", survol, "TOPRIGHT", 0, 0)
+	droite:SetPoint("BOTTOMRIGHT", survol, "BOTTOMRIGHT", 0, 0)
 
-	local barre = _G["ReputationBar" .. index .. "ReputationBar"]
-	if barre and not barre.foreverFond then
-		barre:SetWidth(BARRE_L)
-		barre:SetHeight(BARRE_H)
-		-- ReputationEntryTemplate : la barre est ancree RIGHT x = -3.
-		barre:ClearAllPoints()
-		barre:SetPoint("RIGHT", ligne, "RIGHT", BARRE_X, 0)
+	local milieu = survol:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(milieu, ATLAS_SURVOL_MILIEU, true)
+	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT", 0, 0)
+	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT", 0, 0)
 
-		-- La StatusBar du client garde sa valeur -- c'est elle qu'on lit --
-		-- mais plus son art. On EFFACE sa texture plutot que de la remplacer :
-		-- SetStatusBarTexture attend un chemin, et lui en donner un vide ou
-		-- nul se comporte mal selon les clients.
-		local sienne = barre.GetStatusBarTexture and barre:GetStatusBarTexture()
-		if sienne then
-			sienne:SetAlpha(0)
-		end
-		balayerFond(barre)
+	ligne.survolPieces = { gauche, droite, milieu }
 
-		local fond = barre:CreateTexture(nil, "BACKGROUND")
-		ForeverUI.SetAtlas(fond, ATLAS_FOND)
-		fond:SetAllPoints(barre)
-		barre.foreverFond = fond
+	-- LA BARRE, et ce qu'elle porte.
+	local barre = CreateFrame("Frame", nil, ligne)
+	barre:SetWidth(BARRE_L)
+	barre:SetHeight(BARRE_H)
+	barre:SetPoint("RIGHT", ligne, "RIGHT", BARRE_X, 0)
+	ligne.barre = barre
 
-		local remplissage = barre:CreateTexture(nil, "BORDER")
-		remplissage:SetPoint("LEFT", barre, "LEFT", 0, 0)
-		remplissage:SetHeight(REMPLISSAGE_H)
-		barre.foreverRemplissage = remplissage
-	end
+	local fond = barre:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(fond, ATLAS_BARRE_FOND, true)
+	fond:SetAllPoints(barre)
 
-	-- LE NOM. Chez camelot il va du RIGHT de l'AccountWideIcon -- 23 de large
-	-- ancree a LEFT x = 2, donc x = 25 -- jusqu'au LEFT de la barre moins 10.
-	-- Police GameFontHighlight, hauteur 15, aligne a gauche.
-	local nom = _G["ReputationBar" .. index .. "FactionName"]
-	if nom and barre then
-		nom:ClearAllPoints()
-		nom:SetPoint("LEFT", ligne, "LEFT", NOM_X, 0)
-		nom:SetPoint("RIGHT", barre, "LEFT", NOM_ECART, 0)
-		nom:SetHeight(NOM_H)
-		nom:SetJustifyH("LEFT")
-		if GameFontHighlight then
-			nom:SetFontObject(GameFontHighlight)
-		end
-	end
+	local remplissage = barre:CreateTexture(nil, "BORDER")
+	remplissage:SetPoint("LEFT", barre, "LEFT", 0, 0)
+	barre.remplissage = remplissage
 
-	-- L'INTITULE D'ATTITUDE est le Text de la barre : LEFT et RIGHT sur elle,
-	-- donc centre, en GameFontHighlight.
-	local attitude = _G["ReputationBar" .. index .. "ReputationBarFactionStanding"]
-	if attitude and barre then
-		attitude:ClearAllPoints()
-		attitude:SetPoint("LEFT", barre, "LEFT", 0, 0)
-		attitude:SetPoint("RIGHT", barre, "RIGHT", 0, 0)
-		attitude:SetJustifyH("CENTER")
-		if GameFontHighlight then
-			attitude:SetFontObject(GameFontHighlight)
-		end
-	end
+	local texte = barre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	texte:SetPoint("LEFT", barre, "LEFT", 0, 0)
+	texte:SetPoint("RIGHT", barre, "RIGHT", 0, 0)
+	texte:SetJustifyH("CENTER")
+	barre.texte = texte
 
-	-- LA PLAQUE D'EN-TETE, etiree sur toute la ligne comme le fait la source.
-	-- Elle ne parait que sur les en-tetes : les entrees n'en ont pas.
-	if not ligne.foreverEntete then
-		local plaque = ligne:CreateTexture(nil, "BACKGROUND")
-		ForeverUI.SetAtlas(plaque, ATLAS_ENTETE)
-		plaque:SetPoint("TOPLEFT", ligne, "TOPLEFT", 0, 0)
-		plaque:SetPoint("BOTTOMRIGHT", ligne, "BOTTOMRIGHT", 0, 0)
-		plaque:Hide()
-		ligne.foreverEntete = plaque
-	end
+	-- LE NOM. Ses deux ancrages ne sont pas les memes selon le gabarit : ils
+	-- se reposent donc a chaque remplissage.
+	local nom = ligne:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	nom:SetHeight(NOM_H)
+	nom:SetJustifyH("LEFT")
+	ligne.nom = nom
 
-	local bouton = _G["ReputationBar" .. index .. "ExpandOrCollapseButton"]
-	if bouton then
-		bouton:SetWidth(16)
-		bouton:SetHeight(16)
-		bouton:ClearAllPoints()
-		bouton:SetPoint("RIGHT", ligne, "RIGHT", BOUTON_X, BOUTON_Y)
-	end
+	-- LA FLECHE d'un en-tete.
+	local fleche = ligne:CreateTexture(nil, "OVERLAY")
+	fleche:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X, FLECHE_Y)
+	fleche:Hide()
+	ligne.fleche = fleche
 
+	ligne:RegisterForClicks("LeftButtonUp")
 	return ligne
 end
 
--- LE REMPLISSAGE SUIT LA VALEUR, ET SA COULEUR L'ATTITUDE.
---
--- FACTION_BAR_COLORS est la table du client : huit attitudes, de hai a
--- exalte. camelot teinte le meme remplissage blanc ; on fait de meme, plutot
--- que de chercher un art par attitude qui n'existe pas.
--- TOUT L'ART DU CLIENT SE TAIT, A CHAQUE PASSAGE.
---
--- ReputationFrame_Update ne se contente pas de poser des valeurs : il montre
--- et redimensionne l'art de 3.3.5 -- la texture de la StatusBar, les deux
--- AtWarHighlight additifs, les traits d'arborescence. L'etouffer une seule
--- fois, a la construction, ne suffit donc pas : il revient. On repasse apres
--- lui, et on ne laisse parler que ce qui est a nous.
-local function etoufferArtDuClient(index, barre)
-	if barre then
-		for _, region in ipairs({ barre:GetRegions() }) do
-			if region ~= barre.foreverFond and region ~= barre.foreverRemplissage
-				and region.GetObjectType and region:GetObjectType() == "Texture" then
-				region:SetAlpha(0)
-			end
-		end
-		local sienne = barre.GetStatusBarTexture and barre:GetStatusBarTexture()
-		if sienne then
-			sienne:SetAlpha(0)
-		end
+-- ----------------------------------------------------------- le remplissage
+
+local function poserBarre(ligne, donnees)
+	local barre = ligne.barre
+	local fraction = 0
+	if donnees.maximum and donnees.maximum > 0 then
+		fraction = donnees.valeur / donnees.maximum
 	end
 
-	for _, suffixe in ipairs({ "LeftLine", "BottomLine", "Background" }) do
-		local piece = _G["ReputationBar" .. index .. suffixe]
-		if piece then
-			piece:SetAlpha(0)
+	ForeverUI.SetAtlasFill(barre.remplissage, ATLAS_BARRE_REMPLISSAGE,
+		fraction, BARRE_L)
+	barre.remplissage:SetHeight(REMPLISSAGE_H)
+
+	local couleur = FACTION_BAR_COLORS and FACTION_BAR_COLORS[donnees.attitude]
+	if couleur then
+		barre.remplissage:SetVertexColor(couleur.r, couleur.g, couleur.b)
+	end
+
+	barre.texte:SetText(donnees.intitule or "")
+end
+
+-- L'OPACITE DU SURVOL, telle que RefreshBackgroundHighlightOpacity la donne.
+local function poserSurvol(ligne)
+	if ligne.entete then
+		ligne.survol:SetAlpha(0)
+		return
+	end
+
+	local dessus = ligne:IsMouseOver()
+	local alpha
+	if ligne.enGuerre then
+		alpha = (ligne.choisie and 0.85) or (dessus and 0.65) or 0.50
+	else
+		alpha = (ligne.choisie and 0.20) or (dessus and 0.10) or 0
+	end
+	ligne.survol:SetAlpha(alpha)
+
+	local teinte = ligne.enGuerre and FACTION_AT_WAR_COLOR
+	for _, piece in ipairs(ligne.survolPieces) do
+		if teinte then
+			piece:SetVertexColor(teinte.r, teinte.g, teinte.b)
+		else
+			piece:SetVertexColor(1, 1, 1)
 		end
 	end
 end
 
-local function majRemplissages()
-	for index = 1, (NUM_FACTIONS_DISPLAYED or 0) do
-		local barre = _G["ReputationBar" .. index .. "ReputationBar"]
-		etoufferArtDuClient(index, barre)
-		if barre and barre.foreverRemplissage then
-			local _, maximum = barre:GetMinMaxValues()
-			local valeur = barre:GetValue() or 0
-			local fraction = 0
-			if maximum and maximum > 0 then
-				fraction = valeur / maximum
-			end
-			ForeverUI.SetAtlasFill(barre.foreverRemplissage, ATLAS_REMPLISSAGE,
-				fraction, BARRE_L)
-			barre.foreverRemplissage:SetHeight(REMPLISSAGE_H)
+local function remplirLigne(ligne, donnees)
+	ligne.factionIndex = donnees.index
+	ligne.entete = donnees.entete
+	ligne.replie = donnees.replie
+	ligne.enGuerre = donnees.enGuerre
+	ligne.progression = donnees.progression
+	ligne.intitule = donnees.intitule
+	ligne.dessusAvant = nil
 
-			local ligne = _G["ReputationBar" .. index]
-			local couleur = ligne and ligne.standingID and FACTION_BAR_COLORS
-				and FACTION_BAR_COLORS[ligne.standingID]
-			if couleur then
-				barre.foreverRemplissage:SetVertexColor(couleur.r, couleur.g, couleur.b)
-			end
-		end
+	ligne.nom:SetText(donnees.nom or "")
+	ligne.nom:ClearAllPoints()
 
-		local ligne = _G["ReputationBar" .. index]
-		local bouton = _G["ReputationBar" .. index .. "ExpandOrCollapseButton"]
-		if ligne then
-			local entete = ligne.foreverEntete
-			if entete then
-				if ligne.isHeader then entete:Show() else entete:Hide() end
+	if donnees.entete then
+		ligne:SetHeight(ENTETE_H)
+		ligne.plaque:Show()
+		ligne.barre:Hide()
+		ligne.nom:SetFontObject(GameFontNormalLeft or GameFontNormal)
+		ligne.nom:SetPoint("LEFT", ligne, "LEFT", ENTETE_NOM_X, 0)
+		ligne.nom:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X - FLECHE_PLACE, 0)
+
+		ForeverUI.SetAtlas(ligne.fleche, donnees.replie and ATLAS_PLUS or ATLAS_MOINS)
+		ligne.fleche:Show()
+	else
+		ligne:SetHeight(ENTREE_H)
+		ligne.plaque:Hide()
+		ligne.barre:Show()
+		ligne.fleche:Hide()
+		ligne.nom:SetFontObject(GameFontHighlight or GameFontNormal)
+		ligne.nom:SetPoint("LEFT", ligne, "LEFT", NOM_X, 0)
+		ligne.nom:SetPoint("RIGHT", ligne.barre, "LEFT", NOM_ECART, 0)
+		poserBarre(ligne, donnees)
+	end
+
+	ligne.choisie = (choisie ~= nil and choisie == donnees.index)
+	poserSurvol(ligne)
+	ligne:Show()
+end
+
+-- ------------------------------------------------------------- les donnees
+
+-- CE QUE 3.3.5 DONNE. GetFactionInfo rend, dans l'ordre : nom, description,
+-- attitude, seuil courant, seuil suivant, valeur, en guerre, peut declarer la
+-- guerre, est un en-tete, est replie, a de la reputation, est surveillee,
+-- est un enfant.
+local function lireFaction(rang)
+	local nom, _, attitude, seuil, suivant, valeur, enGuerre, _, entete,
+		replie = GetFactionInfo(rang)
+	if not nom then
+		return nil
+	end
+
+	local maximum, courant = 1, 1
+	local plein = (attitude == (MAX_REPUTATION_REACTION or 8))
+	if not plein then
+		maximum = (suivant or 0) - (seuil or 0)
+		courant = (valeur or 0) - (seuil or 0)
+	end
+
+	local intitule = ""
+	if GetText then
+		intitule = GetText("FACTION_STANDING_LABEL" .. tostring(attitude),
+			UnitSex and UnitSex("player")) or ""
+	end
+
+	return {
+		index = rang,
+		nom = nom,
+		attitude = attitude,
+		valeur = courant,
+		maximum = maximum,
+		entete = entete,
+		replie = replie,
+		enGuerre = enGuerre,
+		intitule = intitule,
+		progression = (not plein)
+			and (tostring(courant) .. " / " .. tostring(maximum)) or nil,
+	}
+end
+
+local function poserListe()
+	if not panneau then
+		return
+	end
+
+	local total = (GetNumFactions and GetNumFactions()) or 0
+	local place = #lignes
+	if decalage > total - place then
+		decalage = math.max(0, total - place)
+	end
+
+	local precedente
+	for rang, ligne in ipairs(lignes) do
+		local donnees = lireFaction(decalage + rang)
+		if donnees then
+			remplirLigne(ligne, donnees)
+			ligne:ClearAllPoints()
+			if precedente then
+				ligne:SetPoint("TOPLEFT", precedente, "BOTTOMLEFT", 0, 0)
+			else
+				ligne:SetPoint("TOPLEFT", panneau, "TOPLEFT", 0, 0)
 			end
-			-- Un en-tete n'a pas de barre : camelot n'en montre pas non plus.
-			local barre = _G["ReputationBar" .. index .. "ReputationBar"]
-			if barre then
-				if ligne.isHeader then barre:Hide() else barre:Show() end
-			end
-			habillerBouton(bouton, ligne.isCollapsed, ligne.isHeader)
+			precedente = ligne
+		else
+			ligne:Hide()
 		end
 	end
 end
-ForeverUI.ReputationFills = majRemplissages
+ForeverUI.ReputationLayout = poserListe
 
--- L'ATTITUDE N'EST PAS RETENUE PAR LE CLIENT. ReputationFrame_Update la lit
--- pour ecrire l'intitule, puis l'oublie ; il nous la faut pour teinter. On la
--- reprend a la source -- GetFactionInfo -- au meme indice que lui.
-local function retenirAttitudes()
-    local total = (GetNumFactions and GetNumFactions()) or 0
-    local decalage = (FauxScrollFrame_GetOffset
-        and _G["ReputationListScrollFrame"]
-        and FauxScrollFrame_GetOffset(_G["ReputationListScrollFrame"])) or 0
-    for index = 1, (NUM_FACTIONS_DISPLAYED or 0) do
-        local ligne = _G["ReputationBar" .. index]
-        if ligne then
-            local rang = decalage + index
-            if rang <= total then
-                local _, _, standingID, _, _, _, _, _, isHeader = GetFactionInfo(rang)
-                ligne.standingID = standingID
-                ligne.isHeader = isHeader
-            else
-                ligne.standingID = nil
-                ligne.isHeader = nil
-            end
-        end
-    end
+-- --------------------------------------------------------- la construction
+
+local function suivreSurvol()
+	for _, ligne in ipairs(lignes) do
+		if ligne:IsShown() and not ligne.entete then
+			poserSurvol(ligne)
+
+			-- Au survol, la barre montre la progression ; au repos,
+			-- l'attitude. C'est TryShowBarProgressText.
+			local dessus = ligne:IsMouseOver()
+			if dessus ~= ligne.dessusAvant then
+				ligne.dessusAvant = dessus
+				if dessus and ligne.progression then
+					ligne.barre.texte:SetText(ligne.progression)
+				else
+					ligne.barre.texte:SetText(ligne.intitule or "")
+				end
+			end
+		end
+	end
 end
 
 local function monter(hote)
@@ -349,94 +365,93 @@ local function monter(hote)
 		return nil, {}
 	end
 
-	-- L'ecran occupe le volet gauche, comme les autres.
 	cadre:ClearAllPoints()
 	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
 	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", 0, 0)
 
-	if not monte then
-		monte = true
-		balayerFond(cadre)
-		for _, nom in ipairs(ANCIENS) do
-			local piece = _G[nom]
-			if piece then
-				piece:SetAlpha(0)
-			end
-		end
+	if panneau then
+		return nil, { cadre }
+	end
 
-		-- COMBIEN DE LIGNES TIENNENT. Le client en annonce quinze, calees
-		-- sur sa fenetre ; au pas de camelot, le volet en porte moins. On
-		-- recalcule plutot que de laisser deborder, et on le dit au client :
-		-- sa pagination se sert des deux memes nombres.
-		local hauteur = hote:GetHeight() or 0
-		if hauteur < 100 then
-			hauteur = VOLET_H
+	-- L'ART ET LES LIGNES DE 3.3.5 S'EN VONT. On ne garde du client que ce
+	-- cadre, comme support, et ses fonctions de lecture.
+	for _, region in ipairs({ cadre:GetRegions() }) do
+		if region.Hide then
+			region:Hide()
 		end
-
-		local place = math.floor((hauteur + LISTE_Y - LISTE_Y2) / LIGNE_HAUTEUR)
-		if place < 1 then
-			place = 1
-		end
-		if place > 15 then
-			place = 15
-		end
-		NUM_FACTIONS_DISPLAYED = place
-		REPUTATIONFRAME_FACTIONHEIGHT = LIGNE_HAUTEUR
-
-		local largeur = hote:GetWidth() or 0
-		if largeur < 100 then
-			largeur = VOLET_L
-		end
-		largeur = largeur + LISTE_X2 - LISTE_X
-
-		local precedente
-		for index = 1, 15 do
-			local ligne = habillerLigne(index, largeur)
-			if ligne then
-				ligne:ClearAllPoints()
-				if index > place then
-					ligne:Hide()
-				elseif precedente then
-					ligne:SetPoint("TOPLEFT", precedente, "BOTTOMLEFT", 0, 0)
-				else
-					ligne:SetPoint("TOPLEFT", hote, "TOPLEFT", LISTE_X, LISTE_Y)
-				end
-				if index <= place then
-					precedente = ligne
-				end
-			end
-		end
-
-		-- LES DEUX TRAITS, en haut et en bas de la liste.
-		--
-		-- SANS LE TROISIEME ARGUMENT. Il veut dire "ne touche pas a la
-		-- taille" -- il ne vaut donc que si on la pose soi-meme juste apres.
-		-- Pose ici sur des textures sans dimension ni second ancrage, il
-		-- laissait le trait s'etaler sur TOUT le volet : une immense bande
-		-- doree par-dessus l'ecran.
-		local premiere = _G["ReputationBar1"]
-		if premiere then
-			local haut = cadre:CreateTexture(nil, "ARTWORK")
-			ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
-			haut:SetPoint("CENTER", premiere, "TOP", 0, 0)
-
-			local bas = cadre:CreateTexture(nil, "ARTWORK")
-			ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
-			bas:SetPoint("CENTER", hote, "BOTTOMLEFT",
-				LISTE_X + largeur / 2, LISTE_Y2)
+	end
+	for index = 1, 15 do
+		local vieille = _G["ReputationBar" .. index]
+		if vieille then
+			vieille:Hide()
+			vieille:ClearAllPoints()
 		end
 	end
 
+	local hauteur = hote:GetHeight() or 0
+	if hauteur < 100 then
+		hauteur = VOLET_H
+	end
+	local largeur = hote:GetWidth() or 0
+	if largeur < 100 then
+		largeur = VOLET_L
+	end
+	largeur = largeur + LISTE_X2 - LISTE_X
+
+	panneau = CreateFrame("Frame", "ForeverUIReputationList", cadre)
+	panneau:SetPoint("TOPLEFT", hote, "TOPLEFT", LISTE_X, LISTE_Y)
+	panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", LISTE_X2, LISTE_Y2)
+	panneau:SetWidth(largeur)
+
+	local place = math.floor((hauteur + LISTE_Y - LISTE_Y2) / ENTREE_H)
+	if place < 1 then
+		place = 1
+	end
+	for index = 1, place do
+		local ligne = creerLigne(index, largeur)
+		ligne:SetScript("OnClick", function(self)
+			if not self.factionIndex then
+				return
+			end
+			if self.entete then
+				if self.replie then
+					ExpandFactionHeader(self.factionIndex)
+				else
+					CollapseFactionHeader(self.factionIndex)
+				end
+			else
+				choisie = self.factionIndex
+				poserListe()
+			end
+		end)
+		lignes[index] = ligne
+	end
+
+	-- LES DEUX TRAITS, en haut et en bas de la liste.
+	local haut = cadre:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
+	haut:SetPoint("CENTER", panneau, "TOP", 0, 0)
+
+	local bas = cadre:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
+	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
+
+	panneau:SetScript("OnUpdate", suivreSurvol)
+	panneau:EnableMouseWheel(true)
+	panneau:SetScript("OnMouseWheel", function(self, sens)
+		local total = (GetNumFactions and GetNumFactions()) or 0
+		decalage = math.max(0, math.min(decalage - sens, total - #lignes))
+		poserListe()
+	end)
+
+	poserListe()
 	return nil, { cadre }
 end
 
-ForeverUI.ReputationTab = { Build = monter }
+ForeverUI.ReputationTab = { Build = monter, Rows = lignes }
 
--- LE CLIENT REMPLIT, NOUS TEIGNONS. ReputationFrame_Update pose les valeurs
--- et les intitules ; notre passage vient apres, sur le meme evenement.
+-- Le client annonce ses changements par UPDATE_FACTION et les traite dans
+-- ReputationFrame_Update : on se greffe dessus, ses donnees etant les notres.
 if hooksecurefunc and type(_G["ReputationFrame_Update"]) == "function" then
-	hooksecurefunc("ReputationFrame_Update", function()
-		retenirAttitudes()
-		majRemplissages()
-	end)
+	hooksecurefunc("ReputationFrame_Update", poserListe)
 end

@@ -875,6 +875,14 @@ for i = 1, 15 do
         _G[n .. suffixe] = r:CreateTexture(n .. suffixe, "BACKGROUND")
     end
 end
+MAX_REPUTATION_REACTION = 8
+FACTION_AT_WAR_COLOR = { r = 0.8, g = 0.2, b = 0.2 }
+GameFontNormalLeft = "GameFontNormalLeft"
+GameFontHighlight = "GameFontHighlight"
+function UnitSex() return 2 end
+REPLIES = {}
+function ExpandFactionHeader(i) REPLIES[i] = false end
+function CollapseFactionHeader(i) REPLIES[i] = true end
 FACTIONS = { { nom = "Cataclysme", standing = 4, entete = true },
              { nom = "Orgrimmar", standing = 8 },
              { nom = "Darnassus", standing = 4 } }
@@ -882,9 +890,10 @@ function GetNumFactions() return #FACTIONS end
 function GetFactionInfo(i)
     local f = FACTIONS[i]
     if not f then return nil end
-    -- nom, description, standingID, barMin, barMax, barValue, atWarWith,
-    -- canToggleAtWar, isHeader, isCollapsed, ...
-    return f.nom, "", f.standing, 0, 1000, 250, false, false, f.entete, false
+    -- nom, description, standingID, seuil, suivant, valeur, enGuerre,
+    -- peutDeclarer, estEnTete, estReplie, ...
+    return f.nom, "", f.standing, 0, 1000, 250, f.guerre or false, false,
+           f.entete, REPLIES[i] or false
 end
 function ReputationFrame_Update() end
 
@@ -2580,76 +2589,68 @@ def main():
     assert g.ReputationFrame.shown, "et l ecran de reputation, lui, parait"
     assert perso.foreverRepli.shown,         "le volet existe sur cet onglet : il reste repliable"
 
-    # L ONGLET DE REPUTATION, repris du code de camelot.
+    # L ONGLET DE REPUTATION : NOS lignes, baties d apres les gabarits de
+    # camelot et remplies depuis GetFactionInfo. Celles du client sont
+    # retirees -- c est ce qui met fin aux reprises de son art.
     lua.execute("ForeverUICharacterLeftPane:SetHeight(464)")
     g.CharacterFrame_ShowSubFrame("ReputationFrame")
     g.ForeverUI.Panes.ShowGroup("ReputationFrame")
     g.ForeverUI.CharacterApplyPanes(perso)
 
-    r1, r2 = g.ReputationBar1, g.ReputationBar2
-    p1 = r1.points[len(list(r1.points.values()))]
-    print("   reputation : ligne %d x %d, premiere en (%s, %s) de %s, pas %d" % (
-        r1.width, r1.height, p1[4], p1[5], p1[2].name,
-        g.REPUTATIONFRAME_FACTIONHEIGHT))
-    assert r1.height == 30, "ReputationEntryTemplate fait 30 de haut"
-    assert r1.width == 464 - 101, "de LISTE_X a LISTE_X2 : 398 - 10 - 25 = 363"
-    assert (p1[4], p1[5]) == (10, -40), "TOPLEFT du volet (10, -40), comme camelot"
-    p2 = r2.points[len(list(r2.points.values()))]
-    assert p2[2].name == "ReputationBar1" and p2[3] == "BOTTOMLEFT",         "les lignes s empilent"
-    assert g.REPUTATIONFRAME_FACTIONHEIGHT == 30,         "le client pagine sur le meme pas que nous"
-    print("   lignes qui tiennent : %d (le client en annoncait 15)" % (
-        g.NUM_FACTIONS_DISPLAYED))
-    assert 1 <= g.NUM_FACTIONS_DISPLAYED <= 15,         "recalcule pour le volet, au lieu de deborder"
+    liste = g.ForeverUIReputationList
+    pl = liste.points[1]
+    rangs = g.ForeverUI.ReputationTab.Rows
+    r1, r2 = g.ForeverUIReputationRow1, g.ForeverUIReputationRow2
+    print("   reputation : liste %s (%s, %s), %d lignes de %d de large" % (
+        pl[1], pl[4], pl[5], len(list(rangs.values())), r1.width))
+    assert (pl[4], pl[5]) == (10, -40), "TOPLEFT du volet (10, -40)"
+    assert r1.width == 398 - 10 - 25, "de LISTE_X a LISTE_X2"
+    assert not g.ReputationBar1.shown, "les lignes du client s en vont"
 
-    barre = g.ReputationBar1ReputationBar
-    print("   barre : %d x %d, fond=%s" % (
-        barre.width, barre.height, barre.foreverFond is not None))
-    assert barre.width == 160 and barre.height == 29,         "ReputationBarTemplate : 160 x 29"
-    assert barre.foreverFond and barre.foreverRemplissage,         "fond common-stat-bar-bg et remplissage teinte"
+    # UN EN-TETE : plaque, nom en or a LEFT x = 10, fleche a RIGHT (-8, -1).
+    pf = r1.fleche.points[1]
+    pn1 = r1.nom.points[1]
+    print("   en-tete : plaque=%s barre=%s | nom %s x=%s, police=%s | fleche %s (%s, %s)" % (
+        r1.plaque.shown, r1.barre.shown, pn1[1], pn1[4], r1.nom.font,
+        pf[1], pf[4], pf[5]))
+    assert r1.plaque.shown and not r1.barre.shown, "un en-tete n a pas de barre"
+    assert (pn1[1], pn1[4]) == ("LEFT", 10), "ReputationHeaderTemplate : LEFT x = 10"
+    assert r1.nom.font == "GameFontNormalLeft", "et son nom est en or"
+    assert (pf[1], pf[4], pf[5]) == ("RIGHT", -8, -1), "StateIcon a RIGHT (-8, -1)"
+    assert r1.fleche.width == 13, "common-button-list-minus, a sa taille d atlas"
 
-    # Le client remplit, nous teignons : le greffon suit son passage.
-    g.ReputationFrame_Update()
-    rem = barre.foreverRemplissage
-    print("   remplissage : largeur %s, couleur %s" % (
-        rem.width, rem.vertexColor and rem.vertexColor[1]))
-    assert rem.width and rem.width > 0, "la fraction vient de la StatusBar du client"
-    assert g.ReputationFrameFactionLabel.alpha == 0,         "les intitules de colonne de 3.3.5 s effacent"
-    assert g.ReputationBar1LeftLine.alpha == 0,         "les lignes d arborescence aussi : camelot n en a pas"
+    # UNE ENTREE : barre a RIGHT x = -3, nom en blanc de x = 25 au LEFT de la
+    # barre moins 10.
+    pb = r2.barre.points[1]
+    pn2 = r2.nom.points[1]
+    print("   entree : barre %d x %d %s x=%s | nom x=%s police=%s | remplissage %s" % (
+        r2.barre.width, r2.barre.height, pb[1], pb[4], pn2[4],
+        r2.nom.font, r2.barre.remplissage.width))
+    assert r2.barre.width == 160 and r2.barre.height == 29, "ReputationBarTemplate"
+    assert (pb[1], pb[4]) == ("RIGHT", -3), "ancree RIGHT x = -3"
+    assert (pn2[1], pn2[4]) == ("LEFT", 25), "le bord droit de l AccountWideIcon"
+    assert r2.nom.font == "GameFontHighlight", "le nom d une entree est en blanc"
+    r3 = g.ForeverUIReputationRow3
+    print("   exalte : barre pleine (%s) | amical : %s sur 160" % (
+        r2.barre.remplissage.width, r3.barre.remplissage.width))
+    assert r2.barre.remplissage.width == 160.0,         "a l attitude maximale la barre est pleine, comme la source le veut"
+    assert r3.barre.remplissage.width == 40.0, "250 sur 1000, sur 160 de barre"
+    assert r2.barre.remplissage.height == 15, "ColoredProgressBarTemplate"
+    assert not r2.plaque.shown, "une entree n a pas de plaque"
 
-    # EN-TETE CONTRE ENTREE. common-button-list-collapseExpand est le FOND
-    # d une ligne d en-tete, etire sur toute sa largeur -- pas une fleche.
-    e1, e2 = r1.foreverEntete, r2.foreverEntete
-    bouton = g.ReputationBar1ExpandOrCollapseButton
-    pb = bouton.points[len(list(bouton.points.values()))]
-    print("   en-tete : plaque ligne1=%s ligne2=%s | fleche %s (%s, %s), barre=%s" % (
-        e1.shown, e2.shown, pb[1], pb[4], pb[5], barre.shown))
-    assert e1.shown, "la premiere faction du faux client est un en-tete"
-    assert not e2.shown, "une entree n en a pas"
-    assert not barre.shown, "et un en-tete n a pas de barre"
-    assert g.ReputationBar2ReputationBar.shown, "l entree, si"
-    assert pb[1] == "RIGHT" and (pb[4], pb[5]) == (-8, -1),         "ReputationHeaderTemplate pose son StateIcon a RIGHT (-8, -1)"
-    assert bouton.foreverIcone.shown, "et la fleche parait sur un en-tete"
-    # UNE TEXTURE SANS TAILLE S ETALE. Le troisieme argument de SetAtlas veut
-    # dire "ne touche pas a la taille" : sans dimension ni second ancrage, le
-    # trait de liste couvrait tout le volet.
-    print("   fleche %d x %d | traits de liste : %s" % (
-        bouton.foreverIcone.width or 0, bouton.foreverIcone.height or 0,
-        [(t.width, t.height) for t in g.ReputationFrame.regions.values()
-         if t.width == 384]))
-    assert bouton.foreverIcone.width == 13,         "common-button-list-plus fait 13 de large, pas la taille du bouton"
-    # L ART DU CLIENT REVIENT A CHAQUE MISE A JOUR : on repasse apres lui.
-    bouton.GetNormalTexture(bouton).SetAlpha(bouton.GetNormalTexture(bouton), 1)
-    g.ReputationFrame_Update()
-    assert bouton.GetNormalTexture(bouton).alpha == 0,         "le plus de 3.3.5 doit se taire a CHAQUE passage, pas une fois"
-    pbarre = barre.points[len(list(barre.points.values()))]
-    print("   barre ancree %s sur %s de %s, x=%s" % (
-        pbarre[1], pbarre[3], pbarre[2].name, pbarre[4]))
-    assert pbarre[1] == "RIGHT" and pbarre[4] == -3,         "ReputationEntryTemplate ancre la barre a RIGHT x = -3"
-    nom = g.ReputationBar2FactionName
-    assert nom.justify == "LEFT" and nom.height == 15,         "le nom : GameFontHighlight, hauteur 15, aligne a gauche"
-    traits = [t for t in g.ReputationFrame.regions.values() if t.width == 384]
-    assert len(traits) == 2 and all(t.height == 8 for t in traits),         "les deux traits font 384 x 8, leur taille d atlas"
-    assert not g.ReputationBar2ExpandOrCollapseButton.foreverIcone.shown,         "pas sur une entree"
+    # LE CLIC : un en-tete se replie, une entree se choisit.
+    r1.scripts.OnClick(r1)
+    print("   clic sur l en-tete : replie=%s, fleche %d de haut" % (
+        g.REPLIES[1], r1.fleche.height or 0))
+    assert g.REPLIES[1] is True, "CollapseFactionHeader sur l indice de la ligne"
+    g.ForeverUI.ReputationLayout()
+    assert r1.fleche.height == 13, "le plus prend la place du moins, a SA taille"
+
+    r2.scripts.OnClick(r2)
+    g.ForeverUI.ReputationLayout()
+    print("   clic sur une entree : survol a %.2f" % r2.survol.alpha)
+    assert abs(r2.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
+    assert abs(r1.survol.alpha) < 1e-6, "un en-tete n a pas de survol"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):
