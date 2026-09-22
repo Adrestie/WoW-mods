@@ -29,6 +29,9 @@
 --   ligne        DarkMenuElementTemplate, 20 de haut.
 --   police       le compositeur pose GameFontHighlight, blanc, justifie a
 --                gauche et centre verticalement.
+--   largeur      DropdownButtonMixin:RegisterMenu -- si la description du
+--                menu n'impose rien, SetMinimumWidth(self:GetWidth()) : la
+--                liste fait AU MOINS la largeur du bouton qui l'ouvre.
 --   coche        MenuVariants.CreateCheckbox : la CASE common-dropdown-
 --                ticksquare a LEFT, toujours la, et la COCHE JAUNE
 --                common-dropdown-icon-checkmark-yellow par-dessus, centree
@@ -69,6 +72,48 @@ local COCHE_L, COCHE_H = 15, 14
 local COCHE_X, COCHE_Y = 2, 1
 local FONDS = { "Backdrop", "MenuBackdrop" }
 
+-- L'ecart que le client garde entre la liste et ses lignes : il pose la
+-- liste a maxWidth + 25 et les lignes a maxWidth. On le garde tel quel pour
+-- que la marge de droite ne bouge pas quand la liste s'elargit.
+local LISTE_MARGE = 25
+
+-- LA LARGEUR. Le client taille la liste sur son texte le plus long
+-- (maxWidth + 25) ; camelot lui impose en plus un PLANCHER : la largeur du
+-- bouton qui l'ouvre. Une liste plus etroite que son menu deroulant ne peut
+-- donc plus arriver, et une entree plus longue que le bouton continue de
+-- l'elargir -- c'est un minimum, pas une egalite.
+--
+-- Cela se joue a l'affichage de la liste : ToggleDropDownMenu retient le
+-- menu ouvert (UIDROPDOWNMENU_OPEN_MENU) AVANT de la montrer, et ne verifie
+-- qu'elle tient dans l'ecran qu'APRES -- la largeur doit donc etre acquise
+-- a ce moment-la, sinon le recadrage se ferait sur l'ancienne.
+--
+-- Seul le premier niveau est concerne : un sous-menu n'est ouvert par aucun
+-- bouton de menu deroulant.
+local function ajusterLargeur(liste)
+	if (liste.foreverNiveau or liste:GetID()) ~= 1 then
+		return
+	end
+
+	local ouvreur = UIDROPDOWNMENU_OPEN_MENU
+	if not ouvreur or not ouvreur.GetWidth then
+		return
+	end
+
+	local plancher = ouvreur:GetWidth()
+	if not plancher or plancher <= liste:GetWidth() then
+		return
+	end
+
+	liste:SetWidth(plancher)
+	for index = 1, (liste.numButtons or 0) do
+		local bouton = _G[liste:GetName() .. "Button" .. index]
+		if bouton then
+			bouton:SetWidth(plancher - LISTE_MARGE)
+		end
+	end
+end
+
 -- La liste perd ses deux fonds d'epoque et prend celui de camelot.
 --
 -- On RETIRE le fond au lieu de masquer le cadre : ToggleDropDownMenu montre
@@ -95,6 +140,8 @@ local function habillerListe(liste)
 	fond:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", FOND_X, -FOND_Y)
 	fond:SetAlpha(FOND_ALPHA)
 	liste.foreverFond = fond
+
+	liste:HookScript("OnShow", ajusterLargeur)
 end
 
 -- La case et la coche. La case va en BORDER et la coche reste en ARTWORK :
@@ -156,6 +203,7 @@ if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 			return
 		end
 
+		liste.foreverNiveau = level
 		habillerListe(liste)
 
 		local bouton = _G[liste:GetName() .. "Button" .. (liste.numButtons or 1)]
@@ -166,8 +214,20 @@ if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 	end)
 end
 
+-- UIDropDownMenu_Refresh retaille la liste sur son texte (maxWidth + 25) et
+-- effacerait le plancher : on le repose derriere elle.
+if hooksecurefunc and type(UIDropDownMenu_Refresh) == "function" then
+	hooksecurefunc("UIDropDownMenu_Refresh", function(cadre, valeur, niveau)
+		local liste = _G["DropDownList" .. (niveau or UIDROPDOWNMENU_MENU_LEVEL or 1)]
+		if liste and liste:IsShown() then
+			ajusterLargeur(liste)
+		end
+	end)
+end
+
 ForeverUI.DropDown = {
 	Skin = habillerListe,
 	SkinButton = habillerBouton,
 	Refresh = reglerBouton,
+	Fit = ajusterLargeur,
 }

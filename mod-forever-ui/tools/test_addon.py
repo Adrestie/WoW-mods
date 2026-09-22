@@ -725,6 +725,7 @@ UIDROPDOWNMENU_BORDER_HEIGHT = 15
 for niveau = 1, 2 do
     local nom = "DropDownList" .. niveau
     local liste = CreateFrame("Button", nom, UIParent)
+    liste:SetID(niveau)
     liste.numButtons = 0
     for _, suffixe in ipairs({ "Backdrop", "MenuBackdrop" }) do
         local fond = CreateFrame("Frame", nom .. suffixe, liste)
@@ -2365,6 +2366,32 @@ def main():
     assert not b2.foreverCase.shown, "une ligne notCheckable n en a pas"
     assert (coche.width, coche.height) == (15, 14), "common-dropdown-icon-checkmark-yellow"
     assert (pc[1], pc[4], pc[5]) == ("CENTER", 2, 1), "la coche se centre sur sa case a (2, 1)"
+
+    # La largeur : la liste ne peut plus etre plus etroite que le menu
+    # deroulant qui l ouvre.
+    lua.execute("""
+        ForeverUIMenuTemoin = CreateFrame("Frame", "ForeverUIMenuTemoin", UIParent)
+        ForeverUIMenuTemoin:SetWidth(203)
+        ForeverUIMenuTemoin:SetHeight(40)
+        UIDROPDOWNMENU_OPEN_MENU = ForeverUIMenuTemoin
+        -- ce que fait le OnShow du client : tailler sur le texte le plus long
+        DropDownList1:SetWidth(120)
+        DropDownList1Button1:SetWidth(95)
+        DropDownList1Button2:SetWidth(95)
+    """)
+    assert liste.hooks.OnShow is not None, "le plancher se pose a l affichage de la liste"
+    liste.hooks.OnShow(liste)
+    print("   largeur : menu 203, liste taillee a 120 -> %d, ligne %d" % (
+        liste.width, b1.width))
+    assert liste.width == 203,         "camelot pose SetMinimumWidth(bouton:GetWidth()) : la liste suit son menu"
+    assert b1.width == 203 - 25, "les lignes gardent l ecart de 25 du client"
+
+    # Une entree plus longue que le bouton continue d elargir : c est un
+    # plancher, pas une egalite.
+    lua.execute("DropDownList1:SetWidth(300) DropDownList1Button1:SetWidth(275)")
+    liste.hooks.OnShow(liste)
+    print("   liste plus large que son menu : %d (inchangee)" % liste.width)
+    assert liste.width == 300, "un menu plus large que son bouton n est pas retreci"
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

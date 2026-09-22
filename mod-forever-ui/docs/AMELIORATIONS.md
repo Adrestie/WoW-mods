@@ -571,6 +571,19 @@ la famille `mainline`, avec l'art `c60`.
 | Coche | une seule texture, `UI-CheckBox-Check` 18 × 18 à `LEFT`, montrée si coché | la **case** `common-dropdown-ticksquare` toujours là, la **coche jaune** `common-dropdown-icon-checkmark-yellow` par-dessus si choisi | la case en `BORDER`, la coche du client repeinte en jaune et centrée dessus à (2, 1) |
 | Surbrillance | `UI-QuestTitleHighlight` en `ADD` | `MenuVariants.CreateHighlight` : **la même** | rien à faire |
 | Flèche de sous-menu | `ChatFrameExpandArrow` | `MenuVariants.CreateSubmenuArrow` : **la même** | rien à faire |
+| Largeur | taillée sur le texte le plus long (`maxWidth + 25`) | `DropdownButtonMixin:RegisterMenu` pose `SetMinimumWidth(self:GetWidth())` | plancher à la largeur du menu déroulant qui l'ouvre |
+
+**La largeur est un plancher, pas une égalité.** Camelot n'impose à la liste
+qu'un *minimum* — la largeur du bouton — et la laisse s'élargir si une
+entrée est plus longue. Il se pose à l'affichage de la liste :
+`ToggleDropDownMenu` retient le menu ouvert (`UIDROPDOWNMENU_OPEN_MENU`)
+**avant** de la montrer et ne vérifie qu'elle tient dans l'écran
+qu'**après** ; la largeur doit donc être acquise à ce moment-là, sinon le
+recadrage se ferait sur l'ancienne. `UIDropDownMenu_Refresh` retaille aussi
+la liste, donc le plancher se repose derrière elle. Les lignes gardent
+l'écart de 25 que le client tient entre la liste et elles, pour que la marge
+de droite ne bouge pas. Seul le premier niveau est concerné : un sous-menu
+n'est ouvert par aucun bouton de menu déroulant.
 
 **Retirer un fond, pas le masquer.** `ToggleDropDownMenu` montre l'un ou
 l'autre `Backdrop` à chaque ouverture, selon `displayMode` : un cadre masqué
