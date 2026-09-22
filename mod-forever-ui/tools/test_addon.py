@@ -61,6 +61,7 @@ local function newRegion(kind)
     function r:SetText(t) self.text = t end
     function r:GetText() return self.text end
     function r:SetJustifyH(j) self.justify = j end
+    function r:SetJustifyV(j) self.justifyV = j end
     function r:SetTextColor(rr, vv, bb, aa) self.textColor = {rr, vv, bb, aa} end
     function r:GetTextColor()
         local c = self.textColor or {1, 1, 1, 1}
@@ -493,6 +494,15 @@ NORMAL_FONT_COLOR = { r = 1, g = 0.82, b = 0 }
 REPUTATION, CURRENCY, PVP, SKILLS = "Reputation", "Currency", "PvP", "Skills"
 function UnitPVPName(unite) return "Robert Polson" end
 CharacterModelFrame = CreateFrame("Frame", "CharacterModelFrame", CharacterFrame)
+CharacterLevelText = CharacterFrame:CreateFontString("CharacterLevelText", "ARTWORK")
+-- le client compose cette ligne ; le faux client en pose une pour qu'on
+-- puisse verifier qu'elle est bien recopiee
+CharacterLevelText:SetText("Niveau 3 Elfe de la nuit Druide")
+for _, cote in ipairs({ "Left", "Right" }) do
+    local nom = "CharacterModelFrameRotate" .. cote .. "Button"
+    local b = CreateFrame("Button", nom, CharacterModelFrame)
+    b:SetWidth(16); b:SetHeight(16)
+end
 PaperDollFrame = CreateFrame("Frame", "PaperDollFrame", CharacterFrame)
 PaperDollFrameTexture = PaperDollFrame:CreateTexture("PaperDollFrameTexture", "ARTWORK")
 EMPLACEMENTS_PERSO = {
@@ -1647,6 +1657,31 @@ def main():
         o1.foreverIcone.portraitOf, not g.CharacterFrameTab1Text.shown))
     assert o1.foreverIcone.portraitOf == "player",         "l onglet du personnage porte le portrait, comme la source"
     assert abs(o1.foreverIcone.texcoord[1] - 0.03125) < 1e-6,         "rogne a 0,03125 comme UpdateCharacterModeTabPortrait"
+
+    # LE NIVEAU, LA RACE ET LA CLASSE : dans le volet droit, la ou la source
+    # met PaperDollLevelInfo.
+    niveau = droit.ligneNiveau
+    pn = niveau.points[1]
+    assert not g.CharacterLevelText.shown, "la ligne du client s efface"
+    assert niveau.text == g.CharacterLevelText.text,         "le texte vient du client, nous ne faisons que l afficher"
+    print("   ligne de niveau : %s sur %s (%s, %s), large de %d, parent %s" % (
+        pn[1], pn[3], pn[4], pn[5], niveau.width, niveau.parent and niveau.parent.name))
+    assert pn[1] == "TOP" and pn[3] == "TOP", "elle se pose sous le haut du volet"
+    assert pn[5] == -54, "PaperDollLevelInfo : -4 des onglets lateraux, -50 dessous"
+    assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
+    assert niveau.owner.name == "ForeverUICharacterRightPane",         "elle appartient au volet : une region ne se reparente pas en 3.3.5"
+    assert niveau.width == 220, "PaperDollLevelInfo fait 220 de large"
+    assert niveau.justify == "CENTER", "centree"
+
+    # LES FLECHES DU MODELE : centrees sur le volet, cote a cote.
+    fg = g.CharacterModelFrameRotateLeftButton.points[1]
+    fd = g.CharacterModelFrameRotateRightButton.points[1]
+    print("   fleches : %s (%s) et %s (%s), a %s du haut du volet" % (
+        fg[1], fg[4], fd[1], fd[4], fg[5]))
+    assert fg[1] == "TOP" and fd[1] == "TOP", "elles s accrochent au haut du volet"
+    assert fg[2].name == "ForeverUICharacterLeftPane"
+    assert abs(fg[4] + fd[4]) < 1e-6, "elles se repartissent de part et d autre du milieu"
+    assert fg[4] < 0 and fd[4] > 0, "la gauche a gauche, la droite a droite"
 
     modele = g.CharacterModelFrame.points[1]
     print("   modele : %s sur %s (il occupe le volet gauche)" % (modele[1], modele[3]))

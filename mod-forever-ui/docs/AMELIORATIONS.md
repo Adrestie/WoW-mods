@@ -422,6 +422,8 @@ n'y a donc rien à trancher ici.
 | Titre | bande de 58 à −24, texte centré à 5 px de son haut posé à −1 — `CharacterFrame` **n'appelle pas** `SetTitleOffsets`, il garde les valeurs par défaut du mixin ; son milieu tombe à 332,5 sur 631, ce que la capture confirme |
 | Titre affiché | le nom du joueur (`UnitPVPName`) en clair, ou l'intitulé du sous-cadre affiché en jaune — `characterFrameDisplayInfo` |
 | Fermeture | 24 × 24 au `TOPRIGHT (1, 0)`, le X rouge des panneaux modernes |
+| Niveau, race et classe | dans le **volet droit**, `TOP (0, −54)`, 220 de large — `PaperDollLevelInfo` est à `TOP (0, −50)` des onglets latéraux, eux-mêmes à `TOP (0, −4)` du volet |
+| Flèches du modèle | centrées horizontalement dans le volet gauche, 29 sous son bord haut |
 | Onglets latéraux | `ModeTabs` 64 × 384 au `TOPRIGHT` du cadre, y −30 ; onglets 55 × 55 (`common-sidetab` fait 55 × 60 dont 5 de transparent), icône centrée à −3 |
 
 **L'ordre de dessin, corrigé après le premier essai en jeu.** Les volets sont
@@ -460,6 +462,12 @@ Trois autres corrections du même essai :
 - **l'art d'époque ne tient pas qu'au cadre** : la feuille de 3.3.5 le répartit
   sur ses sous-cadres, qui échappent à un balayage du seul `CharacterFrame`. La
   liste est balayée à chaque passage.
+
+**Une région ne se reparente pas en 3.3.5.** `SetParent` n'existe pas dans la
+table des méthodes de `FontString` de ce client, et ancrer la ligne du client au
+volet ne suffirait pas : elle appartient au cadre, donc elle se dessinerait
+*sous* les volets, qui sont des cadres fils. On efface la sienne et on pose la
+nôtre dans le volet, en recopiant son texte — c'est le client qui le compose.
 
 **Écarts assumés.** `PaperDollItemSlotButton_OnLoad` pose l'arme principale à
 `(−60, 30)` quand l'emplacement de distance est montré et à `(−40, 30)` sinon,

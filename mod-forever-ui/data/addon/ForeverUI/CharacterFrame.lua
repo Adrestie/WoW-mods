@@ -108,6 +108,22 @@ local TITRES = {
 	{ cadre = "SkillsFrame", texte = "SKILLS" },
 }
 
+-- LE NIVEAU, LA RACE ET LA CLASSE, dans le volet DROIT.
+--
+-- RELEVE -- PaperDollLevelInfo : une bande de 220 x 20 posee au TOP
+-- (0, -50) de PaperDollSidebarTabs, qui est elle-meme au TOP (0, -4) du
+-- volet droit. La ligne tombe donc a -54 sous le haut du volet, centree.
+-- C'est le "Druidesse de niveau 3" de la capture. 3.3.5 n'a qu'une ligne
+-- pour les trois ; elle prend cette place.
+local NIVEAU_Y = -54
+local NIVEAU_LARGEUR, NIVEAU_HAUTEUR = 220, 20
+
+-- LES FLECHES DU MODELE, centrees dans le volet gauche. La capture les
+-- montre en haut, a 29 sous le bord du volet ; leur milieu tombe sur celui
+-- du volet.
+local ROTATION_Y = -29
+local ROTATION_ECART = 4
+
 local FERMETURE = 24
 local FERMETURE_X, FERMETURE_Y = 1, 0
 local FERMETURE_ATLAS = {
@@ -405,6 +421,48 @@ local function poserModele()
 	modele:ClearAllPoints()
 	modele:SetPoint("TOPLEFT", voletGauche, "TOPLEFT", 0, 0)
 	modele:SetPoint("BOTTOMRIGHT", voletGauche, "BOTTOMRIGHT", 0, 0)
+
+	-- Les fleches de rotation : centrees sur le volet, cote a cote.
+	local gauche = _G["CharacterModelFrameRotateLeftButton"]
+	local droite = _G["CharacterModelFrameRotateRightButton"]
+	if gauche and droite then
+		local demi = gauche:GetWidth() / 2 + ROTATION_ECART / 2
+
+		gauche:ClearAllPoints()
+		gauche:SetPoint("TOP", voletGauche, "TOP", -demi, ROTATION_Y)
+		gauche:SetFrameLevel(modele:GetFrameLevel() + 2)
+
+		droite:ClearAllPoints()
+		droite:SetPoint("TOP", voletGauche, "TOP", demi, ROTATION_Y)
+		droite:SetFrameLevel(modele:GetFrameLevel() + 2)
+	end
+end
+
+-- La ligne du niveau, de la race et de la classe.
+--
+-- PIEGE 3.3.5. Une region ne se REPARENTE pas : SetParent n'est pas dans la
+-- table des methodes de FontString de ce client. Ancrer celle du client au
+-- volet ne suffirait pas non plus -- elle appartient au cadre, donc elle se
+-- dessinerait SOUS les volets, qui sont des cadres fils. On efface donc la
+-- sienne et on pose la notre dans le volet, en recopiant son texte : c'est
+-- le client qui le compose, nous ne faisons que l'afficher.
+local function poserNiveau()
+	local source = _G["CharacterLevelText"]
+
+	if not voletDroit.ligneNiveau then
+		local ligne = voletDroit:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+		ligne:SetPoint("TOP", voletDroit, "TOP", 0, NIVEAU_Y)
+		ligne:SetWidth(NIVEAU_LARGEUR)
+		ligne:SetHeight(NIVEAU_HAUTEUR)
+		ligne:SetJustifyH("CENTER")
+		ligne:SetJustifyV("MIDDLE")
+		voletDroit.ligneNiveau = ligne
+	end
+
+	if source then
+		source:Hide()
+		voletDroit.ligneNiveau:SetText(source:GetText() or "")
+	end
 end
 
 -- LES ONGLETS LATERAUX. camelot les met en colonne A DROITE, dehors : une
@@ -523,6 +581,7 @@ local function habiller()
 	poserTitre(cadre)
 	poserFermeture(cadre)
 	poserModele()
+	poserNiveau()
 	poserEmplacements()
 	poserOnglets(cadre)
 end
