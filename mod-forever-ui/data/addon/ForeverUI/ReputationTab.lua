@@ -82,6 +82,15 @@ local FLECHE_X, FLECHE_Y = -8, -1
 local FLECHE_PLACE = 16                 -- ce que le nom lui laisse
 local COTE = 6                          -- les tranches du survol
 
+-- LA PLAQUE D'EN-TETE SE DECOUPE, ELLE NE S'ETIRE PAS.
+--
+-- Elle mesure 64 x 29 et la ligne en fait plus de trois cents : etiree telle
+-- quelle, ses coins arrondis s'etalaient en ellipses. Mesure sur l'art --
+-- alpha de la colonne de gauche -- l'arrondi court sur une dizaine de
+-- pixels ; un coin de 12 le couvre, et reste sous la moitie de la hauteur,
+-- au-dela de quoi les tranches se chevaucheraient.
+local PLAQUE_COIN = 12
+
 local ATLAS_BARRE_FOND = "common-stat-bar-bg"
 local ATLAS_BARRE_REMPLISSAGE = "common-stat-bar-white"
 local ATLAS_ENTETE = "common-button-list-collapseexpand"
@@ -107,12 +116,12 @@ local function creerLigne(index, largeur)
 	ligne:SetWidth(largeur)
 	ligne:SetHeight(ENTREE_H)
 
-	-- LE FOND D'EN-TETE, etire sur la ligne comme le fait la source.
-	local plaque = ligne:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(plaque, ATLAS_ENTETE, true)
-	plaque:SetAllPoints(ligne)
-	plaque:Hide()
-	ligne.plaque = plaque
+	-- LE FOND D'EN-TETE, en neuf tranches : seules celles du milieu s'etirent.
+	ligne.plaque = ForeverUI.CreateNineSlice(ligne, ATLAS_ENTETE, PLAQUE_COIN,
+		{ 0, 0, 0, 0 }, "BACKGROUND") or {}
+	for _, tranche in ipairs(ligne.plaque) do
+		tranche:Hide()
+	end
 
 	-- LE SURVOL D'UNE ENTREE : trois tranches, les cotes larges de 6.
 	local survol = CreateFrame("Frame", nil, ligne)
@@ -242,7 +251,9 @@ local function remplirLigne(ligne, donnees)
 
 	if donnees.entete then
 		ligne:SetHeight(ENTETE_H)
-		ligne.plaque:Show()
+		for _, tranche in ipairs(ligne.plaque) do
+			tranche:Show()
+		end
 		ligne.barre:Hide()
 		ligne.nom:SetFontObject(GameFontNormalLeft or GameFontNormal)
 		ligne.nom:SetPoint("LEFT", ligne, "LEFT", ENTETE_NOM_X, 0)
@@ -252,7 +263,9 @@ local function remplirLigne(ligne, donnees)
 		ligne.fleche:Show()
 	else
 		ligne:SetHeight(ENTREE_H)
-		ligne.plaque:Hide()
+		for _, tranche in ipairs(ligne.plaque) do
+			tranche:Hide()
+		end
 		ligne.barre:Show()
 		ligne.fleche:Hide()
 		ligne.nom:SetFontObject(GameFontHighlight or GameFontNormal)

@@ -2613,7 +2613,14 @@ def main():
     print("   en-tete : plaque=%s barre=%s | nom %s x=%s, police=%s | fleche %s (%s, %s)" % (
         r1.plaque.shown, r1.barre.shown, pn1[1], pn1[4], r1.nom.font,
         pf[1], pf[4], pf[5]))
-    assert r1.plaque.shown and not r1.barre.shown, "un en-tete n a pas de barre"
+    tranches = list(r1.plaque.values())
+    print("   plaque : %d tranches, %d visibles sur l en-tete, %d sur l entree" % (
+        len(tranches), sum(1 for t in tranches if t.shown),
+        sum(1 for t in r2.plaque.values() if t.shown)))
+    assert len(tranches) == 9, "la plaque se decoupe en neuf, elle ne s etire pas"
+    assert all(t.shown for t in tranches), "toutes paraissent sur un en-tete"
+    assert not any(t.shown for t in r2.plaque.values()), "aucune sur une entree"
+    assert not r1.barre.shown, "un en-tete n a pas de barre"
     assert (pn1[1], pn1[4]) == ("LEFT", 10), "ReputationHeaderTemplate : LEFT x = 10"
     assert r1.nom.font == "GameFontNormalLeft", "et son nom est en or"
     assert (pf[1], pf[4], pf[5]) == ("RIGHT", -8, -1), "StateIcon a RIGHT (-8, -1)"
@@ -2636,7 +2643,6 @@ def main():
     assert r2.barre.remplissage.width == 160.0,         "a l attitude maximale la barre est pleine, comme la source le veut"
     assert r3.barre.remplissage.width == 40.0, "250 sur 1000, sur 160 de barre"
     assert r2.barre.remplissage.height == 15, "ColoredProgressBarTemplate"
-    assert not r2.plaque.shown, "une entree n a pas de plaque"
 
     # LE CLIC : un en-tete se replie, une entree se choisit.
     r1.scripts.OnClick(r1)
