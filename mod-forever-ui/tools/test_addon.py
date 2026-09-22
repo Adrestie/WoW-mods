@@ -1952,15 +1952,35 @@ def main():
     assert sel.width == 203 and sel.height == 40,         "197 x 40 chez camelot, elargi au volet : ses lignes font 193 et il deborde de 5"
     assert psel[4] == 15, "il deborde de 5 a gauche de ses lignes, posees a 20"
     assert sel.shown, "il doit etre visible"
-    assert sel.foreverFond.texture is not None, "il porte le fond UI-Character-Info-Title"
+    # Le selecteur est un bouton tertiaire decoupe, avec ses deux etats.
+    normal = list(sel.foreverFond.values())
+    presse = list(sel.foreverPresse.values())
+    print("   bouton : %d tranches normales, %d pressees, coin %dx%d" % (
+        len(normal), len(presse), normal[0].width, normal[0].height))
+    assert len(normal) == 9 and len(presse) == 9,         "l art de bouton se decoupe, il ne s etire pas de 46 a 203"
+    assert normal[0].width == 11 and normal[0].height == 11,         "l about arrondi fait 11 px : au-dela le profil ne change plus"
+    assert all(t.texture is not None for t in normal)
+    assert all(not t.shown for t in presse), "au repos, seul l etat normal se voit"
+
     dore = [g.PlayerStatFrameLeftDropDownLeft, g.PlayerStatFrameLeftDropDownMiddle,
             g.PlayerStatFrameLeftDropDownRight, g.PlayerStatFrameLeftDropDownText]
     print("   cadre dore efface : %s" % [bool(r.shown) for r in dore])
     assert not any(r.shown for r in dore), "l art du menu deroulant deborde : il s efface"
     fleche = g.PlayerStatFrameLeftDropDownButton
-    pfl = fleche.points[len(list(fleche.points.values()))]
-    print("   fleche du menu : %s (%s, %s)" % (pfl[1], pfl[4], pfl[5]))
-    assert (pfl[1], pfl[3], pfl[4]) == ("RIGHT", "RIGHT", -6), "elle revient contre le bord droit"
+    print("   fleche du menu masquee : %s" % (not fleche.shown))
+    assert not fleche.shown, "toute la barre ouvre le menu, la fleche n a plus lieu d etre"
+
+    # L etat presse tient tant que la liste est ouverte.
+    lua.execute('UIDROPDOWNMENU_OPEN_MENU = PlayerStatFrameLeftDropDown')
+    lua.execute('DropDownList1:Show()')
+    g.ForeverUI.CharacterStatTabsState()
+    print("   liste ouverte : presse=%s, normal=%s" % (
+        presse[0].shown, normal[0].shown))
+    assert presse[0].shown and not normal[0].shown, "presse tant que la liste est la"
+    lua.execute('DropDownList1:Hide()')
+    g.ForeverUI.CharacterStatTabsState()
+    print("   liste fermee : presse=%s, normal=%s" % (presse[0].shown, normal[0].shown))
+    assert not presse[0].shown and normal[0].shown, "et il se releve quand elle part"
     assert sel.mouseEnabled and sel.scripts.OnMouseUp is not None,         "toute la barre ouvre le menu, pas seulement la fleche de 24"
     print("   intitules : gauche \"%s\" | droite \"%s\"" % (
         sel.foreverIntitule.text, selD.foreverIntitule.text))

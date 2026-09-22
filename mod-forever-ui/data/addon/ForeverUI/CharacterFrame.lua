@@ -329,8 +329,25 @@ local STAT_PAR_GROUPE = 6
 -- client rappelle UpdatePaperdollStats(prefixe, cle) a chaque changement.
 local STAT_ENTETE = 40
 local STAT_ENTETE_DEBORD = 5
-local STAT_FLECHE = -6                  -- le bouton du client, contre le bord
-local ATLAS_ENTETE = "ui-character-info-title"
+-- LE SELECTEUR EST UN BOUTON, PAS UN EN-TETE.
+--
+-- Il portait UI-Character-Info-Title, l'en-tete de categorie de camelot. A
+-- la demande il prend l'art de bouton commonbuttontertiaryc60, avec ses
+-- deux etats : common-button-tertiary-normal et ...-pressed, 46 x 34
+-- chacun. L'etat presse tient tant que sa liste est ouverte, ce qui donne
+-- au bouton la meme lecture qu'un onglet enfonce.
+--
+-- DECOUPE, ET NON ETIREE. Mesure sur l'art : a partir de x = 11 le profil
+-- d'une colonne ne change plus -- l'about arrondi fait donc 11 px, et le
+-- coin vaut 11 sur les deux axes (11 + 24 + 11 en largeur, 11 + 12 + 11 en
+-- hauteur). Tendue de 46 a 203, l'image ecraserait ses angles.
+--
+-- LA FLECHE S'EN VA. Le bouton du client ($parentButton) n'a plus lieu
+-- d'etre : toute la barre ouvre deja le menu.
+local ATLAS_BOUTON = "common-button-tertiary-normal"
+local ATLAS_BOUTON_PRESSE = "common-button-tertiary-pressed"
+local BOUTON_COIN = 11
+local BOUTON_MARGES = { 0, 0, 0, 0 }
 local SELECTEUR_PIECES = { "Left", "Middle", "Right", "Text" }
 local STAT_GROUPES = {
 	{
@@ -822,23 +839,31 @@ local function habillerSelecteur(selecteur)
 		end
 	end
 
-	local fond = selecteur:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, ATLAS_ENTETE, true)
-	fond:SetPoint("TOPLEFT", selecteur, "TOPLEFT")
-	fond:SetPoint("BOTTOMRIGHT", selecteur, "BOTTOMRIGHT")
-	selecteur.foreverFond = fond
+	selecteur.foreverFond = ForeverUI.CreateNineSlice(selecteur, ATLAS_BOUTON,
+		BOUTON_COIN, BOUTON_MARGES, "BACKGROUND")
+	selecteur.foreverPresse = ForeverUI.CreateNineSlice(selecteur,
+		ATLAS_BOUTON_PRESSE, BOUTON_COIN, BOUTON_MARGES, "BACKGROUND")
+	for _, tranche in ipairs(selecteur.foreverPresse or {}) do
+		tranche:Hide()
+	end
 
 	local intitule = selecteur:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	intitule:SetPoint("CENTER", selecteur, "CENTER", 0, 1)
 	selecteur.foreverIntitule = intitule
 
-	-- Le bouton du client garde le clic ; il revient contre le bord droit.
-	-- Et la barre entiere ouvre le menu, comme un en-tete de camelot : une
-	-- fleche de 24 sur une barre de 203 se chercherait.
+	-- La fleche du client s'efface : toute la barre ouvre le menu.
 	local bouton = nom and _G[nom .. "Button"]
 	if bouton then
-		bouton:ClearAllPoints()
-		bouton:SetPoint("RIGHT", selecteur, "RIGHT", STAT_FLECHE, 0)
+		bouton:Hide()
+	end
+
+	if not ForeverUI.statListeGreffee then
+		local liste = _G["DropDownList1"]
+		if liste and liste.HookScript then
+			liste:HookScript("OnShow", majEtatSelecteurs)
+			liste:HookScript("OnHide", majEtatSelecteurs)
+			ForeverUI.statListeGreffee = true
+		end
 	end
 
 	selecteur:EnableMouse(true)
@@ -847,8 +872,33 @@ local function habillerSelecteur(selecteur)
 		if PlaySound then
 			PlaySound("igMainMenuOptionCheckBoxOn")
 		end
+		majEtatSelecteurs()
 	end)
 end
+
+-- L'ETAT PRESSE TIENT TANT QUE LA LISTE EST OUVERTE.
+--
+-- Elle se ferme de deux facons : par ToggleDropDownMenu, et par
+-- CloseDropDownMenus quand on clique ailleurs -- celle-la ne passe pas par
+-- la premiere. On se greffe donc sur le OnShow et le OnHide de la liste
+-- elle-meme, qui couvrent les deux.
+local function majEtatSelecteurs()
+	local liste = _G["DropDownList1"]
+	for _, groupe in ipairs(STAT_GROUPES) do
+		local selecteur = _G[groupe.selecteur]
+		if selecteur and selecteur.foreverPresse then
+			local ouvert = liste and liste:IsShown()
+				and UIDROPDOWNMENU_OPEN_MENU == selecteur
+			for _, tranche in ipairs(selecteur.foreverPresse) do
+				if ouvert then tranche:Show() else tranche:Hide() end
+			end
+			for _, tranche in ipairs(selecteur.foreverFond or {}) do
+				if ouvert then tranche:Hide() else tranche:Show() end
+			end
+		end
+	end
+end
+ForeverUI.CharacterStatTabsState = majEtatSelecteurs
 
 -- L'intitule d'une categorie : la CVar porte une CLE (PLAYERSTAT_BASE_STATS),
 -- le texte affichable est la globale du meme nom.
