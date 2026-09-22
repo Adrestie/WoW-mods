@@ -339,15 +339,36 @@ local function hauteurDe(donnees)
 	return donnees.entete and ENTETE_H or ENTREE_H
 end
 
--- LES LIGNES DU CLIENT SE REMONTRENT SEULES, comme celles de la reputation :
--- SkillFrame_UpdateSkills repose ses SkillRankFrame et ses SkillTypeLabel a
--- chaque passage.
-local function masquerLignesDuClient()
-	for index = 1, (SKILLS_TO_DISPLAY or 12) do
-		for _, prefixe in ipairs({ "SkillRankFrame", "SkillTypeLabel" }) do
-			local vieille = _G[prefixe .. index]
-			if vieille then
-				vieille:Hide()
+-- L'ECRAN DU CLIENT SE TAIT EN ENTIER, A CHAQUE PASSAGE.
+--
+-- Il ne s'agit pas que de ses lignes. SkillFrame declare aussi un bouton de
+-- tri, un bouton "tout replier", son cadre de depliage et ses trois tuiles,
+-- deux boutons accepter / annuler, sa liste a ascenseur, et tout un cadre de
+-- detail -- ScrollFrame, ScrollChildFrame, StatusBar. Les enumerer serait
+-- une liste a tenir a jour et a oublier.
+--
+-- On masque donc TOUT ce que ce cadre porte et qui n'est pas a nous : ses
+-- regions, et ses cadres fils sauf notre panneau. GetRegions ne rend que les
+-- premieres, GetChildren que les seconds -- il faut les deux.
+--
+-- Et a chaque passage, parce que SkillFrame_UpdateSkills remontre les
+-- siennes : les masquer une fois ne tient pas.
+local function etoufferEcranDuClient()
+	local cadre = _G["SkillFrame"]
+	if not cadre then
+		return
+	end
+
+	for _, region in ipairs({ cadre:GetRegions() }) do
+		if region.Hide then
+			region:Hide()
+		end
+	end
+
+	if cadre.GetChildren then
+		for _, fils in ipairs({ cadre:GetChildren() }) do
+			if fils ~= panneau and fils.Hide then
+				fils:Hide()
 			end
 		end
 	end
@@ -391,7 +412,7 @@ local function poserListe()
 		return
 	end
 
-	masquerLignesDuClient()
+	etoufferEcranDuClient()
 
 	local total = (GetNumSkillLines and GetNumSkillLines()) or 0
 	local posees = disposer()
@@ -567,12 +588,6 @@ local function monter(hote)
 	if cadre.SetBackdrop then
 		cadre:SetBackdrop(nil)
 	end
-	for _, region in ipairs({ cadre:GetRegions() }) do
-		if region.Hide then
-			region:Hide()
-		end
-	end
-	masquerLignesDuClient()
 
 	local hauteur = hote:GetHeight() or 0
 	if hauteur < 100 then
@@ -613,11 +628,14 @@ local function monter(hote)
 		lignes[index] = ligne
 	end
 
-	local haut = cadre:CreateTexture(nil, "ARTWORK")
+	-- LES DEUX TRAITS VIVENT SUR NOTRE PANNEAU, et non sur le cadre du
+	-- client : celui-ci voit toutes ses regions masquees a chaque passage,
+	-- sans condition, et les notres y auraient disparu avec.
+	local haut = panneau:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
 	haut:SetPoint("CENTER", panneau, "TOP", 0, 0)
 
-	local bas = cadre:CreateTexture(nil, "ARTWORK")
+	local bas = panneau:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
 	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
 

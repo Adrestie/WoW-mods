@@ -102,6 +102,10 @@ function CreateFrame(kind, name, parent, template)
     f.parent = parent
     f.template = template
     f.regions = {}          -- pour GetRegions : les textures du cadre lui-meme
+    f.children = {}         -- pour GetChildren : les cadres fils
+    if parent and parent.children then
+        table.insert(parent.children, f)
+    end
     f.scripts = {}
     f.events = {}
     f.attributes = {}
@@ -157,7 +161,15 @@ function CreateFrame(kind, name, parent, template)
         if not self._highlight then self._highlight = newRegion("texture") end
         return self._highlight
     end
-    function f:SetParent(p) self.parent = p end
+    function f:SetParent(p)
+        if self.parent and self.parent.children then
+            for i, c in ipairs(self.parent.children) do
+                if c == self then table.remove(self.parent.children, i) break end
+            end
+        end
+        self.parent = p
+        if p and p.children then table.insert(p.children, self) end
+    end
     function f:GetParent() return self.parent end
     function f:GetWidth() return self.width or 0 end
     function f:GetHeight() return self.height or 0 end
@@ -231,6 +243,10 @@ function CreateFrame(kind, name, parent, template)
     -- lupa tourne en Lua 5.5, ou unpack n'est plus global ; le jeu est en
     -- 5.1, ou il l'est. Le faux client accepte les deux.
     function f:GetRegions() return (table.unpack or unpack)(self.regions) end
+    -- Les cadres FILS, que GetRegions ne rend pas : il faut les deux pour
+    -- etouffer un ecran du client.
+    function f:GetChildren() return (table.unpack or unpack)(self.children) end
+    function f:GetNumChildren() return #self.children end
     function f:GetNumRegions() return #self.regions end
     function f:CreateFontString(n, layer, font)
         local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self; return t
@@ -879,7 +895,18 @@ function CollapseSkillHeader(i) _competences()[i].replie = true end
 COMPETENCE_CHOISIE = 0
 function SetSelectedSkill(i) COMPETENCE_CHOISIE = i end
 function GetSelectedSkill() return COMPETENCE_CHOISIE end
-function SkillFrame_UpdateSkills() end
+SkillSortButton = CreateFrame("Button", "SkillSortButton", SkillFrame)
+SkillFrameCollapseAllButton = CreateFrame("Button", "SkillFrameCollapseAllButton", SkillFrame)
+SkillListScrollFrame = CreateFrame("Frame", "SkillListScrollFrame", SkillFrame)
+SkillDetailStatusBar = CreateFrame("StatusBar", "SkillDetailStatusBar", SkillFrame)
+SkillFrame:CreateTexture("SkillFrameHorizontalBarLeft", "BACKGROUND")
+function SkillFrame_UpdateSkills()
+    -- Comme le vrai : il remontre ses lignes a chaque passage.
+    for i = 1, SKILLS_TO_DISPLAY do
+        _G["SkillRankFrame" .. i]:Show()
+        _G["SkillTypeLabel" .. i]:Show()
+    end
+end
 TokenFrame = CreateFrame("Frame", "TokenFrame", CharacterFrame)
 TokenFrame:Hide()
 -- L ECRAN DE REPUTATION de 3.3.5 : quinze lignes posees une fois dans le
@@ -2958,6 +2985,24 @@ def main():
     assert sd.titre.text == "Epees",         "SelectFirstSkillIfNoneSelected : la premiere qui n est pas un en-tete"
     assert sd.jauge.width == 180, "RankBar : 180 x 29"
     assert "epees" in sd.description.text, "la description, 13e valeur de GetSkillLineInfo"
+
+    # TOUT L ECRAN DU CLIENT SE TAIT : pas seulement ses lignes. SkillFrame
+    # declare aussi un bouton de tri, un "tout replier", ses tuiles de
+    # depliage, deux boutons et tout un cadre de detail.
+    for nom in ("SkillSortButton", "SkillFrameCollapseAllButton",
+                "SkillListScrollFrame", "SkillDetailStatusBar"):
+        if g[nom]:
+            g[nom].Show(g[nom])
+    g.SkillFrame_UpdateSkills()
+    g.ForeverUI.SkillsLayout()
+    restants = [n for n in ("SkillSortButton", "SkillFrameCollapseAllButton",
+                            "SkillListScrollFrame", "SkillDetailStatusBar",
+                            "SkillRankFrame1", "SkillTypeLabel1")
+                if g[n] and g[n].shown]
+    print("   ecran du client : %d morceau(x) encore visible(s)" % len(restants))
+    assert restants == [], "il en reste : %s" % restants
+    assert g.ForeverUISkillList.shown, "mais notre panneau, lui, demeure"
+    assert g.ForeverUISkillRow1.shown, "et nos lignes avec"
 
     # REPLIER un en-tete raccourcit la liste, comme pour la reputation.
     avant = [l.nom.text for l in g.ForeverUI.SkillsTab.Rows.values() if l.shown]
