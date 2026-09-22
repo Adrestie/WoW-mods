@@ -101,6 +101,7 @@ function CreateFrame(kind, name, parent, template)
     function f:RegisterForDrag(...) self.dragButtons = { ... } end
     function f:RegisterForClicks() end
     function f:EnableMouse(v) self.mouseEnabled = (v ~= false) end
+    function f:EnableMouseWheel(v) self.wheelEnabled = (v ~= false) end
     function f:SetMovable(v) self.movable = (v ~= false) end
     function f:IsMovable() return self.movable end
     function f:SetClampedToScreen() end
@@ -579,6 +580,65 @@ end
 GearManagerToggleButton = CreateFrame("Button", "GearManagerToggleButton", CharacterFrame)
 GearManagerDialog = CreateFrame("Frame", "GearManagerDialog", UIParent)
 GearManagerDialog:Hide()
+GearManagerDialog.title = GearManagerDialog:CreateFontString("GearManagerDialogTitle", "OVERLAY")
+GearManagerDialog.buttons = {}
+MAX_EQUIPMENT_SETS_PER_PLAYER = 10
+-- Les cartes du client : un CheckButton de 36 dont l'icone est la
+-- NormalTexture et l'intitule le $parentName sous elle.
+for i = 1, MAX_EQUIPMENT_SETS_PER_PLAYER do
+    local b = CreateFrame("CheckButton", "GearSetButton" .. i, GearManagerDialog)
+    b:SetWidth(36); b:SetHeight(36)
+    local vide = b:CreateTexture(nil, "BACKGROUND")
+    vide:SetTexture("UI-EmptySlot-Disabled")   -- chemin sans antislash
+    _G["GearSetButton" .. i .. "Name"] = b:CreateFontString(
+        "GearSetButton" .. i .. "Name", "OVERLAY")
+    b.icon = b:GetNormalTexture()
+    b.text = _G["GearSetButton" .. i .. "Name"]
+    table.insert(GearManagerDialog.buttons, b)
+end
+for _, nom in ipairs({ "DeleteSet", "EquipSet", "SaveSet" }) do
+    local b = CreateFrame("Button", "GearManagerDialog" .. nom, GearManagerDialog)
+    b:SetWidth(78); b:SetHeight(22)
+end
+ENSEMBLES = { { nom = "eee", icone = "icone-eee", porte = true },
+              { nom = "aaa", icone = "icone-aaa", porte = false } }
+function GetNumEquipmentSets() return #ENSEMBLES end
+function GetEquipmentSetInfo(i)
+    local e = ENSEMBLES[i]
+    if e then return e.nom, e.icone end
+end
+function GetEquipmentSetLocations(nom)
+    for _, e in ipairs(ENSEMBLES) do
+        if e.nom == nom then
+            return e.porte and { 100, 101 } or { 200 }
+        end
+    end
+end
+function EquipmentManager_UnpackLocation(place)
+    -- < 200 : sur le joueur et hors des sacs
+    if place < 200 then return true, false, false, 1, nil end
+    return true, false, true, 1, 1
+end
+-- Ce que fait le vrai : il remplit les cartes des ensembles existants et
+-- desactive les autres.
+function GearManagerDialog_Update()
+    local total = GetNumEquipmentSets()
+    for i, bouton in ipairs(GearManagerDialog.buttons) do
+        if i <= total then
+            local nom, icone = GetEquipmentSetInfo(i)
+            bouton.name = nom
+            bouton.text:SetText(nom)
+            bouton:GetNormalTexture():SetTexture(icone)
+            bouton:SetChecked(GearManagerDialog.selectedSetName == nom)
+        else
+            bouton.name = nil
+            bouton.text:SetText("")
+            bouton:SetChecked(false)
+        end
+    end
+end
+function GearManagerDialogSaveSet_OnClick() end
+function GearManagerDialog_OnShow() end
 CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
 CharacterResistanceFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -60, -80)
 ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
@@ -791,7 +851,7 @@ def main():
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
-             "CharacterFrame.lua"]
+             "CharacterFrame.lua", "EquipmentManager.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -2562,6 +2622,43 @@ def main():
     liste.hooks.OnShow(liste)
     print("   liste plus large que son menu : %d (inchangee)" % liste.width)
     assert liste.width == 300, "un menu plus large que son bouton n est pas retreci"
+
+    # ------------------------------- gestionnaire d equipement
+    pane = g.ForeverUIEquipmentPane
+    pp3 = pane.points[1]
+    print("panneau du gestionnaire : %s sur %s de la pierre" % (pp3[1], pp3[3]))
+    assert pp3[1] == "TOPLEFT" and pp3[3] == "BOTTOMLEFT",         "il part du bas de la bande de pierre, comme chez camelot"
+    assert g.GearManagerDialog.parent.name == "ForeverUIEquipmentPane",         "la fenetre du client passe dans le volet, elle n est pas recreee"
+    assert not g.GearManagerDialog.title.shown, "son art de fenetre s efface"
+
+    lua.execute("GearManagerDialog_Update()")
+    g.ForeverUI.EquipmentPane.Apply()
+    carte = g.GearSetButton1
+    print("   carte : %dx%d, fond %dx%d a x=%s, texte a x=%s" % (
+        carte.width, carte.height, carte.foreverFond.width, carte.foreverFond.height,
+        carte.foreverFond.points[1][4], g.GearSetButton1Name.points[1][4]))
+    assert carte.width == 169 and carte.height == 44, "GearSetButtonTemplate : 169 x 44"
+    assert carte.foreverFond.points[1][4] == 42, "UI-Character-Info-OutfitCard a x = 42"
+    assert (carte.foreverFond.width, carte.foreverFond.height) == (152, 49)
+    assert g.GearSetButton1Name.points[1][4] == 55, "l intitule a LEFT 55"
+    icone = carte._normal
+    assert icone.width == 36 and icone.points[1][4] == 4, "l icone 36 a LEFT 4"
+
+    print("   coches : eee=%s (porte), aaa=%s (non porte)" % (
+        carte.foreverCoche.shown, g.GearSetButton2.foreverCoche.shown))
+    assert carte.foreverCoche.shown, "l ensemble porte montre sa coche"
+    assert not g.GearSetButton2.foreverCoche.shown, "l autre non"
+    assert not g.GearSetButton3.shown, "les cartes sans ensemble ne s affichent pas"
+
+    equiper = g.GearManagerDialogEquipSet
+    nouveau = g.ForeverUIEquipmentNewSet
+    print("   boutons : equiper %dx%d (%s, %s) | nouveau %dx%d a (%s, %s)" % (
+        equiper.width, equiper.height, equiper.points[1][4], equiper.points[1][5],
+        nouveau.width, nouveau.height, nouveau.points[1][4], nouveau.points[1][5]))
+    assert (equiper.width, equiper.height) == (99, 28), "99 x 28 chez camelot"
+    assert (equiper.points[1][4], equiper.points[1][5]) == (-50, 20)
+    assert (nouveau.width, nouveau.height) == (180, 34), "New Set : 180 x 34"
+    assert (nouveau.points[1][4], nouveau.points[1][5]) == (0, 50)
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

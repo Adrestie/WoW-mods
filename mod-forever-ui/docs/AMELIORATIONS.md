@@ -644,6 +644,40 @@ angles arrondis du cadre. Mesuré sur `UI-Character-Info-StatTab` : sur ses
 42, la bande de métal occupe 3..6 et 35..38, l'ouverture va donc de 7 à 34 —
 **28 px**, centrés. C'est la taille de l'icône.
 
+### Le gestionnaire d'équipement dans le volet droit
+
+**Relevé — `PaperDollFrame.EquipmentManagerPane` (camelot).** Le panneau part
+du `BOTTOMLEFT` de la bande de pierre et descend jusqu'au bas du volet ;
+bordure `common-insideframe` (1, 1 / −4, 2) ; liste de (5, −8) à (−20, 105) ;
+trait `UI-Character-Info-ScrollLine` au bas de la liste ; **Equip** 99 × 28 au
+`BOTTOM (−50, 20)`, **Save** 99 × 28 au `BOTTOM (50, 20)`, **New Set**
+180 × 34 au `BOTTOM (0, 50)` avec `UI-Character-Info-Icon-Add` à `LEFT (13)`.
+
+**Relevé — `GearSetButtonTemplate` (camelot), la carte d'un ensemble :**
+169 × 44 ; fond `UI-Character-Info-OutfitCard` 152 × 49 posé à `TOPLEFT x=42` ;
+survol `…-Hover` et sélection `…-Selected` à la même place ; coche
+`UI-Character-Info-Icon-Tick` à `RIGHT (−23, 0)` quand l'ensemble est **porté** ;
+intitulé `GameFontNormalLeft` 98 × 38 à `LEFT (55)` ; icône 36 × 36 à
+`LEFT (4)`, cerclée de `UI-Character-Info-OutfitIcon-Frame`.
+
+**Ce que le client porte**, et qui n'est pas recréé : `GearManagerDialog`, une
+fenêtre de 261 × 155 sur `UIPanelDialogTemplate` dont les
+`GearSetButton1..MAX_EQUIPMENT_SETS_PER_PLAYER` sont posés **en grille de
+cinq**. Une carte y est un `CheckButton` de 36 sur `PopupButtonTemplate` : son
+icône est sa **NormalTexture**, son intitulé le `$parentName` sous elle, et un
+`UI-EmptySlot-Disabled` derrière. La fenêtre passe dans le volet, son art de
+fenêtre est effacé, ses cartes se reposent en colonne et se rhabillent : c'est
+toujours le client qui tient la liste, la sélection et les infobulles.
+
+**Ce qui diffère, et pourquoi.**
+
+| Point | Raison |
+|---|---|
+| **New Set** | 3.3.5 n'a pas ce bouton : on y crée un ensemble par **Save**, qui ouvre la fenêtre de nom. Le nôtre fait la même chose après avoir vidé la sélection — exactement « enregistrer sous un nouveau nom ». |
+| **Delete gardé** | camelot efface un ensemble par le menu de sa carte, menu que 3.3.5 n'a pas. Le bouton du client est **conservé** plutôt que de retirer la seule façon d'effacer un ensemble ; il est masqué par défaut au-dessus de Save, à replacer sur décision. |
+| **La coche** | `GetEquipmentSetInfo` ne dit pas si un ensemble est porté. Elle se calcule depuis `GetEquipmentSetLocations` : porté quand chaque pièce est sur le joueur et hors des sacs. |
+| **Pas de barre de défilement** | `MinimalScrollBar` n'est pas portée. La liste défile à la **molette**, et le trait de camelot marque son bas. |
+
 **Le système de panneaux reprend la main, il faut repasser derrière.**
 `GearManagerDialog_OnShow` appelle `UpdateUIPanelPositions(CharacterFrame)`
 et `_OnHide` appelle `UpdateUIPanelPositions()` : le système de panneaux

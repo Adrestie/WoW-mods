@@ -1230,6 +1230,9 @@ local function habiller()
 	poserStatistiques()
 	poserNiveau()
 	poserOngletsVolet()
+	if ForeverUI.EquipmentPane then
+		ForeverUI.EquipmentPane.Apply()
+	end
 	poserEmplacements()
 	poserOnglets(cadre)
 end

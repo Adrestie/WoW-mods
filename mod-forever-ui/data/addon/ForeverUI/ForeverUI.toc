@@ -27,3 +27,4 @@ BottomBar.lua
 StatusBars.lua
 Bags.lua
 CharacterFrame.lua
+EquipmentManager.lua
