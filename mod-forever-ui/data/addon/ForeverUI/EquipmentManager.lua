@@ -198,14 +198,13 @@ local function ensemblesOrdonnes()
 		end
 	end
 
-	-- On elague au passage : un ensemble efface laisse sinon son nom dans
-	-- l'ordre pour toujours.
+	-- L'ORDRE NE S'ELAGUE PAS ICI. Il l'a fait, et c'etait une faute :
+	-- quand le client ne rend momentanement AUCUN ensemble -- ce qui arrive
+	-- entre un enregistrement et son evenement -- l'elagage vidait la table
+	-- pour de bon. Les noms revenaient ensuite un par un, d'ou une liste en
+	-- retard d'une operation. Un nom inconnu est simplement saute ; il ne
+	-- coute qu'une ligne de table.
 	local ordre = ordreRetenu()
-	for rang = #ordre, 1, -1 do
-		if not parNom[ordre[rang]] then
-			table.remove(ordre, rang)
-		end
-	end
 
 	local liste = {}
 	for _, nom in ipairs(ordre) do
@@ -218,7 +217,7 @@ local function ensemblesOrdonnes()
 		local nom = GetEquipmentSetInfo(index)
 		if nom and not dans[nom] then
 			liste[#liste + 1] = index
-			ordreRetenu()[#ordreRetenu() + 1] = nom
+			ordre[#ordre + 1] = nom
 		end
 	end
 	return liste
@@ -818,10 +817,9 @@ local function terminerEdition()
     if dialogue then
         dialogue.selectedSetName = e.nom
     end
-    if GearManagerDialog_Update then
-        GearManagerDialog_Update()
+    if ForeverUI.EquipmentSetsRefresh then
+        ForeverUI.EquipmentSetsRefresh()
     end
-    poserCartes()
 end
 ForeverUI.EquipmentSetEditFinish = terminerEdition
 
@@ -836,13 +834,11 @@ attenteEdition:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 attenteEdition:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
 attenteEdition:SetScript("OnEvent", function(self, evenement, termine, nom)
     if evenement == "EQUIPMENT_SETS_CHANGED" then
-        -- Le contenu des cartes vient du client : il faut le lui faire
-        -- refaire, pas seulement les reposer. Il ne s'en charge lui-meme
-        -- que fenetre ouverte, et la notre peut etre sur l'autre onglet.
-        if GearManagerDialog_Update then
-            GearManagerDialog_Update()
+        -- A l'image suivante : le client n'a pas forcement fini de refaire
+        -- sa liste quand il annonce qu'elle a change.
+        if ForeverUI.EquipmentSetsRefresh then
+            ForeverUI.EquipmentSetsRefresh()
         end
-        poserCartes()
         return
     end
     if edition and termine and nom == edition.ancien then
@@ -962,4 +958,30 @@ if hooksecurefunc and type(GearManagerDialogPopup_OnHide) == "function" then
             edition = nil
         end
     end)
+end
+
+-- LE RATTRAPAGE D'UNE IMAGE.
+--
+-- GetNumEquipmentSets et GetEquipmentSetInfo ne rendent pas le nouvel etat
+-- dans la foulee d'un enregistrement ou d'un effacement : reposer les cartes
+-- au meme instant les calculait sur l'etat d'AVANT, et la liste restait en
+-- retard d'une operation -- renommer AAA en AAB ne montrait plus rien, creer
+-- AZE faisait apparaitre AAB, et ainsi de suite.
+--
+-- On repose donc a l'IMAGE SUIVANTE, comme pour la hauteur des sacs : c'est
+-- le seul moment ou l'on est sur que le client a fini. La demande vient des
+-- evenements et de la fin d'une modification ; le rattrapage se rendort tout
+-- seul et ne se redemande jamais lui-meme.
+local rattrapageListe = CreateFrame("Frame", "ForeverUIEquipmentRecheck")
+rattrapageListe:Hide()
+rattrapageListe:SetScript("OnUpdate", function(self)
+    self:Hide()
+    if GearManagerDialog_Update then
+        GearManagerDialog_Update()
+    end
+    ForeverUI.EquipmentSetsLayout()
+end)
+
+function ForeverUI.EquipmentSetsRefresh()
+    rattrapageListe:Show()
 end

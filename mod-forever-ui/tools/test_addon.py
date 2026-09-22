@@ -639,9 +639,20 @@ for _, nom in ipairs({ "DeleteSet", "EquipSet", "SaveSet" }) do
 end
 ENSEMBLES = { { nom = "eee", icone = "icone-eee", porte = true },
               { nom = "aaa", icone = "icone-aaa", porte = false } }
-function GetNumEquipmentSets() return #ENSEMBLES end
+-- LA LISTE QUE LE CLIENT REND N'EST PAS CELLE QU'ON VIENT D'ECRIRE.
+-- GetNumEquipmentSets et GetEquipmentSetInfo repondent sur un etat PUBLIE,
+-- qui ne rattrape le vrai qu'a EQUIPMENT_SETS_CHANGED. C'est ce decalage
+-- qui laissait la liste en retard d'une operation, et le banc l'ignorait.
+-- GetEquipmentSetInfoByName, lui, repond tout de suite -- c'est ce que le
+-- jeu montre.
+PUBLIES = {}
+function publierEnsembles()
+    PUBLIES = {}
+    for i, e in ipairs(ENSEMBLES) do PUBLIES[i] = e end
+end
+function GetNumEquipmentSets() return #PUBLIES end
 function GetEquipmentSetInfo(i)
-    local e = ENSEMBLES[i]
+    local e = PUBLIES[i]
     if e then return e.nom, e.icone end
 end
 -- Les places sont indexees par EMPLACEMENT d'equipement, et le quatrieme
@@ -763,6 +774,7 @@ function RecalculateGearManagerDialogPopup() RECALCULE = (RECALCULE or 0) + 1 en
 function GearManagerDialogPopup_OnShow() end
 function GearManagerDialogPopup_Update() end
 -- Ce que fait le vrai OnHide : il oublie le nom saisi.
+publierEnsembles()
 function GearManagerDialogPopup_OnHide()
     GearManagerDialogPopup.name = nil
     if GearManagerDialogPopupEditBox.SetText then
@@ -2923,11 +2935,21 @@ def main():
     print("   clic sur l engrenage : ensemble choisi = %s" % (
         g.GearManagerDialog.selectedSetName))
     assert g.GearManagerDialog.selectedSetName == "eee",         "il choisit l ensemble : c est de lui que la fenetre tire nom et icone"
+    def imageSuivante():
+        """Le rattrapage repose la liste a l image d apres, comme en jeu."""
+        r = g.ForeverUIEquipmentRecheck
+        if r.shown:
+            r.scripts.OnUpdate(r, 0.02)
+
     def finirRemplacement(ancien):
-        """Le client annonce la fin par EQUIPMENT_SWAP_FINISHED."""
+        """La suite reelle : fin du remplacement, puis publication de la
+        nouvelle liste et son evenement, puis le rattrapage d une image."""
         att = g.ForeverUIEquipmentEdit
         if att.shown:
             att.scripts.OnEvent(att, "EQUIPMENT_SWAP_FINISHED", True, ancien)
+        lua.execute("publierEnsembles()")
+        att.scripts.OnEvent(att, "EQUIPMENT_SETS_CHANGED")
+        imageSuivante()
 
     # MODIFIER UN ENSEMBLE : memes objets, nouveau nom, a la meme place.
     lua.execute('ForeverUIDB.ordreEnsembles = { "eee", "aaa" }')
@@ -2977,9 +2999,55 @@ def main():
     # liste et le defilement masque les autres.
     lua.execute('ForeverUIEquipmentPane:SetHeight(400)')
     att.scripts.OnEvent(att, "EQUIPMENT_SETS_CHANGED")
+    assert g.ForeverUIEquipmentRecheck.shown,         "l evenement demande un rattrapage, il ne repose pas tout de suite"
+    imageSuivante()
     visibles = [b.name for b in g.GearManagerDialog.buttons.values() if b.shown]
     print("   apres EQUIPMENT_SETS_CHANGED : cartes visibles %s" % visibles)
     assert "eee4" in visibles, "l ensemble renomme doit apparaitre sans autre secousse"
+    # LA SEQUENCE SIGNALEE, en repartant de zero : creer AAA, le renommer
+    # en AAB, creer AZE, supprimer AAB. La liste doit suivre a chaque pas,
+    # et non montrer l etat d avant.
+    lua.execute('ENSEMBLES = {} publierEnsembles()')
+    lua.execute('ForeverUIDB.ordreEnsembles = {}')
+    lua.execute('GearManagerDialog_Update()')
+    g.ForeverUI.EquipmentSetsLayout()
+
+    def visiblesMaintenant():
+        return [b.name for b in g.GearManagerDialog.buttons.values() if b.shown]
+
+    def apresChangement():
+        lua.execute("publierEnsembles()")
+        att2 = g.ForeverUIEquipmentEdit
+        att2.scripts.OnEvent(att2, "EQUIPMENT_SETS_CHANGED")
+        imageSuivante()
+
+    lua.execute('SaveEquipmentSet("AAA", 1)')
+    apresChangement()
+    print("   sequence : creer AAA -> %s" % visiblesMaintenant())
+    assert visiblesMaintenant() == ["AAA"], "AAA doit s afficher"
+
+    lua.execute('SaveEquipmentSet("AAB", 1) DeleteEquipmentSet("AAA")')
+    lua.execute('ForeverUIDB.ordreEnsembles = { "AAB" }')
+    apresChangement()
+    print("   sequence : AAA renomme en AAB -> %s" % visiblesMaintenant())
+    assert visiblesMaintenant() == ["AAB"], "le renomme doit rester visible"
+
+    lua.execute('SaveEquipmentSet("AZE", 2)')
+    apresChangement()
+    print("   sequence : creer AZE -> %s" % visiblesMaintenant())
+    assert visiblesMaintenant() == ["AAB", "AZE"], "les deux doivent etre la"
+
+    lua.execute('DeleteEquipmentSet("AAB")')
+    apresChangement()
+    print("   sequence : supprimer AAB -> %s" % visiblesMaintenant())
+    assert visiblesMaintenant() == ["AZE"], "AZE reste, seul"
+
+    # On rend au faux client l etat que la suite du banc attend.
+    lua.execute('ENSEMBLES = { { nom = "eee", icone = "icone-eee", porte = true },'
+                '              { nom = "aaa", icone = "icone-aaa", porte = false } }')
+    lua.execute('ForeverUIDB.ordreEnsembles = { "eee", "aaa" }')
+    apresChangement()
+
     assert "eee4" in noms and ancien not in noms,         "au plafond, l ancien part d abord : son equipement est porte"
     lua.execute('MAX_EQUIPMENT_SETS_PER_PLAYER = 10')
     lua.execute('ENSEMBLES[1].nom = "eee" ENSEMBLES[2].nom = "aaa"')
