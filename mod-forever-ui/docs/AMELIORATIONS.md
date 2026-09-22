@@ -510,6 +510,24 @@ l'en-tête de `CharacterStatFrameCategoryTemplate` (camelot) prend leur place :
 | Fond | `UI-Character-Info-Title` tendu du `TOPLEFT` au `BOTTOMRIGHT` | idem (`ui-character-info-title`, feuille 10) |
 | Intitulé | `GameFontHighlight` centré à (0, 1) | idem |
 
+**Le sélecteur est un bouton, plus un en-tête.** Écart assumé, sur demande :
+il portait `UI-Character-Info-Title`, l'en-tête de catégorie de camelot ; il
+prend désormais l'art de bouton `commonbuttontertiaryc60`, avec ses deux
+états `common-button-tertiary-normal` et `…-pressed` (46 × 34 chacun).
+L'état pressé **tient tant que sa liste est ouverte**.
+
+Découpé et non étiré : mesuré sur l'art, à partir de `x = 11` le profil d'une
+colonne ne change plus — l'about arrondi fait 11 px, donc coin de **11** sur
+les deux axes (11 + 24 + 11 en largeur, 11 + 12 + 11 en hauteur). Tendue de
+46 à 203, l'image écraserait ses angles.
+
+La liste se ferme de **deux** façons : par `ToggleDropDownMenu`, et par
+`CloseDropDownMenus` quand on clique ailleurs — celle-là ne passe pas par la
+première. L'état se relève donc sur le `OnShow` et le `OnHide` de la **liste
+elle-même**, qui couvrent les deux. La flèche du client (`$parentButton`) est
+masquée : toute la barre ouvre déjà le menu.
+
+
 L'intitulé ne se lit pas sur le cadre : la catégorie choisie vit dans une CVar
 (`playerStatLeftDropdown`, `playerStatRightDropdown`) qui porte une **clé**
 (`PLAYERSTAT_BASE_STATS`) ; le texte affichable est la globale du même nom. Le
