@@ -198,26 +198,45 @@ local function ensemblesOrdonnes()
 		end
 	end
 
-	-- L'ORDRE NE S'ELAGUE PAS ICI. Il l'a fait, et c'etait une faute :
-	-- quand le client ne rend momentanement AUCUN ensemble -- ce qui arrive
-	-- entre un enregistrement et son evenement -- l'elagage vidait la table
-	-- pour de bon. Les noms revenaient ensuite un par un, d'ou une liste en
-	-- retard d'une operation. Un nom inconnu est simplement saute ; il ne
-	-- coute qu'une ligne de table.
+	-- L'ORDRE RETENU NE GARDE QU'UNE FOIS CHAQUE NOM.
+	--
+	-- Il finissait par en tenir plusieurs copies : un nom que le client ne
+	-- publie pas a cet instant est saute par la premiere boucle, et la
+	-- seconde le rajoute des qu'il reparait. Quelques operations suffisaient
+	-- a obtenir "aab, aab, aze, aab, azq, zzzaq, aab". Chaque copie prenait
+	-- un rang, l'ensemble se posait quatre fois, et la carte finissait a un
+	-- rang au-dela du nombre d'ensembles -- donc masquee, liste vide.
+	--
+	-- ET IL SE NETTOIE, mais SEULEMENT quand le client publie quelque chose.
+	-- L'elaguer sans condition etait la faute d'avant : entre un
+	-- enregistrement et son evenement, le client ne rend AUCUN ensemble, et
+	-- la table se vidait pour de bon. A zero ensemble publie, on ne touche
+	-- a rien.
 	local ordre = ordreRetenu()
 
-	local liste = {}
+	local liste, retenu = {}, {}
 	for _, nom in ipairs(ordre) do
-		if parNom[nom] then
+		if parNom[nom] and not dans[nom] then
 			liste[#liste + 1] = parNom[nom]
 			dans[nom] = true
+			retenu[#retenu + 1] = nom
 		end
 	end
 	for index = 1, total do
 		local nom = GetEquipmentSetInfo(index)
 		if nom and not dans[nom] then
 			liste[#liste + 1] = index
-			ordre[#ordre + 1] = nom
+			dans[nom] = true
+			retenu[#retenu + 1] = nom
+		end
+	end
+
+	if total > 0 then
+		for rang = #ordre, 1, -1 do
+			ordre[rang] = nil
+		end
+		for rang, nom in ipairs(retenu) do
+			ordre[rang] = nom
 		end
 	end
 	return liste
@@ -554,9 +573,12 @@ local function poserCartes()
 
 	for position = 1, #dialogue.buttons do
 		local bouton = parRang[position]
-		local index = position
+		-- Le rang n'est PAS l'indice du client : c'est ordre[position] qui
+		-- le donne. Confondre les deux masquait toute carte posee a un rang
+		-- superieur au nombre d'ensembles.
+		local index = ordre[position]
 		local rang = position - decalage
-		if bouton and index <= total and rang >= 1 and rang <= place then
+		if bouton and index and index <= total and rang >= 1 and rang <= place then
 			bouton:ClearAllPoints()
 			if precedent then
 				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, 0)
@@ -792,13 +814,29 @@ attenteEdition:Hide()
 
 local function remplacerDansOrdre(ancien, nouveau)
     local ordre = ordreRetenu()
+    local place
     for rang, connu in ipairs(ordre) do
         if connu == ancien then
             ordre[rang] = nouveau
-            return
+            place = rang
+            break
         end
     end
-    ordre[#ordre + 1] = nouveau
+    if not place then
+        place = #ordre + 1
+        ordre[place] = nouveau
+    end
+    -- Le nouveau nom pouvait deja figurer ailleurs -- un ancien renommage,
+    -- un ensemble efface puis recree. Deux copies, et il prendrait deux
+    -- rangs. On n'en garde que celle qu'on vient de poser.
+    for rang = #ordre, 1, -1 do
+        if rang ~= place and ordre[rang] == nouveau then
+            table.remove(ordre, rang)
+            if rang < place then
+                place = place - 1
+            end
+        end
+    end
 end
 
 local function terminerEdition()

@@ -3082,6 +3082,30 @@ def main():
     print("   liste inchangee : %d pose(s) sur 10 controles" % poses)
     assert poses == 0, "liste inchangee, rien a reposer"
 
+    # L ETAT CORROMPU RAPPORTE PAR /fui sets, rejoue tel quel : l ordre
+    # retenu tenait sept entrees pour UN ensemble publie -- "aab" quatre
+    # fois, plus trois noms effaces. L ensemble se posait donc quatre fois,
+    # la carte finissait au rang 4 pour un total de 1, et se masquait.
+    lua.execute('ENSEMBLES = { { nom = "aab", icone = "icone-aab", porte = false } }')
+    lua.execute("publierEnsembles()")
+    lua.execute('ForeverUIDB.ordreEnsembles = '
+                '{ "aab", "aab", "aze", "aab", "azq", "zzzaq", "aab" }')
+    lua.execute('GearManagerDialog_Update()')
+    g.ForeverUI.EquipmentSetsLayout()
+    pose = list(g.ForeverUI.EquipmentSetsOrder().values())
+    print("   ordre corrompu : pose %s | retenu %s | visibles %s" % (
+        pose, list(g.ForeverUIDB.ordreEnsembles.values()), visiblesMaintenant()))
+    assert pose == [1], "un ensemble publie ne se pose qu une fois"
+    assert visiblesMaintenant() == ["aab"], "et sa carte doit etre visible"
+    assert list(g.ForeverUIDB.ordreEnsembles.values()) == ["aab"],         "l ordre retenu se nettoie des doublons et des noms effaces"
+
+    # A ZERO ENSEMBLE PUBLIE, en revanche, l ordre ne doit PAS etre vide :
+    # c est l etat momentane entre un enregistrement et son evenement.
+    lua.execute('ENSEMBLES = {} publierEnsembles()')
+    g.ForeverUI.EquipmentSetsOrder()
+    print("   client muet : retenu %s" % list(g.ForeverUIDB.ordreEnsembles.values()))
+    assert list(g.ForeverUIDB.ordreEnsembles.values()) == ["aab"],         "le client ne publie rien : on ne touche pas a l ordre"
+
     # LE TEMOIN ne doit rien casser, et dire ce qu il voit.
     g.ForeverUI.EquipmentSetsDebug()
     print("   temoin /fui sets : rapport rendu sans erreur")
