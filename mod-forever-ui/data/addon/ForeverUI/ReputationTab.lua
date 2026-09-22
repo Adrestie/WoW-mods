@@ -107,7 +107,18 @@ local PLAQUE_COIN = 12
 local JAUGE_COIN = 10
 
 local ATLAS_BARRE_FOND = "common-stat-bar-bg"
-local ATLAS_BARRE_REMPLISSAGE = "common-stat-bar-white"
+-- LE REMPLISSAGE EST CUIT, PAS PRIS DANS SA FEUILLE.
+--
+-- camelot le decoupe par common-stat-bar-Mask, une MaskTexture que 3.3.5 n'a
+-- pas : sans elle, le remplissage avait des bouts carres qui ne suivaient pas
+-- le contour du fond. tools/cuire_masque.py multiplie donc l'alpha du masque
+-- dans celui du remplissage, une fois pour toutes -- et il le DECOUPE comme
+-- notre fond, bouts de 10 px et milieu etire, pour que les deux contours se
+-- superposent exactement.
+--
+-- Le resultat est un fichier a lui seul, calcule pour une barre de 160 : on
+-- le rogne a la fraction voulue, comme SetFillPercent.
+local CHEMIN_REMPLISSAGE = "Interface\\ForeverUI\\Bars\\statbarfill"
 local ATLAS_ENTETE = "common-button-list-collapseexpand"
 local ATLAS_PLUS = "common-button-list-plus"
 local ATLAS_MOINS = "common-button-list-minus"
@@ -212,10 +223,23 @@ local function poserBarre(ligne, donnees)
 	if donnees.maximum and donnees.maximum > 0 then
 		fraction = donnees.valeur / donnees.maximum
 	end
+	if fraction < 0 then
+		fraction = 0
+	elseif fraction > 1 then
+		fraction = 1
+	end
 
-	ForeverUI.SetAtlasFill(barre.remplissage, ATLAS_BARRE_REMPLISSAGE,
-		fraction, BARRE_L)
-	barre.remplissage:SetHeight(REMPLISSAGE_H)
+	-- SetFillPercent : largeur = fraction x largeur de barre, et la texture
+	-- rognee d'autant. Une largeur nulle est refusee par le client.
+	if fraction * BARRE_L < 1 then
+		barre.remplissage:Hide()
+	else
+		barre.remplissage:SetTexture(CHEMIN_REMPLISSAGE)
+		barre.remplissage:SetTexCoord(0, fraction, 0, 1)
+		barre.remplissage:SetWidth(BARRE_L * fraction)
+		barre.remplissage:SetHeight(REMPLISSAGE_H)
+		barre.remplissage:Show()
+	end
 
 	local couleur = FACTION_BAR_COLORS and FACTION_BAR_COLORS[donnees.attitude]
 	if couleur then

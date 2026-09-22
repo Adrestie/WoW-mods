@@ -17,7 +17,7 @@
 """Cuire le masque des onglets lateraux dans l'alpha de leurs icones.
 
 POURQUOI. camelot decoupe l'icone d'un onglet par une MaskTexture --
-LargeSideTabButtonTemplate la declare sur common-sidetab-mask -- et 3.3.5
+LargeSideTabButtonTemplate la declare sur common-sidetab-mask   # et 3.3.5
 n'en a pas. Ses angles restaient donc carres la ou la source les arrondit.
 Ce que le client ne sait pas faire a l'ecran, on le fait AVANT : l'alpha du
 masque est multiplie dans celui de l'icone, une fois pour toutes.
@@ -47,7 +47,7 @@ CE QUI RESTE CARRE. L'onglet du personnage porte le PORTRAIT du joueur, pose
 par SetPortraitTexture a chaque changement d'apparence : il n'y a pas de
 fichier a cuire. Ses angles restent donc vifs.
 
-OU VONT LES FICHIERS. L'icone brute reste dans icons/ -- c'est la provenance,
+OU VONT LES FICHIERS. L'icone brute reste dans icons/   # c'est la provenance,
 et l'entree de cette cuisson. La version cuite va dans tabicons/, et c'est
 elle que l'addon affiche. Relancer cet outil refait la seconde a partir de
 la premiere, sans wow.export.
@@ -252,9 +252,86 @@ def cuire(nom, masque):
     return cible
 
 
+# ---------------------------------------------------------------------------
+# LE REMPLISSAGE DES JAUGES
+#
+# camelot le decoupe par common-stat-bar-Mask, une MaskTexture ancree LEFT et
+# RIGHT sur la barre -- donc tendue sur toute sa largeur -- a sa hauteur
+# d'atlas, 29, celle de la barre. Le remplissage, lui, fait 15 de haut et
+# s'ancre a LEFT : il occupe donc la bande centrale, de 7 a 22.
+#
+# MAIS NOTRE FOND EST DECOUPE, PAS TENDU. Le sien s'etire avec la barre, le
+# notre garde ses bouts a 10 px et n'etire que le milieu. Un masque tendu ne
+# coinciderait donc plus avec lui : il est decoupe de la meme facon, et les
+# deux contours se superposent exactement.
+JAUGE_L, JAUGE_H = 160.0, 29.0   # largeur et hauteur de la barre
+JAUGE_COIN = 10.0   # le meme que le fond
+JAUGE_REMPLISSAGE_H = 15.0
+JAUGE_ECHELLE = 2   # on cuit au double, pour le contour
+
+MASQUE_JAUGE = os.path.join(ART, "common", "commonstatbarmaskc60.blp")
+REMPLISSAGE = os.path.join(ART, "common", "commonstatbarc60.blp")
+# common-stat-bar-white, dans sa feuille
+REMPLISSAGE_RECT = (0.003906, 0.941406, 0.406250, 0.523438)
+SORTIE_JAUGE = os.path.join(ART, "bars")
+
+
+def _decoupe(x, longueur, coin, source):
+    """Ou lire, dans une image de `source` de large, un point pose a `x` sur
+    une bande de `longueur`, quand l'image est DECOUPEE : ses deux bouts de
+    `coin` restent a l'echelle, seul le milieu s'etire."""
+    if x < coin:
+        return x / source
+    if x > longueur - coin:
+        return (source - (longueur - x)) / source
+    milieu = (x - coin) / (longueur - 2.0 * coin)
+    return (coin + milieu * (source - 2.0 * coin)) / source
+
+
+def cuire_jauge():
+    if not os.path.exists(MASQUE_JAUGE) or not os.path.exists(REMPLISSAGE):
+        print("   le masque ou la feuille de jauge manque")
+        return None
+
+    ml, mh, mpix = _lire(MASQUE_JAUGE)
+    fl, fh, fpix = _lire(REMPLISSAGE)
+
+    u1, u2, v1, v2 = REMPLISSAGE_RECT
+    largeur = int(JAUGE_L * JAUGE_ECHELLE)
+    hauteur = int(JAUGE_REMPLISSAGE_H * JAUGE_ECHELLE)
+    pixels = bytearray(largeur * hauteur * 4)
+
+    haut = (JAUGE_H - JAUGE_REMPLISSAGE_H) / 2.0
+
+    for j in range(hauteur):
+        v = (j + 0.5) / hauteur
+        y = haut + v * JAUGE_REMPLISSAGE_H          # en repere de la barre
+        my = y / JAUGE_H
+        for i in range(largeur):
+            u = (i + 0.5) / largeur
+            base = (i + j * largeur) * 4
+
+            # La couleur vient du remplissage, lu dans sa feuille.
+            r, vert, b, a = _lire_bilineaire(u1 + (u2 - u1) * u,
+                                             v1 + (v2 - v1) * v, fl, fh, fpix)
+            pixels[base:base + 3] = bytes((r, vert, b))
+            if a == 0:
+                continue
+
+            mx = _decoupe(u * JAUGE_L, JAUGE_L, JAUGE_COIN, ml)
+            m = _alpha_du_masque(mx, my, ml, mh, mpix)
+            pixels[base + 3] = int(a * m / 255.0 + 0.5)
+
+    os.makedirs(SORTIE_JAUGE, exist_ok=True)
+    cible = os.path.join(SORTIE_JAUGE, "statbarfill.blp")
+    io.open(cible, "wb").write(blp.encoder(largeur, hauteur, bytes(pixels)))
+    _png(cible[:-4] + ".png", largeur, hauteur, pixels)
+    return cible
+
+
 def main():
     if not os.path.exists(MASQUE):
-        raise SystemExit("le masque manque : %s -- le faire entrer avec "
+        raise SystemExit("le masque manque : %s   # le faire entrer avec "
                          "tools/ajouter_feuilles.py" % MASQUE)
 
     masque = _lire(MASQUE)
@@ -269,6 +346,11 @@ def main():
         print("   %-60s %8d o" % (os.path.relpath(cible, RACINE),
                                   os.path.getsize(cible)))
         faits += 1
+
+    jauge = cuire_jauge()
+    if jauge:
+        print("   %-60s %8d o" % (os.path.relpath(jauge, RACINE),
+                                  os.path.getsize(jauge)))
 
     print("%d icone(s) cuite(s) ; poser dans le client avec tools/deployer.py" % faits)
 

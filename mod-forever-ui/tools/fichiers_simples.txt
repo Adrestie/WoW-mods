@@ -45,3 +45,7 @@ interface/icons/classicon_rogue.blp
 interface/icons/classicon_shaman.blp
 interface/icons/classicon_warlock.blp
 interface/icons/classicon_warrior.blp
+
+# Le masque des jauges. Comme celui des onglets, il n'est pas affiche :
+# tools/cuire_masque.py le cuit dans le remplissage.
+interface/common/commonstatbarmaskc60.blp

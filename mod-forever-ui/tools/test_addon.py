@@ -2650,6 +2650,8 @@ def main():
         len(fonds), r2.barre.remplissage.width))
     assert len(fonds) == 9, "common-stat-bar-bg se decoupe en neuf"
     assert r2.barre.remplissage.layer == "BORDER",         "le remplissage reste une seule texture, rognee"
+    assert "statbarfill" in (r2.barre.remplissage.texture or ""),         "et c est la version CUITE au masque, decoupee comme le fond"
+    assert abs(r3.barre.remplissage.texcoord[2] - 0.25) < 1e-6,         "rognee a la fraction : 250 sur 1000"
 
     # LE CLIC : un en-tete se replie, une entree se choisit.
     r1.scripts.OnClick(r1)
