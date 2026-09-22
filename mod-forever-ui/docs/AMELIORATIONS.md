@@ -541,8 +541,27 @@ ni `SetPortraitZoom`** — vérifié dans `Wow.exe`, où seul `SetModelScale`
 figure. Le personnage est donc reculé par `SetModelScale` à la demande (0,1 à l'essai).
 Valeur choisie à l'œil, pas relevée.
 
-Elle se repose **à chaque passage de l'habillage** : le client refait son
-modèle quand le personnage change d'apparence et l'échelle repart alors à 1.
+Relevé dans `Wow.exe`, ce client ne porte que **deux leviers** :
+
+| Levier | Ce qu'il fait | Ce qu'on voit |
+|---|---|---|
+| `SetModelScale(s)` | réduit le **modèle** ; la caméra ne bouge pas | le modèle se réduit **autour de son origine**, il paraît donc aussi glisser vers le bas du cadre |
+| `SetPosition(profondeur, latéral, hauteur)` | déplace le modèle devant la caméra | l'éloigner le rapetisse **sans changer son cadrage** : c'est le vrai recul |
+
+Absents : `SetCameraDistance`, `SetCameraPosition`, `SetCameraTarget`,
+`SetCustomCamera`, `SetPortraitZoom`, `SetCamDistanceScale`. Aucune des deux
+valeurs ne se relève dans la source — camelot cadre par une scène que 3.3.5
+n'a pas — elles se jugent donc à l'œil, d'où **`/fui modele`** :
+
+```
+/fui modele                    ce que porte le modèle
+/fui modele echelle 0.8        SetModelScale
+/fui modele position -5 0 0    SetPosition
+/fui modele position defaut    rend la position au client
+```
+
+Le réglage se repose **à chaque passage de l'habillage** : le client refait son
+modèle quand le personnage change d'apparence et tout repart à zéro.
 `UNIT_MODEL_CHANGED` est écouté pour cette raison.
 
 **Le séparateur des volets passe devant l'encadrement.** L'habillage de la

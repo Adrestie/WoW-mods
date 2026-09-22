@@ -135,7 +135,22 @@ local MODELE_Y = 24
 -- scene, et ce client n'a ni SetCamDistanceScale ni SetPortraitZoom --
 -- verifie dans Wow.exe, seul SetModelScale y figure. C'est donc par lui
 -- qu'on recule le personnage. Valeur choisie a l'oeil, a la demande.
+-- CE QUE CE CLIENT PORTE, releve dans Wow.exe : SetModelScale et
+-- GetModelScale, SetPosition et GetPosition, SetCamera, SetFacing. PAS de
+-- SetCameraDistance, SetCameraPosition, SetCameraTarget, SetCustomCamera ni
+-- SetPortraitZoom. Deux leviers, donc, et deux seulement :
+--
+--   ECHELLE   SetModelScale reduit le MODELE. La camera ne bouge pas, et le
+--             modele se reduit autour de son origine -- il parait donc aussi
+--             glisser vers le bas du cadre.
+--   POSITION  SetPosition(profondeur, lateral, hauteur) deplace le modele
+--             devant la camera. L'eloigner le rapetisse SANS changer son
+--             cadrage : c'est le vrai recul.
+--
+-- Reglable en jeu par /fui modele, pour juger a l'oeil ; ce qui est ici est
+-- ce qui s'applique au chargement.
 local MODELE_ECHELLE = 0.1     -- VALEUR D'ESSAI
+local MODELE_POSITION = nil    -- { profondeur, lateral, hauteur }, nil = celle du client
 
 -- LE PANNEAU DES RESISTANCES se decale vers la droite. On garde son
 -- ancrage d'origine et on n'y ajoute que ce decalage, sinon chaque passage
@@ -541,6 +556,8 @@ local function poserEmplacements()
 	end
 end
 
+ForeverUI.ModeleReglage = { echelle = MODELE_ECHELLE, position = MODELE_POSITION }
+
 local function poserModele()
 	local modele = CharacterModelFrame
 	if not modele then
@@ -552,9 +569,13 @@ local function poserModele()
 	modele:SetPoint("BOTTOMRIGHT", voletGauche, "BOTTOMRIGHT", 0, MODELE_Y)
 
 	-- A reposer a chaque passage : le client refait son modele quand le
-	-- personnage change d'apparence, et l'echelle repart alors a 1.
-	if modele.SetModelScale then
-		modele:SetModelScale(MODELE_ECHELLE)
+	-- personnage change d'apparence, et le reglage repart alors a zero.
+	local reglage = ForeverUI.ModeleReglage
+	if modele.SetModelScale and reglage.echelle then
+		modele:SetModelScale(reglage.echelle)
+	end
+	if modele.SetPosition and reglage.position then
+		modele:SetPosition(reglage.position[1], reglage.position[2], reglage.position[3])
 	end
 
 	-- Les fleches de rotation : centrees sur le volet, cote a cote.
@@ -999,4 +1020,60 @@ function ForeverUI.CharacterSheetDebug()
 	end)
 	guetteur:Show()
 	dire("promenez le curseur sur un emplacement pendant cinq secondes.")
+end
+
+-- LE REGLAGE DU MODELE EN JEU. Aucune des deux valeurs ne se releve dans la
+-- source -- camelot cadre par une scene que 3.3.5 n'a pas -- elles se jugent
+-- donc a l'oeil. La commande les pose et les rend, pour pouvoir comparer les
+-- deux leviers sans recharger l'interface.
+--
+--   /fui modele                      ce que porte le modele
+--   /fui modele echelle 0.8          SetModelScale
+--   /fui modele position -5 0 0      SetPosition(profondeur, lateral, hauteur)
+--   /fui modele position defaut      rend la position au client
+function ForeverUI.CharacterModelTune(argument)
+	local dire = function(texte)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	local modele = _G["CharacterModelFrame"]
+	if not modele then
+		return
+	end
+
+	local cle, reste = string.match(argument or "", "^(%S*)%s*(.*)$")
+	cle = string.lower(cle or "")
+	local reglage = ForeverUI.ModeleReglage
+
+	if cle == "echelle" then
+		reglage.echelle = tonumber(reste) or reglage.echelle
+	elseif cle == "position" then
+		if string.lower(reste) == "defaut" then
+			reglage.position = nil
+			modele:RefreshUnit()
+		else
+			local x, y, z = string.match(reste, "^(%-?[%d%.]+)%s+(%-?[%d%.]+)%s+(%-?[%d%.]+)$")
+			if x then
+				reglage.position = { tonumber(x), tonumber(y), tonumber(z) }
+			else
+				dire("modele : /fui modele position <profondeur> <lateral> <hauteur>")
+				return
+			end
+		end
+	elseif cle ~= "" then
+		dire("modele : echelle <n> | position <x> <y> <z> | position defaut")
+		return
+	end
+
+	if ForeverUI.CharacterSheet then
+		ForeverUI.CharacterSheet.Apply()
+	end
+
+	local echelle = modele.GetModelScale and modele:GetModelScale()
+	local x, y, z = nil, nil, nil
+	if modele.GetPosition then
+		x, y, z = modele:GetPosition()
+	end
+	dire(string.format("modele : echelle=%s position=(%s, %s, %s)",
+		tostring(echelle), tostring(x), tostring(y), tostring(z)))
 end

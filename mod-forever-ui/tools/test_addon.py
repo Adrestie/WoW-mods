@@ -147,6 +147,12 @@ function CreateFrame(kind, name, parent, template)
     function f:IsShown() return self.shown end
     function f:SetFrameStrata(s) self.strata = s end
     function f:SetModelScale(v) self.modelScale = v end
+    function f:SetPosition(x, y, z) self.pos = { x, y, z } end
+    function f:GetPosition()
+        local p = self.pos or { 0, 0, 0 }
+        return p[1], p[2], p[3]
+    end
+    function f:RefreshUnit() self.refreshed = (self.refreshed or 0) + 1 end
     function f:GetModelScale() return self.modelScale or 1 end
     function f:SetFrameLevel(l) self.frameLevel = l end
     function f:SetScale(v) self.scale = v end
@@ -1695,7 +1701,21 @@ def main():
     # quand le personnage change d apparence.
     echelle = g.CharacterModelFrame.modelScale
     print("   echelle du modele : %.2f" % echelle)
-    assert abs(echelle - 0.1) < 0.001, "SetModelScale, seul reglage que ce client porte"
+    assert abs(echelle - 0.1) < 0.001, "la valeur d essai en place au chargement"
+
+    # Les deux leviers se reglent en jeu : rien ne se releve dans la source,
+    # ils se jugent a l oeil.
+    g.SlashCmdList["FOREVERUI"]("modele echelle 0.55")
+    print("   /fui modele echelle 0.55 -> %.2f" % g.CharacterModelFrame.modelScale)
+    assert abs(g.CharacterModelFrame.modelScale - 0.55) < 0.001
+    g.SlashCmdList["FOREVERUI"]("modele position -5 0 0")
+    pos = list(g.CharacterModelFrame.pos.values())
+    print("   /fui modele position -5 0 0 -> (%s, %s, %s)" % (pos[0], pos[1], pos[2]))
+    assert pos == [-5, 0, 0], "SetPosition(profondeur, lateral, hauteur)"
+    g.SlashCmdList["FOREVERUI"]("modele position defaut")
+    print("   position rendue au client : %d rafraichissement" % g.CharacterModelFrame.refreshed)
+    assert g.CharacterModelFrame.refreshed >= 1, "le client doit reprendre la main"
+    g.SlashCmdList["FOREVERUI"]("modele echelle 0.1")
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot

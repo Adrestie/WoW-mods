@@ -281,6 +281,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic des sacs disponible.")
 		end
+	elseif command == "modele" then
+		if ForeverUI.CharacterModelTune then
+			ForeverUI.CharacterModelTune(argument)
+		else
+			say("aucun reglage du modele disponible.")
+		end
 	elseif command == "perso" then
 		if ForeverUI.CharacterSheetDebug then
 			ForeverUI.CharacterSheetDebug()
@@ -302,6 +308,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui modele")
 	end
 end
