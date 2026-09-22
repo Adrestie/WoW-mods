@@ -652,8 +652,25 @@ function ForeverUI.ReputationDebug()
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
 	end
 
-	dire(string.format("reputation : %d factions, decalage %d, %d lignes",
-		(GetNumFactions and GetNumFactions()) or 0, decalage, #lignes))
+	local total = (GetNumFactions and GetNumFactions()) or 0
+	dire(string.format("reputation : %d factions, decalage %d, %d lignes, %d posees",
+		total, decalage, #lignes, visibles))
+
+	-- CE QUE LE CLIENT EXPOSE, ligne par ligne, drapeaux compris : c'est lui
+	-- qui decide de la hierarchie, pas nous.
+	dire("ce que le client expose :")
+	for rang = 1, total do
+		local nom, _, attitude, seuil, suivant, valeur, _, _, entete, replie,
+			avecRep, _, enfant = GetFactionInfo(rang)
+		DEFAULT_CHAT_FRAME:AddMessage(string.format(
+			"   %2d %-28s entete=%-5s enfant=%-5s replie=%-5s avecRep=%-5s "
+			.. "attitude=%s brut=%s/%s/%s",
+			rang, tostring(nom), tostring(entete), tostring(enfant),
+			tostring(replie), tostring(avecRep), tostring(attitude),
+			tostring(seuil), tostring(suivant), tostring(valeur)))
+	end
+
+	dire("ce que nous posons :")
 
 	for rang, ligne in ipairs(lignes) do
 		if ligne:IsShown() then
