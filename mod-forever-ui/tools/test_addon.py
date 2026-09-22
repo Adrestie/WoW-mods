@@ -108,6 +108,7 @@ function CreateFrame(kind, name, parent, template)
     function f:RegisterForClicks() end
     function f:EnableMouse(v) self.mouseEnabled = (v ~= false) end
     function f:EnableMouseWheel(v) self.wheelEnabled = (v ~= false) end
+    function f:IsMouseOver() return self.souris == true end
     function f:SetMovable(v) self.movable = (v ~= false) end
     function f:IsMovable() return self.movable end
     function f:SetClampedToScreen() end
@@ -652,6 +653,16 @@ function EquipmentManager_UnpackLocation(place)
     return true, false, true, place - 200, 1
 end
 function UseEquipmentSet(nom) DERNIER_EQUIPE = nom end
+DELETE = "Delete"
+SETTINGS = "Settings"
+ERR_CLIENT_LOCKED_OUT = "verrouille"
+UIErrorsFrame = CreateFrame("Frame", "UIErrorsFrame", UIParent)
+function UIErrorsFrame:AddMessage() end
+POPUPS = {}
+function StaticPopup_Show(quoi, texte)
+    table.insert(POPUPS, { quoi = quoi, texte = texte })
+    return { }
+end
 -- Ce que fait le vrai : il remplit les cartes des ensembles existants et
 -- desactive les autres.
 function GearManagerDialog_Update()
@@ -2825,6 +2836,44 @@ def main():
     assert not carte.foreverCoche.shown,         "le slot rendu doit valoir la cle, sinon une piece portee ailleurs passait"
     lua.execute('ENSEMBLES[1].porte = true ENSEMBLES[2].porte = false')
     g.ForeverUI.EquipmentSetsLayout()
+
+    # Les deux boutons de survol : engrenage et croix rouge.
+    supprimer = carte.foreverSupprimer
+    editer = carte.foreverEditer
+    ps2 = supprimer.points[1]
+    pe2 = editer.points[1]
+    print("   survol : supprimer %dx%d %s (%s, %s) | editer %dx%d %s sur %s %s" % (
+        supprimer.width, supprimer.height, ps2[1], ps2[4], ps2[5],
+        editer.width, editer.height, pe2[1], pe2[3], pe2[4]))
+    assert (supprimer.width, supprimer.height) == (14, 14), "camelot : 14 x 14"
+    assert (ps2[1], ps2[4], ps2[5]) == ("BOTTOMRIGHT", -21, 2)
+    assert (editer.width, editer.height) == (16, 16), "camelot : 16 x 16"
+    assert (pe2[1], pe2[3], pe2[4]) == ("RIGHT", "LEFT", -1)
+    assert "GroupLoot-Pass" in supprimer.texture.texture, "la croix rouge du client"
+    assert "GEAR_64GREY" in editer.texture.texture, "l engrenage du client"
+
+    print("   au repos : supprimer=%s, editer=%s" % (supprimer.shown, editer.shown))
+    assert not supprimer.shown and not editer.shown, "ils ne paraissent qu au survol"
+    lua.execute("GearSetButton1.souris = true")
+    g.ForeverUI.EquipmentSetsHover()
+    print("   au survol : supprimer=%s, editer=%s, survol=%s" % (
+        supprimer.shown, editer.shown, carte.foreverSurvol.shown))
+    assert supprimer.shown and editer.shown and carte.foreverSurvol.shown
+
+    avantPopups = len(list(g.POPUPS.values()))
+    supprimer.scripts.OnClick(supprimer)
+    dernier = list(g.POPUPS.values())[-1]
+    print("   clic sur la croix : %s sur \"%s\"" % (dernier.quoi, dernier.texte))
+    assert len(list(g.POPUPS.values())) == avantPopups + 1
+    assert dernier.quoi == "CONFIRM_DELETE_EQUIPMENT_SET", "la fenetre de validation du client"
+    assert dernier.texte == "eee", "sur le bon ensemble"
+
+    editer.scripts.OnClick(editer)
+    print("   clic sur l engrenage : ensemble choisi = %s" % (
+        g.GearManagerDialog.selectedSetName))
+    assert g.GearManagerDialog.selectedSetName == "eee",         "il choisit l ensemble : c est de lui que la fenetre tire nom et icone"
+    lua.execute("GearSetButton1.souris = false")
+    g.ForeverUI.EquipmentSetsHover()
 
     pc2 = carte.foreverCoche.points[1]
     print("   coche : %s (%s, %s)" % (pc2[1], pc2[4], pc2[5]))

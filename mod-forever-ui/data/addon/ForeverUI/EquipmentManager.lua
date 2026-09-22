@@ -112,6 +112,38 @@ local ATLAS_PLUS = "ui-character-info-icon-add"
 local ATLAS_BORDURE = "common-insideframe"
 local ATLAS_TRAIT = "ui-character-info-scrollline"
 
+-- RELEVE -- camelot, GearSetButtonTemplate, les deux boutons de survol :
+--
+--   $parentDeleteButton  14 x 14, BOTTOMRIGHT (-21, 2)
+--                        Interface\\Buttons\\UI-GroupLoot-Pass-Up, alpha 0,5
+--                        au repos et 1 au survol ; enfonce, la texture
+--                        glisse de (1, -1). Infobulle DELETE. Au clic :
+--                        StaticPopup_Show("CONFIRM_DELETE_EQUIPMENT_SET").
+--   $parentEditButton    16 x 16, RIGHT sur le LEFT du precedent, x = -1
+--                        Interface\\WorldMap\\GEAR_64GREY, memes alphas.
+--
+-- Les deux ne paraissent QUE sur la carte survolee -- camelot le decide
+-- dans PaperDollEquipmentManagerPane_OnUpdate, en interrogeant IsMouseOver
+-- a chaque image. On fait de meme : un OnEnter ne suffirait pas, il part
+-- des qu'on entre sur l'un de ces deux boutons, qui sont des cadres fils.
+--
+-- CE QUI DIFFERE. L'engrenage de camelot ouvre un menu d'assignation de
+-- SPECIALISATION (C_EquipmentSet.AssignSpecToEquipmentSet), qui n'existe
+-- pas en 3.3.5. A la demande, il rouvre ici la fenetre de creation sur
+-- l'ensemble choisi : le client la remplit alors de son nom et de son
+-- icone (RecalculateGearManagerDialogPopup), et son Okay voit que le nom
+-- existe deja -- il demande confirmation puis ECRASE l'ensemble au lieu
+-- d'en creer un.
+-- EQUIPMENT_SET_SETTINGS, l'infobulle de camelot, n'existe pas ici :
+-- SETTINGS est la plus proche que ce client porte.
+local SUPPRIMER = 14
+local SUPPRIMER_X, SUPPRIMER_Y = -21, 2
+local EDITER = 16
+local EDITER_X = -1
+local ICONE_SUPPRIMER = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+local ICONE_EDITER = "Interface\\WorldMap\\GEAR_64GREY"
+local REPOS, SURVOL = 0.5, 1.0
+
 local panneau, decalage = nil, 0
 
 -- QUEL ENSEMBLE EST PORTE. Deux questions, et je n'en avais traite
@@ -266,17 +298,111 @@ local function habillerCarte(bouton)
 		texte:SetPoint("LEFT", bouton, "LEFT", CARTE_TEXTE_X, 0)
 	end
 
-	bouton:HookScript("OnEnter", function(self)
-		if self.name and self.name ~= "" then
-			self.foreverSurvol:Show()
-		end
-	end)
-	bouton:HookScript("OnLeave", function(self)
-		self.foreverSurvol:Hide()
-	end)
+	-- LES DEUX BOUTONS DE SURVOL.
+	local function petitBouton(nom, cote, icone, infobulle, clic)
+		local b = CreateFrame("Button", bouton:GetName() .. nom, bouton)
+		b:SetWidth(cote)
+		b:SetHeight(cote)
+		b:SetFrameLevel(bouton:GetFrameLevel() + 2)
+
+		local t = b:CreateTexture(nil, "ARTWORK")
+		t:SetTexture(icone)
+		t:SetAllPoints(b)
+		t:SetAlpha(REPOS)
+		b.texture = t
+
+		b:SetScript("OnEnter", function(self)
+			self.texture:SetAlpha(SURVOL)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(infobulle)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function(self)
+			self.texture:SetAlpha(REPOS)
+			GameTooltip:Hide()
+		end)
+		b:SetScript("OnMouseDown", function(self)
+			self.texture:ClearAllPoints()
+			self.texture:SetPoint("TOPLEFT", self, "TOPLEFT", 1, -1)
+			self.texture:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", 1, -1)
+		end)
+		b:SetScript("OnMouseUp", function(self)
+			self.texture:ClearAllPoints()
+			self.texture:SetAllPoints(self)
+		end)
+		b:SetScript("OnClick", clic)
+		b:Hide()
+		return b
+	end
+
+	bouton.foreverSupprimer = petitBouton("ForeverUIDelete", SUPPRIMER,
+		ICONE_SUPPRIMER, DELETE or "Delete", function(self)
+			local carte = self:GetParent()
+			if not carte.name or carte.name == "" then
+				return
+			end
+			local fenetre = StaticPopup_Show("CONFIRM_DELETE_EQUIPMENT_SET", carte.name)
+			if fenetre then
+				fenetre.data = carte.name
+			elseif UIErrorsFrame then
+				UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
+			end
+		end)
+	bouton.foreverSupprimer:SetPoint("BOTTOMRIGHT", bouton, "BOTTOMRIGHT",
+		SUPPRIMER_X, SUPPRIMER_Y)
+
+	bouton.foreverEditer = petitBouton("ForeverUIEdit", EDITER,
+		ICONE_EDITER, SETTINGS or "Settings", function(self)
+			local carte = self:GetParent()
+			if not carte.name or carte.name == "" then
+				return
+			end
+			-- On choisit d'abord l'ensemble : c'est de lui que le client
+			-- tire le nom et l'icone de la fenetre, et c'est son nom que
+			-- son Okay retrouvera pour ecraser au lieu de creer.
+			local dialogue = _G["GearManagerDialog"]
+			if dialogue then
+				dialogue.selectedSetName = carte.name
+				if GearManagerDialog_Update then
+					GearManagerDialog_Update()
+				end
+			end
+			if GearManagerDialogSaveSet_OnClick then
+				GearManagerDialogSaveSet_OnClick(_G["GearManagerDialogSaveSet"])
+			end
+		end)
+	bouton.foreverEditer:SetPoint("RIGHT", bouton.foreverSupprimer, "LEFT",
+		EDITER_X, 0)
 
 	bouton.foreverCarte = true
 end
+
+-- LE SURVOL SE SUIT A CHAQUE IMAGE, PAS PAR OnEnter. Les deux boutons sont
+-- des cadres fils de la carte : y entrer declencherait le OnLeave de la
+-- carte, qui les masquerait aussitot. camelot interroge IsMouseOver dans
+-- PaperDollEquipmentManagerPane_OnUpdate, on fait pareil.
+local function suivreSurvol()
+	local dialogue = _G["GearManagerDialog"]
+	if not dialogue or not dialogue.buttons then
+		return
+	end
+
+	for _, bouton in ipairs(dialogue.buttons) do
+		if bouton.foreverCarte and bouton:IsShown() then
+			local dessus = bouton:IsMouseOver() and bouton.name and bouton.name ~= ""
+			if dessus then
+				bouton.foreverSurvol:Show()
+				bouton.foreverSupprimer:Show()
+				bouton.foreverEditer:Show()
+			else
+				bouton.foreverSurvol:Hide()
+				bouton.foreverSupprimer:Hide()
+				bouton.foreverEditer:Hide()
+			end
+		end
+	end
+end
+ForeverUI.EquipmentSetsHover = suivreSurvol
 
 -- La liste : les ensembles existants, en colonne, a partir du decalage.
 local function poserCartes()
@@ -340,6 +466,7 @@ local function monter(volet)
 	trait:SetPoint("TOP", panneau, "BOTTOM", 0, LISTE_Y2)
 
 	-- La molette fait defiler : camelot a une barre, que nous n'avons pas.
+	panneau:SetScript("OnUpdate", suivreSurvol)
 	panneau:EnableMouseWheel(true)
 	panneau:SetScript("OnMouseWheel", function(self, sens)
 		local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
