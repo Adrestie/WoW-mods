@@ -2807,12 +2807,13 @@ def main():
     print("choix d icone : fenetre %d x %d, %d boutons, %d par rangee" % (
         popup.width, popup.height, len(list(popup.buttons.values())),
         g.NUM_GEARSET_ICONS_PER_ROW))
-    assert (popup.width, popup.height) == (525, 495), "IconSelectorPopupFrameTemplate"
+    assert popup.width == 525, "IconSelectorPopupFrameTemplate"
+    assert popup.height == g.CharacterFrame.height,         "a la demande : la hauteur de la feuille de personnage"
     assert g.NUM_GEARSET_ICONS_PER_ROW == 10, "ScrollBoxSelectorMixin:GetStride rend 10"
-    assert g.NUM_GEARSET_ICON_ROWS == 8
-    assert g.NUM_GEARSET_ICONS_SHOWN == 80, "dix par rangee, huit rangees"
+    assert g.NUM_GEARSET_ICON_ROWS == 7
+    assert g.NUM_GEARSET_ICONS_SHOWN == 70, "dix par rangee, sept rangees"
     assert g.GEARSET_ICON_ROW_HEIGHT == 46, "36 d icone plus 10 d ecart"
-    assert len(list(popup.buttons.values())) == 80, "le client n en cree que quinze"
+    assert len(list(popup.buttons.values())) == 70, "le client n en cree que quinze"
 
     b1 = g.GearManagerDialogPopupButton1
     b2 = g.GearManagerDialogPopupButton2
@@ -2840,6 +2841,15 @@ def main():
     print("   bande droite : %s et %s" % (pts[0][1], pts[1][1]))
     assert pts[0][1] == "TOPRIGHT" and pts[1][1] == "BOTTOMRIGHT",         "deux points du meme cote : le coin bas droit fait 174, il l etirerait"
     assert g.GearManagerDialogPopupScrollFrameScrollBar.width == 8,         "MinimalScrollBar fait 8 de large"
+    # Autant d espace de part et d autre de la barre.
+    barre = g.GearManagerDialogPopupScrollFrameScrollBar
+    pb = barre.points[len(list(barre.points.values())) - 1]
+    droiteIcones = 21 + 5 + 10 * 46 - 10
+    ecartDroit = -pb[4] - 17
+    ecartGauche = (525 - 17 - ecartDroit - 8) - droiteIcones
+    print("   barre : %g a gauche, %g a droite" % (ecartGauche, ecartDroit))
+    assert abs(ecartGauche - ecartDroit) < 0.01,         "le meme ecart entre les icones et la barre qu entre la barre et le bord"
+
     curseur = g.GearManagerDialogPopupScrollFrameScrollBarThumbTexture.texture or ""
     print("   curseur : %s" % curseur)
     assert "minimalscrollbar" in curseur.lower(),         "le curseur prend la feuille de camelot"

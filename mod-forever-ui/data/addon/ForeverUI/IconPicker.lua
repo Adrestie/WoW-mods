@@ -40,7 +40,10 @@
 
 ForeverUI = ForeverUI or {}
 
-local POPUP_L, POPUP_H = 525, 495
+-- ECART ASSUME, sur demande : la fenetre prend la HAUTEUR DE LA FEUILLE de
+-- personnage, et non les 495 de camelot. Le nombre de rangees s'en deduit :
+-- de la grille (-97) au socle des boutons il reste de quoi en poser sept.
+local POPUP_L, POPUP_H = 525, 484
 local ENTETE_X, ENTETE_Y = 24, -21
 local CHAMP_X, CHAMP_Y = 29, -35
 local CHOISIR_X, CHOISIR_Y = 24, -79
@@ -53,12 +56,21 @@ local CHOIX_X, CHOIX_Y = -4.5, -3.5
 local GRILLE_X, GRILLE_Y = 21, -97
 local ICONE = 36
 local PAR_RANGEE = 10
-local RANGEES = 8
+local RANGEES = 7
 local ECART = 10
 local MARGE = 5
 local PAS = ICONE + ECART
 
 local BAS_ECART = 16                    -- Okay et Cancel, au bas de la fenetre
+local BORD_DROIT = 17                   -- la largeur de !macropopup-right
+
+-- L'habillage : fond, encadrement et barre. Declares ici parce que la pose
+-- de la fenetre s'en sert pour centrer la barre dans l'espace qui reste.
+local FOND_ALPHA = 0.8
+local FOND_MARGE = 7
+local BARRE_L = 8
+local FLECHE_L, FLECHE_H = 17, 11
+local CURSEUR_H = 36                    -- minimal-scrollbar-thumb-bottom
 
 local monte = false
 
@@ -162,8 +174,9 @@ end
 ForeverUI.IconPickerRefresh = majChoixCourant
 
 local function poserFenetre(popup)
+	local feuille = _G["CharacterFrame"]
 	popup:SetWidth(POPUP_L)
-	popup:SetHeight(POPUP_H)
+	popup:SetHeight((feuille and feuille:GetHeight()) or POPUP_H)
 
 	local champ = _G["GearManagerDialogPopupEditBox"]
 	if champ then
@@ -193,6 +206,22 @@ local function poserFenetre(popup)
 		defilement:SetHeight(RANGEES * PAS - ECART + 2 * MARGE)
 		defilement:ClearAllPoints()
 		defilement:SetPoint("TOPLEFT", popup, "TOPLEFT", GRILLE_X, GRILLE_Y)
+	end
+
+	-- AUTANT D'ESPACE DE PART ET D'AUTRE DE LA BARRE. Sur demande : le
+	-- meme ecart entre la derniere colonne d'icones et la barre qu'entre la
+	-- barre et le bord de la fenetre. Il se calcule, il n'est pas ecrit :
+	-- si la grille ou la fenetre changent, il suit.
+	local barre = _G["GearManagerDialogPopupScrollFrameScrollBar"]
+	if barre then
+		local droiteIcones = GRILLE_X + MARGE + PAR_RANGEE * PAS - ECART
+		local libre = (POPUP_L - BORD_DROIT) - droiteIcones
+		local ecart = (libre - BARRE_L) / 2
+		barre:ClearAllPoints()
+		barre:SetPoint("TOPRIGHT", popup, "TOPRIGHT",
+			-(BORD_DROIT + ecart), GRILLE_Y - MARGE)
+		barre:SetPoint("BOTTOMRIGHT", popup, "TOPRIGHT",
+			-(BORD_DROIT + ecart), GRILLE_Y - MARGE - (RANGEES * PAS - ECART))
 	end
 
 	local okay = _G["GearManagerDialogPopupOkay"]
@@ -248,11 +277,6 @@ ForeverUI.IconPicker = { Apply = habiller }
 -- en trois morceaux (minimal-scrollbar-track-top / -middle / -bottom), un
 -- curseur en trois morceaux (minimal-scrollbar-thumb-*) et deux fleches
 -- (minimal-scrollbar-arrow-top / -bottom) de 17 x 11.
-local FOND_ALPHA = 0.8
-local FOND_MARGE = 7
-local BARRE_L = 8
-local FLECHE_L, FLECHE_H = 17, 11
-local CURSEUR_H = 36                    -- minimal-scrollbar-thumb-bottom
 
 local function habillerCadre(popup)
 	if popup.foreverCadre then
