@@ -644,6 +644,15 @@ angles arrondis du cadre. Mesuré sur `UI-Character-Info-StatTab` : sur ses
 42, la bande de métal occupe 3..6 et 35..38, l'ouverture va donc de 7 à 34 —
 **28 px**, centrés. C'est la taille de l'icône.
 
+**Le système de panneaux reprend la main, il faut repasser derrière.**
+`GearManagerDialog_OnShow` appelle `UpdateUIPanelPositions(CharacterFrame)`
+et `_OnHide` appelle `UpdateUIPanelPositions()` : le système de panneaux
+replace alors la feuille à **sa** position, et la place retenue par le joueur
+est perdue — ouvrir le gestionnaire remettait la fenêtre à zéro. Le greffon
+est posé sur `UpdateUIPanelPositions` elle-même plutôt que sur le seul
+gestionnaire : toute autre ouverture qui la déclenche pose le même problème,
+et il ne coûte rien quand aucune place n'est retenue.
+
 **Les deux onglets se comportent en onglets.** Celui qu'on ouvre ferme
 l'autre : le gestionnaire montre son panneau et **masque les statistiques**,
 les statistiques ferment le panneau et reviennent. Deux pièges :

@@ -551,6 +551,12 @@ PLAYERSTAT_MELEE_COMBAT = "Corps a corps"
 PLAYERSTAT_DEFENSES = "Defenses"
 function UpdatePaperdollStats(prefixe, cle) end
 function PaperDollFrame_UpdateStats() end
+-- Le systeme de panneaux : il replace la feuille a SA position, et le
+-- gestionnaire d'equipement l'appelle a chaque ouverture et fermeture.
+function UpdateUIPanelPositions(cadre)
+    CharacterFrame:ClearAllPoints()
+    CharacterFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+end
 CharacterAttributesFrame = CreateFrame("Frame", "CharacterAttributesFrame", CharacterFrame)
 for _, cote in ipairs({ "Left", "Right" }) do
     -- UIDropDownMenuTemplate : 40 x 32, porte par un art qui le deborde,
@@ -1976,6 +1982,16 @@ def main():
     # Un passage de l habillage ne doit pas les rallumer dans son dos.
     g.ForeverUI.CharacterSheet.Apply()
     assert not g.PlayerStatFrameLeftDropDown.shown,         "l habillage repasse ici a chaque evenement : il doit respecter l onglet"
+
+    # Le gestionnaire appelle UpdateUIPanelPositions : la place retenue
+    # ne doit pas y passer.
+    lua.execute('ForeverUIDB.positions["feuille"] = '
+                '{ point = "CENTER", relativePoint = "CENTER", x = 120, y = -40 }')
+    g.UpdateUIPanelPositions(g.CharacterFrame)
+    pp2 = perso.points[len(list(perso.points.values()))]
+    print("   apres le systeme de panneaux : %s (%s, %s)" % (pp2[1], pp2[4], pp2[5]))
+    assert (pp2[1], pp2[4], pp2[5]) == ("CENTER", 120, -40),         "ouvrir le gestionnaire ne doit pas reinitialiser la fenetre"
+    lua.execute('ForeverUIDB.positions["feuille"] = nil')
 
     stats.scripts.OnClick(stats)
     lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]

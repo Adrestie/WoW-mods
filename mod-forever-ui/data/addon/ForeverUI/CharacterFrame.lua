@@ -1175,6 +1175,24 @@ local function reposerLaPlace(cadre)
 		place.x or 0, place.y or 0)
 end
 
+-- LE SYSTEME DE PANNEAUX REPREND LA MAIN, ET IL FAUT REPASSER DERRIERE.
+--
+-- GearManagerDialog_OnShow appelle UpdateUIPanelPositions(CharacterFrame),
+-- et _OnHide appelle UpdateUIPanelPositions() : le systeme de panneaux
+-- replace alors la feuille a SA position, et la place retenue par le joueur
+-- est perdue. Ouvrir le gestionnaire remettait donc la fenetre a zero.
+--
+-- On greffe sur UpdateUIPanelPositions elle-meme, et non sur le seul
+-- gestionnaire : toute autre ouverture qui la declenche pose le meme
+-- probleme, et le greffon ne coute rien quand aucune place n'est retenue.
+if hooksecurefunc and type(UpdateUIPanelPositions) == "function" then
+	hooksecurefunc("UpdateUIPanelPositions", function()
+		if CharacterFrame and CharacterFrame:IsShown() then
+			reposerLaPlace(CharacterFrame)
+		end
+	end)
+end
+
 local function habiller()
 	local cadre = CharacterFrame
 	if not cadre or InCombatLockdown() then
