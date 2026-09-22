@@ -1860,6 +1860,14 @@ local function poserOngletsCrees()
 	creerOngletLateral("stats", "ForeverUICharacterTabStats",
 		ONGLET_ICONES.stats, STATISTICS or "Statistics", ECRAN_STATS)
 
+	-- Les notres suivent la meme regle que ceux du client : sous le metal.
+	local niveauOnglets = barreOnglets:GetFrameLevel()
+	for _, cle in ipairs({ "pvp", "stats" }) do
+		if onglets[cle] then
+			onglets[cle]:SetFrameLevel(niveauOnglets + 1)
+		end
+	end
+
 	-- La faction ne change pas en cours de partie, mais l'onglet peut etre
 	-- cree avant que le client l'ait rendue : on la repose a chaque passage.
 	if onglets.pvp and faction then
@@ -1875,6 +1883,20 @@ local function poserOnglets(cadre)
 		barreOnglets:SetHeight(ONGLETS_H)
 		barreOnglets:SetPoint("TOPLEFT", cadre, "TOPRIGHT", ONGLETS_X, ONGLETS_Y)
 	end
+
+	-- LES ONGLETS PASSENT SOUS L'ENCADREMENT.
+	--
+	-- Un onglet est plus large que ce qu'on en voit : son art porte une
+	-- langue a gauche, qui vient se glisser sous la fenetre. Le survol et le
+	-- marqueur d'actif couvrent cette langue, et ils debordaient donc sur le
+	-- metal du volet droit -- l'encadrement etant pose plus haut, mais les
+	-- onglets n'ayant aucun niveau fixe, rien ne garantissait l'ordre.
+	--
+	-- Il est donc pose : la barre au niveau du cadre, les onglets un cran
+	-- au-dessus -- assez pour couvrir le fond du panneau, pas assez pour
+	-- atteindre l'habillage, qui vit a NIVEAU_ART.
+	local niveauOnglets = cadre:GetFrameLevel()
+	barreOnglets:SetFrameLevel(niveauOnglets)
 
 	local precedent
 	local index = 1
@@ -1941,6 +1963,7 @@ local function poserOnglets(cadre)
 
 		onglet:SetWidth(ONGLET_L)
 		onglet:SetHeight(ONGLET_H)
+		onglet:SetFrameLevel(niveauOnglets + 1)
 		onglets[index] = onglet
 		index = index + 1
 	end

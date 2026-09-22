@@ -2242,6 +2242,15 @@ def main():
     print("   un onglet : %d x %d (55 x 55 : 55 x 60 moins 5 de transparent)" % (
         o1.width, o1.height))
     assert o1.width == 55 and o1.height == 55
+    # SOUS L ENCADREMENT. La langue gauche de l onglet, que le survol et le
+    # marqueur d actif couvrent, se glisse sous la fenetre : elle debordait
+    # sur le metal du volet droit.
+    hab = perso.foreverHabillage
+    print("   niveaux : barre %d, onglet %d, habillage %d" % (
+        barre.frameLevel or 0, o1.frameLevel or 0, hab.frameLevel or 0))
+    assert (o1.frameLevel or 0) < (hab.frameLevel or 0),         "un onglet doit passer SOUS l encadrement de la fenetre"
+    assert (g.ForeverUICharacterTabPvP.frameLevel or 0) < (hab.frameLevel or 0),         "les notres aussi"
+    assert (o1.frameLevel or 0) > (perso.frameLevel or 0),         "mais au-dessus du fond du panneau"
     p2 = o2.points[1]
     assert p2[1] == "TOPLEFT" and p2[3] == "BOTTOMLEFT", "ils s empilent"
     # SANS FAMILIER, LES SUIVANTS REMONTENT. Un onglet masque mais toujours
