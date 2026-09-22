@@ -1687,6 +1687,17 @@ def main():
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot
+    # Le modele couvre tout le volet et prend la souris : a niveau egal
+    # c est lui qui recoit le clic, et plus rien ne se deseequipe.
+    modele = g.CharacterModelFrame
+    print("   niveaux : modele %d, emplacement %d" % (
+        modele.frameLevel or 1, tete.frameLevel or 1))
+    assert (tete.frameLevel or 1) > (modele.frameLevel or 1),         "l emplacement doit passer au-dessus du modele, sinon le clic va au modele"
+    niveauAvant = tete.frameLevel
+    g.ForeverUI.CharacterSheet.Apply()
+    print("   apres un second passage : %d (pas d escalade)" % tete.frameLevel)
+    assert tete.frameLevel == niveauAvant, "le niveau ne doit pas monter a chaque passage"
+
     print("   emplacement : %d x %d (40) | ecart %d (6)" % (
         tete.width, tete.height, -cou.points[1][5]))
     assert tete.width == 40 and tete.height == 40, "PaperDollItemSlotButtonTemplate : 40"

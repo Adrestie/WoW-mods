@@ -529,6 +529,36 @@ déclenchait rien, et un greffon cassé serait passé inaperçu. Il enveloppe
 désormais vraiment — l'originale, puis le greffon, et les valeurs rendues sont
 celles de l'originale.
 
+**À niveau de cadre égal, c'est le modèle qui reçoit le clic.** Chez le
+client, la scène du modèle tient entre les deux colonnes d'emplacements
+(233 × 215) : rien ne se recouvre. Camelot lui donne **tout le volet gauche**
+et pose les emplacements par-dessus. Mais `CharacterModelFrame` est sensible
+à la souris, et il naît au même niveau que les emplacements — tous enfants de
+`PaperDollFrame`.
+
+Mesuré en jeu avec `/fui perso` :
+
+```
+tete : 39x39 strate=MEDIUM niveau=28 souris=1 montre=1
+   clic=true glisser=true recoit=true actif=true
+   ce qui couvre son centre et prend la souris :
+      PaperDollFrame        strate=MEDIUM  niveau=27
+      CharacterModelFrame   strate=MEDIUM  niveau=28
+      CharacterHeadSlot     strate=MEDIUM  niveau=28
+      sous le curseur : CharacterModelFrame
+```
+
+Le bouton avait tous ses scripts et prenait la souris : c'est bien le modèle
+qui interceptait, donc **plus de déséquipement et plus d'infobulle**. Les
+emplacements passent d'un cran au-dessus de lui. Le test est un « au moins »
+(`if niveau <= niveau du modèle`) et non une augmentation sèche : l'habillage
+se rejoue à chaque ouverture et à chaque changement d'équipement, une
+incrémentation ferait monter le niveau sans fin.
+
+Le réflexe général : **dès qu'on agrandit un cadre sensible à la souris pour
+lui faire remplir un volet, il faut remonter ce qui doit rester cliquable
+par-dessus.** Un niveau égal ne se voit pas à l'écran.
+
 **Une région ne se reparente pas en 3.3.5.** `SetParent` n'existe pas dans la
 table des méthodes de `FontString` de ce client, et ancrer la ligne du client au
 volet ne suffirait pas : elle appartient au cadre, donc elle se dessinerait

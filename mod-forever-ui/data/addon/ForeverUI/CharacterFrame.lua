@@ -428,6 +428,28 @@ local function habillerEmplacement(nom, cote, atlasCadre)
 	bouton:SetWidth(cote)
 	bouton:SetHeight(cote)
 
+	-- LE MODELE PREND LA SOURIS, ET IL COUVRE TOUT LE VOLET.
+	--
+	-- Chez le client, la scene du modele tient entre les deux colonnes
+	-- d'emplacements (233 x 215) : rien ne se recouvre. Camelot lui donne
+	-- tout le volet gauche et pose les emplacements PAR-DESSUS, ce qu'on a
+	-- repris -- mais le modele, lui, est sensible a la souris, et il nait
+	-- au meme niveau de cadre que les emplacements, tous enfants de
+	-- PaperDollFrame.
+	--
+	-- MESURE EN JEU (/fui perso) : emplacement et modele tous deux a 28,
+	-- et GetMouseFocus rend CharacterModelFrame. A NIVEAU EGAL, C'EST LE
+	-- MODELE QUI RECOIT LE CLIC -- plus de deseequipement, plus
+	-- d'infobulle. L'emplacement passe donc un cran au-dessus.
+	--
+	-- Le test est un "au moins" : chaque passage de l'habillage le rejoue,
+	-- et une augmentation seche ferait monter le niveau sans fin.
+	local modele = _G["CharacterModelFrame"]
+	if modele and modele.GetFrameLevel
+		and bouton:GetFrameLevel() <= modele:GetFrameLevel() then
+		bouton:SetFrameLevel(modele:GetFrameLevel() + 1)
+	end
+
 	if not bouton.foreverCadre then
 		local normale = bouton:GetNormalTexture()
 		if normale then
