@@ -227,6 +227,10 @@ INSERT INTO `item_template`
 (902502, 15, 4, 'Wanderer''s Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0),
 (902503, 15, 4, 'Astral Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0),
 (902504, 15, 4, 'Grand Board', 31755, 3, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'A board of the stellar tarot.', '', 903001, 0, 0),
+(902601, 15, 0, 'Token of The Crossroads', 6664, 3, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 'A token of the stellar tarot. Use it to choose your path.', '', 903999, 0, 0),
+(902602, 15, 0, 'Token of The Devil', 6664, 3, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 'A token of the stellar tarot. Use it to choose your path.', '', 903998, 0, 0),
+(902603, 15, 0, 'Token of The Fate', 6664, 3, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 'A token of the stellar tarot. Use it to choose your path.', '', 903997, 0, 0),
+(902651, 15, 0, 'Lucky Coin', 6467, 4, 0, 1, 0, 0, 0, 1, 1, 0, 20, 0, 'A coin the dead sometimes leave. Fortune favours whoever carries it.', '', 903996, 0, -1),
 (902600, 15, 0, 'Crate of Goods', 11448, 1, 4, 1, 0, 0, 0, 1, 1, 0, 1, 0, 'Goods from the four corners of the world, in a harbour''s crate.', '', 0, 0, 0);
 
 INSERT INTO `item_template_locale` (`ID`, `locale`, `Name`, `Description`) VALUES
@@ -431,6 +435,10 @@ INSERT INTO `item_template_locale` (`ID`, `locale`, `Name`, `Description`) VALUE
 (902502, 'frFR', 'Plateau du vagabond', 'Un plateau du tarot stellaire.'),
 (902503, 'frFR', 'Plateau astral', 'Un plateau du tarot stellaire.'),
 (902504, 'frFR', 'Grand plateau', 'Un plateau du tarot stellaire.'),
+(902601, 'frFR', 'Jeton : La Croisée des chemins', 'Un jeton du tarot stellaire. Utilisez-le pour choisir votre voie.'),
+(902602, 'frFR', 'Jeton : Le Diable', 'Un jeton du tarot stellaire. Utilisez-le pour choisir votre voie.'),
+(902603, 'frFR', 'Jeton : Le Destin', 'Un jeton du tarot stellaire. Utilisez-le pour choisir votre voie.'),
+(902651, 'frFR', 'Pièce porte-bonheur', 'Une pièce que les morts laissent parfois. La fortune sourit à qui la porte.'),
 (902600, 'frFR', 'Caisse de marchandises', 'Des marchandises des quatre coins du monde, dans une caisse de port.');
 
 INSERT INTO `item_dbc`
@@ -637,6 +645,10 @@ INSERT INTO `item_dbc`
 (902502, 15, 4, -1, 0, 31755, 0, 0),
 (902503, 15, 4, -1, 0, 31755, 0, 0),
 (902504, 15, 4, -1, 0, 31755, 0, 0),
+(902601, 15, 0, -1, 0, 6664, 0, 0),
+(902602, 15, 0, -1, 0, 6664, 0, 0),
+(902603, 15, 0, -1, 0, 6664, 0, 0),
+(902651, 15, 0, -1, 0, 6467, 0, 0),
 (902600, 15, 0, -1, 0, 11448, 0, 0);
 
 -- The crate's one written line: the core opens no item whose loot template is

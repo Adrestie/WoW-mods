@@ -414,7 +414,10 @@
 #include "StellarTarotScript.h"
 #include "StellarTarotEffects.h"   // le verrou de re-entrance, tenu par les repartiteurs
 #include "StellarTarotLoot.h"
+#include "StellarTarotLayout.h"
+#include "StellarTarotMgr.h"
 #include "Creature.h"
+#include "TemporarySummon.h"
 #include "DatabaseEnv.h"
 #include "GameTime.h"
 #include "Item.h"
@@ -436,6 +439,7 @@
 #include "Group.h"
 #include "Pet.h"
 #include "SpellMgr.h"
+#include "DBCStores.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Opcodes.h"
@@ -574,6 +578,17 @@ namespace
         return !main || main->GetTemplate()->Class != ITEM_CLASS_WEAPON;
     }
 
+    // LE HAUT DE L'ECHELLE DES NIVEAUX : 83, le niveau des boss de Norfendre.
+    // Au-dela, rien ne monte plus -- un boss y est compte d'office.
+    constexpr uint32 PALIER_HAUT = 83;
+
+    // UNE CAPITALE : le coeur le dit dans la table des zones.
+    bool EstUneCapitale(uint32 zone)
+    {
+        AreaTableEntry const* const ici = sAreaTableStore.LookupEntry(zone);
+        return ici && (ici->flags & AREA_FLAG_CAPITAL) != 0;
+    }
+
     bool IsBoss(Creature* c)
     {
         return c && (c->isWorldBoss() || c->IsDungeonBoss());
@@ -598,6 +613,93 @@ namespace
     // charge : c'est a eux que l'evenement `fever` reconnait un tic de fievre.
     std::set<uint32> gFeverSpells;
 
+    // POSER UNE STATISTIQUE SANS AURA, par le chemin meme que le coeur
+    // emploie pour les statistiques d'un objet. Deux familles s'en servent :
+    // `gempct`, qui rend une part de ce que les gemmes donnent, et `randstat`,
+    // qui en tire une au sort -- car le `EffectMiscValue` d'un sort, QUELLE
+    // statistique il majore, est ecrit dans le DBC et ne se choisit pas a la
+    // pose. Deplacee ici telle quelle depuis `GemPct`, sans un mot de change.
+    void Poser(Player* player, uint32 stat, int32 val, bool apply)
+    {
+        float const f = float(val);
+        switch (stat)
+        {
+            case ITEM_MOD_MANA: player->HandleStatFlatModifier(UNIT_MOD_MANA, BASE_VALUE, f, apply); break;
+            case ITEM_MOD_HEALTH: player->HandleStatFlatModifier(UNIT_MOD_HEALTH, BASE_VALUE, f, apply); break;
+            case ITEM_MOD_AGILITY:
+                player->HandleStatFlatModifier(UNIT_MOD_STAT_AGILITY, BASE_VALUE, f, apply);
+                player->UpdateStatBuffMod(STAT_AGILITY);
+                break;
+            case ITEM_MOD_STRENGTH:
+                player->HandleStatFlatModifier(UNIT_MOD_STAT_STRENGTH, BASE_VALUE, f, apply);
+                player->UpdateStatBuffMod(STAT_STRENGTH);
+                break;
+            case ITEM_MOD_INTELLECT:
+                player->HandleStatFlatModifier(UNIT_MOD_STAT_INTELLECT, BASE_VALUE, f, apply);
+                player->UpdateStatBuffMod(STAT_INTELLECT);
+                break;
+            case ITEM_MOD_SPIRIT:
+                player->HandleStatFlatModifier(UNIT_MOD_STAT_SPIRIT, BASE_VALUE, f, apply);
+                player->UpdateStatBuffMod(STAT_SPIRIT);
+                break;
+            case ITEM_MOD_STAMINA:
+                player->HandleStatFlatModifier(UNIT_MOD_STAT_STAMINA, BASE_VALUE, f, apply);
+                player->UpdateStatBuffMod(STAT_STAMINA);
+                break;
+            case ITEM_MOD_DEFENSE_SKILL_RATING: player->ApplyRatingMod(CR_DEFENSE_SKILL, val, apply); break;
+            case ITEM_MOD_DODGE_RATING: player->ApplyRatingMod(CR_DODGE, val, apply); break;
+            case ITEM_MOD_PARRY_RATING: player->ApplyRatingMod(CR_PARRY, val, apply); break;
+            case ITEM_MOD_BLOCK_RATING: player->ApplyRatingMod(CR_BLOCK, val, apply); break;
+            case ITEM_MOD_HIT_MELEE_RATING: player->ApplyRatingMod(CR_HIT_MELEE, val, apply); break;
+            case ITEM_MOD_HIT_RANGED_RATING: player->ApplyRatingMod(CR_HIT_RANGED, val, apply); break;
+            case ITEM_MOD_HIT_SPELL_RATING: player->ApplyRatingMod(CR_HIT_SPELL, val, apply); break;
+            case ITEM_MOD_CRIT_MELEE_RATING: player->ApplyRatingMod(CR_CRIT_MELEE, val, apply); break;
+            case ITEM_MOD_CRIT_RANGED_RATING: player->ApplyRatingMod(CR_CRIT_RANGED, val, apply); break;
+            case ITEM_MOD_CRIT_SPELL_RATING: player->ApplyRatingMod(CR_CRIT_SPELL, val, apply); break;
+            case ITEM_MOD_HASTE_MELEE_RATING: player->ApplyRatingMod(CR_HASTE_MELEE, val, apply); break;
+            case ITEM_MOD_HASTE_RANGED_RATING: player->ApplyRatingMod(CR_HASTE_RANGED, val, apply); break;
+            case ITEM_MOD_HASTE_SPELL_RATING: player->ApplyRatingMod(CR_HASTE_SPELL, val, apply); break;
+            case ITEM_MOD_HIT_RATING:
+                player->ApplyRatingMod(CR_HIT_MELEE, val, apply);
+                player->ApplyRatingMod(CR_HIT_RANGED, val, apply);
+                player->ApplyRatingMod(CR_HIT_SPELL, val, apply);
+                break;
+            case ITEM_MOD_CRIT_RATING:
+                player->ApplyRatingMod(CR_CRIT_MELEE, val, apply);
+                player->ApplyRatingMod(CR_CRIT_RANGED, val, apply);
+                player->ApplyRatingMod(CR_CRIT_SPELL, val, apply);
+                break;
+            case ITEM_MOD_RESILIENCE_RATING:
+                player->ApplyRatingMod(CR_CRIT_TAKEN_MELEE, val, apply);
+                player->ApplyRatingMod(CR_CRIT_TAKEN_RANGED, val, apply);
+                player->ApplyRatingMod(CR_CRIT_TAKEN_SPELL, val, apply);
+                break;
+            case ITEM_MOD_HASTE_RATING:
+                player->ApplyRatingMod(CR_HASTE_MELEE, val, apply);
+                player->ApplyRatingMod(CR_HASTE_RANGED, val, apply);
+                player->ApplyRatingMod(CR_HASTE_SPELL, val, apply);
+                break;
+            case ITEM_MOD_EXPERTISE_RATING: player->ApplyRatingMod(CR_EXPERTISE, val, apply); break;
+            case ITEM_MOD_ARMOR_PENETRATION_RATING: player->ApplyRatingMod(CR_ARMOR_PENETRATION, val, apply); break;
+            case ITEM_MOD_ATTACK_POWER:
+                player->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER, TOTAL_VALUE, f, apply);
+                player->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER_RANGED, TOTAL_VALUE, f, apply);
+                break;
+            case ITEM_MOD_RANGED_ATTACK_POWER:
+                player->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER_RANGED, TOTAL_VALUE, f, apply);
+                break;
+            case ITEM_MOD_SPELL_POWER: player->ApplySpellPowerBonus(val, apply); break;
+            case ITEM_MOD_MANA_REGENERATION: player->ApplyManaRegenBonus(val, apply); break;
+            case ITEM_MOD_HEALTH_REGEN: player->ApplyHealthRegenBonus(val, apply); break;
+            default: break;
+        }
+    }
+
+    // AUTOUR DE L'ADVERSAIRE : la distance a laquelle un autre ennemi le rend
+    // « accompagne ». Dix metres : un camp de monstres tient dedans, un
+    // adversaire ecarte du groupe n'y tient pas.
+    constexpr float SEUL_RAYON = 10.0f;
+
     // The hostile units within `range` of `center`, `except` left out.
     std::list<Unit*> HostilesAround(Player* player, WorldObject* center, float range, Unit* except)
     {
@@ -607,6 +709,56 @@ namespace
         Cell::VisitObjects(center, searcher, range);
         out.remove(except);
         return out;
+    }
+
+    // UN CONTRE UN : le joueur seul face a un monstre seul, les deux cotes
+    // mesures. L'adversaire est seul quand aucun autre ennemi vivant ne se
+    // tient a moins de dix metres de lui ; le joueur l'est quand aucun autre
+    // allie ne se tient a moins de dix metres de LUI -- un autre joueur, un
+    // familier, un garde. LES TOTEMS NE COMPTENT PAS : ils ne poursuivent
+    // personne, et un chaman ne pourrait plus jamais etre seul.
+    // UN LEURRE N'EST PAS UN ADVERSAIRE. Les creatures que le coeur marque
+    // `CREATURE_FLAG_EXTRA_TRIGGER` ne sont la que pour porter un effet : la
+    // flamme au sol de Marrowgar, un totem de decor, une zone qui tique. Elles
+    // sont invisibles et insaisissables pour le joueur, et les compter comme
+    // ennemis rompait le duel en permanence (releve en jeu le 2026-09-21).
+    bool EstUnLeurre(Unit const* unit)
+    {
+        Creature const* const creature = unit ? unit->ToCreature() : nullptr;
+        return creature && creature->IsTrigger();
+    }
+
+    // DERRIERE LE LEURRE, CELUI QUI L'A POSE : la flamme appartient au boss,
+    // c'est LUI l'adversaire. Sans cela, un tic de flamme se mesurait autour de
+    // la flamme, qui a toujours son maitre a cote d'elle.
+    Unit* Derriere(Unit* unit)
+    {
+        if (!EstUnLeurre(unit))
+            return unit;
+        if (TempSummon const* const invoque = unit->ToTempSummon())
+            if (Unit* const maitre = invoque->GetSummonerUnit())
+                return maitre;
+        if (Unit* const proprietaire = unit->GetOwner())
+            return proprietaire;
+        return unit;
+    }
+
+    bool UnContreUn(Player* player, Unit* adversaire)
+    {
+        if (!player || !adversaire)
+            return false;
+        adversaire = Derriere(adversaire);
+        for (Unit* autre : HostilesAround(player, adversaire, SEUL_RAYON, adversaire))
+            if (!EstUnLeurre(autre))
+                return false;
+        std::list<Unit*> amis;
+        Acore::AnyFriendlyUnitInObjectRangeCheck check(player, player, SEUL_RAYON);
+        Acore::UnitListSearcher<Acore::AnyFriendlyUnitInObjectRangeCheck> searcher(player, amis, check);
+        Cell::VisitObjects(player, searcher, SEUL_RAYON);
+        for (Unit* ami : amis)
+            if (ami && ami != player && !ami->IsTotem())
+                return false;
+        return true;
     }
 
     // The states a line can wait for WITHOUT keeping anything: no parameter,
@@ -804,6 +956,29 @@ namespace
         if (mot == "shield") return HasShield(player);
         if (mot == "twohand") return HasTwoHand(player);
         if (mot == "dualwield") return DualWields(player);
+        // `stacks:<sort>:<n>` : LE JOUEUR PORTE CETTE AURA A TANT DE CUMULS.
+        // C'est ainsi qu'un niveau lit le compte qu'un autre tient -- « A 5
+        // cumuls : ... ». L'aura est le seul temoin, et le coeur la porte.
+        if (mot == "stacks")
+        {
+            Aura const* const porte = n ? player->GetAura(uint32(n), player->GetGUID()) : nullptr;
+            return porte && int32(porte->GetStackAmount()) >= std::max(1, m);
+        }
+        // `aura:<sort>` : LE JOUEUR PORTE CETTE AURA-LA. C'est ainsi qu'une
+        // ligne lit la PHASE qu'une autre ligne de la meme carte tient : la
+        // maree haute, le Soleil. Rien de partage entre les scripts -- l'aura
+        // est le seul temoin, et le coeur la porte.
+        if (mot == "aura") return n && player->HasAura(uint32(n));
+        // UN OBJET HERITAGE EQUIPE, un seul suffit : le jeu les range sous
+        // leur propre qualite.
+        if (mot == "heirloom")
+        {
+            for (uint8 place = EQUIPMENT_SLOT_START; place < EQUIPMENT_SLOT_END; ++place)
+                if (Item const* piece = player->GetItemByPos(INVENTORY_SLOT_BAG_0, place))
+                    if (piece->GetTemplate() && piece->GetTemplate()->Quality == ITEM_QUALITY_HEIRLOOM)
+                        return true;
+            return false;
+        }
         if (mot == "unarmed") return Unarmed(player);
         if (mot == "solo") return !player->GetGroup();
         if (mot == "rested") return player->HasPlayerFlag(PLAYER_FLAGS_RESTING);
@@ -823,7 +998,17 @@ namespace
         if (mot == "full_hp") return sujet->GetHealth() >= sujet->GetMaxHealth();
         if (mot == "mana_below") return sujet->GetPowerPct(POWER_MANA) < float(n);
         if (mot == "humanoid") return sujet->GetCreatureType() == CREATURE_TYPE_HUMANOID;
-        if (mot == "alone") return sujet->getAttackers().size() <= 1;
+        // SEUL : L'ADVERSAIRE N'A AUCUN AUTRE ENNEMI AUTOUR DE LUI. Ce n'est
+        // pas « je suis seul a le frapper » : un joueur solo remplissait alors
+        // la condition en permanence, au milieu d'un camp entier (releve en jeu
+        // le 2026-09-20, carte 83). Le sujet est la cible quand on FRAPPE ;
+        // quand on SUBIT, l'adversaire est le vis-a-vis -- le joueur, lui,
+        // n'est jamais « seul » au sens de la carte.
+        if (mot == "alone")
+        {
+            Unit* const adversaire = (sujet == player && vis_a_vis) ? vis_a_vis : sujet;
+            return UnContreUn(player, adversaire);
+        }
         if (mot == "range_over") return player->GetDistance(sujet) > float(n);
         // DANS LE DOS : le coup vient de derriere, hors du demi-cercle que le
         // sujet a devant lui -- le meme compas que l'evenement `dmg_taken_back`.
@@ -1095,8 +1280,11 @@ namespace
         // lancement. Deux cartes qui retirent des parts d'armure differentes
         // ne peuvent donc pas partager un sort sans que l'une des deux mente.
         int32 n = 0, n2 = 0, chance = 100, spell = 0;
+        // Les cumuls que la PLAIE porte d'elle-meme, quand le bienfait n'en a
+        // pas a lui preter (un soin, par exemple). 0 : elle suit le bienfait.
+        int32 stacks = 0;
         [[nodiscard]] bool Some() const { return !kind.empty(); }
-    };
+};
 
     // ===================== LE REVERS D'UNE LIGNE =====================
     //
@@ -1124,6 +1312,27 @@ namespace
         stacks = std::max(1, stacks);
         if (kind == "hp")
             Bleed(player, PctOf(player->GetMaxHealth(), n), STELLAR_TAROT_SPELL_PRICE);
+        // LA DURABILITE DE TOUT CE QUI EST PORTE : le coeur sait l'oter, piece
+        // par piece, et prevenir le client.
+        else if (kind == "durability")
+        {
+            for (uint8 place = EQUIPMENT_SLOT_START; place < EQUIPMENT_SLOT_END; ++place)
+                if (Item* piece = player->GetItemByPos(INVENTORY_SLOT_BAG_0, place))
+                {
+                    uint32 const max = piece->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+                    if (!max)
+                        continue;
+                    uint32 const perd = PctOf(max, n);
+                    if (perd)
+                        player->DurabilityPointsLoss(piece, int32(perd));
+                }
+        }
+        // TOMBER A UN POINT DE VIE : ce que la carte prend, elle le prend tout.
+        else if (kind == "to_one")
+        {
+            if (player->GetHealth() > 1)
+                Bleed(player, uint32(player->GetHealth() - 1), STELLAR_TAROT_SPELL_PRICE);
+        }
         // LE COUP QUI S'EMPILE : le meme coup que `hp`, multiplie par le
         // nombre de cumuls que le bienfait porte.
         else if (kind == "hp_each")
@@ -1138,7 +1347,7 @@ namespace
         {
             uint32 const mal = markSpell ? markSpell : STELLAR_TAROT_SPELL_PRICE;
             int32 const battements = std::max(1, n2 / 2);
-            int32 const parTic = std::max<int32>(1, int32(PctOf(player->GetMaxHealth(), n)) / battements) - 1;
+            int32 const parTic = std::max<int32>(1, int32(PctOf(player->GetMaxHealth(), n)) / battements);
             Aura* plaie = player->GetAura(mal, player->GetGUID());
             if (!plaie)
             {
@@ -1168,7 +1377,14 @@ namespace
         else if (kind == "taken")
         {
             int32 const more = n;
-            Put(player, player, markSpell ? markSpell : STELLAR_TAROT_SPELL_TAKEN_MORE, n2, &more);
+            uint32 const sort = markSpell ? markSpell : STELLAR_TAROT_SPELL_TAKEN_MORE;
+            Put(player, player, sort, n2, &more);
+            // LA PLAIE QUI S'EMPILE : elle monte d'un cumul par passage,
+            // jusqu'au plafond que la ligne lui donne.
+            if (stacks > 1)
+                if (Aura* posee = player->GetAura(sort, player->GetGUID()))
+                    if (int32(posee->GetStackAmount()) < stacks)
+                        posee->ModStackAmount(1);
         }
         // L'ARMURE QUI CEDE, un moment : le revers a sa propre duree, celle
         // que le classeur lui donne, et non celle du bienfait.
@@ -1190,7 +1406,7 @@ namespace
         {
             // Le de du sort ajoute le dernier point : on le retire d'abord pour
             // que le tic vaille tout juste la part demandee.
-            int32 const perTick = int32(PctOf(player->GetMaxHealth(), n)) - 1;
+            int32 const perTick = int32(PctOf(player->GetMaxHealth(), n));
             Put(player, player, markSpell ? markSpell : STELLAR_TAROT_SPELL_BURN, n2, &perTick);
         }
     }
@@ -1198,7 +1414,10 @@ namespace
     {
         return k == "hp" || k == "hp_each" || k == "hp_stack" || k == "mana" || k == "disorient"
             || k == "stun" || k == "silence" || k == "sleep" || k == "root" || k == "taken"
-            || k == "burn" || k == "burn_s" || k == "self_hit" || k == "armor";
+            || k == "burn" || k == "burn_s" || k == "self_hit" || k == "armor"
+            // La durabilite de tout ce qui est porte, et le point de vie qui
+            // reste quand la carte a tout pris.
+            || k == "durability" || k == "to_one";
     }
     // Les revers qui demandent DEUX chiffres (une valeur et une duree).
     bool CostPair(std::string const& k)
@@ -1231,12 +1450,25 @@ namespace
         but.kind = r.Word();
         if (!CostKind(but.kind))
             return (error = "unknown drawback \"" + but.kind + "\"", false);
-        if (!r.Int(1, 100000, but.n))
+        // `to_one` ne porte aucun chiffre : il prend tout ce qui depasse un
+        // point de vie, et rien ne se mesure la.
+        if (but.kind == "to_one")
+            but.n = 1;
+        else if (!r.Int(1, 100000, but.n))
             return (error = but.kind + " expects a figure", false);
         if (CostPair(but.kind) && !r.Int(1, 3600, but.n2))
             return (error = but.kind + " expects the figure then the seconds", false);
         if (CostMarks(but.kind))
             r.OptInt(902000, 903999, but.spell);
+        // `stacks:<k>` : LA PLAIE S'EMPILE D'ELLE-MEME. Le cas ordinaire est
+        // qu'elle suive les cumuls du bienfait ; quand celui-ci n'en a pas --
+        // un soin, par exemple -- la ligne dit les siens.
+        if (!r.End() && r.Peek() == "stacks")
+        {
+            r.Word();
+            if (!r.Int(1, 100, but.stacks))
+                return (error = "stacks expects how many", false);
+        }
         return true;
     }
 
@@ -1286,7 +1518,10 @@ namespace
             else
                 // LES REVERS QUI COMPTENT LES CUMULS lisent celui du bienfait,
                 // retenu a la pose.
-                Cost(player, but.kind, but.n, but.n2, spellId, uint32(but.spell), stacks);
+                // LES CUMULS DE LA PLAIE : les siens quand elle en a, ceux du
+                // bienfait sinon.
+                Cost(player, but.kind, but.n, but.n2, spellId, uint32(but.spell),
+                     but.stacks ? but.stacks : stacks);
             return;
         }
         std::string const kind = but.kind;
@@ -1313,11 +1548,14 @@ namespace
     // l'etat porte (auras 20 et 21, leur periode dans le sort). Ne reste que la
     // durabilite, que l'effet 111 sait bien reparer mais en le journalisant,
     // quand l'ecriture directe du module est muette.
-    void SmallAction(Player* player, std::string const& action, int32 n, uint32 /*spellId*/ = 0)
+    void SmallAction(Player* player, std::string const& action, int32 n, uint32 spellId = 0)
     {
         if (action == "repair") Mend(player, uint32(n));
+        // `hurt` : une part des PV MAX, arrachee a chaque battement. Elle ne
+        // tue pas -- le joueur ne descend jamais sous un point de vie.
+        else if (action == "hurt") Bleed(player, PctOf(player->GetMaxHealth(), n), spellId);
     }
-    bool SmallKind(std::string const& a) { return a == "repair"; }
+    bool SmallKind(std::string const& a) { return a == "repair" || a == "hurt"; }
 
     // -- aura helpers ----------------------------------------------------------
 
@@ -1336,11 +1574,18 @@ namespace
 
     // Pose l'aura du niveau en y ecrivant, effet par effet, la part demandee
     // des scores du joueur. Rend false si le sort ne nomme aucun score.
-    bool LayRatingShare(Player* player, uint32 spellId, std::vector<int32> const& parts, int32 seconds)
+    bool LayRatingShare(Player* player, uint32 spellId, std::vector<int32> const& parts, int32 seconds,
+                        int32 cumuls = 1)
     {
         SpellInfo const* const info = sSpellMgr->GetSpellInfo(spellId);
         if (!info || !player)
             return false;
+        // LES CUMULS SURVIVENT A LA MESURE. L'aura part pour que sa propre
+        // part ne se compte pas dans le score lu ; sans ce rappel, chaque pose
+        // la faisait repartir a UN cumul et la ligne ne montait jamais.
+        int32 deja = 0;
+        if (Aura const* ancienne = player->GetAura(spellId, player->GetGUID()))
+            deja = int32(ancienne->GetStackAmount());
         player->RemoveAurasDueToSpell(spellId);          // sa part ne compte pas
         int32 bp[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
         bool porte[MAX_SPELL_EFFECTS] = { false, false, false };
@@ -1361,8 +1606,13 @@ namespace
             nomme = porte[i] = true;
             int32 const own = std::max<int32>(0, int32(player->GetUInt32Value(
                 uint16(PLAYER_FIELD_COMBAT_RATING_1) + uint16(cr))));
-            // La face du de ajoute le dernier point, comme partout ailleurs.
-            bp[i] = int32(std::llround(double(own) * part / 100.0)) - 1;
+            // LA VALEUR FINALE, ET RIEN DE MOINS. `CastCustomSpell` ne prend pas
+            // un chiffre de DBC : `Spell::SetSpellValue` (Spell.cpp:8556) range
+            // `CalcBaseValue(valeur)`, qui retranche le de lui-meme et le
+            // rendra a `CalcValue`. Retrancher le point ici le retranchait deux
+            // fois -- et une part qui ne vaut qu'un point disparaissait tout
+            // entiere (1 % de 60 en penetration d'armure, carte 82 niveau 3).
+            bp[i] = int32(std::llround(double(own) * part / 100.0));
         }
         if (!nomme)
             return false;
@@ -1370,12 +1620,22 @@ namespace
         // valeur que pour les effets qu'on remplit.
         player->CastCustomSpell(player, spellId, porte[0] ? &bp[0] : nullptr,
                                 porte[1] ? &bp[1] : nullptr, porte[2] ? &bp[2] : nullptr, true);
-        if (seconds)
-            if (Aura* laid = player->GetAura(spellId, player->GetGUID()))
+        if (Aura* laid = player->GetAura(spellId, player->GetGUID()))
+        {
+            // Le cumul d'avant, et un de plus, sans depasser le plafond de la
+            // ligne : le coeur multiplie lui-meme la part par les cumuls.
+            if (cumuls > 1)
+            {
+                uint8 const veut = uint8(std::min<int32>(deja + 1, cumuls));
+                if (veut > 1)
+                    laid->SetStackAmount(veut);
+            }
+            if (seconds)
             {
                 laid->SetMaxDuration(seconds * 1000);
                 laid->SetDuration(seconds * 1000);
             }
+        }
         return true;
     }
 
@@ -1413,7 +1673,8 @@ namespace
             Reader r(params);
             _state = r.Word();
             static char const* const noArg[] = { "shield", "twohand", "dualwield", "unarmed", "solo", "night", "day",
-                                                 "dawn_dusk", "combat", "nocombat", "rested", "water", "charmed" };
+                                                 "dawn_dusk", "combat", "nocombat", "rested", "water", "charmed",
+                                                 "heirloom" };
             bool ok = false;
             for (char const* s : noArg)
                 if (_state == s)
@@ -1424,6 +1685,8 @@ namespace
                 ok = r.Int(1, 3600, _n) || (error = _state + " expects the seconds", false);
             else if (_state == "hp_below" || _state == "hp_above" || _state == "mana_below")
                 ok = r.Int(1, 100, _n) || (error = _state + " expects a percentage", false);
+            else if (_state == "aura")
+                ok = r.Int(902000, 903999, _n) || (error = "aura expects a spell of the module", false);
             else if (_state == "gold_above")
                 ok = r.Int(1, 2000000000, _n) || (error = "gold_above expects an amount of copper", false);
             else if (_state == "hour")
@@ -1443,6 +1706,10 @@ namespace
             {
                 std::string const word = r.Word();
                 if (word == "stacks" && r.Int(2, 100, _stacks))
+                    continue;
+                // `grow:<k>` : CHAQUE BATTEMENT AJOUTE UN CUMUL a l'aura du
+                // niveau, jusqu'a k. « chaque tic +2% degats. 10 cumuls ».
+                if (word == "grow" && r.Int(2, 100, _monte))
                     continue;
                 // and:<etat> : DEUX etats a la fois, « la nuit ET hors combat ».
                 // Seuls les etats sans chiffre s'y ajoutent.
@@ -1477,7 +1744,22 @@ namespace
                         _ratingParts.push_back(autre);
                     continue;
                 }
-                error = "after the state, only stacks:<k>, tick:<sec>:<action>:<n> or rating:<pct> may follow";
+                // hitroll:<quoi> -- CE QUE LE DE DU COUP BLANC NE DONNE PLUS
+                // tant que l'etat tient. Le meme vocabulaire que la famille.
+                if (word == "hitroll")
+                {
+                    _hitroll = r.Word();
+                    if (_hitroll.empty()) { error = "hitroll expects a word"; return false; }
+                    continue;
+                }
+                // sp:<pct> -- UNE PART DE LA PUISSANCE DES SORTS du joueur,
+                // relue tant que l'etat tient : le DBC ne porte pas ce
+                // chiffre-la, le module l'y met a la pose. Le meme chemin que
+                // chez `proc`, dont c'est deja la garniture.
+                if (word == "sp" && r.Int(1, 1000, _spPct))
+                    continue;
+                error = "after the state, only stacks:<k>, tick:<sec>:<action>:<n>, "
+                        "sp:<pct> or rating:<pct> may follow";
                 return false;
             }
             return true;
@@ -1492,6 +1774,14 @@ namespace
             {
                 _ticked = 0;
                 SmallAction(player, _tickAction, _tickN, _spellId);
+                // L'AURA QUI MONTE AVEC LES BATTEMENTS.
+                if (_monte)
+                {
+                    ApplyOwned(player, _spellId);
+                    if (Aura* aura = player->GetAura(_spellId, player->GetGUID()))
+                        if (int32(aura->GetStackAmount()) < _monte)
+                            aura->ModStackAmount(1);
+                }
             }
         }
         void OnEnterCombat(Player* player) override { Check(player); }
@@ -1505,6 +1795,25 @@ namespace
                 return;
             _stillSince = 0;
             RemoveOwned(player, _spellId);
+        }
+        // LE DE DU COUP BLANC, tant que l'etat tient.
+        void OnMeleeRoll(Player* player, Unit* /*autre*/, bool mien, int32& /*crit*/,
+                         int32& /*miss*/, int32& dodge, int32& parry, int32& block) override
+        {
+            if (_hitroll.empty() || !player || !Holds(player))
+                return;
+            if (_hitroll == "noblock")
+            {
+                if (mien)
+                    block = 0;
+                return;
+            }
+            if (mien)
+                return;
+            if (_hitroll == "nododge")
+                dodge = 0;
+            else if (_hitroll == "noparry")
+                parry = 0;
         }
 
     private:
@@ -1601,6 +1910,33 @@ namespace
                 LayRatingShare(player, _spellId, _ratingParts, 0);
                 return;
             }
+            // UNE PART DE LA PUISSANCE DES SORTS, de meme : l'aura est retiree
+            // d'abord, pour qu'elle ne se nourrisse pas d'elle-meme. Les effets
+            // que le DBC porte deja a leur chiffre -- le revers d'une ligne,
+            // par exemple -- ne sont pas ecrases : seuls les deux premiers
+            // (degats et soins) recoivent la part.
+            if (_spPct)
+            {
+                int32 const own = std::max(0, player->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC));
+                int32 const bp = int32(std::llround(double(own) * _spPct / 100.0));
+                if (Aura const* deja = player->GetAura(_spellId, player->GetGUID()))
+                    if (AuraEffect const* premier = deja->GetEffect(0))
+                        if (premier->GetAmount() == bp)
+                            return;             // rien n'a bouge
+                RemoveOwned(player, _spellId);
+                SpellInfo const* const info = sSpellMgr->GetSpellInfo(_spellId);
+                int32 veut[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
+                for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                {
+                    if (!info)
+                        continue;
+                    bool const part = info->Effects[i].ApplyAuraName == SPELL_AURA_MOD_DAMAGE_DONE
+                                   || info->Effects[i].ApplyAuraName == SPELL_AURA_MOD_HEALING_DONE;
+                    veut[i] = part ? bp : info->Effects[i].CalcValue(player);
+                }
+                player->CastCustomSpell(player, _spellId, &veut[0], &veut[1], &veut[2], true);
+                return;
+            }
             ApplyOwned(player, _spellId);
             if (_stacks > 1 && _n > 0)
             {
@@ -1613,8 +1949,9 @@ namespace
                         aura->SetStackAmount(uint8(want));
             }
         }
-        std::string _state, _and, _tickAction;
-        int32 _n = 0, _m = 0, _stacks = 1, _tickEvery = 0, _tickN = 0, _ratingPct = 0;
+        std::string _state, _and, _tickAction, _hitroll;
+        int32 _n = 0, _m = 0, _stacks = 1, _tickEvery = 0, _tickN = 0, _ratingPct = 0, _spPct = 0;
+        int32 _monte = 0;           // les cumuls que les battements ajoutent
         std::vector<int32> _ratingParts;
         uint32 _ticked = 0;
         uint32 _stillSince = 0;
@@ -1624,6 +1961,26 @@ namespace
     // =========================================================================
     // proc:<event>:<chance>:<icd>:<action>[:<params>][:trigger:<spell>][:cost:<kind>:<n>]
     // =========================================================================
+    // LE SORT D'UNE FIOLE : declare ici, la ou le proc en a besoin ; ce que
+    // « potion » veut dire est dit plus bas, aupres des autres fioles.
+    bool EstUnePotion(Spell* spell);
+
+    // UN SORT DE METIER QUI CREE UN OBJET : ce que le classeur appelle
+    // « objet fabrique ». Conjurer du pain n'en est pas -- la competence doit
+    // etre un METIER, primaire ou secondaire, et le coeur le dit lui-meme.
+    bool EstUneFabrication(SpellInfo const* info)
+    {
+        if (!info || (!info->HasEffect(SPELL_EFFECT_CREATE_ITEM) && !info->HasEffect(SPELL_EFFECT_CREATE_ITEM_2)))
+            return false;
+        SkillLineAbilityMapBounds bornes = sSpellMgr->GetSkillLineAbilityMapBounds(info->Id);
+        for (auto it = bornes.first; it != bornes.second; ++it)
+            if (SkillLineEntry const* ligne = sSkillLineStore.LookupEntry(it->second->SkillLine))
+                if (ligne->categoryId == SKILL_CATEGORY_PROFESSION
+                    || ligne->categoryId == SKILL_CATEGORY_SECONDARY)
+                    return true;
+        return false;
+    }
+
     class Proc : public StellarTarotScript
     {
     public:
@@ -1635,10 +1992,17 @@ namespace
                                                  "enter_instance", "dmg_taken_back",
                                                  "hit_spell", "hit_ranged", "dmg_taken", "dmg_taken_phys", "dmg_taken_magic", "spell_cast",
                                                  "spell_cast_dmg", "spell_cast_heal", "spell_cast_timed",
+                                                 "school_change", "school_same", "spell_repeat", "craft", "potion", "pet_death",
+                                                 "spell_cast_periodic", "enter_capital",
+                                                 "hits_taken_row", "played", "loot_grey", "ally_death", "hit_far", "run", "spell_many",
+                                                 "ally_reached",
+                                                 "tool",
+                                                 "hour_strike",
                                                  "spell_crit_fire", "wand",
                                                  "heal", "heal_ally", "heal_full", "enter_combat", "leave_combat", "levelup", "resurrect",
                                                  "zone", "quest", "loot_gold", "vendor_buy", "repair",
-                                                 "flight_end", "loot_creature", "vendor_sell",
+                                                 "flight_end", "loot_creature", "loot_humanoid", "vendor_sell",
+                                                 "auction_post", "auction_won",
                                                  "jump", "jump_combat", "death", "pet_hit",
                                                  "crit", "spell_crit", "heal_crit", "dodge", "parry", "block", "crit_taken", "miss",
                                                  "fever" };
@@ -1649,6 +2013,22 @@ namespace
             {
                 known = true;
                 if (!r.Int(1, 86400, _eventN)) { error = "dismount expects the seconds"; return false; }
+            }
+            // `hits_taken_row:<n>` : n coups SUBIS d'affilee sans en rendre.
+            // `played:<sec>` : toutes les sec secondes passees EN JEU.
+            if (_event == "hits_taken_row" || _event == "played" || _event == "ally_death"
+                || _event == "hit_far" || _event == "run" || _event == "spell_many")
+            {
+                if (!r.Int(1, 86400, _eventN))
+                { error = _event + " expects its count"; return false; }
+            }
+            // `ally_reached:<m>:<sec>` : un allie qui etait a plus de m metres
+            // et qu'on a rejoint en moins de sec secondes.
+            if (_event == "ally_reached")
+            {
+                known = true;
+                if (!r.Int(1, 200, _eventN) || !r.Int(1, 60, _eventM))
+                { error = "ally_reached expects the metres then the seconds"; return false; }
             }
             if (_event == "spin")
             {
@@ -1701,12 +2081,24 @@ namespace
             {
                 if (!r.Int(1, 3600, _a) || !r.Int(1, 1000, _b)) { error = "burn expects the seconds then the share"; return false; }
             }
-            else if (A == "none" || A == "restore" || A == "recast" || A == "repair_all" || A == "next_crit" || A == "next_sure"
-                     || A == "next_instant"
+            // `next_crit[:<combien>]` : le compte des sorts promis vit dans le
+            // DBC (ProcCharges) ; la ligne le dit pour que le generateur l'y
+            // mette, et le moteur n'en fait rien de plus.
+            else if (A == "next_crit")
+            {
+                r.OptInt(1, 10, _a);
+                ok = true;
+            }
+            else if (A == "none" || A == "restore" || A == "recast" || A == "repair_all" || A == "next_sure"
+                     || A == "next_instant" || A == "next_all" || A == "next_quick"
+                     || A == "next_sharp"
                      || A == "extra_shot" || A == "extra_copy" || A == "free_repair" || A == "crate"
+                     || A == "craft_copy" || A == "craft_refund" || A == "reset_one_cooldown"
+                     || A == "reset_all_cooldowns"
                      || A == "grey_item" || A == "gem")
                 ok = true;
-            else if (A == "repair_one" || A == "refund" || A == "resurrect")
+            else if (A == "repair_one" || A == "refund" || A == "refund_amount" || A == "resurrect"
+                     || A == "reflect" || A == "cast_next")
                 ok = r.Int(1, 100, _a);
             else if (A == "mana_pm")
                 ok = r.Int(1, 1000, _a);
@@ -1716,15 +2108,93 @@ namespace
                 ok = r.Int(0, 86400, _a) && r.Int(1, 100, _b);
             else if (A == "aura_group")
                 ok = r.Int(1, 86400, _a) && r.Int(1, 100, _b);
-            else if (A == "heal" || A == "mana" || A == "heal_both" || A == "leech" || A == "mirror"
+            else if (A == "heal_other" || A == "heal" || A == "mana" || A == "heal_both" || A == "leech" || A == "mirror"
                      || A == "copper_per_damage"
                      || A == "free_next" || A == "cooldowns" || A == "reset_cooldowns" || A == "repair" || A == "gold_mult"
                      || A == "immune_snare" || A == "root" || A == "stun" || A == "disorient" || A == "fear" || A == "sleep"
-                     || A == "silence" || A == "knockback")
+                     || A == "silence" || A == "knockback" || A == "pull")
                 ok = r.Int(1, 100000, _a);
-            else if (A == "gold_level" || A == "silver_level")
+            else if (A == "reset_long_cooldowns")
+            {
+                if (!r.Int(1, 86400, _a)) { error = "reset_long_cooldowns expects the seconds"; return false; }
+                r.OptInt(1, 100, _b);
+            }
+            else if (A == "sleep_area" || A == "stun_area" || A == "fear_area")
+            {
+                if (!r.Int(1, 60, _a) || !r.Int(1, 100, _b))
+                { error = A + " expects the seconds then the radius"; return false; }
+            }
+            // `gold_slice:<tranche>:<or>:<plafond>` : tant d'or par tranche de
+            // tant d'or possede, jamais au-dela du plafond. Tout en PIECES D'OR.
+            else if (A == "gold_slice")
+            {
+                if (!r.Int(1, 1000000, _a) || !r.Int(1, 1000000, _b) || !r.Int(1, 1000000, _c))
+                { error = "gold_slice expects the slice, the gold and the cap"; return false; }
+            }
+            else if (A == "invisible")
+            {
+                if (!r.Int(1, 60, _a)) { error = "invisible expects the seconds"; return false; }
+                // `still` : et le joueur ne peut rien faire pendant ce temps --
+                // « invisible, intangible, aucune action ».
+                if (!r.End() && r.Peek() == "still")
+                {
+                    r.Word();
+                    _b = 1;
+                }
+            }
+            // `to_gold:<facteur>` : l'objet est change en or, tant de fois son
+            // prix de vente.
+            // `ignore_armor:<pct>` : le coup porte comme si la cible avait
+            // d'autant moins d'armure. On ne triche pas sur la formule -- c'est
+            // CELLE DU COEUR qu'on rejoue, avec une armure allegee, et l'on
+            // ajoute la difference.
+            else if (A == "ignore_armor")
+            {
+                if (!r.Int(1, 100, _a)) { error = "ignore_armor expects the percentage"; return false; }
+            }
+            // `lucky_event:<sec>:<cuivre par niveau>` : PILE OU FACE. Ou bien
+            // la bourse s'arrondit, ou bien l'aura du niveau se pose pour le
+            // temps dit -- « evenement chanceux, or ou +10% statistiques ».
+            else if (A == "lucky_event")
+            {
+                if (!r.Int(1, 86400, _a) || !r.Int(1, 1000000, _b))
+                { error = "lucky_event expects the seconds then the copper per level"; return false; }
+            }
+            // `spread_dots:<m>` : ce que le joueur avait pose sur le mort passe
+            // sur un autre ennemi, a portee.
+            else if (A == "spread_dots")
+            {
+                if (!r.Int(1, 100, _a)) { error = "spread_dots expects the radius"; return false; }
+            }
+            // `wild_splash:<pct>:<m>` : une cible au hasard alentour -- amie ou
+            // non -- prend cette part du coup.
+            else if (A == "wild_splash")
+            {
+                if (!r.Int(1, 1000, _a) || !r.Int(1, 100, _b))
+                { error = "wild_splash expects the share then the radius"; return false; }
+            }
+            else if (A == "to_gold")
+            {
+                if (!r.Int(1, 1000, _a)) { error = "to_gold expects the factor"; return false; }
+            }
+            else if (A == "craft_skill" || A == "extra_attack")
+            {
+                if (!r.Int(1, 10, _a)) { error = A + " expects its count"; return false; }
+            }
+            else if (A == "loot_item")
+                ok = r.Int(902000, 902999, _a);
+            else if (A == "gold_level" || A == "silver_level" || A == "gold" || A == "loot_gold_level")
                 ok = r.Int(1, 100000000, _a);
-            else if (A == "shield_self" || A == "shield_target" || A == "splash" || A == "cleave" || A == "explode"
+            else if (A == "loot_gold_rand" || A == "loot_gold_boss")
+                ok = r.Int(0, 100000, _a) && r.Int(0, 100000, _b);
+            // Les deux bouts de l'echelle, en CUIVRE : ce que laisse un monstre
+            // de niveau 1, et ce que laisse un monstre du palier haut.
+            else if (A == "loot_gold_scale")
+                ok = r.Int(1, 2000000000, _a) && r.Int(1, 2000000000, _b);
+            else if (A == "summon")
+                ok = r.Int(902000, 903999, _a) && r.Int(1, 3600, _b);
+            else if (A == "shield_self" || A == "shield_target" || A == "shield_other"
+                     || A == "splash" || A == "cleave" || A == "explode"
                      || A == "heal_group" || A == "heal_ally_amount" || A == "heal_pet" || A == "bleed" || A == "blink")
                 ok = r.Int(1, 10000, _a) && r.Int(0, 10000, _b);
             else if (A == "bleed_hit")
@@ -1732,7 +2202,7 @@ namespace
             else if (A == "turn" || A == "turn_ally")
                 ok = r.Int(1, 3600, _a) && (r.OptInt(1, 100, _b) || true);
             else if (A == "shield_ally" || A == "shield_group" || A == "damage_sp" || A == "damage_ap" || A == "extra"
-                     || A == "explode_sp" || A == "hp_dmg")
+                     || A == "explode_sp" || A == "explode_ap" || A == "hp_dmg")
                 ok = r.Int(1, 10000, _a) && r.Int(0, 10000, _b) && (r.OptInt(0, 10000, _c) || true);
             else
             {
@@ -1790,6 +2260,74 @@ namespace
                 // sp:<pct> : l'aura que l'action pose porte une puissance des
                 // sorts lue sur celle du joueur, comme chez « cond ».
                 if (word == "sp" && r.Int(1, 1000, _spPct))
+                    continue;
+                // heal:<pct> : LE SOIN QUI ACCOMPAGNE L'ACTION. Une ligne ne
+                // porte qu'une action, et certaines cartes en promettent deux
+                // d'un coup -- « rend 10% PV ET +20% vitesse de course ». Le
+                // soin se donne AVANT l'action, comme le texte le dit.
+                if (word == "heal" && r.Int(1, 100, _healPct))
+                    continue;
+                // only:<etat>[:<n>] : LA LIGNE NE PART QUE SOUS CET ETAT. Le
+                // meme vocabulaire que « cond », lu au meme endroit : « Seul,
+                // sortie de combat », « Si 2 armes equipees : ... ».
+                if (word == "only")
+                {
+                    _only = r.Word();
+                    if (_only.empty()) { error = "only expects a state"; return false; }
+                    r.OptInt(1, 2000000000, _onlyN);
+                    // Un second chiffre, quand l'etat en demande deux :
+                    // « only:stacks:<sort>:<combien> ».
+                    r.OptInt(1, 2000000000, _onlyM);
+                    continue;
+                }
+                // deadline:<sec> : L'ECHEANCE. Chaque fois que la ligne part,
+                // le compte repart ; s'il arrive au bout EN COMBAT sans que
+                // rien ne soit reparti, le joueur tombe a un point de vie.
+                if (word == "deadline" && r.Int(1, 3600, _echeance))
+                    continue;
+                // reset : TOUS LES TEMPS DE RECHARGE remis a zero avant
+                // l'action. Une ligne ne porte qu'une action, et certaines
+                // cartes en promettent deux d'un coup.
+                if (word == "reset")
+                {
+                    _reset = true;
+                    continue;
+                }
+                // restore : PV ET MANA REMIS A PLEIN avant l'action. Une
+                // ligne ne porte qu'une action, et certaines cartes en
+                // promettent deux -- « PV et mana restaures, +5% vitesse de
+                // course, 5 min ».
+                if (word == "restore")
+                {
+                    _restore = true;
+                    continue;
+                }
+                // spend:<sort>[:<sort>...] : CE QUE LA LIGNE DEPENSE en
+                // payant. Les auras nommees -- celles qu'un AUTRE niveau de la
+                // meme carte empile -- sont retirees quand la ligne part.
+                // « le prochain sort consomme les 5 cumuls ».
+                if (word == "spend")
+                {
+                    int32 sort = 0;
+                    while (r.OptInt(902000, 903999, sort))
+                        _depense.push_back(uint32(sort));
+                    if (_depense.empty()) { error = "spend expects at least one spell"; return false; }
+                    continue;
+                }
+                // ally_hit:<pct>:<m> : LE COUP TOUCHE AUSSI UN ALLIE, pour
+                // cette part. C'est une garniture et non une action : la ligne
+                // garde la sienne pour ce qu'elle fait a la CIBLE.
+                if (word == "ally_hit" && r.Int(1, 1000, _coupAllie) && r.Int(1, 100, _coupAllieM))
+                    continue;
+                // heal_dealt:<pct> : TANT QUE L'AURA DE LA LIGNE TIENT, ce
+                // que le joueur inflige le soigne d'autant. C'est ainsi qu'une
+                // promesse « +300% degats et vous soigne du meme montant » se
+                // tient : l'aura porte les degats, la garniture le soin.
+                if (word == "heal_dealt" && r.Int(1, 1000, _soinDuCoup))
+                    continue;
+                // low:<pct> : LA LIGNE NE PART QUE BLESSE. « Degats subis SOUS
+                // 20% PV » -- l'evenement est le meme, la garde s'ajoute.
+                if (word == "low" && r.Int(1, 100, _low))
                     continue;
                 // rating:<pct>[:<pct>...] : une part par score nomme.
                 if (word == "rating" && r.Int(-1000, 1000, _ratingPct))
@@ -2111,6 +2649,98 @@ namespace
                     Fire(player, player->GetVictim(), 0);
                 _wasBelow = below;
             }
+            // COURIR SANS S'ARRETER ET SANS ETRE TOUCHE. La course doit etre
+            // CONTINUE : s'arreter remet le compte a zero, tout comme un coup
+            // encaisse (voir OnDamageTaken). La ligne ne part qu'une fois par
+            // course : le compte repart apres qu'elle a paye.
+            else if (_event == "run")
+            {
+                float const x = player->GetPositionX(), y = player->GetPositionY();
+                bool const bouge = std::fabs(x - _courseX) > 0.1f || std::fabs(y - _courseY) > 0.1f;
+                _courseX = x; _courseY = y;
+                if (!bouge)
+                {
+                    _course = 0;
+                    return;
+                }
+                if (++_course >= uint32(_eventN))
+                {
+                    _course = 0;
+                    Fire(player, nullptr, 0);
+                }
+            }
+            // L'ALLIE QU'ON REJOINT : on retient depuis quand chacun etait
+            // LOIN ; celui qu'on retrouve a portee assez vite paie la ligne.
+            else if (_event == "ally_reached")
+            {
+                uint32 const now = uint32(GameTime::GetGameTime().count());
+                for (Player* ami : GroupAround(player, 200.0f))
+                {
+                    if (!ami || ami == player)
+                        continue;
+                    ObjectGuid const qui = ami->GetGUID();
+                    float const d = player->GetDistance(ami);
+                    if (d > float(_eventN))
+                    {
+                        _loin[qui] = now;
+                        continue;
+                    }
+                    auto const it = _loin.find(qui);
+                    if (it == _loin.end())
+                        continue;
+                    bool const vite = now - it->second <= uint32(_eventM);
+                    _loin.erase(it);
+                    if (vite)
+                        Fire(player, ami, ami->GetMaxHealth());
+                }
+            }
+            // L'ECHEANCE QUI TUE : en combat seulement, et remise a zero par
+            // chaque depart de la ligne. Hors combat, rien ne court.
+            if (_echeance)
+            {
+                uint32 const now = uint32(GameTime::GetGameTime().count());
+                if (!player->IsInCombat())
+                    _depuisEcheance = now;
+                else if (!_depuisEcheance)
+                    _depuisEcheance = now;
+                else if (now - _depuisEcheance >= uint32(_echeance))
+                {
+                    _depuisEcheance = now;
+                    if (player->GetHealth() > 1)
+                        Bleed(player, uint32(player->GetHealth() - 1), _spellId);
+                }
+            }
+            // TOUTES LES N SECONDES PASSEES EN JEU : le compte ne court que
+            // tant que le joueur est la, et repart a zero a chaque paiement.
+            else if (_event == "played")
+            {
+                if (++_secondesDeJeu >= uint32(_eventN))
+                {
+                    _secondesDeJeu = 0;
+                    Fire(player, nullptr, 0);
+                }
+            }
+            // L'HEURE PLEINE : le serveur ne sonne pas les heures, la ligne
+            // regarde donc l'horloge a chaque tic. La premiere lecture ne
+            // sonne rien -- on ne sait pas encore d'ou l'on vient.
+            else if (_event == "hour_strike")
+            {
+                int const heure = LocalHour();
+                if (_heureVue >= 0 && heure != _heureVue)
+                    Fire(player, nullptr, 0);
+                _heureVue = heure;
+            }
+            // LE FAMILIER EST MORT : le coeur ne previent personne, la ligne
+            // regarde donc elle-meme, une fois par seconde. Un maitre qui
+            // range sa bete ne la perd pas : seule une bete MORTE compte.
+            else if (_event == "pet_death")
+            {
+                Pet* const bete = player->GetPet();
+                bool const vivante = bete && bete->IsAlive();
+                if (_avaitBete && !vivante)
+                    Fire(player, nullptr, 0);
+                _avaitBete = vivante;
+            }
             // The end of a flight: the core tells no one when a taxi sets its
             // passenger down, so the card watches -- once a second is enough
             // for something that lasts minutes.
@@ -2165,6 +2795,36 @@ namespace
                 _mirrorAmount = 0;
                 return;
             }
+            // COMBIEN DE MONDE UN SORT A TOUCHE : le coeur ne le dit pas. On
+            // compte les coups que LE MEME sort porte a des victimes
+            // DIFFERENTES ; un nouveau sort, ou une seconde qui passe, remet
+            // le compte a zero.
+            if (_event == "spell_many" && spell && spellId && victim)
+            {
+                uint32 const now = uint32(GameTime::GetGameTimeMS().count());
+                if (spellId != _sortTouche || now - _depuisTouche > 500)
+                {
+                    _sortTouche = spellId;
+                    _depuisTouche = now;
+                    _touches.clear();
+                    _ditTouche = false;
+                }
+                _touches.insert(victim->GetGUID());
+                if (!_ditTouche && int32(_touches.size()) >= _eventN)
+                {
+                    _ditTouche = true;
+                    Fire(player, victim, damage);
+                }
+            }
+            // UN COUP PORTE DE LOIN : la distance au moment ou il tombe.
+            if (_event == "hit_far" && victim && player->GetDistance(victim) > float(_eventN))
+                Fire(player, victim, damage);
+            // LA PROMESSE QUI SOIGNE : tant que l'aura de la ligne tient, ce
+            // que le joueur inflige le soigne d'autant.
+            if (_soinDuCoup && damage && _spellId && player->HasAura(uint32(_spellId)))
+                Heal(player, player, PctOf(damage, _soinDuCoup), _spellId);
+            // RENDRE UN COUP rompt la serie des coups subis.
+            _coupsSubis = 0;
             if (spellId)
                 _lastSpellId = spellId;
             // L'ECOLE DU COUP : une ligne qui double les degats sans nommer
@@ -2234,8 +2894,24 @@ namespace
             }
         }
         void OnDamageTaken(Player* player, Unit* attacker, uint32& damage, bool spell, uint32 /*school*/,
-                           uint32 /*spellId*/) override
+                           uint32 spellId) override
         {
+            // LE SORT QU'ON VIENT DE SUBIR : « le reflechir » n'a pas d'autre
+            // source, le coeur ne le gardant nulle part.
+            if (spell && spellId)
+                _sortSubi = spellId;
+            // UN COUP ENCAISSE ROMPT LA COURSE.
+            _course = 0;
+            // LES COUPS SUBIS D'AFFILEE SANS EN RENDRE : en rendre un remet le
+            // compte a zero (voir OnDamageDealt).
+            if (_event == "hits_taken_row")
+            {
+                if (++_coupsSubis >= uint32(_eventN))
+                {
+                    _coupsSubis = 0;
+                    Fire(player, attacker, damage);
+                }
+            }
             if (_event == "dmg_taken" || (_event == "dmg_taken_phys" && !spell) || (_event == "dmg_taken_magic" && spell))
                 Fire(player, attacker, damage);
             // DANS LE DOS : l'assaillant n'est pas dans le demi-cercle que le
@@ -2301,12 +2977,91 @@ namespace
                     }
                 }
             }
+            // CHANGER D'ECOLE, ou rester dans la meme : on retient l'ecole du
+            // sort precedent, et c'est la comparaison qui fait partir la ligne.
+            // Le TOUT PREMIER sort n'est ni un changement ni une repetition :
+            // il n'y a rien avant lui.
+            else if (_event == "school_change" || _event == "school_same")
+            {
+                uint32 const ecole = uint32(info->GetSchoolMask());
+                bool const meme = _ecoleIncantee != 0 && (_ecoleIncantee & ecole) != 0;
+                fires = _event == "school_same" ? meme : (_ecoleIncantee != 0 && !meme);
+                _ecoleIncantee = ecole;
+            }
+            // LE MEME SORT RELANCE : le precedent portait deja ce numero.
+            else if (_event == "spell_repeat")
+            {
+                fires = _sortIncante == info->Id;
+                _sortIncante = info->Id;
+            }
+            // UN SORT QUI BAT : il pose un effet periodique -- poison, flamme,
+            // regain. Le coeur le dit dans le sort lui-meme.
+            else if (_event == "spell_cast_periodic")
+            {
+                fires = false;
+                for (uint8 i = 0; i < MAX_SPELL_EFFECTS && !fires; ++i)
+                    fires = info->Effects[i].Effect == SPELL_EFFECT_APPLY_AURA
+                         && info->Effects[i].Amplitude > 0;
+            }
+            // UNE POTION BUE : le sort vient d'une fiole que le joueur avale.
+            else if (_event == "potion")
+                fires = EstUnePotion(spell);
+            // UN OBJET FABRIQUE : un sort qui cree un objet ET qui releve d'un
+            // METIER. Le sort porte tout ce qu'il faut -- ce qui sort, et ce
+            // qu'il consomme -- et le coeur prend les composants APRES la
+            // ligne : ce qu'on rend se rend donc au tour suivant.
+            else if (_event == "craft")
+                fires = EstUneFabrication(info);
             if (fires)
             {
                 _lastCast = spell;
                 Fire(player, spell->m_targets.GetUnitTarget(), 0);
                 _lastCast = nullptr;
             }
+        }
+        // L'HOTEL DES VENTES : deux moments qui portent une somme, et c'est
+        // elle que l'action rembourse.
+        void OnAuctionPosted(Player* player, uint32 deposit) override
+        {
+            if (_event == "auction_post" && deposit)
+                Fire(player, nullptr, deposit);
+        }
+        void OnAuctionWon(Player* player, uint32 price) override
+        {
+            if (_event == "auction_won" && price)
+                Fire(player, nullptr, price);
+        }
+        // UN OBJET GRIS QUI ENTRE DANS LES SACS. Le montant que la ligne
+        // recevra est le PRIX DE VENTE de ce qui vient d'arriver, pile par
+        // pile : c'est sur lui que la pierre de l'alchimiste compte.
+        void OnItemGained(Player* player, Item* item, uint32 count) override
+        {
+            if (_event != "loot_grey" || !item)
+                return;
+            ItemTemplate const* const modele = item->GetTemplate();
+            if (!modele || modele->Quality != ITEM_QUALITY_POOR || !modele->SellPrice)
+                return;
+            uint32 const combien = std::max<uint32>(1, count);
+            uint64 const valeur = uint64(modele->SellPrice) * combien;
+            // CHANGE EN OR : l'objet s'en va, et sa valeur -- multipliee --
+            // entre dans la bourse. L'action se joue ICI, la ou l'objet est
+            // encore sous la main ; `Fire` ne le porterait pas jusqu'a elle.
+            if (_action == "to_gold")
+            {
+                if (!Ready(player))
+                    return;
+                uint32 const entry = modele->ItemId;
+                uint64 const du = std::min<uint64>(valeur * uint64(_a), 2000000000ULL);
+                PlusTard(player, TOUR_SUIVANT, [entry, combien, du](Player* p)
+                {
+                    p->DestroyItemCount(entry, combien, true);
+                    p->ModifyMoney(int32(du));
+                });
+                Owe(player, _spellId, _say ? uint32(_say) : STELLAR_TAROT_STR_LUCKY, du, true);
+                Pay(player);
+                return;
+            }
+            Fire(player, nullptr, uint32(std::min<uint64>(valeur, 2000000000ULL)));
         }
         void OnJump(Player* player) override
         {
@@ -2323,13 +3078,21 @@ namespace
         void OnDeath(Player* player) override { if (_event == "death") Fire(player, nullptr, 0); }
         [[nodiscard]] uint32 Watches() const override
         {
-            if (_event == "death_near") return GUET_MORT_ALENTOUR;
+            if (_event == "death_near" || _event == "ally_death") return GUET_MORT_ALENTOUR;
             if (_event == "spin") return GUET_ROTATION;
             if (_event == "jump" || _event == "jump_combat") return GUET_SAUT;
             return 0;
         }
         // UNE MORT AUX ALENTOURS, de la main de n'importe qui : la ligne dit
         // sa portee, et c'est ici qu'on la mesure.
+        // UN ALLIE QUI TOMBE, a portee. Le module cherche lui-meme : le coeur
+        // ne previent que le tueur.
+        void OnAllyDeath(Player* player, Player* mort) override
+        {
+            if (_event != "ally_death" || !mort || player->GetDistance(mort) > float(_eventN))
+                return;
+            Fire(player, mort, mort->GetMaxHealth());
+        }
         void OnNearbyDeath(Player* player, Unit* died) override
         {
             if (_event != "death_near" || !died || player->GetDistance(died) > float(_eventN))
@@ -2340,7 +3103,23 @@ namespace
         void OnLeaveCombat(Player* player) override { if (_event == "leave_combat") Fire(player, nullptr, 0); }
         void OnLevelUp(Player* player) override { if (_event == "levelup") Fire(player, nullptr, 0); }
         void OnResurrect(Player* player) override { if (_event == "resurrect") Fire(player, nullptr, 0); }
-        void OnZone(Player* player, uint32 /*zone*/, uint32 /*area*/) override { if (_event == "zone") Fire(player, nullptr, 0); }
+        void OnZone(Player* player, uint32 zone, uint32 area) override
+        {
+            if (_event == "zone")
+            {
+                Fire(player, nullptr, 0);
+                return;
+            }
+            // UNE CAPITALE : le coeur le dit dans la table des zones
+            // (AREA_FLAG_CAPITAL). Entrer, c'est n'y avoir pas ete au coup
+            // d'avant -- une zone et ses quartiers valent pour une seule.
+            if (_event != "enter_capital")
+                return;
+            bool const dedans = EstUneCapitale(area) || EstUneCapitale(zone);
+            if (dedans && !_enCapitale)
+                Fire(player, nullptr, 0);
+            _enCapitale = dedans;
+        }
         void OnQuestComplete(Player* player, Quest const* /*quest*/) override { if (_event == "quest") Fire(player, nullptr, 0); }
         // The gold of a loot, before it is taken: gold_mult multiplies it.
         void OnLootMoney(Player* player, uint32& copper) override
@@ -2365,14 +3144,87 @@ namespace
         // window, and the card would give what the creature never held.
         void OnCreatureLoot(Player* player, Loot* loot) override
         {
-            if (_event != "loot_creature" || !loot)
+            if (!loot || (_event != "loot_creature" && _event != "loot_humanoid"))
                 return;
+            // `loot_humanoid` : le meme moment, mais le cadavre doit etre celui
+            // d'un humanoide. Le coeur porte le type dans le gabarit.
+            if (_event == "loot_humanoid")
+            {
+                Unit* const source = ObjectAccessor::GetUnit(*player, loot->sourceWorldObjectGUID);
+                Creature* const bete = source ? source->ToCreature() : nullptr;
+                if (!bete || bete->GetCreatureType() != CREATURE_TYPE_HUMANOID)
+                    return;
+            }
             if (_action == "crate")
             {
                 if (!Ready(player))
                     return;
                 loot->AddItem(LootStoreItem(STELLAR_TAROT_ITEM_CRATE, 0, 100.0f, false,
                                             LOOT_MODE_DEFAULT, 0, 1, 1));
+                Pay(player);
+            }
+            // UN COFFRE D'OR SUR LE CADAVRE : de _a a _b pieces d'or, plus une
+            // monnaie de poche tiree au hasard -- 0 a 99 pieces d'argent et
+            // autant de cuivre, pour que le chiffre n'ait jamais l'air rond.
+            // `loot_gold_boss` ne repond qu'aux boss : le coeur dit lequel
+            // (`Creature::isWorldBoss`, et le rang du gabarit).
+            else if (_action == "loot_gold_rand" || _action == "loot_gold_boss")
+            {
+                if (_action == "loot_gold_boss")
+                {
+                    Unit* const source = ObjectAccessor::GetUnit(*player, loot->sourceWorldObjectGUID);
+                    Creature* const bete = source ? source->ToCreature() : nullptr;
+                    if (!bete || !IsBoss(bete))
+                        return;
+                }
+                if (!Ready(player))
+                    return;
+                loot->gold += urand(uint32(_a), uint32(_b)) * 10000 + urand(0, 99) * 100 + urand(0, 99);
+                Pay(player);
+            }
+            // UNE BOURSE DANS UN CADAVRE QUI N'EN PORTAIT PAS. La ligne ne
+            // touche jamais a l'or que le monstre avait deja : elle ne remplit
+            // qu'une bourse VIDE -- c'est ce que disent « laisse de l'or plus
+            // souvent » et « laisse toujours de l'or ».
+            //
+            // LE MONTANT SUIT LE NIVEAU DU MORT, en droite ligne d'un bout a
+            // l'autre de l'echelle, et le hasard l'ecarte de 15 % au plus. Un
+            // BOSS est compte au palier haut, quel que soit son niveau.
+            else if (_action == "loot_gold_scale")
+            {
+                if (loot->gold)
+                    return;
+                Unit* const source = ObjectAccessor::GetUnit(*player, loot->sourceWorldObjectGUID);
+                Creature* const bete = source ? source->ToCreature() : nullptr;
+                uint32 niveau = bete ? bete->GetLevel() : player->GetLevel();
+                if (bete && IsBoss(bete))
+                    niveau = PALIER_HAUT;
+                niveau = std::min<uint32>(std::max<uint32>(niveau, 1), PALIER_HAUT);
+                if (!Ready(player))
+                    return;
+                double const part = double(niveau - 1) / double(PALIER_HAUT - 1);
+                double const droit = double(_a) + (double(_b) - double(_a)) * part;
+                int32 const ecart = int32(urand(0, 30)) - 15;          // -15 % a +15 %
+                loot->gold += uint32(std::max<int64>(1, std::llround(droit * (100 + ecart) / 100.0)));
+                Pay(player);
+            }
+            // DE L'OR DANS LE CADAVRE : le coeur porte la bourse du butin, et
+            // le joueur la ramasse avec le reste. Rien de plus qu'un chiffre
+            // ajoute la ou le monde met le sien.
+            else if (_action == "loot_gold_level")
+            {
+                if (!Ready(player))
+                    return;
+                loot->gold += uint32(_a) * player->GetLevel();
+                Pay(player);
+            }
+            // UN OBJET NOMME, pose dans le cadavre : c'est la carte qui dit
+            // lequel, et le joueur le ramasse avec le reste.
+            else if (_action == "loot_item")
+            {
+                if (!Ready(player))
+                    return;
+                loot->AddItem(LootStoreItem(uint32(_a), 0, 100.0f, false, LOOT_MODE_DEFAULT, 0, 1, 1));
                 Pay(player);
             }
             // Une babiole de plus sur le cadavre : une piece grise de l'age du
@@ -2503,6 +3355,12 @@ namespace
                 return false;
             if (_onlyDark && !IsNight() && player->IsOutdoors())
                 return false;
+            // LA GARDE DE SANTE : la ligne dort tant que le joueur va bien.
+            if (_low && player->GetHealthPct() >= float(_low))
+                return false;
+            // L'ETAT QUE LA LIGNE EXIGE, s'il y en a un.
+            if (!_only.empty() && !EtatTenu(_only, _onlyN, _onlyM, player, player, nullptr))
+                return false;
             if (_onlyNight && !IsNight())
                 return false;
             uint32 const now = uint32(GameTime::GetGameTime().count());
@@ -2572,6 +3430,49 @@ namespace
                 return;
             // L'INSTRUMENT DE MESURE : un depart de plus pour cette ligne.
             StellarTarotEffects::CompteDepart(player, _spellId, other);
+            // LE SOIN QUI ACCOMPAGNE : il tombe avant l'action, dans l'ordre
+            // ou la carte l'annonce.
+            // UN ALLIE PREND SA PART DU COUP : la ligne le dit en garniture, et
+            // sa propre action reste pour la cible.
+            if (_coupAllie && amount)
+            {
+                std::list<Player*> amis;
+                Acore::AnyPlayerInObjectRangeCheck check(player, float(_coupAllieM));
+                Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(player, amis, check);
+                Cell::VisitObjects(player, searcher, float(_coupAllieM));
+                std::vector<Player*> bons;
+                for (Player* ami : amis)
+                    if (ami && ami != player && ami->IsAlive())
+                        bons.push_back(ami);
+                if (!bons.empty())
+                    Hurt(player, bons[urand(0, uint32(bons.size()) - 1)],
+                         Part(Mesure::Coup, _coupAllie, player, amount), 1, _spellId);
+            }
+            // CE QUE LA LIGNE DEPENSE : les cumuls qu'un autre niveau tenait
+            // s'en vont, puisqu'ils viennent d'etre employes.
+            for (uint32 sort : _depense)
+                player->RemoveAurasDueToSpell(sort);
+            // L'ECHEANCE REPART : la ligne vient de payer.
+            if (_echeance)
+                _depuisEcheance = uint32(GameTime::GetGameTime().count());
+            // TOUS LES TEMPS DE RECHARGE REMIS A ZERO, avant l'action.
+            if (_reset)
+            {
+                std::vector<uint32> ids;
+                for (auto const& [spellId, cd] : player->GetSpellCooldownMap())
+                    ids.push_back(spellId);
+                for (uint32 spellId : ids)
+                    player->RemoveSpellCooldown(spellId, true);
+            }
+            // PV ET MANA REMIS A PLEIN, avant tout le reste : le coeur les
+            // porte lui-meme, et le joueur voit sa barre se remplir.
+            if (_restore)
+            {
+                player->SetFullHealth();
+                player->SetPower(POWER_MANA, player->GetMaxPower(POWER_MANA));
+            }
+            if (_healPct)
+                Heal(player, player, PctOf(player->GetMaxHealth(), _healPct), _spellId);
             // The night figure stands in for the action's own while it lasts.
             int32 const day = _a;
             if (_nightA && IsNight())
@@ -2594,13 +3495,13 @@ namespace
                 // qu'elle ne se nourrisse pas d'elle-meme.
                 // UNE PART DES SCORES : meme chemin que la puissance des
                 // sorts, mais score par score.
-                if (_ratingPct && A == "aura" && LayRatingShare(player, _spellId, _ratingParts, _a))
+                if (_ratingPct && A == "aura" && LayRatingShare(player, _spellId, _ratingParts, _a, _b))
                     return;
                 if (_spPct && A == "aura")
                 {
                     RemoveOwned(player, _spellId);
                     int32 const own = std::max(0, player->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC));
-                    int32 const bp = int32(std::llround(double(own) * _spPct / 100.0)) - 1;
+                    int32 const bp = int32(std::llround(double(own) * _spPct / 100.0));
                     player->CastCustomSpell(player, _spellId, &bp, &bp, &bp, true);
                     if (Aura* laid = player->GetAura(_spellId, player->GetGUID()))
                     {
@@ -2654,7 +3555,7 @@ namespace
                     {
                         p->RemoveAurasDueToSpell(first, p->GetGUID());
                         p->RemoveAurasDueToSpell(spell, p->GetGUID());
-                        int32 const bp = pct - 1;       // le de du sort ajoute le dernier point
+                        int32 const bp = pct;           // entier : le coeur retranche le de lui-meme
                         p->CastCustomSpell(p, spell, &bp, &bp, &bp, true);
                         if (Aura* second = p->GetAura(spell, p->GetGUID()))
                         {
@@ -2697,10 +3598,31 @@ namespace
                 _mirrorAmount = std::max<uint32>(1, PctOf(amount, _a));
                 player->CastSpell(other, _lastSpellId, true);
             }
+            // LE SORT SUBI, RENVOYE A SON LANCEUR : c'est le sort lui-meme qui
+            // repart -- ses images, son ecole, son journal -- au nom du joueur.
+            else if (A == "reflect")
+            {
+                if (!other || !_sortSubi)
+                    return;
+                if (_a < 100)
+                {
+                    _mirrorSpell = _sortSubi;
+                    _mirrorAmount = std::max<uint32>(1, PctOf(amount, _a));
+                }
+                player->CastSpell(other, _sortSubi, true);
+            }
             else if (A == "heal_group")
             {
                 for (Player* member : GroupAround(player, float(_b)))
                     Heal(player, member, PctOf(member->GetMaxHealth(), _a), _spellId);
+            }
+            // CELUI QUE L'EVENEMENT NOMME, soigne d'une part de SES PROPRES PV
+            // max -- la jumelle de `heal_group`, pour un seul. L'allie en
+            // danger (`ally_low`) est celui-la.
+            else if (A == "heal_other")
+            {
+                if (other && other->IsAlive())
+                    Heal(player, other, PctOf(other->GetMaxHealth(), _a), _spellId);
             }
             else if (A == "heal_ally_amount")
             {
@@ -2747,17 +3669,27 @@ namespace
                     Heal(player, pet, PctOf(pet->GetMaxHealth(), _a), _spellId);
                 Heal(player, player, PctOf(player->GetMaxHealth(), _b), _spellId);
             }
-            else if (A == "gold_level" || A == "silver_level")
+            else if (A == "gold_level" || A == "silver_level" || A == "gold")
             {
-                uint64 const copper = uint64(_a) * (A == "silver_level" ? 100 : 1) * player->GetLevel();
+                // `gold` : un montant fixe, en cuivre. Les deux autres le
+                // multiplient par le niveau du joueur.
+                uint64 const copper = A == "gold" ? uint64(_a)
+                                    : uint64(_a) * (A == "silver_level" ? 100 : 1) * player->GetLevel();
                 player->ModifyMoney(int32(copper));
                 Owe(player, _spellId, _say ? uint32(_say) : STELLAR_TAROT_STR_BINGO, copper, true);
             }
             else if (A == "copper_per_damage") player->ModifyMoney(int32(std::min<uint64>(uint64(amount) * uint64(_a), 100000000ULL)));
-            else if (A == "shield_self" || A == "shield_target")
+            else if (A == "shield_self" || A == "shield_target" || A == "shield_other")
             {
-                int32 const bp = int32(A == "shield_self" ? PctOf(player->GetMaxHealth(), _a) : PctOf(amount, _a));
-                Unit* who = A == "shield_self" ? player : other;
+                // `shield_other` : CELUI QUE L'EVENEMENT NOMME, protege d'une
+                // part de SES PROPRES points de vie -- la jumelle de
+                // `heal_other`. `shield_target` compte sur le MONTANT du coup.
+                Unit* const who = A == "shield_self" ? player : other;
+                if (!who)
+                    return;
+                int32 const bp = int32(A == "shield_self" ? PctOf(player->GetMaxHealth(), _a)
+                                     : A == "shield_other" ? PctOf(who->GetMaxHealth(), _a)
+                                                           : PctOf(amount, _a));
                 if (bp > 0)
                     Put(player, who, STELLAR_TAROT_SPELL_SHIELD, _b ? _b : 15, &bp);
             }
@@ -2803,19 +3735,23 @@ namespace
                     return;
                 Hurt(player, other, Part(Mesure::ViesMaxDuLanceur, _a, player), uint32(_b ? _b : 32), _spellId);
             }
-            else if (A == "splash" || A == "explode" || A == "explode_sp")
+            else if (A == "splash" || A == "explode" || A == "explode_sp" || A == "explode_ap")
             {
                 if (!other)
                     return;
                 // `explode` mesure les points de vie maximum de la victime :
                 // c'est le chiffre que l'evenement `kill` a deja porte jusqu'ici.
                 uint32 const dmg = A == "explode_sp" ? Part(Mesure::PuissanceDesSorts, _a, player)
+                                 : A == "explode_ap" ? Part(Mesure::PuissanceDAttaque, _a, player)
                                                      : Part(Mesure::Coup, _a, player, amount);
                 uint32 const school = A == "explode_sp" ? uint32(_c ? _c : 64) : 1;
                 if (A == "explode" && other->IsCreature() && IsBoss(other->ToCreature()))
                     return;
                 player->CastSpell(player, school == 1 ? STELLAR_TAROT_SPELL_VISUAL_PHYS : STELLAR_TAROT_SPELL_VISUAL_MAGIC, true);
-                for (Unit* unit : HostilesAround(player, other, float(_b), other))
+                // SANS CADAVRE, C'EST LE JOUEUR QUI EXPLOSE : un evenement
+                // comme « mana sous 10% » ne nomme personne.
+                Unit* const centre = other ? other : player;
+                for (Unit* unit : HostilesAround(player, centre, float(_b), centre))
                     Hurt(player, unit, dmg, school, _spellId);
             }
             else if (A == "cleave")
@@ -2823,6 +3759,13 @@ namespace
                 for (Unit* unit : HostilesAround(player, player, float(_b), other))
                     if (player->HasInArc(float(M_PI), unit))
                         Hurt(player, unit, PctOf(amount, _a), 1, _spellId);
+            }
+            // UN GARDIEN QUI VIENT AU SECOURS : le coeur l'invoque et le
+            // reprend a l'heure dite ; son IA fait le reste.
+            else if (A == "summon")
+            {
+                player->SummonCreature(uint32(_a), *player, TEMPSUMMON_TIMED_DESPAWN,
+                                       uint32(_b) * 1000);
             }
             else if (A == "root") Put(player, other, STELLAR_TAROT_SPELL_ROOT, _a);
             else if (A == "stun") Put(player, other, STELLAR_TAROT_SPELL_STUN, _a);
@@ -2885,6 +3828,18 @@ namespace
             }
             else if (A == "fear") Put(player, other, STELLAR_TAROT_SPELL_FEAR, _a);
             else if (A == "sleep") Put(player, other, STELLAR_TAROT_SPELL_SLEEP, _a);
+            // LE MEME SORT, MAIS SUR TOUT CE QUI EST AUTOUR : le centre est
+            // celui que l'evenement nomme, ou le joueur a defaut.
+            else if (A == "sleep_area" || A == "stun_area" || A == "fear_area")
+            {
+                WorldObject* const centre = other ? static_cast<WorldObject*>(other) : player;
+                uint32 const sort = A == "sleep_area" ? STELLAR_TAROT_SPELL_SLEEP
+                                  : (A == "stun_area" ? STELLAR_TAROT_SPELL_STUN
+                                                      : STELLAR_TAROT_SPELL_FEAR);
+                for (Unit* unit : HostilesAround(player, centre, float(_b), nullptr))
+                    if (unit && unit->IsAlive())
+                        Put(player, unit, sort, _a);
+            }
             else if (A == "silence") Put(player, other, STELLAR_TAROT_SPELL_SILENCE, _a);
             else if (A == "immune_snare") Put(player, player, STELLAR_TAROT_SPELL_IMMUNE_SNARE, _a);
             else if (A == "bleed")
@@ -2908,6 +3863,15 @@ namespace
                 // La part vaut pour CHAQUE tic, et jamais moins d'un point.
                 int32 const perTick = std::max(1, int32(PctOf(amount, _b)));
                 Put(player, other, STELLAR_TAROT_SPELL_BURN, _a, &perTick);
+            }
+            // ATTIRER VERS LA CIBLE ce qui l'entoure : le coeur deplace les
+            // creatures lui-meme, et le client suit.
+            else if (A == "pull")
+            {
+                Unit* const centre = other ? other : player;
+                for (Unit* unit : HostilesAround(player, centre, float(_a), centre))
+                    if (unit && unit->IsAlive() && unit->IsCreature())
+                        unit->GetMotionMaster()->MoveJump(*centre, 12.0f, 6.0f);
             }
             else if (A == "knockback")
             {
@@ -2938,24 +3902,264 @@ namespace
                 uint32 const promesse = _spellId;
                 PlusTard(player, TOUR_SUIVANT, [promesse](Player* p) { Put(p, p, promesse, 0); });
             }
-            else if (A == "free_next" || A == "next_instant")
+            // `cast_next` est la meme promesse que `next_instant`, mais pour une
+            // PART du temps d'incantation : l'aura du niveau porte le
+            // modificateur (108, SPELLMOD_CASTING_TIME) et le coeur la depense
+            // au premier sort qui l'emploie.
+            else if (A == "free_next" || A == "next_instant" || A == "cast_next"
+                     || A == "next_all" || A == "next_quick" || A == "next_sharp")
                 Put(player, player, _spellId, 0);
             // LA PROMESSE EST TOUTE DANS L'AURA : +100 % de critique (aura 290)
             // pour `next_crit`, 500 points d'expertise (aura 240) pour
             // `next_sure` -- de quoi passer l'esquive ET la parade sous zero,
             // que le coeur lit dans le coup blanc comme dans la competence. Le
             // module ne decide plus d'aucune issue.
-            else if (A == "next_crit" || A == "next_sure")
+            else if (A == "next_crit")
             {
                 // L'ETAT TIENT JUSQU'A CE QU'IL SERVE : il promet le prochain
                 // coup, pas les vingt prochaines secondes. Une attaque ratee de
                 // plus ne le consomme pas -- rien n'a ete donne, rien n'est du.
+                // Il est arme par un NON-IMPACT (attaque ratee, esquive,
+                // pirouette) : rien ne peut le devorer a l'instant ou il se
+                // pose, et il n'a donc pas besoin d'attendre.
                 Put(player, player, _spellId, 0);
             }
+            // LA PROMESSE DE COUP ATTEND LE COUP SUIVANT. Celle-la est armee
+            // PAR un impact, et c'est un impact qui la consomme : posee
+            // sur-le-champ, elle tombait dans la ronde de procs du coup meme --
+            // le coeur la voyait naitre et mourir dans la meme image, et elle
+            // n'a jamais promis le coup SUIVANT. Un tour d'horloge plus tard,
+            // ce coup est clos. Meme remede que `cost_next`, et pour la meme
+            // raison.
+            else if (A == "next_sure")
+            {
+                uint32 const promesse = _spellId;
+                PlusTard(player, TOUR_SUIVANT, [promesse](Player* p) { Put(p, p, promesse, 0); });
+            }
+            // CE QUE L'ETABLI VIENT DE RENDRE, une fois de plus. L'objet est
+            // celui du sort lui-meme : rien n'est invente. On attend le tour
+            // suivant, le coeur n'ayant pas encore range le premier exemplaire.
+            else if (A == "craft_copy")
+            {
+                SpellInfo const* const recette = _lastCast ? _lastCast->GetSpellInfo() : nullptr;
+                if (recette)
+                    for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                        if ((recette->Effects[i].Effect == SPELL_EFFECT_CREATE_ITEM
+                             || recette->Effects[i].Effect == SPELL_EFFECT_CREATE_ITEM_2)
+                            && recette->Effects[i].ItemType)
+                        {
+                            uint32 const quoi = recette->Effects[i].ItemType;
+                            uint32 const combien = std::max<uint32>(1, uint32(recette->Effects[i].CalcValue(player)));
+                            PlusTard(player, TOUR_SUIVANT, [quoi, combien](Player* p) { p->AddItem(quoi, combien); });
+                        }
+            }
+            // LES COMPOSANTS RENDUS : le coeur les prend au bout de la ligne,
+            // et on les remet dans les sacs juste apres. La recette ne change
+            // pas -- le joueur les ravale, simplement.
+            else if (A == "craft_refund")
+            {
+                SpellInfo const* const recette = _lastCast ? _lastCast->GetSpellInfo() : nullptr;
+                if (recette)
+                    for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                        if (recette->Reagent[i] > 0 && recette->ReagentCount[i] > 0)
+                        {
+                            uint32 const quoi = uint32(recette->Reagent[i]);
+                            uint32 const combien = uint32(recette->ReagentCount[i]);
+                            PlusTard(player, TOUR_SUIVANT, [quoi, combien](Player* p) { p->AddItem(quoi, combien); });
+                        }
+            }
+            // UN POINT DE COMPETENCE DE PLUS : c'est le coeur qui le donne, par
+            // sa propre montee de metier, a chance certaine.
+            else if (A == "craft_skill")
+            {
+                SpellInfo const* const recette = _lastCast ? _lastCast->GetSpellInfo() : nullptr;
+                if (recette)
+                {
+                    SkillLineAbilityMapBounds bornes = sSpellMgr->GetSkillLineAbilityMapBounds(recette->Id);
+                    for (auto it = bornes.first; it != bornes.second; ++it)
+                        if (uint16 const metier = uint16(it->second->SkillLine))
+                            if (player->HasSkill(metier))
+                            {
+                                for (int32 n = 0; n < std::max(1, _a); ++n)
+                                    player->UpdateSkillPro(metier, 10000, 1);
+                                break;
+                            }
+                }
+            }
+            // LA COMPETENCE OU LE SORT, RELANCE : le coeur le relance
+            // TRIGGERED -- donc sans incantation, sans cout et sans recharge.
+            // Un lancement en cours le nomme ; a defaut, c'est le dernier sort
+            // qui a porte. Un coup d'arme blanc n'en nomme aucun : rien ne se
+            // relance, et c'est ce que le texte dit.
             else if (A == "recast")
             {
-                if (_lastCast && _lastCast->GetSpellInfo())
-                    player->CastSpell(other ? other : player, _lastCast->GetSpellInfo()->Id, true);
+                uint32 const quoi = (_lastCast && _lastCast->GetSpellInfo())
+                                  ? _lastCast->GetSpellInfo()->Id : _lastSpellId;
+                if (quoi)
+                    player->CastSpell(other ? other : player, quoi, true);
+            }
+            // UNE PART DE LA SOMME QUE L'EVENEMENT PORTE, rendue au joueur :
+            // le depot d'une enchere, le prix d'une enchere remportee.
+            else if (A == "refund_amount")
+            {
+                if (!amount)
+                    return;
+                uint32 const rendu = uint32(std::min<uint64>(uint64(amount) * uint64(_a) / 100,
+                                                            2000000000ULL));
+                if (!rendu)
+                    return;
+                player->ModifyMoney(int32(rendu));
+                Owe(player, _spellId, _say ? uint32(_say) : STELLAR_TAROT_STR_REBATE, rendu, true);
+            }
+            // PILE OU FACE : l'or, ou l'aura du niveau.
+            else if (A == "lucky_event")
+            {
+                if (urand(0, 1) == 0)
+                {
+                    uint64 const du = uint64(_b) * player->GetLevel();
+                    player->ModifyMoney(int32(std::min<uint64>(du, 2000000000ULL)));
+                    Owe(player, _spellId, _say ? uint32(_say) : STELLAR_TAROT_STR_LUCKY, du, true);
+                }
+                else if (Aura* aura = player->AddAura(uint32(_spellId), player))
+                {
+                    aura->SetMaxDuration(_a * 1000);
+                    aura->SetDuration(_a * 1000);
+                }
+            }
+            // CE QUE LE MORT PORTAIT PASSE A UN AUTRE : les auras PERIODIQUES
+            // que le joueur avait posees sur lui, et elles seules, avec ce
+            // qu'il leur restait a vivre.
+            else if (A == "spread_dots")
+            {
+                if (!other)
+                    return;
+                Unit* suivant = nullptr;
+                for (Unit* unit : HostilesAround(player, other, float(_a), other))
+                    if (unit && unit->IsAlive())
+                    {
+                        suivant = unit;
+                        break;
+                    }
+                if (!suivant)
+                    return;
+                struct Reprise { uint32 sort; int32 duree; uint8 cumuls; };
+                std::vector<Reprise> reprises;
+                for (auto const& [id, aura] : other->GetOwnedAuras())
+                {
+                    if (!aura || aura->GetCasterGUID() != player->GetGUID())
+                        continue;
+                    SpellInfo const* const info = aura->GetSpellInfo();
+                    bool bat = false;
+                    for (uint8 i = 0; i < MAX_SPELL_EFFECTS && !bat; ++i)
+                        bat = info && info->Effects[i].Amplitude > 0;
+                    if (!bat || aura->GetDuration() <= 0)
+                        continue;
+                    reprises.push_back({ id, aura->GetDuration(), aura->GetStackAmount() });
+                }
+                for (Reprise const& r : reprises)
+                    if (Aura* posee = player->AddAura(r.sort, suivant))
+                    {
+                        posee->SetDuration(r.duree);
+                        if (r.cumuls > 1)
+                            posee->SetStackAmount(r.cumuls);
+                    }
+            }
+            // UNE CIBLE AU HASARD ALENTOUR, amie ou non : le coup part de
+            // travers, et c'est ce que la carte promet.
+            else if (A == "wild_splash")
+            {
+                std::list<Unit*> autour;
+                Acore::AnyUnitInObjectRangeCheck check(player, float(_b));
+                Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(player, autour, check);
+                Cell::VisitObjects(player, searcher, float(_b));
+                std::vector<Unit*> bons;
+                for (Unit* unit : autour)
+                    if (unit && unit != player && unit != other && unit->IsAlive()
+                        && !unit->IsTotem() && unit->IsVisible())
+                        bons.push_back(unit);
+                if (bons.empty())
+                    return;
+                Hurt(player, bons[urand(0, uint32(bons.size()) - 1)],
+                     Part(Mesure::Coup, _a, player, amount), 1, _spellId);
+            }
+            // L'ARMURE IGNOREE : la formule du coeur, rejouee avec une armure
+            // allegee. La difference s'ajoute au coup -- rien n'est invente.
+            else if (A == "ignore_armor")
+            {
+                if (!other || !amount)
+                    return;
+                uint32 const entier = Unit::CalcArmorReducedDamage(player, other, amount, nullptr);
+                if (!entier || entier >= amount)
+                    return;
+                // Ce que l'armure a mange, et la part qu'on lui reprend.
+                uint32 const mange = amount - entier;
+                Hurt(player, other, PctOf(mange, _a), 1, _spellId);
+            }
+            // TANT D'OR PAR TRANCHE D'OR POSSEDE : la bourse se lit au moment
+            // ou la ligne paie, et le plafond la borne.
+            else if (A == "gold_slice")
+            {
+                uint64 const tranches = player->GetMoney() / (uint64(_a) * 10000);
+                uint64 const du = std::min<uint64>(tranches * uint64(_b), uint64(_c)) * 10000;
+                if (!du)
+                    return;
+                player->ModifyMoney(int32(std::min<uint64>(du, 2000000000ULL)));
+                Owe(player, _spellId, _say ? uint32(_say) : STELLAR_TAROT_STR_LUCKY, du, true);
+            }
+            // DISPARAITRE : l'invisibilite du coeur, posee sur le joueur pour
+            // le temps dit.
+            else if (A == "invisible")
+            {
+                Put(player, player, STELLAR_TAROT_SPELL_INVISIBLE, _a);
+                if (_b)
+                    Put(player, player, STELLAR_TAROT_SPELL_STUN, _a);
+            }
+            // UNE ATTAQUE DE PLUS, celle du coeur : il la porte lui-meme au
+            // prochain tour d'horloge, avec l'arme que le joueur tient.
+            else if (A == "extra_attack")
+                player->AddExtraAttacks(uint32(std::max(1, _a)));
+            // TOUT CE QUI RECHARGE, remis a zero d'un coup.
+            else if (A == "reset_all_cooldowns")
+            {
+                std::vector<uint32> ids;
+                for (auto const& [spellId, cd] : player->GetSpellCooldownMap())
+                    ids.push_back(spellId);
+                for (uint32 spellId : ids)
+                    player->RemoveSpellCooldown(spellId, true);
+            }
+            // LES LONGUES RECHARGES : celles dont le temps TOTAL depasse le
+            // seuil dit. Chacune tente sa chance a part, quand la ligne en
+            // donne une.
+            else if (A == "reset_long_cooldowns")
+            {
+                uint32 const now = GameTime::GetGameTimeMS().count();
+                std::vector<uint32> ids;
+                for (auto const& [spellId, cd] : player->GetSpellCooldownMap())
+                {
+                    if (cd.end <= now)
+                        continue;
+                    SpellInfo const* const info = sSpellMgr->GetSpellInfo(spellId);
+                    uint32 const total = info ? std::max(info->RecoveryTime, info->CategoryRecoveryTime) : 0;
+                    if (total < uint32(_a) * 1000)
+                        continue;
+                    if (_b && int32(urand(1, 100)) > _b)
+                        continue;
+                    ids.push_back(spellId);
+                }
+                for (uint32 spellId : ids)
+                    player->RemoveSpellCooldown(spellId, true);
+            }
+            // UN TEMPS DE RECHARGE AU HASARD, remis a zero : on ne prend que
+            // ceux qui courent vraiment, et un seul d'entre eux.
+            else if (A == "reset_one_cooldown")
+            {
+                uint32 const now = GameTime::GetGameTimeMS().count();
+                std::vector<uint32> ids;
+                for (auto const& [spellId, cd] : player->GetSpellCooldownMap())
+                    if (cd.end > now)
+                        ids.push_back(spellId);
+                if (!ids.empty())
+                    player->RemoveSpellCooldown(ids[urand(0, uint32(ids.size()) - 1)], true);
             }
             else if (A == "cooldowns")
             {
@@ -3022,6 +4226,19 @@ namespace
         // deux. La garniture `core:` le dit, le generateur l'ecrit.
         bool _coreChance = false, _coreIcd = false;
         int32 _eventN = 0, _eventM = 0, _row = 0, _spPct = 0, _ratingPct = 0, _countSpell = 0, _signSpell = 0;
+        int32 _healPct = 0;             // le soin qui accompagne l'action
+        int32 _low = 0;                 // la ligne ne part que sous ce seuil de PV
+        std::string _only;              // l'etat que la ligne exige, s'il y en a un
+        bool _restore = false;          // PV et mana remis a plein avant l'action
+        bool _reset = false;            // les recharges remises a zero avant l'action
+        int32 _echeance = 0;            // l'echeance, en secondes, avant de tomber a 1 PV
+        int32 _soinDuCoup = 0;          // ce que le coup soigne tant que l'aura tient
+        int32 _coupAllie = 0, _coupAllieM = 0;   // la part qu'un allie prend, et la portee
+        uint32 _depuisEcheance = 0;     // quand le compte a redemarre
+        std::map<ObjectGuid, uint32> _loin;   // depuis quand chaque allie etait loin
+        std::vector<uint32> _depense;   // les auras que la ligne consomme en payant
+        int32 _onlyN = 0;               // le chiffre de cet etat, quand il en demande un
+        int32 _onlyM = 0;               // son second chiffre, quand il en demande deux
         std::vector<int32> _ratingParts;
         int32 _debuffSpell = 0;
         uint32 _lastSpellId = 0, _mirrorSpell = 0, _mirrorAmount = 0;
@@ -3030,6 +4247,24 @@ namespace
         // _chance est EN POUR MILLE (25 = 2,5 %) ; la ligne, elle, l'ecrit en
         // pour-cent. Tout ce qui la lit ou l'annonce compte en pour mille.
         int32 _chance = 1000, _icd = 0, _a = 0, _b = 0, _c = 0, _trigger = 0, _nightEvery = 0;
+        // L'ECOLE et le NUMERO du sort PRECEDEMMENT INCANTE : « changement
+        // d'ecole », « sorts de meme ecole » et « meme sort relance » ne se
+        // lisent que la. A ne pas confondre avec `_lastSchool` et
+        // `_lastSpellId`, qui sont ceux du dernier COUP porte.
+        uint32 _ecoleIncantee = 0, _sortIncante = 0;
+        uint32 _sortSubi = 0;           // le dernier sort SUBI, pour le reflet
+        bool _avaitBete = false;        // le familier etait vivant au tour d'avant
+        int _heureVue = -1;             // l'heure lue au tour d'avant, -1 avant la premiere
+        bool _enCapitale = false;       // le joueur etait deja en capitale
+        uint32 _coupsSubis = 0;         // les coups subis d'affilee, sans en rendre
+        uint32 _secondesDeJeu = 0;      // les secondes passees en jeu depuis le dernier du
+        uint32 _course = 0;             // les secondes de course sans etre touche
+        float _courseX = 0.0f, _courseY = 0.0f;
+        // LE COMPTE DES CIBLES D'UN SORT : lesquelles, pour quel sort, et
+        // depuis quand -- le coeur ne tient rien de tout cela.
+        std::set<ObjectGuid> _touches;
+        uint32 _sortTouche = 0, _depuisTouche = 0;
+        bool _ditTouche = false;
         uint32 _venduEntry = 0;          // l'objet vendu, retenu jusqu'a l'arrivee de l'argent
         int32 _nightA = 0, _say = 0, _emote = 0, _thenPct = 0, _thenSec = 0, _thenSpell = 0;
         uint32 _seqUntil = 0;
@@ -3161,6 +4396,53 @@ namespace
                 Raise(damage);
         }
 
+        // LE TIC QUE LE JOUEUR SUBIT : la meme reduction que sur un coup. Sans
+        // cela « -5% degats subis » laissait passer les poisons, les brulures
+        // et les zones au sol a plein -- la carte promettait plus qu'elle ne
+        // tenait (releve en jeu le 2026-09-20, carte 83).
+        // CE QUE CETTE LIGNE FAIT A L'INSTANT. Elle ne pose aucune aura : sans
+        // cette phrase, rien au monde ne montre au joueur qu'un « -5% degats
+        // subis » est en force ou non.
+        bool DitSonEtat(Player* player, Unit* cible, std::string& out) override
+        {
+            char const* sens = _sense == Sense::Done ? "degats infliges"
+                             : _sense == Sense::Taken ? "degats subis"
+                             : _sense == Sense::Wand ? "degats de baguette"
+                             : "tics";
+            // Le sujet de la condition : la cible quand on frappe, le joueur
+            // quand on subit -- le meme partage qu'au moment du coup.
+            bool tient;
+            if (_sense == Sense::Taken)
+                tient = Meets(player, player, cible);
+            else
+                tient = cible && Meets(player, cible, player);
+            out = std::string(sens) + " " + (_pct > 0 ? "+" : "") + std::to_string(_pct) + "%";
+            if (!_cond.empty())
+                out += " si " + _cond + " : " + (tient ? "OUI" : "non");
+            else
+                tient = true;
+            if (_school)
+                out += " (ecole " + std::to_string(_school) + ")";
+            if (_chance != 100)
+                out += " (" + std::to_string(_chance) + "% de chance)";
+            out += tient ? " |ACTIF" : " |dormant";
+            return true;
+        }
+
+        void OnPeriodicTaken(Player* player, Unit* attacker, uint32& amount, uint32 spellId) override
+        {
+            if (_sense != Sense::Taken || !amount || !player)
+                return;
+            if (_school)
+            {
+                SpellInfo const* const info = sSpellMgr->GetSpellInfo(spellId);
+                if (!info || !(uint32(info->GetSchoolMask()) & uint32(_school)))
+                    return;
+            }
+            if (Meets(player, player, attacker))
+                Raise(amount);
+        }
+
         void OnPeriodicTick(Player* player, Unit* other, uint32& amount, bool heal,
                             uint32 spellId) override
         {
@@ -3265,6 +4547,407 @@ namespace
     //     total se relit a chaque battement, si bien que changer une piece ou
     //     sertir une gemme se voit dans la seconde.
     // =========================================================================
+    // =========================================================================
+    // randstat:<main|second>:<hausse>[:<baisse>]
+    //     UNE STATISTIQUE TIREE AU SORT, et une autre a la baisse quand la
+    //     ligne en demande une. Le tirage se fait quand la carte PREND EFFET --
+    //     a la connexion, ou a la pose -- et tient jusqu'a ce qu'elle parte.
+    //     Le chiffre est une part de ce que le joueur PORTE DEJA, comme
+    //     `ratingpct`.
+    //
+    //     PAS D'AURA, ET C'EST FORCE : le `EffectMiscValue` d'un sort dit
+    //     QUELLE statistique il majore, et il est ecrit dans le DBC. Aucun sort
+    //     ne peut dire « une statistique quelconque ». Le module emprunte donc
+    //     le chemin de `gempct` : `Poser`, celui-la meme que le coeur emploie
+    //     pour les statistiques d'un objet.
+    // =========================================================================
+    class RandStat : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            std::string const famille = r.Word();
+            if (famille != "main" && famille != "second" && famille != "speed")
+                return (error = "randstat expects main, second or speed", false);
+            _secondaires = (famille == "second");
+            _vitesse = (famille == "speed");
+            if (!r.Int(1, 1000, _haut))
+                return (error = "randstat expects the percentage", false);
+            // LA COURSE OU LA HATE : la course n'est pas une statistique
+            // d'objet, le coeur ne la connait que par une aura. La ligne nomme
+            // donc le sort qui la porte, et le module y met le chiffre.
+            if (_vitesse && !r.Int(902000, 903999, _sortVitesse))
+                return (error = "randstat speed expects its spell", false);
+            r.OptInt(1, 1000, _bas);
+            // UN NIVEAU PLUS HAUT RELEVE LES CHIFFRES : « les bonus passent a
+            // 12% ». Il ne porte aucun script ; c'est celui-ci qui LIT SON
+            // AURA pour savoir s'il doit compter plus grand -- le chemin meme
+            // que suit la fievre de la carte 52.
+            while (!r.End())
+            {
+                std::string const mot = r.Word();
+                if (mot == "up" && r.Int(902000, 903999, _sortHaut) && r.Int(1, 1000, _hautPlus))
+                    continue;
+                if (mot == "down" && r.Int(902000, 903999, _sortBas) && r.Int(1, 1000, _basPlus))
+                    continue;
+                // `pulse:<sec>` : EN COMBAT, le tirage recommence tous les tant
+                // de secondes. Hors combat, rien ne tient.
+                if (mot == "pulse" && r.Int(1, 3600, _cadence))
+                    continue;
+                // `every:<sec>` : le meme tirage qui revient, mais SANS que le
+                // combat y soit pour quelque chose -- « Connexion : une
+                // statistique au hasard, 6 h ».
+                if (mot == "every" && r.Int(1, 86400, _cadence))
+                {
+                    _horsCombat = true;
+                    continue;
+                }
+                // `hold:<sec>` : ce que le tirage tient, apres quoi il tombe.
+                if (mot == "hold" && r.Int(1, 3600, _tenue))
+                    continue;
+                // `then:<pct>:<sec>` : LA MEME statistique se retourne, ce
+                // chiffre-la, ce temps-la. Le signe est dans le chiffre.
+                if (mot == "then" && r.Int(-1000, 1000, _apres) && r.Int(1, 3600, _apresSec))
+                    continue;
+                return (error = "randstat: unknown trailer \"" + mot + "\"", false);
+            }
+            return true;
+        }
+
+        void Apply(Player* player) override
+        {
+            Rendre(player);
+            Tirer(player);
+            Regler(player);
+        }
+        void Remove(Player* player) override
+        {
+            Rendre(player);
+            if (_sortVitesse)
+                RemoveOwned(player, uint32(_sortVitesse));
+            _posee = 0;
+        }
+        // LE NIVEAU DU HAUT PEUT ARRIVER APRES : les auras de la carte se
+        // posent dans leur ordre. On relit a chaque battement, et le chiffre
+        // se corrige dans la seconde.
+        void OnTick(Player* player) override
+        {
+            // LE TIRAGE QUI REVIENT : hors combat, rien ne tient ; en combat,
+            // il recommence a la cadence dite, tient son temps, et se retourne
+            // ensuite si la ligne le demande.
+            if (_cadence)
+            {
+                uint32 const now = uint32(GameTime::GetGameTime().count());
+                if (!_horsCombat && !player->IsInCombat())
+                {
+                    if (_depuis)
+                    {
+                        Rendre(player);
+                        _depuis = 0;
+                        _retourne = false;
+                    }
+                    return;
+                }
+                if (!_depuis || now - _depuis >= uint32(_cadence))
+                {
+                    _depuis = now;
+                    _retourne = false;
+                    Rendre(player);
+                    Tirer(player);
+                }
+                else
+                {
+                    uint32 const ecoule = now - _depuis;
+                    // Le temps de tenue passe : la ligne se retourne, ou tombe.
+                    if (_tenue && ecoule >= uint32(_tenue))
+                    {
+                        bool const encore = _apres
+                            && ecoule < uint32(_tenue) + uint32(_apresSec);
+                        if (encore != _retourne)
+                        {
+                            _retourne = encore;
+                            Rendre(player);
+                        }
+                        if (!encore && !_apres)
+                        {
+                            Rendre(player);
+                            return;
+                        }
+                        if (!encore)
+                            return;
+                    }
+                }
+            }
+            Regler(player);
+        }
+
+    private:
+        struct Choix { uint32 mod; uint32 index; };
+
+        int32 _cadence = 0;         // le tirage recommence tous les tant de secondes
+        int32 _tenue = 0;           // ce qu'il tient
+        int32 _apres = 0;           // ce que la meme statistique prend ensuite
+        int32 _apresSec = 0;        // et pour combien de temps
+        uint32 _depuis = 0;         // l'heure du dernier tirage
+        bool _retourne = false;     // la ligne en est a sa seconde moitie
+        bool _horsCombat = false;   // le tirage revient meme hors combat
+
+        void Rendre(Player* player)
+        {
+            for (auto const& [mod, val] : _donne)
+                Poser(player, mod, val, false);
+            _donne.clear();
+        }
+
+        int32 Valeur(Player* player, Choix const& c) const
+        {
+            return _secondaires
+                 ? int32(player->GetUInt32Value(uint16(PLAYER_FIELD_COMBAT_RATING_1) + uint16(c.index)))
+                 : int32(player->GetStat(Stats(c.index)));
+        }
+
+        // LES CHIFFRES DU MOMENT : ceux de la ligne, ou ceux qu'un niveau plus
+        // haut impose quand son aura est la.
+        void Regler(Player* player)
+        {
+            int32 const haut = (_sortHaut && player->HasAura(uint32(_sortHaut))) ? _hautPlus : _haut;
+            // LA COURSE TIREE : une aura a elle, dont le module fixe le
+            // chiffre a la pose -- le DBC n'en porte aucun.
+            if (_vitesse && _courseTiree)
+            {
+                if (_posee != haut)
+                {
+                    RemoveOwned(player, uint32(_sortVitesse));
+                    int32 const bp = haut;
+                    Put(player, player, uint32(_sortVitesse), 0, &bp);
+                    _posee = haut;
+                }
+                return;
+            }
+            if (_choix.empty())
+                return;
+            int32 const bas  = (_sortBas  && player->HasAura(uint32(_sortBas)))  ? _basPlus  : _bas;
+            std::map<uint32, int32> veut;
+            for (size_t i = 0; i < _choix.size(); ++i)
+            {
+                // LA MEME STATISTIQUE, RETOURNEE : passe le temps de tenue,
+                // c'est le chiffre d'apres qui vaut, pour la premiere.
+                int32 const pct = (i == 0) ? (_retourne ? _apres : haut) : -bas;
+                int32 const val = int32(std::lround(double(Valeur(player, _choix[i])) * pct / 100.0));
+                if (val)
+                    veut[_choix[i].mod] = val;
+            }
+            if (veut == _donne)
+                return;
+            for (auto const& [mod, val] : _donne)
+                Poser(player, mod, val, false);
+            _donne = veut;
+            for (auto const& [mod, val] : _donne)
+                Poser(player, mod, val, true);
+        }
+
+        void Tirer(Player* player)
+        {
+            static Choix const PRINCIPALES[] = {
+                { ITEM_MOD_STRENGTH, STAT_STRENGTH }, { ITEM_MOD_AGILITY, STAT_AGILITY },
+                { ITEM_MOD_STAMINA, STAT_STAMINA }, { ITEM_MOD_INTELLECT, STAT_INTELLECT },
+                { ITEM_MOD_SPIRIT, STAT_SPIRIT },
+            };
+            static Choix const SECONDAIRES[] = {
+                { ITEM_MOD_CRIT_MELEE_RATING, CR_CRIT_MELEE },
+                { ITEM_MOD_HASTE_MELEE_RATING, CR_HASTE_MELEE },
+                { ITEM_MOD_HIT_MELEE_RATING, CR_HIT_MELEE },
+                { ITEM_MOD_DODGE_RATING, CR_DODGE },
+                { ITEM_MOD_PARRY_RATING, CR_PARRY },
+                { ITEM_MOD_EXPERTISE_RATING, CR_EXPERTISE },
+                { ITEM_MOD_ARMOR_PENETRATION_RATING, CR_ARMOR_PENETRATION },
+            };
+            if (_vitesse)
+            {
+                // Pile la course, face la hate. Le choix tient tant que la
+                // carte est la ; seul son chiffre suit le niveau.
+                _choix.clear();
+                _courseTiree = (urand(0, 1) == 0);
+                if (!_courseTiree)
+                    _choix.push_back({ ITEM_MOD_HASTE_RATING, CR_HASTE_MELEE });
+                return;
+            }
+            Choix const* const liste = _secondaires ? SECONDAIRES : PRINCIPALES;
+            uint32 const combien = _secondaires ? 7u : 5u;
+            // LE TIRAGE NE SE FAIT QU'UNE FOIS : les statistiques choisies
+            // tiennent tant que la carte est la ; seuls leurs CHIFFRES suivent
+            // le niveau.
+            _choix.clear();
+            uint32 const haut = urand(0, combien - 1);
+            _choix.push_back(liste[haut]);
+            if (!_bas)
+                return;
+            // UNE AUTRE, jamais la meme : le classeur dit « une autre ».
+            uint32 bas = urand(0, combien - 2);
+            if (bas >= haut)
+                ++bas;
+            _choix.push_back(liste[bas]);
+        }
+
+        bool _secondaires = false;
+        int32 _haut = 0, _bas = 0;
+        int32 _sortHaut = 0, _hautPlus = 0, _sortBas = 0, _basPlus = 0;
+        bool _vitesse = false, _courseTiree = false;
+        int32 _sortVitesse = 0, _posee = 0;
+        std::vector<Choix> _choix;      // la hausse d'abord, la baisse ensuite
+        std::map<uint32, int32> _donne;
+    };
+
+    // =========================================================================
+    // goldstat:<pct>:<tranche en cuivre>:<plafond>
+    //     CE QUE LA BOURSE DONNE : un pourcentage des statistiques principales
+    //     par tranche d'or possede, plafonne. Relu a chaque battement -- la
+    //     bourse change a tout moment, et le chiffre suit.
+    //
+    //     PAS D'AURA, pour la meme raison que `randstat` : le chiffre depend
+    //     de ce que le joueur porte a l'instant, et le DBC ne sait pas le dire.
+    //     Meme `Poser` que `gempct`, celui du coeur pour les objets.
+    // =========================================================================
+    class GoldStat : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 1000, _pct) && r.Int(1, 2000000000, _tranche) && r.Int(1, 1000, _plafond)
+                    && r.End())
+                || (error = "goldstat expects the percentage, the slice and the cap", false);
+        }
+        void Apply(Player* player) override { Regler(player); }
+        void Remove(Player* player) override { Rendre(player); }
+        void OnTick(Player* player) override { Regler(player); }
+
+    private:
+        void Rendre(Player* player)
+        {
+            for (auto const& [mod, val] : _donne)
+                Poser(player, mod, val, false);
+            _donne.clear();
+        }
+
+        void Regler(Player* player)
+        {
+            uint32 const tranches = uint32(player->GetMoney() / uint32(_tranche));
+            int32 const pct = std::min<int32>(_plafond, int32(tranches) * _pct);
+            std::map<uint32, int32> veut;
+            if (pct > 0)
+            {
+                static std::pair<uint32, uint32> const PRINCIPALES[] = {
+                    { ITEM_MOD_STRENGTH, STAT_STRENGTH }, { ITEM_MOD_AGILITY, STAT_AGILITY },
+                    { ITEM_MOD_STAMINA, STAT_STAMINA }, { ITEM_MOD_INTELLECT, STAT_INTELLECT },
+                    { ITEM_MOD_SPIRIT, STAT_SPIRIT },
+                };
+                for (auto const& [mod, stat] : PRINCIPALES)
+                {
+                    int32 const val = int32(std::lround(double(player->GetStat(Stats(stat))) * pct / 100.0));
+                    if (val)
+                        veut[mod] = val;
+                }
+            }
+            if (veut == _donne)
+                return;
+            Rendre(player);
+            _donne = veut;
+            for (auto const& [mod, val] : _donne)
+                Poser(player, mod, val, true);
+        }
+
+        int32 _pct = 0, _tranche = 0, _plafond = 0;
+        std::map<uint32, int32> _donne;
+    };
+
+    // =========================================================================
+    // cheatdeath:<secondes d'invulnerabilite>:<icd>
+    //     LE COUP QUI DEVAIT TUER NE TUE PAS. Le joueur reste a 1 PV, et rien
+    //     ne l'atteint pendant les secondes qui suivent.
+    //
+    //     AVANT LA MORT, PAS APRES : le module n'est pas ici pour relever un
+    //     cadavre -- `resurrect` fait cela ailleurs. Il RABOTE le coup, dans
+    //     les crochets ou le coeur laisse encore changer le chiffre
+    //     (`ModifyMeleeDamage`, `ModifySpellDamageTaken`,
+    //     `ModifyPeriodicDamageAurasTick`). Un coup de 40 000 sur 12 000 PV
+    //     devient un coup de 11 999.
+    //
+    //     CE QUE LE COEUR NE PEUT PAS DIRE : des degats qu'un script infligerait
+    //     directement par `Unit::DealDamage` ne passent par aucun de ces trois
+    //     crochets, et cette carte ne les verra pas.
+    // =========================================================================
+    class CheatDeath : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 60, _immunite) || !r.Int(1, 86400, _icd))
+                return (error = "cheatdeath expects the seconds then the cooldown", false);
+            // `then:<sort>:<sec>` : CE QU'IL EN COUTE une fois le plancher
+            // passe -- « puis ralenti de 50%, 10 sec ». Le sort porte le
+            // chiffre ; la ligne ne dit que sa duree.
+            if (!r.End())
+            {
+                if (r.Word() != "then")
+                    return (error = "after the cooldown, only then:<spell>:<sec> may follow", false);
+                if (!r.Int(902000, 903999, _apres) || !r.Int(1, 3600, _apresSec))
+                    return (error = "then expects its spell then the seconds", false);
+            }
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnDamageTaken(Player* player, Unit* /*attacker*/, uint32& damage, bool /*spell*/,
+                           uint32 /*school*/, uint32 /*spellId*/) override
+        {
+            Raboter(player, damage);
+        }
+        // LE PLANCHER CESSE : c'est alors que le prix se paie.
+        void OnTick(Player* player) override
+        {
+            if (!_apres || !_arme || !player)
+                return;
+            if (uint32(GameTime::GetGameTime().count()) < _arme + uint32(_immunite))
+                return;
+            _arme = 0;
+            Put(player, player, uint32(_apres), _apresSec);
+        }
+        void OnPeriodicTaken(Player* player, Unit* /*attacker*/, uint32& amount, uint32 /*spellId*/) override
+        {
+            Raboter(player, amount);
+        }
+
+    private:
+        void Raboter(Player* player, uint32& degats)
+        {
+            if (!player || !degats)
+                return;
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            // LES SECONDES DE REPIT : rien ne passe, quoi qu'il arrive.
+            if (now < _invulnerableJusqua)
+            {
+                degats = 0;
+                return;
+            }
+            uint32 const pv = player->GetHealth();
+            if (degats < pv)
+                return;                        // ce coup-la ne tuait pas
+            if (_dernier && now - _dernier < uint32(_icd))
+                return;                        // la carte a deja servi
+            _dernier = now;
+            // LE PLANCHER VIENT DE PRENDRE : le prix se paiera a sa fin.
+            _arme = now;
+            _invulnerableJusqua = now + uint32(_immunite);
+            degats = pv - 1;                   // il en reste un
+        }
+
+        int32 _immunite = 0, _icd = 0, _apres = 0, _apresSec = 0;
+        uint32 _arme = 0;           // l'heure ou le plancher a pris
+        uint32 _dernier = 0, _invulnerableJusqua = 0;
+    };
+
     class GemPct : public StellarTarotScript
     {
     public:
@@ -3322,81 +5005,6 @@ namespace
         }
         // LE MEME CHEMIN QUE LE COEUR pour les statistiques d'un objet : la
         // fiche du joueur compte ce qui passe par la.
-        void Poser(Player* player, uint32 stat, int32 val, bool apply)
-        {
-            float const f = float(val);
-            switch (stat)
-            {
-                case ITEM_MOD_MANA: player->HandleStatFlatModifier(UNIT_MOD_MANA, BASE_VALUE, f, apply); break;
-                case ITEM_MOD_HEALTH: player->HandleStatFlatModifier(UNIT_MOD_HEALTH, BASE_VALUE, f, apply); break;
-                case ITEM_MOD_AGILITY:
-                    player->HandleStatFlatModifier(UNIT_MOD_STAT_AGILITY, BASE_VALUE, f, apply);
-                    player->UpdateStatBuffMod(STAT_AGILITY);
-                    break;
-                case ITEM_MOD_STRENGTH:
-                    player->HandleStatFlatModifier(UNIT_MOD_STAT_STRENGTH, BASE_VALUE, f, apply);
-                    player->UpdateStatBuffMod(STAT_STRENGTH);
-                    break;
-                case ITEM_MOD_INTELLECT:
-                    player->HandleStatFlatModifier(UNIT_MOD_STAT_INTELLECT, BASE_VALUE, f, apply);
-                    player->UpdateStatBuffMod(STAT_INTELLECT);
-                    break;
-                case ITEM_MOD_SPIRIT:
-                    player->HandleStatFlatModifier(UNIT_MOD_STAT_SPIRIT, BASE_VALUE, f, apply);
-                    player->UpdateStatBuffMod(STAT_SPIRIT);
-                    break;
-                case ITEM_MOD_STAMINA:
-                    player->HandleStatFlatModifier(UNIT_MOD_STAT_STAMINA, BASE_VALUE, f, apply);
-                    player->UpdateStatBuffMod(STAT_STAMINA);
-                    break;
-                case ITEM_MOD_DEFENSE_SKILL_RATING: player->ApplyRatingMod(CR_DEFENSE_SKILL, val, apply); break;
-                case ITEM_MOD_DODGE_RATING: player->ApplyRatingMod(CR_DODGE, val, apply); break;
-                case ITEM_MOD_PARRY_RATING: player->ApplyRatingMod(CR_PARRY, val, apply); break;
-                case ITEM_MOD_BLOCK_RATING: player->ApplyRatingMod(CR_BLOCK, val, apply); break;
-                case ITEM_MOD_HIT_MELEE_RATING: player->ApplyRatingMod(CR_HIT_MELEE, val, apply); break;
-                case ITEM_MOD_HIT_RANGED_RATING: player->ApplyRatingMod(CR_HIT_RANGED, val, apply); break;
-                case ITEM_MOD_HIT_SPELL_RATING: player->ApplyRatingMod(CR_HIT_SPELL, val, apply); break;
-                case ITEM_MOD_CRIT_MELEE_RATING: player->ApplyRatingMod(CR_CRIT_MELEE, val, apply); break;
-                case ITEM_MOD_CRIT_RANGED_RATING: player->ApplyRatingMod(CR_CRIT_RANGED, val, apply); break;
-                case ITEM_MOD_CRIT_SPELL_RATING: player->ApplyRatingMod(CR_CRIT_SPELL, val, apply); break;
-                case ITEM_MOD_HASTE_MELEE_RATING: player->ApplyRatingMod(CR_HASTE_MELEE, val, apply); break;
-                case ITEM_MOD_HASTE_RANGED_RATING: player->ApplyRatingMod(CR_HASTE_RANGED, val, apply); break;
-                case ITEM_MOD_HASTE_SPELL_RATING: player->ApplyRatingMod(CR_HASTE_SPELL, val, apply); break;
-                case ITEM_MOD_HIT_RATING:
-                    player->ApplyRatingMod(CR_HIT_MELEE, val, apply);
-                    player->ApplyRatingMod(CR_HIT_RANGED, val, apply);
-                    player->ApplyRatingMod(CR_HIT_SPELL, val, apply);
-                    break;
-                case ITEM_MOD_CRIT_RATING:
-                    player->ApplyRatingMod(CR_CRIT_MELEE, val, apply);
-                    player->ApplyRatingMod(CR_CRIT_RANGED, val, apply);
-                    player->ApplyRatingMod(CR_CRIT_SPELL, val, apply);
-                    break;
-                case ITEM_MOD_RESILIENCE_RATING:
-                    player->ApplyRatingMod(CR_CRIT_TAKEN_MELEE, val, apply);
-                    player->ApplyRatingMod(CR_CRIT_TAKEN_RANGED, val, apply);
-                    player->ApplyRatingMod(CR_CRIT_TAKEN_SPELL, val, apply);
-                    break;
-                case ITEM_MOD_HASTE_RATING:
-                    player->ApplyRatingMod(CR_HASTE_MELEE, val, apply);
-                    player->ApplyRatingMod(CR_HASTE_RANGED, val, apply);
-                    player->ApplyRatingMod(CR_HASTE_SPELL, val, apply);
-                    break;
-                case ITEM_MOD_EXPERTISE_RATING: player->ApplyRatingMod(CR_EXPERTISE, val, apply); break;
-                case ITEM_MOD_ARMOR_PENETRATION_RATING: player->ApplyRatingMod(CR_ARMOR_PENETRATION, val, apply); break;
-                case ITEM_MOD_ATTACK_POWER:
-                    player->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER, TOTAL_VALUE, f, apply);
-                    player->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER_RANGED, TOTAL_VALUE, f, apply);
-                    break;
-                case ITEM_MOD_RANGED_ATTACK_POWER:
-                    player->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER_RANGED, TOTAL_VALUE, f, apply);
-                    break;
-                case ITEM_MOD_SPELL_POWER: player->ApplySpellPowerBonus(val, apply); break;
-                case ITEM_MOD_MANA_REGENERATION: player->ApplyManaRegenBonus(val, apply); break;
-                case ITEM_MOD_HEALTH_REGEN: player->ApplyHealthRegenBonus(val, apply); break;
-                default: break;
-            }
-        }
         int32 _pct = 0;
         std::map<uint32, int32> _donne;
     };
@@ -3572,7 +5180,7 @@ namespace
             // que le generateur lui a ecrite. Et cet autre effet a de bonnes
             // raisons d'occuper le premier rang : le client ne lit droit le
             // masque de classe d'un modificateur que la.
-            int32 const bp = bonus - 1;         // the spell's die side adds the last point
+            int32 const bp = bonus;             // whole: the core takes the die side out itself
             SpellInfo const* const info = sSpellMgr->GetSpellInfo(_spellId);
             int32 veut[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
             uint8 masque = 0;
@@ -3663,7 +5271,7 @@ namespace
             for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
                 if (amounts[i])
                 {
-                    bp[i] = amounts[i] - 1;      // le de du sort ajoute le dernier point
+                    bp[i] = amounts[i];          // entier : le coeur retranche le de lui-meme
                     p[i] = &bp[i];
                 }
             player->CastCustomSpell(player, _spellId, p[0], p[1], p[2], true);
@@ -3715,7 +5323,7 @@ namespace
             if (bonus == _applied && player->HasAura(_spellId))
                 return;
             _applied = bonus;
-            int32 const bp = bonus - 1;
+            int32 const bp = bonus;
             SpellInfo const* const info = sSpellMgr->GetSpellInfo(_spellId);
             int32 veut[MAX_SPELL_EFFECTS] = { 0, 0, 0 };
             uint8 masque = 0;
@@ -3829,7 +5437,7 @@ namespace
             int32 const* p[MAX_SPELL_EFFECTS] = { nullptr, nullptr, nullptr };
             for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             {
-                bp[i] = want[i] - 1;        // the spell's die side adds the last point
+                bp[i] = want[i];            // whole: the core takes the die side out itself
                 if (masque & uint8(1 << i))
                     p[i] = &bp[i];
             }
@@ -3873,7 +5481,7 @@ namespace
             RemoveOwned(player, _spellId);
             // One short: the spell's die side adds the last point, the way the
             // generator writes every figure.
-            int32 const bp = want - 1;
+            int32 const bp = want;
             player->CastCustomSpell(player, _spellId, &bp, &bp, &bp, true);
         }
         int32 _day = 0, _night = 0, _applied = 0;
@@ -3934,7 +5542,7 @@ namespace
             if (ReglerAura(player, _spellId, veut, 0x7))
                 return;
             RemoveOwned(player, _spellId);
-            int32 const bp = want - 1;       // the spell's die side adds the last point
+            int32 const bp = want;           // whole: the core takes the die side out itself
             player->CastCustomSpell(player, _spellId, &bp, &bp, &bp, true);
         }
         std::string _state;
@@ -4051,21 +5659,11 @@ namespace
     // drapeaux, ses cumuls et sa duree. L'addon du module corrige donc
     // l'infobulle lui-meme, a condition qu'on lui porte les montants -- un
     // message d'addon, chuchote au joueur, exactement comme AIO en envoie.
+    // LE PAQUET VIT AILLEURS : `StellarTarotEffects::TellAddon`, dont le bloc
+    // de mesure se sert aussi. Un seul endroit fabrique ce message.
     void TellClient(Player* player, char const* prefix, std::string const& message)
     {
-        if (!player || !player->GetSession())
-            return;
-        std::string const full = std::string(prefix) + "\t" + message;
-        WorldPacket data(SMSG_MESSAGECHAT, 100);
-        data << uint8(CHAT_MSG_WHISPER);
-        data << int32(LANG_ADDON);
-        data << player->GetGUID();
-        data << uint32(0);
-        data << player->GetGUID();
-        data << uint32(full.length() + 1);
-        data << full;
-        data << uint8(0);
-        player->GetSession()->SendPacket(&data);
+        StellarTarotEffects::TellAddon(player, prefix, message);
     }
 
     // =========================================================================
@@ -4135,7 +5733,7 @@ namespace
                         eff->ChangeAmount(parTic);
                 return;
             }
-            int32 const bp = parTic - 1;        // le de du sort ajoute le dernier point
+            int32 const bp = parTic;            // entier : le coeur retranche le de lui-meme
             Put(player, player, voulu, 0, &bp);
         }
 
@@ -4153,6 +5751,25 @@ namespace
     bool IsPotionItem(ItemTemplate const* proto)
     {
         return proto && proto->Class == ITEM_CLASS_CONSUMABLE && proto->SubClass == ITEM_SUBCLASS_POTION;
+    }
+
+    bool EstUnePotion(Spell* spell)
+    {
+        return IsPotionItem(CastItemOf(spell));
+    }
+
+    // UN REPAS : le jeu range la nourriture et la boisson sous la meme sorte.
+    bool IsFoodItem(ItemTemplate const* proto)
+    {
+        return proto && proto->Class == ITEM_CLASS_CONSUMABLE && proto->SubClass == ITEM_SUBCLASS_FOOD;
+    }
+
+    // UN ELIXIR OU UN FLACON : l'OBJET le dit, et lui seul -- le sort d'un
+    // elixir ne se distingue en rien de celui d'une potion.
+    bool IsElixirItem(ItemTemplate const* proto)
+    {
+        return proto && proto->Class == ITEM_CLASS_CONSUMABLE
+            && (proto->SubClass == ITEM_SUBCLASS_ELIXIR || proto->SubClass == ITEM_SUBCLASS_FLASK);
     }
 
     // =========================================================================
@@ -4255,14 +5872,24 @@ namespace
         bool Parse(std::vector<std::string> const& params, std::string& error) override
         {
             Reader r(params);
-            return (r.Int(1, 100, _chance) && r.End())
-                || (error = "expects the chance", false);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            // `food` : le meme geste, mais pour un repas. Sans le mot, une fiole.
+            if (!r.End())
+            {
+                if (r.Word() != "food")
+                    return (error = "after the chance, only food may follow", false);
+                _food = true;
+            }
+            return r.End() || (error = "too many parameters", false);
         }
 
         void OnSpellCast(Player* player, Spell* spell) override
         {
             ItemTemplate const* const proto = CastItemOf(spell);
-            if (!player || !IsPotionItem(proto))
+            if (!player || !proto)
+                return;
+            if (!(_food ? IsFoodItem(proto) : IsPotionItem(proto)))
                 return;
             ItemPosCountVec dest;
             if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, proto->ItemId, 1) != EQUIP_ERR_OK)
@@ -4275,6 +5902,183 @@ namespace
 
     private:
         int32 _chance = 0;
+        bool _food = false;
+    };
+
+    // =========================================================================
+    // potionplus:<quoi>[:<n>[:<sec>]]
+    //     CE QU'UNE FIOLE DONNE EN PLUS, au moment ou le joueur l'avale.
+    //       opposite:<pct> la RESSOURCE OPPOSEE : une potion de soin rend en
+    //                      plus cette part de la ressource du joueur, une
+    //                      potion de mana cette part de ses PV.
+    //       cooldown:<pct> le temps de recharge de la fiole, raccourci d'autant
+    //       other          l'effet d'une AUTRE fiole du sac, tiree au hasard
+    //       over:<pct>:<sec> la meme part de l'effet, mais rendue sur la duree
+    // =========================================================================
+    class PotionPlus : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            _what = r.Word();
+            if (_what == "other")
+                return r.End() || (error = "other takes nothing", false);
+            if (_what == "opposite" || _what == "cooldown" || _what == "over")
+            {
+                if (!r.Int(1, 100, _pct))
+                    return (error = _what + " expects its percentage", false);
+                if (_what == "over" && !r.Int(1, 3600, _sec))
+                    return (error = "over expects the seconds", false);
+                return r.End() || (error = "too many parameters", false);
+            }
+            return (error = "unknown potionplus " + _what, false);
+        }
+
+        void OnSpellCast(Player* player, Spell* spell) override
+        {
+            ItemTemplate const* const proto = CastItemOf(spell);
+            if (!player || !IsPotionItem(proto))
+                return;
+            SpellInfo const* const info = spell->GetSpellInfo();
+            if (!info)
+                return;
+            if (_what == "cooldown")
+            {
+                // La recharge de la fiole : c'est la CATEGORIE qui la porte, et
+                // le coeur la raccourcit comme n'importe quelle autre.
+                uint32 const sort = info->Id;
+                int32 const part = _pct;
+                PlusTard(player, TOUR_SUIVANT, [sort, part](Player* p)
+                {
+                    if (SpellInfo const* fiole = sSpellMgr->GetSpellInfo(sort))
+                    {
+                        int32 const duree = int32(fiole->RecoveryTime ? fiole->RecoveryTime
+                                                                     : fiole->CategoryRecoveryTime);
+                        if (duree > 0)
+                            p->ModifySpellCooldown(sort, -duree * part / 100);
+                    }
+                });
+                return;
+            }
+            // UNE AUTRE FIOLE DU SAC : son effet, sans qu'elle soit bue. On ne
+            // prend que ce que le joueur porte vraiment, et jamais celle-ci.
+            if (_what == "other")
+            {
+                std::vector<uint32> fioles;
+                for (uint8 sac = INVENTORY_SLOT_ITEM_START; sac < INVENTORY_SLOT_ITEM_END; ++sac)
+                    if (Item const* porte = player->GetItemByPos(INVENTORY_SLOT_BAG_0, sac))
+                        if (IsPotionItem(porte->GetTemplate()) && porte->GetEntry() != proto->ItemId)
+                            for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+                                if (porte->GetTemplate()->Spells[i].SpellId > 0
+                                    && porte->GetTemplate()->Spells[i].SpellTrigger == ITEM_SPELLTRIGGER_ON_USE)
+                                    fioles.push_back(uint32(porte->GetTemplate()->Spells[i].SpellId));
+                if (fioles.empty())
+                    return;
+                uint32 const tiree = fioles[urand(0, uint32(fioles.size()) - 1)];
+                PlusTard(player, TOUR_SUIVANT, [tiree](Player* p) { p->CastSpell(p, tiree, true); });
+                return;
+            }
+            // LA RESSOURCE OPPOSEE, et la meme part rendue sur la duree : dans
+            // les deux cas, on lit ce que la fiole PROMET, effet par effet.
+            for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                int32 const valeur = info->Effects[i].CalcValue(player);
+                if (valeur <= 0)
+                    continue;
+                uint32 const part = PctOf(uint32(valeur), _pct);
+                if (!part)
+                    continue;
+                bool const soigne = info->Effects[i].Effect == SPELL_EFFECT_HEAL;
+                bool const abreuve = info->Effects[i].Effect == SPELL_EFFECT_ENERGIZE;
+                if (!soigne && !abreuve)
+                    continue;
+                if (_what == "opposite")
+                {
+                    if (soigne)
+                        Energize(player, player, part, _spellId);
+                    else
+                        Heal(player, player, part, _spellId);
+                }
+                // `over` : la meme part, mais versee par tranches d'une seconde.
+                else if (_what == "over")
+                    Verser(player, part, _sec, soigne);
+            }
+        }
+
+    private:
+        // LA PART VERSEE SUR LA DUREE : une tranche par seconde, chacune
+        // annoncee comme le reste de ce que le module rend.
+        void Verser(Player* player, uint32 total, int32 secondes, bool soins)
+        {
+            uint32 const tranche = std::max<uint32>(1, total / uint32(std::max(1, secondes)));
+            uint32 const sort = _spellId;
+            for (int32 n = 1; n <= secondes; ++n)
+                PlusTard(player, Milliseconds(n * 1000), [tranche, sort, soins](Player* p)
+                {
+                    if (soins)
+                        Heal(p, p, tranche, sort);
+                    else
+                        Energize(p, p, tranche, sort);
+                });
+        }
+
+        std::string _what;
+        int32 _pct = 0, _sec = 0;
+    };
+
+    // =========================================================================
+    // deathkeep
+    //     LES FIOLES TRAVERSENT LA MORT. Le coeur enleve toutes les auras d'un
+    //     mort ; la ligne releve celles qui viennent d'un ELIXIR ou d'un FLACON
+    //     juste avant, avec ce qu'il leur restait a vivre, et les repose quand
+    //     le joueur se releve. Rien n'est prolonge : ce qui restait, reste.
+    // =========================================================================
+    class DeathKeep : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            return Reader(params).End() || (error = "takes no parameter", false);
+        }
+
+        void OnDeath(Player* player) override
+        {
+            _gardees.clear();
+            if (!player)
+                return;
+            for (auto const& [id, aura] : player->GetOwnedAuras())
+            {
+                if (!aura || aura->GetDuration() <= 0)
+                    continue;
+                if (!IsElixirItem(sObjectMgr->GetItemTemplate(aura->GetCastItemEntry())))
+                    continue;
+                _gardees.push_back({ id, aura->GetDuration(), aura->GetStackAmount() });
+            }
+        }
+
+        void OnResurrect(Player* player) override
+        {
+            if (!player)
+                return;
+            for (Fiole const& f : _gardees)
+                if (Aura* remise = player->AddAura(f.spell, player))
+                {
+                    remise->SetDuration(f.duree);
+                    if (f.cumuls > 1)
+                        remise->SetStackAmount(f.cumuls);
+                }
+            _gardees.clear();
+        }
+
+    private:
+        struct Fiole
+        {
+            uint32 spell = 0;
+            int32 duree = 0;
+            uint8 cumuls = 1;
+        };
+        std::vector<Fiole> _gardees;
     };
 
     // =========================================================================
@@ -4298,10 +6102,66 @@ namespace
     //     apres la pose. Le revers, lui, attend la pose : un prix ne se paie
     //     pas au milieu de la construction d'une aura.
     // =========================================================================
+    // =========================================================================
+    // breakfree:<chance>:<icd>
+    //     BRISER LE CONTROLE QU'ON SUBIT. Une aura qui porte la mecanique de
+    //     l'etourdissement ou de l'enracinement vient de se poser sur le
+    //     joueur : un tirage, et elle s'en va.
+    //
+    //     CE QUE FAIT LE COEUR : il nomme la mecanique de chaque effet
+    //     (`SpellInfo::GetAllEffectsMechanicMask`) et il retire l'aura. Le
+    //     module ne fait que tirer le de et attendre UN TOUR D'HORLOGE --
+    //     defaire l'aura depuis le crochet qui annonce sa pose reviendrait a la
+    //     retirer pendant que le coeur la range encore.
+    //
+    //     AUCUN CROCHET NEUF : le relais de `UNITHOOK_ON_AURA_APPLY`, que le
+    //     module tenait deja pour celui qui LANCE, sert ici a celui qui SUBIT.
+    // =========================================================================
+    class BreakFree : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            r.OptInt(0, 3600, _icd);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnAuraTaken(Player* player, Unit* /*caster*/, Aura* aura) override
+        {
+            if (!player || !aura)
+                return;
+            SpellInfo const* const info = aura->GetSpellInfo();
+            if (!info)
+                return;
+            uint64 const controle = (uint64(1) << MECHANIC_STUN) | (uint64(1) << MECHANIC_ROOT);
+            if (!(info->GetAllEffectsMechanicMask() & controle))
+                return;
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            if (_icd && _last && now - _last < uint32(_icd))
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            _last = now;
+            uint32 const sort = aura->GetId();
+            PlusTard(player, TOUR_SUIVANT, [sort](Player* p) { p->RemoveAurasDueToSpell(sort); });
+        }
+
+    private:
+        int32 _chance = 100, _icd = 0;
+        uint32 _last = 0;
+    };
+
     class Longer : public StellarTarotScript
     {
     public:
-        enum class Kind { Elixir, Dot, Stun, Cry };
+        // LES DEUX DERNIERES SONT DES DUREES QUE LE JOUEUR SUBIT OU SAVOURE :
+        // la maladie de resurrection, qu'on raccourcit, et le "Bien nourri",
+        // qu'on allonge. Toutes deux se reconnaissent a leur sort, que le jeu
+        // nomme et ne change jamais.
+        enum class Kind { Elixir, Dot, Stun, Cry, Sickness, Food };
         explicit Longer(Kind kind) : _kind(kind) { }
 
         bool Parse(std::vector<std::string> const& params, std::string& error) override
@@ -4316,13 +6176,22 @@ namespace
                     return (r.Int(1, 127, _school) && r.Int(1, 20, _a) && r.End())
                         || (error = "expects the school then the number of ticks", false);
                 case Kind::Stun:
-                    if (!r.Int(1, 60, _a))
-                        return (error = "expects the seconds", false);
+                    // EN DIXIEMES DE SECONDE : une carte allonge de « 0,5 sec »
+                    // (92 N1) aussi bien que de deux (23 N3). En secondes
+                    // entieres, la demi-seconde ne s'ecrivait pas du tout.
+                    if (!r.Int(1, 600, _a))
+                        return (error = "expects the tenths of a second", false);
                     return ReadDrawback(r, _but, error);
                 case Kind::Cry:
                     if (!r.Int(2, 100, _a))
                         return (error = "expects the factor", false);
                     return ReadDrawback(r, _but, error);
+                case Kind::Sickness:
+                    return (r.Int(1, 100, _a) && r.End())
+                        || (error = "expects the percentage taken off", false);
+                case Kind::Food:
+                    return (r.Int(1, 3600, _a) && r.End())
+                        || (error = "expects the seconds added", false);
             }
             return false;
         }
@@ -4378,6 +6247,13 @@ namespace
                             return true;
                     return false;
                 }
+                // LA MALADIE DE RESURRECTION ET LE "BIEN NOURRI" : deux sorts
+                // que le jeu nomme une fois pour toutes, 15007 et 19705. Rien
+                // a deviner, ils se reconnaissent a leur numero.
+                case Kind::Sickness:
+                    return aura->GetOwner() == player && info->Id == 15007;
+                case Kind::Food:
+                    return aura->GetOwner() == player && info->Id == 19705;
                 case Kind::Cry:
                 {
                     // Un cri se reconnait a son nom ANGLAIS -- l'index 0 du
@@ -4418,6 +6294,10 @@ namespace
                     return period > 0 ? duration + period * _a : duration;
                 }
                 case Kind::Stun:
+                    return duration + _a * 100;   // des dixiemes
+                case Kind::Sickness:
+                    return duration - int32(PctOf(uint32(duration), _a));
+                case Kind::Food:
                     return duration + _a * 1000;
                 case Kind::Cry:
                     return duration * _a;
@@ -4428,6 +6308,1809 @@ namespace
         Kind const _kind;
         int32 _a = 0, _school = 0;
         Drawback _but;
+    };
+
+    // =========================================================================
+    // petaura:<sort>
+    //     UNE AURA QUI VIT SUR LA BETE, et non sur le maitre. Le sort du niveau
+    //     reste au joueur -- c'est lui qui porte le revers, quand la carte en
+    //     donne un -- et ce sort-ci, un compagnon, est pose sur le familier.
+    //     La bete change, meurt, revient : la ligne la retrouve a chaque tic.
+    // =========================================================================
+    class AuraDeBete : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(902000, 903999, _sort))
+                return (error = "expects the companion spell", false);
+            // `all` : toute la maisonnee -- la bete, les gardiens, les totems.
+            if (!r.End())
+            {
+                if (r.Word() != "all")
+                    return (error = "after the spell, only all may follow", false);
+                _tous = true;
+            }
+            return r.End() || (error = "too many parameters", false);
+        }
+        void Apply(Player* player) override { Poser(player); }
+        void Remove(Player* player) override
+        {
+            if (!player)
+                return;
+            for (Unit* serviteur : Maisonnee(player))
+                serviteur->RemoveAurasDueToSpell(uint32(_sort));
+        }
+        void OnTick(Player* player) override { Poser(player); }
+
+    private:
+        // CE QUE LE JOUEUR MENE : sa bete seule, ou tout ce qu'il controle.
+        std::vector<Unit*> Maisonnee(Player* player) const
+        {
+            std::vector<Unit*> gens;
+            if (!_tous)
+            {
+                if (Pet* bete = player->GetPet())
+                    gens.push_back(bete);
+                return gens;
+            }
+            for (Unit* mene : player->m_Controlled)
+                if (mene)
+                    gens.push_back(mene);
+            return gens;
+        }
+
+        void Poser(Player* player)
+        {
+            if (!player)
+                return;
+            for (Unit* serviteur : Maisonnee(player))
+                if (serviteur->IsAlive() && !serviteur->HasAura(uint32(_sort), player->GetGUID()))
+                    player->AddAura(uint32(_sort), serviteur);
+        }
+
+        int32 _sort = 0;
+        bool _tous = false;
+    };
+
+    // =========================================================================
+    // cdcut:<pct>
+    //     LES TEMPS DE RECHARGE, RACCOURCIS D'AUTANT. Aucune aura du coeur ne
+    //     sait le faire en POUR-CENT sans nommer une famille de sorts : l'aura
+    //     196 est un nombre de secondes, et le modificateur 108/SPELLMOD_COOLDOWN
+    //     demande un masque de classe. La ligne s'en remet donc a la methode du
+    //     coeur -- ModifySpellCooldown -- appliquee au sort qui vient d'etre
+    //     lance, une fois que le coeur a pose sa recharge.
+    // =========================================================================
+    class CooldownCut : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 99, _pct) && r.End())
+                || (error = "expects the percentage", false);
+        }
+
+        void OnSpellCast(Player* player, Spell* spell) override
+        {
+            if (!player || !spell || spell->IsTriggered())
+                return;
+            SpellInfo const* const info = spell->GetSpellInfo();
+            if (!info)
+                return;
+            uint32 const sort = info->Id;
+            int32 const part = _pct;
+            PlusTard(player, TOUR_SUIVANT, [sort, part](Player* p)
+            {
+                uint32 const now = GameTime::GetGameTimeMS().count();
+                auto const it = p->GetSpellCooldownMap().find(sort);
+                if (it == p->GetSpellCooldownMap().end() || it->second.end <= now)
+                    return;
+                int32 const reste = int32(it->second.end - now);
+                p->ModifySpellCooldown(sort, -reste * part / 100);
+            });
+        }
+
+    private:
+        int32 _pct = 0;
+    };
+
+    // =========================================================================
+    // petshare:<pct>
+    //     LA BETE PORTE SA PART DES COUPS. Ce que le maitre subit est reduit de
+    //     cette part, et la meme part tombe sur le familier. Sans bete vivante,
+    //     rien ne change : le maitre prend tout.
+    // =========================================================================
+    class PetShare : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 99, _pct) && r.End())
+                || (error = "expects the percentage", false);
+        }
+
+        void OnDamageTaken(Player* player, Unit* /*attacker*/, uint32& damage, bool /*spell*/,
+                           uint32 school, uint32 /*spellId*/) override
+        {
+            if (!player || !damage)
+                return;
+            Pet* const bete = player->GetPet();
+            if (!bete || !bete->IsAlive())
+                return;
+            uint32 const part = PctOf(damage, _pct);
+            if (!part)
+                return;
+            damage -= part;
+            Hurt(player, bete, part, school ? school : uint32(SPELL_SCHOOL_MASK_NORMAL), _spellId);
+        }
+
+    private:
+        int32 _pct = 0;
+    };
+
+    // =========================================================================
+    // heirloompct:<pct>
+    //     UNE PART DES STATISTIQUES QUE PORTENT LES OBJETS HERITAGE. Le chiffre
+    //     d'un heritage MONTE AVEC LE NIVEAU du porteur : aucune aura du DBC ne
+    //     peut le dire, il se relit donc a chaque tic, comme la part des gemmes.
+    //     Le meme chemin que le coeur pour les statistiques d'un objet, afin que
+    //     la fiche du personnage compte ce qui passe par la.
+    // =========================================================================
+    class HeirloomPct : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 1000, _pct) && r.End())
+                || (error = "expects the percentage", false);
+        }
+        void Apply(Player* player) override { Recompute(player); }
+        void Remove(Player* player) override { Give(player, false); _donne.clear(); }
+        void OnTick(Player* player) override { Recompute(player); }
+
+    private:
+        void Recompute(Player* player)
+        {
+            std::map<uint32, int32> veut;
+            for (uint8 place = EQUIPMENT_SLOT_START; place < EQUIPMENT_SLOT_END; ++place)
+            {
+                Item const* const piece = player->GetItemByPos(INVENTORY_SLOT_BAG_0, place);
+                if (!piece)
+                    continue;
+                ItemTemplate const* const modele = piece->GetTemplate();
+                if (!modele || modele->Quality != ITEM_QUALITY_HEIRLOOM)
+                    continue;
+                // CE QUE L'OBJET PORTE AU NIVEAU DU JOUEUR. Un heritage ne
+                // porte pas ses chiffres dans son gabarit : ils sortent des
+                // memes tables que le coeur lit (Player::_ApplyItemBonuses) --
+                // ScalingStatDistribution pour le partage entre statistiques,
+                // ScalingStatValues pour l'echelle du niveau.
+                ScalingStatDistributionEntry const* const partage =
+                    modele->ScalingStatDistribution
+                        ? sScalingStatDistributionStore.LookupEntry(modele->ScalingStatDistribution)
+                        : nullptr;
+                uint32 niveau = player->GetLevel();
+                if (partage && niveau > partage->MaxLevel)
+                    niveau = partage->MaxLevel;
+                ScalingStatValuesEntry const* const echelle =
+                    modele->ScalingStatValue ? sScalingStatValuesStore.LookupEntry(niveau) : nullptr;
+                for (uint8 k = 0; k < MAX_ITEM_PROTO_STATS; ++k)
+                {
+                    uint32 quoi = 0;
+                    int32 montant = 0;
+                    if (echelle && partage)
+                    {
+                        if (partage->StatMod[k] < 0)
+                            continue;
+                        quoi = uint32(partage->StatMod[k]);
+                        montant = (echelle->getssdMultiplier(modele->ScalingStatValue)
+                                   * partage->Modifier[k]) / 10000;
+                    }
+                    else
+                    {
+                        if (k >= modele->StatsCount)
+                            continue;
+                        quoi = modele->ItemStat[k].ItemStatType;
+                        montant = modele->ItemStat[k].ItemStatValue;
+                    }
+                    if (montant > 0)
+                        veut[quoi] += montant;
+                }
+            }
+            std::map<uint32, int32> part;
+            for (auto const& [stat, total] : veut)
+            {
+                int32 const donne = int32(std::llround(double(total) * _pct / 100.0));
+                if (donne > 0)
+                    part[stat] = donne;
+            }
+            if (part == _donne)
+                return;
+            Give(player, false);
+            _donne = part;
+            Give(player, true);
+        }
+        void Give(Player* player, bool apply)
+        {
+            for (auto const& [stat, val] : _donne)
+                Poser(player, stat, val, apply);
+        }
+
+        int32 _pct = 0;
+        std::map<uint32, int32> _donne;
+    };
+
+    // =========================================================================
+    // LE META-EFFET D'UNE CARTE A DEUX ETATS
+    //
+    // phase:<cadence>:<groupe>:<sortHaut>:<sortBas>[:mana:<pct>][:heal:<pct>]
+    //       [:both:<toutes>:<duree>][:high:<sous-script>][:low:<sous-script>]
+    //
+    //     UNE CARTE, DEUX ETATS, UNE SEULE HORLOGE. La maree monte et descend,
+    //     le Soleil cede a la Lune : c'est la CARTE qui bat, non le niveau.
+    //     Tous les niveaux d'une meme carte portent le meme `groupe` -- son
+    //     numero -- et lisent la meme horloge : ils changent donc d'etat
+    //     ensemble, quel que soit l'ordre ou ils s'appliquent.
+    //
+    //     CE QU'UN NIVEAU APPORTE A CHAQUE ETAT :
+    //       <sortHaut> / <sortBas>  une aura par etat, posee tant qu'il tient
+    //                               (0 quand ce niveau n'en donne pas)
+    //       high:<sous-script>      ce que le niveau FAIT dans l'etat haut
+    //       low:<sous-script>       ce qu'il fait dans l'etat bas
+    //     Un sous-script est un script entier -- « proc:spell_cast:5:0:free_next »
+    //     -- et le conteneur lui repasse tout ce que le coeur annonce, tant que
+    //     son etat tient. Rien n'est reecrit : c'est le meme moteur.
+    //
+    //     LA CADENCE : un nombre de secondes, ou le mot `night` -- l'etat haut
+    //     est alors la NUIT, et l'etat bas le jour.
+    //
+    //     `mana:` / `heal:` : a chaque CHANGEMENT, cette part est rendue.
+    //     `both:<toutes>:<duree>` : toutes les `toutes` secondes, les DEUX
+    //     auras se posent ensemble pour `duree` secondes, a deux cumuls --
+    //     l'eclipse.
+    // =========================================================================
+
+    // L'HORLOGE D'UNE CARTE, par joueur : le premier niveau qui bat la met a
+    // l'heure, tous les autres la lisent. Sans elle, deux niveaux poses a une
+    // seconde d'intervalle battraient a contretemps.
+    struct Horloge
+    {
+        uint32 depuis = 0;          // le debut du cycle, en secondes de jeu
+        bool haute = true;
+        uint32 eclipseJusqua = 0;   // tant que les deux auras tiennent ensemble
+        uint32 eclipseDepuis = 0;   // la derniere eclipse
+    };
+
+    std::map<std::pair<uint32, int32>, Horloge>& Horloges()
+    {
+        static std::map<std::pair<uint32, int32>, Horloge> horloges;
+        return horloges;
+    }
+
+    class Phase : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            // LA CADENCE : des secondes, ou la nuit.
+            if (r.Peek() == "night")
+            {
+                r.Word();
+                _nuit = true;
+            }
+            else if (!r.Int(1, 3600, _sec))
+                return (error = "phase expects the seconds, or night", false);
+            if (!r.Int(1, 1000, _groupe))
+                return (error = "phase expects the card it belongs to", false);
+            if (!r.Int(0, 903999, _haut) || !r.Int(0, 903999, _bas))
+                return (error = "phase expects its two spells (0 for none)", false);
+            while (!r.End())
+            {
+                std::string const mot = r.Word();
+                if (mot == "mana" && r.Int(1, 100, _mana))
+                    continue;
+                if (mot == "heal" && r.Int(1, 100, _heal))
+                    continue;
+                if (mot == "both" && r.Int(1, 86400, _eclipseChaque) && r.Int(1, 3600, _eclipseDuree))
+                    continue;
+                // LE SOUS-SCRIPT D'UN ETAT : tout ce qui suit lui appartient,
+                // jusqu'au mot de l'autre etat.
+                if (mot == "high" || mot == "low")
+                {
+                    StellarTarotScriptSpec sous;
+                    bool premier = true;
+                    while (!r.End() && r.Peek() != "high" && r.Peek() != "low")
+                    {
+                        std::string const part = r.Word();
+                        if (premier)
+                            sous.name = part;
+                        else
+                            sous.params.push_back(part);
+                        premier = false;
+                    }
+                    if (sous.name.empty())
+                        return (error = mot + " expects a script", false);
+                    sous.text = sous.name;
+                    std::string pourquoi;
+                    std::unique_ptr<StellarTarotScript> fait =
+                        StellarTarotScripts::Create(sous, pourquoi);
+                    if (!fait)
+                        return (error = mot + ": " + pourquoi, false);
+                    (mot == "high" ? _sousHaut : _sousBas) = std::move(fait);
+                    continue;
+                }
+                return (error = "phase: unknown word \"" + mot + "\"", false);
+            }
+            return true;
+        }
+
+        // LE SORT DU NIVEAU est aussi celui des sous-scripts : ce qu'ils posent
+        // et ce qu'ils annoncent porte le nom de la ligne.
+        void Apply(Player* player) override
+        {
+            if (_sousHaut) { _sousHaut->SetSpell(SpellId()); _sousHaut->Apply(player); }
+            if (_sousBas)  { _sousBas->SetSpell(SpellId());  _sousBas->Apply(player); }
+        }
+
+        void Remove(Player* player) override
+        {
+            if (_sousHaut) _sousHaut->Remove(player);
+            if (_sousBas)  _sousBas->Remove(player);
+            Effacer(player);
+        }
+
+        [[nodiscard]] bool OwnsAura() const override
+        {
+            return (_sousHaut && _sousHaut->OwnsAura()) || (_sousBas && _sousBas->OwnsAura());
+        }
+
+        [[nodiscard]] uint32 Watches() const override
+        {
+            uint32 masque = 0;
+            if (_sousHaut) masque |= _sousHaut->Watches();
+            if (_sousBas)  masque |= _sousBas->Watches();
+            return masque;
+        }
+
+        // LE MARQUEUR DE L'ETAT COURANT, et lui seul : une ligne qui ne tient
+        // pas ne doit pas repondre au systeme de procs du coeur.
+        [[nodiscard]] uint32 Trigger() const override
+        {
+            StellarTarotScript const* s = _haute ? _sousHaut.get() : _sousBas.get();
+            return s ? s->Trigger() : 0;
+        }
+
+        void OnLeaveCombat(Player* player) override
+        {
+            if (!_nuit)
+                Effacer(player);
+            if (StellarTarotScript* s = Courant())
+                s->OnLeaveCombat(player);
+        }
+
+        void OnTick(Player* player) override
+        {
+            if (!player)
+                return;
+            Battre(player);
+            if (_sousHaut) _sousHaut->OnTick(player);
+            if (_sousBas)  _sousBas->OnTick(player);
+        }
+
+        bool Promise(std::string& event, int32& chance, int32& icd, bool& coreChance, bool& coreIcd) const override { StellarTarotScript const* s = Courant(); return s && s->Promise(event, chance, icd, coreChance, coreIcd); }
+        void OnCreatureKill(Player* player, Creature* killed) override { if (StellarTarotScript* s = Courant()) s->OnCreatureKill(player, killed); }
+        void OnDamageDealt(Player* player, Unit* victim, uint32& damage, bool spell, uint32 school, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnDamageDealt(player, victim, damage, spell, school, spellId); }
+        void OnDamageTaken(Player* player, Unit* attacker, uint32& damage, bool spell, uint32 school, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnDamageTaken(player, attacker, damage, spell, school, spellId); }
+        void OnHealDone(Player* player, Unit* target, uint32& gain) override { if (StellarTarotScript* s = Courant()) s->OnHealDone(player, target, gain); }
+        void OnSpellCast(Player* player, Spell* spell) override { if (StellarTarotScript* s = Courant()) s->OnSpellCast(player, spell); }
+        void OnTriggerProc(Player* player, Unit* other, uint32 amount) override { if (StellarTarotScript* s = Courant()) s->OnTriggerProc(player, other, amount); }
+        void OnCalcAuraDuration(Player* player, Aura const* aura, int32& duration) override { if (StellarTarotScript* s = Courant()) s->OnCalcAuraDuration(player, aura, duration); }
+        void OnPromiseSpent(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnPromiseSpent(player); }
+        void OnEnterCombat(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnEnterCombat(player); }
+        void OnLevelUp(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnLevelUp(player); }
+        void OnDeath(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnDeath(player); }
+        void OnNearbyDeath(Player* player, Unit* died) override { if (StellarTarotScript* s = Courant()) s->OnNearbyDeath(player, died); }
+        void OnJump(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnJump(player); }
+        void OnResurrect(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnResurrect(player); }
+        void OnZone(Player* player, uint32 zone, uint32 area) override { if (StellarTarotScript* s = Courant()) s->OnZone(player, zone, area); }
+        void OnMapChanged(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnMapChanged(player); }
+        void OnQuestComplete(Player* player, Quest const* quest) override { if (StellarTarotScript* s = Courant()) s->OnQuestComplete(player, quest); }
+        void OnLootMoney(Player* player, uint32& copper) override { if (StellarTarotScript* s = Courant()) s->OnLootMoney(player, copper); }
+        void OnGiveXP(Player* player, uint32& amount, uint8 source) override { if (StellarTarotScript* s = Courant()) s->OnGiveXP(player, amount, source); }
+        void OnGiveReputation(Player* player, float& amount, uint8 source) override { if (StellarTarotScript* s = Courant()) s->OnGiveReputation(player, amount, source); }
+        void OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod) override { if (StellarTarotScript* s = Courant()) s->OnRepairDiscount(player, itemGuid, discountMod); }
+        void OnVendorDiscount(Player const* player, float& discount) override { if (StellarTarotScript* s = Courant()) s->OnVendorDiscount(player, discount); }
+        void OnMoneyChanged(Player* player, int32& amount) override { if (StellarTarotScript* s = Courant()) s->OnMoneyChanged(player, amount); }
+        void OnSellItem(Player* player, Item* item) override { if (StellarTarotScript* s = Courant()) s->OnSellItem(player, item); }
+        void OnCreatureLoot(Player* player, Loot* loot) override { if (StellarTarotScript* s = Courant()) s->OnCreatureLoot(player, loot); }
+        void OnProspect(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnProspect(player, loot, tab, store); }
+        void OnSpend(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnSpend(player); }
+        void OnAuctionPosted(Player* player, uint32 deposit) override { if (StellarTarotScript* s = Courant()) s->OnAuctionPosted(player, deposit); }
+        void OnAuctionSold(Player* player, uint32& profit) override { if (StellarTarotScript* s = Courant()) s->OnAuctionSold(player, profit); }
+        void OnAuctionWon(Player* player, uint32 price) override { if (StellarTarotScript* s = Courant()) s->OnAuctionWon(player, price); }
+        void OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags) override { if (StellarTarotScript* s = Courant()) s->OnFacing(player, x, y, orientation, moveFlags); }
+        void OnPetDamage(Player* player, Unit* victim, uint32& damage) override { if (StellarTarotScript* s = Courant()) s->OnPetDamage(player, victim, damage); }
+        void OnFishing(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnFishing(player, loot, tab, store); }
+        void OnSkinning(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnSkinning(player, loot, tab, store); }
+        void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnObjectLoot(player, loot, tab, store); }
+        void OnItemRoll(Player const* player, uint32 itemId, float& chance) override { if (StellarTarotScript* s = Courant()) s->OnItemRoll(player, itemId, chance); }
+        void OnVendorBuy(Player* player, Item* item, uint32 count, uint32 paid) override { if (StellarTarotScript* s = Courant()) s->OnVendorBuy(player, item, count, paid); }
+        void OnAuraRemoved(Player* player, Aura const* aura) override { if (StellarTarotScript* s = Courant()) s->OnAuraRemoved(player, aura); }
+        void OnAuraApplied(Player* player, Unit* target, Aura* aura) override { if (StellarTarotScript* s = Courant()) s->OnAuraApplied(player, target, aura); }
+        void OnAuraTaken(Player* player, Unit* caster, Aura* aura) override { if (StellarTarotScript* s = Courant()) s->OnAuraTaken(player, caster, aura); }
+        void OnPeriodicTick(Player* player, Unit* other, uint32& amount, bool heal, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnPeriodicTick(player, other, amount, heal, spellId); }
+        void OnPeriodicTaken(Player* player, Unit* attacker, uint32& amount, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnPeriodicTaken(player, attacker, amount, spellId); }
+        bool DitSonEtat(Player* player, Unit* cible, std::string& out) override { StellarTarotScript* s = Courant(); return s && s->DitSonEtat(player, cible, out); }
+
+    private:
+        // LE SOUS-SCRIPT DE L'ETAT COURANT, ou rien.
+        StellarTarotScript* Courant()
+        {
+            return _haute ? _sousHaut.get() : _sousBas.get();
+        }
+        StellarTarotScript const* Courant() const
+        {
+            return _haute ? _sousHaut.get() : _sousBas.get();
+        }
+
+        // L'HORLOGE DE LA CARTE, mise a l'heure par le premier qui la lit.
+        void Battre(Player* player)
+        {
+            // LA NUIT N'A PAS DE CADENCE : c'est le monde qui tranche.
+            if (_nuit)
+            {
+                Poser(player, IsNight());
+                return;
+            }
+            if (!player->IsInCombat())
+            {
+                Effacer(player);
+                return;
+            }
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            Horloge& h = Horloges()[{ player->GetGUID().GetCounter(), _groupe }];
+            if (!h.depuis)
+            {
+                h.depuis = now;
+                h.haute = true;
+            }
+            else
+                h.haute = ((now - h.depuis) / uint32(_sec)) % 2 == 0;
+            // L'ECLIPSE : les deux etats a la fois, et deux fois plus forts.
+            if (_eclipseChaque)
+            {
+                if (!h.eclipseDepuis || now - h.eclipseDepuis >= uint32(_eclipseChaque))
+                {
+                    h.eclipseDepuis = now;
+                    h.eclipseJusqua = now + uint32(_eclipseDuree);
+                }
+                if (now < h.eclipseJusqua)
+                {
+                    PoserLesDeux(player);
+                    return;
+                }
+            }
+            bool const change = h.haute != _haute || !_pose;
+            Poser(player, h.haute);
+            if (!change || !_pose)
+                return;
+            if (_mana)
+                Energize(player, player, PctOf(player->GetMaxPower(POWER_MANA), _mana), SpellId());
+            if (_heal)
+                Heal(player, player, PctOf(player->GetMaxHealth(), _heal), SpellId());
+        }
+
+        void Poser(Player* player, bool haute)
+        {
+            uint32 const veut = uint32(haute ? _haut : _bas);
+            uint32 const autre = uint32(haute ? _bas : _haut);
+            if (autre)
+                player->RemoveAurasDueToSpell(autre);
+            if (veut && !player->HasAura(veut))
+                player->AddAura(veut, player);
+            _haute = haute;
+            _pose = true;
+        }
+
+        // L'ECLIPSE : les deux auras ensemble, a deux cumuls -- « les deux
+        // bonus s'appliquent et sont doubles ».
+        void PoserLesDeux(Player* player)
+        {
+            for (uint32 sort : { uint32(_haut), uint32(_bas) })
+            {
+                if (!sort)
+                    continue;
+                Aura* aura = player->GetAura(sort, player->GetGUID());
+                if (!aura)
+                    aura = player->AddAura(sort, player);
+                if (aura && aura->GetStackAmount() < 2)
+                    aura->SetStackAmount(2);
+            }
+            _pose = true;
+        }
+
+        void Effacer(Player* player)
+        {
+            if (!player)
+                return;
+            if (_haut) player->RemoveAurasDueToSpell(uint32(_haut));
+            if (_bas)  player->RemoveAurasDueToSpell(uint32(_bas));
+            Horloges().erase({ player->GetGUID().GetCounter(), _groupe });
+            _haute = true;
+            _pose = false;
+        }
+
+        int32 _sec = 0, _groupe = 0, _haut = 0, _bas = 0, _mana = 0, _heal = 0;
+        int32 _eclipseChaque = 0, _eclipseDuree = 0;
+        bool _nuit = false;
+        bool _haute = true;
+        bool _pose = false;
+        std::unique_ptr<StellarTarotScript> _sousHaut, _sousBas;
+    };
+
+    // =========================================================================
+    // LE META-EFFET D'UNE CARTE QUI S'ACHARNE
+    //
+    // focus:<groupe>:<max>:<sort>[:perstack][:from:<seuil>][:rating:<pct>]
+    //       [:others:<pct>][:stun:<sec>][:high:<sous-script>]
+    //
+    //     UNE CARTE, UNE CIBLE, UN COMPTE. Frapper deux fois de suite le meme
+    //     adversaire fait monter le compte ; en changer le remet a zero. Le
+    //     compte appartient a la CARTE -- tous ses niveaux portent le meme
+    //     `groupe`, son numero -- et chacun ne dit que ce qu'il en tire :
+    //       <sort>          l'aura que ce niveau pose tant que la cible tient
+    //                       (0 quand il n'en pose pas)
+    //       perstack        ses cumuls suivent le compte ; sinon elle reste a un
+    //       from:<seuil>    elle n'est posee qu'a partir de ce compte
+    //       rating:<pct>    son chiffre est une PART du score que l'aura nomme,
+    //                       relue a la pose -- le DBC ne la porte pas
+    //       others:<pct>    ce que le joueur inflige AUX AUTRES cibles est
+    //                       modifie d'autant, tant que le compte tient
+    //       stun:<sec>      changer de cible etourdit le joueur
+    //       high:<sous>     un sous-script entier, actif a partir du seuil
+    // =========================================================================
+
+    // LA CIBLE ET LE COMPTE D'UNE CARTE, par joueur.
+    struct Acharnement
+    {
+        ObjectGuid cible;
+        int32 cumuls = 0;
+    };
+
+    std::map<std::pair<uint32, int32>, Acharnement>& Acharnements()
+    {
+        static std::map<std::pair<uint32, int32>, Acharnement> tout;
+        return tout;
+    }
+
+    class Focus : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 1000, _groupe) || !r.Int(1, 100, _max))
+                return (error = "focus expects the card and the ceiling", false);
+            // `self` : l'aura du niveau lui-meme -- le cas ordinaire. Un chiffre
+            // nomme un autre sort ; 0, aucun.
+            if (r.Peek() == "self")
+            {
+                r.Word();
+                _sien = true;
+            }
+            else if (!r.Int(0, 903999, _sort))
+                return (error = "focus expects self, a spell, or 0", false);
+            while (!r.End())
+            {
+                std::string const mot = r.Word();
+                if (mot == "perstack") { _parCumul = true; continue; }
+                if (mot == "from" && r.Int(1, 100, _seuil)) continue;
+                if (mot == "rating" && r.Int(-1000, 1000, _rating)) continue;
+                if (mot == "others" && r.Int(-1000, 1000, _autres)) continue;
+                if (mot == "stun" && r.Int(1, 60, _stun)) continue;
+                if (mot == "high")
+                {
+                    StellarTarotScriptSpec sous;
+                    bool premier = true;
+                    while (!r.End())
+                    {
+                        std::string const part = r.Word();
+                        if (premier) sous.name = part;
+                        else sous.params.push_back(part);
+                        premier = false;
+                    }
+                    if (sous.name.empty())
+                        return (error = "high expects a script", false);
+                    sous.text = sous.name;
+                    std::string pourquoi;
+                    _sous = StellarTarotScripts::Create(sous, pourquoi);
+                    if (!_sous)
+                        return (error = "high: " + pourquoi, false);
+                    continue;
+                }
+                return (error = "focus: unknown word \"" + mot + "\"", false);
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool OwnsAura() const override { return true; }
+
+        [[nodiscard]] uint32 Watches() const override { return _sous ? _sous->Watches() : 0u; }
+
+        [[nodiscard]] uint32 Trigger() const override
+        {
+            return (_sous && _atteint) ? _sous->Trigger() : 0u;
+        }
+
+        void Apply(Player* player) override
+        {
+            if (_sous) { _sous->SetSpell(SpellId()); _sous->Apply(player); }
+        }
+
+        void Remove(Player* player) override
+        {
+            if (_sous) _sous->Remove(player);
+            if (Sort()) RemoveOwned(player, Sort());
+            if (player)
+                Acharnements().erase({ player->GetGUID().GetCounter(), _groupe });
+            _atteint = false;
+        }
+
+        // LE COUP QUI COMPTE : la cible d'avant, ou une autre. C'est ici que le
+        // compte monte, retombe, et que le prix du changement se paie.
+        void OnDamageDealt(Player* player, Unit* victim, uint32& damage, bool spell,
+                           uint32 school, uint32 spellId) override
+        {
+            if (!player || !victim || !victim->IsAlive())
+                return;
+            Acharnement& a = Acharnements()[{ player->GetGUID().GetCounter(), _groupe }];
+            ObjectGuid const qui = victim->GetGUID();
+            bool const change = a.cible && a.cible != qui;
+            // CE QUE LE JOUEUR INFLIGE AUX AUTRES, tant que le compte tient.
+            if (_autres && change && a.cumuls >= std::max(1, _seuil))
+                damage = uint32(std::max<int64>(0, std::llround(double(damage) * (100 + _autres) / 100.0)));
+            if (change)
+            {
+                a.cumuls = 0;
+                if (_stun)
+                    Put(player, player, STELLAR_TAROT_SPELL_STUN, _stun);
+            }
+            if (a.cible != qui)
+                a.cumuls = 0;
+            a.cible = qui;
+            if (a.cumuls < _max)
+                ++a.cumuls;
+            Poser(player, a.cumuls);
+            if (_sous && _atteint)
+                _sous->OnDamageDealt(player, victim, damage, spell, school, spellId);
+        }
+
+        // UNE CIBLE MORTE N'EST PLUS UNE CIBLE : le compte tombe avec elle.
+        void OnCreatureKill(Player* player, Creature* killed) override
+        {
+            if (player && killed)
+            {
+                Acharnement& a = Acharnements()[{ player->GetGUID().GetCounter(), _groupe }];
+                if (a.cible == killed->GetGUID())
+                {
+                    a.cible.Clear();
+                    a.cumuls = 0;
+                    Poser(player, 0);
+                }
+            }
+            if (_sous && _atteint)
+                _sous->OnCreatureKill(player, killed);
+        }
+
+        bool Promise(std::string& event, int32& chance, int32& icd, bool& coreChance, bool& coreIcd) const override { StellarTarotScript const* s = Courant(); return s && s->Promise(event, chance, icd, coreChance, coreIcd); }
+        void OnDamageTaken(Player* player, Unit* attacker, uint32& damage, bool spell, uint32 school, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnDamageTaken(player, attacker, damage, spell, school, spellId); }
+        void OnHealDone(Player* player, Unit* target, uint32& gain) override { if (StellarTarotScript* s = Courant()) s->OnHealDone(player, target, gain); }
+        void OnSpellCast(Player* player, Spell* spell) override { if (StellarTarotScript* s = Courant()) s->OnSpellCast(player, spell); }
+        void OnTriggerProc(Player* player, Unit* other, uint32 amount) override { if (StellarTarotScript* s = Courant()) s->OnTriggerProc(player, other, amount); }
+        void OnCalcAuraDuration(Player* player, Aura const* aura, int32& duration) override { if (StellarTarotScript* s = Courant()) s->OnCalcAuraDuration(player, aura, duration); }
+        void OnPromiseSpent(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnPromiseSpent(player); }
+        void OnEnterCombat(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnEnterCombat(player); }
+        void OnLevelUp(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnLevelUp(player); }
+        void OnDeath(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnDeath(player); }
+        void OnNearbyDeath(Player* player, Unit* died) override { if (StellarTarotScript* s = Courant()) s->OnNearbyDeath(player, died); }
+        void OnJump(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnJump(player); }
+        void OnResurrect(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnResurrect(player); }
+        void OnZone(Player* player, uint32 zone, uint32 area) override { if (StellarTarotScript* s = Courant()) s->OnZone(player, zone, area); }
+        void OnMapChanged(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnMapChanged(player); }
+        void OnQuestComplete(Player* player, Quest const* quest) override { if (StellarTarotScript* s = Courant()) s->OnQuestComplete(player, quest); }
+        void OnLootMoney(Player* player, uint32& copper) override { if (StellarTarotScript* s = Courant()) s->OnLootMoney(player, copper); }
+        void OnGiveXP(Player* player, uint32& amount, uint8 source) override { if (StellarTarotScript* s = Courant()) s->OnGiveXP(player, amount, source); }
+        void OnGiveReputation(Player* player, float& amount, uint8 source) override { if (StellarTarotScript* s = Courant()) s->OnGiveReputation(player, amount, source); }
+        void OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod) override { if (StellarTarotScript* s = Courant()) s->OnRepairDiscount(player, itemGuid, discountMod); }
+        void OnVendorDiscount(Player const* player, float& discount) override { if (StellarTarotScript* s = Courant()) s->OnVendorDiscount(player, discount); }
+        void OnMoneyChanged(Player* player, int32& amount) override { if (StellarTarotScript* s = Courant()) s->OnMoneyChanged(player, amount); }
+        void OnSellItem(Player* player, Item* item) override { if (StellarTarotScript* s = Courant()) s->OnSellItem(player, item); }
+        void OnCreatureLoot(Player* player, Loot* loot) override { if (StellarTarotScript* s = Courant()) s->OnCreatureLoot(player, loot); }
+        void OnProspect(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnProspect(player, loot, tab, store); }
+        void OnSpend(Player* player) override { if (StellarTarotScript* s = Courant()) s->OnSpend(player); }
+        void OnAuctionPosted(Player* player, uint32 deposit) override { if (StellarTarotScript* s = Courant()) s->OnAuctionPosted(player, deposit); }
+        void OnAuctionSold(Player* player, uint32& profit) override { if (StellarTarotScript* s = Courant()) s->OnAuctionSold(player, profit); }
+        void OnAuctionWon(Player* player, uint32 price) override { if (StellarTarotScript* s = Courant()) s->OnAuctionWon(player, price); }
+        void OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags) override { if (StellarTarotScript* s = Courant()) s->OnFacing(player, x, y, orientation, moveFlags); }
+        void OnPetDamage(Player* player, Unit* victim, uint32& damage) override { if (StellarTarotScript* s = Courant()) s->OnPetDamage(player, victim, damage); }
+        void OnFishing(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnFishing(player, loot, tab, store); }
+        void OnSkinning(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnSkinning(player, loot, tab, store); }
+        void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override { if (StellarTarotScript* s = Courant()) s->OnObjectLoot(player, loot, tab, store); }
+        void OnItemRoll(Player const* player, uint32 itemId, float& chance) override { if (StellarTarotScript* s = Courant()) s->OnItemRoll(player, itemId, chance); }
+        void OnVendorBuy(Player* player, Item* item, uint32 count, uint32 paid) override { if (StellarTarotScript* s = Courant()) s->OnVendorBuy(player, item, count, paid); }
+        void OnAuraRemoved(Player* player, Aura const* aura) override { if (StellarTarotScript* s = Courant()) s->OnAuraRemoved(player, aura); }
+        void OnAuraApplied(Player* player, Unit* target, Aura* aura) override { if (StellarTarotScript* s = Courant()) s->OnAuraApplied(player, target, aura); }
+        void OnAuraTaken(Player* player, Unit* caster, Aura* aura) override { if (StellarTarotScript* s = Courant()) s->OnAuraTaken(player, caster, aura); }
+        void OnPeriodicTick(Player* player, Unit* other, uint32& amount, bool heal, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnPeriodicTick(player, other, amount, heal, spellId); }
+        void OnPeriodicTaken(Player* player, Unit* attacker, uint32& amount, uint32 spellId) override { if (StellarTarotScript* s = Courant()) s->OnPeriodicTaken(player, attacker, amount, spellId); }
+        bool DitSonEtat(Player* player, Unit* cible, std::string& out) override { StellarTarotScript* s = Courant(); return s && s->DitSonEtat(player, cible, out); }
+
+    private:
+        StellarTarotScript* Courant() { return _atteint ? _sous.get() : nullptr; }
+        StellarTarotScript const* Courant() const { return _atteint ? _sous.get() : nullptr; }
+
+        void Poser(Player* player, int32 cumuls)
+        {
+            _atteint = cumuls >= std::max(1, _seuil);
+            uint32 const sort = Sort();
+            if (!sort)
+                return;
+            if (!_atteint)
+            {
+                RemoveOwned(player, sort);
+                return;
+            }
+            int32 const veut = _parCumul ? cumuls : 1;
+            // UNE PART DU SCORE : le DBC ne la porte pas, le module l'y met.
+            if (_rating)
+            {
+                LayRatingShare(player, sort, { _rating }, 0, veut);
+                return;
+            }
+            Aura* aura = player->GetAura(sort, player->GetGUID());
+            if (!aura)
+                aura = player->AddAura(sort, player);
+            if (aura && int32(aura->GetStackAmount()) != veut)
+                aura->SetStackAmount(uint8(std::max(1, veut)));
+        }
+
+        // L'AURA DU NIVEAU : `_sien` la designe, et `Sort()` la rend.
+        [[nodiscard]] uint32 Sort() const { return _sien ? SpellId() : uint32(_sort); }
+
+        int32 _groupe = 0, _max = 1, _sort = 0, _seuil = 1, _rating = 0, _autres = 0, _stun = 0;
+        bool _sien = false;
+        bool _parCumul = false;
+        bool _atteint = false;
+        std::unique_ptr<StellarTarotScript> _sous;
+    };
+
+    // =========================================================================
+    // L'OBJET QU'UNE CARTE DONNE, ET LA VOIE QU'ON CHOISIT
+    //
+    // cardtool:<groupe>:<objet>:<A1>:<A2>:<A3>[:gives][:stacks:<n>][:onchange:<sec>]
+    //
+    //     LA CARTE MET UN JETON DANS LES SACS ; s'en servir change de voie, et
+    //     la voie tourne : premiere, deuxieme, troisieme, puis de nouveau la
+    //     premiere. La voie appartient a la CARTE -- tous ses niveaux portent
+    //     le meme `groupe` -- et chacun ne dit que ce qu'il en tire :
+    //       <A1> <A2> <A3>  l'aura de ce niveau pour chaque voie (0 : aucune)
+    //       gives           CE niveau donne le jeton et fait tourner la voie ;
+    //                       les autres ne font que suivre
+    //       stacks:<n>      la voie choisie est posee a n cumuls -- c'est ainsi
+    //                       qu'un niveau « double » le chiffre d'un autre
+    //       onchange:<sec>  a chaque changement de voie, l'aura du NIVEAU est
+    //                       posee pour ce temps-la
+    // =========================================================================
+
+    // LA VOIE D'UNE CARTE, par joueur : laquelle, a combien de cumuls, et le
+    // compteur de changements -- c'est lui que les autres niveaux guettent.
+    struct Voie
+    {
+        int32 laquelle = 0;         // 0, 1 ou 2
+        int32 cumuls = 1;
+        uint32 tour = 0;            // avance a chaque changement
+    };
+
+    std::map<std::pair<uint32, int32>, Voie>& Voies()
+    {
+        static std::map<std::pair<uint32, int32>, Voie> toutes;
+        return toutes;
+    }
+
+    class CardTool : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 1000, _groupe) || !r.Int(0, 902999, _objet))
+                return (error = "cardtool expects the card and its item", false);
+            for (int32& sort : _voies)
+                if (!r.Int(0, 903999, sort))
+                    return (error = "cardtool expects three spells (0 for none)", false);
+            while (!r.End())
+            {
+                std::string const mot = r.Word();
+                if (mot == "gives") { _donne = true; continue; }
+                // `on_use:<sous-script>` : CE QUE L'USAGE DU JETON DECLENCHE.
+                // Tout ce qui suit appartient au sous-script -- une ligne
+                // entiere du moteur, avec sa chance, sa recharge et son prix.
+                if (mot == "on_use")
+                {
+                    StellarTarotScriptSpec sous;
+                    bool premier = true;
+                    while (!r.End())
+                    {
+                        std::string const part = r.Word();
+                        if (premier) sous.name = part;
+                        else sous.params.push_back(part);
+                        premier = false;
+                    }
+                    if (sous.name.empty())
+                        return (error = "on_use expects a script", false);
+                    sous.text = sous.name;
+                    std::string pourquoi;
+                    _usage = StellarTarotScripts::Create(sous, pourquoi);
+                    if (!_usage)
+                        return (error = "on_use: " + pourquoi, false);
+                    continue;
+                }
+                if (mot == "stacks" && r.Int(1, 10, _cumuls)) continue;
+                if (mot == "onchange" && r.Int(1, 3600, _surChangement)) continue;
+                return (error = "cardtool: unknown word \"" + mot + "\"", false);
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool OwnsAura() const override { return true; }
+
+        [[nodiscard]] uint32 Watches() const override { return _usage ? _usage->Watches() : 0u; }
+
+        void Apply(Player* player) override
+        {
+            if (!player)
+                return;
+            if (_usage) { _usage->SetSpell(SpellId()); _usage->Apply(player); }
+            Voie& v = Voies()[{ player->GetGUID().GetCounter(), _groupe }];
+            v.cumuls = std::max(v.cumuls, _cumuls);
+            if (_donne && _objet && !player->HasItemCount(uint32(_objet), 1, true))
+            {
+                ItemPosCountVec ou;
+                if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, ou, uint32(_objet), 1) == EQUIP_ERR_OK)
+                    if (Item* jeton = player->StoreNewItem(ou, uint32(_objet), true))
+                        player->SendNewItem(jeton, 1, true, false);
+            }
+            _vu = v.tour;
+            Poser(player, v);
+        }
+
+        void Remove(Player* player) override
+        {
+            if (!player)
+                return;
+            if (_usage)
+                _usage->Remove(player);
+            for (int32 sort : _voies)
+                if (sort)
+                    RemoveOwned(player, uint32(sort));
+            if (_surChangement)
+                RemoveOwned(player, SpellId());
+            if (_donne)
+            {
+                if (_objet)
+                    player->DestroyItemCount(uint32(_objet), 1, true);
+                Voies().erase({ player->GetGUID().GetCounter(), _groupe });
+            }
+        }
+
+        // LE JETON QU'ON EMPLOIE : c'est le niveau qui l'a donne qui fait
+        // tourner la voie ; les autres la lisent.
+        void OnSpellCast(Player* player, Spell* spell) override
+        {
+            if (!player || !_objet)
+                return;
+            ItemTemplate const* const quoi = CastItemOf(spell);
+            if (!quoi || quoi->ItemId != uint32(_objet))
+                return;
+            // CE QUE L'USAGE DECLENCHE : la ligne du sous-script joue, avec sa
+            // chance, sa recharge et son prix -- le conteneur ne fait que lui
+            // dire que le moment est venu.
+            if (_usage)
+                _usage->OnTriggerProc(player, player->GetVictim(), 0);
+            Voie& v = Voies()[{ player->GetGUID().GetCounter(), _groupe }];
+            // UNE VOIE A SUIVRE : seulement si la carte en a une. Un jeton qui
+            // ne fait qu'agir n'a pas de voie a tourner.
+            bool const aUneVoie = _voies[0] || _voies[1] || _voies[2];
+            if (_donne && aUneVoie)
+            {
+                // HORS COMBAT SEULEMENT : le texte de la carte le dit.
+                if (player->IsInCombat())
+                    return;
+                v.laquelle = (v.laquelle + 1) % 3;
+                ++v.tour;
+            }
+            Suivre(player, v);
+        }
+
+        void OnTick(Player* player) override
+        {
+            if (!player)
+                return;
+            Suivre(player, Voies()[{ player->GetGUID().GetCounter(), _groupe }]);
+        }
+
+    private:
+        // LA VOIE A TOURNE : ce niveau repose la sienne, et paie ce qu'il doit
+        // au changement.
+        void Suivre(Player* player, Voie& v)
+        {
+            if (v.tour == _vu)
+                return;
+            _vu = v.tour;
+            Poser(player, v);
+            if (_surChangement && SpellId())
+            {
+                RemoveOwned(player, SpellId());
+                if (Aura* aura = player->AddAura(SpellId(), player))
+                {
+                    aura->SetMaxDuration(_surChangement * 1000);
+                    aura->SetDuration(_surChangement * 1000);
+                }
+            }
+        }
+
+        void Poser(Player* player, Voie const& v)
+        {
+            for (int32 i = 0; i < 3; ++i)
+            {
+                if (!_voies[i])
+                    continue;
+                if (i != v.laquelle)
+                {
+                    RemoveOwned(player, uint32(_voies[i]));
+                    continue;
+                }
+                Aura* aura = player->GetAura(uint32(_voies[i]), player->GetGUID());
+                if (!aura)
+                    aura = player->AddAura(uint32(_voies[i]), player);
+                if (aura && int32(aura->GetStackAmount()) != v.cumuls)
+                    aura->SetStackAmount(uint8(std::max(1, v.cumuls)));
+            }
+        }
+
+        int32 _groupe = 0, _objet = 0, _cumuls = 1, _surChangement = 0;
+        int32 _voies[3] = { 0, 0, 0 };
+        bool _donne = false;
+        uint32 _vu = 0;
+        std::unique_ptr<StellarTarotScript> _usage;   // ce que l'usage declenche
+    };
+
+    // =========================================================================
+    // stacklong:<sec>:<sort>[:<sort>...]
+    //     LES CUMULS DURENT PLUS LONGTEMPS. Un niveau superieur ne POSE rien :
+    //     il rallonge ce qu'un niveau inferieur a pose -- et une duree ne
+    //     s'additionne pas, elle se REMPLACE. Le coeur demande au module la
+    //     duree maximale de chaque aura qu'il calcule (OnCalcAuraDuration) :
+    //     la ligne repond pour les sorts qu'elle nomme, et pour eux seuls.
+    // =========================================================================
+    class StackLonger : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 3600, _sec))
+                return (error = "stacklong expects the seconds", false);
+            while (!r.End())
+            {
+                int32 sort = 0;
+                if (!r.Int(902000, 903999, sort))
+                    return (error = "after the seconds, only spells of the module", false);
+                _sorts.push_back(uint32(sort));
+            }
+            return !_sorts.empty() || (error = "stacklong expects at least one spell", false);
+        }
+
+        void OnCalcAuraDuration(Player* /*player*/, Aura const* aura, int32& duration) override
+        {
+            if (!aura)
+                return;
+            for (uint32 sort : _sorts)
+                if (aura->GetId() == sort)
+                {
+                    duration = _sec * 1000;
+                    return;
+                }
+        }
+
+    private:
+        int32 _sec = 0;
+        std::vector<uint32> _sorts;
+    };
+
+    // =========================================================================
+    // healmod:<soi>:<autres>
+    //     LE SOIN, SELON QUI LE DONNE. Aucune aura du coeur ne fait cette
+    //     difference : MOD_HEALING_DONE suit le soigneur, MOD_HEALING_RECEIVED
+    //     ne regarde pas qui soigne. La ligne lit donc les deux montants la ou
+    //     ils tombent -- celui que le joueur se rend a lui-meme, et celui que
+    //     les AUTRES lui rendent.
+    //       <soi>    ce que le joueur se rend, modifie d'autant
+    //       <autres> ce que les autres lui rendent, modifie d'autant
+    //                (-100 : ils ne peuvent plus le soigner du tout)
+    // =========================================================================
+    class HealMod : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(-100, 1000, _soi) || !r.Int(-100, 1000, _autres))
+                return (error = "healmod expects both percentages", false);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnHealDone(Player* player, Unit* target, uint32& gain) override
+        {
+            if (!_soi || !gain || target != player)
+                return;
+            gain = uint32(std::max<int64>(0, std::llround(double(gain) * (100 + _soi) / 100.0)));
+        }
+
+        void OnHealTaken(Player* player, Unit* healer, uint32& gain) override
+        {
+            if (!_autres || !gain || !healer || healer == player)
+                return;
+            gain = uint32(std::max<int64>(0, std::llround(double(gain) * (100 + _autres) / 100.0)));
+        }
+
+    private:
+        int32 _soi = 0, _autres = 0;
+    };
+
+    // =========================================================================
+    // hitroll:<quoi>[:only:<etat>[:<n>]]
+    //     CE QUE LE DE DU COUP BLANC NE PEUT PLUS DONNER. Le coeur demande au
+    //     module les cinq chances avant de jeter le de
+    //     (`OnBeforeRollMeleeOutcomeAgainst`) : c'est le seul endroit ou une
+    //     carte peut fermer une issue. Aucune aura ne le sait dire -- l'aura
+    //     248 ne touche que l'esquive, et les attributs de sort sont statiques
+    //     et partages par tous ceux qui les lancent.
+    //       noblock   vos attaques ne peuvent plus etre bloquees
+    //       nododge   vous n'esquivez plus
+    //       noparry   vous ne parez plus
+    //       firstmiss la PREMIERE attaque d'un ennemi donne vous rate
+    //     `only:<etat>` : seulement tant que cet etat tient.
+    // =========================================================================
+    class HitRoll : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            _quoi = r.Word();
+            static char const* const mots[] = { "noblock", "nododge", "noparry", "firstmiss" };
+            bool connu = false;
+            for (char const* m : mots)
+                if (_quoi == m) connu = true;
+            if (!connu)
+                return (error = "unknown hitroll " + _quoi, false);
+            if (!r.End())
+            {
+                if (r.Word() != "only")
+                    return (error = "after the word, only only:<state> may follow", false);
+                _etat = r.Word();
+                r.OptInt(1, 3600, _etatN);
+            }
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void Remove(Player* /*player*/) override { _deja.clear(); }
+
+        void OnMeleeRoll(Player* player, Unit* autre, bool mien, int32& /*crit*/, int32& miss,
+                         int32& dodge, int32& parry, int32& block) override
+        {
+            if (!player)
+                return;
+            if (!_etat.empty() && !EtatTenu(_etat, _etatN, 0, player, player, nullptr))
+                return;
+            // `noblock` parle des coups QUE LE JOUEUR PORTE ; les trois autres
+            // de ceux QU'IL SUBIT.
+            if (_quoi == "noblock")
+            {
+                if (mien)
+                    block = 0;
+                return;
+            }
+            if (mien)
+                return;
+            if (_quoi == "nododge")
+                dodge = 0;
+            else if (_quoi == "noparry")
+                parry = 0;
+            // LA PREMIERE ATTAQUE D'UN ENNEMI DONNE, et elle seule : on retient
+            // ceux qui ont deja frappe. La liste meurt avec la ligne.
+            else if (_quoi == "firstmiss" && autre)
+            {
+                if (_deja.insert(autre->GetGUID()).second)
+                    miss = 10000;
+            }
+        }
+
+    private:
+        std::string _quoi, _etat;
+        int32 _etatN = 0;
+        std::set<ObjectGuid> _deja;
+    };
+
+    // =========================================================================
+    // pertag:<tag>:<pour_mille>[:linked][:tick:<sec>:<quoi>]
+    //     PAR CARTE D'UN TAG POSEE SUR LE PLATEAU. Le chiffre est en POUR
+    //     MILLE : le classeur dit « +0,5% », qui ne tient pas dans un entier.
+    //       <tag>     le numero du tag (Physical, Magic, Wealth, ...)
+    //       linked    on ne compte que les cartes RACCORDEES -- celles dont au
+    //                 moins un bord s'accorde a une voisine
+    //       tick:<sec>:<quoi>  au lieu d'une aura, un versement periodique :
+    //                 `mana` ou `heal`, cette part par carte comptee
+    //     Sans `tick`, l'aura du niveau est posee a autant de cumuls que de
+    //     cartes comptees ; son chiffre est celui du DBC, par cumul.
+    // =========================================================================
+    class PerTag : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 100, _tag) || !r.Int(1, 10000, _pourMille))
+                return (error = "pertag expects the tag then the per-mille figure", false);
+            while (!r.End())
+            {
+                std::string const mot = r.Word();
+                if (mot == "linked") { _raccordees = true; continue; }
+                // `sp` : le chiffre est une part de la PUISSANCE DES SORTS du
+                // joueur, que le DBC ne peut pas porter -- le module l'y met,
+                // et il la relit a chaque battement.
+                if (mot == "sp") { _sp = true; continue; }
+                if (mot == "tick" && r.Int(1, 3600, _cadence))
+                {
+                    _quoi = r.Word();
+                    if (_quoi != "mana" && _quoi != "heal")
+                        return (error = "tick expects mana or heal", false);
+                    continue;
+                }
+                return (error = "pertag: unknown word \"" + mot + "\"", false);
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool OwnsAura() const override { return true; }
+
+        void Apply(Player* player) override { Regler(player); }
+        void Remove(Player* player) override { RemoveOwned(player, SpellId()); _compte = 0; }
+        void OnTick(Player* player) override
+        {
+            Regler(player);
+            if (!_cadence || !_compte)
+                return;
+            // EN COMBAT SEULEMENT, comme le dit la carte, et au rythme donne.
+            if (!player->IsInCombat())
+                return;
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            if (_dernier && now - _dernier < uint32(_cadence))
+                return;
+            _dernier = now;
+            uint32 const total = uint32(_pourMille) * uint32(_compte);
+            if (_quoi == "mana")
+                Energize(player, player, PourMille(player->GetMaxPower(POWER_MANA), total), SpellId());
+            else
+                Heal(player, player, PourMille(player->GetMaxHealth(), total), SpellId());
+        }
+
+    private:
+        static uint32 PourMille(uint32 total, uint32 part)
+        {
+            return uint32(std::llround(double(total) * part / 1000.0));
+        }
+
+        // CE QUE LE PLATEAU PORTE : les cartes du tag, posees, et raccordees
+        // quand la ligne le demande.
+        int32 Compter(Player* player) const
+        {
+            int32 combien = 0;
+            StellarTarotLayout const layout = StellarTarotLayouts::Load(player);
+            for (StellarTarotActivation const& a : StellarTarotLayouts::Activations(layout))
+            {
+                StellarTarotCard const* const carte = sStellarTarotMgr->Card(a.placement.cardId);
+                if (!carte || int32(carte->tagId) != _tag)
+                    continue;
+                if (_raccordees)
+                {
+                    bool accordee = false;
+                    for (bool bord : a.matched)
+                        if (bord) accordee = true;
+                    if (!accordee)
+                        continue;
+                }
+                ++combien;
+            }
+            return combien;
+        }
+
+        void Regler(Player* player)
+        {
+            int32 const combien = Compter(player);
+            // LA PUISSANCE DES SORTS BOUGE d'elle-meme : le compte des cartes
+            // ne suffit pas a dire que rien n'a change.
+            if (combien == _compte && !(_sp && !player->HasAura(SpellId())))
+                return;
+            _compte = combien;
+            RemoveOwned(player, SpellId());
+            // Un versement periodique ne pose aucune aura : le compte suffit.
+            if (_cadence || !_compte)
+                return;
+            // UNE PART DE LA PUISSANCE DES SORTS : le chiffre entier est calcule
+            // ici -- la part, multipliee par le nombre de cartes comptees -- et
+            // l'aura le porte d'un seul tenant.
+            if (_sp)
+            {
+                int32 const propre = std::max(0, player->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC));
+                int32 const bp = int32(std::llround(double(propre) * _pourMille * _compte / 1000.0));
+                if (bp <= 0)
+                    return;
+                player->CastCustomSpell(player, SpellId(), &bp, &bp, &bp, true);
+                return;
+            }
+            if (Aura* aura = player->AddAura(SpellId(), player))
+                if (_compte > 1)
+                    aura->SetStackAmount(uint8(std::min(_compte, 100)));
+        }
+
+        int32 _tag = 0, _pourMille = 0, _cadence = 0, _compte = 0;
+        bool _raccordees = false;
+        bool _sp = false;
+        std::string _quoi;
+        uint32 _dernier = 0;
+    };
+
+    // =========================================================================
+    // lockpick:<sort>
+    //     LES SERRURES S'OUVRENT SANS CLE. Le module n'ouvre rien lui-meme :
+    //     il APPREND au joueur un sort qui porte SPELL_EFFECT_OPEN_LOCK, et
+    //     c'est le coeur qui fait le reste -- `Spell::CanOpenLock` le trouve
+    //     dans les sorts connus, lit sa valeur et ouvre. Le sort est repris
+    //     quand la carte s'en va.
+    // =========================================================================
+    class LockPick : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(902000, 903999, _sort) && r.End())
+                || (error = "lockpick expects its spell", false);
+        }
+        void Apply(Player* player) override
+        {
+            if (player && !player->HasSpell(uint32(_sort)))
+                player->learnSpell(uint32(_sort), false);
+        }
+        void Remove(Player* player) override
+        {
+            if (player && player->HasSpell(uint32(_sort)))
+                player->removeSpell(uint32(_sort), SPEC_MASK_ALL, false);
+        }
+
+    private:
+        int32 _sort = 0;
+    };
+
+    // =========================================================================
+    // bridge:<pct>:<sec>:<chance>[:<sort>]
+    //     LE PONT. Un soin porte a un allie peut le LIER au soigneur : tant que
+    //     le lien tient, cette part de ce que l'allie encaisse passe sur le
+    //     soigneur, et l'allie d'autant moins. Le coeur ne dit a personne ce
+    //     qu'un autre subit : le module le porte aux veilleurs du groupe.
+    // =========================================================================
+    class Bridge : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 100, _pct) || !r.Int(1, 3600, _sec) || !r.Int(1, 100, _chance))
+                return (error = "bridge expects the share, the seconds and the chance", false);
+            r.OptInt(902000, 903999, _marque);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        [[nodiscard]] uint32 Watches() const override { return GUET_ALLIE_FRAPPE; }
+
+        void Remove(Player* player) override { Delier(player); }
+
+        // UN SOIN PORTE A UN ALLIE : la chance dit s'il est lie.
+        void OnHealDone(Player* player, Unit* target, uint32& /*gain*/) override
+        {
+            if (!player || !target || target == player || !target->IsPlayer())
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            Delier(player);
+            _lie = target->GetGUID();
+            _jusqua = uint32(GameTime::GetGameTime().count()) + uint32(_sec);
+            if (_marque)
+                player->AddAura(uint32(_marque), target);
+        }
+
+        void OnTick(Player* player) override
+        {
+            if (_lie && uint32(GameTime::GetGameTime().count()) >= _jusqua)
+                Delier(player);
+        }
+
+        // CE QUE L'ALLIE LIE ENCAISSE : la part dite passe sur le soigneur.
+        void OnAllyDamaged(Player* player, Player* allie, uint32& damage) override
+        {
+            if (!_lie || !allie || allie->GetGUID() != _lie || !damage)
+                return;
+            uint32 const part = PctOf(damage, _pct);
+            if (!part)
+                return;
+            damage -= part;
+            Bleed(player, part, SpellId());
+        }
+
+    private:
+        void Delier(Player* player)
+        {
+            if (_marque && _lie && player)
+                if (Unit* qui = ObjectAccessor::GetUnit(*player, _lie))
+                    qui->RemoveAurasDueToSpell(uint32(_marque));
+            _lie.Clear();
+            _jusqua = 0;
+        }
+
+        int32 _pct = 0, _sec = 0, _chance = 100, _marque = 0;
+        ObjectGuid _lie;
+        uint32 _jusqua = 0;
+    };
+
+    // =========================================================================
+    // featherfall:<m>
+    //     UNE CHUTE QUI S'ADOUCIT. Le coeur ne previent d'aucune chute avant
+    //     l'atterrissage : la ligne guette la descente elle-meme et pose la
+    //     descente lente du jeu des que le joueur est tombe d'assez haut.
+    // =========================================================================
+    class FeatherFall : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 200, _metres) && r.End())
+                || (error = "featherfall expects the metres", false);
+        }
+
+        void Remove(Player* player) override
+        {
+            if (player)
+                player->RemoveAurasDueToSpell(SLOW_FALL);
+            _haut = 0.0f;
+        }
+
+        void OnTick(Player* player) override
+        {
+            if (!player)
+                return;
+            float const z = player->GetPositionZ();
+            if (!player->IsFalling())
+            {
+                // Pose a terre : la descente lente n'a plus lieu d'etre.
+                if (_haut != 0.0f)
+                {
+                    player->RemoveAurasDueToSpell(SLOW_FALL);
+                    _haut = 0.0f;
+                }
+                return;
+            }
+            if (_haut == 0.0f)
+            {
+                _haut = z;
+                return;
+            }
+            if (_haut - z >= float(_metres) && !player->HasAura(SLOW_FALL))
+                player->AddAura(SLOW_FALL, player);
+        }
+
+    private:
+        static constexpr uint32 SLOW_FALL = 130;    // « Descente lente », le sort du jeu
+        int32 _metres = 0;
+        float _haut = 0.0f;
+    };
+
+    // =========================================================================
+    // targetres:<pct>
+    //     IGNORER UNE PART DES RESISTANCES DE LA CIBLE. L'aura 168
+    //     (MOD_TARGET_RESISTANCE) porte un nombre de points, non un
+    //     pourcentage : le module lit la resistance de la cible du moment et
+    //     ecrit la part demandee dans l'aura, a chaque battement. Sans cible,
+    //     rien n'est ecrit -- il n'y a rien a ignorer.
+    // =========================================================================
+    class TargetRes : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 100, _pct) && r.End())
+                || (error = "targetres expects the percentage", false);
+        }
+        [[nodiscard]] bool OwnsAura() const override { return true; }
+        void Remove(Player* player) override { RemoveOwned(player, SpellId()); _pose = -1; }
+
+        void OnTick(Player* player) override
+        {
+            Unit* const cible = player ? player->GetVictim() : nullptr;
+            // LA RESISTANCE MAGIQUE DE LA CIBLE : le coeur les tient ecole par
+            // ecole ; on prend la plus basse, celle qui vaut pour l'ombre comme
+            // pour le feu, et l'on en ignore la part dite.
+            int32 veut = 0;
+            if (cible)
+            {
+                int32 plus_basse = -1;
+                for (uint8 ecole = SPELL_SCHOOL_HOLY; ecole < MAX_SPELL_SCHOOL; ++ecole)
+                {
+                    int32 const r = cible->GetResistance(SpellSchools(ecole));
+                    if (plus_basse < 0 || r < plus_basse)
+                        plus_basse = r;
+                }
+                veut = -int32(std::llround(double(std::max(0, plus_basse)) * _pct / 100.0));
+            }
+            if (veut == _pose)
+                return;
+            _pose = veut;
+            RemoveOwned(player, SpellId());
+            if (!veut)
+                return;
+            int32 bp = veut;
+            player->CastCustomSpell(player, SpellId(), &bp, &bp, &bp, true);
+        }
+
+    private:
+        int32 _pct = 0;
+        int32 _pose = -1;
+    };
+
+    // =========================================================================
+    // areacost:<pct>
+    //     LES SORTS DE ZONE COUTENT MOINS. Aucune aura ne sait dire « de
+    //     zone » : le modificateur 108 choisit par famille de sorts, et le
+    //     coeur n'a pas de masque pour l'etendue. Le module rend donc la part
+    //     du cout, au moment ou le sort part, et seulement s'il frappe une
+    //     zone -- ce que le sort dit lui-meme (`IsTargetingArea`).
+    // =========================================================================
+    class AreaCost : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 100, _pct) && r.End())
+                || (error = "areacost expects the percentage", false);
+        }
+
+        void OnSpellCast(Player* player, Spell* spell) override
+        {
+            if (!player || !spell || spell->IsTriggered())
+                return;
+            SpellInfo const* const info = spell->GetSpellInfo();
+            if (!info || !info->IsTargetingArea() || info->PowerType != POWER_MANA)
+                return;
+            int32 const cout = info->CalcPowerCost(player, info->GetSchoolMask());
+            uint32 const rendu = uint32(std::llround(double(std::max(0, cout)) * _pct / 100.0));
+            if (rendu)
+                Energize(player, player, rendu, SpellId());
+        }
+
+    private:
+        int32 _pct = 0;
+    };
+
+    // =========================================================================
+    // cackle:<critiques>:<ratees>
+    //     LE RIRE DU FOU : il promet, puis il trahit. Les prochaines attaques
+    //     sont critiques a coup sur, et celles d'apres ratent a coup sur. Rien
+    //     de tout cela n'est une aura : c'est le DE DU COUP BLANC, que le coeur
+    //     demande au module avant de le jeter.
+    // =========================================================================
+    class Cackle : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 20, _critiques) || !r.Int(0, 20, _ratees))
+                return (error = "cackle expects how many crits then how many misses", false);
+            if (!r.Int(1, 100, _chance))
+                return (error = "cackle expects the chance", false);
+            r.OptInt(0, 86400, _icd);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void Remove(Player* /*player*/) override { _reste = 0; _rate = 0; }
+
+        // UN CRITIQUE ARME LE RIRE, si la chance et la recharge le veulent.
+        void OnMeleeRoll(Player* /*player*/, Unit* /*autre*/, bool mien, int32& crit,
+                         int32& miss, int32& /*dodge*/, int32& /*parry*/, int32& /*block*/) override
+        {
+            if (!mien)
+                return;
+            if (_reste)
+            {
+                --_reste;
+                crit = 10000;
+                if (!_reste)
+                    _rate = _ratees;
+                return;
+            }
+            if (_rate)
+            {
+                --_rate;
+                miss = 10000;
+            }
+        }
+
+        void OnTriggerProc(Player* /*player*/, Unit* /*other*/, uint32 /*amount*/) override { Armer(); }
+
+    private:
+        void Armer()
+        {
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            if (_icd && _dernier && now - _dernier < uint32(_icd))
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            _dernier = now;
+            _reste = _critiques;
+            _rate = 0;
+        }
+
+        int32 _critiques = 0, _ratees = 0, _chance = 100, _icd = 0;
+        int32 _reste = 0, _rate = 0;
+        uint32 _dernier = 0;
+    };
+
+    // =========================================================================
+    // heallow:<seuil>:<pct>
+    //     UN SOIN SUR UNE CIBLE AU PLUS BAS, majore d'autant. Aucune aura du
+    //     coeur ne regarde la vie de la CIBLE d'un soin : le module lit le
+    //     montant au moment ou il tombe, et rien d'autre.
+    // =========================================================================
+    class HealLow : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            return (r.Int(1, 100, _seuil) && r.Int(1, 1000, _pct) && r.End())
+                || (error = "expects the threshold then the percentage", false);
+        }
+
+        void OnHealDone(Player* /*player*/, Unit* target, uint32& gain) override
+        {
+            if (!target || !gain || target->GetHealthPct() >= float(_seuil))
+                return;
+            gain = uint32(std::llround(double(gain) * (100 + _pct) / 100.0));
+        }
+
+    private:
+        int32 _seuil = 0, _pct = 0;
+    };
+
+    // =========================================================================
+    // ward:<quoi>:<pct>
+    //     LES BOUCLIERS DU JOUEUR, ceux qui absorbent.
+    //       more:<pct>   ce qu'ils absorbent, majore d'autant. Le coeur a deja
+    //                    pose le chiffre quand il previent : on le repose.
+    //       broken:<pct> le bouclier ROMPU -- absorbe jusqu'au bout -- rend
+    //                    cette part du mana du joueur.
+    // =========================================================================
+    class Ward : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            _what = r.Word();
+            if (_what != "more" && _what != "broken")
+                return (error = "ward expects more or broken", false);
+            if (!r.Int(1, 1000, _pct))
+                return (error = "expects the percentage", false);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnAuraApplied(Player* player, Unit* target, Aura* aura) override
+        {
+            if (_what != "more" || !player || !aura || target != player)
+                return;
+            for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                AuraEffect* effet = aura->GetEffect(i);
+                if (!effet || effet->GetAuraType() != SPELL_AURA_SCHOOL_ABSORB)
+                    continue;
+                int32 const pose = effet->GetAmount();
+                if (pose <= 0)
+                    continue;
+                effet->ChangeAmount(pose + int32(std::llround(double(pose) * _pct / 100.0)));
+            }
+        }
+
+        // UN BOUCLIER QUI S'EN VA : rompu quand il ne lui restait plus rien.
+        // Celui qui expire en ayant encore de quoi absorber n'est pas rompu.
+        void OnAuraRemoved(Player* player, Aura const* aura) override
+        {
+            if (_what != "broken" || !player || !aura)
+                return;
+            bool absorbe = false;
+            for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (AuraEffect const* effet = aura->GetEffect(i))
+                    if (effet->GetAuraType() == SPELL_AURA_SCHOOL_ABSORB)
+                    {
+                        absorbe = true;
+                        if (effet->GetAmount() > 0)
+                            return;                 // il lui restait de quoi tenir
+                    }
+            if (!absorbe)
+                return;
+            Energize(player, player, PctOf(player->GetMaxPower(POWER_MANA), _pct), _spellId);
+        }
+
+    private:
+        std::string _what;
+        int32 _pct = 0;
+    };
+
+    // =========================================================================
+    // roll:<quoi>:<facteur>:<chance_haute>:<chance_basse>[:<revers>]
+    //     LE DE DU FOU. A chaque coup porte, sort lance ou soin rendu -- selon
+    //     `quoi` (dmg, heal, both) -- deux des sont jetes dans cet ordre : le
+    //     premier multiplie le montant par `facteur`, le second le fait tomber.
+    //     Ce que « tomber » veut dire tient au revers :
+    //       (rien)     le montant est nul
+    //       hurt       le soin devient une blessure du meme montant sur la cible
+    //       self:<pct> la part dite du coup revient au joueur
+    //     Les deux des ne peuvent pas gagner ensemble : le premier consulte
+    //     decide, et le second n'est jete que s'il a perdu.
+    // =========================================================================
+    class DeDuFou : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            std::string const quoi = r.Word();
+            if (quoi == "dmg")        _degats = true;
+            else if (quoi == "heal")  _soins = true;
+            else if (quoi == "both")  _degats = _soins = true;
+            else                      return (error = "roll expects dmg, heal or both", false);
+            if (!r.Int(2, 10, _facteur) || !r.Int(1, 100, _haute) || !r.Int(0, 100, _basse))
+                return (error = "roll expects the factor then the two chances", false);
+            if (!r.End())
+            {
+                _revers = r.Word();
+                if (_revers == "self")
+                {
+                    if (!r.Int(1, 100, _part))
+                        return (error = "self expects its percentage", false);
+                }
+                else if (_revers != "hurt")
+                    return (error = "unknown backlash " + _revers, false);
+            }
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnDamageDealt(Player* player, Unit* victim, uint32& damage, bool /*spell*/,
+                           uint32 school, uint32 /*spellId*/) override
+        {
+            if (!_degats || !damage || !player)
+                return;
+            if (int32(urand(1, 100)) <= _haute)
+            {
+                damage *= uint32(_facteur);
+                return;
+            }
+            if (!_basse || int32(urand(1, 100)) > _basse)
+                return;
+            // Le revers du coup : soit il ne porte pas, soit il revient.
+            if (_revers == "self")
+            {
+                uint32 const retour = uint32(std::llround(double(damage) * _part / 100.0));
+                (void)victim;
+                (void)school;
+                Bleed(player, retour, _spellId);
+            }
+            else
+                damage = 0;
+        }
+
+        void OnHealDone(Player* player, Unit* target, uint32& gain) override
+        {
+            if (!_soins || !gain || !player)
+                return;
+            if (int32(urand(1, 100)) <= _haute)
+            {
+                gain *= uint32(_facteur);
+                return;
+            }
+            if (!_basse || int32(urand(1, 100)) > _basse)
+                return;
+            // « blesser la cible du montant » : le soin se retourne, et c'est
+            // bien la cible du soin qui le prend.
+            if (_revers == "hurt" && target)
+            {
+                uint32 const mal = gain;
+                gain = 0;
+                if (target == player)
+                    Bleed(player, mal, _spellId);
+                else
+                    Hurt(player, target, mal, SPELL_SCHOOL_MASK_SHADOW, _spellId);
+            }
+            else
+                gain = 0;
+        }
+
+    private:
+        bool _degats = false, _soins = false;
+        int32 _facteur = 2, _haute = 0, _basse = 0, _part = 0;
+        std::string _revers;
+    };
+
+    // =========================================================================
+    // lootchance:<qualite>:<pct>
+    //     LA CHANCE D'UNE LIGNE DE TABLE, majoree pour les objets d'une
+    //     qualite donnee. Le coeur tire chaque ligne de chaque table avec sa
+    //     propre chance ; la carte la multiplie, elle n'ajoute aucun objet et
+    //     ne touche a aucune table.
+    //       rare      : qualite 3
+    //       epic      : qualite 4
+    //       rare_epic : les deux
+    //     La chance reste bornee a 100 : au-dela, le coeur la lirait comme une
+    //     certitude et la ligne tomberait a coup sur.
+    // =========================================================================
+    class LootChance : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            std::string const quoi = r.Word();
+            if (quoi == "rare")            _du = 3, _au = 3;
+            else if (quoi == "epic")       _du = 4, _au = 4;
+            else if (quoi == "rare_epic")  _du = 3, _au = 4;
+            else                           return (error = "unknown quality \"" + quoi + "\"", false);
+            if (!r.Int(1, 1000, _pct))
+                return (error = "expects the percentage", false);
+            return r.End() || (error = "too many parameters", false);
+        }
+        [[nodiscard]] uint32 Watches() const override { return GUET_DE_DE_BUTIN; }
+
+        void OnItemRoll(Player const* /*player*/, uint32 itemId, float& chance) override
+        {
+            if (chance <= 0.0f || chance >= 100.0f)
+                return;                 // deja certaine, ou jamais : rien a majorer
+            ItemTemplate const* modele = sObjectMgr->GetItemTemplate(itemId);
+            if (!modele || modele->Quality < uint32(_du) || modele->Quality > uint32(_au))
+                return;
+            chance = std::min(100.0f, chance * float(100 + _pct) / 100.0f);
+        }
+
+    private:
+        int32 _du = 0, _au = 0, _pct = 0;
     };
 
     // =========================================================================
@@ -4442,18 +8125,286 @@ namespace
         bool Parse(std::vector<std::string> const& params, std::string& error) override
         {
             Reader r(params);
-            return (r.Int(1, 10, _times) && r.End())
-                || (error = "expects how many more draws", false);
+            if (!r.Int(1, 10, _times))
+                return (error = "expects how many more draws", false);
+            // UNE CHANCE, quand la carte en donne une : « peut contenir un
+            // objet supplementaire (10% de chance) ». Sans elle, a coup sur.
+            r.OptInt(1, 100, _chance);
+            // UNE RECHARGE, quand la carte en pose une : le tirage de plus ne
+            // revient pas avant ce delai, quoi que le joueur ouvre.
+            r.OptInt(0, 86400, _icd);
+            return r.End() || (error = "too many parameters", false);
         }
         void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override
         {
             if (!loot || !tab || !store)
                 return;
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            if (_icd && _last && now - _last < uint32(_icd))
+                return;
+            if (_chance < 100 && int32(urand(1, 100)) > _chance)
+                return;
+            _last = now;
             for (int32 i = 0; i < _times; ++i)
                 tab->Process(*loot, *store, LOOT_MODE_DEFAULT, player);
         }
     private:
         int32 _times = 0;
+        int32 _chance = 100;
+        int32 _icd = 0;
+        uint32 _last = 0;
+    };
+
+    // =========================================================================
+    // loot_gear:<qualite>:<chance>[:<icd>]
+    //     UNE PIECE D'EQUIPEMENT DE PLUS dans un butin qu'on vient d'ouvrir,
+    //     rare ou epique, a la mesure du joueur. Elle est prise dans ce que le
+    //     monde fait DEJA tomber -- aucune table n'est inventee -- et elle
+    //     rejoint le butin comme n'importe quelle ligne de sa table.
+    // =========================================================================
+    class LootGear : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            std::string const quoi = r.Word();
+            if (quoi == "rare")       _quality = ITEM_QUALITY_RARE;
+            else if (quoi == "epic")  _quality = ITEM_QUALITY_EPIC;
+            else                      return (error = "unknown quality " + quoi, false);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            r.OptInt(0, 86400, _icd);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* /*tab*/, LootStore const* /*store*/) override
+        {
+            if (!player || !loot)
+                return;
+            uint32 const now = uint32(GameTime::GetGameTime().count());
+            if (_icd && _last && now - _last < uint32(_icd))
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            uint32 const piece = StellarTarotLoot::GearFor(uint8(_quality), player->GetLevel());
+            if (!piece)
+                return;
+            _last = now;
+            loot->AddItem(LootStoreItem(piece, 0, 100.0f, false, LOOT_MODE_DEFAULT, 0, 1, 1));
+        }
+
+    private:
+        int32 _quality = 0, _chance = 100, _icd = 0;
+        uint32 _last = 0;
+    };
+
+    // =========================================================================
+    // loot_double:<qualite>:<chance>
+    //     CE QUI VIENT DE TOMBER, EN DOUBLE. Chaque objet de cette qualite ou
+    //     mieux deja pose dans le butin peut y etre remis une fois. On ne
+    //     choisit rien : c'est le butin du joueur, deux fois.
+    // =========================================================================
+    class LootDouble : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            std::string const quoi = r.Word();
+            if (quoi == "rare")       _least = ITEM_QUALITY_RARE;
+            else if (quoi == "epic")  _least = ITEM_QUALITY_EPIC;
+            else                      return (error = "unknown quality " + quoi, false);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnCreatureLoot(Player* player, Loot* loot) override { Double(player, loot); }
+        void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* /*tab*/, LootStore const* /*store*/) override
+        {
+            Double(player, loot);
+        }
+
+    private:
+        void Double(Player* player, Loot* loot)
+        {
+            if (!player || !loot)
+                return;
+            // Ce qui est DEJA dans le butin, et rien de ce qu'on y ajoute : la
+            // liste est arretee avant la premiere copie.
+            std::vector<uint32> copies;
+            for (LootItem const& item : loot->items)
+            {
+                ItemTemplate const* modele = sObjectMgr->GetItemTemplate(item.itemid);
+                if (!modele || int32(modele->Quality) < _least)
+                    continue;
+                if (int32(urand(1, 100)) > _chance)
+                    continue;
+                copies.push_back(item.itemid);
+            }
+            for (uint32 entry : copies)
+                loot->AddItem(LootStoreItem(entry, 0, 100.0f, false, LOOT_MODE_DEFAULT, 0, 1, 1));
+        }
+
+        int32 _least = 0, _chance = 100;
+    };
+
+    // =========================================================================
+    // boss_extra:<chance>[:<combien>]
+    //     UN BOSS REND DAVANTAGE : sa propre table est tiree une fois de plus
+    //     au moment ou son cadavre se remplit. Rien n'en sort qui ne pouvait
+    //     pas en sortir.
+    // =========================================================================
+    class BossExtra : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            r.OptInt(1, 10, _times);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnCreatureLoot(Player* player, Loot* loot) override
+        {
+            if (!player || !loot || !loot->sourceWorldObjectGUID.IsCreature())
+                return;
+            Creature* mort = ObjectAccessor::GetCreature(*player, loot->sourceWorldObjectGUID);
+            if (!mort)
+                return;
+            CreatureTemplate const* modele = mort->GetCreatureTemplate();
+            if (!modele || (!mort->isWorldBoss() && modele->rank != CREATURE_ELITE_WORLDBOSS
+                            && !(mort->GetMap() && mort->GetMap()->IsDungeon() && modele->rank == CREATURE_ELITE_ELITE)))
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            LootTemplate const* tab = LootTemplates_Creature.GetLootFor(modele->lootid);
+            if (!tab)
+                return;
+            for (int32 i = 0; i < _times; ++i)
+                tab->Process(*loot, LootTemplates_Creature, LOOT_MODE_DEFAULT, player);
+        }
+
+    private:
+        int32 _chance = 100, _times = 1;
+    };
+
+    // =========================================================================
+    // harvest:<quoi>:<chance>
+    //     LA RECOLTE, au moment ou le butin du noeud ou du cadavre se compose.
+    //       herb_extra   : la table du noeud d'HERBES, tiree une fois de plus
+    //       herb_other   : une autre herbe de l'age du joueur, en plus
+    //       skin_extra   : la table du DEPEÇAGE, tiree une fois de plus
+    //       node_plus    : une unite de plus sur chaque pile du noeud
+    //       node_respawn : le noeud repousse sur-le-champ
+    //     « Noeud de recolte » vaut pour les deux serrures -- l'herboristerie
+    //     et le minage -- et pour elles seules : un coffre n'est pas un noeud.
+    // =========================================================================
+    class Harvest : public StellarTarotScript
+    {
+    public:
+        bool Parse(std::vector<std::string> const& params, std::string& error) override
+        {
+            Reader r(params);
+            _what = r.Word();
+            static char const* const kinds[] = { "herb_extra", "herb_other", "skin_extra",
+                                                 "node_plus", "node_respawn" };
+            bool known = false;
+            for (char const* k : kinds)
+                if (_what == k) known = true;
+            if (!known)
+                return (error = "unknown harvest " + _what, false);
+            if (!r.Int(1, 100, _chance))
+                return (error = "expects the chance", false);
+            return r.End() || (error = "too many parameters", false);
+        }
+
+        void OnSkinning(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override
+        {
+            if (_what != "skin_extra" || !player || !loot || !tab || !store)
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            tab->Process(*loot, *store, LOOT_MODE_DEFAULT, player);
+        }
+
+        void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store) override
+        {
+            if (_what == "skin_extra" || !player || !loot)
+                return;
+            GameObject* const noeud = ObjectAccessor::GetGameObject(*player, loot->sourceWorldObjectGUID);
+            int32 const serrure = SerrureDe(noeud);
+            bool const herbe = serrure == LOCKTYPE_HERBALISM;
+            bool const recolte = herbe || serrure == LOCKTYPE_MINING;
+            if (_what == "herb_extra" || _what == "herb_other")
+            {
+                if (!herbe)
+                    return;
+            }
+            else if (!recolte)
+                return;
+            if (int32(urand(1, 100)) > _chance)
+                return;
+            if (_what == "herb_extra")
+            {
+                if (tab && store)
+                    tab->Process(*loot, *store, LOOT_MODE_DEFAULT, player);
+            }
+            // UNE AUTRE PLANTE, de l'age du joueur : elle vient de ce que les
+            // noeuds du monde donnent deja, et de rien d'autre.
+            else if (_what == "herb_other")
+            {
+                if (uint32 const plante = StellarTarotLoot::HerbFor(player->GetLevel()))
+                    loot->AddItem(LootStoreItem(plante, 0, 100.0f, false, LOOT_MODE_DEFAULT, 0, 1, 1));
+            }
+            // UNE UNITE DE PLUS sur chaque pile que le noeud vient de donner.
+            else if (_what == "node_plus")
+            {
+                for (LootItem& item : loot->items)
+                {
+                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item.itemid);
+                    uint32 const pile = proto && proto->GetMaxStackSize() ? proto->GetMaxStackSize() : 1;
+                    item.count = uint8(std::min<uint32>(uint32(item.count) + 1, pile));
+                }
+            }
+            // LE NOEUD REPOUSSE : c'est le coeur qui le fait revenir, au tour
+            // suivant -- celui-ci est encore en train d'etre depouille.
+            else if (_what == "node_respawn" && noeud)
+            {
+                ObjectGuid const qui = noeud->GetGUID();
+                PlusTard(player, TOUR_SUIVANT, [qui](Player* p)
+                {
+                    if (GameObject* go = ObjectAccessor::GetGameObject(*p, qui))
+                    {
+                        go->SetLootState(GO_READY);
+                        go->SetRespawnTime(1);
+                    }
+                });
+            }
+        }
+
+    private:
+        // LA SERRURE D'UN OBJET DU DECOR : ce que le coeur demande pour
+        // l'ouvrir. -1 quand il n'y en a pas.
+        static int32 SerrureDe(GameObject const* go)
+        {
+            if (!go || !go->GetGOInfo())
+                return -1;
+            LockEntry const* const lock = sLockStore.LookupEntry(go->GetGOInfo()->GetLockId());
+            if (!lock)
+                return -1;
+            for (uint8 i = 0; i < MAX_LOCK_CASE; ++i)
+                if (lock->Type[i] == LOCK_KEY_SKILL
+                    && (lock->Index[i] == LOCKTYPE_HERBALISM || lock->Index[i] == LOCKTYPE_MINING))
+                    return int32(lock->Index[i]);
+            return -1;
+        }
+
+        std::string _what;
+        int32 _chance = 100;
     };
 
     // =========================================================================
@@ -4826,7 +8777,9 @@ namespace
             // `xp_other` : l'experience que l'AURA NE COUVRE PAS -- la
             // decouverte et le champ de bataille. Les auras 200 et 291 portent
             // le reste, et une ligne qui les a gardees n'y ajoute rien.
-            static char const* const kinds[] = { "gold_loot", "xp", "xp_other", "rep", "quest_gold", "repair",
+            static char const* const kinds[] = { "gold_loot", "xp", "xp_other", "xp_explore", "rep",
+                                                 "quest_gold", "quest_gold_daily", "repair", "ah_sell",
+                                                 "rep_quest",
                                                  "vendor_buy", "vendor_sell", "vendor_sell_grey", "vendor_sell_good" };
             bool known = false;
             for (char const* k : kinds)
@@ -4834,19 +8787,22 @@ namespace
             if (!known) { error = "unknown kind \"" + _kind + "\""; return false; }
             if (!r.Int(-100, 10000, _pct))
                 return (error = "expects the percentage", false);
-            // UNE SECONDE MONNAIE, quand la carte en promet deux d'un coup :
-            // « and:<genre>:<part> ». Elle n'a ni palier ni plafond -- ceux-ci
-            // restent au premier genre, qui seul les porte.
-            if (!r.End() && r.Peek() == "and")
+            // D'AUTRES MONNAIES, quand la carte en promet plusieurs d'un coup :
+            // « and:<genre>:<part> », autant de fois qu'il le faut. Elles n'ont
+            // ni palier ni plafond -- ceux-ci restent au premier genre, qui
+            // seul les porte.
+            while (!r.End() && r.Peek() == "and")
             {
                 r.Word();
-                _kind2 = r.Word();
+                std::string const autre = r.Word();
                 bool ok2 = false;
                 for (char const* k : kinds)
-                    if (_kind2 == k) ok2 = true;
-                if (!ok2) { error = "unknown second kind \"" + _kind2 + "\""; return false; }
-                if (!r.Int(-100, 10000, _pct2))
+                    if (autre == k) ok2 = true;
+                if (!ok2) { error = "unknown second kind \"" + autre + "\""; return false; }
+                int32 part = 0;
+                if (!r.Int(-100, 10000, part))
                     return (error = "the second kind expects its percentage", false);
+                _autres.emplace_back(autre, part);
             }
             // Two shapes may follow. « per_gold:<gold>:cap:<pct> » : the figure
             // counts once per slice of that many gold pieces the player owns,
@@ -4873,11 +8829,22 @@ namespace
         bool On(Player const* player) const { return _state.empty() || SimpleState(player, _state); }
 
         // La ligne couvre-t-elle ce genre, et pour quelle part ?
-        bool Has(char const* k) const { return _kind == k || _kind2 == k; }
+        bool Has(char const* k) const
+        {
+            if (_kind == k)
+                return true;
+            for (auto const& [genre, part] : _autres)
+                if (genre == k)
+                    return true;
+            return false;
+        }
         int32 PctOf(Player const* player, char const* k) const
         {
             if (_kind == k) return Pct(player);
-            return _kind2 == k ? _pct2 : 0;
+            for (auto const& [genre, part] : _autres)
+                if (genre == k)
+                    return part;
+            return 0;
         }
 
         // Le pourcentage en vigueur : celui de la ligne, ou celui que la bourse
@@ -4907,14 +8874,31 @@ namespace
                 amount = uint32(std::llround(double(amount) * (100 + PctOf(player, "xp")) / 100.0));
             else if (reste && Has("xp_other") && On(player))
                 amount = uint32(std::llround(double(amount) * (100 + PctOf(player, "xp_other")) / 100.0));
+            // `xp_explore` ne couvre QUE la decouverte : ce que le joueur
+            // gagne en mettant le pied quelque part, et rien d'autre.
+            if (source == XPSOURCE_EXPLORE && Has("xp_explore") && On(player))
+                amount = uint32(std::llround(double(amount) * (100 + PctOf(player, "xp_explore")) / 100.0));
         }
-        void OnGiveReputation(Player* player, float& amount) override
+        void OnGiveReputation(Player* player, float& amount, uint8 source) override
         {
-            if (Has("rep") && On(player)) amount = amount * float(100 + PctOf(player, "rep")) / 100.0f;
+            if (Has("rep") && On(player))
+                amount = amount * float(100 + PctOf(player, "rep")) / 100.0f;
+            // `rep_quest` : la reputation que RENDENT LES QUETES, et elle
+            // seule -- journalieres, hebdomadaires et repetables comprises.
+            bool const quete = source == REPUTATION_SOURCE_QUEST
+                            || source == REPUTATION_SOURCE_DAILY_QUEST
+                            || source == REPUTATION_SOURCE_WEEKLY_QUEST
+                            || source == REPUTATION_SOURCE_MONTHLY_QUEST
+                            || source == REPUTATION_SOURCE_REPEATABLE_QUEST;
+            if (quete && Has("rep_quest") && On(player))
+                amount = amount * float(100 + PctOf(player, "rep_quest")) / 100.0f;
         }
         void OnQuestComplete(Player* player, Quest const* quest) override
         {
-            if (Has("quest_gold") && quest)
+            // `quest_gold_daily` ne repond qu'aux quetes journalieres ; le
+            // coeur dit lui-meme lesquelles.
+            bool const journaliere = quest && quest->IsDaily();
+            if ((Has("quest_gold") || (journaliere && Has("quest_gold_daily"))) && quest)
             {
                 // CE QUE LA QUETE PAIE VRAIMENT, compte comme le coeur le
                 // compte (Player::RewardQuest) : l'argent de la recompense,
@@ -4928,12 +8912,20 @@ namespace
                 money += quest->GetRewOrReqMoney(player->GetLevel());
                 if (money > 0)
                 {
-                    int32 const extra = int32(std::llround(double(money) * Pct(player) / 100.0));
+                    int32 const part = Has("quest_gold") ? Pct(player)
+                                                         : PctOf(player, "quest_gold_daily");
+                    int32 const extra = int32(std::llround(double(money) * part / 100.0));
                     player->ModifyMoney(extra);
                     if (extra > 0)
                         Owe(player, SpellId(), STELLAR_TAROT_STR_QUEST_GOLD, uint64(extra), true);
                 }
             }
+        }
+        // LE GAIN D'UNE VENTE A L'HOTEL, avant qu'il ne parte au courrier.
+        void OnAuctionSold(Player* player, uint32& profit) override
+        {
+            if (Has("ah_sell") && On(player) && profit)
+                profit = uint32(std::llround(double(profit) * (100 + PctOf(player, "ah_sell")) / 100.0));
         }
         void OnRepairDiscount(Player* player, ObjectGuid /*itemGuid*/, float& discountMod) override
         {
@@ -4979,8 +8971,11 @@ namespace
             }
         }
     private:
-        std::string _kind, _kind2, _state;
-        int32 _pct = 0, _pct2 = 0, _perGold = 0, _cap = 0;
+        std::string _kind, _state;
+        // LES AUTRES MONNAIES de la meme ligne : « +20% or, +20% experience et
+        // +20% reputation gagnes » en tient trois.
+        std::vector<std::pair<std::string, int32>> _autres;
+        int32 _pct = 0, _perGold = 0, _cap = 0;
         uint32 _selling = 0;             // l'heure ou la somme est attendue
     };
 }
@@ -4997,12 +8992,17 @@ void StellarTarotScripts::RegisterEngine()
     Register("seal", [] { return std::make_unique<Seal>(); });
     Register("convoy", [] { return std::make_unique<Convoy>(); });
     Register("gempct", [] { return std::make_unique<GemPct>(); });
+    Register("cheatdeath", [] { return std::make_unique<CheatDeath>(); });
+    Register("goldstat", [] { return std::make_unique<GoldStat>(); });
+    Register("randstat", [] { return std::make_unique<RandStat>(); });
     Register("stat", [] { return std::make_unique<NightStat>(); });
     Register("costmod", [] { return std::make_unique<CostMod>(); });
     Register("drink", [] { return std::make_unique<Drink>(); });
     Register("fever", [] { return std::make_unique<Fever>(); });
     Register("potion", [] { return std::make_unique<PotionPower>(); });
     Register("potion_keep", [] { return std::make_unique<PotionKeep>(); });
+    Register("potionplus", [] { return std::make_unique<PotionPlus>(); });
+    Register("deathkeep", [] { return std::make_unique<DeathKeep>(); });
     Register("elixirlong", [] { return std::make_unique<Longer>(Longer::Kind::Elixir); });
     Register("statcond", [] { return std::make_unique<StateStat>(); });
     Register("secondpct", [] { return std::make_unique<SecondaryPct>(); });
@@ -5010,12 +9010,40 @@ void StellarTarotScripts::RegisterEngine()
     Register("shoutlong", [] { return std::make_unique<Longer>(Longer::Kind::Cry); });
     Register("hearthcd", [] { return std::make_unique<HearthCooldown>(); });
     Register("chest_extra", [] { return std::make_unique<ChestExtra>(); });
+    Register("roll", [] { return std::make_unique<DeDuFou>(); });
+    Register("ward", [] { return std::make_unique<Ward>(); });
+    Register("heallow", [] { return std::make_unique<HealLow>(); });
+    Register("targetres", [] { return std::make_unique<TargetRes>(); });
+    Register("areacost", [] { return std::make_unique<AreaCost>(); });
+    Register("cackle", [] { return std::make_unique<Cackle>(); });
+    Register("bridge", [] { return std::make_unique<Bridge>(); });
+    Register("featherfall", [] { return std::make_unique<FeatherFall>(); });
+    Register("lockpick", [] { return std::make_unique<LockPick>(); });
+    Register("pertag", [] { return std::make_unique<PerTag>(); });
+    Register("hitroll", [] { return std::make_unique<HitRoll>(); });
+    Register("healmod", [] { return std::make_unique<HealMod>(); });
+    Register("stacklong", [] { return std::make_unique<StackLonger>(); });
+    Register("cardtool", [] { return std::make_unique<CardTool>(); });
+    Register("focus", [] { return std::make_unique<Focus>(); });
+    Register("phase", [] { return std::make_unique<Phase>(); });
+    Register("heirloompct", [] { return std::make_unique<HeirloomPct>(); });
+    Register("petaura", [] { return std::make_unique<AuraDeBete>(); });
+    Register("cdcut", [] { return std::make_unique<CooldownCut>(); });
+    Register("petshare", [] { return std::make_unique<PetShare>(); });
+    Register("lootchance", [] { return std::make_unique<LootChance>(); });
+    Register("loot_gear", [] { return std::make_unique<LootGear>(); });
+    Register("loot_double", [] { return std::make_unique<LootDouble>(); });
+    Register("boss_extra", [] { return std::make_unique<BossExtra>(); });
+    Register("harvest", [] { return std::make_unique<Harvest>(); });
     Register("prospect", [] { return std::make_unique<Prospect>(); });
     Register("fish", [] { return std::make_unique<Fish>(); });
     Register("ore", [] { return std::make_unique<Ore>(); });
     Register("tickmod", [] { return std::make_unique<NumberMod>(NumberMod::Sense::Tick); });
     Register("dotlong", [] { return std::make_unique<Longer>(Longer::Kind::Dot); });
     Register("stunlong", [] { return std::make_unique<Longer>(Longer::Kind::Stun); });
+    Register("breakfree", [] { return std::make_unique<BreakFree>(); });
+    Register("sicknessless", [] { return std::make_unique<Longer>(Longer::Kind::Sickness); });
+    Register("foodlong", [] { return std::make_unique<Longer>(Longer::Kind::Food); });
     Register("econ", [] { return std::make_unique<Econ>(); });
     Register("xpkin", [] { return std::make_unique<XpKin>(); });
 }

@@ -3042,6 +3042,50 @@ def main():
     print("   sequence : supprimer AAB -> %s" % visiblesMaintenant())
     assert visiblesMaintenant() == ["AZE"], "AZE reste, seul"
 
+    # LE CAS REEL QUI RESTAIT : LE CLIENT PUBLIE APRES TOUT LE MONDE.
+    #
+    # En jeu, la liste restait vide apres un renommage jusqu a l operation
+    # suivante. On rejoue donc le pire : l evenement arrive AVANT que le
+    # client ait refait sa liste, le rattrapage d une image passe dans le
+    # vide, et RIEN d autre n est signale ensuite. Seul le battement du
+    # panneau peut alors reparer.
+    lua.execute('ENSEMBLES = {} publierEnsembles()')
+    lua.execute('ForeverUIDB.ordreEnsembles = {}')
+    lua.execute('SaveEquipmentSet("AAA", 1)')
+    apresChangement()
+    assert visiblesMaintenant() == ["AAA"], "point de depart : AAA est la"
+
+    lua.execute('SaveEquipmentSet("AAB", 1) DeleteEquipmentSet("AAA")')
+    lua.execute('ForeverUIDB.ordreEnsembles = { "AAB" }')
+    att3 = g.ForeverUIEquipmentEdit
+    att3.scripts.OnEvent(att3, "EQUIPMENT_SETS_CHANGED")   # trop tot
+    imageSuivante()                                        # dans le vide
+    print("   publication tardive : au signal -> %s" % visiblesMaintenant())
+    assert "AAB" not in visiblesMaintenant(),         "le client n a encore rien publie : la liste est en retard"
+
+    lua.execute("publierEnsembles()")   # le client publie, sans rien annoncer
+    pan = g.ForeverUIEquipmentPane
+    pan.scripts.OnUpdate(pan, 0.25)
+    print("   publication tardive : apres un battement -> %s" % visiblesMaintenant())
+    assert visiblesMaintenant() == ["AAB"],         "la surveillance doit reparer sans qu aucun evenement le demande"
+
+    # Et elle ne repose pas la liste a chaque image pour rien.
+    poses = []
+    vrai = g.ForeverUI.EquipmentSetsLayout
+    g.ForeverUI.EquipmentSetsLayout = lua.eval(
+        "function() FOREVER_POSES = (FOREVER_POSES or 0) + 1 end")
+    lua.execute("FOREVER_POSES = 0")
+    for _ in range(10):
+        pan.scripts.OnUpdate(pan, 0.25)
+    poses = g.FOREVER_POSES
+    g.ForeverUI.EquipmentSetsLayout = vrai
+    print("   liste inchangee : %d pose(s) sur 10 controles" % poses)
+    assert poses == 0, "liste inchangee, rien a reposer"
+
+    # LE TEMOIN ne doit rien casser, et dire ce qu il voit.
+    g.ForeverUI.EquipmentSetsDebug()
+    print("   temoin /fui sets : rapport rendu sans erreur")
+
     # On rend au faux client l etat que la suite du banc attend.
     lua.execute('ENSEMBLES = { { nom = "eee", icone = "icone-eee", porte = true },'
                 '              { nom = "aaa", icone = "icone-aaa", porte = false } }')

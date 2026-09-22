@@ -1738,10 +1738,17 @@ end
 -- shown is lit. Tag 0 stands for "All".
 local ALL = 0
 
--- The name typed in the search box, and whether a card answers it.
+-- What is typed in the search box, and whether a card answers it. DIGITS ASK
+-- FOR A NUMBER: the one the player reads on the card, "82.", not the
+-- catalogue's identifier. The first digits are enough -- "8" keeps 8 and the
+-- eighties -- and a card still unknown answers too, its number being all it
+-- shows. Anything else is read as a name, as before.
 local function Matches(card)
     local wanted = S.search or ""
     if wanted == "" then return true end
+    if wanted:match("^%d+$") then
+        return tostring(card.no or 0):find(wanted, 1, true) == 1
+    end
     return Lower(card.name or ""):find(Lower(wanted), 1, true) ~= nil
 end
 
@@ -2732,6 +2739,204 @@ if not STELLAR_TAROT_PROFIT_HOOKED then
         return (nom:gsub("%s*%b()%s*$", ""))
     end
 
+
+-- ---------------------------------------------------------------------------
+-- LE BLOC DE MESURE
+--
+-- Un bloc de texte, deplacable, qui dit en continu ce que porte le personnage :
+-- ce que le client sait lire lui-meme -- statistiques, scores et le pourcentage
+-- auquel chacun se convertit, vitesse -- et ce que le SERVEUR est seul a
+-- savoir : les multiplicateurs de degats et de soins, qu'aucune fonction du
+-- client n'expose, et l'etat des lignes de cartes qui majorent un chiffre au
+-- moment du coup, lesquelles ne posent aucune aura.
+--
+-- `.tarot hud` l'allume et l'eteint. Le serveur pousse son bloc une fois par
+-- seconde ; le cote client se relit cinq fois par seconde.
+-- ---------------------------------------------------------------------------
+local HUD = { serveur = {}, lignes = {} }
+
+local CR = {   -- les indices de l'API du client, 1-based
+    { "Toucher mêlée", 6 }, { "Toucher distance", 7 }, { "Toucher sorts", 8 },
+    { "Critique mêlée", 9 }, { "Critique distance", 10 }, { "Critique sorts", 11 },
+    { "Hâte mêlée", 18 }, { "Hâte distance", 19 }, { "Hâte sorts", 20 },
+    { "Esquive", 3 }, { "Parade", 4 }, { "Blocage", 5 }, { "Défense", 2 },
+}
+
+local function Ligne(nom, valeur, extra)
+    if extra then
+        return fmt("|cffa0a0a0%s|r  |cffffffff%s|r  |cff808080(%s)|r", nom, valeur, extra)
+    end
+    return fmt("|cffa0a0a0%s|r  |cffffffff%s|r", nom, valeur)
+end
+
+local function BlocClient()
+    local t = {}
+    t[#t + 1] = "|cffffd100Statistiques|r"
+    local STATS = { "Force", "Agilité", "Endurance", "Intelligence", "Esprit" }
+    for i = 1, 5 do
+        -- LE PREMIER RETOUR DE `UnitStat` EST LE TOTAL, non la base : Blizzard
+        -- lui-même calcule la base par `stat - posBuff - negBuff`
+        -- (PaperDollFrame.lua). Et le client ne sait pas séparer un bonus fixe
+        -- d'un bonus en pourcentage : quand le serveur l'a dit, on le croit.
+        local total, effectif, pos, neg = UnitStat("player", i)
+        local part = HUD.serveur["stat" .. (i - 1)]
+        if part then
+            local base, fixe, pct, somme, dixiemes = part[1], part[2], part[3], part[4], part[5]
+            local detail = fmt("base %d", base)
+            if fixe ~= 0 then detail = detail .. fmt(" %+d", fixe) end
+            if pct ~= 0 then detail = detail .. fmt(" %+d à %+.1f%%", pct, dixiemes / 10) end
+            t[#t + 1] = Ligne(STATS[i], somme, detail)
+        else
+            t[#t + 1] = Ligne(STATS[i], effectif, fmt("base %d, %+d / %d", total - pos - neg, pos, neg))
+        end
+    end
+    t[#t + 1] = Ligne("PV max", UnitHealthMax("player"))
+    t[#t + 1] = Ligne("Ressource max", UnitPowerMax("player"))
+    t[#t + 1] = Ligne("Armure", (select(2, UnitArmor("player"))))
+
+    t[#t + 1] = " "
+    t[#t + 1] = "|cffffd100Scores de combat|r  |cff808080(valeur → %)|r"
+    for _, c in ipairs(CR) do
+        local score = GetCombatRating(c[2]) or 0
+        local pct = GetCombatRatingBonus(c[2]) or 0
+        if score ~= 0 or pct ~= 0 then
+            t[#t + 1] = Ligne(c[1], score, fmt("%.2f%%", pct))
+        end
+    end
+    -- PÉNÉTRATION D'ARMURE ET EXPERTISE : dites par le SERVEUR, et montrées
+    -- même à zéro. Ce sont elles que lisent les lignes de cartes à part de
+    -- score, et savoir qu'on n'en porte aucune vaut autant que le chiffre.
+    for _, c in ipairs({ { "Pénétration d'armure", "armorpen" }, { "Expertise", "expertise" } }) do
+        local p = HUD.serveur[c[2]]
+        if p then
+            t[#t + 1] = Ligne(c[1], p[1], fmt("%.1f%%", p[2] / 10))
+        end
+    end
+
+    t[#t + 1] = " "
+    t[#t + 1] = "|cffffd100Chances effectives|r"
+    t[#t + 1] = Ligne("Critique mêlée", fmt("%.2f%%", GetCritChance() or 0))
+    t[#t + 1] = Ligne("Critique distance", fmt("%.2f%%", GetRangedCritChance() or 0))
+    t[#t + 1] = Ligne("Critique sorts", fmt("%.2f%%", GetSpellCritChance(2) or 0))
+    t[#t + 1] = Ligne("Esquive", fmt("%.2f%%", GetDodgeChance() or 0))
+    t[#t + 1] = Ligne("Parade", fmt("%.2f%%", GetParryChance() or 0))
+    t[#t + 1] = Ligne("Blocage", fmt("%.2f%%", GetBlockChance() or 0))
+
+    t[#t + 1] = " "
+    t[#t + 1] = "|cffffd100Puissance|r"
+    local ap, apPos, apNeg = UnitAttackPower("player")
+    t[#t + 1] = Ligne("Puissance d'attaque", (ap or 0) + (apPos or 0) + (apNeg or 0))
+    local rap, rPos, rNeg = UnitRangedAttackPower("player")
+    t[#t + 1] = Ligne("Puissance à distance", (rap or 0) + (rPos or 0) + (rNeg or 0))
+    t[#t + 1] = Ligne("Puissance des sorts", GetSpellBonusDamage(2) or 0)
+    t[#t + 1] = Ligne("Puissance de soin", GetSpellBonusHealing and GetSpellBonusHealing() or 0)
+
+    t[#t + 1] = " "
+    t[#t + 1] = "|cffffd100Déplacement|r"
+    local vitesse = GetUnitSpeed("player") or 0
+    t[#t + 1] = Ligne("Vitesse", fmt("%.2f yd/s", vitesse), fmt("%.0f%%", vitesse / 7 * 100))
+    return t
+end
+
+local NOMS = {
+    dmgdone = "Dégâts infligés", dmgtaken = "Dégâts subis",
+    meleetaken = "Dégâts de mêlée subis", healdone = "Soins prodigués",
+    healtaken = "Soins reçus", speed = "Vitesse (serveur)",
+}
+local ORDRE = { "dmgdone", "dmgtaken", "meleetaken", "healdone", "healtaken", "speed" }
+
+local function BlocServeur()
+    local t = { " ", "|cffffd100Multiplicateurs du cœur|r  |cff808080(100% = rien)|r" }
+    for _, clef in ipairs(ORDRE) do
+        local v = HUD.serveur[clef]
+        if v then
+            local couleur = (v == 100) and "|cffffffff" or (v > 100 and "|cff60ff60" or "|cffff8060")
+            t[#t + 1] = Ligne(NOMS[clef], couleur .. v .. "%|r")
+        end
+    end
+    if #HUD.lignes > 0 then
+        t[#t + 1] = " "
+        t[#t + 1] = "|cffffd100Lignes de cartes au coup|r  |cff808080(aucune aura : invisibles ailleurs)|r"
+        for _, l in ipairs(HUD.lignes) do
+            local texte, etat = l:match("^(.-) |(%u?%a+)$")
+            texte, etat = texte or l, etat or ""
+            local couleur = (etat == "ACTIF") and "|cff60ff60" or "|cff808080"
+            t[#t + 1] = fmt("%s%s|r", couleur, texte)
+        end
+    end
+    if not HUD.serveur.dmgdone then
+        t[#t + 1] = "|cff808080en attente du serveur…|r"
+    end
+    return t
+end
+
+function HUD.Cadre()
+    if HUD.frame then return HUD.frame end
+    local f = CreateFrame("Frame", "StellarTarotHud", UIParent)
+    f:SetPoint("CENTER", UIParent, "CENTER", 320, 0)
+    f:SetWidth(320)
+    f:SetHeight(200)
+    f:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
+                    insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+    f:SetBackdropColor(0, 0, 0, 0.75)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetClampedToScreen(true)
+    f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.text:SetPoint("TOPLEFT", 10, -10)
+    f.text:SetJustifyH("LEFT")
+    f.text:SetJustifyV("TOP")
+    f.text:SetWidth(300)
+    f.depuis = 0
+    f:SetScript("OnUpdate", function(self, elapsed)
+        self.depuis = self.depuis + elapsed
+        if self.depuis < 0.2 then return end
+        self.depuis = 0
+        local t = BlocClient()
+        for _, l in ipairs(BlocServeur()) do t[#t + 1] = l end
+        self.text:SetText(table.concat(t, "\n"))
+        self:SetHeight(self.text:GetStringHeight() + 20)
+    end)
+    HUD.frame = f
+    return f
+end
+
+function HUD.Montre(visible)
+    local f = HUD.Cadre()
+    if visible then f:Show() else f:Hide() end
+end
+
+function HUD.Recoit(message)
+    if message == "on" then
+        HUD.serveur, HUD.lignes = {}, {}
+        HUD.Montre(true)
+        return
+    end
+    if message == "off" then
+        HUD.Montre(false)
+        return
+    end
+    local serveur, lignes = {}, {}
+    for champ in message:gmatch("[^\t]+") do
+        local clef, valeur = champ:match("^(%w+)=(.+)$")
+        if clef == "ligne" then
+            lignes[#lignes + 1] = valeur
+        elseif clef and valeur:find(":", 1, true) then
+            -- Un champ composé : les cinq termes d'une statistique.
+            local parts = {}
+            for n in valeur:gmatch("[^:]+") do parts[#parts + 1] = tonumber(n) or 0 end
+            serveur[clef] = parts
+        elseif clef then
+            serveur[clef] = tonumber(valeur) or valeur
+        end
+    end
+    HUD.serveur, HUD.lignes = serveur, lignes
+end
+
     local receiver = CreateFrame("Frame")
     receiver:RegisterEvent("CHAT_MSG_ADDON")
     receiver:RegisterEvent("MERCHANT_SHOW")
@@ -2746,6 +2951,11 @@ if not STELLAR_TAROT_PROFIT_HOOKED then
             -- attendre -- le forgeron a fini, il n'y a pas de fenêtre à fermer.
             -- LA BONNE AFFAIRE : le marchand a paye le double, et l'objet se
             -- nomme comme les autres, par son lien.
+            -- LE BLOC DE MESURE : le serveur y pousse ce qu'il est seul a savoir.
+            if prefix == "StellarTarotHud" and message then
+                HUD.Recoit(message)
+                return
+            end
             if prefix == "StellarTarotKeenBuyer" and message then
                 local id, objet = message:match("^(%d+):(%d+)$")
                 local nom = id and Nom(tonumber(id))

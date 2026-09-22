@@ -71,6 +71,9 @@ constexpr uint32 STELLAR_TAROT_SPELL_SLEEP  = 903806;
 constexpr uint32 STELLAR_TAROT_SPELL_SILENCE = 903807;
 constexpr uint32 STELLAR_TAROT_SPELL_IMMUNE_SNARE = 903808;
 constexpr uint32 STELLAR_TAROT_SPELL_IMMUNE_CONTROL = 903809;
+// DISPARAITRE : l'invisibilite que le coeur porte, pour le temps qu'une
+// ligne lui donne.
+constexpr uint32 STELLAR_TAROT_SPELL_INVISIBLE = 903810;
 constexpr uint32 STELLAR_TAROT_SPELL_BURN = 903795;              // fire, over time
 constexpr uint32 STELLAR_TAROT_SPELL_TAKEN_MORE = 903798;        // a drawback: the player takes more damage
 constexpr uint32 STELLAR_TAROT_SPELL_WAND_SHOT = 903794;         // the second shot a card grants, a wand's own
@@ -86,6 +89,12 @@ constexpr uint32 STELLAR_TAROT_SPELL_TURNED = 903792;
 // while. It has its own spell so that it may outlast -- or fall short of --
 // the boon the level's aura carries, the two having their own durations.
 constexpr uint32 STELLAR_TAROT_SPELL_ARMOR_DOWN = 903793;
+// LES CREATURES DU MODULE. Un espace d'identifiants A PART de celui des objets
+// et des sorts : une creature 902650 ne croise ni l'objet ni le sort qui
+// portent ce numero. Le coeur les clone de gabarits natifs, faction amie, et
+// leur donne l'IA de gardien du module.
+constexpr uint32 STELLAR_TAROT_NPC_BOAR   = 902650;   // le sanglier de la carte 139
+constexpr uint32 STELLAR_TAROT_NPC_DOUBLE = 902651;   // le double de la carte 74
 constexpr uint32 STELLAR_TAROT_ITEM_CRATE = 902600;              // the crate of goods a card lays in a corpse
 constexpr uint32 STELLAR_TAROT_SPELL_VISUAL_MAGIC = 903796;      // an explosion's animation, arcane
 constexpr uint32 STELLAR_TAROT_SPELL_VISUAL_PHYS  = 903797;      // an explosion's animation, physical

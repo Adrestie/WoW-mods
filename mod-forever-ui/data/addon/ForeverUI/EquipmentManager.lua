@@ -445,11 +445,61 @@ local function habillerCarte(bouton)
 	bouton.foreverCarte = true
 end
 
+-- LA LISTE SE SURVEILLE, ELLE NE S'ATTEND PAS.
+--
+-- On ne sait pas QUAND le client aura refait sa liste : ni au retour de
+-- SaveEquipmentSet, ni a l'instant de EQUIPMENT_SETS_CHANGED, ni meme a
+-- l'image suivante -- les ensembles vivent cote serveur. Toute hypothese de
+-- delai s'est revelee fausse, et une liste posee trop tot restait vide
+-- jusqu'a l'operation d'apres.
+--
+-- On ne parie donc plus : on compare ce que le client rend -- le nombre
+-- d'ensembles et leurs noms -- a ce qui est affiche, et on repose des que
+-- cela differe. La comparaison coute une poignee de chaines, et elle ne se
+-- fait qu'un cinquieme de seconde et seulement panneau ouvert.
+local SURVEILLANCE = 0.2
+local dernierEtat, depuisControle = nil, 0
+
+local function etatDeLaListe()
+	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
+	local bouts = { tostring(total) }
+	for index = 1, total do
+		local nom, icone = GetEquipmentSetInfo(index)
+		bouts[#bouts + 1] = tostring(nom) .. "=" .. tostring(icone)
+	end
+	return table.concat(bouts, "|")
+end
+
+local function surveillerListe(ecoule)
+	depuisControle = depuisControle + (ecoule or 0)
+	if depuisControle < SURVEILLANCE then
+		return
+	end
+	depuisControle = 0
+
+	local etat = etatDeLaListe()
+	if etat ~= dernierEtat then
+		dernierEtat = etat
+		if GearManagerDialog_Update then
+			GearManagerDialog_Update()
+		end
+		-- poserCartes est defini plus bas : on passe par le point publie.
+		ForeverUI.EquipmentSetsLayout()
+	end
+end
+ForeverUI.EquipmentSetsWatch = surveillerListe
+
+function ForeverUI.EquipmentSetsForget()
+	dernierEtat = nil
+	depuisControle = SURVEILLANCE
+end
+
 -- LE SURVOL SE SUIT A CHAQUE IMAGE, PAS PAR OnEnter. Les deux boutons sont
 -- des cadres fils de la carte : y entrer declencherait le OnLeave de la
 -- carte, qui les masquerait aussitot. camelot interroge IsMouseOver dans
 -- PaperDollEquipmentManagerPane_OnUpdate, on fait pareil.
-local function suivreSurvol()
+local function suivreSurvol(self, ecoule)
+	surveillerListe(ecoule)
 	local dialogue = _G["GearManagerDialog"]
 	if not dialogue or not dialogue.buttons then
 		return
@@ -982,6 +1032,56 @@ rattrapageListe:SetScript("OnUpdate", function(self)
     ForeverUI.EquipmentSetsLayout()
 end)
 
+-- TEMOIN -- /fui sets. La liste des ensembles se decide en trois endroits :
+-- ce que le client publie, l'ordre que nous retenons, et ce que les cartes
+-- affichent. Quand les trois ne disent pas la meme chose, c'est ce rapport
+-- qui le montre, au lieu d'avoir a le deviner.
+function ForeverUI.EquipmentSetsDebug()
+	local dire = function(texte)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
+	local noms = {}
+	for index = 1, total do
+		local nom, icone = GetEquipmentSetInfo(index)
+		noms[#noms + 1] = string.format("%d=%s(%s)", index, tostring(nom), tostring(icone))
+	end
+	dire(string.format("ensembles : le client en publie %d : %s", total,
+		table.concat(noms, ", ")))
+
+	dire("ordre retenu : " .. table.concat(ordreRetenu(), ", "))
+
+	local rangs = {}
+	for position, index in ipairs(ensemblesOrdonnes()) do
+		rangs[#rangs + 1] = string.format("%d<-%d", position, index)
+	end
+	dire("ordre pose : " .. table.concat(rangs, ", "))
+	dire(string.format("defilement = %d, cartes qui tiennent = %d, panneau %s",
+		decalage, cartesVisibles(), (panneau and panneau:IsShown()) and "ouvert" or "ferme"))
+	dire(string.format("porte = %s, edition = %s",
+		tostring(ForeverUIDB and ForeverUIDB.ensembleEquipe), tostring(edition and edition.ancien)))
+
+	local dialogue = _G["GearManagerDialog"]
+	if not dialogue or not dialogue.buttons then
+		dire("aucune carte : le dialogue du client n'est pas la.")
+		return
+	end
+	for index, bouton in ipairs(dialogue.buttons) do
+		if bouton.name and bouton.name ~= "" or bouton:IsShown() then
+			local ancre = bouton:GetPoint(1)
+			DEFAULT_CHAT_FRAME:AddMessage(string.format(
+				"   carte %d : nom=%s visible=%s ancre=%s coche=%s",
+				index, tostring(bouton.name), tostring(bouton:IsShown()),
+				tostring(ancre),
+				tostring(bouton.foreverCoche and bouton.foreverCoche:IsShown())))
+		end
+	end
+end
+
 function ForeverUI.EquipmentSetsRefresh()
+    -- On oublie l'etat connu : le prochain controle reposera la liste, quel
+    -- que soit le moment ou le client aura fini.
+    ForeverUI.EquipmentSetsForget()
     rattrapageListe:Show()
 end

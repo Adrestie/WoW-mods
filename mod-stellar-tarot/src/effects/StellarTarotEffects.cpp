@@ -20,6 +20,7 @@
  */
 
 #include "StellarTarotEffects.h"
+#include "Group.h"
 #include "GameTime.h"
 #include "Log.h"
 #include "Player.h"
@@ -27,6 +28,7 @@
 #include "StellarTarotMgr.h"
 #include "StellarTarotScript.h"
 #include "Spell.h"
+#include "SpellAuraEffects.h"
 #include "SpellAuras.h"
 #include "SpellInfo.h"
 #include "WorldSession.h"
@@ -34,7 +36,11 @@
 #include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
+#include "Opcodes.h"
+#include "WorldPacket.h"
+#include <cmath>
 #include <list>
+#include <set>
 #include <map>
 #include <memory>
 
@@ -323,6 +329,53 @@ namespace
 
 }
 
+namespace
+{
+    // LES PORTEURS DU BLOC DE MESURE. Un joueur qui se deconnecte le perd :
+    // c'est un outil de mise au point, pas un reglage.
+    std::set<ObjectGuid>& Huds()
+    {
+        static std::set<ObjectGuid> huds;
+        return huds;
+    }
+
+    // UN POURCENTAGE LISIBLE : le coeur rend un multiplicateur (0.95), le bloc
+    // montre ce que le joueur lit sur sa fiche (95).
+    int32 EnPourCent(float multiplicateur)
+    {
+        return int32(std::lround(multiplicateur * 100.0f));
+    }
+}
+
+void StellarTarotEffects::TellAddon(Player* player, char const* prefix, std::string const& message)
+{
+    if (!player || !player->GetSession())
+        return;
+    std::string const full = std::string(prefix) + "	" + message;
+    WorldPacket data(SMSG_MESSAGECHAT, 100);
+    data << uint8(CHAT_MSG_WHISPER);
+    data << int32(LANG_ADDON);
+    data << player->GetGUID();
+    data << uint32(0);
+    data << player->GetGUID();
+    data << uint32(full.length() + 1);
+    data << full;
+    data << uint8(0);
+    player->GetSession()->SendPacket(&data);
+}
+
+bool StellarTarotEffects::ToggleHud(Player* player)
+{
+    if (!player)
+        return false;
+    ObjectGuid const guid = player->GetGUID();
+    bool const allume = Huds().insert(guid).second;
+    if (!allume)
+        Huds().erase(guid);
+    TellAddon(player, "StellarTarotHud", allume ? "on" : "off");
+    return allume;
+}
+
 void StellarTarotEffects::OnUpdate(Player* player, uint32 diff)
 {
     if (!player || !player->IsInWorld())
@@ -332,6 +385,65 @@ void StellarTarotEffects::OnUpdate(Player* player, uint32 diff)
     if (clock < 1000)
         return;
     clock = 0;
+    // LE BLOC DE MESURE, une fois par seconde et pour lui seul.
+    if (Huds().count(player->GetGUID()))
+    {
+        std::string bloc = "mesure";
+        auto ajoute = [&bloc](char const* clef, int32 valeur)
+        {
+            bloc += "	" + std::string(clef) + "=" + std::to_string(valeur);
+        };
+        ajoute("dmgdone", EnPourCent(player->GetTotalAuraMultiplier(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE)));
+        ajoute("dmgtaken", EnPourCent(player->GetTotalAuraMultiplier(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN)));
+        ajoute("meleetaken", EnPourCent(player->GetTotalAuraMultiplier(SPELL_AURA_MOD_MELEE_DAMAGE_TAKEN_PCT)));
+        ajoute("healdone", EnPourCent(player->GetTotalAuraMultiplier(SPELL_AURA_MOD_HEALING_DONE_PERCENT)));
+        ajoute("healtaken", EnPourCent(player->GetTotalAuraMultiplier(SPELL_AURA_MOD_HEALING_PCT)));
+        ajoute("speed", EnPourCent(player->GetSpeedRate(MOVE_RUN)));
+        // LES DEUX SCORES QUE LA FICHE MONTRE MAL : la penetration d'armure et
+        // l'expertise. Le serveur donne le score brut ET le pourcentage auquel
+        // le coeur le convertit -- c'est ce score-la que lisent les lignes de
+        // cartes a garniture `rating:`.
+        for (auto const& paire : { std::make_pair("armorpen", CR_ARMOR_PENETRATION),
+                                   std::make_pair("expertise", CR_EXPERTISE) })
+        {
+            uint32 const score = player->GetUInt32Value(uint16(PLAYER_FIELD_COMBAT_RATING_1) + uint16(paire.second));
+            int32 const dixiemes = int32(std::lround(player->GetRatingBonusValue(paire.second) * 10.0f));
+            bloc += "	" + std::string(paire.first) + "=" + std::to_string(score) + ":" + std::to_string(dixiemes);
+        }
+        // LES CINQ STATISTIQUES, DECOMPOSEES COMME LE COEUR LES CALCULE :
+        // ((base + fixe de base) x pourcentage de base + fixe total) x
+        // pourcentage total (`Unit::GetTotalStatValue`). Le client, lui, ne
+        // recoit qu'un total et un bonus global : il ne peut pas distinguer ce
+        // qui vient d'un chiffre fixe de ce qui vient d'un pourcentage.
+        for (uint8 i = STAT_STRENGTH; i < MAX_STATS; ++i)
+        {
+            Stats const stat = Stats(i);
+            UnitMods const um = UnitMods(static_cast<uint16>(UNIT_MOD_STAT_START) + i);
+            int32 const base = int32(std::lround(player->GetCreateStat(stat)));
+            int32 const total = int32(std::lround(player->GetTotalStatValue(stat)));
+            int32 const fixe = int32(std::lround(player->GetFlatModifierValue(um, BASE_VALUE)
+                                               + player->GetFlatModifierValue(um, TOTAL_VALUE)));
+            // Le reste est ce que les pourcentages ont ajoute : les trois parts
+            // font le total, par construction.
+            int32 const part = total - base - fixe;
+            int32 const dixiemes = int32(std::lround((player->GetPctModifierValue(um, BASE_PCT)
+                                                    * player->GetPctModifierValue(um, TOTAL_PCT) - 1.0f) * 1000.0f));
+            bloc += "	stat" + std::to_string(i) + "=" + std::to_string(base) + ":" + std::to_string(fixe)
+                  + ":" + std::to_string(part) + ":" + std::to_string(total) + ":" + std::to_string(dixiemes);
+        }
+        // CE QUE LES LIGNES DU MODULE FONT A L'INSTANT : elles ne posent aucune
+        // aura, le coeur ne les connait pas, et sans ce bloc rien au monde ne
+        // les montre. La cible du joueur sert de sujet aux conditions qui
+        // parlent de l'adversaire.
+        Unit* const cible = player->GetSelectedUnit();
+        Each(player, [&](StellarTarotScript& s)
+        {
+            std::string dit;
+            if (s.DitSonEtat(player, cible, dit) && !dit.empty())
+                bloc += "	ligne=" + dit;
+        });
+        TellAddon(player, "StellarTarotHud", bloc);
+    }
     Each(player, [&](StellarTarotScript& s) { s.OnTick(player); });
     // LE VERDICT AU JOURNAL, toutes les trente secondes et seulement s'il s'est
     // passe quelque chose depuis la derniere fois.
@@ -363,6 +475,51 @@ namespace
         return spellId >= STELLAR_TAROT_CARD_ITEM_BASE && spellId <= STELLAR_TAROT_TRIGGER_LAST;
     }
 
+    // LES RALENTISSEMENTS DES CARTES S'AJOUTENT, ET LE COEUR NE SAIT PAS LE
+    // FAIRE. `Unit::UpdateSpeed` ne retient qu'UN SEUL ralentissement, le plus
+    // fort (`GetMaxNegativeAuraModifier(SPELL_AURA_MOD_DECREASE_SPEED)`,
+    // Unit.cpp:11281) ; l'autre voie, `MOD_SPEED_ALWAYS`, qui MULTIPLIE bien
+    // ses auras (`GetTotalAuraMultiplier`), est jetee par le
+    // `std::max(non_stack_bonus, stack_bonus)` de la ligne 11213 des qu'elle
+    // descend sous 1. Aucun sort du jeu ne cumule deux ralentissements --
+    // Frostbolt, Frost Shock, Mind Flay, Hurricane portent tous
+    // MOD_DECREASE_SPEED et le plus fort l'emporte : c'est la regle du jeu, et
+    // c'est pourquoi le calcul revient au module.
+    //
+    // IL NE PORTE QUE SUR LES AURAS DU MODULE : un ralentissement du jeu garde
+    // la regle du jeu. Les parts S'ADDITIONNENT, le concepteur l'ayant tranche
+    // le 2026-09-20 : -10% et -10% font -20%.
+    bool Ralentit(SpellInfo const* info)
+    {
+        return info && info->HasAura(SPELL_AURA_MOD_DECREASE_SPEED);
+    }
+
+    void CumulerLesRalentissements(Unit* who, Aura const* qui_part)
+    {
+        if (!who)
+            return;
+        std::vector<AuraEffect*> miens;
+        int32 somme = 0;
+        for (AuraEffect* eff : who->GetAuraEffectsByType(SPELL_AURA_MOD_DECREASE_SPEED))
+        {
+            if (!eff || !OursSpell(eff->GetId()) || (qui_part && eff->GetBase() == qui_part))
+                continue;
+            miens.push_back(eff);
+            // LA PART DE LA CARTE, celle que porte le DBC : le montant courant
+            // a pu etre reecrit par un passage precedent.
+            somme += eff->GetSpellInfo()->GetEffect(SpellEffIndex(eff->GetEffIndex())).CalcValue();
+        }
+        if (miens.empty())
+            return;
+        // Le total sur CHACUNE : le coeur ne lira que la plus forte, qui les
+        // vaut toutes, et le compte reste juste quelle que soit celle qui tombe.
+        // Le plancher evite qu'une main de cartes ne cloue le joueur sur place.
+        int32 const total = std::max(somme, -99);
+        for (AuraEffect* eff : miens)
+            if (eff->GetAmount() != total)
+                eff->ChangeAmount(total);
+    }
+
     // Le verrou vaut pour l'unite qui agit comme pour celle qui subit : le
     // coup qu'une carte porte ne doit reveiller aucune ligne, des deux cotes.
     bool Held(Unit* one, Unit* two)
@@ -391,6 +548,31 @@ bool StellarTarotEffects::HeldFor(ObjectGuid who)
     return Locks().count(who) != 0;
 }
 
+// CE QU'UN ALLIE SUBIT, porte a ceux qui veillent sur lui. Le coeur passe ici
+// pour CHAQUE coup du royaume : tant qu'aucun plateau ne le guette, on rend la
+// main aussitot.
+namespace
+{
+    void PrevenirLesVeilleurs(Unit* victim, uint32& damage)
+    {
+        if (!(gGuetDuRoyaume & StellarTarotScript::GUET_ALLIE_FRAPPE))
+            return;
+        Player* const frappe = victim ? victim->ToPlayer() : nullptr;
+        Group const* const groupe = frappe ? frappe->GetGroup() : nullptr;
+        if (!groupe)
+            return;
+        for (GroupReference const* it = groupe->GetFirstMember(); it; it = it->next())
+        {
+            Player* const membre = it->GetSource();
+            if (!membre || membre == frappe || !membre->IsInWorld())
+                continue;
+            if (!(GuetDe(membre) & StellarTarotScript::GUET_ALLIE_FRAPPE))
+                continue;
+            Each(membre, [&](StellarTarotScript& s) { s.OnAllyDamaged(membre, frappe, damage); });
+        }
+    }
+}
+
 void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell, uint32 school, uint32 spellId)
 {
     // LE TIR SUPPLEMENTAIRE EST UN TIR COMME UN AUTRE. Les sorts du module ne
@@ -406,6 +588,8 @@ void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage,
         Each(attacker->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageDealt(attacker->ToPlayer(), victim, damage, spell, school, spellId); });
     if (victim && victim->IsPlayer())
         Each(victim->ToPlayer(), [&](StellarTarotScript& s) { s.OnDamageTaken(victim->ToPlayer(), attacker, damage, spell, school, spellId); });
+    // CEUX QUI VEILLENT SUR LUI : le coeur ne previent que le frappe.
+    PrevenirLesVeilleurs(victim, damage);
     // LE COUP DU FAMILIER : le coeur ne parle que de la bete ; le module remonte
     // jusqu'au maitre, dont les cartes peuvent y repondre.
     if (attacker && !attacker->IsPlayer())
@@ -420,6 +604,25 @@ void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
         return;
     if (healer && healer->IsPlayer())
         Each(healer->ToPlayer(), [&](StellarTarotScript& s) { s.OnHealDone(healer->ToPlayer(), receiver, gain); });
+    // CELUI QUI RECOIT porte peut-etre des cartes, lui aussi : le coeur ne
+    // previent que le soigneur.
+    if (Player* const soigne = receiver ? receiver->ToPlayer() : nullptr)
+        Each(soigne, [&](StellarTarotScript& s) { s.OnHealTaken(soigne, healer, gain); });
+}
+
+void StellarTarotEffects::OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss,
+                                      int32& dodge, int32& parry, int32& block)
+{
+    if (Player* const frappeur = attacker ? attacker->ToPlayer() : nullptr)
+        Each(frappeur, [&](StellarTarotScript& s)
+        {
+            s.OnMeleeRoll(frappeur, victim, true, crit, miss, dodge, parry, block);
+        });
+    if (Player* const frappe = victim ? victim->ToPlayer() : nullptr)
+        Each(frappe, [&](StellarTarotScript& s)
+        {
+            s.OnMeleeRoll(frappe, attacker, false, crit, miss, dodge, parry, block);
+        });
 }
 
 // ===================== L'INSTRUMENT DE MESURE =====================
@@ -746,9 +949,9 @@ void StellarTarotEffects::OnGiveXP(Player* player, uint32& amount, uint8 source)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnGiveXP(player, amount, source); });
 }
-void StellarTarotEffects::OnGiveReputation(Player* player, float& amount)
+void StellarTarotEffects::OnGiveReputation(Player* player, float& amount, uint8 source)
 {
-    Each(player, [&](StellarTarotScript& s) { s.OnGiveReputation(player, amount); });
+    Each(player, [&](StellarTarotScript& s) { s.OnGiveReputation(player, amount, source); });
 }
 void StellarTarotEffects::OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod)
 {
@@ -778,6 +981,21 @@ void StellarTarotEffects::OnCreatureLoot(Player* player, Loot* loot)
 // distance exacte reste au script : chacun a la sienne.
 void StellarTarotEffects::OnUnitDied(Unit* died, Unit* /*killer*/)
 {
+    // UN ALLIE QUI TOMBE : un joueur mort, et les porteurs de cartes autour de
+    // lui. Le coeur ne previent personne, ni pour une bete ni pour un homme.
+    if (Player* const tombe = died ? died->ToPlayer() : nullptr)
+    {
+        if (!(gGuetDuRoyaume & StellarTarotScript::GUET_MORT_ALENTOUR))
+            return;
+        std::list<Player*> autour;
+        Acore::AnyPlayerInObjectRangeCheck check(tombe, 100.0f);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(tombe, autour, check);
+        Cell::VisitObjects(tombe, searcher, 100.0f);
+        for (Player* qui : autour)
+            if (qui && qui != tombe && qui->IsInWorld())
+                Each(qui, [&](StellarTarotScript& s) { s.OnAllyDeath(qui, tombe); });
+        return;
+    }
     if (!died || !died->IsCreature())
         return;
     // PERSONNE NE GUETTE : pas de recherche. C'est le cas ordinaire, et il
@@ -806,9 +1024,27 @@ void StellarTarotEffects::OnFishing(Player* player, Loot* loot, LootTemplate con
     Each(player, [&](StellarTarotScript& s) { s.OnFishing(player, loot, tab, store); });
 }
 
+void StellarTarotEffects::OnSkinning(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnSkinning(player, loot, tab, store); });
+}
+
 void StellarTarotEffects::OnSpend(Player* player)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnSpend(player); });
+}
+
+void StellarTarotEffects::OnAuctionPosted(Player* player, uint32 deposit)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnAuctionPosted(player, deposit); });
+}
+void StellarTarotEffects::OnAuctionSold(Player* player, uint32& profit)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnAuctionSold(player, profit); });
+}
+void StellarTarotEffects::OnAuctionWon(Player* player, uint32 price)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnAuctionWon(player, price); });
 }
 
 void StellarTarotEffects::OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags)
@@ -825,6 +1061,19 @@ void StellarTarotEffects::OnObjectLoot(Player* player, Loot* loot, LootTemplate 
     Each(player, [&](StellarTarotScript& s) { s.OnObjectLoot(player, loot, tab, store); });
 }
 
+// LE DE DE CHAQUE LIGNE DE CHAQUE TABLE. Le coeur passe ici des milliers de
+// fois par butin compose : tant qu'aucun plateau du royaume ne guette le de,
+// on ne cherche meme pas le joueur dans le registre.
+void StellarTarotEffects::OnItemRoll(Player const* player, uint32 itemId, float& chance)
+{
+    if (!player || !(gGuetDuRoyaume & StellarTarotScript::GUET_DE_DE_BUTIN))
+        return;
+    Player* qui = const_cast<Player*>(player);
+    if (!(GuetDe(qui) & StellarTarotScript::GUET_DE_DE_BUTIN))
+        return;
+    Each(qui, [&](StellarTarotScript& s) { s.OnItemRoll(player, itemId, chance); });
+}
+
 void StellarTarotEffects::OnMapChanged(Player* player)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnMapChanged(player); });
@@ -837,6 +1086,11 @@ void StellarTarotEffects::OnJump(Player* player)
     Each(player, [&](StellarTarotScript& s) { s.OnJump(player); });
 }
 
+void StellarTarotEffects::OnItemGained(Player* player, Item* item, uint32 count)
+{
+    Each(player, [&](StellarTarotScript& s) { s.OnItemGained(player, item, count); });
+}
+
 void StellarTarotEffects::OnSellItem(Player* player, Item* item)
 {
     Each(player, [&](StellarTarotScript& s) { s.OnSellItem(player, item); });
@@ -845,9 +1099,28 @@ void StellarTarotEffects::OnAuraApply(Unit* target, Aura* aura)
 {
     if (!aura || !target)
         return;
+    // Le revers d'une carte qui ralentit : le total est l'affaire du module.
+    if (OursSpell(aura->GetId()) && Ralentit(aura->GetSpellInfo()))
+        CumulerLesRalentissements(target, nullptr);
     Unit* const caster = aura->GetCaster();
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnAuraApplied(caster->ToPlayer(), target, aura); });
+    // ET CELUI QUI LA SUBIT : ses cartes ont leur mot a dire sur ce qui vient
+    // de se poser sur lui. Meme crochet, l'autre bout du relais.
+    if (target->IsPlayer())
+        Each(target->ToPlayer(), [&](StellarTarotScript& s) { s.OnAuraTaken(target->ToPlayer(), caster, aura); });
+}
+
+void StellarTarotEffects::OnAuraRemove(Unit* target, Aura const* aura)
+{
+    if (!aura || !target)
+        return;
+    if (OursSpell(aura->GetId()) && Ralentit(aura->GetSpellInfo()))
+        CumulerLesRalentissements(target, aura);
+    // CE QUE LE PORTEUR DE CARTES PERD : une aura qu'il avait sur lui, et qui
+    // vient d'etre detachee. Les lignes qui la guettent sont les siennes.
+    if (Player* const qui = target->ToPlayer())
+        Each(qui, [&](StellarTarotScript& s) { s.OnAuraRemoved(qui, aura); });
 }
 
 void StellarTarotEffects::OnCalcDuration(Aura const* aura, int32& duration)
@@ -873,5 +1146,10 @@ void StellarTarotEffects::OnPeriodicTick(Unit* caster, Unit* other, uint32& amou
         return;
     if (caster && caster->IsPlayer())
         Each(caster->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTick(caster->ToPlayer(), other, amount, heal, spellId); });
+    // ET CELUI QUI LE SUBIT : les cartes du porteur du tic ont leur mot a dire
+    // sur ce qu'il lui coute, comme elles l'ont sur un coup. Jamais sur un
+    // soin, qui n'est pas un mal a reduire.
+    if (!heal && other && other->IsPlayer())
+        Each(other->ToPlayer(), [&](StellarTarotScript& s) { s.OnPeriodicTaken(other->ToPlayer(), caster, amount, spellId); });
 }
 

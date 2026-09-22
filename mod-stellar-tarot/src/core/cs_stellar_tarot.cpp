@@ -21,6 +21,7 @@
  * .tarot info                          (SEC_GAMEMASTER)     the loaded catalogue
  * .tarot reload                        (SEC_ADMINISTRATOR)  reads the mod_stellar_tarot_* tables again
  * .tarot study <entry>                 (SEC_PLAYER)         studies a card or a board from the bags
+ * .tarot hud                           (SEC_PLAYER)         toggles the measurement block
  * .tarot binder [player]               (SEC_GAMEMASTER)     what a player's account has studied
  * .tarot board <board_id|0>            (SEC_PLAYER)         equips a board, or takes it off
  * .tarot place <row> <col> <card_id>   (SEC_PLAYER)         lays a card on a cell
@@ -85,6 +86,7 @@ public:
             // SEC_PLAYER: the paths of the interface (through RunCommand) --
             // every rule is applied inside.
             { "study",  HandleStudyCommand,  SEC_PLAYER,        Console::No  },
+            { "hud",    HandleHudCommand,    SEC_PLAYER,        Console::No  },
             { "binder", HandleBinderCommand, SEC_GAMEMASTER,    Console::Yes },
             { "board",  HandleBoardCommand,  SEC_PLAYER,        Console::No  },
             { "place",  HandlePlaceCommand,  SEC_PLAYER,        Console::No  },
@@ -211,6 +213,20 @@ public:
 
     // STUDYING: the item leaves the bags and the card or board joins the
     // binder of the whole account. Always on oneself, always from the bags.
+    // LE BLOC DE MESURE : ce que le serveur est seul a savoir, pousse a
+    // l'addon une fois par seconde. Outil de mise au point, perdu a la
+    // deconnexion.
+    static bool HandleHudCommand(ChatHandler* handler)
+    {
+        Player* player = Self(handler);
+        if (!player)
+            return true;
+        bool const allume = StellarTarotEffects::ToggleHud(player);
+        handler->PSendSysMessage(allume ? "Tarot : bloc de mesure ALLUME."
+                                        : "Tarot : bloc de mesure eteint.");
+        return true;
+    }
+
     static bool HandleStudyCommand(ChatHandler* handler, uint32 entry)
     {
         Player* player = Self(handler);

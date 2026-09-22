@@ -107,6 +107,17 @@ public:
     virtual void OnDamageTaken(Player* /*player*/, Unit* /*attacker*/, uint32& /*damage*/, bool /*spell*/,
                                uint32 /*school*/ = 1, uint32 /*spellId*/ = 0) { }
     virtual void OnHealDone(Player* /*player*/, Unit* /*target*/, uint32& /*gain*/) { }
+    // UN SOIN RECU, de qui que ce soit -- le pendant de `OnHealDone`. C'est
+    // le seul endroit ou une ligne peut lire ce que les AUTRES rendent au
+    // joueur : aucune aura du coeur ne distingue le soigneur.
+    virtual void OnHealTaken(Player* /*player*/, Unit* /*healer*/, uint32& /*gain*/) { }
+    // LE DE DU COUP BLANC, avant qu'il ne tombe : les cinq chances, en
+    // CENTIEMES de pour-cent (0 : jamais, 10000 : a coup sur). `mien` dit si
+    // le joueur FRAPPE (les chances sont celles de sa victime) ou s'il est
+    // frappe (ce sont les siennes).
+    virtual void OnMeleeRoll(Player* /*player*/, Unit* /*autre*/, bool /*mien*/,
+                             int32& /*crit*/, int32& /*miss*/, int32& /*dodge*/,
+                             int32& /*parry*/, int32& /*block*/) { }
     virtual void OnSpellCast(Player* /*player*/, Spell* /*spell*/) { }
     // NOTE D'UNITE : la chance qu'une ligne annonce (`Promise`) est EN POUR
     // MILLE -- 25 vaut 2,5 %. La ligne l'ecrit en pour-cent, le moteur la garde
@@ -131,6 +142,14 @@ public:
     // Une creature vient de mourir pres du joueur, tuee par n'importe qui --
     // lui compris. La distance est a la charge du script.
     virtual void OnNearbyDeath(Player* /*player*/, Unit* /*died*/) { }
+    // UN ALLIE QUI TOMBE : un JOUEUR ami, mort aux alentours. Le pendant de
+    // `OnNearbyDeath`, que le coeur ne dit pas davantage.
+    virtual void OnAllyDeath(Player* /*player*/, Player* /*mort*/) { }
+    // CE QU'UN ALLIE SUBIT : un membre du groupe vient d'encaisser. Le coeur
+    // ne le dit qu'a lui ; le module le porte a ceux qui veillent.
+    virtual void OnAllyDamaged(Player* /*player*/, Player* /*allie*/, uint32& /*damage*/) { }
+    // UN OBJET QUI ENTRE DANS LES SACS, quelle qu'en soit la provenance.
+    virtual void OnItemGained(Player* /*player*/, Item* /*item*/, uint32 /*count*/) { }
     // LES CROCHETS QUE LE COEUR APPELLE BEAUCOUP : une ligne qui les veut le
     // DIT. Sans cette declaration, le module partirait en recherche spatiale a
     // chaque mort de creature du royaume, et suivrait chaque pas et chaque
@@ -140,6 +159,8 @@ public:
         GUET_MORT_ALENTOUR = 0x1,   // une creature meurt pres du joueur
         GUET_ROTATION      = 0x2,   // le joueur tourne sur place
         GUET_SAUT          = 0x4,   // le joueur saute
+        GUET_DE_DE_BUTIN   = 0x8,   // chaque ligne de chaque table de butin
+        GUET_ALLIE_FRAPPE  = 0x10,  // un membre du groupe encaisse un coup
     };
     [[nodiscard]] virtual uint32 Watches() const { return 0; }
     // Le joueur saute : le seul signal que le coeur donne d'un saut.
@@ -155,7 +176,8 @@ public:
     // 0 une victime, 1 et 2 une quete, 3 une decouverte, 4 un champ de
     // bataille. Les auras natives ne couvrent que les trois premieres.
     virtual void OnGiveXP(Player* /*player*/, uint32& /*amount*/, uint8 /*source*/) { }
-    virtual void OnGiveReputation(Player* /*player*/, float& /*amount*/) { }
+    // La reputation, et D'OU elle vient : ReputationSource du coeur.
+    virtual void OnGiveReputation(Player* /*player*/, float& /*amount*/, uint8 /*source*/) { }
     // Une réparation sur le point d'être payée : l'objet visé, ou un GUID
     // vide quand le joueur répare tout.
     virtual void OnRepairDiscount(Player* /*player*/, ObjectGuid /*itemGuid*/, float& /*discountMod*/) { }
@@ -174,6 +196,12 @@ public:
     // reparation) ou a l'HOTEL DES VENTES (un depot, une enchere, un achat
     // immediat). Le courrier, le vol et l'entraineur n'en sont pas.
     virtual void OnSpend(Player* /*player*/) { }
+    // L'HOTEL DES VENTES, les trois moments qui portent une somme : la mise en
+    // vente (le depot deja preleve), la vente faite (le gain du vendeur, que
+    // la carte peut majorer) et l'enchere remportee (le prix paye).
+    virtual void OnAuctionPosted(Player* /*player*/, uint32 /*deposit*/) { }
+    virtual void OnAuctionSold(Player* /*player*/, uint32& /*profit*/) { }
+    virtual void OnAuctionWon(Player* /*player*/, uint32 /*price*/) { }
     // LE JOUEUR BOUGE : la place et l'orientation qu'un paquet de mouvement
     // vient d'annoncer. Tout ce que le serveur sait de la rotation passe par la.
     virtual void OnFacing(Player* /*player*/, float /*x*/, float /*y*/, float /*orientation*/,
@@ -184,18 +212,45 @@ public:
     // ajouter -- ou doubler ce qui en sort.
     virtual void OnFishing(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
                            LootStore const* /*store*/) { }
+    // LE DEPEÇAGE : le butin d'un cadavre qu'on vient d'écorcher, avec la
+    // table dont il sort -- une carte peut y puiser de nouveau.
+    virtual void OnSkinning(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
+                            LootStore const* /*store*/) { }
     virtual void OnObjectLoot(Player* /*player*/, Loot* /*loot*/, LootTemplate const* /*tab*/,
                               LootStore const* /*store*/) { }
+    // LE DE D'UNE LIGNE DE TABLE DE BUTIN, avant qu'il ne tombe : l'objet
+    // qu'elle donnerait et la chance qu'elle porte, que la carte peut majorer.
+    // Le coeur appelle ceci pour CHAQUE ligne de CHAQUE butin : rien de lourd
+    // ne doit y tenir.
+    virtual void OnItemRoll(Player const* /*player*/, uint32 /*itemId*/, float& /*chance*/) { }
     // An item BOUGHT from a vendor, once it is in the bags: how many pieces
     // landed, and what the player ACTUALLY paid -- reputation and the other
     // cards' rebates included.
     virtual void OnVendorBuy(Player* /*player*/, Item* /*item*/, uint32 /*count*/, uint32 /*paid*/) { }
+    // UNE AURA DU JOUEUR QUI S'EN VA, de lui-meme ou de sa cible : le coeur
+    // l'a deja detachee, mais ses effets se lisent encore.
+    virtual void OnAuraRemoved(Player* /*player*/, Aura const* /*aura*/) { }
     // An aura the player has just laid on someone.
     virtual void OnAuraApplied(Player* /*player*/, Unit* /*target*/, Aura* /*aura*/) { }
+    // UNE AURA QUE LE JOUEUR VIENT DE SUBIR, de qui que ce soit -- le pendant
+    // de `OnAuraApplied`, qui ne parle qu'a celui qui LANCE. Meme crochet du
+    // coeur (`UNITHOOK_ON_AURA_APPLY`), l'autre bout du relais.
+    virtual void OnAuraTaken(Player* /*player*/, Unit* /*caster*/, Aura* /*aura*/) { }
     // A tick of one of the player's periodic effects, before it lands: damage
     // on a victim, or healing on whoever carries the effect.
     virtual void OnPeriodicTick(Player* /*player*/, Unit* /*other*/, uint32& /*amount*/, bool /*heal*/,
                                 uint32 /*spellId*/) { }
+    // UN BATTEMENT QUE LE JOUEUR SUBIT, avant qu'il ne tombe : le tic d'un
+    // poison, d'une flamme, d'une zone au sol. Le pendant de `OnDamageTaken`
+    // pour ce qui bat, les deux chemins du coeur etant distincts. Les soins
+    // n'y passent pas.
+    virtual void OnPeriodicTaken(Player* /*player*/, Unit* /*attacker*/, uint32& /*amount*/,
+                                 uint32 /*spellId*/) { }
+    // CE QUE CETTE LIGNE FAIT A L'INSTANT, pour le bloc de mesure : une phrase,
+    // ou rien quand la ligne n'a rien a montrer. `cible` est la cible du
+    // joueur, s'il en a une : c'est sur elle que se lisent les conditions qui
+    // parlent de l'adversaire.
+    virtual bool DitSonEtat(Player* /*player*/, Unit* /*cible*/, std::string& /*out*/) { return false; }
 
 protected:
     uint32 _spellId = 0;

@@ -79,6 +79,15 @@ namespace StellarTarotLoot
     // corpse; 0 when there is none to give.
     [[nodiscard]] uint32 GreyItemFor(uint8 level);
 
+    // UNE PIECE D'EQUIPEMENT rare (3) ou epique (4) a la mesure d'un joueur de
+    // ce niveau, prise dans ce que le monde fait deja tomber ; 0 quand il n'y
+    // a rien a donner.
+    [[nodiscard]] uint32 GearFor(uint8 quality, uint8 level);
+
+    // UNE HERBE de l'age d'un joueur de ce niveau, prise dans ce que les
+    // noeuds du decor donnent deja ; 0 quand il n'y a rien a donner.
+    [[nodiscard]] uint32 HerbFor(uint8 level);
+
     // One line saying what a source is, for `.tarot sources`.
     [[nodiscard]] std::string Describe(StellarTarotSource const& source);
 }

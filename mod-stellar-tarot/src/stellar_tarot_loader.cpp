@@ -27,10 +27,13 @@ void AddSC_stellar_tarot_scripts();
 void AddSC_stellar_tarot_commands();
 // LE PROC DU COEUR : l'AuraScript qui previent la ligne quand son aura part.
 void AddSC_stellar_tarot_proc();
+// LE GARDIEN qu'une carte fait venir : sanglier ou double.
+void AddSC_stellar_tarot_guardian();
 
 void Addmod_stellar_tarotScripts()
 {
     AddSC_stellar_tarot_scripts();
     AddSC_stellar_tarot_commands();
     AddSC_stellar_tarot_proc();
+    AddSC_stellar_tarot_guardian();
 }

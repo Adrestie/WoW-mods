@@ -91,6 +91,10 @@ namespace StellarTarotEffects
     // scripts see it as dealt, the victim's as taken. Either may be a creature.
     void OnDamage(Unit* attacker, Unit* victim, uint32& damage, bool spell, uint32 school = 1, uint32 spellId = 0);
     void OnHeal(Unit* healer, Unit* receiver, uint32& gain);
+    // Le de du coup blanc, des deux cotes : celui qui frappe et celui qui est
+    // frappe peuvent l'un et l'autre porter des cartes.
+    void OnMeleeRoll(Unit* attacker, Unit* victim, int32& crit, int32& miss,
+                     int32& dodge, int32& parry, int32& block);
     void OnSpellCast(Player* player, Spell* spell);
     void OnEnterCombat(Player* player);
     void OnLeaveCombat(Player* player);
@@ -101,7 +105,9 @@ namespace StellarTarotEffects
     void OnQuestComplete(Player* player, Quest const* quest);
     void OnLootMoney(Player* player, uint32& copper);
     void OnGiveXP(Player* player, uint32& amount, uint8 source);
-    void OnGiveReputation(Player* player, float& amount);
+    // D'OU VIENT LA REPUTATION : le coeur le dit (ReputationSource), et une
+    // carte qui ne parle que des quetes en a besoin.
+    void OnGiveReputation(Player* player, float& amount, uint8 source);
     void OnRepairDiscount(Player* player, ObjectGuid itemGuid, float& discountMod);
     void OnVendorDiscount(Player const* player, float& discount);
     void OnMoneyChanged(Player* player, int32& amount);
@@ -109,21 +115,44 @@ namespace StellarTarotEffects
     void OnVendorBuy(Player* player, Item* item, uint32 count, uint32 paid);
     void OnCreatureLoot(Player* player, Loot* loot);
     void OnObjectLoot(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
+    // Le de d'une ligne de table de butin. Appele pour CHAQUE ligne de CHAQUE
+    // butin du royaume : rendu au plus vite tant qu'aucun plateau ne le guette.
+    void OnItemRoll(Player const* player, uint32 itemId, float& chance);
     void OnProspect(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
     void OnFishing(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
+    void OnSkinning(Player* player, Loot* loot, LootTemplate const* tab, LootStore const* store);
     void OnSpend(Player* player);
+    void OnAuctionPosted(Player* player, uint32 deposit);
+    void OnAuctionSold(Player* player, uint32& profit);
+    void OnAuctionWon(Player* player, uint32 price);
     void OnFacing(Player* player, float x, float y, float orientation, uint32 moveFlags);
     void OnJump(Player* player);
     // Une creature morte : le module cherche lui-meme les porteurs de cartes
     // alentour, le coeur ne prevenant que le tueur.
     void OnUnitDied(Unit* died, Unit* killer);
+    // Un objet qui entre dans les sacs : le coeur le dit au porteur.
+    void OnItemGained(Player* player, Item* item, uint32 count);
     void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId);
     void OnAuraApply(Unit* target, Aura* aura);
+    // UNE AURA QUI S'EN VA : les revers qui ralentissent se recomptent sans
+    // elle. Rendu au plus vite quand l'aura n'est pas du module.
+    void OnAuraRemove(Unit* target, Aura const* aura);
     // LE COEUR CALCULE LA DUREE D'UNE AURA : appele pour TOUTE aura du monde,
     // donc rendu au plus vite quand elle ne vient pas d'un porteur de cartes.
     void OnCalcDuration(Aura const* aura, int32& duration);
 
     [[nodiscard]] std::vector<StellarTarotActiveEffect> Active(Player* player);
+
+    // ===================== LE BLOC DE MESURE =====================
+    //
+    // Ce que le SERVEUR est seul a savoir : les multiplicateurs du coeur --
+    // degats infliges, degats subis, soins -- qu'aucune fonction du client
+    // n'expose, et l'etat des lignes de cartes qui majorent un chiffre AU
+    // MOMENT DU COUP, lesquelles ne posent aucune aura et ne se lisent donc
+    // nulle part. Le client lit tout le reste lui-meme.
+    bool ToggleHud(Player* player);
+    // Parler a l'addon, par le canal des messages d'addon.
+    void TellAddon(Player* player, char const* prefix, std::string const& message);
 
     // ===================== L'INSTRUMENT DE MESURE =====================
     //

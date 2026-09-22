@@ -10,4 +10,5 @@
 
 DELETE FROM `spellduration_dbc` WHERE `ID` BETWEEN 700 AND 799;
 INSERT INTO `spellduration_dbc` (`ID`, `Duration`, `DurationPerLevel`, `MaxDuration`) VALUES
-(700, 20000, 0, 20000);
+(700, 600000, 0, 600000),
+(701, 20000, 0, 20000);

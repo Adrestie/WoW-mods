@@ -78,6 +78,7 @@ public:
             PLAYERHOOK_ON_SPELL_CAST,
             PLAYERHOOK_ON_BEFORE_LOOT_MONEY,
             PLAYERHOOK_ON_GIVE_EXP,
+            PLAYERHOOK_ON_STORE_NEW_ITEM,
             PLAYERHOOK_ON_GIVE_REPUTATION,
             PLAYERHOOK_ON_BEFORE_DURABILITY_REPAIR,
             PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM,
@@ -125,9 +126,14 @@ public:
             StellarTarotEffects::OnLootMoney(player, loot->gold);
     }
     void OnPlayerGiveXP(Player* player, uint32& amount, Unit* /*victim*/, uint8 source) override { StellarTarotEffects::OnGiveXP(player, amount, source); }
-    void OnPlayerGiveReputation(Player* player, int32 /*faction*/, float& amount, ReputationSource /*source*/) override
+    // UN OBJET QUI ENTRE DANS LES SACS : butin, achat, fabrication, courrier.
+    void OnPlayerStoreNewItem(Player* player, Item* item, uint32 count) override
     {
-        StellarTarotEffects::OnGiveReputation(player, amount);
+        StellarTarotEffects::OnItemGained(player, item, count);
+    }
+    void OnPlayerGiveReputation(Player* player, int32 /*faction*/, float& amount, ReputationSource source) override
+    {
+        StellarTarotEffects::OnGiveReputation(player, amount, uint8(source));
     }
     void OnPlayerBeforeDurabilityRepair(Player* player, ObjectGuid /*npc*/, ObjectGuid item, float& discountMod, uint8 /*guildBank*/) override
     {
@@ -226,10 +232,25 @@ public:
             UNITHOOK_MODIFY_PERIODIC_DAMAGE_AURAS_TICK,
             UNITHOOK_MODIFY_HEAL_RECEIVED,
             UNITHOOK_ON_AURA_APPLY,
+            UNITHOOK_ON_AURA_REMOVE,
             UNITHOOK_ON_HEAL,
             UNITHOOK_ON_BEFORE_ROLL_MELEE_OUTCOME_AGAINST,
             UNITHOOK_ON_UNIT_DEATH
         }) { }
+
+    // LE DE DU COUP BLANC, avant qu'il ne tombe. Le coeur passe les cinq
+    // chances par reference : c'est le seul endroit ou une carte peut dire
+    // « vos attaques ne peuvent plus etre bloquees ».
+    void OnBeforeRollMeleeOutcomeAgainst(Unit const* attacker, Unit const* victim,
+        WeaponAttackType /*attType*/, int32& /*attackerMaxSkillValueForLevel*/,
+        int32& /*victimMaxSkillValueForLevel*/, int32& /*attackerWeaponSkill*/,
+        int32& /*victimDefenseSkill*/, int32& crit_chance, int32& miss_chance,
+        int32& dodge_chance, int32& parry_chance, int32& block_chance) override
+    {
+        StellarTarotEffects::OnMeleeRoll(const_cast<Unit*>(attacker), const_cast<Unit*>(victim),
+                                         crit_chance, miss_chance, dodge_chance,
+                                         parry_chance, block_chance);
+    }
 
     // Le coeur ne signale une mort qu'au tueur : c'est ici que le module
     // apprend qu'une creature est tombee, pour prevenir les temoins.
@@ -257,6 +278,12 @@ public:
     void OnAuraApply(Unit* unit, Aura* aura) override
     {
         StellarTarotEffects::OnAuraApply(unit, aura);
+    }
+
+    // Une aura qui s'en va : les revers qui ralentissent se recomptent.
+    void OnAuraRemove(Unit* unit, AuraApplication* aurApp, AuraRemoveMode /*mode*/) override
+    {
+        StellarTarotEffects::OnAuraRemove(unit, aurApp ? aurApp->GetBase() : nullptr);
     }
 
     // UN TIC D'EFFET PERIODIQUE : les cartes du LANCEUR peuvent y ajouter. Le
@@ -329,11 +356,35 @@ public:
         // La peche : ce que le bouchon vient de remonter.
         else if (&store == &LootTemplates_Fishing)
             StellarTarotEffects::OnFishing(lootOwner, loot, tab, &store);
+        // Le depeçage : ce que le couteau vient de tirer du cadavre.
+        else if (&store == &LootTemplates_Skinning)
+            StellarTarotEffects::OnSkinning(lootOwner, loot, tab, &store);
         // The crate of goods being opened: the module fills it itself.
         else if (&store == &LootTemplates_Item)
             if (Item const* opened = lootOwner->GetItemByGuid(loot->containerGUID))
                 if (opened->GetEntry() == STELLAR_TAROT_ITEM_CRATE)
                     StellarTarotLoot::FillCrate(lootOwner, loot);
+    }
+};
+
+// LE DE DE CHAQUE LIGNE DE TABLE DE BUTIN. Le crochet est global : il ne
+// depend d'aucune entree de base, et le coeur l'appelle pour chaque ligne de
+// chaque table qu'il compose. Rendre vrai laisse le de suivre son cours ; la
+// carte ne fait que deplacer la chance.
+class StellarTarotGlobalScript : public GlobalScript
+{
+public:
+    StellarTarotGlobalScript() : GlobalScript("StellarTarotGlobalScript",
+        {
+            GLOBALHOOK_ON_ITEM_ROLL
+        }) { }
+
+    bool OnItemRoll(Player const* player, LootStoreItem const* item, float& chance,
+        Loot& /*loot*/, LootStore const& /*store*/) override
+    {
+        if (player && item)
+            StellarTarotEffects::OnItemRoll(player, item->itemid, chance);
+        return true;
     }
 };
 
@@ -345,7 +396,9 @@ class StellarTarotAuctionScript : public AuctionHouseScript
 public:
     StellarTarotAuctionScript() : AuctionHouseScript("StellarTarotAuctionScript",
         {
-            AUCTIONHOUSEHOOK_ON_AUCTION_ADD
+            AUCTIONHOUSEHOOK_ON_AUCTION_ADD,
+            AUCTIONHOUSEHOOK_ON_BEFORE_AUCTIONHOUSEMGR_SEND_AUCTION_SUCCESSFUL_MAIL,
+            AUCTIONHOUSEHOOK_ON_BEFORE_AUCTIONHOUSEMGR_SEND_AUCTION_WON_MAIL
         }) { }
 
     void OnAuctionAdd(AuctionHouseObject* /*ah*/, AuctionEntry* entry) override
@@ -353,7 +406,28 @@ public:
         if (!entry)
             return;
         if (Player* seller = ObjectAccessor::FindConnectedPlayer(entry->owner))
+        {
             StellarTarotEffects::OnSpend(seller);
+            StellarTarotEffects::OnAuctionPosted(seller, entry->deposit);
+        }
+    }
+
+    // LA VENTE FAITE : le gain du vendeur, avant qu'il ne parte au courrier.
+    void OnBeforeAuctionHouseMgrSendAuctionSuccessfulMail(AuctionHouseMgr* /*mgr*/, AuctionEntry* /*auction*/,
+        Player* owner, uint32& /*owner_accId*/, uint32& profit, bool& /*sendNotification*/,
+        bool& /*updateAchievementCriteria*/, bool& /*sendMail*/) override
+    {
+        if (owner)
+            StellarTarotEffects::OnAuctionSold(owner, profit);
+    }
+
+    // L'ENCHERE REMPORTEE : ce que l'acheteur vient de payer.
+    void OnBeforeAuctionHouseMgrSendAuctionWonMail(AuctionHouseMgr* /*mgr*/, AuctionEntry* auction,
+        Player* bidder, uint32& /*bidder_accId*/, bool& /*sendNotification*/,
+        bool& /*updateAchievementCriteria*/, bool& /*sendMail*/) override
+    {
+        if (bidder && auction)
+            StellarTarotEffects::OnAuctionWon(bidder, auction->bid);
     }
 };
 
@@ -379,6 +453,7 @@ void AddSC_stellar_tarot_scripts()
     new StellarTarotPlayerScript();
     new StellarTarotUnitScript();
     new StellarTarotLootScript();
+    new StellarTarotGlobalScript();
     new StellarTarotAuctionScript();
     new StellarTarotSpellScript();
 }
