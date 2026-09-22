@@ -16,14 +16,14 @@ nothing else is allowed to disturb.
 | Player frame | Frame and portrait, health and power bars, rest and combat states, threat, vehicle art, PvP icon, raid subgroup indicator, play time, incoming damage, and the death knight rune bar. | done |
 | Target frame | Frame and portrait, health and power bars, the reputation band, and the art each classification calls for: ordinary, minus, rare, elite and rare elite dragons, world boss ring. | done |
 | Cast bar | Standard, channelled and uninterruptable casts, the interrupted state and the shield. | done |
-| Action bar | The 45 x 45 button and all of its states, the page number block, the two gryphon end caps. The button art reaches every action button the client carries, the secondary bars included. | done |
-| Stance bar | Forms, auras and aspects on the 30 x 30 small button. | done |
-| Pet bar | The familiar's ten buttons, same small button as the stances. | done |
-| Micro menu and bags bar | The ten micro buttons, and beside them the backpack, the four bag slots and the keyring. | done |
+| Action bar | The button and all of its states, the page number block, the two gryphon end caps. The button art reaches every action button the client carries, the secondary bars included. | done |
+| Stance bar | Forms, auras and aspects, on the smaller button they share with the pet bar. | done |
+| Pet bar | The familiar's buttons and their states. | done |
+| Micro menu and bags bar | The micro buttons, and beside them the backpack, the bag slots and the keyring. | done |
 | Experience and reputation bars | Both bars, their fills, and the reputation colour per standing. | done |
 | Bags | Panel, slots, search box, sort button, round portrait in its ring. | done |
-| Character sheet | The 631 x 484 window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, the twelve stat lines and their two category selectors; and in the right pane the two tabs it opens on -- character stats, and the equipment manager: set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet. | done, except the pane's collapse to 398 and the reputation / skills / PvP / currency tabs |
-| Dropdown lists | `DropDownList1` and `DropDownList2`, which every menu in the game opens: background, rows, font, check box and tick, width aligned on the menu that opened it. | done |
+| Character sheet | The window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, the twelve stat lines and their two category selectors; and in the right pane the two tabs it opens on -- character stats, and the equipment manager: set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet. | done, except the right pane's collapse and the reputation / skills / PvP / currency tabs |
+| Dropdown lists | The list a dropdown opens, which is one and the same for every menu in the game: background, rows, font, check box and tick, and a width that follows the menu that opened it. | done |
 | Minimap | -- | not started |
 | Chat | -- | not started |
 | Tooltips | -- | not started |
