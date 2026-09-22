@@ -7,3 +7,17 @@ interface/icons/ui-hud-actionbar-bag.blp
 
 # le cadre teinte par la qualite, pose sur chaque objet d'un sac
 interface/common/whiteiconframe.blp
+
+# les icones des onglets lateraux de la feuille de personnage, telles que
+# CHARACTER_MODE_TAB_ICONS les nomme dans camelot/CharacterFrame.lua. Aucune
+# des trois n'existe dans le client 3.3.5.
+interface/icons/ability_racial_jackofalltrades.blp
+# INTROUVABLES AU 2026-09-22, et donc pas versees :
+#   interface/icons/inv_sidetab_reputation2_c60.blp
+#   interface/icons/inv_sidetab_currency_c60.blp
+# Le client charge dans wow.export EST celui de camelot -- wow_classic_beta
+# 1.60.1.69913 -- et son code les nomme, mais le listfile communautaire ne
+# leur donne aucun nom : /resolve rend null, /search n'en connait aucune, et
+# il n'existe donc aucun moyen de les exporter par leur chemin. Un listfile
+# a jour est le seul deblocage. Les onglets de reputation et de monnaie
+# gardent leur texte d'ici la.

@@ -220,7 +220,32 @@ local ONGLET_VOLET_Y = -9               -- -4 du cadre des onglets, -5 du premie
 --
 -- Mesure sur UI-Character-Info-StatTab : sur ses 42, la bande de metal
 -- occupe 3..6 et 35..38, l'ouverture va donc de 7 a 34 -- 28 px, centres.
-local ONGLET_ECART = 0                  -- ils se touchent, comme chez camelot
+-- RELEVE -- camelot/CharacterFrame.lua, UpdateTabLayout : un onglet visible
+-- se pose sur le BOTTOMLEFT du precedent VISIBLE, en (0, -2).
+local ONGLET_ECART = -2
+
+-- LES ICONES DES ONGLETS -- camelot/CharacterFrame.lua,
+-- CHARACTER_MODE_TAB_ICONS, avec SetupModeTabs pour les deux cas a part :
+--
+--   personnage   aucune icone : le PORTRAIT du joueur, rogne a 0,03125
+--   reputation   Interface/ICONS/INV_SideTab_Reputation2_c60
+--   competences  Interface/ICONS/Ability_Racial_JackofAllTrades
+--   PvP          selon la faction : INV_SideTab_Honor_<Alliance|Horde>_c60
+--   monnaie      Interface/ICONS/INV_SideTab_Currency_c60
+--
+-- CE QUI MANQUE, ET POURQUOI. Des cinq, seule celle des competences a pu
+-- etre versee. Le client charge dans wow.export EST celui de camelot --
+-- wow_classic_beta 1.60.1.69913 -- et son code nomme les autres, mais le
+-- listfile communautaire ne leur donne aucun nom : /resolve rend null et
+-- /search n'en connait aucune, donc rien ne permet de les exporter par leur
+-- chemin. Reputation et monnaie gardent leur texte tant que ce n'est pas
+-- debloque.
+--
+-- L'ONGLET DU FAMILIER n'existe pas chez camelot : aucune icone n'est donc
+-- relevee pour lui. Il garde son texte, faute de source.
+local ONGLET_ICONES = {
+	[4] = "Interface\\ForeverUI\\Icons\\Ability_Racial_JackofAllTrades",
+}
 local ONGLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
 local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
@@ -1606,13 +1631,22 @@ local function poserOnglets(cadre)
 			icone:Hide()
 			onglet.foreverIcone = icone
 
-			-- Le texte du client reste : les icones que la source demande
-			-- pour les autres onglets n'existent pas dans l'export.
+			-- L'ICONE REMPLACE LE MOT quand la source en donne une ; sinon
+			-- le texte du client reste, centre comme le serait l'icone.
 			local texte = _G["CharacterFrameTab" .. index .. "Text"]
 			if texte then
 				texte:ClearAllPoints()
 				texte:SetPoint("CENTER", onglet, "CENTER", ONGLET_ICONE_X, 0)
 				texte:SetWidth(ONGLET_L - 10)
+			end
+
+			if ONGLET_ICONES[index] then
+				icone:SetTexture(ONGLET_ICONES[index])
+				icone:Show()
+				if texte then
+					texte:Hide()
+					texte:SetText("")
+				end
 			end
 
 			onglet.foreverSkinned = true

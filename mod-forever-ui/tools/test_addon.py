@@ -2243,7 +2243,7 @@ def main():
         p3[1], p3[3], p3[2].name, p3[4], p3[5]))
     assert not g.CharacterFrameTab2.shown, "le client masque l onglet du familier"
     assert p3[2].name == "CharacterFrameTab1",         "reputation doit suivre le personnage, pas le trou du familier"
-    assert (p3[1], p3[3]) == ("TOPLEFT", "BOTTOMLEFT") and (p3[4], p3[5]) == (0, 0),         "et avec le meme espace que les autres"
+    assert (p3[1], p3[3]) == ("TOPLEFT", "BOTTOMLEFT") and (p3[4], p3[5]) == (0, -2),         "et avec le meme espace que les autres : UpdateTabLayout pose (0, -2)"
     p4 = g.CharacterFrameTab4.points[len(list(g.CharacterFrameTab4.points.values()))]
     p5 = g.CharacterFrameTab5.points[len(list(g.CharacterFrameTab5.points.values()))]
     assert p4[2].name == "CharacterFrameTab3" and p5[2].name == "CharacterFrameTab4",         "competences et monnaie suivent a leur tour"
@@ -2254,6 +2254,16 @@ def main():
     p3 = o3.points[len(list(o3.points.values()))]
     print("   familier revenu : onglet 3 ancre sur %s" % p3[2].name)
     assert p3[2].name == "CharacterFrameTab2", "il reprend sa place derriere le familier"
+
+    # LES ICONES DES ONGLETS. Seule celle des competences a pu etre versee :
+    # le listfile de wow.export ne nomme pas les deux INV_SideTab_*_c60.
+    o4 = g.CharacterFrameTab4
+    print("   onglet competences : icone=%s, texte visible=%s" % (
+        o4.foreverIcone.texture, g.CharacterFrameTab4Text.shown))
+    assert o4.foreverIcone.texture and "JackofAllTrades" in o4.foreverIcone.texture,         "CHARACTER_MODE_TAB_ICONS donne cette icone aux competences"
+    assert o4.foreverIcone.shown and not g.CharacterFrameTab4Text.shown,         "l icone remplace le mot"
+    for i in (3, 5):
+        assert g["CharacterFrameTab%dText" % i].shown,             "sans icone versee, le texte reste : onglet %d" % i
 
     print("   onglet du personnage : portrait=%s, texte masque=%s" % (
         o1.foreverIcone.portraitOf, not g.CharacterFrameTab1Text.shown))
