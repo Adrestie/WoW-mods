@@ -81,14 +81,33 @@ local NIVEAU_ART = 5                    -- l'art passe au-dessus des volets
 -- 5 px trop haut, d'ou un encadrement qui n'allait pas jusqu'en bas de la
 -- fenetre, et les coins de droite 2 px trop a droite.
 --
+-- ET CE QUI MANQUAIT ENCORE : ces decalages, corriges ou non, posent le
+-- CONTOUR EXTERIEUR de l'image. Le filet interieur du metal tombe alors a
+-- 6 px DANS la fenetre, et ces 6 px de fond restent visibles sous lui --
+-- c'est ce qui se lit comme un encadrement qui n'atteint pas le bas.
+--
+-- MESURE SUR L'ART, et non sur une capture : une capture a sa propre
+-- echelle, l'atlas non. uiframemetal2xc60 est en double densite, donc les
+-- mesures sont divisees par deux. Distance du filet interieur au bord de
+-- l'image, en pixels d'affichage :
+--
+--   bande gauche   18,5   (coin portrait et coin bas gauche, identiques)
+--   bande droite    8,5
+--   bande basse    14
+--   bande haute    41,5   -- c'est la barre de titre, interieure par
+--                            conception : le haut ne se recalcule pas.
+--
+-- Le decalage vaut donc cette distance : l'image deborde d'autant, et son
+-- filet tombe pile sur le bord de la fenetre.
+--
 -- PANNEAU_MONTEE est en plus, et n'est PAS de la source : 1 px de montee de
 -- tout l'encadrement, juge a l'ecran, a la demande.
 local PANNEAU_MONTEE = 1
 local PANNEAU_COINS = {
-	coinHautGauche = { x = -13, y = 16 + PANNEAU_MONTEE },
-	coinHautDroit = { x = 2, y = 16 + PANNEAU_MONTEE },
-	coinBasGauche = { x = -13, y = -8 + PANNEAU_MONTEE },
-	coinBasDroit = { x = 2, y = -8 + PANNEAU_MONTEE },
+	coinHautGauche = { x = -18.5, y = 16 + PANNEAU_MONTEE },
+	coinHautDroit = { x = 8.5, y = 16 + PANNEAU_MONTEE },
+	coinBasGauche = { x = -18.5, y = -14 + PANNEAU_MONTEE },
+	coinBasDroit = { x = 8.5, y = -14 + PANNEAU_MONTEE },
 }
 
 local EMPLACEMENT = 40

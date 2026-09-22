@@ -1666,11 +1666,11 @@ def main():
     # L encadrement : camelot corrige ses mises en page APRES les avoir
     # definies, et c est cette correction qui manquait -- les coins du bas
     # etaient 5 px trop haut, l encadrement n allait pas jusqu en bas.
-    for cle, attendu in (("coinHautGauche", (-13, 17)), ("coinHautDroit", (2, 17)),
-                         ("coinBasGauche", (-13, -7)), ("coinBasDroit", (2, -7))):
+    for cle, attendu in (("coinHautGauche", (-18.5, 17)), ("coinHautDroit", (8.5, 17)),
+                         ("coinBasGauche", (-18.5, -13)), ("coinBasDroit", (8.5, -13))):
         pc = perso.foreverPanel[cle].points[1]
         print("   %-15s (%s, %s)" % (cle, pc[4], pc[5]))
-        assert (pc[4], pc[5]) == attendu,             "%s : NineSliceLayoutOverrides, plus 1 px de montee" % cle
+        assert (pc[4], pc[5]) == attendu,             "%s : mesure du filet interieur sur l art, plus 1 px de montee" % cle
 
     # Les sacs, eux, ne bougent pas : ils sont valides.
     pb = g.ContainerFrame1.foreverPanel.coinBasGauche.points[1]

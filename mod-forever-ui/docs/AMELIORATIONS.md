@@ -602,15 +602,33 @@ doit être décalé autrement » :
 | `BottomRightCorner` | `UI-Frame-Metal-CornerBottomRight` | `x += −2`, `y = −8` | 2, −8 |
 
 Nous prenions les valeurs **non corrigées** : les deux coins du bas étaient
-5 px trop haut, d'où un encadrement qui **n'allait pas jusqu'en bas de la
-fenêtre**, et les coins de droite 2 px trop à droite. `SetPanelArt` prend
-désormais une option `coins` pour ces décalages ; la feuille s'en sert, avec
-en plus **1 px de montée de tout l'encadrement** — celui-là n'est pas de la
-source, il a été jugé à l'écran (`PANNEAU_MONTEE`).
+5 px trop haut et les coins de droite 2 px trop à droite.
 
-⚠ **La même correction vaut pour la fenêtre des sacs**, que les overrides
-touchent aussi (`HeldBagLayout`). Elle est **validée**, donc laissée telle
-quelle : à reprendre sur accord.
+**Mais même corrigés, ces décalages posent le CONTOUR EXTÉRIEUR de l'image.**
+Le filet intérieur du métal tombe alors à 6 px **dans** la fenêtre, et ces
+6 px de fond restent visibles sous lui — ce qui se lit comme un encadrement
+qui n'atteint pas le bas. Le décalage se calcule donc sur le **filet
+intérieur**.
+
+**Mesuré sur l'art, jamais sur une capture** : une capture d'écran a sa propre
+échelle, l'atlas non. `uiframemetal2xc60` est en double densité, donc les
+mesures sont divisées par deux. Distance du filet intérieur au bord de
+l'image, en pixels d'affichage :
+
+| Bande | Filet intérieur | Décalage |
+|---|---|---|
+| gauche | 18,5 (identique sur le coin portrait et le coin bas gauche) | `x = −18,5` |
+| droite | 8,5 | `x = 8,5` |
+| basse | 14 | `y = −14` |
+| haute | 41,5 — c'est la **barre de titre**, intérieure par conception | le haut ne se recalcule pas |
+
+`SetPanelArt` prend une option `coins` pour ces décalages ; la feuille s'en
+sert, avec en plus **1 px de montée** — celui-là n'est pas de la source, il a
+été jugé à l'écran (`PANNEAU_MONTEE`).
+
+⚠ **La fenêtre des sacs a les deux mêmes défauts** : ni les overrides de
+camelot, ni le calcul sur le filet intérieur. Elle est **validée**, donc
+laissée telle quelle : à reprendre sur accord.
 
 **À niveau de cadre égal, c'est le modèle qui reçoit le clic.** Chez le
 client, la scène du modèle tient entre les deux colonnes d'emplacements
