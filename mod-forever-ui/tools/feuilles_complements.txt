@@ -54,3 +54,11 @@ interface/common/commonsidetabc60.blp
 # coche jaune
 interface/common/commondropdownc60.blp
 interface/common/commondropdown.blp
+
+# choix d'icone d'un ensemble : l'encadrement de camelot
+# (SelectionFrameTemplate, atlas macropopup-*) et sa barre de defilement
+# (MinimalScrollBar)
+interface/macroframe/macropopupc60.blp
+interface/macroframe/macropopupverticalc60.blp
+interface/buttons/minimalscrollbarproportionalc60.blp
+interface/buttons/minimalscrollbarverticalc60.blp

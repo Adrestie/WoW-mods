@@ -221,13 +221,182 @@ local function habiller()
 		monte = true
 	end
 
+	if ForeverUI.IconPickerSkin then
+		ForeverUI.IconPickerSkin()
+	end
 	majChoixCourant()
 end
 
 ForeverUI.IconPicker = { Apply = habiller }
 
--- Monte des le chargement : le client remplit sa grille des la premiere
--- ouverture, et il lui faut ses quatre-vingts boutons a ce moment-la.
+-- ============================================================ l'habillage
+--
+-- RELEVE -- camelot. La fenetre s'ancre en TOPLEFT sur le TOPRIGHT de ce
+-- qu'elle accompagne : ici la feuille de personnage. Son fond est une
+-- texture NOIRE a 80 %, de TOPLEFT (7, -7) a BOTTOMRIGHT (-7, 7). Son
+-- encadrement est SelectionFrameTemplate, un neuf-tranches dont les huit
+-- morceaux sont les atlas macropopup-* :
+--
+--   coin haut gauche / droit   18 x 71
+--   coin bas gauche            18 x 39
+--   coin bas droit            174 x 39   -- il porte le socle des boutons
+--   bord haut                 256 x 68
+--   bord bas                  256 x 39
+--   bords gauche et droit      17 x 256
+--
+-- La barre de defilement est MinimalScrollBar : 8 de large, une glissiere
+-- en trois morceaux (minimal-scrollbar-track-top / -middle / -bottom), un
+-- curseur en trois morceaux (minimal-scrollbar-thumb-*) et deux fleches
+-- (minimal-scrollbar-arrow-top / -bottom) de 17 x 11.
+local FOND_ALPHA = 0.8
+local FOND_MARGE = 7
+local BARRE_L = 8
+local FLECHE_L, FLECHE_H = 17, 11
+
+local function habillerCadre(popup)
+	if popup.foreverCadre then
+		return
+	end
+
+	-- L'art de fenetre de 3.3.5 s'efface.
+	local regions = { popup:GetRegions() }
+	for _, region in ipairs(regions) do
+		if region.GetObjectType and region:GetObjectType() == "Texture" then
+			region:SetAlpha(0)
+		end
+	end
+
+	local fond = popup:CreateTexture(nil, "BACKGROUND")
+	fond:SetTexture(0, 0, 0, FOND_ALPHA)
+	fond:SetPoint("TOPLEFT", popup, "TOPLEFT", FOND_MARGE, -FOND_MARGE)
+	fond:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -FOND_MARGE, FOND_MARGE)
+
+	local function piece(atlas, point)
+		local t = popup:CreateTexture(nil, "BORDER")
+		if not ForeverUI.SetAtlas(t, atlas) then
+			t:Hide()
+		end
+		if point then
+			t:SetPoint(point, popup, point, 0, 0)
+		end
+		return t
+	end
+
+	local hg = piece("macropopup-topleft-c60", "TOPLEFT")
+	local hd = piece("macropopup-topright-c60", "TOPRIGHT")
+	local bg = piece("macropopup-bottomleft-c60", "BOTTOMLEFT")
+	local bd = piece("macropopup-bottomright-c60", "BOTTOMRIGHT")
+
+	local haut = piece("_macropopup-top-c60")
+	haut:SetPoint("TOPLEFT", hg, "TOPRIGHT")
+	haut:SetPoint("TOPRIGHT", hd, "TOPLEFT")
+	local bas = piece("_macropopup-bottom-c60")
+	bas:SetPoint("BOTTOMLEFT", bg, "BOTTOMRIGHT")
+	bas:SetPoint("BOTTOMRIGHT", bd, "BOTTOMLEFT")
+	local gauche = piece("!macropopup-left-c60")
+	gauche:SetPoint("TOPLEFT", hg, "BOTTOMLEFT")
+	gauche:SetPoint("BOTTOMRIGHT", bg, "TOPRIGHT")
+	local droite = piece("!macropopup-right-c60")
+	droite:SetPoint("TOPRIGHT", hd, "BOTTOMRIGHT")
+	droite:SetPoint("BOTTOMLEFT", bd, "TOPLEFT")
+
+	popup.foreverCadre = { hg, hd, bg, bd, haut, bas, gauche, droite }
+	popup.foreverFond = fond
+end
+
+-- LA BARRE DE DEFILEMENT. Celle du FauxScrollFrame garde tout son
+-- comportement : seules ses textures changent.
+local function habillerBarre()
+	local barre = _G["GearManagerDialogPopupScrollFrameScrollBar"]
+	if not barre or barre.foreverBarre then
+		return
+	end
+
+	barre:SetWidth(BARRE_L)
+
+	for _, region in ipairs({ barre:GetRegions() }) do
+		if region.GetObjectType and region:GetObjectType() == "Texture" then
+			region:SetAlpha(0)
+		end
+	end
+
+	local function tranche(atlas, couche)
+		local t = barre:CreateTexture(nil, couche or "BACKGROUND")
+		if not ForeverUI.SetAtlas(t, atlas) then
+			t:Hide()
+		end
+		t:SetWidth(BARRE_L)
+		return t
+	end
+
+	local hautG = tranche("minimal-scrollbar-track-top-c60")
+	hautG:SetPoint("TOP", barre, "TOP", 0, 0)
+	local basG = tranche("minimal-scrollbar-track-bottom-c60")
+	basG:SetPoint("BOTTOM", barre, "BOTTOM", 0, 0)
+	local milieuG = tranche("!minimal-scrollbar-track-middle-c60")
+	milieuG:SetPoint("TOPLEFT", hautG, "BOTTOMLEFT")
+	milieuG:SetPoint("BOTTOMRIGHT", basG, "TOPRIGHT")
+
+	-- Le curseur : le client n'en a qu'une texture, on la remplace par le
+	-- morceau central de camelot, qui est fait pour s'etirer.
+	local curseur = _G["GearManagerDialogPopupScrollFrameScrollBarThumbTexture"]
+	if curseur then
+		ForeverUI.SetAtlas(curseur, "minimal-scrollbar-thumb-middle-c60", true)
+		curseur:SetWidth(BARRE_L)
+	end
+
+	for nom, atlas in pairs({
+		["GearManagerDialogPopupScrollFrameScrollBarScrollUpButton"] =
+			"minimal-scrollbar-arrow-top-c60",
+		["GearManagerDialogPopupScrollFrameScrollBarScrollDownButton"] =
+			"minimal-scrollbar-arrow-bottom-c60",
+	}) do
+		local bouton = _G[nom]
+		if bouton then
+			bouton:SetWidth(FLECHE_L)
+			bouton:SetHeight(FLECHE_H)
+			for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+				"GetDisabledTexture", "GetHighlightTexture" }) do
+				local texture = bouton[methode] and bouton[methode](bouton)
+				if texture then
+					texture:SetAlpha(0)
+				end
+			end
+			local fleche = bouton:CreateTexture(nil, "ARTWORK")
+			ForeverUI.SetAtlas(fleche, atlas)
+			fleche:SetPoint("CENTER", bouton, "CENTER", 0, 0)
+		end
+	end
+
+	barre.foreverBarre = true
+end
+
+-- A DROITE DE LA FEUILLE DE PERSONNAGE. camelot ancre sa fenetre en TOPLEFT
+-- sur le TOPRIGHT de ce qu'elle accompagne ; 3.3.5 la posait sous le
+-- gestionnaire, qui n'est plus une fenetre.
+local function poserAcote(popup)
+	local feuille = _G["CharacterFrame"]
+	if not feuille then
+		return
+	end
+	popup:ClearAllPoints()
+	popup:SetPoint("TOPLEFT", feuille, "TOPRIGHT", 0, 0)
+end
+
+ForeverUI.IconPickerSkin = function()
+	local popup = _G["GearManagerDialogPopup"]
+	if not popup then
+		return
+	end
+	habillerCadre(popup)
+	habillerBarre()
+	poserAcote(popup)
+end
+
+-- MONTE DES LE CHARGEMENT, ET EN DERNIER. Le client remplit sa grille des la
+-- premiere ouverture et il lui faut ses quatre-vingts boutons a ce
+-- moment-la ; l'appel vient apres IconPickerSkin, sinon l'habillage ne
+-- serait pas encore ecrit au moment ou habiller le cherche.
 habiller()
 
 if hooksecurefunc then

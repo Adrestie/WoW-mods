@@ -685,6 +685,16 @@ GearManagerDialogPopup:CreateFontString("popupIcone", "OVERLAY"):SetText(MACRO_P
 for _, nom in ipairs({ "EditBox", "ScrollFrame", "Okay", "Cancel" }) do
     CreateFrame("Frame", "GearManagerDialogPopup" .. nom, GearManagerDialogPopup)
 end
+-- la barre du FauxScrollFrame et ses deux fleches
+GearManagerDialogPopupScrollFrameScrollBar = CreateFrame("Slider",
+    "GearManagerDialogPopupScrollFrameScrollBar", GearManagerDialogPopupScrollFrame)
+GearManagerDialogPopupScrollFrameScrollBarThumbTexture =
+    GearManagerDialogPopupScrollFrameScrollBar:CreateTexture(
+        "GearManagerDialogPopupScrollFrameScrollBarThumbTexture", "ARTWORK")
+for _, sens in ipairs({ "Up", "Down" }) do
+    CreateFrame("Button", "GearManagerDialogPopupScrollFrameScrollBarScroll" .. sens
+        .. "Button", GearManagerDialogPopupScrollFrameScrollBar)
+end
 function GetEquipmentSetIconInfo(i) return "icone-" .. tostring(i), i end
 function RecalculateGearManagerDialogPopup() RECALCULE = (RECALCULE or 0) + 1 end
 function GearManagerDialogPopup_OnShow() end
@@ -2815,6 +2825,20 @@ def main():
     assert p2[4] == 10, "ecart horizontal de 10"
     assert (p11[1], p11[3]) == ("TOPLEFT", "BOTTOMLEFT"), "la 11e ouvre la rangee suivante"
     assert p11[5] == -10, "ecart vertical de 10"
+
+    pp4 = popup.points[len(list(popup.points.values()))]
+    print("   place : %s sur %s de %s" % (pp4[1], pp4[3], pp4[2] and pp4[2].name))
+    assert (pp4[1], pp4[3]) == ("TOPLEFT", "TOPRIGHT") and         pp4[2].name == "CharacterFrame", "a droite de la feuille de personnage"
+    pf = popup.foreverFond.points[1]
+    assert (pf[4], pf[5]) == (7, -7), "le fond noir part de (7, -7)"
+    print("   encadrement : %d morceaux | barre large de %d" % (
+        len(list(popup.foreverCadre.values())),
+        g.GearManagerDialogPopupScrollFrameScrollBar.width))
+    assert len(list(popup.foreverCadre.values())) == 8,         "SelectionFrameTemplate : quatre coins et quatre bords"
+    assert g.GearManagerDialogPopupScrollFrameScrollBar.width == 8,         "MinimalScrollBar fait 8 de large"
+    curseur = g.GearManagerDialogPopupScrollFrameScrollBarThumbTexture.texture or ""
+    print("   curseur : %s" % curseur)
+    assert "minimalscrollbar" in curseur.lower(),         "le curseur prend la feuille de camelot"
 
     choix = g.ForeverUIIconChoiceButton
     print("   choix courant : %dx%d, %s (%s, %s)" % (

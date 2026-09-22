@@ -1149,7 +1149,9 @@ parcours des icônes, ni le défilement, ni la sélection ne sont réécrits.
 | Point | Raison |
 |---|---|
 | **Soixante-cinq boutons en plus** | Le client n'en crée que **quinze** à son `OnLoad`, en grille de cinq. Il en faut 80 : les manquants sont créés sur **son** gabarit (`GearSetPopupButtonTemplate`) et tous sont reposés en rangées de dix. |
-| **Barre de défilement** | Celle de 3.3.5 est conservée : `MinimalScrollBar` n'est pas portée. |
+| **Barre de défilement** | `MinimalScrollBar` est portée : 8 de large, glissière en trois morceaux (`minimal-scrollbar-track-top/-middle/-bottom`), curseur sur `minimal-scrollbar-thumb-middle`, flèches de 17 × 11. Seules les **textures** changent : le `FauxScrollFrame` du client garde tout son comportement. |
+| **Place** | camelot ancre la fenêtre en `TOPLEFT` sur le `TOPRIGHT` de ce qu'elle accompagne — ici la feuille de personnage. 3.3.5 la posait sous le gestionnaire, qui n'est plus une fenêtre. |
+| **Fond et encadrement** | Fond noir à **80 %** de `(7, −7)` à `(−7, 7)`, et `SelectionFrameTemplate` en neuf pièces : coins hauts 18 × 71, coin bas gauche 18 × 39, **coin bas droit 174 × 39** (il porte le socle des boutons), bord haut 256 × 68, bord bas 256 × 39, bords latéraux 17 × 256. Quatre feuilles versées : `macropopupc60`, `macropopupverticalc60`, `minimalscrollbarproportionalc60`, `minimalscrollbarverticalc60`. |
 | **Les deux lignes du choix courant** | `ICON_SELECTION_TITLE_CURRENT` et sa description n'existent pas dans ce client : écrites en dur, comme « New Set ». |
 | **« Click to view in the list »** | 3.3.5 sait déjà faire ce saut : `RecalculateGearManagerDialogPopup` déplace le défilement jusqu'à l'icône retenue. Le bouton l'appelle. |
 
