@@ -875,12 +875,16 @@ for i = 1, 15 do
         _G[n .. suffixe] = r:CreateTexture(n .. suffixe, "BACKGROUND")
     end
 end
-FACTIONS = { { nom = "Orgrimmar", standing = 8 }, { nom = "Darnassus", standing = 4 } }
+FACTIONS = { { nom = "Cataclysme", standing = 4, entete = true },
+             { nom = "Orgrimmar", standing = 8 },
+             { nom = "Darnassus", standing = 4 } }
 function GetNumFactions() return #FACTIONS end
 function GetFactionInfo(i)
     local f = FACTIONS[i]
     if not f then return nil end
-    return f.nom, "", f.standing, 0, 1000, 250
+    -- nom, description, standingID, barMin, barMax, barValue, atWarWith,
+    -- canToggleAtWar, isHeader, isCollapsed, ...
+    return f.nom, "", f.standing, 0, 1000, 250, false, false, f.entete, false
 end
 function ReputationFrame_Update() end
 
@@ -2611,6 +2615,21 @@ def main():
     assert rem.width and rem.width > 0, "la fraction vient de la StatusBar du client"
     assert g.ReputationFrameFactionLabel.alpha == 0,         "les intitules de colonne de 3.3.5 s effacent"
     assert g.ReputationBar1LeftLine.alpha == 0,         "les lignes d arborescence aussi : camelot n en a pas"
+
+    # EN-TETE CONTRE ENTREE. common-button-list-collapseExpand est le FOND
+    # d une ligne d en-tete, etire sur toute sa largeur -- pas une fleche.
+    e1, e2 = r1.foreverEntete, r2.foreverEntete
+    bouton = g.ReputationBar1ExpandOrCollapseButton
+    pb = bouton.points[len(list(bouton.points.values()))]
+    print("   en-tete : plaque ligne1=%s ligne2=%s | fleche %s (%s, %s), barre=%s" % (
+        e1.shown, e2.shown, pb[1], pb[4], pb[5], barre.shown))
+    assert e1.shown, "la premiere faction du faux client est un en-tete"
+    assert not e2.shown, "une entree n en a pas"
+    assert not barre.shown, "et un en-tete n a pas de barre"
+    assert g.ReputationBar2ReputationBar.shown, "l entree, si"
+    assert pb[1] == "RIGHT" and (pb[4], pb[5]) == (-8, -1),         "ReputationHeaderTemplate pose son StateIcon a RIGHT (-8, -1)"
+    assert bouton.foreverIcone.shown, "et la fleche parait sur un en-tete"
+    assert not g.ReputationBar2ExpandOrCollapseButton.foreverIcone.shown,         "pas sur une entree"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):

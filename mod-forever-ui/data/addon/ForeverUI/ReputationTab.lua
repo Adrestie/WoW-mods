@@ -50,14 +50,27 @@ local LISTE_X2, LISTE_Y2 = -25, 15
 local LIGNE_HAUTEUR = 30                -- ReputationEntryTemplate
 local BARRE_L, BARRE_H = 160, 29        -- ReputationBarTemplate
 local REMPLISSAGE_H = 15                -- ColoredProgressBarTemplate
-local BOUTON = 20                       -- common-button-list-collapseExpand
-local BOUTON_X = 3
-local NOM_X = 26                        -- apres le bouton
+-- LE BOUTON DE L'EN-TETE EST A DROITE, ET CE N'EST PAS UNE PLAQUE.
+--
+-- ERREUR CORRIGEE : common-button-list-collapseExpand n'est pas une fleche,
+-- c'est le FOND d'une ligne d'en-tete -- une plaque arrondie de 64 x 28 que
+-- ReputationHeaderTemplate pose sans ancrage, donc etiree sur toute la
+-- ligne. Posee a sa taille d'atlas sur un bouton de 20, elle recouvrait les
+-- noms de reputation.
+--
+-- La vraie fleche est le StateIcon du meme gabarit, que ReputationHeaderMixin
+-- remplit avec common-button-list-plus ou -minus, ancre RIGHT en (-8, -1).
+-- Le nom, lui, est a LEFT x = 10.
+local BOUTON_X, BOUTON_Y = -8, -1       -- RIGHT de la ligne d'en-tete
+local NOM_X = 10                        -- ReputationHeaderTemplate
 local NOM_ECART = -10                   -- du LEFT de la barre
+local ENTETE_H = 28                     -- ReputationHeaderTemplate
 
 local ATLAS_FOND = "common-stat-bar-bg"
 local ATLAS_REMPLISSAGE = "common-stat-bar-white"
-local ATLAS_BOUTON = "common-button-list-collapseexpand"
+local ATLAS_ENTETE = "common-button-list-collapseexpand"
+local ATLAS_PLUS = "common-button-list-plus"
+local ATLAS_MOINS = "common-button-list-minus"
 local ATLAS_TRAIT = "ui-character-info-scrollline-long"
 
 -- LA TAILLE DU VOLET NE SE MESURE PAS ICI.
@@ -88,22 +101,17 @@ local function balayerFond(cadre)
 	end
 end
 
--- LE BOUTON DEPLIER / REPLIER. camelot lui donne un seul art, retourne selon
--- l'etat ; 3.3.5 en pose deux, UI-PlusButton-Up et UI-MinusButton-Up, et
--- ReputationFrame_Update les repose a chaque passage. On greffe donc APRES
--- lui, sinon il reprendrait la main.
-local function habillerBouton(bouton, replie)
+-- LE BOUTON DEPLIER / REPLIER. 3.3.5 lui pose UI-PlusButton-Up ou
+-- UI-MinusButton-Up a CHAQUE passage de ReputationFrame_Update : on greffe
+-- donc apres lui, sinon il reprendrait la main.
+local function habillerBouton(bouton, replie, entete)
 	if not bouton then
 		return
 	end
 
-	if not bouton.foreverFond then
-		bouton:SetWidth(BOUTON)
-		bouton:SetHeight(BOUTON)
-		local fond = bouton:CreateTexture(nil, "ARTWORK")
-		ForeverUI.SetAtlas(fond, ATLAS_BOUTON, true)
-		fond:SetPoint("CENTER", bouton, "CENTER", 0, 0)
-		bouton.foreverFond = fond
+	if not bouton.foreverIcone then
+		local icone = bouton:CreateTexture(nil, "OVERLAY")
+		bouton.foreverIcone = icone
 
 		for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
 			"GetHighlightTexture" }) do
@@ -114,16 +122,17 @@ local function habillerBouton(bouton, replie)
 		end
 	end
 
-	-- Deplie, la fleche pointe vers le bas : une rotation d'un quart de tour
-	-- par les coordonnees, faute de SetRotation sur ce client.
-	local e = ForeverUI.AtlasEntry and ForeverUI.AtlasEntry(ATLAS_BOUTON)
-	if e then
-		if replie then
-			bouton.foreverFond:SetTexCoord(e[2], e[3], e[4], e[5])
-		else
-			bouton.foreverFond:SetTexCoord(e[3], e[2], e[4], e[5])
-		end
+	if not entete then
+		bouton.foreverIcone:Hide()
+		return
 	end
+
+	-- Le plus et le moins n'ont pas la meme taille -- 13 x 13 et 13 x 4 --
+	-- et se posent tous deux au centre du bouton.
+	ForeverUI.SetAtlas(bouton.foreverIcone, replie and ATLAS_PLUS or ATLAS_MOINS, true)
+	bouton.foreverIcone:ClearAllPoints()
+	bouton.foreverIcone:SetPoint("CENTER", bouton, "CENTER", 0, 0)
+	bouton.foreverIcone:Show()
 end
 
 -- UNE LIGNE. Le contenu reste au client ; on ne fait que la reposer et
@@ -185,10 +194,23 @@ local function habillerLigne(index, largeur)
 		attitude:SetPoint("CENTER", barre, "CENTER", 0, 0)
 	end
 
+	-- LA PLAQUE D'EN-TETE, etiree sur toute la ligne comme le fait la source.
+	-- Elle ne parait que sur les en-tetes : les entrees n'en ont pas.
+	if not ligne.foreverEntete then
+		local plaque = ligne:CreateTexture(nil, "BACKGROUND")
+		ForeverUI.SetAtlas(plaque, ATLAS_ENTETE)
+		plaque:SetPoint("TOPLEFT", ligne, "TOPLEFT", 0, 0)
+		plaque:SetPoint("BOTTOMRIGHT", ligne, "BOTTOMRIGHT", 0, 0)
+		plaque:Hide()
+		ligne.foreverEntete = plaque
+	end
+
 	local bouton = _G["ReputationBar" .. index .. "ExpandOrCollapseButton"]
 	if bouton then
+		bouton:SetWidth(16)
+		bouton:SetHeight(16)
 		bouton:ClearAllPoints()
-		bouton:SetPoint("LEFT", ligne, "LEFT", BOUTON_X, 0)
+		bouton:SetPoint("RIGHT", ligne, "RIGHT", BOUTON_X, BOUTON_Y)
 	end
 
 	return ligne
@@ -221,10 +243,19 @@ local function majRemplissages()
 			end
 		end
 
-		local bouton = _G["ReputationBar" .. index .. "ExpandOrCollapseButton"]
 		local ligne = _G["ReputationBar" .. index]
-		if bouton and ligne then
-			habillerBouton(bouton, ligne.isCollapsed)
+		local bouton = _G["ReputationBar" .. index .. "ExpandOrCollapseButton"]
+		if ligne then
+			local entete = ligne.foreverEntete
+			if entete then
+				if ligne.isHeader then entete:Show() else entete:Hide() end
+			end
+			-- Un en-tete n'a pas de barre : camelot n'en montre pas non plus.
+			local barre = _G["ReputationBar" .. index .. "ReputationBar"]
+			if barre then
+				if ligne.isHeader then barre:Hide() else barre:Show() end
+			end
+			habillerBouton(bouton, ligne.isCollapsed, ligne.isHeader)
 		end
 	end
 end
@@ -243,10 +274,12 @@ local function retenirAttitudes()
         if ligne then
             local rang = decalage + index
             if rang <= total then
-                local _, _, standingID = GetFactionInfo(rang)
+                local _, _, standingID, _, _, _, _, _, isHeader = GetFactionInfo(rang)
                 ligne.standingID = standingID
+                ligne.isHeader = isHeader
             else
                 ligne.standingID = nil
+                ligne.isHeader = nil
             end
         end
     end
