@@ -233,18 +233,26 @@ local ONGLET_ECART = -2
 --   PvP          selon la faction : INV_SideTab_Honor_<Alliance|Horde>_c60
 --   monnaie      Interface/ICONS/INV_SideTab_Currency_c60
 --
--- CE QUI MANQUE, ET POURQUOI. Des cinq, seule celle des competences a pu
--- etre versee. Le client charge dans wow.export EST celui de camelot --
--- wow_classic_beta 1.60.1.69913 -- et son code nomme les autres, mais le
--- listfile communautaire ne leur donne aucun nom : /resolve rend null et
--- /search n'en connait aucune, donc rien ne permet de les exporter par leur
--- chemin. Reputation et monnaie gardent leur texte tant que ce n'est pas
--- debloque.
+-- DEUX D'ENTRE ELLES N'ONT PAS DE NOM DANS LE LISTFILE. Le code de camelot
+-- les nomme en clair, mais le listfile communautaire ne les identifie pas :
+-- elles n'existent que par leur FileDataID. Elles sont donc versees par cet
+-- identifiant et rangees sous le nom de la source --
+-- tools/fichiers_simples.txt porte la correspondance :
+--   reputation  8197103        monnaie  8197078
+--   PvP Alliance 8197097       PvP Horde 8197098
 --
--- L'ONGLET DU FAMILIER n'existe pas chez camelot : aucune icone n'est donc
--- relevee pour lui. Il garde son texte, faute de source.
+-- LE PvP N'EST PAS VERSE : la feuille de 3.3.5 n'a pas cet onglet. Ses deux
+-- identifiants sont notes ici pour le jour ou elle en aura un.
+--
+-- L'ONGLET DU FAMILIER, lui, n'existe pas chez camelot : aucune icone n'est
+-- relevee pour lui, il garde son texte.
+--
+-- LES INDICES SONT CEUX DE 3.3.5, et non ceux de camelot : ici
+-- 1 personnage, 2 familier, 3 reputation, 4 competences, 5 monnaie.
 local ONGLET_ICONES = {
+	[3] = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Reputation2_c60",
 	[4] = "Interface\\ForeverUI\\Icons\\Ability_Racial_JackofAllTrades",
+	[5] = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Currency_c60",
 }
 local ONGLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"

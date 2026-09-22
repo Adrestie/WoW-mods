@@ -72,11 +72,32 @@ def _logique(nom):
     return "-".join(parts)
 
 
+# QUAND LE CLIENT NE NOMME PAS SON FICHIER.
+#
+# Le listfile est communautaire : il ne donne un nom qu'aux fichiers que
+# quelqu'un a identifies. Les autres n'existent que par leur FileDataID, et
+# wow.export les appelle "unknown_<id>". Le code de camelot, lui, connait le
+# vrai nom -- il l'ecrit en clair -- mais rien ne permet de l'exporter par ce
+# nom-la.
+#
+# Une ligne peut donc s'ecrire "source => nom voulu dans l'atelier" : on
+# exporte par l'identifiant, et on range sous le nom de la source. L'atelier
+# reste lisible, et l'identifiant demeure dans la liste pour retrouver le
+# fichier plus tard.
+_ALIAS = {}
+
+
 def _lire(liste):
     voulues = []
     for ligne in io.open(liste, encoding="utf-8"):
         ligne = ligne.split("#")[0].strip()
-        if ligne:
+        if not ligne:
+            continue
+        if "=>" in ligne:
+            source, voulu = [part.strip().lower() for part in ligne.split("=>", 1)]
+            _ALIAS[source] = voulu
+            voulues.append(source)
+        else:
             voulues.append(ligne.lower())
     return voulues
 
@@ -93,7 +114,12 @@ def fichiers_simples():
 
 
 def chemin_atelier(feuille, extension=".blp"):
-    """interface/hud/x.blp -> data/art/interface/ForeverUI/hud/x.blp"""
+    """interface/hud/x.blp -> data/art/interface/ForeverUI/hud/x.blp
+
+    Un fichier sans nom dans le listfile se range sous celui que la source
+    lui donne, pas sous son "unknown_<id>".
+    """
+    feuille = _ALIAS.get(feuille, feuille)
     morceaux = feuille.split("/")
     assert morceaux[0] == "interface", feuille
     return os.path.join(ART, "interface", PREFIXE, *morceaux[1:])[:-4] + extension

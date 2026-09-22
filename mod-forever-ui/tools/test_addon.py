@@ -2262,8 +2262,14 @@ def main():
         o4.foreverIcone.texture, g.CharacterFrameTab4Text.shown))
     assert o4.foreverIcone.texture and "JackofAllTrades" in o4.foreverIcone.texture,         "CHARACTER_MODE_TAB_ICONS donne cette icone aux competences"
     assert o4.foreverIcone.shown and not g.CharacterFrameTab4Text.shown,         "l icone remplace le mot"
-    for i in (3, 5):
-        assert g["CharacterFrameTab%dText" % i].shown,             "sans icone versee, le texte reste : onglet %d" % i
+    for i, attendu in ((3, "Reputation2"), (5, "Currency")):
+        onglet = g["CharacterFrameTab%d" % i]
+        print("   onglet %d : icone=%s, texte visible=%s" % (
+            i, onglet.foreverIcone.texture, g["CharacterFrameTab%dText" % i].shown))
+        assert onglet.foreverIcone.texture and attendu in onglet.foreverIcone.texture,             "l icone de camelot, versee par son FileDataID : onglet %d" % i
+        assert onglet.foreverIcone.shown and not g["CharacterFrameTab%dText" % i].shown,             "elle remplace le mot : onglet %d" % i
+    # Le familier n a pas d icone chez camelot : il garde son texte.
+    assert g.CharacterFrameTab2Text.shown, "aucune source pour l onglet du familier"
 
     print("   onglet du personnage : portrait=%s, texte masque=%s" % (
         o1.foreverIcone.portraitOf, not g.CharacterFrameTab1Text.shown))
