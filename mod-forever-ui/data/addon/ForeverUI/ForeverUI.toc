@@ -28,3 +28,4 @@ StatusBars.lua
 Bags.lua
 CharacterFrame.lua
 EquipmentManager.lua
+IconPicker.lua

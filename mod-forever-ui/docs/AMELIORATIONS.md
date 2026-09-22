@@ -1125,6 +1125,35 @@ Les sacs gardent la grille de 3.3.5 (quatre colonnes, boutons de 37, pas de
 `ForeverUI.SetPanelArt` est écrit pour servir à tous les panneaux à venir :
 feuille de personnage, livre de sorts, talents.
 
+### Le choix d'icône d'un ensemble
+
+**Relevé — `IconSelectorPopupFrameTemplate` (camelot).** Fenêtre 525 × 495 ;
+intitulé du champ à `TOPLEFT (24, −21)` ; champ de nom 182 × 20 à
+`(29, −35)`, 16 lettres ; « Choose an Icon: » à `(24, −79)` ; zone du choix
+275 × 45 à `TOPRIGHT (−13, −13)`, son bouton d'icône 36 à `(−4,5 ; −3,5)` ;
+grille 494 × 361 à `TOPLEFT (21, −97)`.
+
+**Relevé — `ScrollBoxSelectorMixin`** (la grille elle-même) : `GetStride`
+rend **10**, `GetButtonHeight` **36**, `GetPadding` marges de 5 et écarts de
+**10** dans les deux sens.
+
+**Tout le remplissage du client passe par quatre globales.**
+`GearManagerDialogPopup_Update` et `RecalculateGearManagerDialogPopup` ne
+lisent que `NUM_GEARSET_ICONS_PER_ROW`, `NUM_GEARSET_ICON_ROWS`,
+`NUM_GEARSET_ICONS_SHOWN` et `GEARSET_ICON_ROW_HEIGHT`. Les porter aux
+valeurs de camelot — 10, 8, 80 et 46 — suffit à obtenir sa grille : ni le
+parcours des icônes, ni le défilement, ni la sélection ne sont réécrits.
+
+**Ce qui diffère, et pourquoi.**
+
+| Point | Raison |
+|---|---|
+| **Soixante-cinq boutons en plus** | Le client n'en crée que **quinze** à son `OnLoad`, en grille de cinq. Il en faut 80 : les manquants sont créés sur **son** gabarit (`GearSetPopupButtonTemplate`) et tous sont reposés en rangées de dix. |
+| **Barre de défilement** | Celle de 3.3.5 est conservée : `MinimalScrollBar` n'est pas portée. |
+| **Les deux lignes du choix courant** | `ICON_SELECTION_TITLE_CURRENT` et sa description n'existent pas dans ce client : écrites en dur, comme « New Set ». |
+| **« Click to view in the list »** | 3.3.5 sait déjà faire ce saut : `RecalculateGearManagerDialogPopup` déplace le défilement jusqu'à l'icône retenue. Le bouton l'appelle. |
+
+
 ### Défauts connus
 
 **Un sac peut sortir par le haut de l'écran.** Selon le nombre et la taille

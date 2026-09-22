@@ -662,6 +662,33 @@ function GearManagerDialog_Update()
     end
 end
 function GearManagerDialogSaveSet_OnClick() end
+-- La fenetre de choix d'icone du client : quinze boutons en grille de cinq,
+-- un champ de nom, un cadre de defilement et deux boutons.
+NUM_GEARSET_ICONS_PER_ROW = 5
+NUM_GEARSET_ICON_ROWS = 3
+NUM_GEARSET_ICONS_SHOWN = 15
+GEARSET_ICON_ROW_HEIGHT = 36
+MACRO_POPUP_CHOOSE_ICON = "Choose an Icon:"
+GEARSETS_POPUP_TEXT = "Enter Set Name (Max 16 Characters):"
+GearManagerDialogPopup = CreateFrame("Frame", "GearManagerDialogPopup", UIParent)
+GearManagerDialogPopup:Hide()
+GearManagerDialogPopup.buttons = {}
+for i = 1, NUM_GEARSET_ICONS_SHOWN do
+    local b = CreateFrame("CheckButton", "GearManagerDialogPopupButton" .. i,
+        GearManagerDialogPopup)
+    b:SetWidth(36); b:SetHeight(36)
+    b.icon = b:GetNormalTexture()
+    table.insert(GearManagerDialogPopup.buttons, b)
+end
+GearManagerDialogPopup:CreateFontString("popupNom", "OVERLAY"):SetText(GEARSETS_POPUP_TEXT)
+GearManagerDialogPopup:CreateFontString("popupIcone", "OVERLAY"):SetText(MACRO_POPUP_CHOOSE_ICON)
+for _, nom in ipairs({ "EditBox", "ScrollFrame", "Okay", "Cancel" }) do
+    CreateFrame("Frame", "GearManagerDialogPopup" .. nom, GearManagerDialogPopup)
+end
+function GetEquipmentSetIconInfo(i) return "icone-" .. tostring(i), i end
+function RecalculateGearManagerDialogPopup() RECALCULE = (RECALCULE or 0) + 1 end
+function GearManagerDialogPopup_OnShow() end
+function GearManagerDialogPopup_Update() end
 function GearManagerDialog_OnShow()
     if GearManagerDialog.toplevel ~= false then
         GearManagerDialog:Raise()
@@ -879,7 +906,8 @@ def main():
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
-             "CharacterFrame.lua", "EquipmentManager.lua"]
+             "CharacterFrame.lua", "EquipmentManager.lua",
+             "IconPicker.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -2763,6 +2791,43 @@ def main():
     assert (equiper.points[1][4], equiper.points[1][5]) == (-50, 20)
     assert (nouveau.width, nouveau.height) == (180, 34), "New Set : 180 x 34"
     assert (nouveau.points[1][4], nouveau.points[1][5]) == (0, 50)
+
+    # ------------------------------- choix d icone d un ensemble
+    popup = g.GearManagerDialogPopup
+    print("choix d icone : fenetre %d x %d, %d boutons, %d par rangee" % (
+        popup.width, popup.height, len(list(popup.buttons.values())),
+        g.NUM_GEARSET_ICONS_PER_ROW))
+    assert (popup.width, popup.height) == (525, 495), "IconSelectorPopupFrameTemplate"
+    assert g.NUM_GEARSET_ICONS_PER_ROW == 10, "ScrollBoxSelectorMixin:GetStride rend 10"
+    assert g.NUM_GEARSET_ICON_ROWS == 8
+    assert g.NUM_GEARSET_ICONS_SHOWN == 80, "dix par rangee, huit rangees"
+    assert g.GEARSET_ICON_ROW_HEIGHT == 46, "36 d icone plus 10 d ecart"
+    assert len(list(popup.buttons.values())) == 80, "le client n en cree que quinze"
+
+    b1 = g.GearManagerDialogPopupButton1
+    b2 = g.GearManagerDialogPopupButton2
+    b11 = g.GearManagerDialogPopupButton11
+    p1, p2, p11 = b1.points[1], b2.points[1], b11.points[1]
+    print("   grille : 1er (%s, %s), 2e %s +%s, 11e %s %s" % (
+        p1[4], p1[5], p2[1], p2[4], p11[1], p11[3]))
+    assert b1.width == 36 and b1.height == 36, "GetButtonHeight rend 36"
+    assert (p1[4], p1[5]) == (26, -102), "grille a (21, -97) plus la marge de 5"
+    assert p2[4] == 10, "ecart horizontal de 10"
+    assert (p11[1], p11[3]) == ("TOPLEFT", "BOTTOMLEFT"), "la 11e ouvre la rangee suivante"
+    assert p11[5] == -10, "ecart vertical de 10"
+
+    choix = g.ForeverUIIconChoiceButton
+    print("   choix courant : %dx%d, %s (%s, %s)" % (
+        choix.width, choix.height, choix.points[1][1],
+        choix.points[1][4], choix.points[1][5]))
+    assert choix.width == 36, "le bouton d icone de la zone de choix"
+    lua.execute('GearManagerDialogPopup.selectedTexture = "icone-42"')
+    g.ForeverUI.IconPicker.Apply()
+    assert choix.icone.texture == "icone-42", "il montre ce que le client a retenu"
+    avant = g.RECALCULE or 0
+    choix.scripts.OnClick(choix)
+    print("   clic sur le choix : %d saut(s) vers la liste" % ((g.RECALCULE or 0) - avant))
+    assert (g.RECALCULE or 0) > avant,         "cliquer ramene la liste sur l icone retenue"
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():
