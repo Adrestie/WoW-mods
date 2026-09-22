@@ -63,7 +63,7 @@ from foreverui import blp
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART = os.path.join(RACINE, "data", "art", "interface", "ForeverUI")
-MASQUE = os.path.join(ART, "common", "commonsidetabmaskc60.blp")
+MASQUE = os.path.join(ART, "common", "commonsidetabmask2xc60.blp")
 ENTREE = os.path.join(ART, "icons")
 SORTIE = os.path.join(ART, "tabicons")
 
@@ -84,6 +84,29 @@ MASQUE_L, MASQUE_H = 55.0, 60.0
 ICONE = 50.0
 ICONE_X, ICONE_Y = -3.0, 0.0
 ROGNAGE = 0.03125
+
+# LE MASQUE EST BINAIRE, ET C'EST LE PROBLEME.
+#
+# Releve sur l'art : sa ligne du milieu passe de 0 a 255 d'un texel a
+# l'autre, sans le moindre degrade. Le client, lui, l'applique a la
+# RESOLUTION DE L'ECRAN, ou cette marche est fine ; cuite a 64 px elle
+# devient un escalier, que l'agrandissement de l'interface etale ensuite sur
+# deux ou trois pixels reels. D'ou des icones "tres pixelisees" alors que
+# leur contenu n'avait pas bouge.
+#
+# Deux remedes, et un constat.
+#   * On cuit a ECHELLE fois la taille de la source : le contour a de quoi
+#     s'adoucir.
+#   * On INTERPOLE le masque au lieu de le lire au texel le plus proche.
+#     C'est lui, et lui seul, qui porte la marche : sur-echantillonner sans
+#     interpoler ne servait a rien -- a l'echelle ou l'on cuit, seize
+#     echantillons tombaient tous dans le meme texel du masque. On prend au
+#     passage sa version 2x, deux fois plus fine.
+#   * Le CONTENU de l'icone, lui, ne gagne rien : 64 x 64 est tout ce que le
+#     client possede -- verifie sur les 14 fichiers voisins, tous de cette
+#     taille -- et camelot affiche exactement les memes.
+ECHELLE = 2
+SUPER = 4
 
 
 # L'APERCU. L'atelier veut un .png a cote de chaque .blp, pour qu'on voie ce
@@ -118,20 +141,56 @@ def _lire(chemin):
 
 
 def _alpha_du_masque(mx, my, largeur, hauteur, pixels):
-    """L'alpha du masque a une position donnee, en fraction de sa surface."""
-    if mx < 0.0 or mx >= 1.0 or my < 0.0 or my >= 1.0:
-        return 0                       # CLAMPTOBLACKADDITIVE : dehors, rien
-    i = int(mx * largeur)
-    j = int(my * hauteur)
-    if i >= largeur:
-        i = largeur - 1
-    if j >= hauteur:
-        j = hauteur - 1
-    # Le masque est en niveaux de gris : sa couleur porte l'information
-    # autant que son alpha. On prend le plus petit des deux, pour qu'un
-    # masque ecrit d'une facon ou de l'autre donne le meme resultat.
-    base = (j * largeur + i) * 4
-    return min(pixels[base], pixels[base + 3])
+    """L'alpha du masque a une position donnee, interpole.
+
+    Le masque est en niveaux de gris : sa couleur porte l'information autant
+    que son alpha, on prend le plus petit des deux. Et il est BINAIRE --
+    releve sur l'art, sa ligne du milieu passe de 0 a 255 d'un texel a
+    l'autre. Lu au texel le plus proche, son contour serait un escalier ;
+    interpole, il devient le degrade que le client obtient en l'appliquant a
+    la resolution de l'ecran.
+    """
+    x = mx * largeur - 0.5
+    y = my * hauteur - 0.5
+    i0 = int(x) if x >= 0 else -1
+    j0 = int(y) if y >= 0 else -1
+    fx, fy = x - i0, y - j0
+
+    def texel(i, j):
+        if i < 0 or i >= largeur or j < 0 or j >= hauteur:
+            return 0                   # CLAMPTOBLACKADDITIVE : dehors, rien
+        base = (j * largeur + i) * 4
+        return min(pixels[base], pixels[base + 3])
+
+    a, b = texel(i0, j0), texel(i0 + 1, j0)
+    c, d = texel(i0, j0 + 1), texel(i0 + 1, j0 + 1)
+    haut = a + (b - a) * fx
+    bas = c + (d - c) * fx
+    return haut + (bas - haut) * fy
+
+
+def _lire_bilineaire(u, v, largeur, hauteur, pixels):
+    """Les quatre composantes de la source, interpolees."""
+    x = u * largeur - 0.5
+    y = v * hauteur - 0.5
+    i0 = int(x) if x >= 0 else -1
+    j0 = int(y) if y >= 0 else -1
+    fx, fy = x - i0, y - j0
+
+    def texel(i, j):
+        i = 0 if i < 0 else (largeur - 1 if i >= largeur else i)
+        j = 0 if j < 0 else (hauteur - 1 if j >= hauteur else j)
+        b = (j * largeur + i) * 4
+        return pixels[b], pixels[b + 1], pixels[b + 2], pixels[b + 3]
+
+    a, b, c, d = (texel(i0, j0), texel(i0 + 1, j0),
+                  texel(i0, j0 + 1), texel(i0 + 1, j0 + 1))
+    sortie = []
+    for k in range(4):
+        haut = a[k] + (b[k] - a[k]) * fx
+        bas = c[k] + (d[k] - c[k]) * fx
+        sortie.append(int(haut + (bas - haut) * fy + 0.5))
+    return sortie
 
 
 def cuire(nom, masque):
@@ -139,13 +198,17 @@ def cuire(nom, masque):
     if not os.path.exists(source):
         return None
 
-    largeur, hauteur, pixels = _lire(source)
+    src_l, src_h, source_px = _lire(source)
     ml, mh, mpix = masque
 
-    demi_l, demi_h = ONGLET_L / 2.0, ONGLET_H / 2.0
+    largeur, hauteur = src_l * ECHELLE, src_h * ECHELLE
+    pixels = bytearray(largeur * hauteur * 4)
+
+    demi_l = ONGLET_L / 2.0
     gauche = ICONE_X - ICONE / 2.0
     haut = ICONE_Y + ICONE / 2.0
     etendue = 1.0 - 2.0 * ROGNAGE
+    pas = 1.0 / (largeur * SUPER)       # un pas de sur-echantillon, en u
 
     for j in range(hauteur):
         v = (j + 0.5) / hauteur
@@ -154,17 +217,27 @@ def cuire(nom, masque):
             base = (j * largeur + i) * 4
 
             if u < ROGNAGE or u > 1.0 - ROGNAGE or v < ROGNAGE or v > 1.0 - ROGNAGE:
-                pixels[base + 3] = 0    # jamais affiche : autant l'effacer
+                continue                # jamais affiche : laisse a zero
+
+            r, vert, b, a = _lire_bilineaire(u, v, src_l, src_h, source_px)
+            pixels[base:base + 3] = bytes((r, vert, b))
+            if a == 0:
                 continue
 
-            x = gauche + (u - ROGNAGE) / etendue * ICONE
-            y = haut - (v - ROGNAGE) / etendue * ICONE
+            # LE CONTOUR SE MOYENNE. Un seul echantillon rendrait la marche
+            # du masque telle quelle ; SUPER x SUPER en font un degrade.
+            somme = 0
+            for sj in range(SUPER):
+                vv = v + (sj - (SUPER - 1) / 2.0) * pas
+                y = haut - (vv - ROGNAGE) / etendue * ICONE
+                my = (MASQUE_H / 2.0 - y) / MASQUE_H
+                for si in range(SUPER):
+                    uu = u + (si - (SUPER - 1) / 2.0) * pas
+                    x = gauche + (uu - ROGNAGE) / etendue * ICONE
+                    mx = (x + demi_l) / MASQUE_L
+                    somme += _alpha_du_masque(mx, my, ml, mh, mpix)
 
-            mx = (x + demi_l) / MASQUE_L
-            my = (MASQUE_H / 2.0 - y) / MASQUE_H
-
-            a = _alpha_du_masque(mx, my, ml, mh, mpix)
-            pixels[base + 3] = (pixels[base + 3] * a) // 255
+            pixels[base + 3] = int(a * somme / (255.0 * SUPER * SUPER) + 0.5)
 
     cible = os.path.join(SORTIE, nom)
     os.makedirs(SORTIE, exist_ok=True)

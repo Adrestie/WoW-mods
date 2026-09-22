@@ -30,4 +30,4 @@ interface/icons/unknown_8197104.blp => interface/icons/inv_sidetab_stats_c60.blp
 # n'a pas de MaskTexture -- mais tools/cuire_masque.py le cuit dans l'alpha
 # des icones d'onglet. Il entre donc dans l'atelier pour que cette cuisson se
 # refasse sans wow.export.
-interface/common/commonsidetabmaskc60.blp
+interface/common/commonsidetabmask2xc60.blp
