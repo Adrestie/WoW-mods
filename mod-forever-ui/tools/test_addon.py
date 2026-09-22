@@ -1704,7 +1704,7 @@ def main():
     posInitiale = list(g.CharacterModelFrame.pos.values())
     print("   modele : position %s, echelle %s (laissee au client)" % (
         posInitiale, g.CharacterModelFrame.modelScale))
-    assert posInitiale == [-5.5, 0, 0], "la profondeur retenue"
+    assert posInitiale == [-6, 0, 0], "la profondeur retenue"
     assert g.CharacterModelFrame.modelScale is None,         "nil veut dire qu on ne touche pas a l echelle, pas qu on la remet a 1"
 
     # Les deux leviers se reglent en jeu : rien ne se releve dans la source,
@@ -1719,7 +1719,7 @@ def main():
     g.SlashCmdList["FOREVERUI"]("modele position defaut")
     print("   position rendue au client : %d rafraichissement" % g.CharacterModelFrame.refreshed)
     assert g.CharacterModelFrame.refreshed >= 1, "le client doit reprendre la main"
-    g.SlashCmdList["FOREVERUI"]("modele position -5.5 0 0")
+    g.SlashCmdList["FOREVERUI"]("modele position -6 0 0")
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot

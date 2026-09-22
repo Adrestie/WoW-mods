@@ -150,11 +150,11 @@ local MODELE_Y = 24
 -- Reglable en jeu par /fui modele, pour juger a l'oeil ; ce qui est ici est
 -- ce qui s'applique au chargement.
 -- VALEURS RETENUES, jugees a l'ecran. C'est la POSITION qui cadre : le
--- personnage recule de 5,5 devant la camera, ce qui le rapetisse sans
+-- personnage recule de 6 devant la camera, ce qui le rapetisse sans
 -- deplacer son cadrage. L'echelle reste celle du client -- nil veut dire
 -- qu'on n'y touche pas, et non qu'on la remet a 1.
 local MODELE_ECHELLE = nil
-local MODELE_POSITION = { -5.5, 0, 0 }   -- profondeur, lateral, hauteur
+local MODELE_POSITION = { -6, 0, 0 }   -- profondeur, lateral, hauteur
 
 -- LE PANNEAU DES RESISTANCES se decale vers la droite. On garde son
 -- ancrage d'origine et on n'y ajoute que ce decalage, sinon chaque passage
