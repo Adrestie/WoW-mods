@@ -495,6 +495,12 @@ for _, nom in ipairs(EMPLACEMENTS_PERSO) do
     _G[plein .. "IconTexture"] = b:CreateTexture(plein .. "IconTexture", "BORDER")
     _G[plein .. "NormalTexture"] = b:CreateTexture(plein .. "NormalTexture", "ARTWORK")
 end
+for i = 1, 5 do
+    local nom = "CharacterFrameTab" .. i
+    local t = CreateFrame("Button", nom, CharacterFrame)
+    _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
+    t:CreateTexture(nom .. "Fond", "ARTWORK")
+end
 function CharacterFrame_ShowSubFrame() end
 function PaperDollFrame_OnShow() end
 
@@ -1582,6 +1588,24 @@ def main():
         "l arme principale se pose au bas du volet gauche, a (-60, 30)"
     assert distance.width == 27 and munitions.width == 27, "distance et munitions font 27"
     assert munitions.points[1][4] == 19, "les munitions sont a 19 de la distance"
+
+    # LES ONGLETS LATERAUX : en colonne a droite, DEHORS.
+    barre = g.ForeverUICharacterModeTabs
+    o1, o2 = g.CharacterFrameTab1, g.CharacterFrameTab2
+    pb = barre.points[1]
+    print("   onglets : barre %d x %d, %s sur %s (%s, %s)" % (
+        barre.width, barre.height, pb[1], pb[3], pb[4], pb[5]))
+    assert barre.width == 64 and barre.height == 384, "ModeTabs fait 64 x 384"
+    assert pb[1] == "TOPLEFT" and pb[3] == "TOPRIGHT" and pb[5] == -30,         "la barre se pose a droite du cadre, 30 sous son haut"
+    print("   un onglet : %d x %d (55 x 55 : 55 x 60 moins 5 de transparent)" % (
+        o1.width, o1.height))
+    assert o1.width == 55 and o1.height == 55
+    p2 = o2.points[1]
+    assert p2[1] == "TOPLEFT" and p2[3] == "BOTTOMLEFT", "ils s empilent"
+    print("   onglet du personnage : portrait=%s, texte masque=%s" % (
+        o1.foreverIcone.portraitOf, not g.CharacterFrameTab1Text.shown))
+    assert o1.foreverIcone.portraitOf == "player",         "l onglet du personnage porte le portrait, comme la source"
+    assert abs(o1.foreverIcone.texcoord[1] - 0.03125) < 1e-6,         "rogne a 0,03125 comme UpdateCharacterModeTabPortrait"
 
     modele = g.CharacterModelFrame.points[1]
     print("   modele : %s sur %s (il occupe le volet gauche)" % (modele[1], modele[3]))

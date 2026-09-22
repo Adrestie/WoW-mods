@@ -44,3 +44,7 @@ interface/common/commoncoinbox.blp
 
 # bouton de fermeture rouge des panneaux
 interface/buttons/redbuttonsc60.blp
+
+# onglets lateraux de la feuille du personnage (55 x 60, la variante
+# camelot est plus large que celle du client moderne)
+interface/common/commonsidetabc60.blp
