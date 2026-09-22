@@ -734,7 +734,7 @@ toujours le client qui tient la liste, la sélection et les infobulles.
 | **New Set** | 3.3.5 n'a pas ce bouton : on y crée un ensemble par **Save**, qui ouvre la fenêtre de nom. Le nôtre fait la même chose après avoir vidé la sélection — exactement « enregistrer sous un nouveau nom ». Son intitulé est écrit **en dur**, « New Set » : `PAPERDOLL_NEWEQUIPMENTSET`, que camelot écrit, n'existe pas ici, et ce client ne porte aucune chaîne équivalente — ce libellé ne se traduira donc pas. Il porte le même **bouton tertiaire** que les sélecteurs de statistiques. |
 | **Le panneau suit son onglet** | Ses boutons sont des cadres fils du **panneau**, pas de la fenêtre du client : masquer `GearManagerDialog` ne les emportait pas, et « New » restait visible sous les statistiques. Le panneau entier se montre et se cache avec l'onglet. |
 | **Delete gardé** | camelot efface un ensemble par le menu de sa carte, menu que 3.3.5 n'a pas. Le bouton du client est **conservé** plutôt que de retirer la seule façon d'effacer un ensemble ; il est masqué par défaut au-dessus de Save, à replacer sur décision. |
-| **La coche** | `GetEquipmentSetInfo` ne dit pas si un ensemble est porté. Elle se calcule depuis `GetEquipmentSetLocations` : porté quand chaque pièce est sur le joueur et hors des sacs. |
+| **La coche** | `GetEquipmentSetInfo` ne dit pas si un ensemble est porté, et 3.3.5 n'a **aucune** notion d'ensemble actif — son propre gestionnaire n'affiche d'ailleurs rien de tel. Deux conditions : (a) chaque pièce est dans **son** emplacement, (b) l'ensemble est le **dernier équipé**. |
 | **Pas de barre de défilement** | `MinimalScrollBar` n'est pas portée. La liste défile à la **molette**, et le trait de camelot marque son bas. |
 | **La carte, écarts assumés** | camelot donne 169 × 44 avec un fond de 152 × 49 à `x = 42`. Sur demande : la liste glisse de **4** vers la droite, la carte descend à **40** de haut (fond 45, le débord de 5 de la source étant gardé) et son fond passe à **174** de large, **calculé** pour que l'écart séparateur → icône égale l'écart carte → bord de la fenêtre : le séparateur est à −6 et fait 11, donc son bord droit tombe à 5 ; l'icône commence à 13, soit 8 ; la carte doit donc finir à 233 − 8 = 225. |
 | **Le choix au-dessus du survol** | Les deux étaient en `BORDER`, où seul l'ordre de création départage — trop fragile pour une règle d'affichage. Le survol reste en `BORDER`, le choix monte en `ARTWORK`. |
@@ -753,6 +753,21 @@ passage**, la pose des boutons tournant justement après son `OnShow`. Même fam
 le modèle 3D sur les emplacements d'équipement : **un cadre sensible à la
 souris qu'on étale sur un volet avale tout ce qui reste dessous**.
 
+
+**La coche demandait deux questions, je n'en avais traité qu'une, mal.**
+
+1. **La pièce est-elle dans le BON emplacement ?** `GetEquipmentSetLocations`
+   rend une table indexée par **emplacement d'équipement**, et
+   `EquipmentManager_UnpackLocation` rend `joueur, banque, sacs, SLOT`. Je ne
+   lisais que les deux premiers drapeaux : une pièce portée dans un **autre**
+   emplacement passait pour bonne, d'où des coches sur des ensembles sans
+   rapport. Il faut comparer le slot rendu à la **clé**.
+2. **Deux ensembles aux mêmes pièces.** Si deux ensembles décrivent le même
+   équipement, la géométrie ne peut pas les départager : tous deux sont
+   « portés ». Le dernier ensemble équipé est donc retenu (greffon sur
+   `UseEquipmentSet`, gardé d'une session à l'autre dans `ForeverUIDB`), et la
+   coche va à celui-là — **à condition qu'il soit encore porté**, sinon elle
+   disparaît dès que le joueur change une pièce à la main.
 
 **Le système de panneaux reprend la main, il faut repasser derrière.**
 `GearManagerDialog_OnShow` appelle `UpdateUIPanelPositions(CharacterFrame)`

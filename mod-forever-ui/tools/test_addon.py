@@ -631,18 +631,27 @@ function GetEquipmentSetInfo(i)
     local e = ENSEMBLES[i]
     if e then return e.nom, e.icone end
 end
+-- Les places sont indexees par EMPLACEMENT d'equipement, et le quatrieme
+-- retour de UnpackLocation est le SLOT ou la piece se trouve.
+--   porte = true       -> chaque piece est dans SON emplacement
+--   porte = "ailleurs" -> sur le joueur, mais dans un autre emplacement
+--   porte = false      -> dans les sacs
 function GetEquipmentSetLocations(nom)
     for _, e in ipairs(ENSEMBLES) do
         if e.nom == nom then
-            return e.porte and { 100, 101 } or { 200 }
+            if e.porte == true then return { [1] = 101, [5] = 105 } end
+            if e.porte == "ailleurs" then return { [1] = 105, [5] = 101 } end
+            return { [1] = 201 }
         end
     end
 end
 function EquipmentManager_UnpackLocation(place)
-    -- < 200 : sur le joueur et hors des sacs
-    if place < 200 then return true, false, false, 1, nil end
-    return true, false, true, 1, 1
+    if place < 200 then
+        return true, false, false, place - 100, nil
+    end
+    return true, false, true, place - 200, 1
 end
+function UseEquipmentSet(nom) DERNIER_EQUIPE = nom end
 -- Ce que fait le vrai : il remplit les cartes des ensembles existants et
 -- desactive les autres.
 function GearManagerDialog_Update()
@@ -2794,13 +2803,32 @@ def main():
     icone = carte._normal
     assert icone.width == 36 and icone.points[1][4] == 4, "l icone 36 a LEFT 4"
 
-    print("   coches : eee=%s (porte), aaa=%s (non porte)" % (
+    # LA COCHE. Elle demande DEUX choses : chaque piece dans SON emplacement,
+    # et l ensemble d etre le dernier equipe -- sans quoi deux ensembles aux
+    # memes pieces la porteraient tous les deux.
+    lua.execute('ForeverUIDB.ensembleEquipe = "eee" UseEquipmentSet("eee")')
+    g.ForeverUI.EquipmentSetsLayout()
+    print("   coches : eee=%s (equipe), aaa=%s (non equipe)" % (
         carte.foreverCoche.shown, g.GearSetButton2.foreverCoche.shown))
+    assert carte.foreverCoche.shown, "l ensemble equipe et en place montre sa coche"
+    assert not g.GearSetButton2.foreverCoche.shown, "l autre non"
+
+    lua.execute('ENSEMBLES[2].porte = true')
+    g.ForeverUI.EquipmentSetsLayout()
+    print("   memes pieces : eee=%s, aaa=%s" % (
+        carte.foreverCoche.shown, g.GearSetButton2.foreverCoche.shown))
+    assert carte.foreverCoche.shown and not g.GearSetButton2.foreverCoche.shown,         "le dernier equipe departage, la geometrie seule ne le peut pas"
+
+    lua.execute('ENSEMBLES[1].porte = "ailleurs"')
+    g.ForeverUI.EquipmentSetsLayout()
+    print("   pieces ailleurs sur le joueur : eee=%s" % carte.foreverCoche.shown)
+    assert not carte.foreverCoche.shown,         "le slot rendu doit valoir la cle, sinon une piece portee ailleurs passait"
+    lua.execute('ENSEMBLES[1].porte = true ENSEMBLES[2].porte = false')
+    g.ForeverUI.EquipmentSetsLayout()
+
     pc2 = carte.foreverCoche.points[1]
     print("   coche : %s (%s, %s)" % (pc2[1], pc2[4], pc2[5]))
     assert (pc2[1], pc2[4]) == ("RIGHT", -12),         "elle longe le bord droit de la carte, que le bouton couvre entierement"
-    assert carte.foreverCoche.shown, "l ensemble porte montre sa coche"
-    assert not g.GearSetButton2.foreverCoche.shown, "l autre non"
     assert not g.GearSetButton3.shown, "les cartes sans ensemble ne s affichent pas"
 
     equiper = g.GearManagerDialogEquipSet

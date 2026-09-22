@@ -114,9 +114,24 @@ local ATLAS_TRAIT = "ui-character-info-scrollline"
 
 local panneau, decalage = nil, 0
 
--- Un ensemble est PORTE quand chacune de ses pieces est sur le joueur et
--- hors des sacs. EquipmentManager_UnpackLocation rend ces deux drapeaux.
-local function ensemblePorte(nom)
+-- QUEL ENSEMBLE EST PORTE. Deux questions, et je n'en avais traite
+-- qu'une, mal.
+--
+-- 1. LA PIECE EST-ELLE DANS LE BON EMPLACEMENT ? GetEquipmentSetLocations
+--    rend une table indexee par EMPLACEMENT d'equipement, et
+--    EquipmentManager_UnpackLocation rend "joueur, banque, sacs, SLOT".
+--    Je ne lisais que les deux premiers drapeaux : une piece portee dans un
+--    AUTRE emplacement passait pour bonne, d'ou des coches sur des
+--    ensembles sans rapport. Il faut comparer le slot rendu a la CLE.
+--
+-- 2. DEUX ENSEMBLES AUX MEMES PIECES. Si deux ensembles decrivent le meme
+--    equipement, la geometrie ne peut pas les departager : tous deux sont
+--    "portes". 3.3.5 n'a AUCUNE notion d'ensemble actif -- son propre
+--    gestionnaire n'affiche d'ailleurs rien de tel. On retient donc le
+--    dernier ensemble equipe, en se greffant sur UseEquipmentSet, et la
+--    coche va a celui-la -- a condition qu'il soit encore porte, sinon
+--    elle disparait des que le joueur change une piece a la main.
+local function piecesEnPlace(nom)
 	if not nom or not GetEquipmentSetLocations or not EquipmentManager_UnpackLocation then
 		return false
 	end
@@ -127,16 +142,37 @@ local function ensemblePorte(nom)
 	end
 
 	local vu = false
-	for _, place in pairs(places) do
+	for emplacement, place in pairs(places) do
 		if type(place) == "number" and place > 1 then
-			local joueur, _, sacs = EquipmentManager_UnpackLocation(place)
-			if not joueur or sacs then
+			local joueur, _, sacs, slot = EquipmentManager_UnpackLocation(place)
+			if not joueur or sacs or slot ~= emplacement then
 				return false
 			end
 			vu = true
 		end
 	end
 	return vu
+end
+
+local function ensembleActif()
+	ForeverUIDB = ForeverUIDB or {}
+	return ForeverUIDB.ensembleEquipe
+end
+
+local function ensemblePorte(nom)
+	return nom ~= nil and nom == ensembleActif() and piecesEnPlace(nom)
+end
+ForeverUI.EquipmentSetWorn = ensemblePorte
+
+-- Le dernier ensemble equipe, retenu d'une session a l'autre.
+if hooksecurefunc and type(UseEquipmentSet) == "function" then
+	hooksecurefunc("UseEquipmentSet", function(nom)
+		ForeverUIDB = ForeverUIDB or {}
+		ForeverUIDB.ensembleEquipe = nom
+		if ForeverUI.EquipmentSetsLayout then
+			ForeverUI.EquipmentSetsLayout()
+		end
+	end)
 end
 
 -- Combien de cartes tiennent dans la liste, et ou elle commence.
