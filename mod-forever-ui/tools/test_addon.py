@@ -1227,8 +1227,30 @@ def main():
     print("barre bonus : bouton 3 en %s (%s, %s) | barre de sorts en %s (%s, %s)" % (
         bonus[1], bonus[4], bonus[5], principal[1], principal[4], principal[5]))
     assert (bonus[1], bonus[4], bonus[5]) == (principal[1], principal[4], principal[5]),         "la barre bonus doit se poser exactement sur la barre de sorts"
-    assert bonus[2].name == principal[2].name == "ForeverUIActionBarHolder",         "les deux doivent s ancrer au meme porteur"
+    assert principal[2].name == "ForeverUIActionBarHolder",         "la barre de sorts s ancre au porteur"
+    assert bonus[2].name == "ForeverUIBonusSlide",         "la barre bonus s ancre a la glissiere, qui est posee sur le porteur"
     assert g.BonusActionButton1.width == 45, "ses boutons ont la taille des autres"
+    # LE GLISSEMENT. La glissiere est un cadre a nous : la deplacer est
+    # permis en combat, alors que deplacer un bouton securise ne l'est pas.
+    glissiere = g.ForeverUI.ActionBarSlide
+    g.BonusActionBarFrame.Hide(g.BonusActionBarFrame)
+    glissiere.scripts.OnUpdate(glissiere, 0.05)
+    g.BonusActionBarFrame.Show(g.BonusActionBarFrame)
+    glissiere.scripts.OnUpdate(glissiere, 0.0)
+    depart = glissiere.points[1][5]
+    print("   glissement : depart a %.0f (une hauteur de bouton sous le porteur)" % depart)
+    assert depart == -45, "la barre doit partir d une hauteur de bouton plus bas"
+    glissiere.scripts.OnUpdate(glissiere, 0.1)
+    milieu = glissiere.points[1][5]
+    glissiere.scripts.OnUpdate(glissiere, 0.2)
+    fin = glissiere.points[1][5]
+    print("   a mi-course %.1f, puis %.1f (au repos sur le porteur)" % (milieu, fin))
+    assert depart < milieu < fin, "elle doit remonter progressivement"
+    assert fin == 0, "elle doit finir exactement sur le porteur"
+    # et elle ne bouge plus tant que la barre reste affichee
+    glissiere.scripts.OnUpdate(glissiere, 0.5)
+    assert glissiere.points[1][5] == 0, "au repos, la glissiere ne bouge plus"
+
     print("   art d'epoque de la barre bonus : %s et %s" % (
         g.BonusActionBarTexture0.alpha, g.BonusActionBarTexture1.alpha))
     assert g.BonusActionBarTexture0.alpha == 0 and g.BonusActionBarTexture1.alpha == 0,         "l art glissant d epoque doit disparaitre"
@@ -1242,7 +1264,7 @@ def main():
     g.HOOKS["ActionButton_Update"](g.ActionButton1)
     apres = g.BonusActionButton3.points[len(list(g.BonusActionButton3.points.values()))]
     print("   porteur deplace : la barre bonus reste ancree a lui (%s)" % apres[1])
-    assert apres[2].name == "ForeverUIActionBarHolder",         "elle doit rester ancree au porteur, pas a l ecran"
+    assert apres[2].name == "ForeverUIBonusSlide",         "elle doit rester ancree a la glissiere, pas a l ecran"
     g.ForeverUI.Layout.SetDefaults("actionbar", garde[0], garde[1], garde[2], garde[3])
 
     print("ancien fond du client efface : %s | porteur enregistre : %s" % (

@@ -287,15 +287,58 @@ local rightCap = createEndCap("ForeverUIActionBarRightCap", "ui-hud-actionbar-gr
 
 -- LA BARRE BONUS PREND LA MEME PLACE. Quand le joueur change de posture,
 -- 3.3.5 montre BonusActionBarFrame par-dessus la barre principale, a une
--- position a lui -- d'ou le decalage. Ses douze boutons sont donc poses sur
--- LE MEME PORTEUR, aux memes places : la barre de remplacement suit alors
--- la position du porteur, y compris celle que le joueur a choisie par /fui.
+-- position a lui -- d'ou le decalage. Ses douze boutons sont donc poses aux
+-- memes places que ceux de la barre de sorts : la barre de remplacement
+-- suit alors la position du porteur, y compris celle que le joueur a
+-- choisie par /fui.
 --
 -- On ne reparente rien : un bouton reste enfant de la barre du client, donc
 -- il suit sa visibilite (posture, vehicule, possession). Seul son ancrage
--- change. La barre bonus de 3.3.5 glisse a l'ecran en se deplacant : ancres
--- au porteur, ses boutons ne glissent plus, ils paraissent.
+-- change.
+--
+-- LA GLISSIERE. 3.3.5 fait GLISSER cette barre pour la faire paraitre, et
+-- il faut garder ce mouvement. Or on ne peut pas deplacer un bouton
+-- securise image par image : le client l'interdit en combat, et c'est
+-- precisement la qu'on change de posture. Les boutons bonus sont donc
+-- ancres UNE FOIS a une glissiere -- un cadre a nous, pose sur le porteur
+-- -- et c'est elle qui glisse. Les boutons suivent sans qu'on y touche, et
+-- deplacer son propre cadre reste permis en combat.
 local BARRES_POSEES = { "ActionButton", "BonusActionButton" }
+
+-- La glissiere couvre le porteur et se decale en hauteur pendant le
+-- mouvement. DUREE et COURSE sont celles du client quand il les declare.
+local glissiere = CreateFrame("Frame", "ForeverUIBonusSlide", holder)
+local GLISSEMENT_DUREE = BONUS_ACTIONBUTTON_SLIDE_TIME or 0.2
+local GLISSEMENT_COURSE = BUTTON_SIZE
+
+local function poserGlissiere(avancement)
+	local decalage = -GLISSEMENT_COURSE * (1 - avancement)
+	glissiere:ClearAllPoints()
+	glissiere:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, decalage)
+	glissiere:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, decalage)
+end
+poserGlissiere(1)
+
+-- Le glissement se declenche a l'apparition de la barre bonus, jamais de
+-- lui-meme : hors mouvement, la glissiere est au repos sur le porteur.
+glissiere.avancement = 1
+glissiere:SetScript("OnUpdate", function(self, elapse)
+	local visible = BonusActionBarFrame and BonusActionBarFrame:IsShown()
+
+	if visible and not self.visible then
+		self.avancement = 0             -- elle vient de paraitre : on glisse
+	end
+	self.visible = visible
+
+	if self.avancement < 1 then
+		self.avancement = self.avancement + (elapse or 0) / GLISSEMENT_DUREE
+		if self.avancement > 1 then
+			self.avancement = 1
+		end
+		poserGlissiere(self.avancement)
+	end
+end)
+ForeverUI.ActionBarSlide = glissiere
 
 local function layoutButtons()
 	if InCombatLockdown() then
@@ -303,11 +346,12 @@ local function layoutButtons()
 	end
 
 	for _, prefixe in ipairs(BARRES_POSEES) do
+		local ancre = (prefixe == "BonusActionButton") and glissiere or holder
 		for index = 1, BUTTON_COUNT do
 			local button = _G[prefixe .. index]
 			if button then
 				button:ClearAllPoints()
-				button:SetPoint("LEFT", holder, "LEFT", (index - 1) * BUTTON_PITCH, 0)
+				button:SetPoint("LEFT", ancre, "LEFT", (index - 1) * BUTTON_PITCH, 0)
 
 				-- Les separateurs appartiennent au porteur : une seule serie
 				-- suffit, posee sur la barre principale.

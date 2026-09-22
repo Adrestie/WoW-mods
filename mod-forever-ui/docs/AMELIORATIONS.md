@@ -242,10 +242,17 @@ porteur, **y compris celle que le joueur a choisie** par `/fui`. Rien n'est
 reparenté — un bouton reste enfant de la barre du client, donc il suit sa
 visibilité (posture, véhicule, possession) ; seul son ancrage change.
 
-Deux conséquences assumées : la barre bonus de 3.3.5 **glisse** à l'écran en se
-déplaçant, or des boutons ancrés au porteur ne glissent plus — ils paraissent ;
-et son art d'époque (deux morceaux glissants) est effacé par le même balayage
-de régions que celui de la barre du familier.
+**La glissière.** 3.3.5 fait *glisser* cette barre pour la faire paraître, et
+ce mouvement est conservé. Mais on ne peut pas déplacer un bouton sécurisé image
+par image : le client l'interdit en combat, et c'est précisément là qu'on change
+de posture. Les boutons bonus sont donc ancrés **une fois** à une glissière —
+`ForeverUIBonusSlide`, un cadre à nous posé sur le porteur — et c'est **elle**
+qui glisse. Les boutons suivent sans qu'on y touche, et déplacer son propre
+cadre reste permis en combat. La course vaut une hauteur de bouton, la durée
+`BONUS_ACTIONBUTTON_SLIDE_TIME` quand le client la déclare, 0,2 s sinon.
+
+Son art d'époque (deux morceaux glissants) est effacé par le même balayage de
+régions que celui de la barre du familier.
 
 ---
 
