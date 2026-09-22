@@ -29,6 +29,10 @@
 --   PAGE     un contenu dans un hote pour un groupe donne. Plusieurs pages
 --            dans le meme hote et le meme groupe se remplacent entre elles
 --            -- ce sont des boutons, pas des onglets.
+--   MOBILIER  ce qu'un hote porte pour un groupe QUELLE QUE SOIT la page : la
+--            bande de pierre, les onglets qui choisissent la page. camelot le
+--            traite ainsi -- UpdateRightPaneHeader ne masque que le StoneBg,
+--            l'hote, lui, reste en place.
 --
 -- Un contenu se CONSTRUIT une seule fois, a sa premiere ouverture, et pose sa
 -- geometrie a ce moment-la. Ensuite il ne fait plus que paraitre et
@@ -57,7 +61,8 @@ local ordreHotes = {}
 function Panes.NewHost(nom, cadre)
 	local hote = hotes[nom]
 	if not hote then
-		hote = { nom = nom, contenus = {}, ordre = {}, pages = {}, montre = true }
+		hote = { nom = nom, contenus = {}, ordre = {}, pages = {},
+		         mobilier = {}, montre = true }
 		hotes[nom] = hote
 		ordreHotes[#ordreHotes + 1] = nom
 	end
@@ -130,6 +135,21 @@ function Panes.Own(hote, id, cadre)
 	contenu.cadres[#contenu.cadres + 1] = cadre
 end
 
+-- Le mobilier d'un groupe. Appelable plusieurs fois : les cadres s'ajoutent.
+function Panes.Furniture(nom, groupe, cadres)
+	local hote = hotes[nom]
+	if not hote then
+		return
+	end
+	local liste = hote.mobilier[groupe] or {}
+	hote.mobilier[groupe] = liste
+	for _, cadre in ipairs(cadres or {}) do
+		if cadre then
+			liste[#liste + 1] = cadre
+		end
+	end
+end
+
 local function poser(contenu, visible)
 	if visible then
 		batir(contenu)
@@ -157,6 +177,29 @@ local function appliquer(hote)
 		poser(hote.contenus[id], id == voulu)
 	end
 	hote.actuel = voulu
+
+	-- LE MOBILIER. On masque tout ce qui est declare, puis on remontre celui
+	-- du groupe courant : un meuble partage par deux groupes ne depend ainsi
+	-- d'aucun ordre de parcours.
+	local actifs = {}
+	local sien = hote.mobilier[hote.groupe or ""]
+	if hote.montre and voulu and sien then
+		for _, cadre in ipairs(sien) do
+			actifs[cadre] = true
+		end
+	end
+	for _, liste in pairs(hote.mobilier) do
+		for _, cadre in ipairs(liste) do
+			if cadre and cadre.Hide and not actifs[cadre] then
+				cadre:Hide()
+			end
+		end
+	end
+	for cadre in pairs(actifs) do
+		if cadre.Show then
+			cadre:Show()
+		end
+	end
 
 	-- UN HOTE SANS CONTENU NE S'AFFICHE PAS. C'est ce qui empeche un volet
 	-- droit vide -- et son fond, et sa bande de pierre -- de rester a

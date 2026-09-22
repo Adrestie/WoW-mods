@@ -1238,10 +1238,18 @@ end
 -- et c'est de lui qu'on part. Le nom de l'ecran sert donc de nom de groupe --
 -- aucune table de correspondance a tenir a jour.
 --
--- Le groupe du personnage remplit les deux volets. Les quatre autres n'ont
--- rien a mettre dans le volet droit : il disparait, et la fenetre se reduit
--- a la largeur du gauche. C'est ce qui empeche le panneau du gestionnaire d'y
--- survivre, et les barres de reputation de le traverser.
+-- LE VOLET DROIT RESTE OUVERT SUR TOUS LES ONGLETS. C'est ce que fait la
+-- source : UpdateRightPaneHeader ne masque QUE la bande de pierre --
+-- "the stone header backs the PaperDoll sidebar tabs, so it should not render
+-- on tabs that have none" -- et RightPaneHost, lui, demeure. Chaque onglet
+-- aura ses propres informations a y mettre ; le volet leur est donc reserve
+-- des maintenant, vide en attendant.
+--
+-- Ce qui s'en va d'un onglet a l'autre, c'est ce qui appartient au groupe :
+-- la bande de pierre, les deux onglets de page et la ligne de niveau pour le
+-- personnage, la page ouverte avec eux. Le panneau du gestionnaire ne peut
+-- donc plus survivre a un changement d'onglet, et les barres de reputation
+-- restent bornees au volet gauche.
 local ECRAN_PERSONNAGE = "PaperDollFrame"
 local ECRANS_SIMPLES = {
 	{ groupe = "PetPaperDollFrame", id = "familier" },
@@ -1291,8 +1299,30 @@ local function declarerContenus()
 		})
 	end
 
-	-- LE VOLET DROIT : deux pages, et le groupe du personnage seul. La
-	-- premiere declaree est celle qui s'ouvre par defaut.
+	-- LE MOBILIER DU VOLET DROIT POUR LE PERSONNAGE : ce qui s'y trouve
+	-- quelle que soit la page ouverte, et qui n'a rien a faire sur les autres
+	-- onglets. La source masque exactement ces trois choses --
+	-- UpdateRightPaneHeader pour la pierre, HidePaperDollRightPane pour les
+	-- onglets de page et la ligne de niveau.
+	Panes.Furniture("droit", ECRAN_PERSONNAGE, {
+		voletDroit.pierre,
+		voletDroit.ongletStats,
+		voletDroit.ongletEquipement,
+		voletDroit.ligneNiveau,
+	})
+
+	-- LES QUATRE AUTRES ONGLETS gardent le volet droit, vide pour l'instant.
+	-- Une page declaree sans rien construire suffit a le dire : l'hote reste
+	-- ouvert, avec son fond et son separateur, et la fenetre sa largeur.
+	for _, ecran in ipairs(ECRANS_SIMPLES) do
+		Panes.Register({
+			hote = "droit", groupe = ecran.groupe, id = ecran.id .. ".droit",
+			construire = function() return nil, {} end,
+		})
+	end
+
+	-- LE VOLET DROIT POUR LE PERSONNAGE : deux pages. La premiere declaree
+	-- est celle qui s'ouvre par defaut.
 	Panes.Register({
 		hote = "droit", groupe = ECRAN_PERSONNAGE, id = "stats",
 		construire = function()

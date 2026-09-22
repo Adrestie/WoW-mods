@@ -2424,17 +2424,22 @@ def main():
     g.ForeverUI.Panes.ShowGroup("ReputationFrame")
     g.ForeverUI.CharacterApplyPanes(perso)
     pr2 = g.ReputationFrame.points[len(list(g.ReputationFrame.points.values()))]
-    print("   onglet reputation : volet droit=%s, panneau=%s, fenetre %d, "
-          "reputation ancree a %s de %s" % (
-        droit.shown, g.ForeverUIEquipmentPane.shown, perso.width,
-        pr2[1], pr2[2].name))
+    print("   onglet reputation : volet droit=%s, pierre=%s, onglets de page=%s, "
+          "panneau=%s, fenetre %d, reputation ancree a %s de %s" % (
+        droit.shown, droit.pierre.shown, stats.shown,
+        g.ForeverUIEquipmentPane.shown, perso.width, pr2[1], pr2[2].name))
     assert not g.ForeverUIEquipmentPane.shown,         "LE PANNEAU DU GESTIONNAIRE NE SURVIT PLUS A UN CHANGEMENT D ONGLET"
     assert not g.GearManagerDialog.shown, "ni la fenetre du client avec lui"
-    assert not droit.shown, "l hote droit n a rien a montrer sur cet onglet"
-    assert perso.width == 398, "la fenetre se reduit au volet gauche"
+    # LE VOLET DROIT RESTE OUVERT : chaque onglet aura ses informations a y
+    # mettre. Seul ce qui appartient au personnage s en va.
+    assert droit.shown, "LE VOLET DROIT RESTE OUVERT D UN ONGLET A L AUTRE"
+    assert perso.width == 631, "la fenetre garde donc sa largeur"
+    assert not droit.pierre.shown,         "la bande de pierre porte les onglets de page : elle ne sert plus ici"
+    assert not stats.shown and not gear.shown,         "les deux onglets de page appartiennent au personnage"
+    assert not droit.ligneNiveau.shown, "la ligne de niveau aussi"
     assert pr2[2].name == "ForeverUICharacterLeftPane",         "LES BARRES DE REPUTATION SONT BORNEES AU VOLET GAUCHE"
     assert g.ReputationFrame.shown, "et l ecran de reputation, lui, parait"
-    assert not perso.foreverRepli.shown,         "un volet qui n existe pas sur cet onglet ne se replie pas"
+    assert perso.foreverRepli.shown,         "le volet existe sur cet onglet : il reste repliable"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):
@@ -2455,7 +2460,22 @@ def main():
     assert perso.width == 631 and droit.shown, "le volet droit revient"
     assert Panes.CurrentPage("droit") == "equipement",         "la page ouverte avant le detour est celle qui revient"
     assert g.ForeverUIEquipmentPane.shown
+    assert droit.pierre.shown and gear.shown and droit.ligneNiveau.shown,         "le mobilier du personnage revient avec lui"
     assert perso.foreverRepli.shown, "et le bouton de repli avec"
+
+    # ET LE REPLI VAUT SUR TOUS LES ONGLETS, puisque le volet y est.
+    perso.foreverRepli.scripts.OnClick(perso.foreverRepli)
+    g.CharacterFrame_ShowSubFrame("SkillFrame")
+    g.ForeverUI.Panes.ShowGroup("SkillFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    print("   replie puis onglet competences : fenetre %d, volet droit=%s" % (
+        perso.width, droit.shown))
+    assert perso.width == 398 and not droit.shown, "le repli traverse les onglets"
+    perso.foreverRepli.scripts.OnClick(perso.foreverRepli)
+    assert perso.width == 631 and droit.shown, "et se defait depuis n importe lequel"
+    g.CharacterFrame_ShowSubFrame("PaperDollFrame")
+    g.ForeverUI.Panes.ShowGroup("PaperDollFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
 
     # RIEN NE SE RECALCULE. Vingt allers-retours ne doivent deplacer aucune
     # mesure : un contenu se batit une fois, puis ne fait que paraitre.
