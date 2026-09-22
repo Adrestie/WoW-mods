@@ -71,6 +71,7 @@ local ARME_X, ARME_Y = -60, 30
 local PETIT = 27
 local MUNITIONS_ECART = 19
 
+local PIERRE_HAUTEUR = 85               -- UI-Character-Info-Stat-StoneBG
 local SEPARATEUR = 11
 local SEPARATEUR_EMBOUT = 4             -- mesure sur l'art : 11 x 50, deux embouts
 
@@ -129,6 +130,27 @@ local MODELE_Y = 24
 -- le pousserait un peu plus loin.
 local RESISTANCES_X = 30
 
+-- LES STATISTIQUES. Ce client ne porte pas le PaperDollFrame d'origine : son
+-- patch-enus-9.mpq livre un FrameXML modifie, avec deux groupes de six
+-- lignes -- PlayerStatFrameLeft1..6 et PlayerStatFrameRight1..6 -- chacun
+-- coiffe d'un selecteur de categorie (MostrarStatPaperDoll*DropDown). Le
+-- modele d'une ligne, PStatFrameTemplate, fait 155 x 16 : un intitule a
+-- gauche, sa valeur a droite ; les lignes s'enchainent sans ecart, d'ou un
+-- pas de 16.
+--
+-- Elles sont reposees dans le volet droit, sous la bande de pierre. Elles
+-- y sont elargies : le volet fait 233 et le modele 155, et une ligne dont
+-- la valeur est calee a droite gagne a occuper toute la largeur.
+local STAT_PAS = 16
+local STAT_MARGE = 20                   -- de chaque cote du volet
+local STAT_HAUT = 10                    -- sous la bande de pierre
+local STAT_ENTRE_GROUPES = 16
+local STAT_GROUPES = {
+	{ selecteur = "MostrarStatPaperDollLeftDropDown", prefixe = "PlayerStatFrameLeft" },
+	{ selecteur = "MostrarStatPaperDollRightDropDown", prefixe = "PlayerStatFrameRight" },
+}
+local STAT_PAR_GROUPE = 6
+
 local FERMETURE = 24
 local FERMETURE_X, FERMETURE_Y = 1, 0
 local FERMETURE_ATLAS = {
@@ -166,7 +188,8 @@ local RANGEE_ARMES = { "MainHand", "SecondaryHand", "Ranged" }
 local ANCIENS_CADRES = {
 	"CharacterFrame", "PaperDollFrame", "PetPaperDollFrame", "SkillFrame",
 	"ReputationFrame", "HonorFrame", "TokenFrame", "PaperDollItemsFrame",
-	"CharacterAttributesFrame", "CharacterResistanceFrame",
+	"CharacterAttributesFrame", "CharacterAttributesFrameer",
+	"CharacterResistanceFrame",
 }
 
 -- LA FENETRE SE DEPLACE PAR SA BARRE DU HAUT. Le cadre du client est
@@ -483,6 +506,42 @@ local function poserResistances()
 	cadre:SetPoint(a[1], a[2], a[3], a[4] + RESISTANCES_X, a[5])
 end
 
+-- Les statistiques, reposees dans le volet droit. Ce sont des cadres du
+-- client : on les deplace et on les elargit, on ne les recree pas -- ce
+-- sont eux qui portent les infobulles et les menus de categorie.
+local function poserStatistiques()
+	if not voletDroit then
+		return
+	end
+
+	local largeur = VOLET_DROIT - 2 * STAT_MARGE
+	local niveau = voletDroit:GetFrameLevel() + 3
+	local y = -(PIERRE_HAUTEUR + STAT_HAUT)
+
+	for _, groupe in ipairs(STAT_GROUPES) do
+		local selecteur = _G[groupe.selecteur]
+		if selecteur then
+			selecteur:SetFrameLevel(niveau)
+			selecteur:ClearAllPoints()
+			selecteur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", STAT_MARGE, y)
+			y = y - selecteur:GetHeight()
+		end
+
+		for index = 1, STAT_PAR_GROUPE do
+			local ligne = _G[groupe.prefixe .. index]
+			if ligne then
+				ligne:SetFrameLevel(niveau)
+				ligne:SetWidth(largeur)
+				ligne:ClearAllPoints()
+				ligne:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", STAT_MARGE, y)
+				y = y - STAT_PAS
+			end
+		end
+
+		y = y - STAT_ENTRE_GROUPES
+	end
+end
+
 -- La ligne du niveau, de la race et de la classe.
 --
 -- PIEGE 3.3.5. Une region ne se REPARENTE pas : SetParent n'est pas dans la
@@ -641,6 +700,7 @@ local function habiller()
 	poserFermeture(cadre)
 	poserModele()
 	poserResistances()
+	poserStatistiques()
 	poserNiveau()
 	poserEmplacements()
 	poserOnglets(cadre)

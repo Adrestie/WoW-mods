@@ -464,6 +464,24 @@ Trois autres corrections du même essai :
   sur ses sous-cadres, qui échappent à un balayage du seul `CharacterFrame`. La
   liste est balayée à chaque passage.
 
+**Ce client n'a pas le `PaperDollFrame` d'origine.** Son
+`Data/enus/patch-enus-9.mpq` livre un **FrameXML modifié** :
+`Interface\FrameXML\PaperDollFrame.lua` et `.xml`, `CharacterFrame.lua` et
+`.xml`, plus leurs textures. C'est donc ce code-là qui tourne, et non celui de
+Blizzard. Sa présentation des statistiques est reprise telle quelle et reposée
+dans le volet droit :
+
+| Pièce | Valeur |
+|---|---|
+| Ligne de statistique | `PStatFrameTemplate`, 155 × 16 — intitulé à gauche, valeur à droite |
+| Groupes | `PlayerStatFrameLeft1..6` et `PlayerStatFrameRight1..6`, deux groupes de six **empilés** (le client les pose à −24 et −155, même x) |
+| Pas | 16, les lignes s'enchaînent sans écart |
+| Sélecteur de catégorie | `MostrarStatPaperDollLeftDropDown` et `…RightDropDown`, un par groupe |
+| Chez nous | dans le volet droit sous la bande de pierre, élargies à 193 (233 moins 20 de marge de chaque côté), niveau de cadre au-dessus du fond du volet |
+
+Ce sont des cadres du client : ils sont déplacés et élargis, jamais recréés —
+ce sont eux qui portent les infobulles et les menus de catégorie.
+
 **Une région ne se reparente pas en 3.3.5.** `SetParent` n'existe pas dans la
 table des méthodes de `FontString` de ce client, et ancrer la ligne du client au
 volet ne suffirait pas : elle appartient au cadre, donc elle se dessinerait

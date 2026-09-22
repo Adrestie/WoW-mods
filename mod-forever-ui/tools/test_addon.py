@@ -523,6 +523,18 @@ for i = 1, 5 do
     _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
     t:CreateTexture(nom .. "Fond", "ARTWORK")
 end
+-- les statistiques du FrameXML modifie de ce client : deux groupes de six
+-- lignes, chacun coiffe d'un selecteur de categorie
+CharacterAttributesFrame = CreateFrame("Frame", "CharacterAttributesFrame", CharacterFrame)
+for _, cote in ipairs({ "Left", "Right" }) do
+    local sel = CreateFrame("CheckButton", "MostrarStatPaperDoll" .. cote .. "DropDown",
+        CharacterAttributesFrame)
+    sel:SetWidth(120); sel:SetHeight(18)
+    for i = 1, 6 do
+        local l = CreateFrame("Frame", "PlayerStatFrame" .. cote .. i, CharacterAttributesFrame)
+        l:SetWidth(155); l:SetHeight(16)
+    end
+end
 CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
 CharacterResistanceFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -60, -80)
 ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
@@ -1668,6 +1680,25 @@ def main():
     print("   apres un passage du client : %s (%s, %s)" % (pp2[1], pp2[4], pp2[5]))
     assert (pp2[1], pp2[4], pp2[5]) == ("CENTER", 120, -40),         "la place retenue doit etre reposee apres le client"
     lua.execute('ForeverUIDB.positions["feuille"] = nil')
+
+    # LES STATISTIQUES, dans le volet droit, sous la bande de pierre.
+    l1 = g.PlayerStatFrameLeft1
+    l6 = g.PlayerStatFrameLeft6
+    r1 = g.PlayerStatFrameRight1
+    sel = g.MostrarStatPaperDollLeftDropDown
+    pl1 = l1.points[len(list(l1.points.values()))]
+    print("   stats : ligne large de %d, premiere a (%s, %s) du volet droit" % (
+        l1.width, pl1[4], pl1[5]))
+    assert pl1[2].name == "ForeverUICharacterRightPane", "elles vont dans le volet droit"
+    assert l1.width == 233 - 40, "elles sont elargies au volet moins ses marges"
+    ecart = l1.points[len(list(l1.points.values()))][5] -         g.PlayerStatFrameLeft2.points[len(list(g.PlayerStatFrameLeft2.points.values()))][5]
+    print("   pas entre deux lignes : %d (16 : PStatFrameTemplate)" % ecart)
+    assert ecart == 16, "le pas est celui du modele de ligne"
+    assert sel.points[len(list(sel.points.values()))][5] > pl1[5],         "le selecteur coiffe son groupe"
+    y6 = l6.points[len(list(l6.points.values()))][5]
+    yr1 = r1.points[len(list(r1.points.values()))][5]
+    print("   second groupe %d plus bas que la derniere ligne du premier" % (y6 - yr1))
+    assert yr1 < y6, "le second groupe vient sous le premier"
 
     fermer = g.CharacterFrameCloseButton
     pf = fermer.points[1]
