@@ -423,7 +423,8 @@ n'y a donc rien à trancher ici.
 | Titre affiché | **toujours** le nom du personnage et son titre (`UnitPVPName`), en clair — écart assumé : `characterFrameDisplayInfo` fait suivre le titre au sous-cadre affiché (REPUTATION, PVP, SKILLS…), demandé autrement |
 | Fermeture | 24 × 24 au `TOPRIGHT (1, 0)`, le X rouge des panneaux modernes |
 | Niveau, race et classe | dans le **volet droit**, `TOP (0, −54)`, 220 de large — `PaperDollLevelInfo` est à `TOP (0, −50)` des onglets latéraux, eux-mêmes à `TOP (0, −4)` du volet |
-| Flèches du modèle | centrées horizontalement dans le volet gauche, 29 sous son bord haut |
+| Flèches du modèle | centrées horizontalement dans le volet gauche (réglage : `ROTATION_Y`) |
+| Déplacement | la **barre du haut** sert de poignée ; la place choisie est retenue dans `ForeverUIDB` et **reposée après le client**, dont le système de panneaux replace la fenêtre à chaque ouverture |
 | Onglets latéraux | `ModeTabs` 64 × 384 au `TOPRIGHT` du cadre, y −30 ; onglets 55 × 55 (`common-sidetab` fait 55 × 60 dont 5 de transparent), icône centrée à −3 |
 
 **L'ordre de dessin, corrigé après le premier essai en jeu.** Les volets sont

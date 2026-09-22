@@ -98,10 +98,11 @@ function CreateFrame(kind, name, parent, template)
     function f:GetName() return self.name end
     function f:RegisterEvent(e) self.events[e] = true end
     function f:UnregisterAllEvents() self.events = {} end
-    function f:RegisterForDrag() end
+    function f:RegisterForDrag(...) self.dragButtons = { ... } end
     function f:RegisterForClicks() end
-    function f:EnableMouse() end
-    function f:SetMovable() end
+    function f:EnableMouse(v) self.mouseEnabled = (v ~= false) end
+    function f:SetMovable(v) self.movable = (v ~= false) end
+    function f:IsMovable() return self.movable end
     function f:SetClampedToScreen() end
     function f:GetNormalTexture()
         if not self._normal then self._normal = newRegion("texture") end
@@ -1643,6 +1644,30 @@ def main():
     assert titre.justify == "CENTER", "il se centre dans sa bande"
     assert not g.CharacterNameText.shown, "le titre du client s efface"
     assert bande.GetFrameLevel(bande) > habillage.GetFrameLevel(habillage),         "le titre passe au-dessus du metal, comme TitleContainer a 510"
+
+    # LA BARRE DU HAUT DEPLACE LA FENETRE, et la place est retenue : le
+    # systeme de panneaux du client repose la fenetre a chaque ouverture.
+    print("   barre du haut : souris=%s, glissable=%s, cadre deplacable=%s" % (
+        bande.mouseEnabled, bande.scripts.OnDragStart is not None, perso.movable))
+    assert bande.mouseEnabled, "la barre doit prendre la souris"
+    assert bande.scripts.OnDragStart is not None, "la barre doit servir de poignee"
+    assert perso.movable, "le cadre doit etre deplacable"
+
+    bande.scripts.OnDragStart(bande)
+    perso.SetPoint(perso, "CENTER", g.UIParent, "CENTER", 120, -40)
+    bande.scripts.OnDragStop(bande)
+    retenue = g.ForeverUIDB.positions["feuille"]
+    print("   apres deplacement : %s (%s, %s) retenu" % (
+        retenue.point, retenue.x, retenue.y))
+    assert retenue.point == "CENTER" and retenue.x == 120 and retenue.y == -40,         "la place doit etre retenue"
+
+    # le client repose sa fenetre : on doit la remettre
+    perso.SetPoint(perso, "TOPLEFT", g.UIParent, "TOPLEFT", 0, 0)
+    g.ForeverUI.CharacterSheet.Apply()
+    pp2 = perso.points[len(list(perso.points.values()))]
+    print("   apres un passage du client : %s (%s, %s)" % (pp2[1], pp2[4], pp2[5]))
+    assert (pp2[1], pp2[4], pp2[5]) == ("CENTER", 120, -40),         "la place retenue doit etre reposee apres le client"
+    lua.execute('ForeverUIDB.positions["feuille"] = nil')
 
     fermer = g.CharacterFrameCloseButton
     pf = fermer.points[1]

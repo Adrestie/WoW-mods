@@ -169,6 +169,16 @@ local ANCIENS_CADRES = {
 	"CharacterAttributesFrame", "CharacterResistanceFrame",
 }
 
+-- LA FENETRE SE DEPLACE PAR SA BARRE DU HAUT. Le cadre du client est
+-- range par le systeme de panneaux : il le repose a chaque ouverture. On
+-- retient donc la place choisie et on la repose apres lui, a chaque
+-- passage de l'habillage -- qui tourne justement a l'ouverture.
+local function placeRetenue()
+	ForeverUIDB = ForeverUIDB or {}
+	ForeverUIDB.positions = ForeverUIDB.positions or {}
+	return ForeverUIDB.positions
+end
+
 local voletGauche, voletDroit, barreOnglets
 local onglets = {}
 
@@ -279,12 +289,33 @@ local function poserTitre(cadre)
 		texte:SetJustifyH("CENTER")
 		cadre.foreverBandeTitre = bande
 		cadre.foreverTitre = texte
+
+		-- La barre du haut sert de poignee : clic maintenu, la fenetre suit.
+		cadre:SetMovable(true)
+		cadre:SetClampedToScreen(true)
+		bande:EnableMouse(true)
+		bande:RegisterForDrag("LeftButton")
+		bande:SetScript("OnDragStart", function()
+			if not InCombatLockdown() then
+				cadre:StartMoving()
+			end
+		end)
+		bande:SetScript("OnDragStop", function()
+			cadre:StopMovingOrSizing()
+			local point, _, pointRelatif, x, y = cadre:GetPoint(1)
+			if point then
+				placeRetenue()["feuille"] = {
+					point = point, relativePoint = pointRelatif, x = x, y = y,
+				}
+			end
+		end)
 	end
 
 	-- UnitPVPName rend le nom ACCOMPAGNE de son titre quand le joueur en
 	-- porte un ; sans titre, c'est le nom seul.
 	local texte = cadre.foreverTitre
 	local nom = (UnitPVPName and UnitPVPName("player")) or UnitName("player")
+	-- (le deplacement est monte plus bas, une seule fois)
 	texte:SetText(nom or "")
 	if HIGHLIGHT_FONT_COLOR then
 		texte:SetTextColor(HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g,
@@ -564,6 +595,19 @@ local function poserOnglets(cadre)
 	end
 end
 
+-- Le systeme de panneaux du client repose la fenetre a chaque ouverture :
+-- on remet la place retenue apres lui.
+local function reposerLaPlace(cadre)
+	local place = placeRetenue()["feuille"]
+	if not place or InCombatLockdown() then
+		return
+	end
+
+	cadre:ClearAllPoints()
+	cadre:SetPoint(place.point, UIParent, place.relativePoint or place.point,
+		place.x or 0, place.y or 0)
+end
+
 local function habiller()
 	local cadre = CharacterFrame
 	if not cadre or InCombatLockdown() then
@@ -593,6 +637,7 @@ local function habiller()
 	end
 	poserPortrait(cadre)
 	poserTitre(cadre)
+	reposerLaPlace(cadre)
 	poserFermeture(cadre)
 	poserModele()
 	poserResistances()
