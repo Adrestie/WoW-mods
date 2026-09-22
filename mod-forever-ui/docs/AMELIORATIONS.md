@@ -251,6 +251,13 @@ qui glisse. Les boutons suivent sans qu'on y touche, et déplacer son propre
 cadre reste permis en combat. La course vaut une hauteur de bouton, la durée
 `BONUS_ACTIONBUTTON_SLIDE_TIME` quand le client la déclare, 0,2 s sinon.
 
+Le mouvement va **dans les deux sens**. Au retrait, c'est le client qui le rend
+possible : comme pour ses autres barres glissantes, il pose `mode = "hide"`,
+**continue d'afficher la barre** le temps du mouvement, et ne la masque qu'à la
+fin. On lit donc son `mode` et pas seulement sa visibilité. Si un client ne
+portait pas ce champ, le retrait resterait instantané — rien ne peut animer des
+boutons déjà masqués.
+
 Son art d'époque (deux morceaux glissants) est effacé par le même balayage de
 régions que celui de la barre du familier.
 

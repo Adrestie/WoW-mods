@@ -1251,6 +1251,26 @@ def main():
     glissiere.scripts.OnUpdate(glissiere, 0.5)
     assert glissiere.points[1][5] == 0, "au repos, la glissiere ne bouge plus"
 
+    # LE RETRAIT. Le client pose mode = "hide", garde la barre affichee le
+    # temps du mouvement, puis la masque : la glissiere redescend.
+    lua.execute('BonusActionBarFrame.mode = "hide"')
+    glissiere.scripts.OnUpdate(glissiere, 0.1)
+    descente = glissiere.points[1][5]
+    print("   retrait : a mi-course %.1f" % descente)
+    assert -45 < descente < 0, "elle doit redescendre progressivement"
+    glissiere.scripts.OnUpdate(glissiere, 0.2)
+    print("   puis %.0f (sortie)" % glissiere.points[1][5])
+    assert glissiere.points[1][5] == -45, "elle doit finir une hauteur de bouton plus bas"
+
+    # le client la masque enfin : elle est prete a remonter
+    lua.execute('BonusActionBarFrame.mode = "none"')
+    g.BonusActionBarFrame.Hide(g.BonusActionBarFrame)
+    glissiere.scripts.OnUpdate(glissiere, 0.05)
+    g.BonusActionBarFrame.Show(g.BonusActionBarFrame)
+    glissiere.scripts.OnUpdate(glissiere, 0.0)
+    print("   a la posture suivante : depart a %.0f" % glissiere.points[1][5])
+    assert glissiere.points[1][5] == -45, "le mouvement suivant repart d en bas"
+
     print("   art d'epoque de la barre bonus : %s et %s" % (
         g.BonusActionBarTexture0.alpha, g.BonusActionBarTexture1.alpha))
     assert g.BonusActionBarTexture0.alpha == 0 and g.BonusActionBarTexture1.alpha == 0,         "l art glissant d epoque doit disparaitre"

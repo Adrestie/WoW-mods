@@ -319,21 +319,35 @@ local function poserGlissiere(avancement)
 end
 poserGlissiere(1)
 
--- Le glissement se declenche a l'apparition de la barre bonus, jamais de
--- lui-meme : hors mouvement, la glissiere est au repos sur le porteur.
+-- Le glissement va dans les DEUX sens. A l'apparition la barre monte ; au
+-- retrait elle redescend, et c'est le client qui rend cela possible : comme
+-- ses autres barres glissantes, il pose mode = "hide", continue de
+-- l'afficher le temps du mouvement, et ne la masque qu'a la fin. On lit
+-- donc son mode plutot que sa seule visibilite.
+--
+-- Si un client ne portait pas ce champ, le retrait resterait instantane :
+-- rien ne peut animer des boutons deja masques.
 glissiere.avancement = 1
+glissiere.cible = 1
 glissiere:SetScript("OnUpdate", function(self, elapse)
-	local visible = BonusActionBarFrame and BonusActionBarFrame:IsShown()
+	local barre = BonusActionBarFrame
+	local visible = barre and barre:IsShown()
 
 	if visible and not self.visible then
-		self.avancement = 0             -- elle vient de paraitre : on glisse
+		self.avancement, self.cible = 0, 1      -- elle parait : elle monte
+	elseif visible and barre.mode == "hide" then
+		self.cible = 0                          -- le client la retire
+	elseif not visible then
+		self.avancement, self.cible = 0, 0      -- prete a remonter
 	end
 	self.visible = visible
 
-	if self.avancement < 1 then
-		self.avancement = self.avancement + (elapse or 0) / GLISSEMENT_DUREE
-		if self.avancement > 1 then
-			self.avancement = 1
+	if self.avancement ~= self.cible then
+		local pas = (elapse or 0) / GLISSEMENT_DUREE
+		if self.cible > self.avancement then
+			self.avancement = math.min(self.cible, self.avancement + pas)
+		else
+			self.avancement = math.max(self.cible, self.avancement - pas)
 		end
 		poserGlissiere(self.avancement)
 	end
