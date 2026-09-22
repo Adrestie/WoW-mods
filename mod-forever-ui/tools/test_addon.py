@@ -2779,9 +2779,17 @@ def main():
     print("   carte : %dx%d, fond %dx%d a x=%s, texte a x=%s" % (
         carte.width, carte.height, carte.foreverFond.width, carte.foreverFond.height,
         carte.foreverFond.points[1][4], g.GearSetButton1Name.points[1][4]))
-    assert carte.width == 169 and carte.height == 44, "GearSetButtonTemplate : 169 x 44"
+    assert carte.width == 216 and carte.height == 40,         "ecart assume : moins haute, et large jusqu au bord de la fenetre"
     assert carte.foreverFond.points[1][4] == 42, "UI-Character-Info-OutfitCard a x = 42"
-    assert (carte.foreverFond.width, carte.foreverFond.height) == (152, 49)
+    assert (carte.foreverFond.width, carte.foreverFond.height) == (174, 45)
+    # Les deux ecarts demandes, en abscisses du volet de 233.
+    pcarte = carte.points[len(list(carte.points.values()))]
+    gaucheIcone = pcarte[4] + 4
+    droiteCarte = pcarte[4] + 42 + 174
+    print("   ecarts : separateur->icone %d, carte->bord %d" % (
+        gaucheIcone - 5, 233 - droiteCarte))
+    assert gaucheIcone - 5 == 233 - droiteCarte, "les deux ecarts doivent etre egaux"
+    assert carte.foreverChoisi.layer == "ARTWORK" and carte.foreverSurvol.layer == "BORDER",         "le choix passe au-dessus du survol, sans dependre de l ordre de creation"
     assert g.GearSetButton1Name.points[1][4] == 55, "l intitule a LEFT 55"
     icone = carte._normal
     assert icone.width == 36 and icone.points[1][4] == 4, "l icone 36 a LEFT 4"

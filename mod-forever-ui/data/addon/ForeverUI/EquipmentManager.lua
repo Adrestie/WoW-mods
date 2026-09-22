@@ -49,15 +49,31 @@
 
 ForeverUI = ForeverUI or {}
 
-local CARTE_L, CARTE_H = 169, 44
-local CARTE_FOND_L, CARTE_FOND_H = 152, 49
+-- ECARTS ASSUMES, sur demande. camelot donne une carte de 169 x 44 dont le
+-- fond fait 152 x 49 pose a x = 42. Ici :
+--
+--   * la liste glisse de 4 vers la droite (LISTE_X de 5 a 9) ;
+--   * la carte est moins haute -- 40 au lieu de 44, le fond suivant a 45,
+--     l'image gardant les 5 de debord de la source ;
+--   * le fond est plus large, pour que l'ecart entre le separateur des
+--     volets et le bord gauche d'une icone soit CELUI du bord droit de la
+--     fenetre au bord droit de la carte.
+--
+-- Le calcul de cette largeur, en abscisses du volet (233 de large) :
+--   le separateur est pose a -6 et fait 11 -> son bord droit tombe a 5
+--   l'icone commence a LISTE_X + 4            -> 13, donc 8 d'ecart
+--   la carte finit a LISTE_X + 42 + largeur   -> il faut 233 - 8 = 225
+--   d'ou largeur = 225 - 9 - 42 = 174
+-- Le bouton, lui, couvre toute la carte : 42 + 174.
+local CARTE_FOND_L, CARTE_FOND_H = 174, 45
 local CARTE_FOND_X = 42
+local CARTE_L, CARTE_H = CARTE_FOND_X + CARTE_FOND_L, 40
 local CARTE_ICONE, CARTE_ICONE_X = 36, 4
 local CARTE_TEXTE_X = 55
 local CARTE_TEXTE_L, CARTE_TEXTE_H = 98, 38
 local COCHE_X = -23
 
-local LISTE_X, LISTE_Y = 5, -8
+local LISTE_X, LISTE_Y = 9, -8
 local LISTE_X2, LISTE_Y2 = -20, 105
 local BOUTON_L, BOUTON_H = 99, 28
 local BOUTON_Y, BOUTON_ECART = 20, 50
@@ -171,10 +187,14 @@ local function habillerCarte(bouton)
 		return t
 	end
 
+	-- LE CHOIX PASSE AU-DESSUS DU SURVOL. Ils etaient sur le meme calque,
+	-- ou seul l'ordre de creation departage -- trop fragile pour une regle
+	-- d'affichage. Le survol reste en BORDER, le choix monte en ARTWORK :
+	-- l'ordre ne depend plus de rien.
 	bouton.foreverFond = carte(ATLAS_FOND, "BACKGROUND")
 	bouton.foreverSurvol = carte(ATLAS_SURVOL, "BORDER")
 	bouton.foreverSurvol:Hide()
-	bouton.foreverChoisi = carte(ATLAS_CHOISI, "BORDER")
+	bouton.foreverChoisi = carte(ATLAS_CHOISI, "ARTWORK")
 	bouton.foreverChoisi:Hide()
 
 	if icone then
