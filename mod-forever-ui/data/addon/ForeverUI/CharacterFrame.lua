@@ -64,7 +64,12 @@ local COMBLE = 20                       -- les volets commencent sous le titre
 local NIVEAU_ART = 5                    -- l'art passe au-dessus des volets
 
 local EMPLACEMENT = 40
+
+-- L'ECART entre deux emplacements. La source n'en donne qu'un, 6, pour les
+-- deux sens. ECART ASSUME, sur demande : les colonnes sont resserrees de 2
+-- px, la rangee des armes garde le 6 de la source.
 local ECART = 6
+local ECART_VERTICAL = ECART - 2
 local GAUCHE_X, GAUCHE_Y = 24, -60
 local DROITE_X, DROITE_Y = -20, -60
 local ARME_X, ARME_Y = -60, 30
@@ -493,7 +498,7 @@ local function poserEmplacements()
 			if index == 1 then
 				bouton:SetPoint("TOPLEFT", voletGauche, "TOPLEFT", GAUCHE_X, GAUCHE_Y)
 			else
-				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, -ECART)
+				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, -ECART_VERTICAL)
 			end
 			precedent = bouton
 		end
@@ -507,7 +512,7 @@ local function poserEmplacements()
 			if index == 1 then
 				bouton:SetPoint("TOPRIGHT", voletGauche, "TOPRIGHT", DROITE_X, DROITE_Y)
 			else
-				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, -ECART)
+				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, -ECART_VERTICAL)
 			end
 			precedent = bouton
 		end

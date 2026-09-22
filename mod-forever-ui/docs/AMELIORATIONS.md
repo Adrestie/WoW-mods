@@ -529,6 +529,11 @@ déclenchait rien, et un greffon cassé serait passé inaperçu. Il enveloppe
 désormais vraiment — l'originale, puis le greffon, et les valeurs rendues sont
 celles de l'originale.
 
+**L'écart entre emplacements est désormais dissymétrique.** La source n'en
+donne qu'un, **6**, pour les deux sens. À la demande, les deux colonnes sont
+resserrées de 2 px (`ECART_VERTICAL` = 4) ; la rangée des armes garde le 6 de
+la source, et l'écart des munitions (19) ne bouge pas.
+
 **L'échelle du modèle, et ce que ce client sait en faire.** Camelot cadre son
 personnage par une scène (`CharacterModelScene`) et la position de son
 acteur. 3.3.5 n'a pas de scène, et ce client n'a **ni `SetCamDistanceScale`

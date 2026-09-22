@@ -1710,12 +1710,15 @@ def main():
     print("   apres un second passage : %d (pas d escalade)" % tete.frameLevel)
     assert tete.frameLevel == niveauAvant, "le niveau ne doit pas monter a chaque passage"
 
-    print("   emplacement : %d x %d (40) | ecart %d (6)" % (
+    print("   emplacement : %d x %d (40) | ecart vertical %d (4)" % (
         tete.width, tete.height, -cou.points[1][5]))
     assert tete.width == 40 and tete.height == 40, "PaperDollItemSlotButtonTemplate : 40"
     pt = tete.points[1]
     assert (pt[1], pt[4], pt[5]) == ("TOPLEFT", 24, -60), "la colonne gauche part de (24, -60)"
-    assert cou.points[1][5] == -6, "les emplacements sont espaces de 6"
+    assert cou.points[1][5] == -4,         "colonnes resserrees de 2 px sur les 6 de la source, a la demande"
+    armes = g.CharacterSecondaryHandSlot.points[1]
+    print("   rangee des armes : ecart horizontal %d (6, celui de la source)" % armes[4])
+    assert armes[4] == 6, "la rangee des armes garde l ecart de la source"
 
     mains = g.CharacterHandsSlot.points[1]
     print("   colonne droite : %s (%s, %s)" % (mains[1], mains[4], mains[5]))
