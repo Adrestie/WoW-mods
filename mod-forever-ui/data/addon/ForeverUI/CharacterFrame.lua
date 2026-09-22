@@ -141,7 +141,21 @@ local ONGLET_ICONE_X = -3               -- GetIconAnchorOffsetsForTabArt
 local PORTRAIT_ONGLET = 0.03125         -- UpdateCharacterModeTabPortrait
 
 local PORTRAIT = 44                     -- voir le calcul plus bas
-local PORTRAIT_X, PORTRAIT_Y = 25, -22.5
+
+-- LE PORTRAIT SUIT SON ANNEAU. L'anneau est porte par le coin haut gauche
+-- de l'encadrement : deplacer ce coin deplace le trou, et un portrait pose
+-- en dur se retrouve a cote. Sa place se calcule donc DEPUIS le coin, et
+-- non plus en absolu -- c'est ce qui l'avait desaxe quand l'encadrement est
+-- passe au calcul sur le filet interieur.
+--
+-- Centre du trou dans l'image du coin, en pixels d'affichage : (38 ; -38,5)
+-- du coin haut gauche de l'image. Mesure sur l'art -- l'anneau y occupe les
+-- plages 13..39 et 113..138 de la feuille, en double densite, soit un trou
+-- centre a 76 px de feuille = 38 affiches -- et c'est aussi ce que donnait
+-- la place validee en jeu quand le coin etait a (-13, 16).
+local PORTRAIT_TROU_X, PORTRAIT_TROU_Y = 38, -38.5
+local PORTRAIT_X = PANNEAU_COINS.coinHautGauche.x + PORTRAIT_TROU_X
+local PORTRAIT_Y = PANNEAU_COINS.coinHautGauche.y + PORTRAIT_TROU_Y
 
 -- LE TITRE. TitledPanelMixin:SetTitleOffsets pose le conteneur du titre en
 -- TOPLEFT (gauche, -1) et TOPRIGHT (droite, -1), avec son texte a TOP

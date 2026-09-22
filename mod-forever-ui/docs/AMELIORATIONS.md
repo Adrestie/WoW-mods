@@ -609,6 +609,24 @@ niveau du volet, passait dessous et se perdait sous le métal. Il prend un
 cran de plus que l'habillage — calculé depuis la constante et non depuis le
 cadre, puisque l'habillage n'existe pas encore quand les volets se montent.
 
+**Le portrait suit son anneau, il ne se recale pas.** L'anneau est porté par
+le **coin haut gauche de l'encadrement** : déplacer ce coin déplace le trou,
+et un portrait posé en absolu se retrouve à côté — c'est ce qui est arrivé
+quand l'encadrement est passé au calcul sur le filet intérieur. Sa place se
+calcule donc **depuis le coin** :
+
+```
+PORTRAIT_X = coinHautGauche.x + 38
+PORTRAIT_Y = coinHautGauche.y - 38,5
+```
+
+Le centre du trou vaut (38 ; −38,5) en pixels d'affichage depuis le coin haut
+gauche de l'image. Mesuré sur l'art — l'anneau occupe les plages 13..39 et
+113..138 de la feuille, en double densité, soit un trou centré à 76 px de
+feuille = 38 affichés — et c'est aussi ce que donnait la place validée en jeu
+quand le coin était à (−13, 16). Le banc vérifie l'écart au coin, pas la
+position absolue, pour que cela ne puisse plus dériver.
+
 **La source ne s'arrête pas à `NineSliceLayouts`.** `PortraitFrameTemplate`
 donne les mêmes décalages que `HeldBagLayout` — haut gauche (−13, 16), haut
 droit (4, 16), bas gauche (−13, −3), bas droit (4, −3) — seul l'atlas du coin

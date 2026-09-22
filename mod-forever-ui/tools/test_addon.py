@@ -1693,7 +1693,10 @@ def main():
         portrait.width, portrait.height, pp[1], pp[3], pp[4], pp[5],
         portrait.portraitOf))
     assert portrait.width == 44, "44 : ses coins tombent juste sous le metal de l anneau"
-    assert pp[4] == 25 and pp[5] == -22.5, "il se centre sur le trou mesure de l anneau"
+    # Il se calcule depuis le coin haut gauche : (-18,5 ; 17) + (38 ; -38,5).
+    assert pp[4] == 19.5 and pp[5] == -21.5,         "le portrait suit le trou de son anneau, porte par le coin de l encadrement"
+    coinHG = perso.foreverPanel.coinHautGauche.points[1]
+    assert pp[4] - coinHG[4] == 38 and pp[5] - coinHG[5] == -38.5,         "l ecart au coin est le centre mesure du trou, il ne doit pas deriver"
     assert portrait.portraitOf == "player", "l anneau ne doit pas rester vide"
 
     # Le fond du volet droit remplit son volet au lieu de s arreter a 383.
