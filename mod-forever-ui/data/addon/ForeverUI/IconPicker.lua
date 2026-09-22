@@ -252,6 +252,7 @@ local FOND_ALPHA = 0.8
 local FOND_MARGE = 7
 local BARRE_L = 8
 local FLECHE_L, FLECHE_H = 17, 11
+local CURSEUR_H = 36                    -- minimal-scrollbar-thumb-bottom
 
 local function habillerCadre(popup)
 	if popup.foreverCadre then
@@ -314,8 +315,14 @@ local function habillerBarre()
 
 	barre:SetWidth(BARRE_L)
 
+	-- LE CURSEUR EST UNE REGION DE LA BARRE : il ne doit pas partir avec
+	-- l'art d'epoque. Il etait efface par cette boucle, puis re-texture
+	-- sans qu'on lui rende son alpha -- donc invisible, et la barre
+	-- paraissait cassee.
+	local curseur = _G["GearManagerDialogPopupScrollFrameScrollBarThumbTexture"]
 	for _, region in ipairs({ barre:GetRegions() }) do
-		if region.GetObjectType and region:GetObjectType() == "Texture" then
+		if region ~= curseur and region.GetObjectType
+			and region:GetObjectType() == "Texture" then
 			region:SetAlpha(0)
 		end
 	end
@@ -337,12 +344,14 @@ local function habillerBarre()
 	milieuG:SetPoint("TOPLEFT", hautG, "BOTTOMLEFT")
 	milieuG:SetPoint("BOTTOMRIGHT", basG, "TOPRIGHT")
 
-	-- Le curseur : le client n'en a qu'une texture, on la remplace par le
-	-- morceau central de camelot, qui est fait pour s'etirer.
-	local curseur = _G["GearManagerDialogPopupScrollFrameScrollBarThumbTexture"]
+	-- Le client n'a qu'une texture de curseur, la ou camelot en a trois.
+	-- On prend son morceau central, fait pour s'etirer, a la taille du
+	-- curseur le plus court de la source : 8 x 36.
 	if curseur then
 		ForeverUI.SetAtlas(curseur, "minimal-scrollbar-thumb-middle-c60", true)
 		curseur:SetWidth(BARRE_L)
+		curseur:SetHeight(CURSEUR_H)
+		curseur:SetAlpha(1)
 	end
 
 	for nom, atlas in pairs({

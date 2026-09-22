@@ -2839,6 +2839,10 @@ def main():
     curseur = g.GearManagerDialogPopupScrollFrameScrollBarThumbTexture.texture or ""
     print("   curseur : %s" % curseur)
     assert "minimalscrollbar" in curseur.lower(),         "le curseur prend la feuille de camelot"
+    tex = g.GearManagerDialogPopupScrollFrameScrollBarThumbTexture
+    print("   curseur : %dx%d, alpha %s" % (tex.width, tex.height, tex.alpha))
+    assert tex.alpha != 0,         "il est une region de la barre : l effacement de l art d epoque l emportait"
+    assert tex.width == 8 and tex.height == 36, "8 x 36, le curseur le plus court de la source"
 
     choix = g.ForeverUIIconChoiceButton
     print("   choix courant : %dx%d, %s (%s, %s)" % (
