@@ -525,21 +525,31 @@ for i = 1, 5 do
     _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
     t:CreateTexture(nom .. "Fond", "ARTWORK")
 end
--- les statistiques du FrameXML modifie de ce client : deux groupes de six
--- lignes, chacun coiffe d'un selecteur de categorie. La categorie choisie
--- vit dans une CVar qui porte une CLE ; le texte est la globale du meme nom.
+-- les statistiques telles que le client les CHARGE (patch-enUS-2 et -3, le
+-- FrameXML d'origine) : deux groupes de six lignes StatFrameTemplate de
+-- 104 x 13, chacun coiffe de son UIDropDownMenuTemplate. La categorie
+-- choisie vit dans une CVar qui porte une CLE ; le texte est la globale du
+-- meme nom.
 PLAYERSTAT_BASE_STATS = "Attributs"
 PLAYERSTAT_MELEE_COMBAT = "Corps a corps"
 PLAYERSTAT_DEFENSES = "Defenses"
 function UpdatePaperdollStats(prefixe, cle) end
 CharacterAttributesFrame = CreateFrame("Frame", "CharacterAttributesFrame", CharacterFrame)
 for _, cote in ipairs({ "Left", "Right" }) do
-    local sel = CreateFrame("CheckButton", "MostrarStatPaperDoll" .. cote .. "DropDown",
-        CharacterAttributesFrame)
-    sel:SetWidth(120); sel:SetHeight(18)
+    -- UIDropDownMenuTemplate : 40 x 32, porte par un art qui le deborde,
+    -- et un bouton fils qui ouvre le menu.
+    local nom = "PlayerStatFrame" .. cote .. "DropDown"
+    local sel = CreateFrame("Frame", nom, CharacterAttributesFrame)
+    sel:SetWidth(149); sel:SetHeight(32)
+    for _, piece in ipairs({ "Left", "Middle", "Right" }) do
+        _G[nom .. piece] = sel:CreateTexture(nom .. piece, "ARTWORK")
+    end
+    _G[nom .. "Text"] = sel:CreateFontString(nom .. "Text", "ARTWORK")
+    local bouton = CreateFrame("Button", nom .. "Button", sel)
+    bouton:SetWidth(24); bouton:SetHeight(24)
     for i = 1, 6 do
         local l = CreateFrame("Frame", "PlayerStatFrame" .. cote .. i, CharacterAttributesFrame)
-        l:SetWidth(155); l:SetHeight(16)
+        l:SetWidth(104); l:SetHeight(13)
     end
 end
 CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
@@ -1706,31 +1716,41 @@ def main():
     l1 = g.PlayerStatFrameLeft1
     l6 = g.PlayerStatFrameLeft6
     r1 = g.PlayerStatFrameRight1
-    sel = g.MostrarStatPaperDollLeftDropDown
+    sel = g.PlayerStatFrameLeftDropDown
     pl1 = l1.points[len(list(l1.points.values()))]
     print("   stats : ligne large de %d, premiere a (%s, %s) du volet droit" % (
         l1.width, pl1[4], pl1[5]))
     assert pl1[2].name == "ForeverUICharacterRightPane", "elles vont dans le volet droit"
     assert l1.width == 233 - 40, "elles sont elargies au volet moins ses marges"
+    assert l1.height == 13, "StatFrameTemplate fait 104 x 13 : le pas vient de la"
     ecart = l1.points[len(list(l1.points.values()))][5] -         g.PlayerStatFrameLeft2.points[len(list(g.PlayerStatFrameLeft2.points.values()))][5]
-    print("   pas entre deux lignes : %d (16 : PStatFrameTemplate)" % ecart)
-    assert ecart == 16, "le pas est celui du modele de ligne"
+    print("   pas entre deux lignes : %d (13 : StatFrameTemplate)" % ecart)
+    assert ecart == 13, "le pas est celui du modele de ligne"
     assert sel.points[len(list(sel.points.values()))][5] > pl1[5],         "le selecteur coiffe son groupe"
     y6 = l6.points[len(list(l6.points.values()))][5]
     yr1 = r1.points[len(list(r1.points.values()))][5]
     print("   second groupe %d plus bas que la derniere ligne du premier" % (y6 - yr1))
     assert yr1 < y6, "le second groupe vient sous le premier"
 
-    # LES SELECTEURS DE CATEGORIE. Sans art ils sont invisibles : le client
-    # ne leur donne qu un surlignage.
-    selD = g.MostrarStatPaperDollRightDropDown
+    # LES SELECTEURS DE CATEGORIE. Leur art d origine deborde du cadre et ne
+    # le suit pas : il s efface, l en-tete moderne prend sa place.
+    selD = g.PlayerStatFrameRightDropDown
     psel = sel.points[len(list(sel.points.values()))]
     print("   selecteur : %d x %d, %s (%s, %s), visible=%s" % (
         sel.width, sel.height, psel[1], psel[4], psel[5], sel.shown))
     assert sel.width == 203 and sel.height == 40,         "197 x 40 chez camelot, elargi au volet : ses lignes font 193 et il deborde de 5"
     assert psel[4] == 15, "il deborde de 5 a gauche de ses lignes, posees a 20"
     assert sel.shown, "il doit etre visible"
-    assert sel.regions[1].texture is not None, "il porte le fond UI-Character-Info-Title"
+    assert sel.foreverFond.texture is not None, "il porte le fond UI-Character-Info-Title"
+    dore = [g.PlayerStatFrameLeftDropDownLeft, g.PlayerStatFrameLeftDropDownMiddle,
+            g.PlayerStatFrameLeftDropDownRight, g.PlayerStatFrameLeftDropDownText]
+    print("   cadre dore efface : %s" % [bool(r.shown) for r in dore])
+    assert not any(r.shown for r in dore), "l art du menu deroulant deborde : il s efface"
+    fleche = g.PlayerStatFrameLeftDropDownButton
+    pfl = fleche.points[len(list(fleche.points.values()))]
+    print("   fleche du menu : %s (%s, %s)" % (pfl[1], pfl[4], pfl[5]))
+    assert (pfl[1], pfl[3], pfl[4]) == ("RIGHT", "RIGHT", -6), "elle revient contre le bord droit"
+    assert sel.mouseEnabled and sel.scripts.OnMouseUp is not None,         "toute la barre ouvre le menu, pas seulement la fleche de 24"
     print("   intitules : gauche \"%s\" | droite \"%s\"" % (
         sel.foreverIntitule.text, selD.foreverIntitule.text))
     assert sel.foreverIntitule.text == "Attributs",         "l intitule est la categorie de la CVar, pas sa cle"

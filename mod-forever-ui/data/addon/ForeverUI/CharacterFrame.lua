@@ -130,48 +130,63 @@ local MODELE_Y = 24
 -- le pousserait un peu plus loin.
 local RESISTANCES_X = 30
 
--- LES STATISTIQUES. Ce client ne porte pas le PaperDollFrame d'origine : son
--- patch-enus-9.mpq livre un FrameXML modifie, avec deux groupes de six
--- lignes -- PlayerStatFrameLeft1..6 et PlayerStatFrameRight1..6 -- chacun
--- coiffe d'un selecteur de categorie (MostrarStatPaperDoll*DropDown). Le
--- modele d'une ligne, PStatFrameTemplate, fait 155 x 16 : un intitule a
--- gauche, sa valeur a droite ; les lignes s'enchainent sans ecart, d'ou un
--- pas de 16.
+-- LES STATISTIQUES.
 --
--- Elles sont reposees dans le volet droit, sous la bande de pierre. Elles
--- y sont elargies : le volet fait 233 et le modele 155, et une ligne dont
--- la valeur est calee a droite gagne a occuper toute la largeur.
-local STAT_PAS = 16
+-- D'OU VIENT LA SOURCE. Le client charge son PaperDollFrame depuis
+-- patch-enUS-2 (le .xml) et patch-enUS-3 (le .lua) : c'est le FrameXML
+-- d'origine. Le patch-enUS-9, lui, porte l'extension .disabled -- le jeu
+-- ne l'ouvre pas, et ses noms (MostrarStatPaperDoll*DropDown,
+-- PStatFrameTemplate) n'existent nulle part a l'ecran. Tout ce qui suit
+-- est releve sur ce que le client charge VRAIMENT : l'addon ne depend
+-- d'aucune archive ajoutee.
+--
+-- CE QUE LE CLIENT PORTE. CharacterAttributesFrame, 230 x 78, tient deux
+-- groupes de six lignes poses COTE A COTE -- PlayerStatFrameLeft1..6 et
+-- PlayerStatFrameRight1..6 -- chacun coiffe de son menu de categorie,
+-- PlayerStatFrameLeftDropDown et PlayerStatFrameRightDropDown. Le modele
+-- d'une ligne, StatFrameTemplate, fait 104 x 13 : un intitule a gauche,
+-- sa valeur dans un cadre fils cale a droite. Les lignes s'enchainent
+-- sans ecart, d'ou un pas de 13.
+--
+-- L'addon n'en recree aucun : le calcul des valeurs, les infobulles et le
+-- menu des categories restent au client. Il les repose l'un SOUS l'autre
+-- dans le volet droit -- une seule colonne, comme camelot -- et les
+-- elargit : le volet fait 233 et le modele 104, et une ligne dont la
+-- valeur est calee a droite gagne a occuper toute la largeur.
+local STAT_PAS = 13                     -- la hauteur de StatFrameTemplate
 local STAT_MARGE = 20                   -- de chaque cote du volet
 local STAT_HAUT = 10                    -- sous la bande de pierre
 local STAT_ENTRE_GROUPES = 16
 local STAT_PAR_GROUPE = 6
 
--- LES SELECTEURS DE CATEGORIE. Chaque groupe est coiffe d'un CheckButton de
--- 153 x 21 -- MostrarStatPaperDoll*DropDown -- dont le clic ouvre le menu
--- des cinq categories (PLAYERSTAT_DROPDOWN_OPTIONS). Ce bouton n'a AUCUNE
--- texture normale, seulement un surlignage : sans art il est invisible, et
--- l'art d'epoque qui le coiffait -- PlayerStatLeftToper, sur
--- UI-Character-StatBackground -- est declare hidden dans ce client.
+-- LES SELECTEURS DE CATEGORIE. Ce sont des UIDropDownMenuTemplate : un
+-- cadre de 40 x 32 dont l'art -- $parentLeft 25, $parentMiddle 115,
+-- $parentRight 25, sur 64 de haut -- DEBORDE tres largement et ne suit pas
+-- la taille du cadre. Il s'efface, et l'en-tete moderne prend sa place ;
+-- le clic, lui, reste celui du client ($parentButton ouvre le menu des
+-- cinq PLAYERSTAT_DROPDOWN_OPTIONS).
 --
 -- RELEVE -- CharacterStatFrameCategoryTemplate de camelot : 197 x 40, fond
 -- UI-Character-Info-Title tendu du TOPLEFT au BOTTOMRIGHT, intitule
 -- GameFontHighlight centre a (0, 1). Ses lignes font 187 : l'en-tete
 -- deborde donc de 5 de chaque cote.
 --
--- La categorie choisie vit dans une CVar, que le client relit a chaque
--- UpdatePaperdollStats ; l'intitule la suit.
+-- L'intitule ne se lit pas sur le bouton : la categorie choisie vit dans
+-- une CVar qui porte une CLE, et le texte est la globale du meme nom. Le
+-- client rappelle UpdatePaperdollStats(prefixe, cle) a chaque changement.
 local STAT_ENTETE = 40
 local STAT_ENTETE_DEBORD = 5
+local STAT_FLECHE = -6                  -- le bouton du client, contre le bord
 local ATLAS_ENTETE = "ui-character-info-title"
+local SELECTEUR_PIECES = { "Left", "Middle", "Right", "Text" }
 local STAT_GROUPES = {
 	{
-		selecteur = "MostrarStatPaperDollLeftDropDown",
+		selecteur = "PlayerStatFrameLeftDropDown",
 		prefixe = "PlayerStatFrameLeft",
 		cvar = "playerStatLeftDropdown",
 	},
 	{
-		selecteur = "MostrarStatPaperDollRightDropDown",
+		selecteur = "PlayerStatFrameRightDropDown",
 		prefixe = "PlayerStatFrameRight",
 		cvar = "playerStatRightDropdown",
 	},
@@ -532,21 +547,51 @@ local function poserResistances()
 	cadre:SetPoint(a[1], a[2], a[3], a[4] + RESISTANCES_X, a[5])
 end
 
--- Un selecteur prend le fond et l'intitule de l'en-tete moderne. Le bouton
--- reste celui du client : c'est lui qui porte le clic et le menu.
+-- Un selecteur prend le fond et l'intitule de l'en-tete moderne. Le menu
+-- reste celui du client : c'est lui qui porte les categories et le calcul.
 local function habillerSelecteur(selecteur)
 	if selecteur.foreverIntitule then
 		return
+	end
+
+	local nom = selecteur:GetName()
+
+	-- Le cadre dore du menu deroulant s'en va : il deborde du cadre et ne
+	-- se redimensionne pas avec lui. Son texte part avec, l'en-tete porte
+	-- le sien.
+	for _, piece in ipairs(SELECTEUR_PIECES) do
+		local region = nom and _G[nom .. piece]
+		if region then
+			region:Hide()
+		end
 	end
 
 	local fond = selecteur:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(fond, ATLAS_ENTETE, true)
 	fond:SetPoint("TOPLEFT", selecteur, "TOPLEFT")
 	fond:SetPoint("BOTTOMRIGHT", selecteur, "BOTTOMRIGHT")
+	selecteur.foreverFond = fond
 
 	local intitule = selecteur:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	intitule:SetPoint("CENTER", selecteur, "CENTER", 0, 1)
 	selecteur.foreverIntitule = intitule
+
+	-- Le bouton du client garde le clic ; il revient contre le bord droit.
+	-- Et la barre entiere ouvre le menu, comme un en-tete de camelot : une
+	-- fleche de 24 sur une barre de 203 se chercherait.
+	local bouton = nom and _G[nom .. "Button"]
+	if bouton then
+		bouton:ClearAllPoints()
+		bouton:SetPoint("RIGHT", selecteur, "RIGHT", STAT_FLECHE, 0)
+	end
+
+	selecteur:EnableMouse(true)
+	selecteur:SetScript("OnMouseUp", function(self)
+		ToggleDropDownMenu(nil, nil, self)
+		if PlaySound then
+			PlaySound("igMainMenuOptionCheckBoxOn")
+		end
+	end)
 end
 
 -- L'intitule d'une categorie : la CVar porte une CLE (PLAYERSTAT_BASE_STATS),

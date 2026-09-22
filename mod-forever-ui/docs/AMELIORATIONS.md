@@ -464,30 +464,44 @@ Trois autres corrections du même essai :
   sur ses sous-cadres, qui échappent à un balayage du seul `CharacterFrame`. La
   liste est balayée à chaque passage.
 
-**Ce client n'a pas le `PaperDollFrame` d'origine.** Son
-`Data/enus/patch-enus-9.mpq` livre un **FrameXML modifié** :
-`Interface\FrameXML\PaperDollFrame.lua` et `.xml`, `CharacterFrame.lua` et
-`.xml`, plus leurs textures. C'est donc ce code-là qui tourne, et non celui de
-Blizzard. Sa présentation des statistiques est reprise telle quelle et reposée
-dans le volet droit :
+**Une archive `.disabled` ne tourne pas — vérifier QUI répond.** Le
+`Data/enus/patch-enus-9.mpq` de ce client porte l'extension **`.disabled`** :
+le jeu ne l'ouvre pas. Le FrameXML modifié qu'il contient
+(`MostrarStatPaperDoll*DropDown`, `PStatFrameTemplate`) n'existe donc nulle
+part à l'écran, et un bloc bâti dessus vise des cadres absents. Une archive
+se lit toujours par la **chaîne** (`foreverui.mpq.open_client(...).where(chemin)`),
+qui répond comme le client : la dernière archive qui porte le fichier gagne,
+et les `.disabled` n'y sont pas.
 
-| Pièce | Valeur |
+Réponse de la chaîne pour cette feuille :
+
+| Fichier | Archive qui répond |
 |---|---|
-| Ligne de statistique | `PStatFrameTemplate`, 155 × 16 — intitulé à gauche, valeur à droite |
-| Groupes | `PlayerStatFrameLeft1..6` et `PlayerStatFrameRight1..6`, deux groupes de six **empilés** (le client les pose à −24 et −155, même x) |
-| Pas | 16, les lignes s'enchaînent sans écart |
-| Sélecteur de catégorie | `MostrarStatPaperDollLeftDropDown` et `…RightDropDown`, un par groupe |
-| Chez nous | dans le volet droit sous la bande de pierre, élargies à 193 (233 moins 20 de marge de chaque côté), niveau de cadre au-dessus du fond du volet |
+| `Interface\FrameXML\PaperDollFrame.xml` | `patch-enus-2.mpq` |
+| `Interface\FrameXML\PaperDollFrame.lua` | `patch-enus-3.mpq` |
+| `Interface\FrameXML\CharacterFrame.xml` | `patch-enus-2.mpq` |
+| `Interface\FrameXML\CharacterFrame.lua` | `patch-enus.mpq` |
+
+**Rien ne tient à une archive ajoutée.** La présentation des statistiques est
+celle du FrameXML d'origine, reposée par l'addon :
+
+| Pièce | Ce que le client charge | Chez nous |
+|---|---|---|
+| Ligne | `StatFrameTemplate`, **104 × 13** — intitulé à gauche, valeur dans un cadre fils calé à droite | élargie à 193 (233 moins 20 de marge de chaque côté) |
+| Pas | **13**, les lignes s'enchaînent sans écart | 13 |
+| Groupes | `PlayerStatFrameLeft1..6` et `…Right1..6`, **côte à côte** dans `CharacterAttributesFrame` (230 × 78) | l'un **sous** l'autre, une seule colonne comme camelot, 16 entre les deux |
+| Sélecteur | `PlayerStatFrameLeftDropDown` et `…RightDropDown`, `UIDropDownMenuTemplate` | en-tête moderne, voir plus bas |
 
 Ce sont des cadres du client : ils sont déplacés et élargis, jamais recréés —
-ce sont eux qui portent les infobulles et les menus de catégorie.
+ce sont eux qui portent le calcul des valeurs, les infobulles et le menu des
+catégories.
 
-**Un sélecteur de catégorie sans art est invisible.** `MostrarStatPaperDoll*
-DropDown` est un `CheckButton` de 153 × 21 qui ne porte **qu'un surlignage**
-(`ButtonHilight-Square`) : aucune texture normale, aucun intitulé. L'art qui le
-coiffait — `PlayerStatLeftToper`, sur `UI-Character-StatBackground` — est
-déclaré `hidden="true"` dans ce FrameXML. Il est donc habillé à la manière de
-`CharacterStatFrameCategoryTemplate` de camelot :
+**L'art d'un menu déroulant déborde de son cadre.** `UIDropDownMenuTemplate`
+mesure 40 × 32, mais son art en fait 165 × 64 : `$parentLeft` 25,
+`$parentMiddle` 115 (que `UIDropDownMenu_SetWidth` retaille), `$parentRight`
+25, tous ancrés les uns aux autres et non au cadre. Le redimensionner ne
+déplace donc rien. Les trois pièces et `$parentText` sont masqués, et
+l'en-tête de `CharacterStatFrameCategoryTemplate` (camelot) prend leur place :
 
 | Pièce | Camelot | Chez nous |
 |---|---|---|
@@ -496,18 +510,18 @@ déclaré `hidden="true"` dans ce FrameXML. Il est donc habillé à la manière 
 | Fond | `UI-Character-Info-Title` tendu du `TOPLEFT` au `BOTTOMRIGHT` | idem (`ui-character-info-title`, feuille 10) |
 | Intitulé | `GameFontHighlight` centré à (0, 1) | idem |
 
-L'intitulé n'est pas dans le bouton : la catégorie choisie vit dans une CVar
+L'intitulé ne se lit pas sur le cadre : la catégorie choisie vit dans une CVar
 (`playerStatLeftDropdown`, `playerStatRightDropdown`) qui porte une **clé**
 (`PLAYERSTAT_BASE_STATS`) ; le texte affichable est la globale du même nom. Le
 client rappelle `UpdatePaperdollStats(préfixe, clé)` à chaque changement : un
-`hooksecurefunc` dessus suffit à faire suivre l'intitulé. Le clic, lui, reste
-celui du client (`ToggleDropDownMenu` sur `PlayerStatFrameLeftDropDowner` et
-`PlayerStatFrameRightDropDown`, tous deux initialisés à leur `OnLoad`), et le
-menu s'ancre au bouton : il suit donc le sélecteur où qu'on le pose.
+`hooksecurefunc` dessus suffit à faire suivre l'intitulé — et il vaut mieux que
+le `$parentText` du client, qui reste vide tant que le menu n'a pas été ouvert
+une fois.
 
-À noter, le client ne masque ces boutons que pendant l'ouverture du
-`PaperDollFrameItemFlyout` ; partout ailleurs il les montre. Leur absence à
-l'écran tenait bien à l'art, pas à la visibilité.
+Le menu reste celui du client : `$parentButton` porte son `OnClick`
+(`ToggleDropDownMenu`) et revient contre le bord droit de l'en-tête. Une flèche
+de 24 sur une barre de 203 se chercherait, donc la barre entière ouvre aussi le
+menu (`OnMouseUp`), comme un en-tête de camelot.
 
 **Le banc n'enveloppait pas ses greffons.** Son `hooksecurefunc` se contentait
 d'enregistrer la fonction dans `HOOKS` : appeler la fonction greffée ne
