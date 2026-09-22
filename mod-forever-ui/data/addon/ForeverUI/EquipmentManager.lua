@@ -322,12 +322,6 @@ local function poserBoutons()
 		nouveau:SetHeight(NOUVEAU_H)
 		nouveau:SetPoint("BOTTOM", panneau, "BOTTOM", 0, NOUVEAU_Y)
 
-		-- AU-DESSUS DE LA FENETRE DU CLIENT. Elle est etalee sur tout le
-		-- panneau, elle prend la souris, et elle est posee un cran plus
-		-- haut : un bouton fils du PANNEAU passait dessous et ne recevait
-		-- plus rien. Ceux du client -- Equip, Save -- sont ses enfants a
-		-- elle, donc epargnes.
-		nouveau:SetFrameLevel(panneau:GetFrameLevel() + 5)
 		-- ECRIT EN DUR, faute de mieux : camelot ecrit
 		-- PAPERDOLL_NEWEQUIPMENTSET, et ce client ne porte aucune chaine
 		-- equivalente -- ni celle-la, ni "New Set" sous un autre nom. Ce
@@ -354,6 +348,19 @@ local function poserBoutons()
 		end)
 		panneau.nouveau = nouveau
 	end
+
+	-- AU-DESSUS DE LA FENETRE DU CLIENT, ET A CHAQUE PASSAGE. Elle est
+	-- etalee sur tout le panneau et elle prend la souris ; un bouton fils du
+	-- PANNEAU passe dessous et ne recoit plus rien. Ceux du client -- Equip,
+	-- Save -- sont ses enfants a elle, donc epargnes.
+	--
+	-- Le niveau se calcule depuis LE SIEN, releve maintenant : elle se hisse
+	-- toute seule a chaque ouverture, et cette fonction tourne justement
+	-- apres son OnShow.
+	local dialogue = _G["GearManagerDialog"]
+	if panneau.nouveau and dialogue then
+		panneau.nouveau:SetFrameLevel(dialogue:GetFrameLevel() + 5)
+	end
 end
 
 -- LA FENETRE DU CLIENT PASSE DANS LE VOLET. On la vide de son art de
@@ -370,6 +377,15 @@ local function accueillirDialogue()
 	dialogue:ClearAllPoints()
 	dialogue:SetAllPoints(panneau)
 	dialogue:SetFrameLevel(panneau:GetFrameLevel() + 1)
+
+	-- ELLE N'EST PLUS UNE FENETRE, ELLE NE DOIT PLUS SE HISSER.
+	-- GearManagerDialog est declaree toplevel dans le FrameXML, et son
+	-- OnShow finit par GearManagerDialog:Raise() : a chaque ouverture elle
+	-- repasse au sommet de sa strate, donc au-dessus de tout ce que le
+	-- panneau porte. Un niveau pose une fois pour toutes ne tenait pas.
+	if dialogue.SetToplevel then
+		dialogue:SetToplevel(false)
+	end
 
 	local regions = { dialogue:GetRegions() }
 	for _, region in ipairs(regions) do

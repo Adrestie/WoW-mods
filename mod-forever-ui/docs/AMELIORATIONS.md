@@ -742,7 +742,12 @@ toujours le client qui tient la liste, la sélection et les infobulles.
 `GearManagerDialog` est étalée sur tout le panneau et posée un cran plus haut
 que lui : un bouton fils du **panneau** passait dessous et ne recevait plus
 rien. Ceux du client — Equip, Save — sont ses enfants à elle, donc épargnés.
-Le bouton « New Set » monte donc au-dessus d'elle. Même famille de défaut que
+Et elle **se hisse toute seule** : elle est déclarée `toplevel="true"` dans le
+FrameXML, et son `OnShow` finit par `GearManagerDialog:Raise()` — à chaque
+ouverture elle repasse au sommet de sa strate, après tout niveau posé une fois
+pour toutes. Deux corrections : `SetToplevel(false)`, puisqu'elle n'est plus
+une fenêtre, et le niveau du bouton **recalculé depuis le sien à chaque
+passage**, la pose des boutons tournant justement après son `OnShow`. Même famille de défaut que
 le modèle 3D sur les emplacements d'équipement : **un cadre sensible à la
 souris qu'on étale sur un volet avale tout ce qui reste dessous**.
 

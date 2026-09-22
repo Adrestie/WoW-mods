@@ -162,6 +162,10 @@ function CreateFrame(kind, name, parent, template)
     function f:RefreshUnit() self.refreshed = (self.refreshed or 0) + 1 end
     function f:GetModelScale() return self.modelScale or 1 end
     function f:SetFrameLevel(l) self.frameLevel = l end
+    function f:SetToplevel(v) self.toplevel = (v ~= false) end
+    -- Le vrai Raise met le cadre au sommet de sa strate. GearManagerDialog
+    -- le fait a chaque ouverture, et ecrasait le niveau de nos boutons.
+    function f:Raise() self.frameLevel = (self.frameLevel or 1) + 20 end
     function f:SetScale(v) self.scale = v end
     function f:GetScale() return self.scale or 1 end
     function f:GetFrameLevel() return self.frameLevel or 1 end
@@ -658,7 +662,11 @@ function GearManagerDialog_Update()
     end
 end
 function GearManagerDialogSaveSet_OnClick() end
-function GearManagerDialog_OnShow() end
+function GearManagerDialog_OnShow()
+    if GearManagerDialog.toplevel ~= false then
+        GearManagerDialog:Raise()
+    end
+end
 CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
 CharacterResistanceFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -60, -80)
 ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
@@ -2129,8 +2137,14 @@ def main():
     assert nouveau.text == "New Set",         "ecrit en dur : ce client ne porte aucune chaine equivalente"
     assert len(list(nouveau.foreverNormal.values())) == 9,         "le meme bouton tertiaire que les selecteurs, decoupe"
     assert nouveau.scripts.OnMouseDown or nouveau.hooks.OnMouseDown,         "l etat presse suit le bouton de la souris"
-    print("   niveaux : fenetre du client %d, bouton %d" % (
-        g.GearManagerDialog.frameLevel or 1, nouveau.frameLevel or 1))
+    # Elle est declaree toplevel et se hisse a chaque ouverture : le niveau
+    # du bouton doit se recalculer apres, pas une fois pour toutes.
+    lua.execute("GearManagerDialog_OnShow()")
+    g.ForeverUI.EquipmentPane.Apply()
+    print("   niveaux apres une ouverture : fenetre %d, bouton %d, toplevel=%s" % (
+        g.GearManagerDialog.frameLevel or 1, nouveau.frameLevel or 1,
+        g.GearManagerDialog.toplevel))
+    assert g.GearManagerDialog.toplevel is False,         "elle n est plus une fenetre : elle ne doit plus se hisser"
     assert (nouveau.frameLevel or 1) > (g.GearManagerDialog.frameLevel or 1),         "la fenetre du client couvre le panneau et prend la souris"
     assert nouveau.scripts.OnClick is not None, "et il porte bien son clic"
     assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
