@@ -259,14 +259,14 @@ local ONGLET_ECART = -2
 -- LES INDICES SONT CEUX DE 3.3.5, et non ceux de camelot : ici
 -- 1 personnage, 2 familier, 3 reputation, 4 competences, 5 monnaie.
 local ONGLET_ICONES = {
-	[3] = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Reputation2_c60",
-	[4] = "Interface\\ForeverUI\\Icons\\Ability_Racial_JackofAllTrades",
-	[5] = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Currency_c60",
+	[3] = "Interface\\ForeverUI\\TabIcons\\Inv_SideTab_Reputation2_c60",
+	[4] = "Interface\\ForeverUI\\TabIcons\\Ability_Racial_JackofAllTrades",
+	[5] = "Interface\\ForeverUI\\TabIcons\\Inv_SideTab_Currency_c60",
 	pvp = {
-		Alliance = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Honor_Alliance_c60",
-		Horde = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Honor_Horde_c60",
+		Alliance = "Interface\\ForeverUI\\TabIcons\\Inv_SideTab_Honor_Alliance_c60",
+		Horde = "Interface\\ForeverUI\\TabIcons\\Inv_SideTab_Honor_Horde_c60",
 	},
-	stats = "Interface\\ForeverUI\\Icons\\Inv_SideTab_Stats_c60",
+	stats = "Interface\\ForeverUI\\TabIcons\\Inv_SideTab_Stats_c60",
 }
 
 -- L'ORDRE DE LA COLONNE. camelot va personnage, reputation, competences,
@@ -325,9 +325,20 @@ local ONGLET_L, ONGLET_H = 55, 55       -- 55 x 60 moins 5 de transparent
 -- GetIconAnchorOffsetsForTabArt rend (-3, 0) : elle n'est pas centree, elle
 -- est decalee vers la gauche, l'art de l'onglet etant transparent a droite.
 --
--- CE QUI MANQUE ENCORE : la source masque l'icone par common-sidetab-mask,
--- une MaskTexture. 3.3.5 n'en a pas ; les angles de l'icone restent donc
--- carres la ou la source les arrondit.
+-- LE MASQUE EST CUIT DANS L'IMAGE. La source decoupe l'icone par
+-- common-sidetab-mask, une MaskTexture que 3.3.5 n'a pas. Ce que le client
+-- ne sait pas faire a l'ecran, tools/cuire_masque.py le fait avant : l'alpha
+-- du masque est multiplie dans celui de l'icone. D'ou deux dossiers --
+-- icons/ garde l'export brut, TabIcons/ porte les versions cuites, et c'est
+-- celles-la qu'on affiche.
+--
+-- LE ROGNAGE RESTE INDISPENSABLE : la cuisson a ete calculee en supposant
+-- que l'icone serait affichee a 50 x 50 avec ce rognage. L'enlever
+-- decalerait l'image sous son propre masque.
+--
+-- L'ONGLET DU PERSONNAGE FAIT EXCEPTION : son icone est le portrait du
+-- joueur, pose par SetPortraitTexture a chaque changement d'apparence. Il
+-- n'y a pas de fichier a cuire, ses angles restent donc vifs.
 local ONGLET_ICONE = 50                 -- interiorExtent
 local ONGLET_ICONE_X = -3               -- GetIconAnchorOffsetsForTabArt
 local PORTRAIT_ONGLET = 0.03125         -- UpdateIconInterior, et le portrait

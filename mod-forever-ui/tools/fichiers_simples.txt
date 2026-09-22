@@ -25,3 +25,9 @@ interface/icons/unknown_8197078.blp => interface/icons/inv_sidetab_currency_c60.
 interface/icons/unknown_8197097.blp => interface/icons/inv_sidetab_honor_alliance_c60.blp
 interface/icons/unknown_8197098.blp => interface/icons/inv_sidetab_honor_horde_c60.blp
 interface/icons/unknown_8197104.blp => interface/icons/inv_sidetab_stats_c60.blp
+
+# LE MASQUE DES ONGLETS LATERAUX. L'addon ne s'en sert PAS a l'ecran -- 3.3.5
+# n'a pas de MaskTexture -- mais tools/cuire_masque.py le cuit dans l'alpha
+# des icones d'onglet. Il entre donc dans l'atelier pour que cette cuisson se
+# refasse sans wow.export.
+interface/common/commonsidetabmaskc60.blp

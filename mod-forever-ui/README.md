@@ -46,6 +46,8 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
     tools/test_addon.py       a mock client that loads the addon and checks it
     tools/ajouter_feuilles.py brings an atlas sheet in with its preview, and
                               regenerates the atlas table
+    tools/cuire_masque.py     bakes a mask into an icon's alpha, for the cuts
+                              3.3.5 cannot make on screen
 
 ## Working on it
 

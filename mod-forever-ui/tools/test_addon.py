@@ -2269,6 +2269,7 @@ def main():
     o4 = g.CharacterFrameTab4
     print("   onglet competences : icone=%s, texte visible=%s" % (
         o4.foreverIcone.texture, g.CharacterFrameTab4Text.shown))
+    assert "TabIcons" in o4.foreverIcone.texture,         "l icone affichee est la version CUITE, pas l export brut"
     assert o4.foreverIcone.texture and "JackofAllTrades" in o4.foreverIcone.texture,         "CHARACTER_MODE_TAB_ICONS donne cette icone aux competences"
     assert o4.foreverIcone.shown and not g.CharacterFrameTab4Text.shown,         "l icone remplace le mot"
     for i, attendu in ((3, "Reputation2"), (5, "Currency")):
