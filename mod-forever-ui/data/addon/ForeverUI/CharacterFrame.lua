@@ -145,11 +145,37 @@ local STAT_PAS = 16
 local STAT_MARGE = 20                   -- de chaque cote du volet
 local STAT_HAUT = 10                    -- sous la bande de pierre
 local STAT_ENTRE_GROUPES = 16
-local STAT_GROUPES = {
-	{ selecteur = "MostrarStatPaperDollLeftDropDown", prefixe = "PlayerStatFrameLeft" },
-	{ selecteur = "MostrarStatPaperDollRightDropDown", prefixe = "PlayerStatFrameRight" },
-}
 local STAT_PAR_GROUPE = 6
+
+-- LES SELECTEURS DE CATEGORIE. Chaque groupe est coiffe d'un CheckButton de
+-- 153 x 21 -- MostrarStatPaperDoll*DropDown -- dont le clic ouvre le menu
+-- des cinq categories (PLAYERSTAT_DROPDOWN_OPTIONS). Ce bouton n'a AUCUNE
+-- texture normale, seulement un surlignage : sans art il est invisible, et
+-- l'art d'epoque qui le coiffait -- PlayerStatLeftToper, sur
+-- UI-Character-StatBackground -- est declare hidden dans ce client.
+--
+-- RELEVE -- CharacterStatFrameCategoryTemplate de camelot : 197 x 40, fond
+-- UI-Character-Info-Title tendu du TOPLEFT au BOTTOMRIGHT, intitule
+-- GameFontHighlight centre a (0, 1). Ses lignes font 187 : l'en-tete
+-- deborde donc de 5 de chaque cote.
+--
+-- La categorie choisie vit dans une CVar, que le client relit a chaque
+-- UpdatePaperdollStats ; l'intitule la suit.
+local STAT_ENTETE = 40
+local STAT_ENTETE_DEBORD = 5
+local ATLAS_ENTETE = "ui-character-info-title"
+local STAT_GROUPES = {
+	{
+		selecteur = "MostrarStatPaperDollLeftDropDown",
+		prefixe = "PlayerStatFrameLeft",
+		cvar = "playerStatLeftDropdown",
+	},
+	{
+		selecteur = "MostrarStatPaperDollRightDropDown",
+		prefixe = "PlayerStatFrameRight",
+		cvar = "playerStatRightDropdown",
+	},
+}
 
 local FERMETURE = 24
 local FERMETURE_X, FERMETURE_Y = 1, 0
@@ -506,6 +532,31 @@ local function poserResistances()
 	cadre:SetPoint(a[1], a[2], a[3], a[4] + RESISTANCES_X, a[5])
 end
 
+-- Un selecteur prend le fond et l'intitule de l'en-tete moderne. Le bouton
+-- reste celui du client : c'est lui qui porte le clic et le menu.
+local function habillerSelecteur(selecteur)
+	if selecteur.foreverIntitule then
+		return
+	end
+
+	local fond = selecteur:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(fond, ATLAS_ENTETE, true)
+	fond:SetPoint("TOPLEFT", selecteur, "TOPLEFT")
+	fond:SetPoint("BOTTOMRIGHT", selecteur, "BOTTOMRIGHT")
+
+	local intitule = selecteur:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	intitule:SetPoint("CENTER", selecteur, "CENTER", 0, 1)
+	selecteur.foreverIntitule = intitule
+end
+
+-- L'intitule d'une categorie : la CVar porte une CLE (PLAYERSTAT_BASE_STATS),
+-- le texte affichable est la globale du meme nom.
+local function ecrireCategorie(selecteur, cle)
+	if selecteur and selecteur.foreverIntitule then
+		selecteur.foreverIntitule:SetText((cle and _G[cle]) or "")
+	end
+end
+
 -- Les statistiques, reposees dans le volet droit. Ce sont des cadres du
 -- client : on les deplace et on les elargit, on ne les recree pas -- ce
 -- sont eux qui portent les infobulles et les menus de categorie.
@@ -521,10 +572,17 @@ local function poserStatistiques()
 	for _, groupe in ipairs(STAT_GROUPES) do
 		local selecteur = _G[groupe.selecteur]
 		if selecteur then
+			habillerSelecteur(selecteur)
+			ecrireCategorie(selecteur, GetCVar and GetCVar(groupe.cvar))
+
 			selecteur:SetFrameLevel(niveau)
+			selecteur:SetWidth(largeur + 2 * STAT_ENTETE_DEBORD)
+			selecteur:SetHeight(STAT_ENTETE)
 			selecteur:ClearAllPoints()
-			selecteur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", STAT_MARGE, y)
-			y = y - selecteur:GetHeight()
+			selecteur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT",
+				STAT_MARGE - STAT_ENTETE_DEBORD, y)
+			selecteur:Show()
+			y = y - STAT_ENTETE
 		end
 
 		for index = 1, STAT_PAR_GROUPE do
@@ -706,7 +764,22 @@ local function habiller()
 	poserOnglets(cadre)
 end
 
+-- Le client rappelle UpdatePaperdollStats(prefixe, cle) des que la
+-- categorie change : l'intitule de l'en-tete correspondant se remet a jour.
+local function suivreCategorie(prefixe, cle)
+	for _, groupe in ipairs(STAT_GROUPES) do
+		if groupe.prefixe == prefixe then
+			ecrireCategorie(_G[groupe.selecteur], cle)
+			return
+		end
+	end
+end
+
 ForeverUI.CharacterSheet = { Apply = habiller, Tabs = onglets }
+
+if hooksecurefunc and type(_G["UpdatePaperdollStats"]) == "function" then
+	hooksecurefunc("UpdatePaperdollStats", suivreCategorie)
+end
 
 if hooksecurefunc then
 	for _, nomFonction in ipairs({ "CharacterFrame_ShowSubFrame", "PaperDollFrame_OnShow",

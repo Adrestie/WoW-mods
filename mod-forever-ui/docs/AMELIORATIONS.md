@@ -482,6 +482,39 @@ dans le volet droit :
 Ce sont des cadres du client : ils sont déplacés et élargis, jamais recréés —
 ce sont eux qui portent les infobulles et les menus de catégorie.
 
+**Un sélecteur de catégorie sans art est invisible.** `MostrarStatPaperDoll*
+DropDown` est un `CheckButton` de 153 × 21 qui ne porte **qu'un surlignage**
+(`ButtonHilight-Square`) : aucune texture normale, aucun intitulé. L'art qui le
+coiffait — `PlayerStatLeftToper`, sur `UI-Character-StatBackground` — est
+déclaré `hidden="true"` dans ce FrameXML. Il est donc habillé à la manière de
+`CharacterStatFrameCategoryTemplate` de camelot :
+
+| Pièce | Camelot | Chez nous |
+|---|---|---|
+| Cadre | 197 × 40 | 203 × 40 — la hauteur de la source, la largeur des lignes (193) plus le débord |
+| Débord sur les lignes | 5 de chaque côté (197 contre 187) | 5, d'où un `x` de 15 quand les lignes sont à 20 |
+| Fond | `UI-Character-Info-Title` tendu du `TOPLEFT` au `BOTTOMRIGHT` | idem (`ui-character-info-title`, feuille 10) |
+| Intitulé | `GameFontHighlight` centré à (0, 1) | idem |
+
+L'intitulé n'est pas dans le bouton : la catégorie choisie vit dans une CVar
+(`playerStatLeftDropdown`, `playerStatRightDropdown`) qui porte une **clé**
+(`PLAYERSTAT_BASE_STATS`) ; le texte affichable est la globale du même nom. Le
+client rappelle `UpdatePaperdollStats(préfixe, clé)` à chaque changement : un
+`hooksecurefunc` dessus suffit à faire suivre l'intitulé. Le clic, lui, reste
+celui du client (`ToggleDropDownMenu` sur `PlayerStatFrameLeftDropDowner` et
+`PlayerStatFrameRightDropDown`, tous deux initialisés à leur `OnLoad`), et le
+menu s'ancre au bouton : il suit donc le sélecteur où qu'on le pose.
+
+À noter, le client ne masque ces boutons que pendant l'ouverture du
+`PaperDollFrameItemFlyout` ; partout ailleurs il les montre. Leur absence à
+l'écran tenait bien à l'art, pas à la visibilité.
+
+**Le banc n'enveloppait pas ses greffons.** Son `hooksecurefunc` se contentait
+d'enregistrer la fonction dans `HOOKS` : appeler la fonction greffée ne
+déclenchait rien, et un greffon cassé serait passé inaperçu. Il enveloppe
+désormais vraiment — l'originale, puis le greffon, et les valeurs rendues sont
+celles de l'originale.
+
 **Une région ne se reparente pas en 3.3.5.** `SetParent` n'existe pas dans la
 table des méthodes de `FontString` de ce client, et ancrer la ligne du client au
 volet ne suffirait pas : elle appartient au cadre, donc elle se dessinerait

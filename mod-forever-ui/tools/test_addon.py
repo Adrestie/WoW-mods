@@ -230,7 +230,9 @@ STATE = { health = 50, healthMax = 100, power = 30, powerMax = 100,
           xp = 500, xpMax = 1000, rested = 200 ,
           faction_suivie = "Les Fils de Hodir", faction_attitude = 5,
           faction_min = 3000, faction_max = 9000, faction_valeur = 6000,
-          cvars = { playerStatusText = "0", statusTextPercentage = "0" } }
+          cvars = { playerStatusText = "0", statusTextPercentage = "0",
+                    playerStatLeftDropdown = "PLAYERSTAT_BASE_STATS",
+                    playerStatRightDropdown = "PLAYERSTAT_MELEE_COMBAT" } }
 
 function UnitHealth(unit) return STATE.health end
 function UnitHealthMax(unit) return STATE.healthMax end
@@ -524,7 +526,12 @@ for i = 1, 5 do
     t:CreateTexture(nom .. "Fond", "ARTWORK")
 end
 -- les statistiques du FrameXML modifie de ce client : deux groupes de six
--- lignes, chacun coiffe d'un selecteur de categorie
+-- lignes, chacun coiffe d'un selecteur de categorie. La categorie choisie
+-- vit dans une CVar qui porte une CLE ; le texte est la globale du meme nom.
+PLAYERSTAT_BASE_STATS = "Attributs"
+PLAYERSTAT_MELEE_COMBAT = "Corps a corps"
+PLAYERSTAT_DEFENSES = "Defenses"
+function UpdatePaperdollStats(prefixe, cle) end
 CharacterAttributesFrame = CreateFrame("Frame", "CharacterAttributesFrame", CharacterFrame)
 for _, cote in ipairs({ "Left", "Right" }) do
     local sel = CreateFrame("CheckButton", "MostrarStatPaperDoll" .. cote .. "DropDown",
@@ -678,7 +685,21 @@ function updateContainerFrameAnchors() end
 function ToggleBag() end
 
 HOOKS = {}
-function hooksecurefunc(nom, fn) HOOKS[nom] = fn end
+-- Le vrai hooksecurefunc ENVELOPPE la fonction : elle s execute, puis le
+-- greffon, et les valeurs rendues sont celles de l originale. Le banc se
+-- contentait d enregistrer le greffon, si bien qu appeler la fonction ne
+-- declenchait rien.
+function hooksecurefunc(nom, fn)
+    HOOKS[nom] = fn
+    if type(nom) == "string" and type(_G[nom]) == "function" then
+        local ancienne = _G[nom]
+        _G[nom] = function(...)
+            local rendus = { ancienne(...) }
+            fn(...)
+            return (table.unpack or unpack)(rendus)
+        end
+    end
+end
 function ActionButton_Update() end
 function ActionButton_ShowGrid() end
 function ActionButton_HideGrid() end
@@ -1699,6 +1720,24 @@ def main():
     yr1 = r1.points[len(list(r1.points.values()))][5]
     print("   second groupe %d plus bas que la derniere ligne du premier" % (y6 - yr1))
     assert yr1 < y6, "le second groupe vient sous le premier"
+
+    # LES SELECTEURS DE CATEGORIE. Sans art ils sont invisibles : le client
+    # ne leur donne qu un surlignage.
+    selD = g.MostrarStatPaperDollRightDropDown
+    psel = sel.points[len(list(sel.points.values()))]
+    print("   selecteur : %d x %d, %s (%s, %s), visible=%s" % (
+        sel.width, sel.height, psel[1], psel[4], psel[5], sel.shown))
+    assert sel.width == 203 and sel.height == 40,         "197 x 40 chez camelot, elargi au volet : ses lignes font 193 et il deborde de 5"
+    assert psel[4] == 15, "il deborde de 5 a gauche de ses lignes, posees a 20"
+    assert sel.shown, "il doit etre visible"
+    assert sel.regions[1].texture is not None, "il porte le fond UI-Character-Info-Title"
+    print("   intitules : gauche \"%s\" | droite \"%s\"" % (
+        sel.foreverIntitule.text, selD.foreverIntitule.text))
+    assert sel.foreverIntitule.text == "Attributs",         "l intitule est la categorie de la CVar, pas sa cle"
+    assert selD.foreverIntitule.text == "Corps a corps"
+    lua.execute('UpdatePaperdollStats("PlayerStatFrameLeft", "PLAYERSTAT_DEFENSES")')
+    print("   apres changement de categorie : gauche \"%s\"" % sel.foreverIntitule.text)
+    assert sel.foreverIntitule.text == "Defenses",         "l intitule doit suivre le menu du client"
 
     fermer = g.CharacterFrameCloseButton
     pf = fermer.points[1]
