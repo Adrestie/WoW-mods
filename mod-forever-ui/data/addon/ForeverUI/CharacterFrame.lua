@@ -276,10 +276,22 @@ local ONGLET_ICONES = {
 -- client, une chaine l'un des notres.
 local ORDRE_ONGLETS = { 1, 2, 3, 4, "pvp", 5, "stats" }
 
+-- CE QU'OUVRE CHAQUE ONGLET. Les cinq premiers viennent de
+-- CharacterFrameTab_OnClick ; les deux autres sont les notres. C'est par
+-- cette table qu'on sait lequel est actif.
+local ONGLET_ECRAN = {
+	[1] = "PaperDollFrame",
+	[2] = "PetPaperDollFrame",
+	[3] = "ReputationFrame",
+	[4] = "SkillFrame",
+	[5] = "TokenFrame",
+}
+
 -- Les deux ecrans que nous ouvrons. Ce ne sont pas des sous-cadres du
 -- client : leurs noms n'ont donc a etre uniques que chez nous.
 local ECRAN_PVP = "ForeverUIPvPPane"
 local ECRAN_STATS = "ForeverUIStatsPane"
+local ONGLET_ECRANS_CREES = { pvp = ECRAN_PVP, stats = ECRAN_STATS }
 local ONGLET_ICONE = 28
 local ATLAS_ONGLET_VOLET = "ui-character-info-stattab"
 local ATLAS_ONGLET_VOLET_CHOISI = "ui-character-info-stattab-selected"
@@ -300,9 +312,38 @@ local SEPARATEUR_EMBOUT = 4             -- mesure sur l'art : 11 x 50, deux embo
 local ONGLETS_L, ONGLETS_H = 64, 384    -- CharacterFrameModeTabs
 local ONGLETS_Y = -30
 local ONGLET_L, ONGLET_H = 55, 55       -- 55 x 60 moins 5 de transparent
-local ONGLET_ICONE = 32
+-- L'ICONE REMPLIT L'INTERIEUR DE L'ONGLET.
+--
+-- RELEVE -- camelot/CharacterFrame.xml donne a ses onglets lateraux
+-- fillToInterior = true, et SidePanelTabButtonMixin:UpdateIconInterior en
+-- tire deux gestes :
+--     self.Icon:SetTexCoord(0.03125, 0.96875, 0.03125, 0.96875)
+--     self.Icon:SetSize(extent, extent)   -- extent = interiorExtent ou 50
+-- L'onglet faisant 55 de large, l'icone en prend donc 50 : tout l'interieur,
+-- moins le bord. Elle etait a 32, soit un tiers de la surface perdu.
+--
+-- GetIconAnchorOffsetsForTabArt rend (-3, 0) : elle n'est pas centree, elle
+-- est decalee vers la gauche, l'art de l'onglet etant transparent a droite.
+--
+-- CE QUI MANQUE ENCORE : la source masque l'icone par common-sidetab-mask,
+-- une MaskTexture. 3.3.5 n'en a pas ; les angles de l'icone restent donc
+-- carres la ou la source les arrondit.
+local ONGLET_ICONE = 50                 -- interiorExtent
 local ONGLET_ICONE_X = -3               -- GetIconAnchorOffsetsForTabArt
-local PORTRAIT_ONGLET = 0.03125         -- UpdateCharacterModeTabPortrait
+local PORTRAIT_ONGLET = 0.03125         -- UpdateIconInterior, et le portrait
+
+-- LES TROIS ETATS D'UN ONGLET, ET LEQUEL VA OU.
+--
+-- RELEVE -- blizzard_sharedxml/mainline/SharedUIPanelTemplates.xml,
+-- LargeSideTabButtonTemplate, du fond vers l'avant :
+--   BACKGROUND  common-sidetab           le fond, toujours la
+--   ARTWORK     l'icone, masquee
+--   OVERLAY     common-sidetab-selected  L'ONGLET ACTIF -- SetChecked le
+--                                        montre ou le masque
+--   HIGHLIGHT   common-sidetab-hover     le survol seul
+--
+-- Le marqueur d'onglet actif n'etait pas pose : son atlas etait declare et
+-- jamais utilise, et rien a l'ecran ne disait quel onglet etait ouvert.
 
 local PORTRAIT = 48                     -- voir le calcul plus bas
 
@@ -492,7 +533,7 @@ local ATLAS = {
 	petitEmplacement = "ui-character-info-gearslotsmall",
 	onglet = "common-sidetab",
 	ongletSurvol = "common-sidetab-hover",
-	ongletChoisi = "common-sidetab-selected",
+	ongletActif = "common-sidetab-selected",
 }
 
 local COLONNE_GAUCHE = {
@@ -1486,6 +1527,9 @@ local function suivreEcran(nom)
 		return
 	end
 	ForeverUI.Panes.ShowGroup(nom)
+	if ForeverUI.CharacterUpdateActiveTab then
+		ForeverUI.CharacterUpdateActiveTab()
+	end
 	if ForeverUI.CharacterApplyPanes then
 		ForeverUI.CharacterApplyPanes(CharacterFrame)
 	end
@@ -1494,6 +1538,26 @@ end
 if hooksecurefunc and type(_G["CharacterFrame_ShowSubFrame"]) == "function" then
 	hooksecurefunc("CharacterFrame_ShowSubFrame", suivreEcran)
 end
+
+-- L'ONGLET ACTIF PORTE SON MARQUEUR.
+--
+-- Une seule chose le decide : le groupe ouvert. On n'a donc rien a retenir,
+-- et aucun clic a intercepter -- ni ceux du client, ni les notres : il suffit
+-- de repasser ici chaque fois que le groupe change.
+local function majOngletActif()
+	local ouvert = ForeverUI.Panes.CurrentGroup()
+	for cle, onglet in pairs(onglets) do
+		if onglet.foreverActif then
+			local sien = ONGLET_ECRAN[cle] or ONGLET_ECRANS_CREES[cle]
+			if sien and sien == ouvert then
+				onglet.foreverActif:Show()
+			else
+				onglet.foreverActif:Hide()
+			end
+		end
+	end
+end
+ForeverUI.CharacterUpdateActiveTab = majOngletActif
 
 -- OUVRIR UN ECRAN QUI N'EST PAS AU CLIENT.
 --
@@ -1510,6 +1574,7 @@ local function ouvrirEcranPropre(groupe)
 		end
 	end
 	ForeverUI.Panes.ShowGroup(groupe)
+	majOngletActif()
 	if ForeverUI.CharacterApplyPanes then
 		ForeverUI.CharacterApplyPanes(CharacterFrame)
 	end
@@ -1728,16 +1793,26 @@ local function creerOngletLateral(cle, nom, icone, infobulle, groupe)
 	fond:SetAllPoints(onglet)
 	onglet.foreverFond = fond
 
-	local survol = onglet:CreateTexture(nil, "HIGHLIGHT")
-	ForeverUI.SetAtlas(survol, ATLAS.ongletSurvol, true)
-	survol:SetAllPoints(onglet)
-
 	local image = onglet:CreateTexture(nil, "ARTWORK")
 	image:SetWidth(ONGLET_ICONE)
 	image:SetHeight(ONGLET_ICONE)
 	image:SetPoint("CENTER", onglet, "CENTER", ONGLET_ICONE_X, 0)
+	image:SetTexCoord(PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET,
+		PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET)
 	image:SetTexture(icone)
 	onglet.foreverIcone = image
+
+	-- Le marqueur d'onglet actif passe PAR-DESSUS l'icone, comme la source
+	-- le met en OVERLAY ; le survol reste sur son propre calque, au-dela.
+	local actif = onglet:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(actif, ATLAS.ongletActif, true)
+	actif:SetAllPoints(onglet)
+	actif:Hide()
+	onglet.foreverActif = actif
+
+	local survol = onglet:CreateTexture(nil, "HIGHLIGHT")
+	ForeverUI.SetAtlas(survol, ATLAS.ongletSurvol, true)
+	survol:SetAllPoints(onglet)
 
 	onglet:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -1808,16 +1883,24 @@ local function poserOnglets(cadre)
 			fond:SetAllPoints(onglet)
 			onglet.foreverFond = fond
 
-			local survol = onglet:CreateTexture(nil, "HIGHLIGHT")
-			ForeverUI.SetAtlas(survol, ATLAS.ongletSurvol, true)
-			survol:SetAllPoints(onglet)
-
 			local icone = onglet:CreateTexture(nil, "ARTWORK")
 			icone:SetWidth(ONGLET_ICONE)
 			icone:SetHeight(ONGLET_ICONE)
 			icone:SetPoint("CENTER", onglet, "CENTER", ONGLET_ICONE_X, 0)
+			icone:SetTexCoord(PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET,
+				PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET)
 			icone:Hide()
 			onglet.foreverIcone = icone
+
+			local actif = onglet:CreateTexture(nil, "OVERLAY")
+			ForeverUI.SetAtlas(actif, ATLAS.ongletActif, true)
+			actif:SetAllPoints(onglet)
+			actif:Hide()
+			onglet.foreverActif = actif
+
+			local survol = onglet:CreateTexture(nil, "HIGHLIGHT")
+			ForeverUI.SetAtlas(survol, ATLAS.ongletSurvol, true)
+			survol:SetAllPoints(onglet)
 
 			-- L'ICONE REMPLACE LE MOT quand la source en donne une ; sinon
 			-- le texte du client reste, centre comme le serait l'icone.
@@ -1848,11 +1931,13 @@ local function poserOnglets(cadre)
 
 	poserOngletsCrees()
 	empilerOnglets()
+	majOngletActif()
 
 	-- L'onglet du personnage porte le portrait du joueur, rogne comme le
 	-- fait UpdateCharacterModeTabPortrait.
 	local premier = onglets[1]
 	if premier and premier.foreverIcone and SetPortraitTexture then
+		-- SetPortraitTexture repose le rognage : il faut le remettre apres.
 		SetPortraitTexture(premier.foreverIcone, "player")
 		premier.foreverIcone:SetTexCoord(PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET,
 			PORTRAIT_ONGLET, 1 - PORTRAIT_ONGLET)

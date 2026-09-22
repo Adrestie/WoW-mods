@@ -2606,6 +2606,39 @@ def main():
     assert not g.PVPParentFrame.shown, "le PvP ne survit pas a un onglet du client"
     assert droit.pierre.shown, "et le mobilier du personnage revient"
 
+    # L ICONE REMPLIT L INTERIEUR : fillToInterior, interiorExtent = 50.
+    ico = g.CharacterFrameTab3.foreverIcone
+    print("   icone d onglet : %d x %d, rognee a %.5f, centree a x=%s" % (
+        ico.width, ico.height, ico.texcoord[1], ico.points[1][4]))
+    assert ico.width == 50 and ico.height == 50,         "UpdateIconInterior : SetSize(50, 50)"
+    assert abs(ico.texcoord[1] - 0.03125) < 1e-6,         "et SetTexCoord(0.03125, 0.96875, ...)"
+    assert ico.points[1][4] == -3, "GetIconAnchorOffsetsForTabArt rend (-3, 0)"
+
+    # LE MARQUEUR D ONGLET ACTIF : common-sidetab-selected, un seul a la fois.
+    def actifs():
+        noms = []
+        for nom in attendu:
+            o = g[nom]
+            if o.foreverActif and o.foreverActif.shown:
+                noms.append(nom)
+        return noms
+
+    g.CharacterFrame_ShowSubFrame("ReputationFrame")
+    g.ForeverUI.Panes.ShowGroup("ReputationFrame")
+    g.ForeverUI.CharacterUpdateActiveTab()
+    print("   onglet actif sur reputation : %s" % actifs())
+    assert actifs() == ["CharacterFrameTab3"], "un seul onglet porte le marqueur"
+
+    pvp.scripts.OnClick(pvp)
+    print("   onglet actif apres clic PvP : %s" % actifs())
+    assert actifs() == ["ForeverUICharacterTabPvP"], "le marqueur suit, meme sur nos onglets"
+
+    g.CharacterFrame_ShowSubFrame("PaperDollFrame")
+    g.ForeverUI.Panes.ShowGroup("PaperDollFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    g.ForeverUI.CharacterUpdateActiveTab()
+    assert actifs() == ["CharacterFrameTab1"], "et revient au personnage"
+
     # LE TEMOIN de la bibliotheque.
     for ligne in g.ForeverUI.Panes.Report().values():
         print("   %s" % ligne)
