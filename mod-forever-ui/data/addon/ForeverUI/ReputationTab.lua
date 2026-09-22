@@ -62,9 +62,12 @@ local REMPLISSAGE_H = 15                -- ColoredProgressBarTemplate
 -- remplit avec common-button-list-plus ou -minus, ancre RIGHT en (-8, -1).
 -- Le nom, lui, est a LEFT x = 10.
 local BOUTON_X, BOUTON_Y = -8, -1       -- RIGHT de la ligne d'en-tete
-local NOM_X = 10                        -- ReputationHeaderTemplate
+local BOUTON = 16
+local ENTETE_NOM_X = 10                 -- ReputationHeaderTemplate
+local NOM_X = 25                        -- AccountWideIcon : LEFT x=2, large de 23
 local NOM_ECART = -10                   -- du LEFT de la barre
-local ENTETE_H = 28                     -- ReputationHeaderTemplate
+local NOM_H = 15
+local BARRE_X = -3                      -- RIGHT de la ligne, ReputationEntryTemplate
 
 local ATLAS_FOND = "common-stat-bar-bg"
 local ATLAS_REMPLISSAGE = "common-stat-bar-white"
@@ -110,15 +113,21 @@ local function habillerBouton(bouton, replie, entete)
 	end
 
 	if not bouton.foreverIcone then
-		local icone = bouton:CreateTexture(nil, "OVERLAY")
-		bouton.foreverIcone = icone
+		bouton:SetWidth(BOUTON)
+		bouton:SetHeight(BOUTON)
+		bouton.foreverIcone = bouton:CreateTexture(nil, "OVERLAY")
+	end
 
-		for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
-			"GetHighlightTexture" }) do
-			local texture = bouton[methode] and bouton[methode](bouton)
-			if texture then
-				texture:SetAlpha(0)
-			end
+	-- L'ART DU CLIENT MEURT A CHAQUE PASSAGE, pas une fois pour toutes.
+	-- ReputationFrame_Update appelle SetNormalTexture(chemin) a chaque mise a
+	-- jour : l'image reprend alors sa taille declaree -- 16 x 16 ancree a
+	-- LEFT +3, pensee pour une ligne de 20 de haut -- et se superpose a la
+	-- notre. C'est ce qui deformait les plus et les moins.
+	for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+		"GetHighlightTexture", "GetDisabledTexture" }) do
+		local texture = bouton[methode] and bouton[methode](bouton)
+		if texture then
+			texture:SetAlpha(0)
 		end
 	end
 
@@ -160,6 +169,9 @@ local function habillerLigne(index, largeur)
 	if barre and not barre.foreverFond then
 		barre:SetWidth(BARRE_L)
 		barre:SetHeight(BARRE_H)
+		-- ReputationEntryTemplate : la barre est ancree RIGHT x = -3.
+		barre:ClearAllPoints()
+		barre:SetPoint("RIGHT", ligne, "RIGHT", BARRE_X, 0)
 
 		-- La StatusBar du client garde sa valeur -- c'est elle qu'on lit --
 		-- mais plus son art. On EFFACE sa texture plutot que de la remplacer :
@@ -182,18 +194,32 @@ local function habillerLigne(index, largeur)
 		barre.foreverRemplissage = remplissage
 	end
 
+	-- LE NOM. Chez camelot il va du RIGHT de l'AccountWideIcon -- 23 de large
+	-- ancree a LEFT x = 2, donc x = 25 -- jusqu'au LEFT de la barre moins 10.
+	-- Police GameFontHighlight, hauteur 15, aligne a gauche.
 	local nom = _G["ReputationBar" .. index .. "FactionName"]
 	if nom and barre then
 		nom:ClearAllPoints()
 		nom:SetPoint("LEFT", ligne, "LEFT", NOM_X, 0)
 		nom:SetPoint("RIGHT", barre, "LEFT", NOM_ECART, 0)
+		nom:SetHeight(NOM_H)
 		nom:SetJustifyH("LEFT")
+		if GameFontHighlight then
+			nom:SetFontObject(GameFontHighlight)
+		end
 	end
 
+	-- L'INTITULE D'ATTITUDE est le Text de la barre : LEFT et RIGHT sur elle,
+	-- donc centre, en GameFontHighlight.
 	local attitude = _G["ReputationBar" .. index .. "ReputationBarFactionStanding"]
 	if attitude and barre then
 		attitude:ClearAllPoints()
-		attitude:SetPoint("CENTER", barre, "CENTER", 0, 0)
+		attitude:SetPoint("LEFT", barre, "LEFT", 0, 0)
+		attitude:SetPoint("RIGHT", barre, "RIGHT", 0, 0)
+		attitude:SetJustifyH("CENTER")
+		if GameFontHighlight then
+			attitude:SetFontObject(GameFontHighlight)
+		end
 	end
 
 	-- LA PLAQUE D'EN-TETE, etiree sur toute la ligne comme le fait la source.
@@ -223,9 +249,39 @@ end
 -- FACTION_BAR_COLORS est la table du client : huit attitudes, de hai a
 -- exalte. camelot teinte le meme remplissage blanc ; on fait de meme, plutot
 -- que de chercher un art par attitude qui n'existe pas.
+-- TOUT L'ART DU CLIENT SE TAIT, A CHAQUE PASSAGE.
+--
+-- ReputationFrame_Update ne se contente pas de poser des valeurs : il montre
+-- et redimensionne l'art de 3.3.5 -- la texture de la StatusBar, les deux
+-- AtWarHighlight additifs, les traits d'arborescence. L'etouffer une seule
+-- fois, a la construction, ne suffit donc pas : il revient. On repasse apres
+-- lui, et on ne laisse parler que ce qui est a nous.
+local function etoufferArtDuClient(index, barre)
+	if barre then
+		for _, region in ipairs({ barre:GetRegions() }) do
+			if region ~= barre.foreverFond and region ~= barre.foreverRemplissage
+				and region.GetObjectType and region:GetObjectType() == "Texture" then
+				region:SetAlpha(0)
+			end
+		end
+		local sienne = barre.GetStatusBarTexture and barre:GetStatusBarTexture()
+		if sienne then
+			sienne:SetAlpha(0)
+		end
+	end
+
+	for _, suffixe in ipairs({ "LeftLine", "BottomLine", "Background" }) do
+		local piece = _G["ReputationBar" .. index .. suffixe]
+		if piece then
+			piece:SetAlpha(0)
+		end
+	end
+end
+
 local function majRemplissages()
 	for index = 1, (NUM_FACTIONS_DISPLAYED or 0) do
 		local barre = _G["ReputationBar" .. index .. "ReputationBar"]
+		etoufferArtDuClient(index, barre)
 		if barre and barre.foreverRemplissage then
 			local _, maximum = barre:GetMinMaxValues()
 			local valeur = barre:GetValue() or 0

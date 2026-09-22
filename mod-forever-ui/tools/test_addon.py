@@ -2637,6 +2637,16 @@ def main():
         [(t.width, t.height) for t in g.ReputationFrame.regions.values()
          if t.width == 384]))
     assert bouton.foreverIcone.width == 13,         "common-button-list-plus fait 13 de large, pas la taille du bouton"
+    # L ART DU CLIENT REVIENT A CHAQUE MISE A JOUR : on repasse apres lui.
+    bouton.GetNormalTexture(bouton).SetAlpha(bouton.GetNormalTexture(bouton), 1)
+    g.ReputationFrame_Update()
+    assert bouton.GetNormalTexture(bouton).alpha == 0,         "le plus de 3.3.5 doit se taire a CHAQUE passage, pas une fois"
+    pbarre = barre.points[len(list(barre.points.values()))]
+    print("   barre ancree %s sur %s de %s, x=%s" % (
+        pbarre[1], pbarre[3], pbarre[2].name, pbarre[4]))
+    assert pbarre[1] == "RIGHT" and pbarre[4] == -3,         "ReputationEntryTemplate ancre la barre a RIGHT x = -3"
+    nom = g.ReputationBar2FactionName
+    assert nom.justify == "LEFT" and nom.height == 15,         "le nom : GameFontHighlight, hauteur 15, aligne a gauche"
     traits = [t for t in g.ReputationFrame.regions.values() if t.width == 384]
     assert len(traits) == 2 and all(t.height == 8 for t in traits),         "les deux traits font 384 x 8, leur taille d atlas"
     assert not g.ReputationBar2ExpandOrCollapseButton.foreverIcone.shown,         "pas sur une entree"
