@@ -529,6 +529,23 @@ déclenchait rien, et un greffon cassé serait passé inaperçu. Il enveloppe
 désormais vraiment — l'originale, puis le greffon, et les valeurs rendues sont
 celles de l'originale.
 
+**L'échelle du modèle, et ce que ce client sait en faire.** Camelot cadre son
+personnage par une scène (`CharacterModelScene`) et la position de son
+acteur. 3.3.5 n'a pas de scène, et ce client n'a **ni `SetCamDistanceScale`
+ni `SetPortraitZoom`** — vérifié dans `Wow.exe`, où seul `SetModelScale`
+figure. Le personnage est donc reculé par `SetModelScale(0,9)` à la demande.
+Valeur choisie à l'œil, pas relevée.
+
+Elle se repose **à chaque passage de l'habillage** : le client refait son
+modèle quand le personnage change d'apparence et l'échelle repart alors à 1.
+`UNIT_MODEL_CHANGED` est écouté pour cette raison.
+
+**Le séparateur des volets passe devant l'encadrement.** L'habillage de la
+fenêtre vit dans un cadre fils à `NIVEAU_ART` (+5) ; le séparateur, posé au
+niveau du volet, passait dessous et se perdait sous le métal. Il prend un
+cran de plus que l'habillage — calculé depuis la constante et non depuis le
+cadre, puisque l'habillage n'existe pas encore quand les volets se montent.
+
 **À niveau de cadre égal, c'est le modèle qui reçoit le clic.** Chez le
 client, la scène du modèle tient entre les deux colonnes d'emplacements
 (233 × 215) : rien ne se recouvre. Camelot lui donne **tout le volet gauche**

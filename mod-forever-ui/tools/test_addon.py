@@ -146,6 +146,8 @@ function CreateFrame(kind, name, parent, template)
     function f:GetRight() return self._right end
     function f:IsShown() return self.shown end
     function f:SetFrameStrata(s) self.strata = s end
+    function f:SetModelScale(v) self.modelScale = v end
+    function f:GetModelScale() return self.modelScale or 1 end
     function f:SetFrameLevel(l) self.frameLevel = l end
     function f:SetScale(v) self.scale = v end
     function f:GetScale() return self.scale or 1 end
@@ -1684,6 +1686,16 @@ def main():
     print("   separateur : trois tranches (embouts de %d)" % sep.haut.height)
     assert sep.haut is not None and sep.milieu is not None and sep.bas is not None,         "le separateur doit etre en trois tranches, ses embouts s etalaient"
     assert sep.haut.height == 4 and sep.bas.height == 4
+    habillage = perso.foreverHabillage
+    print("   separateur : niveau %d, habillage %d (il doit passer devant)" % (
+        sep.frameLevel or 1, habillage.frameLevel or 1))
+    assert (sep.frameLevel or 1) > (habillage.frameLevel or 1),         "le separateur disparaissait sous le metal de l encadrement"
+
+    # L echelle du modele : reposee a chaque passage, le client la remet a 1
+    # quand le personnage change d apparence.
+    echelle = g.CharacterModelFrame.modelScale
+    print("   echelle du modele : %.2f" % echelle)
+    assert abs(echelle - 0.9) < 0.001, "SetModelScale, seul reglage que ce client porte"
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot

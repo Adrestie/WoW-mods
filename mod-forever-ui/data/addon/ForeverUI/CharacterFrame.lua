@@ -125,6 +125,13 @@ local ROTATION_ECART = 4
 -- 3.3.5, qui cadre le personnage plus bas.
 local MODELE_Y = 24
 
+-- L'ECHELLE DU MODELE. Camelot cadre son personnage par une scene
+-- (CharacterModelScene) et la position de son acteur ; 3.3.5 n'a pas de
+-- scene, et ce client n'a ni SetCamDistanceScale ni SetPortraitZoom --
+-- verifie dans Wow.exe, seul SetModelScale y figure. C'est donc par lui
+-- qu'on recule le personnage. Valeur choisie a l'oeil, a la demande.
+local MODELE_ECHELLE = 0.9
+
 -- LE PANNEAU DES RESISTANCES se decale vers la droite. On garde son
 -- ancrage d'origine et on n'y ajoute que ce decalage, sinon chaque passage
 -- le pousserait un peu plus loin.
@@ -297,8 +304,13 @@ local function monterVolets(cadre)
 
 	-- Le separateur porte un embout a chaque bout : tendu tel quel sur la
 	-- hauteur du volet, ils s'etalent. Trois tranches.
+	-- Il passe DEVANT l'encadrement de la fenetre. L'habillage vit dans un
+	-- cadre fils a NIVEAU_ART ; le separateur, pose au niveau du volet,
+	-- passait dessous et disparaissait sous le metal. Il prend donc un cran
+	-- de plus que l'habillage -- qui n'existe pas encore quand les volets se
+	-- montent, d'ou le calcul depuis la constante et non depuis le cadre.
 	local separateur = ForeverUI.CreateVerticalDivider(voletDroit, ATLAS.separateur,
-		SEPARATEUR_EMBOUT, voletDroit:GetFrameLevel() + 1)
+		SEPARATEUR_EMBOUT, cadre:GetFrameLevel() + NIVEAU_ART + 1)
 	separateur:SetWidth(SEPARATEUR)
 	separateur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", -6, -1)
 	separateur:SetPoint("BOTTOMLEFT", voletDroit, "BOTTOMLEFT", -6, 0)
@@ -533,6 +545,12 @@ local function poserModele()
 	modele:ClearAllPoints()
 	modele:SetPoint("TOPLEFT", voletGauche, "TOPLEFT", 0, MODELE_Y)
 	modele:SetPoint("BOTTOMRIGHT", voletGauche, "BOTTOMRIGHT", 0, MODELE_Y)
+
+	-- A reposer a chaque passage : le client refait son modele quand le
+	-- personnage change d'apparence, et l'echelle repart alors a 1.
+	if modele.SetModelScale then
+		modele:SetModelScale(MODELE_ECHELLE)
+	end
 
 	-- Les fleches de rotation : centrees sur le volet, cote a cote.
 	local gauche = _G["CharacterModelFrameRotateLeftButton"]
@@ -862,6 +880,7 @@ veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
 veilleur:RegisterEvent("PLAYER_REGEN_ENABLED")
 veilleur:RegisterEvent("UNIT_INVENTORY_CHANGED")
 veilleur:RegisterEvent("UNIT_PORTRAIT_UPDATE")
+veilleur:RegisterEvent("UNIT_MODEL_CHANGED")
 veilleur:SetScript("OnEvent", habiller)
 
 if CharacterFrame then
