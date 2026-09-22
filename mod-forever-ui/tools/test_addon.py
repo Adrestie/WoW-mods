@@ -262,6 +262,7 @@ function UnitPowerType(unit) return STATE.powerType, STATE.powerToken end
 function UnitName(unit) return STATE.name end
 function UnitLevel(unit) return STATE.level end
 UNIT_LEVEL_TEMPLATE = "Level %d"
+NEW = "New"
 CHARACTER_INFO = "Character Info"
 EQUIPMENT_MANAGER = "Equipment Manager"
 function UnitAffectingCombat(unit) return STATE.combat end
@@ -2095,6 +2096,7 @@ def main():
     assert not any(lignes), "et masque les statistiques"
     assert not g.PlayerStatFrameLeftDropDown.shown, "les selecteurs aussi"
     assert gear.choisi.shown and not stats.choisi.shown, "la marque passe sur lui"
+    assert g.ForeverUIEquipmentPane.shown,         "le panneau du gestionnaire se montre avec son onglet"
 
     # Un passage de l habillage ne doit pas les rallumer dans son dos.
     g.ForeverUI.CharacterSheet.Apply()
@@ -2117,6 +2119,10 @@ def main():
     assert all(lignes) and g.PlayerStatFrameLeftDropDown.shown, "elles reviennent"
     assert not g.GearManagerDialog.shown, "et le panneau du gestionnaire se ferme"
     assert stats.choisi.shown and not gear.choisi.shown, "la marque revient sur lui"
+    print("   panneau du gestionnaire masque sous les statistiques : %s" % (
+        not g.ForeverUIEquipmentPane.shown))
+    assert not g.ForeverUIEquipmentPane.shown,         "ses boutons sont ses cadres fils : masquer la fenetre du client ne suffit pas"
+    assert g.ForeverUIEquipmentNewSet.text == "New",         "PAPERDOLL_NEWEQUIPMENTSET n existe pas ici ; NEW est la plus proche"
     assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
     assert niveau.owner.name == "ForeverUICharacterRightPane",         "elle appartient au volet : une region ne se reparente pas en 3.3.5"
     assert niveau.width == 220, "PaperDollLevelInfo fait 220 de large"

@@ -321,7 +321,12 @@ local function poserBoutons()
 		nouveau:SetWidth(NOUVEAU_L)
 		nouveau:SetHeight(NOUVEAU_H)
 		nouveau:SetPoint("BOTTOM", panneau, "BOTTOM", 0, NOUVEAU_Y)
-		nouveau:SetText(NEW_COMPACT_UNIT_FRAME_PROFILE or EQUIPMENT_MANAGER or "New Set")
+		-- camelot ecrit PAPERDOLL_NEWEQUIPMENTSET, absente de ce client, tout
+		-- comme NEW_COMPACT_UNIT_FRAME_PROFILE que je visais et qui donnait
+		-- "New Profile" -- une chaine d'un tout autre panneau. NEW est la
+		-- plus proche que ce client porte, et elle va avec Equip et Save,
+		-- aussi courtes.
+		nouveau:SetText(NEW or "New")
 
 		local plus = nouveau:CreateTexture(nil, "OVERLAY")
 		ForeverUI.SetAtlas(plus, ATLAS_PLUS)
@@ -395,6 +400,16 @@ local function habiller()
 	if not panneau then
 		monter(volet)
 	end
+
+	-- LE PANNEAU SUIT SON ONGLET. Ses boutons sont des cadres fils du
+	-- PANNEAU, pas de la fenetre du client : masquer celle-ci ne les
+	-- emportait pas, et "New" restait visible sous les statistiques.
+	if volet.statsMontrees == false then
+		panneau:Show()
+	else
+		panneau:Hide()
+	end
+
 	accueillirDialogue()
 	masquerFermeture()
 	poserBoutons()

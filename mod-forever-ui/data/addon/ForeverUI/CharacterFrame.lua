@@ -1139,6 +1139,9 @@ local function poserOngletsVolet()
 				end
 			end
 			montrerStatistiques(statistiques)
+			if ForeverUI.EquipmentPane then
+				ForeverUI.EquipmentPane.Apply()
+			end
 			if GearManagerDialog then
 				if statistiques then
 					GearManagerDialog:Hide()

@@ -724,7 +724,8 @@ toujours le client qui tient la liste, la sélection et les infobulles.
 
 | Point | Raison |
 |---|---|
-| **New Set** | 3.3.5 n'a pas ce bouton : on y crée un ensemble par **Save**, qui ouvre la fenêtre de nom. Le nôtre fait la même chose après avoir vidé la sélection — exactement « enregistrer sous un nouveau nom ». |
+| **New Set** | 3.3.5 n'a pas ce bouton : on y crée un ensemble par **Save**, qui ouvre la fenêtre de nom. Le nôtre fait la même chose après avoir vidé la sélection — exactement « enregistrer sous un nouveau nom ». Son intitulé est `NEW` (« New ») : `PAPERDOLL_NEWEQUIPMENTSET`, que camelot écrit, n'existe pas ici. |
+| **Le panneau suit son onglet** | Ses boutons sont des cadres fils du **panneau**, pas de la fenêtre du client : masquer `GearManagerDialog` ne les emportait pas, et « New » restait visible sous les statistiques. Le panneau entier se montre et se cache avec l'onglet. |
 | **Delete gardé** | camelot efface un ensemble par le menu de sa carte, menu que 3.3.5 n'a pas. Le bouton du client est **conservé** plutôt que de retirer la seule façon d'effacer un ensemble ; il est masqué par défaut au-dessus de Save, à replacer sur décision. |
 | **La coche** | `GetEquipmentSetInfo` ne dit pas si un ensemble est porté. Elle se calcule depuis `GetEquipmentSetLocations` : porté quand chaque pièce est sur le joueur et hors des sacs. |
 | **Pas de barre de défilement** | `MinimalScrollBar` n'est pas portée. La liste défile à la **molette**, et le trait de camelot marque son bas. |
