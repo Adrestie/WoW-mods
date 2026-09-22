@@ -69,13 +69,46 @@ _G.ForeverUI = ForeverUI
 local LISTE_X, LISTE_Y = 10, -40
 local LISTE_X2, LISTE_Y2 = -25, 15
 
+-- LA HIERARCHIE : TROIS GABARITS, TROIS RETRAITS.
+--
+-- RELEVE -- camelot/ReputationFrame.lua, SetElementFactory :
+--   ni en-tete                 ReputationEntryTemplate      hauteur 30
+--   en-tete et pas un enfant   ReputationHeaderTemplate     hauteur 28
+--   en-tete ET un enfant       ReputationSubHeaderTemplate  hauteur 22
+--
+-- SetElementIndentCalculator, dans le meme fichier :
+--   en-tete de premier niveau            0
+--   enfant qui n'est PAS un en-tete     46
+--   tout le reste                        2
+--
+-- SetPadding : 10 de marge sur les quatre bords, et 3 entre deux lignes.
+--
+-- 3.3.5 donne les deux drapeaux qu'il faut : GetFactionInfo rend isHeader en
+-- neuvieme position et isChild en treizieme, plus hasRep en onzieme -- un
+-- sous-en-tete ne montre sa barre que s'il en a une, comme le veut
+-- ReputationSubHeaderMixin:Initialize.
 local ENTREE_H = 30                     -- ReputationEntryTemplate
+local SOUS_ENTETE_H = 22                -- ReputationSubHeaderTemplate
 local ENTETE_H = 28                     -- ReputationHeaderTemplate
+local MARGE = 10                        -- SetPadding
+local ECART = 3                         -- elementSpacing
+local RETRAIT_ENTETE = 0
+local RETRAIT_ENFANT = 46
+local RETRAIT_AUTRE = 2
 local BARRE_L, BARRE_H = 160, 29
 local BARRE_X = -3                      -- RIGHT de la ligne
 local REMPLISSAGE_H = 15
 local NOM_H = 15
-local NOM_X = 25                        -- le bord droit de l'AccountWideIcon
+-- LE NOM D'UNE ENTREE. Il part du bord droit de l'AccountWideIcon, x = 25 --
+-- puis ReputationEntryMixin:Initialize le decale de -10 quand cette icone
+-- est masquee, ce qu'elle est toujours ici : 3.3.5 n'a pas de reputation de
+-- compte. D'ou 15.
+local NOM_X = 15
+-- LE SOUS-EN-TETE porte un bouton de 20 ancre a LEFT du bord droit de cette
+-- meme icone plus 3, donc x = 28 ; son nom suit a +4 de ce bouton.
+local CHEVRON = 20
+local CHEVRON_X = 28
+local SOUS_NOM_ECART = 4
 local NOM_ECART = -10                   -- du LEFT de la barre
 local ENTETE_NOM_X = 10
 local FLECHE_X, FLECHE_Y = -8, -1
@@ -133,6 +166,7 @@ local VOLET_L, VOLET_H = 398, 464
 
 local lignes = {}
 local panneau, decalage = nil, 0
+local visibles = 0                      -- combien tiennent reellement
 local choisie
 
 -- --------------------------------------------------------------- une ligne
@@ -205,11 +239,23 @@ local function creerLigne(index, largeur)
 	nom:SetJustifyH("LEFT")
 	ligne.nom = nom
 
-	-- LA FLECHE d'un en-tete.
+	-- LA FLECHE d'un en-tete de premier niveau, a droite.
 	local fleche = ligne:CreateTexture(nil, "OVERLAY")
 	fleche:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X, FLECHE_Y)
 	fleche:Hide()
 	ligne.fleche = fleche
+
+	-- LE BOUTON d'un sous-en-tete, a gauche.
+	--
+	-- ECART ASSUME : la source lui donne campaign_headericon_closed et
+	-- _open, qui vivent dans interface/questframe/questmaplogatlas.blp --
+	-- une grande feuille pour deux images de 22. On reprend en attendant le
+	-- plus et le moins de l'en-tete, deja verses, ce qui garde la colonne
+	-- coherente.
+	local chevron = ligne:CreateTexture(nil, "OVERLAY")
+	chevron:SetPoint("LEFT", ligne, "LEFT", CHEVRON_X, 0)
+	chevron:Hide()
+	ligne.chevron = chevron
 
 	ligne:RegisterForClicks("LeftButtonUp")
 	return ligne
@@ -278,6 +324,7 @@ end
 local function remplirLigne(ligne, donnees)
 	ligne.factionIndex = donnees.index
 	ligne.entete = donnees.entete
+	ligne.enfant = donnees.enfant
 	ligne.replie = donnees.replie
 	ligne.enGuerre = donnees.enGuerre
 	ligne.progression = donnees.progression
@@ -287,25 +334,48 @@ local function remplirLigne(ligne, donnees)
 	ligne.nom:SetText(donnees.nom or "")
 	ligne.nom:ClearAllPoints()
 
-	if donnees.entete then
+	local plaque = donnees.entete and not donnees.enfant
+	local sousEntete = donnees.entete and donnees.enfant
+
+	for _, tranche in ipairs(ligne.plaque) do
+		if plaque then tranche:Show() else tranche:Hide() end
+	end
+
+	if plaque then
+		-- EN-TETE DE PREMIER NIVEAU : plaque, nom en or, fleche a droite.
 		ligne:SetHeight(ENTETE_H)
-		for _, tranche in ipairs(ligne.plaque) do
-			tranche:Show()
-		end
 		ligne.barre:Hide()
+		ligne.chevron:Hide()
 		ligne.nom:SetFontObject(GameFontNormalLeft or GameFontNormal)
 		ligne.nom:SetPoint("LEFT", ligne, "LEFT", ENTETE_NOM_X, 0)
 		ligne.nom:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X - FLECHE_PLACE, 0)
 
 		ForeverUI.SetAtlas(ligne.fleche, donnees.replie and ATLAS_PLUS or ATLAS_MOINS)
 		ligne.fleche:Show()
-	else
-		ligne:SetHeight(ENTREE_H)
-		for _, tranche in ipairs(ligne.plaque) do
-			tranche:Hide()
+	elseif sousEntete then
+		-- SOUS-EN-TETE : un bouton a gauche, le nom a sa suite, et une barre
+		-- seulement s'il porte de la reputation.
+		ligne:SetHeight(SOUS_ENTETE_H)
+		ligne.fleche:Hide()
+		ForeverUI.SetAtlas(ligne.chevron, donnees.replie and ATLAS_PLUS or ATLAS_MOINS)
+		ligne.chevron:Show()
+
+		ligne.nom:SetFontObject(GameFontHighlight or GameFontNormal)
+		ligne.nom:SetPoint("LEFT", ligne.chevron, "RIGHT", SOUS_NOM_ECART, 0)
+		ligne.nom:SetPoint("RIGHT", ligne.barre, "LEFT", NOM_ECART, 0)
+
+		if donnees.avecRep then
+			ligne.barre:Show()
+			poserBarre(ligne, donnees)
+		else
+			ligne.barre:Hide()
 		end
+	else
+		-- ENTREE.
+		ligne:SetHeight(ENTREE_H)
 		ligne.barre:Show()
 		ligne.fleche:Hide()
+		ligne.chevron:Hide()
 		ligne.nom:SetFontObject(GameFontHighlight or GameFontNormal)
 		ligne.nom:SetPoint("LEFT", ligne, "LEFT", NOM_X, 0)
 		ligne.nom:SetPoint("RIGHT", ligne.barre, "LEFT", NOM_ECART, 0)
@@ -325,7 +395,7 @@ end
 -- est un enfant.
 local function lireFaction(rang)
 	local nom, _, attitude, seuil, suivant, valeur, enGuerre, _, entete,
-		replie = GetFactionInfo(rang)
+		replie, avecRep, _, enfant = GetFactionInfo(rang)
 	if not nom then
 		return nil
 	end
@@ -350,6 +420,8 @@ local function lireFaction(rang)
 		valeur = courant,
 		maximum = maximum,
 		entete = entete,
+		enfant = enfant,
+		avecRep = avecRep,
 		replie = replie,
 		enGuerre = enGuerre,
 		intitule = intitule,
@@ -358,32 +430,79 @@ local function lireFaction(rang)
 	}
 end
 
+-- LE RETRAIT, tel que SetElementIndentCalculator le donne.
+local function retraitDe(donnees)
+	if donnees.entete and not donnees.enfant then
+		return RETRAIT_ENTETE
+	end
+	if not donnees.entete and donnees.enfant then
+		return RETRAIT_ENFANT
+	end
+	return RETRAIT_AUTRE
+end
+
+local function hauteurDe(donnees)
+	if donnees.entete then
+		return donnees.enfant and SOUS_ENTETE_H or ENTETE_H
+	end
+	return ENTREE_H
+end
+
+-- LES LIGNES DU CLIENT SE REMONTRENT SEULES.
+--
+-- ReputationFrame_Update finit par factionRow:Show() sur chacune des
+-- quinze : les masquer une fois, a la construction, ne suffit pas -- elles
+-- reviennent au passage suivant, avec tout leur art d'epoque, et certaines
+-- reputations semblaient alors echapper au theme. On repasse apres lui.
+local function masquerLignesDuClient()
+	for index = 1, 15 do
+		local vieille = _G["ReputationBar" .. index]
+		if vieille then
+			vieille:Hide()
+		end
+	end
+end
+
 local function poserListe()
 	if not panneau then
 		return
 	end
 
+	masquerLignesDuClient()
+
 	local total = (GetNumFactions and GetNumFactions()) or 0
-	local place = #lignes
-	if decalage > total - place then
-		decalage = math.max(0, total - place)
+	local hauteurUtile = (panneau:GetHeight() or 0)
+	if hauteurUtile < 50 then
+		hauteurUtile = VOLET_H + LISTE_Y - LISTE_Y2
+	end
+	local largeurUtile = (panneau:GetWidth() or 0)
+	if largeurUtile < 50 then
+		largeurUtile = VOLET_L + LISTE_X2 - LISTE_X
 	end
 
-	local precedente
+	-- COMBIEN TIENNENT. Les hauteurs changent d'un gabarit a l'autre : on ne
+	-- peut plus diviser, il faut empiler jusqu'a la marge du bas.
+	local y = MARGE
+	local posees = 0
 	for rang, ligne in ipairs(lignes) do
 		local donnees = lireFaction(decalage + rang)
-		if donnees then
+		local hauteur = donnees and hauteurDe(donnees) or 0
+		if donnees and y + hauteur <= hauteurUtile - MARGE then
+			local retrait = retraitDe(donnees)
+			ligne:SetWidth(largeurUtile - 2 * MARGE - retrait)
 			remplirLigne(ligne, donnees)
 			ligne:ClearAllPoints()
-			if precedente then
-				ligne:SetPoint("TOPLEFT", precedente, "BOTTOMLEFT", 0, 0)
-			else
-				ligne:SetPoint("TOPLEFT", panneau, "TOPLEFT", 0, 0)
-			end
-			precedente = ligne
+			ligne:SetPoint("TOPLEFT", panneau, "TOPLEFT", MARGE + retrait, -y)
+			y = y + hauteur + ECART
+			posees = posees + 1
 		else
 			ligne:Hide()
 		end
+	end
+
+	visibles = posees
+	if decalage > total - posees then
+		decalage = math.max(0, total - posees)
 	end
 end
 ForeverUI.ReputationLayout = poserListe
@@ -454,7 +573,9 @@ local function monter(hote)
 	panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", LISTE_X2, LISTE_Y2)
 	panneau:SetWidth(largeur)
 
-	local place = math.floor((hauteur + LISTE_Y - LISTE_Y2) / ENTREE_H)
+	-- On en cree assez pour le cas le plus dense -- que des sous-en-tetes,
+	-- les plus courts -- puisque poserListe s'arrete a la marge du bas.
+	local place = math.floor((hauteur + LISTE_Y - LISTE_Y2) / (SOUS_ENTETE_H + ECART))
 	if place < 1 then
 		place = 1
 	end
@@ -464,6 +585,7 @@ local function monter(hote)
 			if not self.factionIndex then
 				return
 			end
+			-- Un en-tete comme un sous-en-tete se replie.
 			if self.entete then
 				if self.replie then
 					ExpandFactionHeader(self.factionIndex)
@@ -491,7 +613,7 @@ local function monter(hote)
 	panneau:EnableMouseWheel(true)
 	panneau:SetScript("OnMouseWheel", function(self, sens)
 		local total = (GetNumFactions and GetNumFactions()) or 0
-		decalage = math.max(0, math.min(decalage - sens, total - #lignes))
+		decalage = math.max(0, math.min(decalage - sens, total - visibles))
 		poserListe()
 	end)
 

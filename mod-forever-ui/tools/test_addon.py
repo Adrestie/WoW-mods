@@ -883,17 +883,21 @@ function UnitSex() return 2 end
 REPLIES = {}
 function ExpandFactionHeader(i) REPLIES[i] = false end
 function CollapseFactionHeader(i) REPLIES[i] = true end
-FACTIONS = { { nom = "Cataclysme", standing = 4, entete = true },
-             { nom = "Orgrimmar", standing = 8 },
-             { nom = "Darnassus", standing = 4 } }
+-- La hierarchie telle que le client la rend : un en-tete de premier niveau,
+-- un sous-en-tete -- en-tete ET enfant -- puis des entrees enfants.
+FACTIONS = { { nom = "Classic", standing = 4, entete = true },
+             { nom = "Alliance", standing = 5, entete = true, enfant = true, rep = true },
+             { nom = "Darnassus", standing = 4, enfant = true },
+             { nom = "Exodar", standing = 8, enfant = true } }
 function GetNumFactions() return #FACTIONS end
 function GetFactionInfo(i)
     local f = FACTIONS[i]
     if not f then return nil end
     -- nom, description, standingID, seuil, suivant, valeur, enGuerre,
     -- peutDeclarer, estEnTete, estReplie, ...
+    -- ... hasRep en 11e, isWatched en 12e, isChild en 13e
     return f.nom, "", f.standing, 0, 1000, 250, f.guerre or false, false,
-           f.entete, REPLIES[i] or false
+           f.entete, REPLIES[i] or false, f.rep or false, false, f.enfant or false
 end
 function ReputationFrame_Update() end
 
@@ -2604,7 +2608,10 @@ def main():
     print("   reputation : liste %s (%s, %s), %d lignes de %d de large" % (
         pl[1], pl[4], pl[5], len(list(rangs.values())), r1.width))
     assert (pl[4], pl[5]) == (10, -40), "TOPLEFT du volet (10, -40)"
-    assert r1.width == 398 - 10 - 25, "de LISTE_X a LISTE_X2"
+    p1 = r1.points[len(list(r1.points.values()))]
+    # SetPadding : 10 de marge, et le retrait du gabarit en plus.
+    assert r1.width == 363 - 2 * 10, "la liste moins ses deux marges de 10"
+    assert (p1[4], p1[5]) == (10, -10), "TOPLEFT du panneau, decale de la marge"
     assert not g.ReputationBar1.shown, "les lignes du client s en vont"
 
     # UN EN-TETE : plaque, nom en or a LEFT x = 10, fleche a RIGHT (-8, -1).
@@ -2622,35 +2629,65 @@ def main():
     assert not any(t.shown for t in r2.plaque.values()), "aucune sur une entree"
     assert not r1.barre.shown, "un en-tete n a pas de barre"
     assert (pn1[1], pn1[4]) == ("LEFT", 10), "ReputationHeaderTemplate : LEFT x = 10"
+
+    # LES TROIS GABARITS ET LEURS RETRAITS, tels que SetElementFactory et
+    # SetElementIndentCalculator les donnent.
+    r3 = g.ForeverUIReputationRow3
+    def retrait(ligne):
+        pt = ligne.points[len(list(ligne.points.values()))]
+        return pt[4] - 10          # la marge de 10 en moins
+    print("   hierarchie : en-tete h=%d retrait=%d | sous-en-tete h=%d retrait=%d "
+          "| entree enfant h=%d retrait=%d" % (
+        r1.height, retrait(r1), r2.height, retrait(r2), r3.height, retrait(r3)))
+    assert (r1.height, retrait(r1)) == (28, 0),         "en-tete de premier niveau : 28 de haut, aucun retrait"
+    assert (r2.height, retrait(r2)) == (22, 2),         "sous-en-tete : ReputationSubHeaderTemplate, 22 de haut, retrait 2"
+    assert (r3.height, retrait(r3)) == (30, 46),         "enfant qui n est pas un en-tete : 30 de haut, retrait 46"
+    assert r2.chevron.shown and not r2.fleche.shown,         "un sous-en-tete porte son bouton a GAUCHE"
+    assert r1.fleche.shown and not r1.chevron.shown,         "un en-tete de premier niveau porte sa fleche a DROITE"
+    assert r2.barre.shown, "ce sous-en-tete a de la reputation : sa barre parait"
+    assert r3.barre.shown and not r3.chevron.shown, "une entree n a ni l un ni l autre"
+
+    # L ECART entre deux lignes vaut 3, et il suit les hauteurs.
+    ecart = (-retrait(r1) - 10) + 0     # place pour la lisibilite
+    y1 = r1.points[len(list(r1.points.values()))][5]
+    y2 = r2.points[len(list(r2.points.values()))][5]
+    print("   ecart : ligne 1 a %s, ligne 2 a %s (28 + 3 attendus)" % (y1, y2))
+    assert y1 - y2 == 28 + 3, "elementSpacing = 3, apres une ligne de 28"
+
+    # LES LIGNES DU CLIENT SE REMONTRENT SEULES : on repasse apres lui.
+    g.ReputationBar1.Show(g.ReputationBar1)
+    g.ForeverUI.ReputationLayout()
+    assert not g.ReputationBar1.shown,         "ReputationFrame_Update les remontre : il faut les masquer a chaque passage"
     assert r1.nom.font == "GameFontNormalLeft", "et son nom est en or"
     assert (pf[1], pf[4], pf[5]) == ("RIGHT", -8, -1), "StateIcon a RIGHT (-8, -1)"
     assert r1.fleche.width == 13, "common-button-list-minus, a sa taille d atlas"
 
-    # UNE ENTREE : barre a RIGHT x = -3, nom en blanc de x = 25 au LEFT de la
-    # barre moins 10.
-    pb = r2.barre.points[1]
-    pn2 = r2.nom.points[1]
+    # UNE ENTREE : barre a RIGHT x = -3, nom en blanc a x = 15 -- le bord
+    # droit de l AccountWideIcon, 25, moins les 10 que Initialize retire
+    # quand cette icone est masquee, ce qu elle est toujours ici.
+    pb = r3.barre.points[1]
+    pn2 = r3.nom.points[1]
     print("   entree : barre %d x %d %s x=%s | nom x=%s police=%s | remplissage %s" % (
-        r2.barre.width, r2.barre.height, pb[1], pb[4], pn2[4],
-        r2.nom.font, r2.barre.remplissage.width))
-    assert r2.barre.width == 160 and r2.barre.height == 29, "ReputationBarTemplate"
+        r3.barre.width, r3.barre.height, pb[1], pb[4], pn2[4],
+        r3.nom.font, r3.barre.remplissage.width))
+    assert r3.barre.width == 160 and r3.barre.height == 29, "ReputationBarTemplate"
     assert (pb[1], pb[4]) == ("RIGHT", -3), "ancree RIGHT x = -3"
-    assert (pn2[1], pn2[4]) == ("LEFT", 25), "le bord droit de l AccountWideIcon"
-    assert r2.nom.font == "GameFontHighlight", "le nom d une entree est en blanc"
-    r3 = g.ForeverUIReputationRow3
-    print("   exalte : barre pleine (%s) | amical : %s sur 160" % (
-        r2.barre.remplissage.width, r3.barre.remplissage.width))
-    assert r2.barre.remplissage.width == 160.0,         "a l attitude maximale la barre est pleine, comme la source le veut"
+    assert (pn2[1], pn2[4]) == ("LEFT", 15), "25 moins les 10 de Initialize"
+    assert r3.nom.font == "GameFontHighlight", "le nom d une entree est en blanc"
+    r4 = g.ForeverUIReputationRow4
+    print("   exalte : barre pleine (%s) | neutre : %s sur 160" % (
+        r4.barre.remplissage.width, r3.barre.remplissage.width))
+    assert r4.barre.remplissage.width == 160.0,         "a l attitude maximale la barre est pleine, comme la source le veut"
     assert r3.barre.remplissage.width == 40.0, "250 sur 1000, sur 160 de barre"
     assert r2.barre.remplissage.height == 15, "ColoredProgressBarTemplate"
     # LE FOND DE JAUGE SE DECOUPE, LE REMPLISSAGE NON : l un est un cadre,
     # l autre une jauge que camelot rogne a la fraction voulue.
-    fonds = [t for t in r2.barre.regions.values() if t.layer == "BACKGROUND"]
+    fonds = [t for t in r3.barre.regions.values() if t.layer == "BACKGROUND"]
     print("   jauge : %d tranches de fond, remplissage %s de large" % (
-        len(fonds), r2.barre.remplissage.width))
+        len(fonds), r3.barre.remplissage.width))
     assert len(fonds) == 9, "common-stat-bar-bg se decoupe en neuf"
-    assert r2.barre.remplissage.layer == "BORDER",         "le remplissage reste une seule texture, rognee"
-    assert "statbarfill" in (r2.barre.remplissage.texture or ""),         "et c est la version CUITE au masque, decoupee comme le fond"
+    assert r3.barre.remplissage.layer == "BORDER",         "le remplissage reste une seule texture, rognee"
+    assert "statbarfill" in (r3.barre.remplissage.texture or ""),         "et c est la version CUITE au masque, decoupee comme le fond"
     assert abs(r3.barre.remplissage.texcoord[2] - 0.25) < 1e-6,         "rognee a la fraction : 250 sur 1000"
 
     # LE CLIC : un en-tete se replie, une entree se choisit.
@@ -2661,10 +2698,10 @@ def main():
     g.ForeverUI.ReputationLayout()
     assert r1.fleche.height == 13, "le plus prend la place du moins, a SA taille"
 
-    r2.scripts.OnClick(r2)
+    r3.scripts.OnClick(r3)
     g.ForeverUI.ReputationLayout()
-    print("   clic sur une entree : survol a %.2f" % r2.survol.alpha)
-    assert abs(r2.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
+    print("   clic sur une entree : survol a %.2f" % r3.survol.alpha)
+    assert abs(r3.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
     assert abs(r1.survol.alpha) < 1e-6, "un en-tete n a pas de survol"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
