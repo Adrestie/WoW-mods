@@ -452,3 +452,72 @@ function ForeverUI.CreateVerticalDivider(parent, atlas, embout, niveau)
 	cadre.haut, cadre.milieu, cadre.bas = haut, milieu, bas
 	return cadre
 end
+
+-- NEUF TRANCHES DECOUPEES DANS UNE SEULE IMAGE.
+--
+-- POURQUOI. Une image de panneau porte une ombre et des coins arrondis de
+-- taille fixe. L'etirer d'un bord a l'autre multiplie cette ombre par le
+-- facteur d'echelle : sur une liste trois fois plus large que l'image, le
+-- filet du bord rentre de vingt pixels et les angles se deforment. Les
+-- coins doivent donc garder leur taille, les bords ne s'etirer que dans un
+-- sens, et le centre seul dans les deux.
+--
+-- marges = { gauche, haut, droite, bas } : de combien le rectangle de
+-- l'image deborde du cadre. C'est ainsi qu'on fait tomber le filet de
+-- l'image exactement sur le bord du cadre : on donne l'epaisseur de
+-- l'ombre, mesuree sur l'image.
+function ForeverUI.CreateNineSlice(parent, atlas, coin, marges, niveau)
+	local e = ForeverUI.AtlasEntry(atlas)
+	if not e then
+		return nil
+	end
+
+	local chemin, u1, u2, v1, v2, largeur, hauteur = e[1], e[2], e[3], e[4], e[5], e[6], e[7]
+	local du = (u2 - u1) * coin / largeur
+	local dv = (v2 - v1) * coin / hauteur
+	local us = { u1, u1 + du, u2 - du, u2 }
+	local vs = { v1, v1 + dv, v2 - dv, v2 }
+
+	local tranches = {}
+	local function tranche(colonne, ligne)
+		local t = parent:CreateTexture(nil, niveau or "BACKGROUND")
+		t:SetTexture(chemin)
+		t:SetTexCoord(us[colonne], us[colonne + 1], vs[ligne], vs[ligne + 1])
+		tranches[#tranches + 1] = t
+		return t
+	end
+
+	local hg, hd = tranche(1, 1), tranche(3, 1)
+	local bg, bd = tranche(1, 3), tranche(3, 3)
+	local haut, bas = tranche(2, 1), tranche(2, 3)
+	local gauche, droite = tranche(1, 2), tranche(3, 2)
+	local centre = tranche(2, 2)
+
+	for _, c in ipairs({ hg, hd, bg, bd }) do
+		c:SetWidth(coin)
+		c:SetHeight(coin)
+	end
+	haut:SetHeight(coin)
+	bas:SetHeight(coin)
+	gauche:SetWidth(coin)
+	droite:SetWidth(coin)
+
+	local G, H, D, B = marges[1], marges[2], marges[3], marges[4]
+	hg:SetPoint("TOPLEFT", parent, "TOPLEFT", -G, H)
+	hd:SetPoint("TOPRIGHT", parent, "TOPRIGHT", D, H)
+	bg:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", -G, -B)
+	bd:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", D, -B)
+
+	haut:SetPoint("TOPLEFT", hg, "TOPRIGHT")
+	haut:SetPoint("TOPRIGHT", hd, "TOPLEFT")
+	bas:SetPoint("BOTTOMLEFT", bg, "BOTTOMRIGHT")
+	bas:SetPoint("BOTTOMRIGHT", bd, "BOTTOMLEFT")
+	gauche:SetPoint("TOPLEFT", hg, "BOTTOMLEFT")
+	gauche:SetPoint("BOTTOMRIGHT", bg, "TOPRIGHT")
+	droite:SetPoint("TOPLEFT", hd, "BOTTOMLEFT")
+	droite:SetPoint("BOTTOMRIGHT", bd, "TOPRIGHT")
+	centre:SetPoint("TOPLEFT", hg, "BOTTOMRIGHT")
+	centre:SetPoint("BOTTOMRIGHT", bd, "TOPLEFT")
+
+	return tranches
+end

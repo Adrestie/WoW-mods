@@ -24,7 +24,7 @@
 -- contextuel.
 --
 --   Generate()   fond common-dropdown-bg, TOPLEFT (-10, 3) et BOTTOMRIGHT
---                (10, -3), alpha 0,925.
+--                (10, -3), alpha 0,925 -- UNE texture etiree.
 --   GetInset()   gauche 8, haut 8, droite 8, bas 15.
 --   ligne        DarkMenuElementTemplate, 20 de haut.
 --   police       le compositeur pose GameFontHighlight, blanc, justifie a
@@ -61,8 +61,25 @@
 
 ForeverUI = ForeverUI or {}
 
+-- LE FOND, EN NEUF TRANCHES. Camelot etire une seule texture d'un bord a
+-- l'autre. Mesure sur l'image -- common-dropdown-bg-c60, 68 x 68 -- le
+-- panneau n'occupe que x 9..58 et y 6..55 : le reste est une OMBRE de 9 a
+-- gauche et a droite, 6 en haut et 12 en bas, et les angles sont coupes sur
+-- 6 pixels. L'etirer sur une liste de 200 x 130 multiplie cette ombre par
+-- 3,3 en largeur et par 2 en hauteur : le filet dore rentre d'une vingtaine
+-- de pixels de chaque cote, les angles s'ecrasent, et le bas du panneau
+-- remonte au-dessus de la derniere ligne.
+--
+-- Les coins gardent donc leur taille et seuls les bords s'etirent. Le coin
+-- vaut 18 : l'ombre la plus epaisse (12) plus le pan coupe (6), ce qui
+-- laisse une bande centrale de 32 sur les 68.
+--
+-- Et les marges ne sont plus celles de camelot mais CELLES DE L'IMAGE :
+-- donner l'epaisseur de l'ombre fait tomber le filet exactement sur le bord
+-- du cadre, donc sur la largeur du menu deroulant.
 local FOND_ATLAS = "common-dropdown-bg-c60"
-local FOND_X, FOND_Y = 10, 3
+local FOND_COIN = 18
+local FOND_MARGES = { 9, 6, 9, 12 }     -- gauche, haut, droite, bas
 local FOND_ALPHA = 0.925
 local LIGNE_HAUTEUR = 20
 local CASE_ATLAS = "common-dropdown-ticksquare"
@@ -132,14 +149,16 @@ local function habillerListe(liste)
 		end
 	end
 
-	local fond = liste:CreateTexture(nil, "BACKGROUND")
-	if not ForeverUI.SetAtlas(fond, FOND_ATLAS, true) then
-		fond:Hide()
+	local tranches = ForeverUI.CreateNineSlice(liste, FOND_ATLAS, FOND_COIN,
+		FOND_MARGES, "BACKGROUND")
+	if not tranches then
+		return
 	end
-	fond:SetPoint("TOPLEFT", liste, "TOPLEFT", -FOND_X, FOND_Y)
-	fond:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", FOND_X, -FOND_Y)
-	fond:SetAlpha(FOND_ALPHA)
-	liste.foreverFond = fond
+	for _, tranche in ipairs(tranches) do
+		tranche:SetAlpha(FOND_ALPHA)
+	end
+	liste.foreverFond = tranches[1]
+	liste.foreverTranches = tranches
 
 	liste:HookScript("OnShow", ajusterLargeur)
 end

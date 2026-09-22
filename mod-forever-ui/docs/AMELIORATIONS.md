@@ -565,13 +565,31 @@ la famille `mainline`, avec l'art `c60`.
 
 | Pièce | Ce que le client charge | Ce que fait camelot | Chez nous |
 |---|---|---|---|
-| Fond | deux `Backdrop` en cadres fils, montrés l'un ou l'autre selon `displayMode` : `UI-DialogBox-Background-Dark` et `UI-Tooltip-Background` | `common-dropdown-bg`, `TOPLEFT (−10, 3)` → `BOTTOMRIGHT (10, −3)`, alpha 0,925 | `common-dropdown-bg-c60`, mêmes décalages et même alpha |
+| Fond | deux `Backdrop` en cadres fils, montrés l'un ou l'autre selon `displayMode` : `UI-DialogBox-Background-Dark` et `UI-Tooltip-Background` | `common-dropdown-bg`, **une texture étirée**, `TOPLEFT (−10, 3)` → `BOTTOMRIGHT (10, −3)`, alpha 0,925 | `common-dropdown-bg-c60` en **neuf tranches**, marges prises sur l'image, même alpha |
 | Hauteur d'une ligne | 16 (`UIDROPDOWNMENU_BUTTON_HEIGHT`) | 20 (`DarkMenuElementTemplate`) | 20, constante comprise — le client s'en sert pour le pas ET pour la hauteur de la liste |
 | Police | `GameFontHighlightSmallLeft` | `GameFontHighlight`, blanc, justifié à gauche | `GameFontHighlightLeft` |
 | Coche | une seule texture, `UI-CheckBox-Check` 18 × 18 à `LEFT`, montrée si coché | la **case** `common-dropdown-ticksquare` toujours là, la **coche jaune** `common-dropdown-icon-checkmark-yellow` par-dessus si choisi | la case en `BORDER`, la coche du client repeinte en jaune et centrée dessus à (2, 1) |
 | Surbrillance | `UI-QuestTitleHighlight` en `ADD` | `MenuVariants.CreateHighlight` : **la même** | rien à faire |
 | Flèche de sous-menu | `ChatFrameExpandArrow` | `MenuVariants.CreateSubmenuArrow` : **la même** | rien à faire |
 | Largeur | taillée sur le texte le plus long (`maxWidth + 25`) | `DropdownButtonMixin:RegisterMenu` pose `SetMinimumWidth(self:GetWidth())` | plancher à la largeur du menu déroulant qui l'ouvre |
+
+**Une image de panneau ne s'étire pas d'un bord à l'autre.** Camelot pose
+`common-dropdown-bg` en **une seule texture étirée**. Mesuré sur l'image —
+68 × 68 — le panneau n'occupe que `x 9..58` et `y 6..55` : le reste est une
+**ombre** de 9 à gauche et à droite, 6 en haut et **12 en bas**, et les angles
+sont coupés sur 6 pixels. L'étirer sur une liste de 200 × 130 multiplie cette
+ombre par 3,3 en largeur et par 2 en hauteur : le filet doré rentre d'une
+vingtaine de pixels de chaque côté, les angles s'écrasent, et le bas du
+panneau remonte **au-dessus de la dernière ligne**.
+
+Le fond est donc découpé en neuf tranches (`ForeverUI.CreateNineSlice`, une
+image → neuf textures) : les coins gardent leur taille, les bords ne
+s'étirent que dans un sens, le centre dans les deux. Le coin vaut **18** —
+l'ombre la plus épaisse (12) plus le pan coupé (6) — ce qui laisse une bande
+centrale de 32 sur les 68. Et les marges ne sont plus celles de camelot mais
+**celles de l'image** (9, 6, 9, 12) : donner l'épaisseur de l'ombre fait
+tomber le filet exactement sur le bord du cadre, donc sur la largeur du menu
+déroulant.
 
 **La largeur est un plancher, pas une égalité.** Camelot n'impose à la liste
 qu'un *minimum* — la largeur du bouton — et la laisse s'élargir si une

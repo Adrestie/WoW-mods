@@ -2343,14 +2343,21 @@ def main():
     assert g.DropDownList1Backdrop.backdrop is None,         "ToggleDropDownMenu remontrerait un cadre masque : le fond doit partir"
     assert g.DropDownList1MenuBackdrop.backdrop is None
 
-    fond = liste.foreverFond
-    ph = fond.points[1]
-    pb = fond.points[2]
-    print("   fond : %s (%s, %s) -> %s (%s, %s), alpha %.3f" % (
-        ph[1], ph[4], ph[5], pb[1], pb[4], pb[5], fond.alpha))
-    assert fond.texture is not None, "le fond de camelot doit etre pose"
-    assert (ph[4], ph[5]) == (-10, 3) and (pb[4], pb[5]) == (10, -3),         "MenuStyle1Mixin:Generate pose le fond a (-10, 3) et (10, -3)"
-    assert abs(fond.alpha - 0.925) < 0.001, "alpha 0,925"
+    # Le fond est decoupe : les coins gardent leur taille, l ombre de
+    # l image ne se multiplie plus avec la liste.
+    tranches = list(liste.foreverTranches.values())
+    print("   fond : %d tranches, alpha %.3f" % (len(tranches), tranches[0].alpha))
+    assert len(tranches) == 9, "neuf tranches : quatre coins, quatre bords, un centre"
+    assert all(t.texture is not None for t in tranches), "chaque tranche porte l image"
+    assert all(abs(t.alpha - 0.925) < 0.001 for t in tranches), "alpha 0,925"
+
+    hg, bd = tranches[0], tranches[3]
+    phg, pbd = hg.points[1], bd.points[1]
+    print("   coin haut gauche : %dx%d %s (%s, %s) | bas droit %s (%s, %s)" % (
+        hg.width, hg.height, phg[1], phg[4], phg[5], pbd[1], pbd[4], pbd[5]))
+    assert hg.width == 18 and hg.height == 18,         "coin de 18 : l ombre la plus epaisse (12) plus le pan coupe (6)"
+    assert (phg[1], phg[4], phg[5]) == ("TOPLEFT", -9, 6),         "l ombre mesuree sur l image : 9 a gauche, 6 en haut"
+    assert (pbd[1], pbd[4], pbd[5]) == ("BOTTOMRIGHT", 9, -12),         "9 a droite, 12 en bas -- le filet tombe sur le bord du cadre"
 
     print("   ligne : %d de haut (20), police %s, pas %d" % (
         b1.height, b1.normalFont.police, g.UIDROPDOWNMENU_BUTTON_HEIGHT))
