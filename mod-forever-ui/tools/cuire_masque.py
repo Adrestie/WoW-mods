@@ -141,6 +141,25 @@ def _png(chemin, largeur, hauteur, rgba):
         + bloc(b"IEND", b""))
 
 
+def _ecrire(chemin, largeur, hauteur, pixels):
+    """Ecrire un BLP et son apercu, apres verification de la taille.
+
+    LE CLIENT VEUT DES PUISSANCES DE DEUX. Tout son art d'interface en est --
+    256 x 256, 256 x 64, 16 x 16 -- et une cuisson en 320 x 30 ne s'affichait
+    pas correctement : il ne sait visiblement pas echantillonner autre chose,
+    et rendait la texture d'un bloc. Le defaut est silencieux a l'ecriture et
+    ne se voit qu'en jeu ; on le refuse donc ici.
+    """
+    for nom, taille in (("largeur", largeur), ("hauteur", hauteur)):
+        if taille <= 0 or (taille & (taille - 1)) != 0:
+            raise SystemExit("%s : %s de %d n'est pas une puissance de deux"
+                             % (os.path.basename(chemin), nom, taille))
+
+    os.makedirs(os.path.dirname(chemin), exist_ok=True)
+    io.open(chemin, "wb").write(blp.encoder(largeur, hauteur, bytes(pixels)))
+    _png(chemin[:-4] + ".png", largeur, hauteur, pixels)
+
+
 def _lire(chemin):
     largeur, hauteur, rgba, _ = blp.decoder(io.open(chemin, "rb").read())
     return largeur, hauteur, bytearray(rgba)
@@ -246,9 +265,7 @@ def cuire(nom, masque):
             pixels[base + 3] = int(a * somme / (255.0 * SUPER * SUPER) + 0.5)
 
     cible = os.path.join(SORTIE, nom)
-    os.makedirs(SORTIE, exist_ok=True)
-    io.open(cible, "wb").write(blp.encoder(largeur, hauteur, bytes(pixels)))
-    _png(cible[:-4] + ".png", largeur, hauteur, pixels)
+    _ecrire(cible, largeur, hauteur, pixels)
     return cible
 
 
@@ -267,7 +284,15 @@ def cuire(nom, masque):
 JAUGE_L, JAUGE_H = 160.0, 29.0   # largeur et hauteur de la barre
 JAUGE_COIN = 10.0   # le meme que le fond
 JAUGE_REMPLISSAGE_H = 15.0
-JAUGE_ECHELLE = 2   # on cuit au double, pour le contour
+# LA TAILLE SE PREND EN PUISSANCE DE DEUX.
+#
+# Tout l'art d'interface du client d'origine l'est -- verifie sur un
+# echantillon : 256 x 256, 256 x 64, 16 x 16. Une premiere cuisson en
+# 320 x 30 ne s'affichait pas correctement ; le client ne sait visiblement
+# pas echantillonner une texture qui ne l'est pas, et la rendait d'un bloc
+# que la teinte de la faction coloriait ensuite. 512 x 32 tient largement le
+# double de la taille affichee, 160 x 15, et garde la lecture en 0..1.
+JAUGE_SORTIE_L, JAUGE_SORTIE_H = 512, 32
 
 MASQUE_JAUGE = os.path.join(ART, "common", "commonstatbarmaskc60.blp")
 REMPLISSAGE = os.path.join(ART, "common", "commonstatbarc60.blp")
@@ -297,8 +322,7 @@ def cuire_jauge():
     fl, fh, fpix = _lire(REMPLISSAGE)
 
     u1, u2, v1, v2 = REMPLISSAGE_RECT
-    largeur = int(JAUGE_L * JAUGE_ECHELLE)
-    hauteur = int(JAUGE_REMPLISSAGE_H * JAUGE_ECHELLE)
+    largeur, hauteur = JAUGE_SORTIE_L, JAUGE_SORTIE_H
     pixels = bytearray(largeur * hauteur * 4)
 
     haut = (JAUGE_H - JAUGE_REMPLISSAGE_H) / 2.0
@@ -322,10 +346,8 @@ def cuire_jauge():
             m = _alpha_du_masque(mx, my, ml, mh, mpix)
             pixels[base + 3] = int(a * m / 255.0 + 0.5)
 
-    os.makedirs(SORTIE_JAUGE, exist_ok=True)
     cible = os.path.join(SORTIE_JAUGE, "statbarfill.blp")
-    io.open(cible, "wb").write(blp.encoder(largeur, hauteur, bytes(pixels)))
-    _png(cible[:-4] + ".png", largeur, hauteur, pixels)
+    _ecrire(cible, largeur, hauteur, pixels)
     return cible
 
 
