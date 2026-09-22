@@ -1544,6 +1544,15 @@ def main():
     assert habillage.GetFrameLevel(habillage) > gauche.GetFrameLevel(gauche),         "l art doit passer au-dessus des volets"
     assert perso.foreverPanel.coinHautGaucheAtlas == "ui-frame-portraitmetal-cornertopleft",         "PortraitFrameTemplate prend le grand anneau, pas celui des sacs"
 
+    # LE FOND RESTE AU DERNIER PLAN. Monte avec le metal dans le cadre fils,
+    # il recouvrait les volets : une region du cadre passe sous tous ses
+    # cadres fils, c'est la place qu'il lui faut.
+    fond = list(perso.foreverPanel.fond.values())[0]
+    print("   fond du panneau : porte par %s (le cadre, pas l habillage)" % (
+        fond.owner.name or "?"))
+    assert fond.owner.name == "CharacterFrame",         "le fond doit rester sur le cadre, sinon il recouvre les volets"
+    assert perso.foreverPanel.coinHautGauche.owner.name != "CharacterFrame",         "le metal, lui, vit dans le cadre fils"
+
     # LE PORTRAIT : le balayage efface celui du client, on pose le notre.
     portrait = perso.foreverPortrait
     pp = portrait.points[1]

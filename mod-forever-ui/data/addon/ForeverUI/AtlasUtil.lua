@@ -263,17 +263,23 @@ local PANNEAU_COINS = {
 --     de la source ne different que par lui -- HeldBagLayout prend
 --     ...CornerTopLeftSmall, PortraitFrameTemplate prend ...CornerTopLeft,
 --     un anneau plus large pour un portrait de 62.
---   niveau : quand il est donne, tout l'art se pose dans un CADRE FILS de
---     ce niveau au-dessus du cadre. La source fait de meme -- son
---     NineSlice est un cadre fils -- et il le faut des que le cadre porte
---     d'autres cadres fils : ceux-ci se dessinent au-dessus de toute
---     region de leur parent, et recouvriraient le metal.
+--   niveau : quand il est donne, LE METAL se pose dans un CADRE FILS de ce
+--     niveau au-dessus du cadre. La source fait de meme -- son NineSlice
+--     est un cadre fils -- et il le faut des que le cadre porte d'autres
+--     cadres fils : ceux-ci se dessinent au-dessus de toute region de leur
+--     parent, et recouvriraient le metal.
+--
+--     LE FOND, LUI, RESTE SUR LE CADRE. Il doit passer DERRIERE tout le
+--     reste : monte avec le metal, il recouvrait les volets de la feuille
+--     du personnage. Une region du cadre est sous tous ses cadres fils,
+--     c'est exactement la place qu'il lui faut.
 function ForeverUI.SetPanelArt(frame, options)
 	if frame.foreverPanel then
 		return frame.foreverPanel
 	end
 
 	options = options or {}
+	-- hote : ou va le METAL. Le fond reste sur le cadre, au dernier plan.
 	local hote = frame
 	if options.niveau then
 		hote = CreateFrame("Frame", nil, frame)
@@ -287,24 +293,24 @@ function ForeverUI.SetPanelArt(frame, options)
 	-- 1. le fond plat
 	local r, v, b, a = PANNEAU_FOND[1], PANNEAU_FOND[2], PANNEAU_FOND[3], PANNEAU_FOND[4]
 
-	local basGauche = hote:CreateTexture(nil, "BACKGROUND")
+	local basGauche = frame:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(basGauche, "uiframebackground-nineslice-cornerbottomleft")
 	basGauche:SetVertexColor(r, v, b, a)
-	basGauche:SetPoint("BOTTOMLEFT", hote, "BOTTOMLEFT", 2, 3)
+	basGauche:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 3)
 
-	local basDroit = hote:CreateTexture(nil, "BACKGROUND")
+	local basDroit = frame:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(basDroit, "uiframebackground-nineslice-cornerbottomright")
 	basDroit:SetVertexColor(r, v, b, a)
-	basDroit:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", -2, 3)
+	basDroit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 3)
 
-	local bordBas = hote:CreateTexture(nil, "BACKGROUND")
+	local bordBas = frame:CreateTexture(nil, "BACKGROUND")
 	bordBas:SetTexture(r, v, b, a)
 	bordBas:SetPoint("TOPLEFT", basGauche, "TOPRIGHT")
 	bordBas:SetPoint("BOTTOMRIGHT", basDroit, "BOTTOMLEFT")
 
-	local corps = hote:CreateTexture(nil, "BACKGROUND")
+	local corps = frame:CreateTexture(nil, "BACKGROUND")
 	corps:SetTexture(r, v, b, a)
-	corps:SetPoint("TOPLEFT", hote, "TOPLEFT", 2, -20)
+	corps:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -20)
 	corps:SetPoint("BOTTOMRIGHT", basDroit, "TOPRIGHT")
 
 	p.fond = { basGauche, basDroit, bordBas, corps }

@@ -427,7 +427,12 @@ collait plus aux fonds, le fond du volet droit débordait sur le bord droit et
 celui du volet gauche mangeait l'anneau du portrait. La source fait la même
 chose que ce qu'il fallait faire : son `NineSlice` est un **cadre fils**, et son
 `PortraitContainer` en est un autre, à `frameLevel` 400. `SetPanelArt` accepte
-donc une option `niveau` qui loge tout l'art dans un cadre fils au-dessus.
+donc une option `niveau` qui loge **le métal** dans un cadre fils au-dessus.
+
+**Le fond, lui, reste sur le cadre.** Monté avec le métal, il recouvrait les
+volets à son tour — c'est une surface opaque, elle doit passer *derrière* tout
+le reste. Une région du cadre se dessine sous tous ses cadres fils : c'est
+exactement la place qu'il lui faut. Le métal monte, le fond descend.
 
 Trois autres corrections du même essai :
 
