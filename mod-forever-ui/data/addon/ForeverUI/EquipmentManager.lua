@@ -752,15 +752,52 @@ local function terminerEdition()
     end
 
     -- Le nom est indispensable : SaveEquipmentSet le refuse vide.
-    if not e.nom or e.nom == "" then
+    if not e.nom or e.nom == "" or not SaveEquipmentSet then
         return
     end
-    if SaveEquipmentSet then
-        SaveEquipmentSet(e.nom, e.icone)
+
+    -- L'INDICE D'ICONE PEUT MANQUER. La fenetre retient l'icone choisie de
+    -- deux facons : selectedIcon quand le joueur en clique une,
+    -- selectedTexture quand elle est seulement PRESELECTIONNEE a
+    -- l'ouverture. Le passage de l'une a l'autre se fait dans
+    -- GearManagerDialogPopup_Update, et seulement pour les icones de la
+    -- page VISIBLE : si celle de l'ensemble est ailleurs dans la liste,
+    -- selectedIcon reste vide et SaveEquipmentSet refuse. On abandonne
+    -- alors, plutot que d'effacer l'ancien sans avoir cree le nouveau.
+    if type(e.icone) ~= "number" then
+        if UIErrorsFrame then
+            UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
+        end
+        return
     end
-    if e.nom ~= e.ancien and DeleteEquipmentSet then
+
+    local renomme = e.nom ~= e.ancien
+
+    -- MAX_EQUIPMENT_SETS_PER_PLAYER. Un renommage cree avant d'effacer, ce
+    -- qui demande une place de plus ; au plafond, il n'y en a pas et
+    -- l'enregistrement echouerait en silence. L'ancien part donc d'abord --
+    -- c'est sans risque, son equipement est PORTE a cet instant, c'est
+    -- justement ce qu'on vient d'equiper.
+    local plafond = MAX_EQUIPMENT_SETS_PER_PLAYER or 10
+    local avant = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
+    if renomme and avant >= plafond and DeleteEquipmentSet then
         DeleteEquipmentSet(e.ancien)
         remplacerDansOrdre(e.ancien, e.nom)
+        renomme = false
+    end
+
+    SaveEquipmentSet(e.nom, e.icone)
+
+    -- ON N'EFFACE QUE SI LE NOUVEAU EXISTE. C'est le garde-fou : tout echec
+    -- de l'enregistrement -- plafond atteint, icone refusee -- laissait
+    -- sinon l'ancien efface et rien a la place.
+    if renomme and DeleteEquipmentSet then
+        if GetEquipmentSetInfoByName and GetEquipmentSetInfoByName(e.nom) then
+            DeleteEquipmentSet(e.ancien)
+            remplacerDansOrdre(e.ancien, e.nom)
+        elseif UIErrorsFrame then
+            UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
+        end
     end
 
     ForeverUIDB = ForeverUIDB or {}

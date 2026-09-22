@@ -2923,6 +2923,12 @@ def main():
     print("   clic sur l engrenage : ensemble choisi = %s" % (
         g.GearManagerDialog.selectedSetName))
     assert g.GearManagerDialog.selectedSetName == "eee",         "il choisit l ensemble : c est de lui que la fenetre tire nom et icone"
+    def finirRemplacement(ancien):
+        """Le client annonce la fin par EQUIPMENT_SWAP_FINISHED."""
+        att = g.ForeverUIEquipmentEdit
+        if att.shown:
+            att.scripts.OnEvent(att, "EQUIPMENT_SWAP_FINISHED", True, ancien)
+
     # MODIFIER UN ENSEMBLE : memes objets, nouveau nom, a la meme place.
     lua.execute('ForeverUIDB.ordreEnsembles = { "eee", "aaa" }')
     editer.scripts.OnClick(editer)
@@ -2935,12 +2941,40 @@ def main():
     lua.execute('GearManagerDialogPopup.name = "eee2"')
     lua.execute('GearManagerDialogPopup.selectedIcon = 7')
     g.GearManagerDialogPopupOkay.scripts.OnClick(g.GearManagerDialogPopupOkay)
+    finirRemplacement("eee")
     noms = [e.nom for e in g.ENSEMBLES.values()]
     print("   apres modification : %s | ordre %s" % (
         noms, list(g.ForeverUIDB.ordreEnsembles.values())))
     assert "eee2" in noms and "eee" not in noms, "renomme, pas duplique"
     assert list(g.ForeverUIDB.ordreEnsembles.values())[0] == "eee2",         "le nouveau prend la place de l ancien dans la liste"
     assert g.ForeverUIDB.ensembleEquipe == "eee2",         "la coche suit le nom qui a change"
+
+    # L INDICE D ICONE PEUT MANQUER : l ancien ne doit alors PAS partir.
+    lua.execute('ForeverUIDB.ordreEnsembles = { "eee2", "aaa" }')
+    editer.scripts.OnClick(editer)
+    lua.execute('GearManagerDialogPopup.name = "eee3"')
+    lua.execute('GearManagerDialogPopup.selectedIcon = nil')
+    intact = carte.name
+    g.GearManagerDialogPopupOkay.scripts.OnClick(g.GearManagerDialogPopupOkay)
+    finirRemplacement(intact)
+    noms = [e.nom for e in g.ENSEMBLES.values()]
+    print("   sans indice d icone : %s (intact %s)" % (noms, intact))
+    assert intact in noms and "eee3" not in noms,         "sans icone valide, rien ne doit etre cree NI efface"
+
+    # Et au plafond, l ancien part avant que le nouveau soit enregistre.
+    lua.execute('MAX_EQUIPMENT_SETS_PER_PLAYER = 2')
+    ancien = carte.name          # le client a pu reordonner ses boutons
+    editer.scripts.OnClick(editer)
+    lua.execute('GearManagerDialogPopup.name = "eee4"')
+    lua.execute('GearManagerDialogPopup.selectedIcon = 9')
+    g.GearManagerDialogPopupOkay.scripts.OnClick(g.GearManagerDialogPopupOkay)
+    finirRemplacement(ancien)
+    noms = [e.nom for e in g.ENSEMBLES.values()]
+    print("   au plafond : %s (ancien %s)" % (noms, ancien))
+    assert "eee4" in noms and ancien not in noms,         "au plafond, l ancien part d abord : son equipement est porte"
+    lua.execute('MAX_EQUIPMENT_SETS_PER_PLAYER = 10')
+    lua.execute('ENSEMBLES[1].nom = "eee" ENSEMBLES[2].nom = "aaa"')
+    lua.execute('ForeverUIDB.ordreEnsembles = { "eee", "aaa" }')
 
     lua.execute("GearSetButton1.souris = false")
     g.ForeverUI.EquipmentSetsHover()
