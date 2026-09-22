@@ -2796,6 +2796,9 @@ def main():
 
     print("   coches : eee=%s (porte), aaa=%s (non porte)" % (
         carte.foreverCoche.shown, g.GearSetButton2.foreverCoche.shown))
+    pc2 = carte.foreverCoche.points[1]
+    print("   coche : %s (%s, %s)" % (pc2[1], pc2[4], pc2[5]))
+    assert (pc2[1], pc2[4]) == ("RIGHT", -12),         "elle longe le bord droit de la carte, que le bouton couvre entierement"
     assert carte.foreverCoche.shown, "l ensemble porte montre sa coche"
     assert not g.GearSetButton2.foreverCoche.shown, "l autre non"
     assert not g.GearSetButton3.shown, "les cartes sans ensemble ne s affichent pas"

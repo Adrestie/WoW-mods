@@ -71,7 +71,12 @@ local CARTE_L, CARTE_H = CARTE_FOND_X + CARTE_FOND_L, 40
 local CARTE_ICONE, CARTE_ICONE_X = 36, 4
 local CARTE_TEXTE_X = 55
 local CARTE_TEXTE_L, CARTE_TEXTE_H = 98, 38
-local COCHE_X = -23
+-- ECART ASSUME, sur demande. camelot ancre sa coche a RIGHT (-23) du
+-- BOUTON, qui chez lui s'arrete 25 px avant le bord de la carte : la coche
+-- tombe donc bien a l'interieur. Ici le bouton couvre toute la carte, si
+-- bien que le meme -23 la ramenait trop vers la gauche. Elle est donc posee
+-- par rapport au bord DROIT de la carte, qu'elle longe a 12.
+local COCHE_X = -12
 
 local LISTE_X, LISTE_Y = 9, -8
 local LISTE_X2, LISTE_Y2 = -20, 105
