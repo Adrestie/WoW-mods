@@ -596,6 +596,8 @@ for i = 1, MAX_EQUIPMENT_SETS_PER_PLAYER do
     b.text = _G["GearSetButton" .. i .. "Name"]
     table.insert(GearManagerDialog.buttons, b)
 end
+-- UIPanelDialogTemplate nomme sa croix $parentClose, pas $parentCloseButton
+GearManagerDialogClose = CreateFrame("Button", "GearManagerDialogClose", GearManagerDialog)
 for _, nom in ipairs({ "DeleteSet", "EquipSet", "SaveSet" }) do
     local b = CreateFrame("Button", "GearManagerDialog" .. nom, GearManagerDialog)
     b:SetWidth(78); b:SetHeight(22)
@@ -2630,6 +2632,8 @@ def main():
     assert pp3[1] == "TOPLEFT" and pp3[3] == "BOTTOMLEFT",         "il part du bas de la bande de pierre, comme chez camelot"
     assert g.GearManagerDialog.parent.name == "ForeverUIEquipmentPane",         "la fenetre du client passe dans le volet, elle n est pas recreee"
     assert not g.GearManagerDialog.title.shown, "son art de fenetre s efface"
+    print("   croix rouge masquee : %s" % (not g.GearManagerDialogClose.shown))
+    assert not g.GearManagerDialogClose.shown,         "le panneau n est plus une fenetre, il se ferme par son onglet"
 
     # La bordure est decoupee : 107 x 107 tendus sur 233 x 379 se brouillent.
     tranches = list(pane.bordure.values())

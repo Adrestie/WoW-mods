@@ -365,12 +365,24 @@ local function accueillirDialogue()
 	if dialogue.title then
 		dialogue.title:Hide()
 	end
-	local fermer = _G["GearManagerDialogCloseButton"]
-	if fermer then
-		fermer:Hide()
-	end
 
 	dialogue.foreverAccueilli = true
+end
+
+-- LA CROIX ROUGE S'EN VA. UIPanelDialogTemplate nomme son bouton
+-- $parentClose -- GearManagerDialogClose -- et non $parentCloseButton : le
+-- masquer sous le mauvais nom ne faisait rien. Le panneau n'est plus une
+-- fenetre, il se ferme par son onglet.
+--
+-- A refaire a chaque passage : le client remontre ses morceaux quand il
+-- rouvre sa fenetre.
+local function masquerFermeture()
+	for _, nom in ipairs({ "GearManagerDialogClose", "GearManagerDialogCloseButton" }) do
+		local bouton = _G[nom]
+		if bouton then
+			bouton:Hide()
+		end
+	end
 end
 
 local function habiller()
@@ -384,6 +396,7 @@ local function habiller()
 		monter(volet)
 	end
 	accueillirDialogue()
+	masquerFermeture()
 	poserBoutons()
 	poserCartes()
 end
