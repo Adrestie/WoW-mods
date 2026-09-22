@@ -405,8 +405,19 @@ function CombatFeedback_OnCombatEvent(self, event, flags, amount, kind) self.las
 function CombatFeedback_OnUpdate(self, elapsed) end
 function RegisterUnitWatch(f) f.unitWatch = true end
 function ToggleDropDownMenu() end
-GameTooltip = { SetOwner = function() end, SetText = function() end,
-                AddLine = function() end, Show = function() end, Hide = function() end }
+-- L infobulle retient son proprietaire et son texte : le jeu le fait, et
+-- une interface qui change un intitule sous un curseur immobile doit la
+-- redemander depuis le meme bouton.
+GameTooltip = {
+    SetOwner = function(self, cadre, ancre)
+        self.owner, self.anchor = cadre, ancre
+    end,
+    GetOwner = function(self) return self.owner end,
+    SetText = function(self, texte) self.text = texte end,
+    AddLine = function() end,
+    Show = function(self) self.shown = true end,
+    Hide = function(self) self.shown = false end,
+}
 RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
                       DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 } }
 GROUP = "Groupe"
@@ -2299,6 +2310,68 @@ def main():
     print("   resistances : %s, puis %s apres deux passages de plus" % (x1, x2))
     assert x1 == -60 + 30, "le decalage est de 30 vers la droite"
     assert x1 == x2, "le decalage ne doit pas deriver a chaque passage"
+
+    # LE REPLI DU VOLET DROIT.
+    repli = g.ForeverUICharacterRightPaneToggle
+    pr = repli.points[1]
+    print("   bouton de repli : %d x %d, %s sur %s de %s (%s, %s)" % (
+        repli.width, repli.height, pr[1], pr[3], pr[2].name, pr[4], pr[5]))
+    assert repli.width == 28 and repli.height == 28, "28 x 28, comme la source"
+    assert pr[1] == "TOPRIGHT" and pr[3] == "TOPRIGHT",         "au coin haut droit du volet gauche"
+    assert pr[2].name == "ForeverUICharacterLeftPane", "du volet GAUCHE, comme LeftPaneHost"
+    assert (pr[4], pr[5]) == (-6, -6), "decale de -6 sur les deux axes"
+    # Le modele couvre ce coin et prend la souris a niveau egal : le meme
+    # piege que les emplacements d equipement.
+    print("   niveaux : bouton %d, modele %d" % (
+        repli.frameLevel or 1, g.CharacterModelFrame.frameLevel or 1))
+    assert (repli.frameLevel or 1) > (g.CharacterModelFrame.frameLevel or 1),         "sinon le modele recoit le clic"
+    assert repli._normal.texture.endswith("PrevPage-Up"),         "depliee, la fleche montre vers la gauche"
+
+    # ON REPLIE. L onglet ouvert est celui du gestionnaire : le depli devra
+    # le retrouver, et non rouvrir sur les statistiques.
+    gear.scripts.OnClick(gear)
+    repli.scripts.OnClick(repli)
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   replie : fenetre %d de large, volet droit visible=%s, stats=%s, "
+          "gestionnaire=%s, onglets lateraux=%s" % (
+        perso.width, droit.shown, any(lignes), g.GearManagerDialog.shown, barre.shown))
+    assert perso.width == 398, "CHARACTER_FRAME_COLLAPSED_WIDTH, la largeur du volet gauche"
+    assert not droit.shown, "le volet droit s en va"
+    assert not any(lignes), "les lignes de statistiques sont au client : a masquer une a une"
+    assert not g.PlayerStatFrameLeftDropDown.shown, "les selecteurs aussi"
+    assert not g.GearManagerDialog.shown, "et le panneau du gestionnaire"
+    assert barre.shown, "LES ONGLETS LATERAUX RESTENT VISIBLES"
+    assert g.CharacterModelFrame.shown, "le volet gauche ne bouge pas"
+    assert repli._normal.texture.endswith("NextPage-Up"),         "replie, la fleche montre vers la droite"
+    assert g.ForeverUIDB.voletDroitReplie is True, "l etat est retenu"
+
+    # Un passage de l habillage ne doit pas redeplier dans notre dos.
+    g.ForeverUI.CharacterSheet.Apply()
+    print("   apres un passage de l habillage : %d de large" % perso.width)
+    assert perso.width == 398, "l habillage repasse a chaque evenement : il doit respecter le repli"
+    assert not droit.shown and not any(
+        g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7))
+
+    # ON DEPLIE : l onglet du gestionnaire revient, pas celui des statistiques.
+    repli.scripts.OnClick(repli)
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   deplie : %d de large, volet droit=%s, gestionnaire=%s, stats=%s" % (
+        perso.width, droit.shown, g.GearManagerDialog.shown, any(lignes)))
+    assert perso.width == 631, "la fenetre reprend sa largeur"
+    assert droit.shown, "le volet droit revient"
+    assert g.GearManagerDialog.shown, "et l onglet qui etait ouvert avec lui"
+    assert not any(lignes), "les statistiques ne se rouvrent pas d office"
+    assert g.ForeverUIDB.voletDroitReplie is False
+
+    # Et depuis les statistiques, ce sont elles qui reviennent.
+    stats.scripts.OnClick(stats)
+    repli.scripts.OnClick(repli)
+    repli.scripts.OnClick(repli)
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   replie puis deplie depuis les statistiques : stats=%s, gestionnaire=%s" % (
+        all(lignes), g.GearManagerDialog.shown))
+    assert all(lignes), "les statistiques reviennent"
+    assert not g.GearManagerDialog.shown, "et le gestionnaire reste ferme"
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu

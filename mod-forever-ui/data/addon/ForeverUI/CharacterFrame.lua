@@ -60,6 +60,55 @@
 
 local LARGEUR, HAUTEUR = 631, 484
 local VOLET_GAUCHE, VOLET_DROIT = 398, 233
+
+-- LE REPLI DU VOLET DROIT.
+--
+-- RELEVE -- camelot/CharacterFrameConstants.lua :
+--   CHARACTER_FRAME_WIDTH           631
+--   CHARACTER_FRAME_COLLAPSED_WIDTH 398
+-- Replie, la fenetre fait donc exactement la largeur du volet GAUCHE : le
+-- droit ne se reduit pas, il s'en va.
+--
+-- RELEVE -- camelot/CharacterFrame.xml, $parentRightPaneToggleButton :
+--   28 x 28, TOPRIGHT sur le $parent.LeftPaneHost en (-6, -6)
+--   normal  Interface\Buttons\UI-SpellbookIcon-PrevPage-Up
+--   enfonce Interface\Buttons\UI-SpellbookIcon-PrevPage-Down
+--   survol  Interface\Buttons\UI-Common-MouseHilight, mode ADD
+--
+-- RELEVE -- camelot/CharacterFrame.lua :
+--   UpdateRightPaneToggleButton : replie, les images passent a NextPage et
+--     l'infobulle a CHARACTER_FRAME_SHOW_DETAILS_TOOLTIP ; depliee, PrevPage
+--     et CHARACTER_FRAME_HIDE_DETAILS_TOOLTIP. La fleche montre donc ou va
+--     le bord, pas ce qu'on cache.
+--   SetRightPaneCollapsed : un son -- IG_CHARACTER_INFO_CLOSE en repliant,
+--     _OPEN en depliant -- puis RefreshRightPane, RefreshDisplay et
+--     UpdateUIPanelPositions.
+--   RefreshRightPane : masque RightPaneHost et les SidePanes. Les ONGLETS
+--     LATERAUX n'y sont PAS : CharacterFrameModeTabs est ancre au TOPRIGHT
+--     de la fenetre, dehors, donc il suit le bord et reste visible. C'est
+--     aussi ce qui est demande ici.
+--
+-- CE QUI DIFFERE, ET POURQUOI :
+--   * l'etat vit dans un CVar chez camelot (characterFrameCollapsed), qui
+--     n'existe pas en 3.3.5 : il est retenu dans ForeverUIDB ;
+--   * SOUNDKIT n'existe pas non plus, les sons se nomment ici par leur
+--     chaine -- igCharacterInfoClose et igCharacterInfoOpen ;
+--   * les deux intitules d'infobulle n'existent pas dans ce client ;
+--   * surtout, les lignes de statistiques et leurs selecteurs sont des
+--     cadres DU CLIENT, seulement ancres dans notre volet : masquer le
+--     volet ne les emporte pas. Il faut les masquer par leur nom, comme le
+--     fait deja l'onglet des statistiques, et le panneau du gestionnaire
+--     avec eux.
+local REPLI = 28
+local REPLI_X, REPLI_Y = -6, -6
+local REPLI_ART = {
+	deplie = { "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up",
+	           "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down" },
+	replie = { "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up",
+	           "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down" },
+}
+local REPLI_SURVOL = "Interface\\Buttons\\UI-Common-MouseHilight"
+
 local COMBLE = 20                       -- les volets commencent sous le titre
 local NIVEAU_ART = 5                    -- l'art passe au-dessus des volets
 
@@ -1108,6 +1157,11 @@ local function creerOngletVolet(nom, infobulle, clic)
 	return onglet
 end
 
+-- L'ONGLET CHOISI SE RETIENT. Replier masque les statistiques, ce qui met
+-- voletDroit.statsMontrees a faux : sans cette memoire, deplier rouvrirait
+-- toujours sur les statistiques, meme si le gestionnaire etait ouvert.
+local ongletVoulu = true
+
 local function poserOngletsVolet()
 	if not voletDroit then
 		return
@@ -1118,6 +1172,7 @@ local function poserOngletsVolet()
 		-- l'autre. Le gestionnaire reste celui du client, on ne fait que
 		-- montrer et cacher son panneau.
 		local function choisir(statistiques)
+			ongletVoulu = statistiques and true or false
 			if voletDroit.ongletStats then
 				if statistiques then
 					voletDroit.ongletStats.choisi:Show()
@@ -1174,6 +1229,155 @@ local function poserOngletsVolet()
 	if ancien then
 		ancien:Hide()
 	end
+end
+
+-- LE REPLI. L'etat est retenu entre deux sessions, comme le CVar de camelot.
+--
+-- DECLAREE AVANT D'ETRE ECRITE. reposerLaPlace vit plus bas dans ce fichier :
+-- sans cette ligne, son nom se resoudrait en GLOBALE -- donc nil -- au moment
+-- ou le bouton est clique. Le meme piege que majEtatSelecteurs.
+local reposerLaPlace
+
+local function voletReplie()
+	ForeverUIDB = ForeverUIDB or {}
+	return ForeverUIDB.voletDroitReplie == true
+end
+
+local function majBoutonRepli(cadre)
+	local bouton = cadre and cadre.foreverRepli
+	if not bouton then
+		return
+	end
+
+	local replie = voletReplie()
+	local art = replie and REPLI_ART.replie or REPLI_ART.deplie
+	bouton:SetNormalTexture(art[1])
+	bouton:SetPushedTexture(art[2])
+	if replie then
+		bouton.infobulle = CHARACTER_FRAME_SHOW_DETAILS_TOOLTIP or "Show details"
+	else
+		bouton.infobulle = CHARACTER_FRAME_HIDE_DETAILS_TOOLTIP or "Hide details"
+	end
+end
+
+-- Ce qui part et ce qui reste.
+--
+-- Partent : notre volet droit -- donc son fond, sa bande de pierre, son
+-- separateur, sa ligne de niveau et ses deux onglets, qui sont ses fils --
+-- puis, un par un, les cadres du CLIENT qui n'y sont qu'ancres : les douze
+-- lignes de statistiques, leurs deux selecteurs, et le panneau du
+-- gestionnaire d'equipement.
+--
+-- Restent : tout le volet gauche, et LES ONGLETS LATERAUX, qui sont ancres
+-- au bord droit de la FENETRE et non au volet : ils se rapprochent avec le
+-- bord et demeurent visibles.
+local function appliquerRepli(cadre)
+	if not cadre then
+		return
+	end
+
+	local replie = voletReplie()
+	cadre:SetWidth(replie and VOLET_GAUCHE or LARGEUR)
+
+	if voletDroit then
+		if replie then
+			voletDroit:Hide()
+		else
+			voletDroit:Show()
+		end
+	end
+
+	if replie then
+		montrerStatistiques(false)
+		if GearManagerDialog then
+			GearManagerDialog:Hide()
+		end
+	else
+		montrerStatistiques(ongletVoulu)
+		if GearManagerDialog then
+			if ongletVoulu then
+				GearManagerDialog:Hide()
+			else
+				GearManagerDialog:Show()
+			end
+		end
+		if ForeverUI.EquipmentPane then
+			ForeverUI.EquipmentPane.Apply()
+		end
+	end
+
+	majBoutonRepli(cadre)
+	if ForeverUI.UpdatePanelCorners then
+		ForeverUI.UpdatePanelCorners(cadre)
+	end
+end
+
+local function basculerVolet()
+	local cadre = CharacterFrame
+	if not cadre or InCombatLockdown() then
+		return
+	end
+
+	ForeverUIDB = ForeverUIDB or {}
+	ForeverUIDB.voletDroitReplie = not voletReplie()
+
+	if PlaySound then
+		PlaySound(voletReplie() and "igCharacterInfoClose" or "igCharacterInfoOpen")
+	end
+
+	appliquerRepli(cadre)
+	reposerLaPlace(cadre)
+
+	-- L'infobulle vient de changer de texte sous un curseur qui n'a pas
+	-- bouge : camelot la redemande depuis le bouton lui-meme.
+	local bouton = cadre.foreverRepli
+	if bouton and GameTooltip:GetOwner() == bouton then
+		GameTooltip:SetOwner(bouton, "ANCHOR_RIGHT")
+		GameTooltip:SetText(bouton.infobulle)
+		GameTooltip:Show()
+	end
+end
+ForeverUI.CharacterToggleRightPane = basculerVolet
+
+local function poserBoutonRepli(cadre)
+	if not voletGauche then
+		return
+	end
+
+	local bouton = cadre.foreverRepli
+	if not bouton then
+		bouton = CreateFrame("Button", "ForeverUICharacterRightPaneToggle", cadre)
+		bouton:SetWidth(REPLI)
+		bouton:SetHeight(REPLI)
+		bouton:SetPoint("TOPRIGHT", voletGauche, "TOPRIGHT", REPLI_X, REPLI_Y)
+		bouton:SetHighlightTexture(REPLI_SURVOL, "ADD")
+		bouton:SetScript("OnClick", basculerVolet)
+		bouton:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(self.infobulle)
+			GameTooltip:Show()
+		end)
+		bouton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		cadre.foreverRepli = bouton
+	end
+
+	-- AU-DESSUS DE L'ART ET DU MODELE. Le bouton se pose dans le coin haut
+	-- droit du volet gauche, que le modele recouvre : a niveau egal, c'est
+	-- le modele qui prend la souris -- le meme piege que les emplacements
+	-- d'equipement. Les fleches de rotation le reglent en prenant deux
+	-- crans de plus que lui ; celui-ci fait de meme, sans jamais descendre
+	-- sous l'habillage.
+	local niveau = cadre:GetFrameLevel() + NIVEAU_ART + 2
+	local modele = _G["CharacterModelFrame"]
+	if modele and modele.GetFrameLevel then
+		local voulu = modele:GetFrameLevel() + 2
+		if voulu > niveau then
+			niveau = voulu
+		end
+	end
+	bouton:SetFrameLevel(niveau)
+
+	majBoutonRepli(cadre)
 end
 
 -- LES ONGLETS LATERAUX. camelot les met en colonne A DROITE, dehors : une
@@ -1263,7 +1467,7 @@ end
 
 -- Le systeme de panneaux du client repose la fenetre a chaque ouverture :
 -- on remet la place retenue apres lui.
-local function reposerLaPlace(cadre)
+function reposerLaPlace(cadre)
 	local place = placeRetenue()["feuille"]
 	if not place or InCombatLockdown() then
 		return
@@ -1298,7 +1502,9 @@ local function habiller()
 		return
 	end
 
-	cadre:SetWidth(LARGEUR)
+	-- La largeur ne se pose plus ici : c'est appliquerRepli, en fin de
+	-- passage, qui la decide -- apres que les statistiques et le panneau du
+	-- gestionnaire ont ete reposes, faute de quoi ils se remontreraient.
 	cadre:SetHeight(HAUTEUR)
 
 	if not cadre.foreverSkinned then
@@ -1334,6 +1540,8 @@ local function habiller()
 	end
 	poserEmplacements()
 	poserOnglets(cadre)
+	poserBoutonRepli(cadre)
+	appliquerRepli(cadre)
 end
 
 -- Le client rappelle UpdatePaperdollStats(prefixe, cle) des que la

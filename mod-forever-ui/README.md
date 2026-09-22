@@ -22,7 +22,7 @@ nothing else is allowed to disturb.
 | Micro menu and bags bar | The micro buttons, and beside them the backpack, the bag slots and the keyring. | done |
 | Experience and reputation bars | Both bars, their fills, and the reputation colour per standing. | done |
 | Bags | Panel, slots, search box, sort button, round portrait in its ring. | done |
-| Character sheet | The window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, the twelve stat lines and their two category selectors; and in the right pane the two tabs it opens on -- character stats, and the equipment manager: set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet. | done, except the right pane's collapse and the reputation / skills / PvP / currency tabs |
+| Character sheet | The window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, the twelve stat lines and their two category selectors; and in the right pane the two tabs it opens on -- character stats, and the equipment manager: set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet. The right pane folds away, and the side tabs stay where they are. | done, except the reputation / skills / PvP / currency tabs |
 | Dropdown lists | The list a dropdown opens, which is one and the same for every menu in the game: background, rows, font, check box and tick, and a width that follows the menu that opened it. | done |
 | Minimap | -- | not started |
 | Chat | -- | not started |
