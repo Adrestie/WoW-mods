@@ -198,8 +198,17 @@ local function ensemblesOrdonnes()
 		end
 	end
 
+	-- On elague au passage : un ensemble efface laisse sinon son nom dans
+	-- l'ordre pour toujours.
+	local ordre = ordreRetenu()
+	for rang = #ordre, 1, -1 do
+		if not parNom[ordre[rang]] then
+			table.remove(ordre, rang)
+		end
+	end
+
 	local liste = {}
-	for _, nom in ipairs(ordreRetenu()) do
+	for _, nom in ipairs(ordre) do
 		if parNom[nom] then
 			liste[#liste + 1] = parNom[nom]
 			dans[nom] = true
@@ -816,8 +825,26 @@ local function terminerEdition()
 end
 ForeverUI.EquipmentSetEditFinish = terminerEdition
 
+-- LA LISTE DU CLIENT SE MET A JOUR APRES COUP. SaveEquipmentSet et
+-- DeleteEquipmentSet rendent la main avant que GetNumEquipmentSets ait
+-- change : reposer les cartes dans la foulee montrait donc l'etat d'AVANT,
+-- et un ensemble renomme n'apparaissait qu'a la prochaine secousse de la
+-- liste -- la creation d'un autre ensemble, par exemple. C'est
+-- EQUIPMENT_SETS_CHANGED qui l'annonce ; on s'y abonne nous-memes plutot
+-- que de compter sur celui du client, qu'il n'ecoute que fenetre ouverte.
+attenteEdition:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 attenteEdition:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
 attenteEdition:SetScript("OnEvent", function(self, evenement, termine, nom)
+    if evenement == "EQUIPMENT_SETS_CHANGED" then
+        -- Le contenu des cartes vient du client : il faut le lui faire
+        -- refaire, pas seulement les reposer. Il ne s'en charge lui-meme
+        -- que fenetre ouverte, et la notre peut etre sur l'autre onglet.
+        if GearManagerDialog_Update then
+            GearManagerDialog_Update()
+        end
+        poserCartes()
+        return
+    end
     if edition and termine and nom == edition.ancien then
         terminerEdition()
     end

@@ -2971,6 +2971,15 @@ def main():
     finirRemplacement(ancien)
     noms = [e.nom for e in g.ENSEMBLES.values()]
     print("   au plafond : %s (ancien %s)" % (noms, ancien))
+    att = g.ForeverUIEquipmentEdit
+    assert att.events["EQUIPMENT_SETS_CHANGED"],         "la liste du client se met a jour apres coup : il faut l ecouter"
+    # Le banc n ancre rien : sans hauteur, une seule carte "tient" dans la
+    # liste et le defilement masque les autres.
+    lua.execute('ForeverUIEquipmentPane:SetHeight(400)')
+    att.scripts.OnEvent(att, "EQUIPMENT_SETS_CHANGED")
+    visibles = [b.name for b in g.GearManagerDialog.buttons.values() if b.shown]
+    print("   apres EQUIPMENT_SETS_CHANGED : cartes visibles %s" % visibles)
+    assert "eee4" in visibles, "l ensemble renomme doit apparaitre sans autre secousse"
     assert "eee4" in noms and ancien not in noms,         "au plafond, l ancien part d abord : son equipement est porte"
     lua.execute('MAX_EQUIPMENT_SETS_PER_PLAYER = 10')
     lua.execute('ENSEMBLES[1].nom = "eee" ENSEMBLES[2].nom = "aaa"')
