@@ -551,7 +551,7 @@ Relevé dans `Wow.exe`, ce client ne porte que **deux leviers** :
 Absents : `SetCameraDistance`, `SetCameraPosition`, `SetCameraTarget`,
 `SetCustomCamera`, `SetPortraitZoom`, `SetCamDistanceScale`.
 
-**Valeur retenue : `SetPosition(−6 ; 0 ; 0)`**, jugée à l'écran. C'est la
+**Valeur retenue : `SetPosition(−6,5 ; 0 ; 0)`**, jugée à l'écran. C'est la
 position qui cadre, pas l'échelle ; `MODELE_ECHELLE` reste à `nil`, ce qui
 veut dire qu'on ne touche pas à l'échelle du client — et non qu'on la remet
 à 1. Aucune des deux
