@@ -496,6 +496,32 @@ local function effacerArtDepoque()
 	end
 end
 
+-- UN FICHIER AJOUTE AU .toc N'ARRIVE QU'AU PROCHAIN DEMARRAGE.
+--
+-- Le client dresse la liste des fichiers d'un addon a l'ouverture ; /reload
+-- rejoue ceux qu'il connait deja, mais n'en decouvre pas de nouveau. Un
+-- fichier pose apres le lancement est donc bien sur le disque, bien inscrit
+-- au .toc, et pourtant absent -- ici ForeverUI.Panes valait nil, et la
+-- feuille s'arretait sur une erreur au chargement.
+--
+-- On le dit, au lieu de casser : le reste de l'interface tient, et le joueur
+-- sait quoi faire.
+local manqueSignale = false
+
+local function bibliothequeLa()
+	if ForeverUI.Panes then
+		return true
+	end
+	if not manqueSignale then
+		manqueSignale = true
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r : Panes.lua n'est pas "
+			.. "charge. Un fichier ajoute a l'addon n'arrive qu'au prochain "
+			.. "demarrage du jeu : fermez et rouvrez le client. La feuille de "
+			.. "personnage reste inactive d'ici la.")
+	end
+	return false
+end
+
 local function monterVolets(cadre)
 	if voletGauche then
 		return
@@ -1585,7 +1611,7 @@ end
 
 local function habiller()
 	local cadre = CharacterFrame
-	if not cadre or InCombatLockdown() then
+	if not cadre or InCombatLockdown() or not bibliothequeLa() then
 		return
 	end
 

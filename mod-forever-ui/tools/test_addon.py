@@ -1048,6 +1048,25 @@ def main():
         sys.exit("chargement interrompu")
     print("chargement : %d fichiers, aucune erreur" % len(ordre))
 
+    # UN FICHIER AJOUTE AU .toc N ARRIVE QU AU PROCHAIN DEMARRAGE : le client
+    # dresse la liste des fichiers d un addon a l ouverture, et /reload ne la
+    # reconstruit pas. Panes.lua manquait donc, bien que pose sur le disque,
+    # et la feuille s arretait sur une erreur au chargement. On rejoue ce cas
+    # dans un client neuf : elle doit se taire et le dire, pas casser.
+    sans = lupa.LuaRuntime(unpack_returned_tuples=True)
+    sans.execute(MOCK)
+    for fn in ordre:
+        if fn == "Panes.lua":
+            continue
+        try:
+            sans.execute(io.open(os.path.join(ADDON, fn), encoding="utf-8").read())
+        except Exception as exc:
+            sys.exit("sans Panes.lua, %s casse : %s" % (fn, str(exc).split(chr(10))[0]))
+    dits = [m for m in sans.globals().RECORDED.messages.values() if "Panes.lua" in m]
+    print("sans Panes.lua : l addon charge, %d message(s) au joueur" % len(dits))
+    assert dits, "il doit DIRE ce qui manque, pas echouer en silence"
+    assert sans.globals().CharacterFrame.width != 631,         "et ne rien habiller tant que la bibliotheque n est pas la"
+
     g = lua.globals()
 
     # 1. tables d'atlas

@@ -67,7 +67,10 @@ New art follows the same path: the `.blp` and its `.png` preview land in
     python tools/deployer.py --art           the art alone, close the client first
 
 The addon files are read at login: after `--addon`, a `/reload` in game is
-enough. The art lives in `patch-Z.MPQ`, which the client keeps locked while it
+enough -- *unless a file was ADDED*. The client lists an addon's files when it
+starts, and `/reload` replays the ones it already knows without discovering a
+new one: a new `.lua` needs the game closed and reopened, however plainly it
+sits in the `.toc`. The art lives in `patch-Z.MPQ`, which the client keeps locked while it
 runs: close the game before `--art`, and start it again afterwards.
 
 Before delivering anything, run the mock client -- it loads the whole addon and
