@@ -420,7 +420,7 @@ n'y a donc rien à trancher ici.
 | Munitions | `LEFT (+19)` de l'emplacement de distance |
 | Modèle | occupe tout le volet gauche, comme la `ModelScene` de la source |
 | Titre | bande de 58 à −24, texte centré à 5 px de son haut posé à −1 — `CharacterFrame` **n'appelle pas** `SetTitleOffsets`, il garde les valeurs par défaut du mixin ; son milieu tombe à 332,5 sur 631, ce que la capture confirme |
-| Titre affiché | le nom du joueur (`UnitPVPName`) en clair, ou l'intitulé du sous-cadre affiché en jaune — `characterFrameDisplayInfo` |
+| Titre affiché | **toujours** le nom du personnage et son titre (`UnitPVPName`), en clair — écart assumé : `characterFrameDisplayInfo` fait suivre le titre au sous-cadre affiché (REPUTATION, PVP, SKILLS…), demandé autrement |
 | Fermeture | 24 × 24 au `TOPRIGHT (1, 0)`, le X rouge des panneaux modernes |
 | Niveau, race et classe | dans le **volet droit**, `TOP (0, −54)`, 220 de large — `PaperDollLevelInfo` est à `TOP (0, −50)` des onglets latéraux, eux-mêmes à `TOP (0, −4)` du volet |
 | Flèches du modèle | centrées horizontalement dans le volet gauche, 29 sous son bord haut |

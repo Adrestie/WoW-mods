@@ -522,6 +522,8 @@ for i = 1, 5 do
     _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
     t:CreateTexture(nom .. "Fond", "ARTWORK")
 end
+ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
+ReputationFrame:Hide()
 function CharacterFrame_ShowSubFrame() end
 function PaperDollFrame_OnShow() end
 
@@ -1625,7 +1627,15 @@ def main():
     b1, b2 = bande.points[1], bande.points[2]
     print("   titre : \"%s\", bande de %s a %s, texte a %s" % (
         titre.text, b1[4], b2[4], titre.points[1][5]))
-    assert titre.text == "Robert Polson", "le titre est le nom du joueur"
+    assert titre.text == "Robert Polson", "le titre est le nom du joueur et son titre"
+
+    # Il ne suit PAS le sous-cadre affiche : characterFrameDisplayInfo y met
+    # REPUTATION, PVP et les autres ; ici c'est toujours le nom.
+    g.ReputationFrame.Show(g.ReputationFrame)
+    g.ForeverUI.CharacterSheet.Apply()
+    print("   panneau de reputation ouvert : titre toujours \"%s\"" % titre.text)
+    assert titre.text == "Robert Polson",         "la barre du haut garde le nom, quel que soit le panneau"
+    g.ReputationFrame.Hide(g.ReputationFrame)
     assert b1[4] == 58 and b2[4] == -24,         "CharacterFrame n appelle pas SetTitleOffsets : les valeurs par defaut"
     assert titre.points[1][5] == -5, "TitleText est a TOP (0, -5)"
     assert titre.justify == "CENTER", "il se centre dans sa bande"

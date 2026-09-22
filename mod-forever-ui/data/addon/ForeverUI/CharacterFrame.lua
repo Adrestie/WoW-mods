@@ -96,17 +96,11 @@ local TITRE_GAUCHE, TITRE_DROITE = 58, -24
 local TITRE_CONTENEUR, TITRE_TEXTE = -1, -5
 local TITRE_BANDE = 20
 
--- RELEVE -- characterFrameDisplayInfo : le titre suit le sous-cadre
--- affiche, et sa couleur avec. Par defaut c'est le nom du joueur, en
--- clair ; les autres panneaux prennent leur intitule, en jaune.
-local TITRES = {
-	{ cadre = "ReputationFrame", texte = "REPUTATION" },
-	{ cadre = "TokenFrame", texte = "CURRENCY" },
-	{ cadre = "HonorFrame", texte = "PVP" },
-	{ cadre = "PVPFrame", texte = "PVP" },
-	{ cadre = "SkillFrame", texte = "SKILLS" },
-	{ cadre = "SkillsFrame", texte = "SKILLS" },
-}
+-- ECART ASSUME, sur demande. characterFrameDisplayInfo fait suivre le
+-- titre au sous-cadre affiche : le nom du joueur par defaut, puis
+-- REPUTATION, CURRENCY, PVP, SKILLS ou STATISTICS selon le panneau, en
+-- jaune. Ici la barre du haut porte TOUJOURS le nom du personnage et son
+-- titre, quel que soit le panneau.
 
 -- LE NIVEAU, LA RACE ET LA CLASSE, dans le volet DROIT.
 --
@@ -276,24 +270,14 @@ local function poserTitre(cadre)
 		cadre.foreverTitre = texte
 	end
 
+	-- UnitPVPName rend le nom ACCOMPAGNE de son titre quand le joueur en
+	-- porte un ; sans titre, c'est le nom seul.
 	local texte = cadre.foreverTitre
-	local intitule, couleur = nil, HIGHLIGHT_FONT_COLOR
-	for _, entree in ipairs(TITRES) do
-		local sousCadre = _G[entree.cadre]
-		if sousCadre and sousCadre.IsShown and sousCadre:IsShown() then
-			intitule = _G[entree.texte] or entree.texte
-			couleur = NORMAL_FONT_COLOR
-			break
-		end
-	end
-
-	if not intitule then
-		intitule = (UnitPVPName and UnitPVPName("player")) or UnitName("player")
-	end
-
-	texte:SetText(intitule or "")
-	if couleur then
-		texte:SetTextColor(couleur.r, couleur.g, couleur.b)
+	local nom = (UnitPVPName and UnitPVPName("player")) or UnitName("player")
+	texte:SetText(nom or "")
+	if HIGHLIGHT_FONT_COLOR then
+		texte:SetTextColor(HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g,
+			HIGHLIGHT_FONT_COLOR.b)
 	end
 end
 
