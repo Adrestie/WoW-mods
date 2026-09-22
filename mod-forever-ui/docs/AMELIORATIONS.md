@@ -779,3 +779,30 @@ Les sacs gardent la grille de 3.3.5 (quatre colonnes, boutons de 37, pas de
 (`ContainerFrameCombinedBags`) n'existe pas ici, chaque sac garde la sienne.
 `ForeverUI.SetPanelArt` est écrit pour servir à tous les panneaux à venir :
 feuille de personnage, livre de sorts, talents.
+
+**Le bouton du menu déroulant reste à reprendre.** La liste ouverte est
+maintenant à la DA de camelot ; le bouton fermé, lui, ne l'est pas encore. Ce
+qui est en place aujourd'hui est l'en-tête de catégorie
+(`CharacterStatFrameCategoryTemplate`, `UI-Character-Info-Title`), choisi pour
+coiffer un groupe de statistiques — pas le contrôle de menu déroulant que
+camelot emploie ailleurs.
+
+Le gabarit de camelot est `WowStyle1DropdownTemplate`
+(`Blizzard_Menu/mainline/MenuTemplates.xml`), 120 × 25 :
+
+| Pièce | Camelot | État chez nous |
+|---|---|---|
+| Fond | `common-dropdown-textholder`, `TOPLEFT (−8, 7)` → `BOTTOMRIGHT (8, −9)` | remplacé par `ui-character-info-title` |
+| Flèche | `common-dropdown-a-button` à `RIGHT (1, −3)`, **six états** — `-hover`, `-pressed`, `-pressedhover`, `-open`, `-disabled` (`GetWowStyle1ArrowButtonState`) | la flèche du client, `UI-ChatIcon-ScrollDown-Up`, sans états |
+| Texte | `GameFontHighlight`, `wordwrap` faux, justifié à gauche, entre `TOPLEFT (8, −8)` et la flèche | notre `FontString` centré |
+
+L'art est **déjà dans l'atelier** : `commondropdownc60.blp` porte
+`common-dropdown-textholder-c60`, `common-dropdown-a-button-c60` et ses cinq
+variantes d'état, et `common-dropdown-b-button-c60` pour le gabarit de filtre
+(`WowStyle1FilterDropdownTemplate`). Rien de nouveau à verser dans l'archive.
+
+À trancher au moment de le faire : 3.3.5 n'a pas la notion d'état `open` sur
+un `UIDropDownMenuTemplate` — il faudra la déduire de `DropDownList1:IsShown()`
+et de `UIDROPDOWNMENU_OPEN_MENU` — et les sélecteurs de la feuille de
+personnage devront choisir entre le contrôle de menu déroulant et l'en-tête de
+catégorie, qui ne sont pas le même objet dans la référence.
