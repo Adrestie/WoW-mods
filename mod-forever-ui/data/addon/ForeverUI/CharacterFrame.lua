@@ -347,10 +347,8 @@ local STAT_ENTETE_DEBORD = 5
 --
 -- LA FLECHE S'EN VA. Le bouton du client ($parentButton) n'a plus lieu
 -- d'etre : toute la barre ouvre deja le menu.
-local ATLAS_BOUTON = "common-button-tertiary-normal"
-local ATLAS_BOUTON_PRESSE = "common-button-tertiary-pressed"
-local BOUTON_COIN = 11
-local BOUTON_MARGES = { 0, 0, 0, 0 }
+-- L'art et ses mesures sont dans AtlasUtil, ForeverUI.SkinTertiaryButton :
+-- le bouton "New Set" du gestionnaire d'equipement emploie le meme.
 local SELECTEUR_PIECES = { "Left", "Middle", "Right", "Text" }
 local STAT_GROUPES = {
 	{
@@ -848,13 +846,10 @@ local function habillerSelecteur(selecteur)
 		end
 	end
 
-	selecteur.foreverFond = ForeverUI.CreateNineSlice(selecteur, ATLAS_BOUTON,
-		BOUTON_COIN, BOUTON_MARGES, "BACKGROUND")
-	selecteur.foreverPresse = ForeverUI.CreateNineSlice(selecteur,
-		ATLAS_BOUTON_PRESSE, BOUTON_COIN, BOUTON_MARGES, "BACKGROUND")
-	for _, tranche in ipairs(selecteur.foreverPresse or {}) do
-		tranche:Hide()
-	end
+	-- Le meme bouton que "New Set" du gestionnaire : la recette et ses
+	-- mesures vivent dans AtlasUtil, une seule fois. Sans "auto" : ici
+	-- l'etat presse ne suit pas la souris mais la liste.
+	ForeverUI.SkinTertiaryButton(selecteur)
 
 	local intitule = selecteur:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	intitule:SetPoint("CENTER", selecteur, "CENTER", 0, 1)
@@ -906,15 +901,9 @@ function majEtatSelecteurs()
 	local liste = _G["DropDownList1"]
 	for _, groupe in ipairs(STAT_GROUPES) do
 		local selecteur = _G[groupe.selecteur]
-		if selecteur and selecteur.foreverPresse then
-			local ouvert = liste and liste:IsShown()
-				and UIDROPDOWNMENU_OPEN_MENU == selecteur
-			for _, tranche in ipairs(selecteur.foreverPresse) do
-				if ouvert then tranche:Show() else tranche:Hide() end
-			end
-			for _, tranche in ipairs(selecteur.foreverFond or {}) do
-				if ouvert then tranche:Hide() else tranche:Show() end
-			end
+		if selecteur and selecteur.foreverPresser then
+			selecteur.foreverPresser(liste and liste:IsShown()
+				and UIDROPDOWNMENU_OPEN_MENU == selecteur)
 		end
 	end
 end

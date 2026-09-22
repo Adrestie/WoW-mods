@@ -1971,7 +1971,7 @@ def main():
     assert psel[4] == 15, "il deborde de 5 a gauche de ses lignes, posees a 20"
     assert sel.shown, "il doit etre visible"
     # Le selecteur est un bouton tertiaire decoupe, avec ses deux etats.
-    normal = list(sel.foreverFond.values())
+    normal = list(sel.foreverNormal.values())
     presse = list(sel.foreverPresse.values())
     print("   bouton : %d tranches normales, %d pressees, coin %dx%d" % (
         len(normal), len(presse), normal[0].width, normal[0].height))
@@ -2122,7 +2122,13 @@ def main():
     print("   panneau du gestionnaire masque sous les statistiques : %s" % (
         not g.ForeverUIEquipmentPane.shown))
     assert not g.ForeverUIEquipmentPane.shown,         "ses boutons sont ses cadres fils : masquer la fenetre du client ne suffit pas"
-    assert g.ForeverUIEquipmentNewSet.text == "New",         "PAPERDOLL_NEWEQUIPMENTSET n existe pas ici ; NEW est la plus proche"
+    nouveau = g.ForeverUIEquipmentNewSet
+    print("   bouton New Set : \"%s\", %d tranches normales, %d pressees" % (
+        nouveau.text, len(list(nouveau.foreverNormal.values())),
+        len(list(nouveau.foreverPresse.values()))))
+    assert nouveau.text == "New Set",         "ecrit en dur : ce client ne porte aucune chaine equivalente"
+    assert len(list(nouveau.foreverNormal.values())) == 9,         "le meme bouton tertiaire que les selecteurs, decoupe"
+    assert nouveau.scripts.OnMouseDown or nouveau.hooks.OnMouseDown,         "l etat presse suit le bouton de la souris"
     assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
     assert niveau.owner.name == "ForeverUICharacterRightPane",         "elle appartient au volet : une region ne se reparente pas en 3.3.5"
     assert niveau.width == 220, "PaperDollLevelInfo fait 220 de large"

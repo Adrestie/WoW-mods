@@ -554,6 +554,13 @@ colonne ne change plus — l'about arrondi fait 11 px, donc coin de **11** sur
 les deux axes (11 + 24 + 11 en largeur, 11 + 12 + 11 en hauteur). Tendue de
 46 à 203, l'image écraserait ses angles.
 
+La recette vit **une seule fois**, dans `ForeverUI.SkinTertiaryButton`
+(`AtlasUtil`) : les sélecteurs et le bouton « New Set » du gestionnaire
+l'emploient tous les deux. Son option `auto` fait suivre l'état pressé au
+bouton de la souris ; sans elle, l'appelant commande par
+`bouton.foreverPresser(vrai ou faux)` — ce que font les sélecteurs, dont
+l'état tient tant que leur liste est ouverte.
+
 La liste se ferme de **deux** façons : par `ToggleDropDownMenu`, et par
 `CloseDropDownMenus` quand on clique ailleurs — celle-là ne passe pas par la
 première. L'état se relève donc sur le `OnShow` et le `OnHide` de la **liste
@@ -724,7 +731,7 @@ toujours le client qui tient la liste, la sélection et les infobulles.
 
 | Point | Raison |
 |---|---|
-| **New Set** | 3.3.5 n'a pas ce bouton : on y crée un ensemble par **Save**, qui ouvre la fenêtre de nom. Le nôtre fait la même chose après avoir vidé la sélection — exactement « enregistrer sous un nouveau nom ». Son intitulé est `NEW` (« New ») : `PAPERDOLL_NEWEQUIPMENTSET`, que camelot écrit, n'existe pas ici. |
+| **New Set** | 3.3.5 n'a pas ce bouton : on y crée un ensemble par **Save**, qui ouvre la fenêtre de nom. Le nôtre fait la même chose après avoir vidé la sélection — exactement « enregistrer sous un nouveau nom ». Son intitulé est écrit **en dur**, « New Set » : `PAPERDOLL_NEWEQUIPMENTSET`, que camelot écrit, n'existe pas ici, et ce client ne porte aucune chaîne équivalente — ce libellé ne se traduira donc pas. Il porte le même **bouton tertiaire** que les sélecteurs de statistiques. |
 | **Le panneau suit son onglet** | Ses boutons sont des cadres fils du **panneau**, pas de la fenêtre du client : masquer `GearManagerDialog` ne les emportait pas, et « New » restait visible sous les statistiques. Le panneau entier se montre et se cache avec l'onglet. |
 | **Delete gardé** | camelot efface un ensemble par le menu de sa carte, menu que 3.3.5 n'a pas. Le bouton du client est **conservé** plutôt que de retirer la seule façon d'effacer un ensemble ; il est masqué par défaut au-dessus de Save, à replacer sur décision. |
 | **La coche** | `GetEquipmentSetInfo` ne dit pas si un ensemble est porté. Elle se calcule depuis `GetEquipmentSetLocations` : porté quand chaque pièce est sur le joueur et hors des sacs. |

@@ -321,12 +321,15 @@ local function poserBoutons()
 		nouveau:SetWidth(NOUVEAU_L)
 		nouveau:SetHeight(NOUVEAU_H)
 		nouveau:SetPoint("BOTTOM", panneau, "BOTTOM", 0, NOUVEAU_Y)
-		-- camelot ecrit PAPERDOLL_NEWEQUIPMENTSET, absente de ce client, tout
-		-- comme NEW_COMPACT_UNIT_FRAME_PROFILE que je visais et qui donnait
-		-- "New Profile" -- une chaine d'un tout autre panneau. NEW est la
-		-- plus proche que ce client porte, et elle va avec Equip et Save,
-		-- aussi courtes.
-		nouveau:SetText(NEW or "New")
+		-- ECRIT EN DUR, faute de mieux : camelot ecrit
+		-- PAPERDOLL_NEWEQUIPMENTSET, et ce client ne porte aucune chaine
+		-- equivalente -- ni celle-la, ni "New Set" sous un autre nom. Ce
+		-- libelle ne se traduira donc pas.
+		nouveau:SetText("New Set")
+
+		-- Le meme visuel que les selecteurs de statistiques : le bouton
+		-- tertiaire, presse tant qu'on le tient.
+		ForeverUI.SkinTertiaryButton(nouveau, true)
 
 		local plus = nouveau:CreateTexture(nil, "OVERLAY")
 		ForeverUI.SetAtlas(plus, ATLAS_PLUS)

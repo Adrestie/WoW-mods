@@ -531,3 +531,60 @@ function ForeverUI.CreateNineSlice(parent, atlas, coin, marges, niveau)
 
 	return tranches
 end
+
+-- LE BOUTON TERTIAIRE, EN DEUX ETATS.
+--
+-- common-button-tertiary-normal et ...-pressed, 46 x 34 chacun, sur la
+-- feuille commonbuttontertiaryc60. Mesure sur l'art : a partir de x = 11 le
+-- profil d'une colonne ne change plus -- l'about arrondi fait 11 px, d'ou un
+-- coin de 11 sur les deux axes (11 + 24 + 11 en largeur, 11 + 12 + 11 en
+-- hauteur). Etire au lieu d'etre decoupe, il ecraserait ses angles des qu'il
+-- depasse 46 de large.
+--
+-- Le bouton garde ses propres textures, simplement effacees : elles portent
+-- encore son etat pour le client, et certaines fonctions les lisent.
+--
+-- auto : l'etat presse suit le bouton de la souris. Sans lui, c'est a
+-- l'appelant de commander, par bouton.foreverPresser(vrai ou faux) -- ce que
+-- font les selecteurs de statistiques, dont l'etat tient tant que leur liste
+-- est ouverte.
+local TERTIAIRE_NORMAL = "common-button-tertiary-normal"
+local TERTIAIRE_PRESSE = "common-button-tertiary-pressed"
+local TERTIAIRE_COIN = 11
+local TERTIAIRE_MARGES = { 0, 0, 0, 0 }
+
+function ForeverUI.SkinTertiaryButton(bouton, auto)
+	if bouton.foreverPresser then
+		return bouton
+	end
+
+	for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+		"GetHighlightTexture", "GetDisabledTexture" }) do
+		local texture = bouton[methode] and bouton[methode](bouton)
+		if texture then
+			texture:SetAlpha(0)
+		end
+	end
+
+	bouton.foreverNormal = ForeverUI.CreateNineSlice(bouton, TERTIAIRE_NORMAL,
+		TERTIAIRE_COIN, TERTIAIRE_MARGES, "BACKGROUND")
+	bouton.foreverPresse = ForeverUI.CreateNineSlice(bouton, TERTIAIRE_PRESSE,
+		TERTIAIRE_COIN, TERTIAIRE_MARGES, "BACKGROUND")
+
+	bouton.foreverPresser = function(etat)
+		for _, tranche in ipairs(bouton.foreverPresse or {}) do
+			if etat then tranche:Show() else tranche:Hide() end
+		end
+		for _, tranche in ipairs(bouton.foreverNormal or {}) do
+			if etat then tranche:Hide() else tranche:Show() end
+		end
+	end
+	bouton.foreverPresser(false)
+
+	if auto then
+		bouton:HookScript("OnMouseDown", function() bouton.foreverPresser(true) end)
+		bouton:HookScript("OnMouseUp", function() bouton.foreverPresser(false) end)
+	end
+
+	return bouton
+end
