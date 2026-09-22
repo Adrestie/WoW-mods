@@ -847,3 +847,110 @@ if CharacterFrame then
 end
 
 habiller()
+
+-- LE TEMOIN. Un bouton d'equipement qui ne repond pas au clic est recouvert
+-- par un cadre qui prend la souris, ou bien il ne la prend plus lui-meme :
+-- rien de tout cela ne se voit a l'ecran. On demande donc au jeu.
+--
+-- Deux reponses. D'abord l'etat du bouton et la liste de TOUT ce qui, visible
+-- et sensible a la souris, couvre son centre -- avec sa strate et son niveau,
+-- qui decident lequel recoit le clic. Ensuite, pendant cinq secondes, ce que
+-- GetMouseFocus rend : il suffit de promener le curseur sur un emplacement
+-- pour lire le nom du cadre qui l'intercepte vraiment.
+local function nomDe(cadre)
+	if not cadre then
+		return "?"
+	end
+	return (cadre.GetName and cadre:GetName()) or "(sans nom)"
+end
+
+local function couvre(cadre, x, y)
+	if not cadre.GetLeft then
+		return false
+	end
+	local g, d, h, b = cadre:GetLeft(), cadre:GetRight(), cadre:GetTop(), cadre:GetBottom()
+	return g and d and h and b and x >= g and x <= d and y >= b and y <= h
+end
+
+local function parcourir(cadre, x, y, trouves, profondeur)
+	if not cadre or profondeur > 6 then
+		return
+	end
+
+	if cadre.IsVisible and cadre:IsVisible() and cadre.IsMouseEnabled
+		and cadre:IsMouseEnabled() and couvre(cadre, x, y) then
+		trouves[#trouves + 1] = cadre
+	end
+
+	if cadre.GetChildren then
+		local enfants = { cadre:GetChildren() }
+		for _, enfant in ipairs(enfants) do
+			parcourir(enfant, x, y, trouves, profondeur + 1)
+		end
+	end
+end
+
+function ForeverUI.CharacterSheetDebug()
+	local dire = function(texte)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	local bouton = _G["CharacterHeadSlot"]
+	if not bouton or not bouton:GetLeft() then
+		dire("feuille : ouvrez-la d'abord, puis refaites /fui perso")
+		return
+	end
+
+	dire(string.format("tete : %dx%d strate=%s niveau=%d souris=%s montre=%s",
+		bouton:GetWidth(), bouton:GetHeight(), tostring(bouton:GetFrameStrata()),
+		bouton:GetFrameLevel(), tostring(bouton:IsMouseEnabled()),
+		tostring(bouton:IsVisible())))
+
+	-- Un bouton peut aussi avoir perdu ses scripts ou avoir ete desactive :
+	-- cela ne se voit pas davantage a l'ecran.
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"   clic=%s glisser=%s recoit=%s actif=%s",
+		tostring(bouton:GetScript("OnClick") ~= nil),
+		tostring(bouton:GetScript("OnDragStart") ~= nil),
+		tostring(bouton:GetScript("OnReceiveDrag") ~= nil),
+		tostring(not bouton.IsEnabled or bouton:IsEnabled() and true or false)))
+
+	local x = (bouton:GetLeft() + bouton:GetRight()) / 2
+	local y = (bouton:GetTop() + bouton:GetBottom()) / 2
+	local trouves = {}
+	parcourir(CharacterFrame, x, y, trouves, 0)
+
+	DEFAULT_CHAT_FRAME:AddMessage("   ce qui couvre son centre et prend la souris :")
+	for _, cadre in ipairs(trouves) do
+		DEFAULT_CHAT_FRAME:AddMessage(string.format("      %-34s strate=%-16s niveau=%d",
+			nomDe(cadre), tostring(cadre:GetFrameStrata()), cadre:GetFrameLevel()))
+	end
+
+	local guetteur = ForeverUI.guetteurSouris
+	if not guetteur then
+		guetteur = CreateFrame("Frame", "ForeverUICharacterMouseWatch")
+		guetteur:Hide()
+		ForeverUI.guetteurSouris = guetteur
+	end
+
+	guetteur.reste = 5
+	guetteur.dernier = nil
+	guetteur:SetScript("OnUpdate", function(self, ecoule)
+		self.reste = self.reste - ecoule
+		if self.reste <= 0 then
+			self:Hide()
+			self:SetScript("OnUpdate", nil)
+			DEFAULT_CHAT_FRAME:AddMessage("   (fin de la veille)")
+			return
+		end
+
+		local sous = GetMouseFocus and GetMouseFocus()
+		local nom = nomDe(sous)
+		if nom ~= self.dernier then
+			self.dernier = nom
+			DEFAULT_CHAT_FRAME:AddMessage("      sous le curseur : " .. nom)
+		end
+	end)
+	guetteur:Show()
+	dire("promenez le curseur sur un emplacement pendant cinq secondes.")
+end

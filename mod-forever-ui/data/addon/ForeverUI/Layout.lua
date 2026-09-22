@@ -281,6 +281,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic des sacs disponible.")
 		end
+	elseif command == "perso" then
+		if ForeverUI.CharacterSheetDebug then
+			ForeverUI.CharacterSheetDebug()
+		else
+			say("aucun diagnostic de la feuille disponible.")
+		end
 	elseif command == "debug" then
 		if ForeverUI.PlayerFrameDebug then
 			ForeverUI.PlayerFrameDebug()
@@ -296,6 +302,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso")
 	end
 end
