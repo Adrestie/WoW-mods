@@ -76,11 +76,11 @@ local NOUVEAU_Y, NOUVEAU_ICONE_X = 50, 13
 -- BOTTOMRIGHT (-4, 2) : converties dans la convention du decoupage -- de
 -- combien l'image deborde du cadre -- cela donne -1, 1, -4, -2.
 --
--- ECART ASSUME, sur demande : toute la bordure est decalee de 2 px vers la
--- droite. Les deux bords bougent ensemble -- le gauche de -1 a -3, le droit
--- de -4 a -2 -- sinon elle s'elargirait au lieu de glisser.
+-- ECART ASSUME, sur demande : toute la bordure est decalee de 3 px vers la
+-- droite. Les deux bords bougent ensemble -- le gauche de -1 a -4, le droit
+-- de -4 a -1 -- sinon elle s'elargirait au lieu de glisser.
 local BORDURE_COIN = 20
-local BORDURE_MARGES = { -3, 1, -2, -2 }
+local BORDURE_MARGES = { -4, 1, -1, -2 }
 
 local ATLAS_FOND = "ui-character-info-outfitcard"
 local ATLAS_SURVOL = "ui-character-info-outfitcard-hover"

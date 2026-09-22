@@ -2640,10 +2640,10 @@ def main():
     assert len(tranches) == 9, "neuf tranches, comme le fond des menus"
     assert coin.width == 20 and coin.height == 20,         "le motif d angle s arrete a 19 : coin de 20"
     droit = tranches[1]
-    print("   bordure : gauche a x=%s, droite a x=%s (2 px vers la droite)" % (
+    print("   bordure : gauche a x=%s, droite a x=%s (3 px vers la droite)" % (
         coin.points[1][4], droit.points[1][4]))
-    assert (coin.points[1][4], coin.points[1][5]) == (3, 1),         "camelot ancre a (1, 1), plus les 2 px demandes"
-    assert droit.points[1][4] == -2,         "les deux bords glissent ensemble, sinon la bordure s elargit"
+    assert (coin.points[1][4], coin.points[1][5]) == (4, 1),         "camelot ancre a (1, 1), plus les 3 px demandes"
+    assert droit.points[1][4] == -1,         "les deux bords glissent ensemble, sinon la bordure s elargit"
 
     lua.execute("GearManagerDialog_Update()")
     g.ForeverUI.EquipmentPane.Apply()
