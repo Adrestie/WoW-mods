@@ -738,6 +738,15 @@ toujours le client qui tient la liste, la sélection et les infobulles.
 | **Pas de barre de défilement** | `MinimalScrollBar` n'est pas portée. La liste défile à la **molette**, et le trait de camelot marque son bas. |
 | **Bordure découpée** | camelot tend `common-insideframe` d'un coin à l'autre. L'image fait 107 × 107 et porte un **motif dans chaque angle** : tendue sur les 233 × 379 du panneau, elle est multipliée par deux en largeur et trois et demi en hauteur, et tout se brouille. Neuf tranches, coin de **20** — mesuré sur l'art : le filet occupe 2..12 et 94..104, le motif d'angle s'arrête à 19. |
 
+**La fenêtre du client couvre le panneau et prend la souris.**
+`GearManagerDialog` est étalée sur tout le panneau et posée un cran plus haut
+que lui : un bouton fils du **panneau** passait dessous et ne recevait plus
+rien. Ceux du client — Equip, Save — sont ses enfants à elle, donc épargnés.
+Le bouton « New Set » monte donc au-dessus d'elle. Même famille de défaut que
+le modèle 3D sur les emplacements d'équipement : **un cadre sensible à la
+souris qu'on étale sur un volet avale tout ce qui reste dessous**.
+
+
 **Le système de panneaux reprend la main, il faut repasser derrière.**
 `GearManagerDialog_OnShow` appelle `UpdateUIPanelPositions(CharacterFrame)`
 et `_OnHide` appelle `UpdateUIPanelPositions()` : le système de panneaux

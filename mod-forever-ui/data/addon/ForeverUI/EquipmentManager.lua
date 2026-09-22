@@ -321,6 +321,13 @@ local function poserBoutons()
 		nouveau:SetWidth(NOUVEAU_L)
 		nouveau:SetHeight(NOUVEAU_H)
 		nouveau:SetPoint("BOTTOM", panneau, "BOTTOM", 0, NOUVEAU_Y)
+
+		-- AU-DESSUS DE LA FENETRE DU CLIENT. Elle est etalee sur tout le
+		-- panneau, elle prend la souris, et elle est posee un cran plus
+		-- haut : un bouton fils du PANNEAU passait dessous et ne recevait
+		-- plus rien. Ceux du client -- Equip, Save -- sont ses enfants a
+		-- elle, donc epargnes.
+		nouveau:SetFrameLevel(panneau:GetFrameLevel() + 5)
 		-- ECRIT EN DUR, faute de mieux : camelot ecrit
 		-- PAPERDOLL_NEWEQUIPMENTSET, et ce client ne porte aucune chaine
 		-- equivalente -- ni celle-la, ni "New Set" sous un autre nom. Ce

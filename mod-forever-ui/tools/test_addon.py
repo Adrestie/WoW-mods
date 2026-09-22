@@ -2129,6 +2129,10 @@ def main():
     assert nouveau.text == "New Set",         "ecrit en dur : ce client ne porte aucune chaine equivalente"
     assert len(list(nouveau.foreverNormal.values())) == 9,         "le meme bouton tertiaire que les selecteurs, decoupe"
     assert nouveau.scripts.OnMouseDown or nouveau.hooks.OnMouseDown,         "l etat presse suit le bouton de la souris"
+    print("   niveaux : fenetre du client %d, bouton %d" % (
+        g.GearManagerDialog.frameLevel or 1, nouveau.frameLevel or 1))
+    assert (nouveau.frameLevel or 1) > (g.GearManagerDialog.frameLevel or 1),         "la fenetre du client couvre le panneau et prend la souris"
+    assert nouveau.scripts.OnClick is not None, "et il porte bien son clic"
     assert pn[2].name == "ForeverUICharacterRightPane", "dans le volet DROIT"
     assert niveau.owner.name == "ForeverUICharacterRightPane",         "elle appartient au volet : une region ne se reparente pas en 3.3.5"
     assert niveau.width == 220, "PaperDollLevelInfo fait 220 de large"
