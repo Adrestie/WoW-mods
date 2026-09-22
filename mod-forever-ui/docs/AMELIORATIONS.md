@@ -529,6 +529,21 @@ déclenchait rien, et un greffon cassé serait passé inaperçu. Il enveloppe
 désormais vraiment — l'originale, puis le greffon, et les valeurs rendues sont
 celles de l'originale.
 
+**La rangée du bas se resserre vers la gauche.** Écart assumé, sur demande.
+Les valeurs sont **relatives au voisin de gauche** et s'additionnent le long
+de la chaîne d'ancrage :
+
+| Emplacement | Réglage | Résultat à l'écran |
+|---|---|---|
+| main droite | — | 0 |
+| main gauche | −2 sur l'écart de la source | −2 |
+| distance / relique | −2 de plus | −4 |
+| munitions | inchangé (19) | −4, hérités de la distance |
+
+La « flèche » des munitions n'a pas de réglage propre : c'est une **région de
+l'emplacement lui-même** — une texture `OVERLAY` de 23 × 41 centrée à
+(−22, 0) sur `CharacterAmmoSlot` — donc elle le suit.
+
 **Les quatre emplacements de la rangée du bas ont la même taille.** camelot
 pose celui de distance en 27 avec `UI-Character-Info-GearSlotSmall`, comme
 les munitions. Il porte pourtant, selon la classe, une **arme à distance ou

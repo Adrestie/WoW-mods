@@ -1771,9 +1771,15 @@ def main():
     pt = tete.points[1]
     assert (pt[1], pt[4], pt[5]) == ("TOPLEFT", 24, -60), "la colonne gauche part de (24, -60)"
     assert cou.points[1][5] == -4,         "colonnes resserrees de 2 px sur les 6 de la source, a la demande"
-    armes = g.CharacterSecondaryHandSlot.points[1]
-    print("   rangee des armes : ecart horizontal %d (6, celui de la source)" % armes[4])
-    assert armes[4] == 6, "la rangee des armes garde l ecart de la source"
+    # ECART ASSUME : la rangee se resserre vers la gauche, en cascade.
+    gauche2 = g.CharacterSecondaryHandSlot.points[1][4]
+    distance2 = g.CharacterRangedSlot.points[1][4]
+    munitions2 = g.CharacterAmmoSlot.points[1][4]
+    print("   rangee : main gauche +%d, distance +%d, munitions +%d" % (
+        gauche2, distance2, munitions2))
+    assert gauche2 == 4, "6 de la source moins 2, demande"
+    assert distance2 == 4, "2 de plus, soit -4 a l ecran puisqu elle suit la main gauche"
+    assert munitions2 == 19, "inchange : elles heritent deja des -4 de la distance"
 
     mains = g.CharacterHandsSlot.points[1]
     print("   colonne droite : %s (%s, %s)" % (mains[1], mains[4], mains[5]))

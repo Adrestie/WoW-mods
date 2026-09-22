@@ -307,6 +307,17 @@ local COLONNE_DROITE = {
 }
 local RANGEE_ARMES = { "MainHand", "SecondaryHand", "Ranged" }
 
+-- ECART ASSUME, sur demande : la rangee du bas se resserre vers la gauche.
+-- Les valeurs sont RELATIVES au voisin de gauche, et s'additionnent le long
+-- de la chaine -- decaler la main gauche de 2 emporte la distance avec elle.
+-- Sur l'ecran : main droite 0, main gauche -2, distance -4, et les munitions
+-- -4 puisqu'elles s'accrochent a la distance.
+--
+-- La fleche des munitions n'a pas de reglage : c'est une region de
+-- l'emplacement lui-meme -- une texture OVERLAY de 23 x 41 centree a
+-- (-22, 0) sur CharacterAmmoSlot -- donc elle le suit.
+local RANGEE_DECALAGE = { 0, -2, -2 }
+
 -- L'art d'epoque ne tient pas qu'au cadre : 3.3.5 le repartit sur ses
 -- sous-cadres, qui sont des cadres fils et echappent a un balayage du seul
 -- CharacterFrame.
@@ -598,7 +609,8 @@ local function poserEmplacements()
 			if index == 1 then
 				bouton:SetPoint("BOTTOM", voletGauche, "BOTTOM", ARME_X, ARME_Y)
 			else
-				bouton:SetPoint("TOPLEFT", precedent, "TOPRIGHT", ECART, 0)
+				bouton:SetPoint("TOPLEFT", precedent, "TOPRIGHT",
+					ECART + (RANGEE_DECALAGE[index] or 0), 0)
 			end
 			precedent = bouton
 		end
