@@ -1699,9 +1699,13 @@ def main():
 
     # L echelle du modele : reposee a chaque passage, le client la remet a 1
     # quand le personnage change d apparence.
-    echelle = g.CharacterModelFrame.modelScale
-    print("   echelle du modele : %.2f" % echelle)
-    assert abs(echelle - 0.1) < 0.001, "la valeur d essai en place au chargement"
+    # C est la POSITION qui cadre le personnage, pas l echelle : elle le
+    # recule devant la camera sans deplacer son cadrage.
+    posInitiale = list(g.CharacterModelFrame.pos.values())
+    print("   modele : position %s, echelle %s (laissee au client)" % (
+        posInitiale, g.CharacterModelFrame.modelScale))
+    assert posInitiale == [-5.5, 0, 0], "la profondeur retenue"
+    assert g.CharacterModelFrame.modelScale is None,         "nil veut dire qu on ne touche pas a l echelle, pas qu on la remet a 1"
 
     # Les deux leviers se reglent en jeu : rien ne se releve dans la source,
     # ils se jugent a l oeil.
@@ -1715,7 +1719,7 @@ def main():
     g.SlashCmdList["FOREVERUI"]("modele position defaut")
     print("   position rendue au client : %d rafraichissement" % g.CharacterModelFrame.refreshed)
     assert g.CharacterModelFrame.refreshed >= 1, "le client doit reprendre la main"
-    g.SlashCmdList["FOREVERUI"]("modele echelle 0.1")
+    g.SlashCmdList["FOREVERUI"]("modele position -5.5 0 0")
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot

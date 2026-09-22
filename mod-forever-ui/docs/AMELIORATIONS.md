@@ -549,7 +549,12 @@ Relevé dans `Wow.exe`, ce client ne porte que **deux leviers** :
 | `SetPosition(profondeur, latéral, hauteur)` | déplace le modèle devant la caméra | l'éloigner le rapetisse **sans changer son cadrage** : c'est le vrai recul |
 
 Absents : `SetCameraDistance`, `SetCameraPosition`, `SetCameraTarget`,
-`SetCustomCamera`, `SetPortraitZoom`, `SetCamDistanceScale`. Aucune des deux
+`SetCustomCamera`, `SetPortraitZoom`, `SetCamDistanceScale`.
+
+**Valeur retenue : `SetPosition(−5,5 ; 0 ; 0)`**, jugée à l'écran. C'est la
+position qui cadre, pas l'échelle ; `MODELE_ECHELLE` reste à `nil`, ce qui
+veut dire qu'on ne touche pas à l'échelle du client — et non qu'on la remet
+à 1. Aucune des deux
 valeurs ne se relève dans la source — camelot cadre par une scène que 3.3.5
 n'a pas — elles se jugent donc à l'œil, d'où **`/fui modele`** :
 
