@@ -323,6 +323,7 @@ end
 
 local function remplirLigne(ligne, donnees)
 	ligne.factionIndex = donnees.index
+	ligne.factionNom = donnees.nom
 	ligne.entete = donnees.entete
 	ligne.enfant = donnees.enfant
 	ligne.replie = donnees.replie
@@ -382,7 +383,10 @@ local function remplirLigne(ligne, donnees)
 		poserBarre(ligne, donnees)
 	end
 
-	ligne.choisie = (choisie ~= nil and choisie == donnees.index)
+	-- LA SELECTION SE RETIENT PAR LE NOM. Un indice ne survit pas a un
+	-- repli : les factions se renumerotent, et la marque changerait de
+	-- ligne. Le nom, lui, ne bouge pas.
+	ligne.choisie = (choisie ~= nil and choisie == donnees.nom)
 	poserSurvol(ligne)
 	ligne:Show()
 end
@@ -463,14 +467,9 @@ local function masquerLignesDuClient()
 	end
 end
 
-local function poserListe()
-	if not panneau then
-		return
-	end
-
-	masquerLignesDuClient()
-
-	local total = (GetNumFactions and GetNumFactions()) or 0
+-- UN PASSAGE : empiler les lignes depuis le decalage, jusqu'a la marge du
+-- bas. Rend combien ont ete posees.
+local function disposer()
 	local hauteurUtile = (panneau:GetHeight() or 0)
 	if hauteurUtile < 50 then
 		hauteurUtile = VOLET_H + LISTE_Y - LISTE_Y2
@@ -480,8 +479,8 @@ local function poserListe()
 		largeurUtile = VOLET_L + LISTE_X2 - LISTE_X
 	end
 
-	-- COMBIEN TIENNENT. Les hauteurs changent d'un gabarit a l'autre : on ne
-	-- peut plus diviser, il faut empiler jusqu'a la marge du bas.
+	-- Les hauteurs changent d'un gabarit a l'autre : on ne peut pas diviser,
+	-- il faut empiler.
 	local y = MARGE
 	local posees = 0
 	for rang, ligne in ipairs(lignes) do
@@ -499,11 +498,35 @@ local function poserListe()
 			ligne:Hide()
 		end
 	end
+	return posees
+end
+
+-- REPLIER RACCOURCIT LA LISTE, IL NE MASQUE PAS.
+--
+-- CollapseFactionHeader retire les enfants de la numerotation du client :
+-- GetNumFactions diminue et tout ce qui suit remonte d'un cran. C'est ainsi
+-- que 3.3.5 et camelot fonctionnent tous les deux, et c'est voulu.
+--
+-- CE QUI NE L'ETAIT PAS : le decalage etait borne APRES la pose. Replier en
+-- bas de liste laissait donc un passage entier pose depuis un decalage
+-- devenu trop grand -- des lignes vides, ou les mauvaises factions, jusqu'au
+-- passage suivant. On borne donc, et on repose si cela a bouge.
+local function poserListe()
+	if not panneau then
+		return
+	end
+
+	masquerLignesDuClient()
+
+	local total = (GetNumFactions and GetNumFactions()) or 0
+	local posees = disposer()
+
+	if decalage > 0 and decalage + posees > total then
+		decalage = math.max(0, total - posees)
+		posees = disposer()
+	end
 
 	visibles = posees
-	if decalage > total - posees then
-		decalage = math.max(0, total - posees)
-	end
 end
 ForeverUI.ReputationLayout = poserListe
 
@@ -593,7 +616,7 @@ local function monter(hote)
 					CollapseFactionHeader(self.factionIndex)
 				end
 			else
-				choisie = self.factionIndex
+				choisie = self.factionNom
 				poserListe()
 			end
 		end)

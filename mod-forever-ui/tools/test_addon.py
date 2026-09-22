@@ -880,24 +880,41 @@ FACTION_AT_WAR_COLOR = { r = 0.8, g = 0.2, b = 0.2 }
 GameFontNormalLeft = "GameFontNormalLeft"
 GameFontHighlight = "GameFontHighlight"
 function UnitSex() return 2 end
-REPLIES = {}
-function ExpandFactionHeader(i) REPLIES[i] = false end
-function CollapseFactionHeader(i) REPLIES[i] = true end
+-- REPLIER RETIRE LES ENFANTS DE LA NUMEROTATION, il ne les masque pas : le
+-- client renumerote, GetNumFactions diminue, et tout ce qui suit remonte.
+-- Le faux client doit en faire autant, sinon l essai ne prouve rien.
+function _visibles()
+    local liste, saute = {}, nil
+    for _, f in ipairs(TOUTES) do
+        if saute and f.enfant then
+            -- avale : son parent est replie
+        else
+            saute = nil
+            liste[#liste + 1] = f
+            if f.entete and f.replie then
+                saute = true
+            end
+        end
+    end
+    return liste
+end
+function ExpandFactionHeader(i) _visibles()[i].replie = false end
+function CollapseFactionHeader(i) _visibles()[i].replie = true end
 -- La hierarchie telle que le client la rend : un en-tete de premier niveau,
 -- un sous-en-tete -- en-tete ET enfant -- puis des entrees enfants.
-FACTIONS = { { nom = "Classic", standing = 4, entete = true },
-             { nom = "Alliance", standing = 5, entete = true, enfant = true, rep = true },
-             { nom = "Darnassus", standing = 4, enfant = true },
-             { nom = "Exodar", standing = 8, enfant = true } }
-function GetNumFactions() return #FACTIONS end
+TOUTES = { { nom = "Classic", standing = 4, entete = true },
+           { nom = "Alliance", standing = 5, entete = true, enfant = true, rep = true },
+           { nom = "Darnassus", standing = 4, enfant = true },
+           { nom = "Exodar", standing = 8, enfant = true } }
+function GetNumFactions() return #_visibles() end
 function GetFactionInfo(i)
-    local f = FACTIONS[i]
+    local f = _visibles()[i]
     if not f then return nil end
     -- nom, description, standingID, seuil, suivant, valeur, enGuerre,
     -- peutDeclarer, estEnTete, estReplie, ...
     -- ... hasRep en 11e, isWatched en 12e, isChild en 13e
     return f.nom, "", f.standing, 0, 1000, 250, f.guerre or false, false,
-           f.entete, REPLIES[i] or false, f.rep or false, false, f.enfant or false
+           f.entete, f.replie or false, f.rep or false, false, f.enfant or false
 end
 function ReputationFrame_Update() end
 
@@ -2691,18 +2708,45 @@ def main():
     assert abs(r3.barre.remplissage.texcoord[2] - 0.25) < 1e-6,         "rognee a la fraction : 250 sur 1000"
 
     # LE CLIC : un en-tete se replie, une entree se choisit.
-    r1.scripts.OnClick(r1)
-    print("   clic sur l en-tete : replie=%s, fleche %d de haut" % (
-        g.REPLIES[1], r1.fleche.height or 0))
-    assert g.REPLIES[1] is True, "CollapseFactionHeader sur l indice de la ligne"
+    # REPLIER RACCOURCIT LA LISTE : le client retire les enfants de sa
+    # numerotation, il ne les masque pas. Tout ce qui suit remonte.
+    avant = [l.nom.text for l in rangs.values() if l.shown]
+    r2.scripts.OnClick(r2)                  # le sous-en-tete Alliance
     g.ForeverUI.ReputationLayout()
-    assert r1.fleche.height == 13, "le plus prend la place du moins, a SA taille"
+    apres = [l.nom.text for l in rangs.values() if l.shown]
+    print("   repli d Alliance : %s -> %s" % (avant, apres))
+    assert apres == ["Classic", "Alliance"],         "ses deux enfants quittent la liste, le reste reste en place"
+    assert r2.chevron.height == 13, "le plus prend la place du moins, a SA taille"
+
+    r2.scripts.OnClick(r2)                  # on la redeploie
+    g.ForeverUI.ReputationLayout()
+    assert [l.nom.text for l in rangs.values() if l.shown] == avant,         "deplier la rend telle quelle"
+
+    r1.scripts.OnClick(r1)                  # l en-tete de premier niveau
+    g.ForeverUI.ReputationLayout()
+    print("   repli de Classic : %s" % [l.nom.text for l in rangs.values() if l.shown])
+    assert [l.nom.text for l in rangs.values() if l.shown] == ["Classic"],         "tout le bloc s en va"
+    r1.scripts.OnClick(r1)
+    g.ForeverUI.ReputationLayout()
 
     r3.scripts.OnClick(r3)
     g.ForeverUI.ReputationLayout()
-    print("   clic sur une entree : survol a %.2f" % r3.survol.alpha)
+    print("   clic sur une entree : survol a %.2f sur %s" % (
+        r3.survol.alpha, r3.nom.text))
     assert abs(r3.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
     assert abs(r1.survol.alpha) < 1e-6, "un en-tete n a pas de survol"
+
+    # LA SELECTION SE RETIENT PAR LE NOM : un repli renumerote les factions,
+    # un indice suivrait la mauvaise ligne.
+    choisi = r3.nom.text
+    r2.scripts.OnClick(r2)                  # replier Alliance
+    g.ForeverUI.ReputationLayout()
+    r2.scripts.OnClick(r2)                  # et la redeployer
+    g.ForeverUI.ReputationLayout()
+    marquees = [l.nom.text for l in rangs.values() if l.shown and l.survol.alpha > 0.15]
+    print("   apres un repli et un depli : marquee = %s (choisie %s)" % (
+        marquees, choisi))
+    assert marquees == [choisi], "la marque reste sur la meme faction"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):
