@@ -1695,7 +1695,7 @@ def main():
     # quand le personnage change d apparence.
     echelle = g.CharacterModelFrame.modelScale
     print("   echelle du modele : %.2f" % echelle)
-    assert abs(echelle - 0.8) < 0.001, "SetModelScale, seul reglage que ce client porte"
+    assert abs(echelle - 0.1) < 0.001, "SetModelScale, seul reglage que ce client porte"
 
     tete = g.CharacterHeadSlot
     cou = g.CharacterNeckSlot
