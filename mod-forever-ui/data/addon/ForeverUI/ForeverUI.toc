@@ -13,6 +13,7 @@ UIAtlas_05_feuille_perso.lua
 UIAtlas_06_complements.lua
 
 AtlasUtil.lua
+Panes.lua
 Layout.lua
 DropDown.lua
 PlayerFrame.lua

@@ -779,15 +779,11 @@ local function habiller()
 		monter(volet)
 	end
 
-	-- LE PANNEAU SUIT SON ONGLET. Ses boutons sont des cadres fils du
-	-- PANNEAU, pas de la fenetre du client : masquer celle-ci ne les
-	-- emportait pas, et "New" restait visible sous les statistiques.
-	if volet.statsMontrees == false then
-		panneau:Show()
-	else
-		panneau:Hide()
-	end
-
+	-- LE PANNEAU NE DECIDE PLUS S'IL PARAIT. Il est une PAGE de l'hote
+	-- droit, et ForeverUI.Panes le montre ou le masque -- avec la fenetre
+	-- du client, qui est desormais son enfant. C'est ce qui l'empeche de
+	-- survivre a un changement d'onglet lateral : il appartient a notre
+	-- volet, que le PaperDollFrame du client ne masque pas.
 	accueillirDialogue()
 	masquerFermeture()
 	poserBoutons()

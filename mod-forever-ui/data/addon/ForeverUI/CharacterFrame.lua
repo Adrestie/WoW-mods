@@ -541,6 +541,11 @@ local function monterVolets(cadre)
 	voletDroit.separateur = separateur
 
 	ForeverUI.CharacterPanes = { gauche = voletGauche, droit = voletDroit }
+
+	-- LES DEUX VOLETS SONT DES HOTES. A partir d'ici, ce qui parait dans
+	-- l'un ou l'autre ne se decide plus ici : voir Panes.lua.
+	ForeverUI.Panes.NewHost("gauche", voletGauche)
+	ForeverUI.Panes.NewHost("droit", voletDroit)
 end
 
 -- LE PORTRAIT. La source le pose en 62 dans PortraitContainer et l'arrondit
@@ -997,29 +1002,10 @@ end
 -- la sixieme ligne -- il la montre, et la cache pour les categories qui
 -- n'ont que cinq statistiques -- et forcer la notre par-dessus ferait
 -- apparaitre une ligne vide.
+-- Les statistiques et le gestionnaire sont deux PAGES du meme hote : l'une
+-- remplace l'autre. Cette fonction ne fait plus que le dire.
 local function montrerStatistiques(afficher)
-	if not voletDroit then
-		return
-	end
-
-	voletDroit.statsMontrees = afficher and true or false
-
-	for _, groupe in ipairs(STAT_GROUPES) do
-		local selecteur = _G[groupe.selecteur]
-		if selecteur then
-			if afficher then selecteur:Show() else selecteur:Hide() end
-		end
-		for index = 1, STAT_PAR_GROUPE do
-			local ligne = _G[groupe.prefixe .. index]
-			if ligne then
-				if afficher then ligne:Show() else ligne:Hide() end
-			end
-		end
-	end
-
-	if afficher and PaperDollFrame_UpdateStats then
-		PaperDollFrame_UpdateStats()
-	end
+	ForeverUI.Panes.ShowPage("droit", afficher and "stats" or "equipement")
 end
 ForeverUI.CharacterShowStats = montrerStatistiques
 
@@ -1050,13 +1036,10 @@ local function poserStatistiques()
 			selecteur:ClearAllPoints()
 			selecteur:SetPoint("TOPLEFT", voletDroit, "TOPLEFT",
 				STAT_MARGE - STAT_ENTETE_DEBORD, y)
-			-- Montre seulement si l'onglet des statistiques est celui
-			-- qui est ouvert : chaque passage de l'habillage repasse ici.
-			if voletDroit.statsMontrees == false then
-				selecteur:Hide()
-			else
-				selecteur:Show()
-			end
+			-- CETTE FONCTION NE POSE QUE DE LA GEOMETRIE. Montrer ou
+			-- masquer appartient a ForeverUI.Panes, et a lui seul : le
+			-- melange des deux est ce qui faisait survivre un panneau a
+			-- un changement d'onglet.
 			y = y - STAT_ENTETE
 		end
 
@@ -1157,11 +1140,9 @@ local function creerOngletVolet(nom, infobulle, clic)
 	return onglet
 end
 
--- L'ONGLET CHOISI SE RETIENT. Replier masque les statistiques, ce qui met
--- voletDroit.statsMontrees a faux : sans cette memoire, deplier rouvrirait
--- toujours sur les statistiques, meme si le gestionnaire etait ouvert.
-local ongletVoulu = true
-
+-- L'ONGLET CHOISI SE RETIENT TOUT SEUL. C'est ForeverUI.Panes qui garde la
+-- page ouverte de chaque hote, par groupe : replier puis deplier la
+-- retrouve, sans que personne ait a s'en souvenir ici.
 local function poserOngletsVolet()
 	if not voletDroit then
 		return
@@ -1171,8 +1152,10 @@ local function poserOngletsVolet()
 		-- Les deux se comportent en onglets : celui qu'on ouvre ferme
 		-- l'autre. Le gestionnaire reste celui du client, on ne fait que
 		-- montrer et cacher son panneau.
+		-- DEUX BOUTONS, UNE SEULE SURFACE. Ils ne montrent ni ne masquent
+		-- quoi que ce soit : ils disent quelle page de l'hote droit est
+		-- ouverte, et la marque suit.
 		local function choisir(statistiques)
-			ongletVoulu = statistiques and true or false
 			if voletDroit.ongletStats then
 				if statistiques then
 					voletDroit.ongletStats.choisi:Show()
@@ -1182,18 +1165,9 @@ local function poserOngletsVolet()
 					voletDroit.ongletEquipement.choisi:Show()
 				end
 			end
-			montrerStatistiques(statistiques)
-			if ForeverUI.EquipmentPane then
-				ForeverUI.EquipmentPane.Apply()
-			end
-			if GearManagerDialog then
-				if statistiques then
-					GearManagerDialog:Hide()
-				else
-					GearManagerDialog:Show()
-				end
-			end
+			ForeverUI.Panes.ShowPage("droit", statistiques and "stats" or "equipement")
 		end
+		voletDroit.choisirPage = choisir
 
 		voletDroit.ongletStats = creerOngletVolet("ForeverUICharacterStatsTab",
 			CHARACTER_INFO or "Character Info",
@@ -1231,6 +1205,131 @@ local function poserOngletsVolet()
 	end
 end
 
+-- CE QUE CHAQUE ONGLET LATERAL OUVRE.
+--
+-- 3.3.5 nomme ses cinq ecrans dans CHARACTERFRAME_SUBFRAMES, et
+-- CharacterFrame_ShowSubFrame n'en montre qu'un : c'est LUI le commutateur,
+-- et c'est de lui qu'on part. Le nom de l'ecran sert donc de nom de groupe --
+-- aucune table de correspondance a tenir a jour.
+--
+-- Le groupe du personnage remplit les deux volets. Les quatre autres n'ont
+-- rien a mettre dans le volet droit : il disparait, et la fenetre se reduit
+-- a la largeur du gauche. C'est ce qui empeche le panneau du gestionnaire d'y
+-- survivre, et les barres de reputation de le traverser.
+local ECRAN_PERSONNAGE = "PaperDollFrame"
+local ECRANS_SIMPLES = {
+	{ groupe = "PetPaperDollFrame", id = "familier" },
+	{ groupe = "ReputationFrame", id = "reputation" },
+	{ groupe = "SkillFrame", id = "competences" },
+	{ groupe = "TokenFrame", id = "monnaie" },
+}
+
+local contenusDeclares = false
+
+local function declarerContenus()
+	if contenusDeclares or not voletDroit then
+		return
+	end
+	contenusDeclares = true
+
+	local Panes = ForeverUI.Panes
+
+	-- LE VOLET GAUCHE, groupe du personnage. Le modele, les emplacements et
+	-- les resistances sont les cadres du PaperDollFrame du client, qu'il
+	-- montre et masque lui-meme : ce contenu n'a donc rien a posseder. Il
+	-- existe pour dire que l'hote gauche a quelque chose a montrer ici.
+	Panes.Register({
+		hote = "gauche", groupe = ECRAN_PERSONNAGE, id = "personnage",
+		construire = function() return nil, {} end,
+	})
+
+	-- LES QUATRE AUTRES ECRANS. Chacun est un cadre du client taille pour la
+	-- fenetre d'ORIGINE, plus etroite que la notre et posee autrement : laisse
+	-- a lui-meme, il traverse le volet droit. On le borne donc a l'hote
+	-- gauche, une fois, a sa premiere ouverture.
+	--
+	-- CE N'EST PAS LEUR MISE EN PAGE : elle reste a faire, ecran par ecran.
+	-- C'est le minimum pour qu'ils ne debordent plus.
+	for _, ecran in ipairs(ECRANS_SIMPLES) do
+		Panes.Register({
+			hote = "gauche", groupe = ecran.groupe, id = ecran.id,
+			construire = function(hote)
+				local cadre = _G[ecran.groupe]
+				if not cadre then
+					return nil, {}
+				end
+				cadre:ClearAllPoints()
+				cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
+				return nil, { cadre }
+			end,
+		})
+	end
+
+	-- LE VOLET DROIT : deux pages, et le groupe du personnage seul. La
+	-- premiere declaree est celle qui s'ouvre par defaut.
+	Panes.Register({
+		hote = "droit", groupe = ECRAN_PERSONNAGE, id = "stats",
+		construire = function()
+			local cadres = {}
+			for _, groupe in ipairs(STAT_GROUPES) do
+				local selecteur = _G[groupe.selecteur]
+				if selecteur then
+					cadres[#cadres + 1] = selecteur
+				end
+				for index = 1, STAT_PAR_GROUPE do
+					local ligne = _G[groupe.prefixe .. index]
+					if ligne then
+						cadres[#cadres + 1] = ligne
+					end
+				end
+			end
+			return nil, cadres
+		end,
+	})
+
+	Panes.Register({
+		hote = "droit", groupe = ECRAN_PERSONNAGE, id = "equipement",
+		construire = function()
+			if ForeverUI.EquipmentPane then
+				ForeverUI.EquipmentPane.Apply()
+			end
+			local panneau = ForeverUI.EquipmentPane and ForeverUI.EquipmentPane.Frame()
+			-- La fenetre du client est passee enfant du panneau, mais elle
+			-- est declaree masquee : la montrer appartient a la page.
+			return panneau, { _G["GearManagerDialog"] }
+		end,
+	})
+
+	-- L'ECRAN OUVERT AU DEPART est celui que le client montre.
+	local ouvert = ECRAN_PERSONNAGE
+	for _, nom in ipairs(CHARACTERFRAME_SUBFRAMES or { ECRAN_PERSONNAGE }) do
+		local cadre = _G[nom]
+		if cadre and cadre:IsShown() then
+			ouvert = nom
+			break
+		end
+	end
+	Panes.ShowGroup(ouvert)
+end
+
+-- LE COMMUTATEUR DU CLIENT EST LE NOTRE. Greffe sur lui, le changement
+-- d'onglet lateral traverse la bibliotheque, et tout ce qui appartient a un
+-- ecran s'en va avec lui -- y compris ce qui, comme notre volet droit, n'est
+-- pas un fils du PaperDollFrame et lui survivait.
+local function suivreEcran(nom)
+	if not contenusDeclares then
+		return
+	end
+	ForeverUI.Panes.ShowGroup(nom)
+	if ForeverUI.CharacterApplyPanes then
+		ForeverUI.CharacterApplyPanes(CharacterFrame)
+	end
+end
+
+if hooksecurefunc and type(_G["CharacterFrame_ShowSubFrame"]) == "function" then
+	hooksecurefunc("CharacterFrame_ShowSubFrame", suivreEcran)
+end
+
 -- LE REPLI. L'etat est retenu entre deux sessions, comme le CVar de camelot.
 --
 -- DECLAREE AVANT D'ETRE ECRITE. reposerLaPlace vit plus bas dans ce fichier :
@@ -1260,50 +1359,37 @@ local function majBoutonRepli(cadre)
 	end
 end
 
--- Ce qui part et ce qui reste.
+-- LA LARGEUR DE LA FENETRE N'EST PAS UN REGLAGE, C'EST UNE CONSEQUENCE.
 --
--- Partent : notre volet droit -- donc son fond, sa bande de pierre, son
--- separateur, sa ligne de niveau et ses deux onglets, qui sont ses fils --
--- puis, un par un, les cadres du CLIENT qui n'y sont qu'ancres : les douze
--- lignes de statistiques, leurs deux selecteurs, et le panneau du
--- gestionnaire d'equipement.
+-- Elle ne depend que d'une chose : l'hote droit a-t-il quelque chose a
+-- montrer ? Il n'en a pas si le joueur l'a replie, et il n'en a pas non plus
+-- sur un onglet lateral qui n'y met rien -- reputation, competences,
+-- monnaie, familier. Les deux cas se traitent donc pareil, et il n'y a plus
+-- qu'UN endroit ou la largeur se decide.
 --
--- Restent : tout le volet gauche, et LES ONGLETS LATERAUX, qui sont ancres
--- au bord droit de la FENETRE et non au volet : ils se rapprochent avec le
--- bord et demeurent visibles.
+-- Ce qui part avec l'hote droit : son fond, sa bande de pierre, son
+-- separateur, sa ligne de niveau, ses deux onglets -- ses fils -- et la page
+-- ouverte, statistiques ou gestionnaire, que la bibliotheque possede.
+--
+-- Ce qui reste : tout le volet gauche, et LES ONGLETS LATERAUX, ancres au
+-- bord droit de la FENETRE et non au volet : ils se rapprochent avec le bord
+-- et demeurent visibles.
 local function appliquerRepli(cadre)
 	if not cadre then
 		return
 	end
 
-	local replie = voletReplie()
-	cadre:SetWidth(replie and VOLET_GAUCHE or LARGEUR)
+	local Panes = ForeverUI.Panes
+	local aQuoiMontrer = Panes.HasContent("droit", Panes.CurrentGroup())
+	local ouvert = aQuoiMontrer and not voletReplie()
 
-	if voletDroit then
-		if replie then
-			voletDroit:Hide()
-		else
-			voletDroit:Show()
-		end
-	end
+	Panes.SetHostShown("droit", ouvert)
+	cadre:SetWidth(ouvert and LARGEUR or VOLET_GAUCHE)
 
-	if replie then
-		montrerStatistiques(false)
-		if GearManagerDialog then
-			GearManagerDialog:Hide()
-		end
-	else
-		montrerStatistiques(ongletVoulu)
-		if GearManagerDialog then
-			if ongletVoulu then
-				GearManagerDialog:Hide()
-			else
-				GearManagerDialog:Show()
-			end
-		end
-		if ForeverUI.EquipmentPane then
-			ForeverUI.EquipmentPane.Apply()
-		end
+	-- Un volet qui n'existe pas sur cet onglet ne se replie pas.
+	local bouton = cadre.foreverRepli
+	if bouton then
+		if aQuoiMontrer then bouton:Show() else bouton:Hide() end
 	end
 
 	majBoutonRepli(cadre)
@@ -1311,6 +1397,7 @@ local function appliquerRepli(cadre)
 		ForeverUI.UpdatePanelCorners(cadre)
 	end
 end
+ForeverUI.CharacterApplyPanes = appliquerRepli
 
 local function basculerVolet()
 	local cadre = CharacterFrame
@@ -1535,12 +1622,13 @@ local function habiller()
 	poserStatistiques()
 	poserNiveau()
 	poserOngletsVolet()
-	if ForeverUI.EquipmentPane then
-		ForeverUI.EquipmentPane.Apply()
-	end
+	-- Le panneau du gestionnaire se construit AVEC SA PAGE, et non a chaque
+	-- passage : c'est la bibliotheque qui l'ouvre. Sa liste, elle, se
+	-- surveille toute seule.
 	poserEmplacements()
 	poserOnglets(cadre)
 	poserBoutonRepli(cadre)
+	declarerContenus()
 	appliquerRepli(cadre)
 end
 
@@ -1627,6 +1715,14 @@ local function parcourir(cadre, x, y, trouves, profondeur)
 end
 
 function ForeverUI.CharacterSheetDebug()
+	-- CE QUE CHAQUE HOTE MONTRE, d'abord : la plupart des fautes d'affichage
+	-- de cette fenetre se lisent la, et nulle part ailleurs.
+	if ForeverUI.Panes and ForeverUI.Panes.Report then
+		for _, ligne in ipairs(ForeverUI.Panes.Report()) do
+			DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r volets : " .. ligne)
+		end
+	end
+
 	local dire = function(texte)
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
 	end

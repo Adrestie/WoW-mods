@@ -800,9 +800,25 @@ function GearManagerDialog_OnShow()
 end
 CharacterResistanceFrame = CreateFrame("Frame", "CharacterResistanceFrame", CharacterFrame)
 CharacterResistanceFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -60, -80)
+-- LES CINQ ECRANS DES ONGLETS LATERAUX, comme CHARACTERFRAME_SUBFRAMES les
+-- nomme, et la fonction qui n en montre qu un : c est elle qui commute.
+CHARACTERFRAME_SUBFRAMES = { "PaperDollFrame", "PetPaperDollFrame", "SkillFrame",
+                             "ReputationFrame", "TokenFrame" }
 ReputationFrame = CreateFrame("Frame", "ReputationFrame", CharacterFrame)
+ReputationFrame:SetWidth(384)
+ReputationFrame:SetHeight(424)
 ReputationFrame:Hide()
-function CharacterFrame_ShowSubFrame() end
+PetPaperDollFrame = CreateFrame("Frame", "PetPaperDollFrame", CharacterFrame)
+PetPaperDollFrame:Hide()
+SkillFrame = CreateFrame("Frame", "SkillFrame", CharacterFrame)
+SkillFrame:Hide()
+TokenFrame = CreateFrame("Frame", "TokenFrame", CharacterFrame)
+TokenFrame:Hide()
+function CharacterFrame_ShowSubFrame(nom)
+    for _, ecran in ipairs(CHARACTERFRAME_SUBFRAMES) do
+        if ecran == nom then _G[ecran]:Show() else _G[ecran]:Hide() end
+    end
+end
 function PaperDollFrame_OnShow() end
 
 -- la barre bonus du client : celle qui remplace la barre de sorts quand le
@@ -1005,7 +1021,8 @@ def main():
 
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
-             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua", "Layout.lua", "DropDown.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua",
+             "Panes.lua", "Layout.lua", "DropDown.lua",
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
@@ -2372,6 +2389,76 @@ def main():
         all(lignes), g.GearManagerDialog.shown))
     assert all(lignes), "les statistiques reviennent"
     assert not g.GearManagerDialog.shown, "et le gestionnaire reste ferme"
+
+    # LES ONGLETS LATERAUX COMMUTENT DES ECRANS ENTIERS.
+    #
+    # Les deux fautes signalees : le panneau du gestionnaire restait visible
+    # sur un autre onglet -- il appartient a NOTRE volet, que le
+    # PaperDollFrame du client ne masque pas -- et les barres de reputation
+    # traversaient le volet droit, le cadre du client gardant la taille de la
+    # fenetre d origine.
+    Panes = g.ForeverUI.Panes
+    gear.scripts.OnClick(gear)          # gestionnaire ouvert
+    assert g.ForeverUIEquipmentPane.shown
+
+    g.CharacterFrame_ShowSubFrame("ReputationFrame")
+    g.ForeverUI.Panes.ShowGroup("ReputationFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    pr2 = g.ReputationFrame.points[len(list(g.ReputationFrame.points.values()))]
+    print("   onglet reputation : volet droit=%s, panneau=%s, fenetre %d, "
+          "reputation ancree a %s de %s" % (
+        droit.shown, g.ForeverUIEquipmentPane.shown, perso.width,
+        pr2[1], pr2[2].name))
+    assert not g.ForeverUIEquipmentPane.shown,         "LE PANNEAU DU GESTIONNAIRE NE SURVIT PLUS A UN CHANGEMENT D ONGLET"
+    assert not g.GearManagerDialog.shown, "ni la fenetre du client avec lui"
+    assert not droit.shown, "l hote droit n a rien a montrer sur cet onglet"
+    assert perso.width == 398, "la fenetre se reduit au volet gauche"
+    assert pr2[2].name == "ForeverUICharacterLeftPane",         "LES BARRES DE REPUTATION SONT BORNEES AU VOLET GAUCHE"
+    assert g.ReputationFrame.shown, "et l ecran de reputation, lui, parait"
+    assert not perso.foreverRepli.shown,         "un volet qui n existe pas sur cet onglet ne se replie pas"
+
+    # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
+    for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):
+        g.CharacterFrame_ShowSubFrame(nom)
+        g.ForeverUI.Panes.ShowGroup(nom)
+        g.ForeverUI.CharacterApplyPanes(perso)
+        visibles = [e for e in ("ReputationFrame", "SkillFrame", "TokenFrame",
+                                "PetPaperDollFrame") if g[e].shown]
+        assert visibles == [nom], "un seul ecran a la fois : %s" % visibles
+    print("   quatre ecrans : un seul visible a la fois")
+
+    # RETOUR AU PERSONNAGE : la page ouverte est retrouvee, pas reinitialisee.
+    g.CharacterFrame_ShowSubFrame("PaperDollFrame")
+    g.ForeverUI.Panes.ShowGroup("PaperDollFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    print("   retour au personnage : fenetre %d, volet droit=%s, page=%s" % (
+        perso.width, droit.shown, Panes.CurrentPage("droit")))
+    assert perso.width == 631 and droit.shown, "le volet droit revient"
+    assert Panes.CurrentPage("droit") == "equipement",         "la page ouverte avant le detour est celle qui revient"
+    assert g.ForeverUIEquipmentPane.shown
+    assert perso.foreverRepli.shown, "et le bouton de repli avec"
+
+    # RIEN NE SE RECALCULE. Vingt allers-retours ne doivent deplacer aucune
+    # mesure : un contenu se batit une fois, puis ne fait que paraitre.
+    avant = (g.ForeverUIEquipmentPane.points[1][4],
+             g.ForeverUIEquipmentNewSet.points[1][5],
+             g.PlayerStatFrameLeft1.points[1][5])
+    for _ in range(20):
+        for nom in ("ReputationFrame", "PaperDollFrame"):
+            g.CharacterFrame_ShowSubFrame(nom)
+            g.ForeverUI.Panes.ShowGroup(nom)
+            g.ForeverUI.CharacterApplyPanes(perso)
+    apres = (g.ForeverUIEquipmentPane.points[1][4],
+             g.ForeverUIEquipmentNewSet.points[1][5],
+             g.PlayerStatFrameLeft1.points[1][5])
+    print("   apres vingt allers-retours : %s (avant %s)" % (str(apres), str(avant)))
+    assert avant == apres, "aucune mesure ne doit deriver d un changement d onglet"
+
+    # LE TEMOIN de la bibliotheque.
+    for ligne in g.ForeverUI.Panes.Report().values():
+        print("   %s" % ligne)
+
+    stats.scripts.OnClick(stats)
 
     # ------------------------------------------------- bas de l'ecran
     micro = g.ForeverUIMicroMenu
