@@ -293,6 +293,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic de la feuille disponible.")
 		end
+	elseif command == "reput" then
+		if ForeverUI.ReputationDebug then
+			ForeverUI.ReputationDebug()
+		else
+			say("aucun diagnostic de la reputation disponible.")
+		end
 	elseif command == "sets" then
 		if ForeverUI.EquipmentSetsDebug then
 			ForeverUI.EquipmentSetsDebug()
@@ -314,6 +320,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui modele, /fui sets")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui modele, /fui sets, /fui reput")
 	end
 end

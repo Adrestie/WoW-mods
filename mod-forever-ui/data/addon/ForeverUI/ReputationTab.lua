@@ -499,6 +499,35 @@ local function monter(hote)
 	return nil, { cadre }
 end
 
+-- TEMOIN -- /fui reput. Ce que le client rend pour chaque ligne visible, et
+-- ce qu'on en fait : c'est la seule facon de departager une donnee fausse
+-- d'un affichage faux.
+function ForeverUI.ReputationDebug()
+	local dire = function(texte)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	dire(string.format("reputation : %d factions, decalage %d, %d lignes",
+		(GetNumFactions and GetNumFactions()) or 0, decalage, #lignes))
+
+	for rang, ligne in ipairs(lignes) do
+		if ligne:IsShown() then
+			local nom, _, attitude, seuil, suivant, valeur, enGuerre, _, entete,
+				replie = GetFactionInfo(decalage + rang)
+			local r, v, b = ligne.barre.remplissage:GetVertexColor()
+			DEFAULT_CHAT_FRAME:AddMessage(string.format(
+				"   %d %s entete=%s attitude=%s brut=%s/%s/%s | barre=%s "
+				.. "large=%s visible=%s teinte=%.2f,%.2f,%.2f",
+				rang, tostring(nom), tostring(entete), tostring(attitude),
+				tostring(seuil), tostring(suivant), tostring(valeur),
+				tostring(ligne.barre:IsShown()),
+				tostring(ligne.barre.remplissage:GetWidth()),
+				tostring(ligne.barre.remplissage:IsShown()),
+				r or -1, v or -1, b or -1))
+		end
+	end
+end
+
 ForeverUI.ReputationTab = { Build = monter, Rows = lignes }
 
 -- Le client annonce ses changements par UPDATE_FACTION et les traite dans
