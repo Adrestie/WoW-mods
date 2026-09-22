@@ -91,6 +91,21 @@ local COTE = 6                          -- les tranches du survol
 -- au-dela de quoi les tranches se chevaucheraient.
 local PLAQUE_COIN = 12
 
+-- LE FOND DE JAUGE SE DECOUPE AUSSI.
+--
+-- common-stat-bar-bg mesure 68 x 30 et la barre en fait 160 : etire, ses
+-- bouts arrondis s'allongeaient. Mesure sur l'art -- on cherche la premiere
+-- colonne dont le profil vertical rejoint celui du milieu, c'est-a-dire ou
+-- le bord est fini : elle tombe a 10. La hauteur ne changeant pas, seules
+-- les tranches horizontales du milieu s'etirent.
+--
+-- LE REMPLISSAGE, LUI, NE SE DECOUPE PAS : c'est une jauge. camelot le
+-- rogne a la fraction voulue -- SetFillPercent pose largeur = fraction x
+-- largeur de barre et SetTexCoord(0, fraction, ...) -- et la meme
+-- compression horizontale s'y applique, sa feuille faisant 240 pour une
+-- barre de 160. Le decouper en ferait un cadre, pas une jauge.
+local JAUGE_COIN = 10
+
 local ATLAS_BARRE_FOND = "common-stat-bar-bg"
 local ATLAS_BARRE_REMPLISSAGE = "common-stat-bar-white"
 local ATLAS_ENTETE = "common-button-list-collapseexpand"
@@ -159,9 +174,8 @@ local function creerLigne(index, largeur)
 	barre:SetPoint("RIGHT", ligne, "RIGHT", BARRE_X, 0)
 	ligne.barre = barre
 
-	local fond = barre:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, ATLAS_BARRE_FOND, true)
-	fond:SetAllPoints(barre)
+	ForeverUI.CreateNineSlice(barre, ATLAS_BARRE_FOND, JAUGE_COIN,
+		{ 0, 0, 0, 0 }, "BACKGROUND")
 
 	local remplissage = barre:CreateTexture(nil, "BORDER")
 	remplissage:SetPoint("LEFT", barre, "LEFT", 0, 0)

@@ -2643,6 +2643,13 @@ def main():
     assert r2.barre.remplissage.width == 160.0,         "a l attitude maximale la barre est pleine, comme la source le veut"
     assert r3.barre.remplissage.width == 40.0, "250 sur 1000, sur 160 de barre"
     assert r2.barre.remplissage.height == 15, "ColoredProgressBarTemplate"
+    # LE FOND DE JAUGE SE DECOUPE, LE REMPLISSAGE NON : l un est un cadre,
+    # l autre une jauge que camelot rogne a la fraction voulue.
+    fonds = [t for t in r2.barre.regions.values() if t.layer == "BACKGROUND"]
+    print("   jauge : %d tranches de fond, remplissage %s de large" % (
+        len(fonds), r2.barre.remplissage.width))
+    assert len(fonds) == 9, "common-stat-bar-bg se decoupe en neuf"
+    assert r2.barre.remplissage.layer == "BORDER",         "le remplissage reste une seule texture, rognee"
 
     # LE CLIC : un en-tete se replie, une entree se choisit.
     r1.scripts.OnClick(r1)
