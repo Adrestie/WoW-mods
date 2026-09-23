@@ -32,4 +32,7 @@ EquipmentManager.lua
 ReputationTab.lua
 SkillsTab.lua
 PvPTab.lua
+Titles.lua
+TokensTab.lua
+PetTab.lua
 IconPicker.lua

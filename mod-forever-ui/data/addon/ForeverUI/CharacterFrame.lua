@@ -178,7 +178,7 @@ local MUNITIONS_ECART = 19
 -- objets de meme rang que les deux armes de melee. Les quatre emplacements
 -- de la rangee prennent donc la meme taille que les autres.
 
--- LES DEUX ONGLETS DU VOLET DROIT.
+-- LES TROIS ONGLETS DU VOLET DROIT.
 --
 -- RELEVE -- camelot/PaperDollFrame.xml. PaperDollSidebarTabs est un cadre de
 -- 233 x 85 ancre au TOP du volet droit, y = -4 ; il tient des CheckButton de
@@ -194,7 +194,13 @@ local MUNITIONS_ECART = 19
 --                     0,109375 / 0,890625 / 0,09375 / 0,90625
 --   EQUIPMENTMANAGER  Interface\PaperDollInfoFrame\PaperDollSidebarTabs
 --                     rogne a 0,015625 / 0,53125 / 0,46875 / 0,60546875
---   PET / TITLES      les autres onglets, hors sujet ici
+--   TITLES            Interface/PaperDollInfoFrame/PaperDollSidebarTabs
+--                     rogne a 0,015625 / 0,53125 / 0,32421875 / 0,46093750
+--   PET               l'autre onglet, hors sujet ici
+--
+-- A LA DEMANDE : le troisieme onglet est celui des TITRES. camelot n'en a
+-- pas -- son PAPERDOLL_SIDEBARS vaut {STATS, EQUIPMENTMANAGER, PET} -- et
+-- celui-ci vient de mainline, ou il existe tel quel.
 --
 -- CE QUI DIFFERE, ET POURQUOI.
 --   PaperDollSidebarTabs.blp N'EXISTE PAS dans ce client : l'onglet du
@@ -204,7 +210,7 @@ local MUNITIONS_ECART = 19
 --   sont pas non plus. L'infobulle du premier onglet prend CHARACTER_INFO,
 --   la plus proche que ce client porte ; le second a EQUIPMENT_MANAGER, qui
 --   existe tel quel.
---   Le client n'a pas d'onglets lateraux : ces deux-la sont crees. Le
+--   Le client n'a pas d'onglets lateraux : ces trois-la sont crees. Le
 --   gestionnaire, lui, n'est pas recree -- l'onglet ouvre et ferme le
 --   GearManagerDialog du client, exactement comme le bouton d'origine, qui
 --   est masque.
@@ -321,6 +327,26 @@ local ICONE_GESTIONNAIRE = "Interface\\PaperDollInfoFrame\\UI-GearManager-Button
 -- On en prend le carre central -- la meme plage sur les deux axes, 6..58,
 -- soit 52 x 52 -- comme l'onglet des statistiques rogne son portrait.
 local ICONE_GESTIONNAIRE_COORD = { 6 / 64, 58 / 64, 6 / 64, 58 / 64 }
+
+-- L'ONGLET DES TITRES.
+--
+-- A LA DEMANDE, ET NON D'APRES camelot. Son PAPERDOLL_SIDEBARS vaut
+-- {STATS, EQUIPMENTMANAGER, PET} : il n'a pas d'onglet de titres. Celui-ci
+-- vient de mainline/PaperDollFrameConstants.lua,
+-- PAPERDOLL_SIDEBARTAB_TITLES, qui en donne l'icone et son rognage :
+--   icon      Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs
+--   texCoords 0,015625 / 0,53125 / 0,32421875 / 0,46093750
+--
+-- Cette planche n'existe pas dans 3.3.5 : elle entre par patch-Z, et le
+-- rognage y designe bien le parchemin scelle -- verifie a l'oeil sur la
+-- decoupe, 33 x 35 sur une planche de 64 x 256.
+--
+-- L'onglet du gestionnaire, LUI, GARDE UI-GearManager-Button. Il est
+-- valide ; cette planche lui donnerait pourtant son icone d'origine, ce qui
+-- reste a demander.
+local ICONE_TITRES =
+	"Interface\\ForeverUI\\PaperDollInfoFrame\\paperdollsidebartabs"
+local ICONE_TITRES_COORD = { 0.015625, 0.53125, 0.32421875, 0.46093750 }
 
 local PIERRE_HAUTEUR = 85               -- UI-Character-Info-Stat-StoneBG
 local SEPARATEUR = 11
@@ -506,29 +532,57 @@ local STAT_PAR_GROUPE = 6
 -- L'intitule ne se lit pas sur le bouton : la categorie choisie vit dans
 -- une CVar qui porte une CLE, et le texte est la globale du meme nom. Le
 -- client rappelle UpdatePaperdollStats(prefixe, cle) a chaque changement.
--- ECART ASSUME, sur demande : 34 et non 40. C'est la hauteur PROPRE de
--- l'art de bouton (common-button-tertiary-normal, 46 x 34) : a cette taille
--- la bande centrale du decoupage ne s'etire plus du tout en hauteur.
+-- ECART ASSUME : 34 et non 40. L'atlas fait 201 x 32 dans sa planche ; a 34
+-- il s'etire de deux pixels, a 40 de huit. C'est aussi la hauteur qu'avait
+-- l'art de bouton qui l'a precede : rien ne bouge autour.
 local STAT_ENTETE = 34
 local STAT_ENTETE_DEBORD = 5
--- LE SELECTEUR EST UN BOUTON, PAS UN EN-TETE.
+
+-- LE SELECTEUR REPREND L'ENCADRE DE camelot.
 --
--- Il portait UI-Character-Info-Title, l'en-tete de categorie de camelot. A
--- la demande il prend l'art de bouton commonbuttontertiaryc60, avec ses
--- deux etats : common-button-tertiary-normal et ...-pressed, 46 x 34
--- chacun. L'etat presse tient tant que sa liste est ouverte, ce qui donne
--- au bouton la meme lecture qu'un onglet enfonce.
+-- A LA DEMANDE. Il a porte un temps l'art de bouton
+-- commonbuttontertiaryc60, avec son etat presse ; il revient a
+-- UI-Character-Info-Title, l'encadre de cuir a clous de
+-- paperdollinfopart1c60 -- celui que CharacterStatFrameCategoryTemplate lui
+-- donne, tendu du TOPLEFT au BOTTOMRIGHT.
 --
--- DECOUPE, ET NON ETIREE. Mesure sur l'art : a partir de x = 11 le profil
--- d'une colonne ne change plus -- l'about arrondi fait donc 11 px, et le
--- coin vaut 11 sur les deux axes (11 + 24 + 11 en largeur, 11 + 12 + 11 en
--- hauteur). Tendue de 46 a 203, l'image ecraserait ses angles.
+-- L'ETAT PRESSE S'EN VA AVEC LE BOUTON. L'encadre de camelot n'en a pas :
+-- la categorie choisie s'ecrit dans l'intitule, et c'est tout. La mecanique
+-- qui le tenait -- majEtatSelecteurs, greffee sur le OnShow et le OnHide de
+-- DropDownList1 -- reste en place et ne trouve plus rien a presser.
+--
+-- L'ART EST TENDU, ET NON DECOUPE. L'encadre porte ses quatre clous dans
+-- les angles, sur 201 x 32 ; tendu a 203 x 34 il ne bouge pratiquement pas.
+-- Le decoupage que demandait l'art de bouton -- 46 de large tendu a 203 --
+-- n'a plus lieu d'etre.
 --
 -- LA FLECHE S'EN VA. Le bouton du client ($parentButton) n'a plus lieu
 -- d'etre : toute la barre ouvre deja le menu.
--- L'art et ses mesures sont dans AtlasUtil, ForeverUI.SkinTertiaryButton :
--- le bouton "New Set" du gestionnaire d'equipement emploie le meme.
+local ATLAS_ENTETE_STAT = "ui-character-info-title"
 local SELECTEUR_PIECES = { "Left", "Middle", "Right", "Text" }
+
+-- LE FOND ALTERNE DES LIGNES DE STATISTIQUES.
+--
+-- A LA DEMANDE, et non d'apres la source : ni camelot ni 3.3.5 ne rayent
+-- leurs lignes de statistiques. Les deux bandes sont celles de
+-- paperdollinfopart1c60 -- releve sur la planche, ce sont les deux seules
+-- bandes horizontales dont l'alpha s'eteint aux deux bouts :
+--   UI-Character-Info-ItemLevel-Bounce  204 x 21, SOMBRE  (27, 21, 16) a 255
+--   UI-Character-Info-Line-Bounce       213 x 18, CLAIRE  (87, 67, 46) a 102
+-- La planche en porte une troisieme, Line-Bounce2, qui est la meme bande
+-- claire en 213 x 23 ; camelot n'emploie aucune des deux.
+--
+-- LA SOMBRE EN PREMIER, puis en alternance, et le compte REPART A CHAQUE
+-- CATEGORIE : un en-tete les separe, et chaque bloc commence donc pareil.
+--
+-- L'INTITULE PASSE A ARTWORK. StatFrameTemplate met son $parentLabel au
+-- calque BACKGROUND -- releve dans le PaperDollFrame.xml du client, ligne
+-- 175 -- et 3.3.5 n'a PAS de sous-calque : textureSubLevel et subLevel sont
+-- absents du binaire, verifie. Une texture ajoutee au meme calque passerait
+-- donc DEVANT le texte, puisqu'elle est creee apres lui. On monte le texte
+-- d'un calque plutot que de descendre la bande, qui ne le peut pas.
+local ATLAS_STAT_SOMBRE = "ui-character-info-itemlevel-bounce"
+local ATLAS_STAT_CLAIR = "ui-character-info-line-bounce"
 local STAT_GROUPES = {
 	{
 		selecteur = "PlayerStatFrameLeftDropDown",
@@ -1056,10 +1110,13 @@ local function habillerSelecteur(selecteur)
 		end
 	end
 
-	-- Le meme bouton que "New Set" du gestionnaire : la recette et ses
-	-- mesures vivent dans AtlasUtil, une seule fois. Sans "auto" : ici
-	-- l'etat presse ne suit pas la souris mais la liste.
-	ForeverUI.SkinTertiaryButton(selecteur)
+	-- L'ENCADRE DE camelot, tendu du TOPLEFT au BOTTOMRIGHT :
+	-- CharacterStatFrameCategoryTemplate. Le troisieme argument dit de NE
+	-- PAS toucher a la taille -- elle vient des deux ancres.
+	local fond = selecteur:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(fond, ATLAS_ENTETE_STAT, true)
+	fond:SetAllPoints(selecteur)
+	selecteur.foreverFond = fond
 
 	local intitule = selecteur:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	intitule:SetPoint("CENTER", selecteur, "CENTER", 0, 1)
@@ -1168,6 +1225,49 @@ ForeverUI.CharacterShowStats = montrerStatistiques
 -- Les statistiques, reposees dans le volet droit. Ce sont des cadres du
 -- client : on les deplace et on les elargit, on ne les recree pas -- ce
 -- sont eux qui portent les infobulles et les menus de categorie.
+
+-- LA BANDE D'UNE LIGNE, posee une fois. Elle est fille de la ligne : elle
+-- suit donc sa visibilite sans que personne ait a s'en occuper.
+local function fondDeLigne(ligne)
+	if ligne.foreverFond then
+		return ligne.foreverFond
+	end
+
+	local fond = ligne:CreateTexture(nil, "BACKGROUND")
+	fond:SetPoint("TOPLEFT", ligne, "TOPLEFT", 0, 0)
+	fond:SetPoint("BOTTOMRIGHT", ligne, "BOTTOMRIGHT", 0, 0)
+	ligne.foreverFond = fond
+
+	-- L'intitule est au MEME calque, et cree avant : sans cela la bande lui
+	-- passerait devant. 3.3.5 n'a pas de sous-calque.
+	local nom = ligne:GetName()
+	local intitule = nom and _G[nom .. "Label"]
+	if intitule and intitule.SetDrawLayer then
+		intitule:SetDrawLayer("ARTWORK")
+	end
+
+	return fond
+end
+
+-- LES LIGNES SE RAYENT, categorie par categorie, en ne comptant que celles
+-- que le client MONTRE : il en cache selon la categorie choisie, et une
+-- alternation calculee sur les six laisserait des trous.
+local function rayerStatistiques()
+	for _, groupe in ipairs(STAT_GROUPES) do
+		local rang = 0
+		for index = 1, STAT_PAR_GROUPE do
+			local ligne = _G[groupe.prefixe .. index]
+			if ligne and ligne.foreverFond and ligne:IsShown() then
+				rang = rang + 1
+				ForeverUI.SetAtlas(ligne.foreverFond,
+					(rang % 2 == 1) and ATLAS_STAT_SOMBRE or ATLAS_STAT_CLAIR,
+					true)
+			end
+		end
+	end
+end
+ForeverUI.CharacterStatStripes = rayerStatistiques
+
 local function poserStatistiques()
 	if not voletDroit then
 		return
@@ -1206,12 +1306,15 @@ local function poserStatistiques()
 				ligne:SetWidth(largeur)
 				ligne:ClearAllPoints()
 				ligne:SetPoint("TOPLEFT", voletDroit, "TOPLEFT", STAT_MARGE, y)
+				fondDeLigne(ligne)
 				y = y - STAT_PAS
 			end
 		end
 
 		y = y - STAT_ENTRE_GROUPES
 	end
+
+	rayerStatistiques()
 end
 
 -- La ligne du niveau, de la race et de la classe.
@@ -1305,43 +1408,78 @@ local function poserOngletsVolet()
 	end
 
 	if not voletDroit.ongletStats then
-		-- Les deux se comportent en onglets : celui qu'on ouvre ferme
-		-- l'autre. Le gestionnaire reste celui du client, on ne fait que
-		-- montrer et cacher son panneau.
-		-- DEUX BOUTONS, UNE SEULE SURFACE. Ils ne montrent ni ne masquent
+		-- TROIS BOUTONS, UNE SEULE SURFACE. Ils ne montrent ni ne masquent
 		-- quoi que ce soit : ils disent quelle page de l'hote droit est
-		-- ouverte, et la marque suit.
-		local function choisir(statistiques)
-			if voletDroit.ongletStats then
-				if statistiques then
-					voletDroit.ongletStats.choisi:Show()
-					voletDroit.ongletEquipement.choisi:Hide()
-				else
-					voletDroit.ongletStats.choisi:Hide()
-					voletDroit.ongletEquipement.choisi:Show()
+		-- ouverte, et la marque suit. Le gestionnaire reste celui du client,
+		-- on ne fait que montrer et cacher son panneau.
+		local PAGES = { "stats", "equipement", "titres" }
+
+		local function choisir(page)
+			-- Un booleen a longtemps suffi, quand il n'y avait que deux
+			-- pages : il est encore accepte pour que rien d'ancien ne casse.
+			if page == true then
+				page = "stats"
+			elseif page == false then
+				page = "equipement"
+			end
+
+			local marques = {
+				stats = voletDroit.ongletStats,
+				equipement = voletDroit.ongletEquipement,
+				titres = voletDroit.ongletTitres,
+			}
+			for nom, onglet in pairs(marques) do
+				if onglet then
+					if nom == page then
+						onglet.choisi:Show()
+					else
+						onglet.choisi:Hide()
+					end
 				end
 			end
-			ForeverUI.Panes.ShowPage("droit", statistiques and "stats" or "equipement")
+			ForeverUI.Panes.ShowPage("droit", page)
 		end
 		voletDroit.choisirPage = choisir
+		voletDroit.pagesDuVolet = PAGES
 
 		voletDroit.ongletStats = creerOngletVolet("ForeverUICharacterStatsTab",
 			CHARACTER_INFO or "Character Info",
-			function() choisir(true) end)
+			function() choisir("stats") end)
 		voletDroit.ongletStats.choisi:Show()
 
 		voletDroit.ongletEquipement = creerOngletVolet(
 			"ForeverUICharacterGearTab", EQUIPMENT_MANAGER or "Equipment Manager",
-			function() choisir(false) end)
+			function() choisir("equipement") end)
 		voletDroit.ongletEquipement.icone:SetTexture(ICONE_GESTIONNAIRE)
 		voletDroit.ongletEquipement.icone:SetTexCoord(
 			ICONE_GESTIONNAIRE_COORD[1], ICONE_GESTIONNAIRE_COORD[2],
 			ICONE_GESTIONNAIRE_COORD[3], ICONE_GESTIONNAIRE_COORD[4])
 
-		-- Les deux se touchent, comme chez camelot, et la paire est centree.
-		voletDroit.ongletStats:SetPoint("TOP", voletDroit, "TOP",
-			-ONGLET_VOLET / 2, ONGLET_VOLET_Y)
-		voletDroit.ongletEquipement:SetPoint("LEFT", voletDroit.ongletStats,
+		voletDroit.ongletTitres = creerOngletVolet(
+			"ForeverUICharacterTitlesTab", PAPERDOLL_SIDEBAR_TITLES
+			or TITLES or "Titles",
+			function() choisir("titres") end)
+		voletDroit.ongletTitres.icone:SetTexture(ICONE_TITRES)
+		voletDroit.ongletTitres.icone:SetTexCoord(
+			ICONE_TITRES_COORD[1], ICONE_TITRES_COORD[2],
+			ICONE_TITRES_COORD[3], ICONE_TITRES_COORD[4])
+
+		-- LES TROIS SE TOUCHENT, ET LE GROUPE EST CENTRE.
+		--
+		-- RELEVE -- camelot/paperdollframe.xml et
+		-- PaperDollFrame_UpdateSidebarTabLayout : c'est le DEUXIEME onglet
+		-- qui porte l'ancre, au TOP du cadre des onglets (0, -5), le
+		-- troisieme colle a sa droite et le premier a sa gauche. A deux, la
+		-- fonction recentre en decalant le deuxieme d'une demi-largeur --
+		-- ce que le volet faisait jusqu'ici.
+		--
+		-- Le gestionnaire prend donc le milieu, les statistiques la gauche
+		-- et les titres la droite, comme demande.
+		voletDroit.ongletEquipement:SetPoint("TOP", voletDroit, "TOP",
+			0, ONGLET_VOLET_Y)
+		voletDroit.ongletStats:SetPoint("RIGHT", voletDroit.ongletEquipement,
+			"LEFT", 0, 0)
+		voletDroit.ongletTitres:SetPoint("LEFT", voletDroit.ongletEquipement,
 			"RIGHT", 0, 0)
 	end
 
@@ -1382,10 +1520,10 @@ end
 -- restent bornees au volet gauche.
 local ECRAN_PERSONNAGE = "PaperDollFrame"
 local ECRANS_SIMPLES = {
-	{ groupe = "PetPaperDollFrame", id = "familier" },
+	{ groupe = "PetPaperDollFrame", id = "familier", module = "PetTab" },
 	{ groupe = "ReputationFrame", id = "reputation", module = "ReputationTab" },
 	{ groupe = "SkillFrame", id = "competences", module = "SkillsTab" },
-	{ groupe = "TokenFrame", id = "monnaie" },
+	{ groupe = "TokenFrame", id = "monnaie", module = "TokensTab" },
 }
 
 local contenusDeclares = false
@@ -1489,6 +1627,7 @@ local function declarerContenus()
 		voletDroit.pierre,
 		voletDroit.ongletStats,
 		voletDroit.ongletEquipement,
+		voletDroit.ongletTitres,
 		voletDroit.ligneNiveau,
 	})
 
@@ -1509,7 +1648,7 @@ local function declarerContenus()
 		})
 	end
 
-	-- LE VOLET DROIT POUR LE PERSONNAGE : deux pages. La premiere declaree
+	-- LE VOLET DROIT POUR LE PERSONNAGE : trois pages. La premiere declaree
 	-- est celle qui s'ouvre par defaut.
 	Panes.Register({
 		hote = "droit", groupe = ECRAN_PERSONNAGE, id = "stats",
@@ -1541,6 +1680,18 @@ local function declarerContenus()
 			-- La fenetre du client est passee enfant du panneau, mais elle
 			-- est declaree masquee : la montrer appartient a la page.
 			return panneau, { _G["GearManagerDialog"] }
+		end,
+	})
+
+	-- LA TROISIEME PAGE DU VOLET DROIT : les titres. A LA DEMANDE -- camelot
+	-- n'a pas cet onglet, voir Titles.lua.
+	Panes.Register({
+		hote = "droit", groupe = ECRAN_PERSONNAGE, id = "titres",
+		construire = function(hote)
+			if ForeverUI.TitlesPane and ForeverUI.TitlesPane.Build then
+				return ForeverUI.TitlesPane.Build(hote)
+			end
+			return nil, {}
 		end,
 	})
 
@@ -1609,6 +1760,28 @@ local function ouvrirEcranPropre(groupe)
 		local cadre = _G[nom]
 		if cadre then
 			cadre:Hide()
+		end
+	end
+
+	-- ET ON REND LA MAIN AUX ONGLETS DU CLIENT.
+	--
+	-- Releve dans UIPanelTemplates.lua : PanelTemplates_SelectTab appelle
+	-- tab:Disable() -- on ne reclique pas l'onglet ou l'on est -- et seul
+	-- PanelTemplates_DeselectTab le rend a nouveau cliquable, par
+	-- tab:Enable(). Les deux ne partent que de ToggleCharacter, par
+	-- PanelTemplates_SetTab.
+	--
+	-- NOS ECRANS NE PASSENT PAR AUCUN DES DEUX. L'onglet du client qui
+	-- etait choisi restait donc DESACTIVE une fois notre ecran ouvert, et
+	-- ne repondait plus au clic : venant de la feuille de personnage, c'est
+	-- son onglet a elle qu'on ne pouvait plus reprendre.
+	--
+	-- Rien ne se voyait, et le premier temoin disait meme le contraire :
+	-- IsEnabled rend un NOMBRE, 0 ou 1, et zero est VRAI en Lua.
+	for index = 1, (CharacterFrame and CharacterFrame.numTabs) or 5 do
+		local onglet = _G["CharacterFrameTab" .. index]
+		if onglet and onglet.Enable and not onglet.isDisabled then
+			onglet:Enable()
 		end
 	end
 	ForeverUI.Panes.ShowGroup(groupe)
@@ -2098,6 +2271,26 @@ local function suivreCategorie(prefixe, cle)
 	for _, groupe in ipairs(STAT_GROUPES) do
 		if groupe.prefixe == prefixe then
 			ecrireCategorie(_G[groupe.selecteur], cle)
+			-- Le client vient de remontrer et de recacher ses lignes : les
+			-- rayures se recomptent sur celles qui restent.
+			rayerStatistiques()
+
+			-- ET LES LIGNES REVIENNENT MEME QUAND LEUR PAGE EST FERMEE.
+			--
+			-- UpdatePaperdollStats fait `statFrame:Show()` pour chaque ligne
+			-- qu'elle remplit -- vingt-trois fois dans le PaperDollFrame.lua
+			-- du client -- sans jamais demander si l'ecran est ouvert. Un
+			-- gain de niveau, un changement d'equipement, et les
+			-- statistiques reparaissaient PAR-DESSUS la page des ensembles
+			-- ou celle des titres.
+			--
+			-- Ce n'est pas a nous de les recacher une par une : montrer et
+			-- masquer appartient a ForeverUI.Panes, et a lui seul. On lui
+			-- demande donc de repasser, et il rend a chaque hote la page
+			-- qui doit y etre.
+			if ForeverUI.Panes and ForeverUI.Panes.Refresh then
+				ForeverUI.Panes.Refresh()
+			end
 			return
 		end
 	end
@@ -2124,7 +2317,33 @@ veilleur:RegisterEvent("PLAYER_REGEN_ENABLED")
 veilleur:RegisterEvent("UNIT_INVENTORY_CHANGED")
 veilleur:RegisterEvent("UNIT_PORTRAIT_UPDATE")
 veilleur:RegisterEvent("UNIT_MODEL_CHANGED")
-veilleur:SetScript("OnEvent", habiller)
+
+-- CHANGER DE TITRE NE CHANGE QUE LE NOM.
+--
+-- SetCurrentTitle part au serveur ; c'est lui qui repond, et le client
+-- annonce la reponse par UNIT_NAME_UPDATE. UnitPVPName ne rend le nouveau
+-- nom qu'a ce moment-la : refaire la bande au clic la remplirait de
+-- l'ancien.
+--
+-- L'evenement part pour TOUTES les unites du decor. On ne refait donc pas
+-- la feuille entiere a chacune : seulement la bande de titre, et seulement
+-- pour le joueur.
+veilleur:RegisterEvent("UNIT_NAME_UPDATE")
+veilleur:SetScript("OnEvent", function(_self, evenement, unite)
+	if evenement == "UNIT_NAME_UPDATE" then
+		if unite == "player" and CharacterFrame then
+			poserTitre(CharacterFrame)
+		end
+		return
+	end
+	habiller()
+end)
+
+ForeverUI.CharacterRefreshTitle = function()
+	if CharacterFrame then
+		poserTitre(CharacterFrame)
+	end
+end
 
 if CharacterFrame then
 	CharacterFrame:HookScript("OnShow", habiller)
@@ -2172,6 +2391,107 @@ local function parcourir(cadre, x, y, trouves, profondeur)
 			parcourir(enfant, x, y, trouves, profondeur + 1)
 		end
 	end
+end
+
+-- TEMOIN -- /fui onglets. Un onglet lateral qui ne repond plus au clic a
+-- trois causes possibles, et aucune ne se voit a l'ecran :
+--   * un cadre le recouvre et prend la souris a sa place ;
+--   * le bouton lui-meme a perdu son clic, sa souris ou son activation ;
+--   * le clic PASSE et c'est son effet qui manque -- ToggleCharacter FERME
+--     la fenetre quand l'ecran demande est DEJA montre, et c'est lui que
+--     CharacterFrameTab_OnClick appelle, pas CharacterFrame_ShowSubFrame.
+-- Le temoin repond aux trois.
+-- IsEnabled REND UN NOMBRE, 0 OU 1, ET ZERO EST VRAI EN LUA.
+--
+-- Le premier temoin ecrivait `onglet:IsEnabled() and true or false` et
+-- annoncait donc TOUS les onglets actifs, y compris celui que
+-- PanelTemplates_SelectTab venait de desactiver. Le meme piege
+-- qu'IsTitleKnown, et il a couvert la faute qu'on cherchait.
+local function estActif(onglet)
+	if not onglet or not onglet.IsEnabled then
+		return true
+	end
+	local etat = onglet:IsEnabled()
+	return etat ~= nil and etat ~= false and etat ~= 0
+end
+
+function ForeverUI.CharacterTabsDebug()
+	local dire = function(texte)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	if not CharacterFrame or not CharacterFrame:IsShown() then
+		dire("onglets : ouvrez la feuille d'abord, puis refaites /fui onglets")
+		return
+	end
+
+	-- CE QUE LE CLIENT CROIT MONTRER. Si un de ses cinq ecrans est encore
+	-- montre alors qu'un ecran a nous est ouvert, ToggleCharacter fermera
+	-- la fenetre au lieu de changer d'onglet.
+	local montres = {}
+	for _, nom in ipairs(CHARACTERFRAME_SUBFRAMES or {}) do
+		local cadre = _G[nom]
+		if cadre and cadre:IsShown() then
+			montres[#montres + 1] = nom
+		end
+	end
+	dire(string.format("ecrans du client montres : %s | groupe ouvert : %s",
+		(#montres > 0) and table.concat(montres, ", ") or "aucun",
+		tostring(ForeverUI.Panes and ForeverUI.Panes.CurrentGroup
+			and ForeverUI.Panes.CurrentGroup())))
+
+	local colonne = {}
+	for _, cle in ipairs(ORDRE_ONGLETS) do
+		local onglet
+		if type(cle) == "number" then
+			onglet = _G["CharacterFrameTab" .. cle]
+		else
+			onglet = onglets[cle]
+		end
+		if onglet then
+			colonne[#colonne + 1] = onglet
+		end
+	end
+
+	for _, onglet in ipairs(colonne) do
+		local gauche = onglet.GetLeft and onglet:GetLeft()
+		dire(string.format("%-30s montre=%-5s souris=%-5s actif=%-5s "
+			.. "strate=%-10s niveau=%d clic=%s",
+			nomDe(onglet), tostring(onglet:IsVisible()),
+			tostring(onglet:IsMouseEnabled()),
+			tostring(estActif(onglet)),
+			tostring(onglet:GetFrameStrata()), onglet:GetFrameLevel(),
+			tostring(onglet:GetScript("OnClick") ~= nil)))
+
+		if gauche then
+			local x = (onglet:GetLeft() + onglet:GetRight()) / 2
+			local y = (onglet:GetTop() + onglet:GetBottom()) / 2
+			local trouves = {}
+			-- DEPUIS UIParent, et non depuis la feuille : ce qui recouvre
+			-- un onglet peut tres bien ne pas lui etre apparente.
+			parcourir(UIParent, x, y, trouves, 0)
+			local noms = {}
+			for _, cadre in ipairs(trouves) do
+				if cadre ~= onglet then
+					noms[#noms + 1] = string.format("%s(%d)", nomDe(cadre),
+						cadre:GetFrameLevel())
+				end
+			end
+			if #noms > 0 then
+				DEFAULT_CHAT_FRAME:AddMessage("      couvert par : "
+					.. table.concat(noms, ", "))
+			end
+		end
+	end
+
+	local guetteur = ForeverUI.guetteurSouris
+	if guetteur and guetteur.SetScript then
+		guetteur.reste = 5
+		guetteur.dernier = nil
+		guetteur:Show()
+	end
+	dire("promenez le curseur sur les onglets : /fui perso dit ce que la "
+		.. "souris touche vraiment")
 end
 
 function ForeverUI.CharacterSheetDebug()
