@@ -49,3 +49,28 @@ interface/icons/classicon_warrior.blp
 # Le masque des jauges. Comme celui des onglets, il n'est pas affiche :
 # tools/cuire_masque.py le cuit dans le remplissage.
 interface/common/commonstatbarmaskc60.blp
+
+# LE REMPLISSAGE DE LA JAUGE CIRCULAIRE DU PVP. camelot le pose en texture de
+# balayage sur un Cooldown -- <SwipeTexture file="Interface\PVPFrame\
+# pvpqueue-sidebar-honorbar-fill"/>. 3.3.5 n'a pas SetSwipeTexture : l'image
+# entre telle quelle, et tools/cuire_masque.py en tire les deux morceaux que
+# l'addon fait tourner.
+interface/pvpframe/pvpqueue-sidebar-honorbar-fill.blp
+
+# LA LISTE DES TITRES, ecran du volet droit.
+#
+# Le survol d'une ligne est UI-FriendsFrame-HighlightBar-Blue, que 3.3.5
+# n'a pas -- il n'a que la version non bleue, qui sert deja a la ligne
+# choisie.
+#
+# Char-Stat-Middle a servi un temps de bande de ligne, telle que
+# PlayerTitleButtonTemplate la pose. A LA DEMANDE, la liste a pris le fond
+# alterne des statistiques -- deux bandes de paperdollinfopart1c60 -- et
+# cette feuille n'est plus employee.
+interface/friendsframe/ui-friendsframe-highlightbar-blue.blp
+
+# LA PLANCHE DES ICONES D'ONGLET DU VOLET DROIT. mainline/
+# PaperDollFrameConstants.lua donne a l'onglet des titres l'icone
+# PaperDollSidebarTabs, rognee a 0,015625 / 0,53125 / 0,32421875 /
+# 0,46093750 : cette planche n'existe pas dans 3.3.5.
+interface/paperdollinfoframe/paperdollsidebartabs.blp

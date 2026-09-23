@@ -53,6 +53,7 @@ elle que l'addon affiche. Relancer cet outil refait la seconde a partir de
 la premiere, sans wow.export.
 """
 import io
+import math
 import os
 import struct
 import sys
@@ -357,6 +358,131 @@ def cuire_jauge(nom, rect):
     return cible
 
 
+# --------------------------------------------------------------------------
+# LA JAUGE CIRCULAIRE DU PVP.
+#
+# camelot la fait avec un Cooldown dont il remplace la texture de balayage :
+#   <Cooldown parentKey="RankProgressBarDisplay" reverse="true"
+#             rotation="180">
+#     <SwipeTexture file="Interface/PVPFrame/pvpqueue-sidebar-honorbar-fill"/>
+# 3.3.5 n'a pas SetSwipeTexture -- verifie dans le binaire -- et la texture de
+# balayage de son Cooldown est cablee dans le moteur.
+#
+# ON REFAIT DONC LE BALAYAGE A LA MAIN, par quadrants. L'addon pose quatre
+# textures, une par quart de cercle ; un quart entierement rempli montre le
+# quart de l'anneau tel quel, et le quart ou s'arrete la jauge montre un DEMI
+# anneau qu'on fait TOURNER par SetTexCoord a huit arguments. Un demi anneau
+# tourne de phi couvre les 180 degres qui finissent a phi : coupe par le
+# rectangle du quadrant, il donne exactement l'arc voulu.
+#
+# CE QUE LA CUISSON DOIT GARANTIR, et que la source ne garantit pas :
+#   * LE CENTRE DU CERCLE EST LE CENTRE DE L'IMAGE. La rotation se fait
+#     autour du centre du quadrilatere ; un cercle decentre tournerait en
+#     decrivant une boucle. Releve sur la source : son centre de gravite est
+#     a (64.0, 63.5) pour un canevas de 128, soit un demi texel trop haut.
+#     On le recale.
+#   * LES BORDS RESTENT TRANSPARENTS. Une fois tournee, la texture est lue
+#     hors de [0,1] dans les coins du quadrilatere ; le client y recopie le
+#     texel du bord. Il doit donc etre vide. Rayon exterieur 51 sur 64 de
+#     demi-canevas : la marge existe, on la garde.
+#   * LA COUPE PASSE PAR LE CENTRE. Le demi anneau garde la moitie GAUCHE --
+#     les angles de 180 a 360 en comptant depuis le haut dans le sens des
+#     aiguilles -- et sa coupe tombe exactement sur l'axe.
+JAUGE_PVP_SOURCE = os.path.join(ART, "pvpframe",
+                                "pvpqueue-sidebar-honorbar-fill.blp")
+SORTIE_PVP = os.path.join(ART, "pvp")
+JAUGE_PVP_SORTIE = 256      # puissance de deux, deux fois la source
+
+
+def _centre_de_gravite(largeur, hauteur, pixels):
+    """Le centre de l'anneau, pondere par l'alpha."""
+    sx = sy = sa = 0.0
+    for j in range(hauteur):
+        for i in range(largeur):
+            a = pixels[(i + j * largeur) * 4 + 3]
+            if a:
+                sx += a * (i + 0.5)
+                sy += a * (j + 0.5)
+                sa += a
+    if sa == 0.0:
+        return largeur / 2.0, hauteur / 2.0
+    return sx / sa, sy / sa
+
+
+def _lire_premultiplie(x, y, largeur, hauteur, pixels):
+    """Un texel interpole, la couleur PONDEREE PAR L'ALPHA.
+
+    x et y sont en texels de la source, centres sur (i + 0.5, j + 0.5).
+
+    POURQUOI PONDERER. Les texels vides de cette image sont blancs -- releve :
+    (255, 255, 255, 0). Interpoler la couleur sans tenir compte de l'alpha
+    ferait remonter ce blanc au contour de l'anneau, qui s'y borderait d'un
+    liseré clair. On interpole donc la couleur multipliee par l'alpha, puis on
+    la redivise.
+    """
+    i0 = int(math.floor(x - 0.5))
+    j0 = int(math.floor(y - 0.5))
+    fx = x - 0.5 - i0
+    fy = y - 0.5 - j0
+
+    def texel(i, j):
+        i = 0 if i < 0 else (largeur - 1 if i >= largeur else i)
+        j = 0 if j < 0 else (hauteur - 1 if j >= hauteur else j)
+        b = (j * largeur + i) * 4
+        return pixels[b], pixels[b + 1], pixels[b + 2], pixels[b + 3]
+
+    coins = (texel(i0, j0), texel(i0 + 1, j0),
+             texel(i0, j0 + 1), texel(i0 + 1, j0 + 1))
+    poids = ((1.0 - fx) * (1.0 - fy), fx * (1.0 - fy),
+             (1.0 - fx) * fy, fx * fy)
+
+    r = v = b = a = 0.0
+    for coin, p in zip(coins, poids):
+        a += p * coin[3]
+        r += p * coin[0] * coin[3]
+        v += p * coin[1] * coin[3]
+        b += p * coin[2] * coin[3]
+    if a <= 0.0:
+        return 0, 0, 0, 0
+    return (int(r / a + 0.5), int(v / a + 0.5), int(b / a + 0.5),
+            int(a + 0.5))
+
+
+def cuire_jauge_pvp():
+    """Les deux morceaux de la jauge : l'anneau entier, et sa moitie gauche."""
+    if not os.path.exists(JAUGE_PVP_SOURCE):
+        print("   le remplissage de la jauge pvp manque")
+        return []
+
+    sl, sh, spix = _lire(JAUGE_PVP_SOURCE)
+    cx, cy = _centre_de_gravite(sl, sh, spix)
+    print("   anneau pvp : %d x %d, centre (%.2f, %.2f)" % (sl, sh, cx, cy))
+
+    taille = JAUGE_PVP_SORTIE
+    echelle = float(sl) / taille          # texels de source par texel de sortie
+    entier = bytearray(taille * taille * 4)
+    moitie = bytearray(taille * taille * 4)
+
+    for j in range(taille):
+        y = (j + 0.5 - taille / 2.0) * echelle + cy
+        for i in range(taille):
+            x = (i + 0.5 - taille / 2.0) * echelle + cx
+            r, v, b, a = _lire_premultiplie(x, y, sl, sh, spix)
+            base = (i + j * taille) * 4
+            entier[base:base + 4] = bytes((r, v, b, a))
+            # LA MOITIE GAUCHE, coupee sur l'axe : les colonnes dont le
+            # centre tombe avant le milieu du canevas.
+            if i + 0.5 < taille / 2.0:
+                moitie[base:base + 4] = bytes((r, v, b, a))
+
+    faits = []
+    for nom, pixels in (("honorfill", entier), ("honorfillhalf", moitie)):
+        cible = os.path.join(SORTIE_PVP, nom + ".blp")
+        _ecrire(cible, taille, taille, pixels)
+        faits.append(cible)
+    return faits
+
+
 def main():
     if not os.path.exists(MASQUE):
         raise SystemExit("le masque manque : %s   # le faire entrer avec "
@@ -380,6 +506,10 @@ def main():
         if jauge:
             print("   %-60s %8d o" % (os.path.relpath(jauge, RACINE),
                                       os.path.getsize(jauge)))
+
+    for jauge in cuire_jauge_pvp():
+        print("   %-60s %8d o" % (os.path.relpath(jauge, RACINE),
+                                  os.path.getsize(jauge)))
 
     print("%d icone(s) cuite(s) ; poser dans le client avec tools/deployer.py" % faits)
 

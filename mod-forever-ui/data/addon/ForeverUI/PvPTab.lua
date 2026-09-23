@@ -29,11 +29,18 @@
 -- CE QUE 3.3.5 DONNE, ET CE QU'IL NE DONNE PAS.
 --
 -- camelot tire tout de C_MajorFactions -- le systeme de renom -- qui n'existe
--- pas ici. Mais les trois fonctions de l'epoque des rangs sont TOUJOURS dans
--- le binaire, verifie dans Wow.exe : UnitPVPRank, GetPVPRankInfo et
+-- pas ici. Les trois fonctions de l'epoque des rangs sont TOUJOURS dans le
+-- binaire, verifie dans Wow.exe : UnitPVPRank, GetPVPRankInfo et
 -- GetPVPRankProgress. WotLK a simplement cesse de s'en servir dans son
--- FrameXML. On s'en sert donc, et le temoin /fui pvp dit ce qu'elles rendent
--- reellement sur ce serveur.
+-- FrameXML.
+--
+-- MAIS ELLES NE RENDENT RIEN, et le temoin /fui pvp l'a dit : UnitPVPRank = 0
+-- avec 67 victoires honorables au compteur. La raison est dans le serveur, et
+-- non dans le client -- mod-pvp-titles/src/mod_pvp_titles.cpp, lu en entier :
+-- le module pose des TITRES, par SetTitle sur CharTitles, et ne touche jamais
+-- au vieux compteur de rang. Le rang se demande donc aux titres connus, par
+-- IsTitleKnown -- present dans le binaire, verifie -- et la progression se
+-- calcule sur les victoires honorables, que GetPVPLifetimeStats donne.
 --
 -- Heureuse coincidence : la planche de camelot porte QUATORZE icones de rang,
 -- exactement les quatorze rangs de l'epoque. Son art c60 EST celui des rangs
@@ -44,12 +51,29 @@
 -- d'honneur -- GetPVPLifetimeStats, GetPVPSessionStats, GetPVPYesterdayStats
 -- et GetHonorCurrency.
 --
+-- LA JAUGE CIRCULAIRE, REFAITE PAR QUADRANTS.
+--
+-- camelot la fait avec un Cooldown dont il remplace la texture de balayage :
+--   <Cooldown reverse="true" rotation="180">
+--     <SwipeTexture file="Interface/PVPFrame/pvpqueue-sidebar-honorbar-fill"/>
+-- SetSwipeTexture est ABSENT du binaire de 3.3.5 -- verifie -- et la texture
+-- de balayage de son Cooldown est cablee dans le moteur : la remplacer
+-- changerait TOUS les temps de recharge du jeu.
+--
+-- ON REFAIT DONC LE BALAYAGE. Le cadran est coupe en quatre quarts. Un quart
+-- que la jauge a depasse montre le quart de l'anneau tel quel ; le quart ou
+-- la jauge s'arrete montre un DEMI anneau -- la moitie gauche, cuite par
+-- tools/cuire_masque.py -- qu'on fait TOURNER par SetTexCoord a huit
+-- arguments. Un demi anneau tourne de phi couvre les 180 degres qui
+-- FINISSENT a phi ; le rectangle du quadrant le coupe, et il ne reste que
+-- l'arc voulu. Aucun masque, aucun ScrollFrame : quatre textures.
+--
+--   rotation="180" : la jauge PART DU BAS, six heures.
+--   sens : celui des aiguilles, celui du Cooldown. Depuis le bas, elle monte
+--          donc par la GAUCHE. Si elle tournait a l'envers en jeu, c'est
+--          JAUGE_SENS qu'il faudrait passer a -1.
+--
 -- CE QUI DIFFERE, ET POURQUOI :
---   * PAS DE JAUGE CIRCULAIRE ANIMEE. camelot la fait avec un Cooldown dont
---     il remplace la texture de balayage -- SetSwipeTexture, ABSENT du
---     binaire de 3.3.5, verifie. L'anneau, la lueur et le badge sont poses ;
---     la progression s'ecrit en toutes lettres, comme le fait deja
---     CurrentRankProgressField.
 --   * GameFontNormalMed2 n'existe pas : GameFontNormalLarge le remplace.
 --   * Le compte a rebours de fin de saison demande
 --     C_SeasonInfo.GetTimeUntilCurrentPVPSeasonEnd, absent lui aussi. La
@@ -84,6 +108,12 @@ local ATLAS_BADGE_RANG = "ui-character-info-honor-icon-%d"
 local ATLAS_ANNEAU_RECOMPENSE = "ui-character-info-honor-rewardring"
 local ATLAS_SEPARATEUR = "ui-character-info-scrollline"
 
+-- LA JAUGE. Les deux morceaux cuits, l'angle de depart et le sens.
+local JAUGE_ENTIER = "Interface\\ForeverUI\\PvP\\honorfill"
+local JAUGE_MOITIE = "Interface\\ForeverUI\\PvP\\honorfillhalf"
+local JAUGE_DEPART = 180        -- <Cooldown rotation="180"> : six heures
+local JAUGE_SENS = 1            -- 1 : sens des aiguilles ; -1 : l'inverse
+
 local VOLET_DROIT_X, VOLET_DROIT_Y = 16, -14
 local VOLET_DROIT_X2, VOLET_DROIT_Y2 = -12, 14
 local TITRE_L = 195
@@ -96,6 +126,13 @@ local DESCRIPTION_Y2 = 6
 local VOLET_L, VOLET_H = 398, 464
 
 local bloc, detail
+
+-- DECLAREES AVANT D'ETRE ECRITES. majBloc borne la fenetre a chaque passage,
+-- et il est ecrit plus haut qu'elles : sans ces deux lignes leurs noms s'y
+-- resoudraient en GLOBALES, donc nil. Le meme piege que majEtatSelecteurs
+-- dans CharacterFrame.lua.
+local hoteGauche
+local bornerAuVolet
 
 -- --------------------------------------------------------------- les donnees
 
@@ -132,6 +169,85 @@ local function nomDuRang(indice)
 	return _G["PVP_RANK_" .. tostring(indice) .. "_" .. tostring(faction01)]
 end
 
+-- LE RANG NE VIENT PAS DU COMPTEUR DE RANG : IL VIENT DES TITRES.
+--
+-- Releve dans le module du serveur, modules/mod-pvp-titles/src/
+-- mod_pvp_titles.cpp, lu en entier : AwardEarnedTitles compare les victoires
+-- honorables de toute une vie a quatorze seuils, et pose un TITRE --
+-- me->SetTitle(sCharTitlesStore.LookupEntry(...)). Il ne touche a AUCUN
+-- moment au vieux compteur de rang de l'epoque classique.
+--
+-- UnitPVPRank reste donc a zero pour toujours, quel que soit le nombre de
+-- victoires, et c'est aux titres connus qu'il faut demander le rang.
+--
+-- LES IDENTIFIANTS. Releve dans CharTitles.dbc du serveur, et l'ordre y est
+-- celui des rangs : 1 a 14 pour l'Alliance -- Private ... Grand Marshal --
+-- et 15 a 28 pour la Horde -- Scout ... High Warlord. Pour ces
+-- identifiants-la, et pour eux seuls, l'indice de bit vaut l'identifiant :
+-- IsTitleKnown les lit tels quels.
+local TITRE_PREMIER = { Alliance = 1, Horde = 15 }
+local RANGS = 14
+
+-- IsTitleKnown REND UN NOMBRE, PAS UN BOOLEEN, ET ZERO EST VRAI EN LUA.
+--
+-- Le client l'ecrit lui-meme -- Interface/FrameXML/PaperDollFrame.lua, ligne
+-- 2605, lu dans l'archive :
+--   for i = 1, GetNumTitles() do
+--       if ( IsTitleKnown(i) ~= 0 ) then
+--
+-- Ecrit `if IsTitleKnown(id) then`, le test est VRAI pour tous les titres :
+-- la boucle partait de 14 et s'arretait au premier tour. En jeu, cela donnait
+-- "Grand Marshal", le rang 14 et la jauge pleine a 67 victoires.
+local function titreConnu(identifiant)
+	if not IsTitleKnown then
+		return false
+	end
+	local connu = IsTitleKnown(identifiant)
+	return connu ~= nil and connu ~= false and connu ~= 0
+end
+
+local function rangParLesTitres()
+	local premier = TITRE_PREMIER[faction()] or TITRE_PREMIER.Alliance
+	for numero = RANGS, 1, -1 do
+		if titreConnu(premier + numero - 1) then
+			return numero
+		end
+	end
+	return 0
+end
+
+-- CE QU'IL FAUT DE VICTOIRES POUR CHAQUE RANG.
+--
+-- ECART ASSUME, ET LE SEUL DE CET ECRAN QUE LE CLIENT NE PEUT PAS VERIFIER.
+-- Ces quatorze nombres sont la CONFIGURATION DU SERVEUR --
+-- configs/modules/mod_pvptitles.conf, cles PvPTitles.Rank_1 a Rank_14 --
+-- et aucune fonction du client ne les demande. Ils sont donc recopies ici,
+-- releves le 23/09/2026 sur la production. Si le serveur change ses seuils,
+-- CETTE TABLE EST LE SEUL ENDROIT A REPRENDRE.
+--
+-- Sans eux la jauge resterait vide : GetPVPRankProgress ne rend rien, pour
+-- la meme raison qu'UnitPVPRank.
+local SEUILS = { 50, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000,
+                 3500, 4000, 5000, 6500 }
+
+local function progresParLesVictoires(numero, victoires)
+	local suivant = SEUILS[numero + 1]
+	if not suivant then
+		return 1          -- rang maximal : la jauge est pleine
+	end
+	local acquis = (numero > 0) and SEUILS[numero] or 0
+	if suivant <= acquis then
+		return 0
+	end
+	local part = ((victoires or 0) - acquis) / (suivant - acquis)
+	if part < 0 then
+		return 0
+	elseif part > 1 then
+		return 1
+	end
+	return part
+end
+
 local function lireRang()
 	local indice = UnitPVPRank and UnitPVPRank("player") or 0
 	local nom, numero
@@ -143,11 +259,26 @@ local function lireRang()
 		numero = (indice > 4) and (indice - 4) or 0
 	end
 
-	nom = nom or nomDuRang(indice)
+	-- Le compteur n'est plus alimente : on demande aux titres.
+	if numero <= 0 then
+		numero = rangParLesTitres()
+	end
+
+	-- Le nom se lit toujours dans les chaines du client, a l'indice de
+	-- l'epoque : le numero plus quatre.
+	nom = nom or nomDuRang(numero + 4)
+
+	local victoires = 0
+	if GetPVPLifetimeStats then
+		victoires = GetPVPLifetimeStats() or 0
+	end
 
 	local progres = 0
 	if GetPVPRankProgress then
 		progres = GetPVPRankProgress() or 0
+	end
+	if not progres or progres <= 0 then
+		progres = progresParLesVictoires(numero, victoires)
 	end
 
 	return {
@@ -155,6 +286,8 @@ local function lireRang()
 		nom = nom,
 		numero = numero,
 		progres = progres,
+		victoires = victoires,
+		seuil = SEUILS[numero + 1],
 	}
 end
 
@@ -186,6 +319,109 @@ local function lireHonneur()
 	}
 end
 
+-- ----------------------------------------------------------------- la jauge
+
+-- LES QUATRE QUARTS, dans le sens des aiguilles depuis midi, en fraction du
+-- cadran : u vers la droite, v vers le BAS -- le repere des coordonnees de
+-- texture.
+local QUADRANTS = {
+	{ 0.5, 1.0, 0.0, 0.5 },   -- haut-droit  : de   0 a  90 degres
+	{ 0.5, 1.0, 0.5, 1.0 },   -- bas-droit   : de  90 a 180
+	{ 0.0, 0.5, 0.5, 1.0 },   -- bas-gauche  : de 180 a 270
+	{ 0.0, 0.5, 0.0, 0.5 },   -- haut-gauche : de 270 a 360
+}
+
+-- OU LIRE, dans une texture qu'on a fait tourner de phi dans le sens des
+-- aiguilles, le point (u, v) du cadran entier.
+--
+-- SetTexCoord a huit arguments ne deplace pas les quatre coins du rectangle a
+-- l'ecran : il dit seulement quel point de l'image chacun montre. Faire
+-- tourner l'image revient donc a faire tourner la LECTURE en sens inverse
+-- autour du centre. Ce qui tombe hors de [0, 1] recopie le texel du bord, et
+-- ce bord est vide : les coins restent transparents.
+local function tourner(u, v, cosinus, sinus)
+	local du, dv = u - 0.5, v - 0.5
+	return 0.5 + du * cosinus + dv * sinus, 0.5 - du * sinus + dv * cosinus
+end
+
+local function poserQuart(tex, cadran, u1, u2, v1, v2)
+	if JAUGE_SENS < 0 then
+		u1, u2 = 1 - u2, 1 - u1
+	end
+	tex:ClearAllPoints()
+	tex:SetPoint("TOPLEFT", cadran, "TOPLEFT", u1 * CADRAN, -v1 * CADRAN)
+	tex:SetPoint("BOTTOMRIGHT", cadran, "TOPLEFT", u2 * CADRAN, -v2 * CADRAN)
+end
+
+local function monterJauge(cadran)
+	local quarts = {}
+	for i = 1, 4 do
+		local quart = QUADRANTS[i]
+		local u1, u2, v1, v2 = quart[1], quart[2], quart[3], quart[4]
+		local q = { u1 = u1, u2 = u2, v1 = v1, v2 = v2 }
+
+		-- Ou commence ce quart, compte depuis le depart de la jauge.
+		q.depart = (90 * (i - 1) - JAUGE_DEPART) % 360
+
+		-- Le quart DEPASSE : l'anneau entier, lu sur ce quart.
+		q.plein = cadran:CreateTexture(nil, "ARTWORK")
+		q.plein:SetTexture(JAUGE_ENTIER)
+		q.plein:SetTexCoord(u1, u2, v1, v2)
+		poserQuart(q.plein, cadran, u1, u2, v1, v2)
+		q.plein:Hide()
+
+		-- Le quart OU LA JAUGE S'ARRETE : le demi anneau, tourne.
+		q.arc = cadran:CreateTexture(nil, "ARTWORK")
+		q.arc:SetTexture(JAUGE_MOITIE)
+		poserQuart(q.arc, cadran, u1, u2, v1, v2)
+		q.arc:Hide()
+
+		quarts[i] = q
+	end
+	return quarts
+end
+
+local function majJauge(fraction)
+	if not bloc or not bloc.jauge then
+		return
+	end
+
+	fraction = fraction or 0
+	if fraction < 0 then
+		fraction = 0
+	elseif fraction > 1 then
+		fraction = 1
+	end
+	local parcouru = fraction * 360
+
+	for i = 1, 4 do
+		local q = bloc.jauge[i]
+		if parcouru >= q.depart + 90 then
+			q.arc:Hide()
+			q.plein:Show()
+		elseif parcouru <= q.depart then
+			q.arc:Hide()
+			q.plein:Hide()
+		else
+			q.plein:Hide()
+
+			-- Le demi anneau couvre les 180 degres qui FINISSENT a l'angle
+			-- dont on l'a tourne. On veut qu'ils finissent sur la tete de la
+			-- jauge, JAUGE_DEPART + parcouru : on le tourne donc de cet
+			-- angle, moins le demi-tour qu'il porte deja.
+			local phi = math.rad(JAUGE_DEPART + parcouru - 360)
+			local cosinus, sinus = math.cos(phi), math.sin(phi)
+			local hgu, hgv = tourner(q.u1, q.v1, cosinus, sinus)
+			local bgu, bgv = tourner(q.u1, q.v2, cosinus, sinus)
+			local hdu, hdv = tourner(q.u2, q.v1, cosinus, sinus)
+			local bdu, bdv = tourner(q.u2, q.v2, cosinus, sinus)
+			q.arc:SetTexCoord(hgu, hgv, bgu, bgv, hdu, hdv, bdu, bdv)
+			q.arc:Show()
+		end
+	end
+end
+ForeverUI.PvPGauge = majJauge
+
 -- --------------------------------------------------------------- l'affichage
 
 local function poserBadge(rang)
@@ -212,6 +448,8 @@ local function majBloc()
 	if not bloc then
 		return
 	end
+
+	bornerAuVolet()
 
 	local rang = lireRang()
 
@@ -241,10 +479,24 @@ local function majBloc()
 
 	poserBadge(rang)
 
-	-- La progression, en toutes lettres : la jauge circulaire n'est pas
-	-- portable.
-	if rang.progres and rang.progres > 0 then
-		bloc.progres:SetText(string.format("%d%%", math.floor(rang.progres * 100 + 0.5)))
+	majJauge(rang.progres)
+
+	-- LA PROGRESSION S'ECRIT EN CHIFFRES, PAS EN POURCENTAGE.
+	--
+	-- C'est ce que fait CurrentRankProgressField chez camelot :
+	--   string.format(PVP_RANK_CURRENT_PROGRESS, rankPoints,
+	--                 nextRankPointsThreshold)
+	-- Cette chaine n'existe pas en 3.3.5 -- ce client n'a plus le systeme de
+	-- rangs -- d'ou le "%d / %d" nu. Les deux nombres sont les VICTOIRES
+	-- HONORABLES de toute une vie et le seuil du palier suivant : ce sont
+	-- eux que mod-pvp-titles compare, et eux qui font avancer la jauge.
+	--
+	-- AU RANG MAXIMAL il n'y a plus de seuil : le compte reste seul.
+	if rang.seuil then
+		bloc.progres:SetText(string.format("%d / %d", rang.victoires or 0,
+			rang.seuil))
+	elseif rang.numero and rang.numero > 0 then
+		bloc.progres:SetText(tostring(rang.victoires or 0))
 	else
 		bloc.progres:SetText("")
 	end
@@ -331,19 +583,63 @@ local function etoufferEcranDuClient()
 	end
 end
 
-local function monter(hote)
-	local cadre = _G["PVPParentFrame"]
-	if not cadre or not hote then
-		return nil, {}
+-- LA FENETRE PvP CESSE D'ETRE UN PANNEAU, ET PAS SEULEMENT UNE FENETRE.
+--
+-- Releve dans l'UIParent.lua du client, ligne 52 :
+--   UIPanelWindows["PVPParentFrame"] = { area = "left", pushable = 0,
+--                                        whileDead = 1 }
+--
+-- Elle est donc INSCRITE au systeme de panneaux. Tant qu'elle y est, le
+-- systeme la replace des qu'il repasse -- UpdateUIPanelPositions rend ses
+-- ancres a UIParent -- et elle redevient une dalle de 384 x 512 posee a
+-- l'ecran. Son art etant eteint, cette dalle ne SE VOIT PAS ; mais elle
+-- prend la souris, et tout ce qui passe dessous cesse de repondre au clic.
+-- C'est ainsi que les onglets lateraux devenaient incliquables des qu'on
+-- ouvrait le PvP.
+--
+-- La retirer de la table est le seul geste qui vaille : le cadre n'est plus
+-- une fenetre, il est le contenu d'un volet.
+local function detacherDuSystemeDePanneaux(cadre)
+	if UIPanelWindows then
+		UIPanelWindows["PVPParentFrame"] = nil
 	end
+	-- Ceinture et bretelles : si le systeme l'a deja prise en charge, elle
+	-- garde une place jusqu'a ce qu'on l'en sorte.
+	if HideUIPanel and cadre.IsShown and cadre:IsShown() then
+		HideUIPanel(cadre)
+	end
+end
 
-	cadre:SetParent(hote)
+-- BORNER LA FENETRE AU VOLET. Refait a chaque passage, et non une seule fois
+-- a la construction : le jour ou un autre systeme lui rendrait ses ancres,
+-- le passage suivant les reprend.
+bornerAuVolet = function()
+	local cadre = _G["PVPParentFrame"]
+	local hote = hoteGauche
+	if not cadre or not hote then
+		return
+	end
+	if cadre:GetParent() ~= hote then
+		cadre:SetParent(hote)
+	end
 	if cadre.SetToplevel then
 		cadre:SetToplevel(false)
 	end
 	cadre:ClearAllPoints()
 	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
 	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", 0, 0)
+end
+ForeverUI.PvPBound = bornerAuVolet
+
+local function monter(hote)
+	local cadre = _G["PVPParentFrame"]
+	if not cadre or not hote then
+		return nil, {}
+	end
+
+	hoteGauche = hote
+	detacherDuSystemeDePanneaux(cadre)
+	bornerAuVolet()
 
 	if bloc then
 		etoufferEcranDuClient()
@@ -384,8 +680,8 @@ local function monter(hote)
 	bloc.progres:SetJustifyH("CENTER")
 	bloc.progres:SetPoint("TOP", bloc.rang, "BOTTOM", 0, PROGRES_Y)
 
-	-- LE CADRAN. Sans la jauge animee -- SetSwipeTexture n'existe pas -- mais
-	-- avec sa lueur, son fond de faction, son anneau et son badge.
+	-- LE CADRAN : sa lueur, son fond de faction, son anneau, la jauge et le
+	-- badge, dans cet ordre -- c'est lui qui decide ce qui passe devant.
 	local cadran = CreateFrame("Frame", "ForeverUIPvPDial", bloc)
 	cadran:SetWidth(CADRAN)
 	cadran:SetHeight(CADRAN)
@@ -410,6 +706,10 @@ local function monter(hote)
 	anneau:SetWidth(ANNEAU_L)
 	anneau:SetHeight(ANNEAU_H)
 	anneau:SetPoint("CENTER", cadran, "CENTER", 0, ANNEAU_Y)
+
+	-- LA JAUGE, entre l'anneau et le badge : quatre quarts, poses ici pour
+	-- passer devant l'anneau et derriere le badge.
+	bloc.jauge = monterJauge(cadran)
 
 	bloc.badge = cadran:CreateTexture(nil, "ARTWORK")
 	bloc.badge:SetPoint("CENTER", cadran, "CENTER", 0, 0)
@@ -474,9 +774,21 @@ ForeverUI.PvPTab = { Build = monter, BuildRight = monterDetail }
 -- TEMOIN -- /fui pvp. Ce que les trois fonctions de rang rendent REELLEMENT
 -- sur ce serveur : WotLK ne s'en sert plus, mais elles sont dans le binaire,
 -- et c'est le serveur qui decide si elles portent une valeur.
-function ForeverUI.PvPDebug()
+function ForeverUI.PvPDebug(essai)
 	local dire = function(texte)
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	-- VALEUR D'ESSAI. /fui pvp 0.35 pose la jauge a 35 % le temps de la
+	-- regarder ; le prochain evenement de rang la remet sur la vraie.
+	if essai then
+		majJauge(essai)
+		dire(string.format("jauge posee a %.0f %% (valeur d'essai)",
+			essai * 100))
+	else
+		-- Sans valeur, le temoin REMET la jauge sur la progression reelle :
+		-- une valeur d'essai ne doit pas survivre au releve qui la suit.
+		majJauge(lireRang().progres)
 	end
 
 	local indice = UnitPVPRank and UnitPVPRank("player")
@@ -484,9 +796,28 @@ function ForeverUI.PvPDebug()
 	if indice and GetPVPRankInfo then
 		nom, numero = GetPVPRankInfo(indice, "player")
 	end
-	dire(string.format("pvp : UnitPVPRank=%s -> nom=%s numero=%s | progres=%s",
+	dire(string.format("compteur de rang : UnitPVPRank=%s -> nom=%s numero=%s"
+		.. " | GetPVPRankProgress=%s",
 		tostring(indice), tostring(nom), tostring(numero),
 		tostring(GetPVPRankProgress and GetPVPRankProgress())))
+
+	-- LES TITRES, la ou le serveur ecrit vraiment le rang.
+	local premier = TITRE_PREMIER[faction()] or TITRE_PREMIER.Alliance
+	local connus = {}
+	for numero2 = 1, RANGS do
+		if titreConnu(premier + numero2 - 1) then
+			connus[#connus + 1] = tostring(numero2)
+		end
+	end
+	dire(string.format("titres de rang (%s, identifiants %d a %d) : %s",
+		faction(), premier, premier + RANGS - 1,
+		(#connus > 0) and table.concat(connus, " ") or "aucun"))
+
+	local r = lireRang()
+	dire(string.format("retenu : rang=%s nom=%s | victoires=%d seuil=%s"
+		.. " -> progres=%.3f",
+		tostring(r.numero), tostring(r.nom), r.victoires or 0,
+		tostring(r.seuil), r.progres or 0))
 
 	local h = lireHonneur()
 	dire(string.format("honneur : courant=%d vie=%d meilleurRang=%d "
@@ -494,6 +825,25 @@ function ForeverUI.PvPDebug()
 		h.courant, h.vie, h.meilleurRang, h.jour, h.pointsJour, h.hier, h.pointsHier))
 	dire(string.format("saison d'arene : %s | faction : %s",
 		tostring(GetCurrentArenaSeason and GetCurrentArenaSeason()), faction()))
+
+	-- CE QUE MONTRE LA JAUGE, quart par quart : "plein", "arc" ou "vide".
+	if bloc and bloc.jauge then
+		local etats = {}
+		for i = 1, 4 do
+			local q = bloc.jauge[i]
+			local etat = "vide"
+			if q.plein:IsShown() then
+				etat = "plein"
+			elseif q.arc:IsShown() then
+				etat = "arc"
+			end
+			etats[i] = string.format("%d(%d)=%s", i, q.depart, etat)
+		end
+		dire("jauge : depart " .. tostring(JAUGE_DEPART) .. " sens "
+			.. tostring(JAUGE_SENS) .. " | " .. table.concat(etats, " "))
+	else
+		dire("jauge : l'ecran n'est pas encore monte")
+	end
 end
 
 -- Le client refait son ecran dans PVPFrame_Update : on passe apres.
@@ -503,3 +853,18 @@ if hooksecurefunc and type(_G["PVPFrame_Update"]) == "function" then
 		majBloc()
 	end)
 end
+
+-- CE QUI FAIT BOUGER LE RANG, maintenant qu'il vient des titres et des
+-- victoires. KNOWN_TITLES_UPDATE dit qu'un titre est tombe -- c'est lui qui
+-- annonce un rang gagne ; PLAYER_PVP_KILLS_CHANGED fait avancer la jauge a
+-- chaque victoire. Les quatre existent dans ce client, verifie dans Wow.exe.
+local veilleur = CreateFrame("Frame")
+veilleur:RegisterEvent("KNOWN_TITLES_UPDATE")
+veilleur:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
+veilleur:RegisterEvent("PLAYER_PVP_RANK_CHANGED")
+veilleur:RegisterEvent("HONOR_CURRENCY_UPDATE")
+veilleur:SetScript("OnEvent", function()
+	if bloc then
+		majBloc()
+	end
+end)
