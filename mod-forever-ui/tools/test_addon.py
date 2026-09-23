@@ -1343,6 +1343,9 @@ ARENA = "Arena"
 -- Leur ORDRE donne le decalage : 1 a 4 sont les rangs negatifs, 5 est le
 -- rang 1, et ainsi de suite. L indice de UnitPVPRank est donc la cle.
 PVP_RANK_1_0 = "Pariah"
+PVP_RANK_1_1 = "Pariah"
+PVP_RANK_4_0 = "Dishonored"
+PVP_RANK_4_1 = "Dishonored"
 PVP_RANK_5_0 = "Scout"
 PVP_RANK_6_0 = "Grunt"
 PVP_RANK_9_0 = "First Sergeant"
@@ -3744,7 +3747,10 @@ def main():
     print("   sans rang : rang=\"%s\", numero=\"%s\", anneau=%s, saison=\"%s\"" % (
         principal.rang.text, principal.numero.text, principal.recompense.shown,
         principal.saison.text))
-    assert principal.rang.text == "", "aucun rang, aucun titre"
+    # SANS RANG, LE JOUEUR EST UN CIVIL, pas un deshonore : le nom se lit a
+    # l indice "numero + 4", et a numero = 0 cela donnait l indice 4 --
+    # PVP_RANK_4, "Dishonored", qui est le rang des tueurs de civils.
+    assert principal.rang.text == "Civilian",         "sans rang, ni titre de rang negatif ni vide : civil"
     assert not principal.recompense.shown,         "un cercle dore vide se lirait comme un defaut"
     assert principal.saison.text == "Arena 8",         "la saison porte son intitule : un chiffre nu se lisait comme un rang"
 
@@ -3821,6 +3827,19 @@ def main():
     g.ForeverUI.PvPUpdate()
     assert lua.eval("IsTitleKnown(1)") == 0,         "le faux doit rendre un nombre, comme le client"
     assert principal.numero.text == "" and not principal.recompense.shown,         "aucun titre, aucun rang -- zero n est pas un titre connu"
+    print("   sans aucun titre : \"%s\"" % principal.rang.text)
+    assert principal.rang.text == "Civilian", "et le joueur est un civil"
+
+    # UN RANG NEGATIF, lui, garde son nom : les indices 1 a 4 sont Pariah,
+    # Outlaw, Exiled et Dishonored, et se nomment par leur indice tel quel.
+    lua.execute("RANG_PVP = 4")
+    g.ForeverUI.PvPUpdate()
+    print("   UnitPVPRank = 4 : \"%s\", numero=\"%s\"" % (
+        principal.rang.text, principal.numero.text))
+    assert principal.rang.text == "Dishonored",         "les indices 1 a 4 sont les rangs negatifs"
+    assert principal.numero.text == "", "et ils n ont pas de numero"
+    lua.execute("RANG_PVP = 0")
+    g.ForeverUI.PvPUpdate()
     lua.execute("PROGRES_PVP = 0.4; VICTOIRES_PVP = 1234")
     g.ForeverUI.PvPUpdate()
 
@@ -3909,7 +3928,9 @@ def main():
     pd = g.ForeverUIPvPDetail
     print("   detail : titre=\"%s\", description=\"%s\"" % (
         pd.titre.text, (pd.description.text or "").replace(chr(10), " | ")))
-    assert pd.titre.text == g.PVP, "sans rang, l intitule PvP du client"
+    # LE VOLET DROIT PORTE LE MEME TITRE QUE L ECRAN : sans rang, "Civilian".
+    # Ce volet est a reprendre -- voir docs/AMELIORATIONS.md, section 5.
+    assert pd.titre.text == "Civilian", "le volet droit suit le nom du rang"
     assert "4567" in pd.description.text, "les points d honneur courants"
     assert "1234" in pd.description.text, "les victoires honorables de toute une vie"
 

@@ -161,6 +161,22 @@ end
 --
 -- On nomme ainsi plutot que par GetPVPRankInfo, qui ne rend rien ici --
 -- releve par /fui pvp : UnitPVPRank = 0, nom = nil.
+-- SANS RANG, LE JOUEUR EST UN CIVIL, PAS UN DESHONORE.
+--
+-- Le nom d'un rang se lit a l'indice "numero + 4". A numero = 0, cela donne
+-- l'indice 4 -- PVP_RANK_4, "Dishonored" -- et l'ecran annoncait donc
+-- deshonore tout joueur de moins de cinquante victoires. Or les indices 1 a
+-- 4, Pariah, Outlaw, Exiled et Dishonored, sont les rangs NEGATIFS, ceux
+-- qu'on obtient en tuant des civils : rien a voir avec un joueur qui n'a
+-- simplement pas encore de rang.
+--
+-- ECART ASSUME : "Civilian" N'EST PAS UNE CHAINE DU CLIENT. Cherchee dans
+-- GlobalStrings -- les quarante chaines de rang vont de PVP_RANK_0 a
+-- PVP_RANK_19, aucune ne la porte -- et dans le binaire : absente des deux.
+-- Elle est donc ecrite en clair ici, et ne se traduira pas. L'autre choix
+-- serait de n'ecrire aucun titre du tout ; celui-ci a ete demande.
+local NOM_SANS_RANG = "Civilian"
+
 local function nomDuRang(indice)
 	if not indice or indice <= 0 then
 		return nil
@@ -264,9 +280,20 @@ local function lireRang()
 		numero = rangParLesTitres()
 	end
 
-	-- Le nom se lit toujours dans les chaines du client, a l'indice de
-	-- l'epoque : le numero plus quatre.
-	nom = nom or nomDuRang(numero + 4)
+	-- LE NOM. Trois cas, et pas deux.
+	--   numero > 0        un vrai rang : indice = numero + 4
+	--   indice de 1 a 4   un rang NEGATIF -- Pariah, Outlaw, Exiled,
+	--                     Dishonored -- qui se nomme par son indice tel quel
+	--   ni l'un ni l'autre le joueur n'a pas de rang : il est CIVIL
+	if not nom then
+		if numero > 0 then
+			nom = nomDuRang(numero + 4)
+		elseif indice and indice >= 1 and indice <= 4 then
+			nom = nomDuRang(indice)
+		else
+			nom = NOM_SANS_RANG
+		end
+	end
 
 	local victoires = 0
 	if GetPVPLifetimeStats then

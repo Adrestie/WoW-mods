@@ -1391,3 +1391,43 @@ un `UIDropDownMenuTemplate` — il faudra la déduire de `DropDownList1:IsShown(
 et de `UIDROPDOWNMENU_OPEN_MENU` — et les sélecteurs de la feuille de
 personnage devront choisir entre le contrôle de menu déroulant et l'en-tête de
 catégorie, qui ne sont pas le même objet dans la référence.
+
+
+---
+
+## 5. Ce qui reste à reprendre sur la feuille de personnage
+
+### 5.1 L'onglet « Pet » n'a pas son icône
+
+Les six onglets latéraux prennent leurs icônes de la référence — icône de
+classe, poignée de main, outils, poing de faction, pièces, parchemin. **Celui
+du familier garde encore l'icône de 3.3.5.** La référence n'en donne pas :
+elle ne met pas le familier dans cette colonne, mais en troisième onglet du
+volet droit (`PAPERDOLL_SIDEBARS` vaut `{STATS, EQUIPMENTMANAGER, PET}`), et
+l'icône qu'elle lui donne là est un rognage de `PaperDollSidebarTabs` — une
+planche qui est **déjà dans l'atelier** depuis l'onglet des titres.
+
+À faire : choisir l'image. Trois pistes, par ordre de fidélité décroissante :
+le rognage `PET` de `PaperDollSidebarTabs`, tel que
+`mainline/PaperDollFrameConstants.lua` le déclare ; une icône
+`INV_SideTab_*` de la même famille que les cinq autres, si le listfile en
+porte une ; ou une icône de sort du familier, cuite au masque comme les
+autres. Les deux premières ne demandent aucun art nouveau.
+
+### 5.2 Le volet droit de l'onglet « PvP » est à revoir
+
+Le volet gauche a été repris de `camelot/pvprankframe` et validé ; **le volet
+droit, lui, n'a jamais été repris** — il empile les chiffres que WotLK sait
+donner (points d'honneur, victoires honorables, meilleur rang, aujourd'hui,
+hier) sous le nom du rang, sans le gabarit de la référence.
+
+Ce que la référence y met, et qui manque ici : `TokenDetailFrame` et
+`ReputationDetailFrame` partagent `CharacterFrameSidePaneTemplate` — titre,
+sous-titre, séparateur, **lignes intitulé/valeur** posées par `AddRow` et
+`AddWrappedRow`, et un pied. Le volet PvP devrait s'y conformer comme les
+autres, et non composer ses lignes en chaînes de caractères.
+
+À faire au même moment : décider ce qui mérite d'y figurer. La référence y
+montre la progression de la saison et le marchand de récompenses, qui n'ont
+pas d'équivalent ici ; les statistiques d'honneur, elles, n'y sont pas — ce
+sont celles que 3.3.5 donne, et elles occupent la place faute de mieux.
