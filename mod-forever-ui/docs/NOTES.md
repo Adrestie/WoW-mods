@@ -1396,3 +1396,25 @@ un `UIDropDownMenuTemplate` — il faudra la déduire de `DropDownList1:IsShown(
 et de `UIDROPDOWNMENU_OPEN_MENU` — et les sélecteurs de la feuille de
 personnage devront choisir entre le contrôle de menu déroulant et l'en-tête de
 catégorie, qui ne sont pas le même objet dans la référence.
+
+### Une région ancrée sur une autre région du même cadre peut rester en arrière
+
+Relevé en jeu sur la réputation, le 2026-09-23. Le nom d'un sous-en-tête était
+ancré `LEFT` sur la **droite du chevron**, +4. Le témoin a montré le même nom
+posé tantôt à 57, tantôt à 101 du panneau, **avec la même ancre et la même
+cible** : ligne à 12, chevron à 40 de bord droit 53 — donc 57 attendu. L'écart
+vaut 44, soit exactement `RETRAIT_ENFANT − RETRAIT_AUTRE` : le nom se résolvait
+sur une position de ligne que le chevron ne portait plus.
+
+`disposer` pose les ancres du nom **puis** réancre la ligne dans le même
+passage. Une région (texture, `FontString`) ancrée sur une autre région du même
+cadre ne suit pas toujours ce déplacement ; un cadre fils, lui, suit — les
+noms ancrés sur `ligne.barre`, qui est un `Frame`, n'ont jamais dérivé.
+
+**Remède :** enlever l'intermédiaire. Le nom s'ancre sur la **ligne**, à
+`CHEVRON_X + largeur du chevron + écart` — même pixel, sans relais.
+
+**Reste à vérifier :** `TokensTab.lua` ancre le nom d'une entrée sur
+`ligne.compte`, un `FontString`, et le réancre à chaque passage. Le même défaut
+y est possible, mais les retraits n'y diffèrent que de 2 px : invisible, donc
+jamais signalé. Non corrigé — l'onglet est validé.

@@ -111,6 +111,9 @@ local NOM_X = 15
 -- meme icone plus 3, donc x = 28 ; son nom suit a +4 de ce bouton.
 local CHEVRON = 20
 local CHEVRON_X = 28
+-- La largeur du bouton de repli, la meme dans ses deux etats : mesure sur
+-- l'art, common-button-list-plus fait 13 x 13 et -minus 13 x 4.
+local CHEVRON_L = 13
 local SOUS_NOM_ECART = 4
 local NOM_ECART = -10                   -- du LEFT de la barre
 local ENTETE_NOM_X = 10
@@ -407,7 +410,29 @@ local function remplirLigne(ligne, donnees)
 
 		ligne.nom:SetFontObject(GameFontHighlight or GameFontNormal)
 		ligne.nom:SetJustifyH("LEFT")
-		ligne.nom:SetPoint("LEFT", ligne.chevron, "RIGHT", SOUS_NOM_ECART, 0)
+		-- LE NOM S'ANCRE SUR LA LIGNE, PAS SUR LE CHEVRON.
+		--
+		-- Il l'etait sur le chevron -- LEFT sur sa droite, +4 -- et le
+		-- releve en jeu a montre le meme nom pose tantot a 57, tantot a
+		-- 101 du panneau, AVEC LA MEME ANCRE ET LA MEME CIBLE : ligne a 12,
+		-- chevron a 40 de bord droit 53, donc 57 attendu. L'ecart vaut 44,
+		-- soit exactement RETRAIT_ENFANT moins RETRAIT_AUTRE : le nom se
+		-- resolvait sur une position de ligne que le chevron ne portait
+		-- plus. Une region ancree sur une AUTRE REGION du meme cadre ne
+		-- suit pas toujours le cadre quand celui-ci est reancre dans le
+		-- meme passage.
+		--
+		-- On enleve l'intermediaire. Le chevron est a CHEVRON_X du bord
+		-- gauche et sa largeur ne depend pas de son etat -- plus et moins
+		-- font 13 de large, seules leurs hauteurs different, 13 et 4,
+		-- releve sur l'art. L'ecart est donc le meme qu'avant, au pixel
+		-- pres, mais il ne passe plus par rien.
+		local largeurChevron = ligne.chevron:GetWidth() or 0
+		if largeurChevron <= 0 then
+			largeurChevron = CHEVRON_L
+		end
+		ligne.nom:SetPoint("LEFT", ligne, "LEFT",
+			CHEVRON_X + largeurChevron + SOUS_NOM_ECART, 0)
 		ligne.nom:SetPoint("RIGHT", ligne.barre, "LEFT", NOM_ECART, 0)
 
 		if donnees.avecRep then
