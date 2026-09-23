@@ -751,9 +751,19 @@ end
 -- TEMOIN -- /fui reput. Ce que le client rend pour chaque ligne visible, et
 -- ce qu'on en fait : c'est la seule facon de departager une donnee fausse
 -- d'un affichage faux.
-function ForeverUI.ReputationDebug()
+-- `filtre` ne garde que les lignes dont le nom le contient : /fui reput
+-- Alliance. Sans lui, la liste entiere passe -- et elle est longue.
+function ForeverUI.ReputationDebug(filtre)
 	local dire = function(texte)
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	local bas = filtre and string.lower(filtre)
+	local function garde(nom)
+		if not bas then
+			return true
+		end
+		return nom and string.find(string.lower(nom), bas, 1, true) ~= nil
 	end
 
 	local total = (GetNumFactions and GetNumFactions()) or 0
@@ -766,12 +776,14 @@ function ForeverUI.ReputationDebug()
 	for rang = 1, total do
 		local nom, _, attitude, seuil, suivant, valeur, _, _, entete, replie,
 			avecRep, _, enfant = GetFactionInfo(rang)
+		if garde(nom) then
 		DEFAULT_CHAT_FRAME:AddMessage(string.format(
 			"   %2d %-28s entete=%-5s enfant=%-5s replie=%-5s avecRep=%-5s "
 			.. "attitude=%s brut=%s/%s/%s",
 			rang, tostring(nom), tostring(entete), tostring(enfant),
 			tostring(replie), tostring(avecRep), tostring(attitude),
 			tostring(seuil), tostring(suivant), tostring(valeur)))
+		end
 	end
 
 	-- LA GEOMETRIE DE CHAQUE LIGNE POSEE.
@@ -783,7 +795,7 @@ function ForeverUI.ReputationDebug()
 	-- ClearAllPoints oublie.
 	dire("geometrie :")
 	for rang, ligne in ipairs(lignes) do
-		if ligne:IsShown() then
+		if ligne:IsShown() and garde(ligne.factionNom) then
 			local p, _, _, x, y = ligne:GetPoint(1)
 			local ancres = {}
 			for numero = 1, (ligne.nom:GetNumPoints() or 0) do
@@ -831,9 +843,9 @@ function ForeverUI.ReputationDebug()
 	dire("ce que nous posons :")
 
 	for rang, ligne in ipairs(lignes) do
-		if ligne:IsShown() then
-			local nom, _, attitude, seuil, suivant, valeur, enGuerre, _, entete,
-				replie = GetFactionInfo(decalage + rang)
+		local nom, _, attitude, seuil, suivant, valeur, enGuerre, _, entete,
+			replie = GetFactionInfo(decalage + rang)
+		if ligne:IsShown() and garde(nom) then
 			local r, v, b = ligne.barre.remplissage:GetVertexColor()
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				"   %d %s entete=%s attitude=%s brut=%s/%s/%s | barre=%s "

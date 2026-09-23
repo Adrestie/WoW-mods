@@ -339,7 +339,8 @@ SlashCmdList["FOREVERUI"] = function(message)
 		end
 	elseif command == "reput" then
 		if ForeverUI.ReputationDebug then
-			ForeverUI.ReputationDebug()
+			-- /fui reput Alliance : ne garde que cette faction-la.
+			ForeverUI.ReputationDebug(argument ~= "" and argument or nil)
 		else
 			say("aucun diagnostic de la reputation disponible.")
 		end
@@ -364,6 +365,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput, /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui micro")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui micro")
 	end
 end
