@@ -341,9 +341,27 @@ micro:SetWidth(LARGEUR_BOUTONS + MICRO_RALLONGE)
 -- Les boutons restent serres contre le bord GAUCHE du bandeau : la rallonge
 -- reste libre a droite, du cote ou le micro-menu s'allonge
 -- (layoutFramesGoingRight chez camelot).
-for index, entree in ipairs(boutonsMicro) do
-	entree.bouton:ClearAllPoints()
-	entree.bouton:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
+--
+-- ET ON LES REPOSE, PARCE QUE LE CLIENT LES REPREND.
+--
+-- VehicleMenuBar_MoveMicroButtons les reancre : CharacterMicroButton a
+-- BOTTOMLEFT (552, 2) et SocialsMicroButton sur le BOTTOMRIGHT de
+-- QuestLogMicroButton. Elle est appelee par MainMenuBar_ToPlayerArt et
+-- MainMenuBar_ToVehicleArt -- donc a chaque entree ou sortie de vehicule,
+-- et le micro-menu se disloquait. Releve par /fui micro, qui a montre ces
+-- deux boutons-la ancres ailleurs que sur notre bandeau.
+local function poserMicro()
+	for index, entree in ipairs(boutonsMicro) do
+		entree.bouton:ClearAllPoints()
+		entree.bouton:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
+	end
+end
+ForeverUI.MicroLayout = poserMicro
+
+poserMicro()
+
+if hooksecurefunc and type(_G["VehicleMenuBar_MoveMicroButtons"]) == "function" then
+	hooksecurefunc("VehicleMenuBar_MoveMicroButtons", poserMicro)
 end
 
 -- ------------------------------------------------------ la barre des sacs
@@ -557,6 +575,7 @@ end
 local function toutPoser()
 	poserSacs()
 	iconeSacADos()
+	poserMicro()
 	for _, entree in ipairs(boutonsMicro) do
 		etatMicro(entree)
 	end
@@ -635,6 +654,21 @@ function ForeverUI.MicroDebug()
 		end
 	end)
 	dire("promenez le curseur sur le bouton du personnage : cinq secondes.")
+end
+
+-- LES CONTENANTS VIDES NE PRENNENT PLUS LA SOURIS.
+--
+-- MainMenuBar est declaree enableMouse="true" et couvre tout le bas de
+-- l'ecran. Son art est remplace par le notre, mais elle restait une dalle
+-- qui avalait les clics -- GetMouseFocus la rendait a la place du bouton
+-- survole. Comme BonusActionBarFrame, et pour la meme raison : un cadre qui
+-- ne sert que de contenant n'a pas a recevoir de clic. Ses enfants -- les
+-- boutons d'action, les micro-boutons -- gardent le leur.
+for _, nom in ipairs({ "MainMenuBar", "MainMenuBarArtFrame" }) do
+	local cadre = _G[nom]
+	if cadre and cadre.EnableMouse then
+		cadre:EnableMouse(false)
+	end
 end
 
 ForeverUI.MicroMenu = micro

@@ -1079,6 +1079,15 @@ HONOR_POINTS = "Points d'honneur"
 LIFETIME_HONORABLE_KILLS = "Victoires honorables"
 TODAY = "Aujourd hui"
 YESTERDAY = "Hier"
+-- Le client reancre deux micro-boutons a chaque entree ou sortie de
+-- vehicule : le faux client doit le faire aussi, sinon l essai ne prouve
+-- rien.
+function VehicleMenuBar_MoveMicroButtons()
+    CharacterMicroButton:ClearAllPoints()
+    CharacterMicroButton:SetPoint("BOTTOMLEFT", MainMenuBarArtFrame, "BOTTOMLEFT", 552, 2)
+    SocialsMicroButton:ClearAllPoints()
+    SocialsMicroButton:SetPoint("BOTTOMLEFT", QuestLogMicroButton, "BOTTOMRIGHT", -3, 0)
+end
 function TogglePVPFrame() end
 function ShowUIPanel(cadre) cadre:Show() end
 PVP = "JcJ"
@@ -2175,6 +2184,18 @@ def main():
         g.BonusActionBarFrame.mouseEnabled,
         all(r.alpha == 0 for r in g.BonusActionBarFrame.regions.values())))
     assert g.BonusActionBarFrame.mouseEnabled is False,         "un cadre qui ne sert que de contenant n a pas a recevoir de clic"
+    assert g.MainMenuBar.mouseEnabled is False,         "MainMenuBar couvre tout le bas de l ecran : elle non plus"
+
+    # LE CLIENT REPREND LES MICRO-BOUTONS. VehicleMenuBar_MoveMicroButtons
+    # reancre le premier et celui des contacts, a chaque entree ou sortie de
+    # vehicule : on repose apres elle.
+    g.CharacterMicroButton.SetPoint(g.CharacterMicroButton, "BOTTOMLEFT", 552, 2)
+    g.VehicleMenuBar_MoveMicroButtons()
+    pc = g.CharacterMicroButton.points[len(list(g.CharacterMicroButton.points.values()))]
+    print("   apres le vehicule : %s sur %s (%s, %s)" % (
+        pc[1], pc[2].name if pc[2] else None, pc[4], pc[5]))
+    assert pc[2] and pc[2].name == "ForeverUIMicroMenu",         "le bouton revient sur notre bandeau"
+    assert (pc[1], pc[4], pc[5]) == ("LEFT", 0, 0), "et a sa place"
 
     tardive = g.PetActionBarFrame.CreateTexture(g.PetActionBarFrame, None, "ARTWORK")
     g.ForeverUI.PetBar.Apply()
