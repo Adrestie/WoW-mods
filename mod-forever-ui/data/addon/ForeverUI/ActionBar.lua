@@ -189,20 +189,27 @@ local function skinButton(button)
 		floatingBG:SetAlpha(0)
 	end
 
+	-- SetFontObject EFFACE LA JUSTIFICATION : elle se repose APRES lui.
+	--
+	-- Un objet de police porte la sienne, et aucune des polices de nombre
+	-- n'a de justifyH -- releve dans le FontStyles.xml du client : elles
+	-- sont donc CENTREES. Le SetJustifyH("RIGHT") ecrit avant le
+	-- SetFontObject ne survivait pas, et les deux textes etaient centres
+	-- dans leur boite au lieu d'etre cales a droite.
 	if hotkey then
 		hotkey:SetWidth(32)
 		hotkey:SetHeight(10)
-		hotkey:SetJustifyH("RIGHT")
 		hotkey:ClearAllPoints()
 		hotkey:SetPoint("TOPRIGHT", -5, -5)
 		hotkey:SetFontObject(NumberFontNormalSmallGray)
+		hotkey:SetJustifyH("RIGHT")
 	end
 
 	if count then
-		count:SetJustifyH("RIGHT")
 		count:ClearAllPoints()
 		count:SetPoint("BOTTOMRIGHT", -5, 5)
 		count:SetFontObject(NumberFontNormal)
+		count:SetJustifyH("RIGHT")
 	end
 
 	if macro then

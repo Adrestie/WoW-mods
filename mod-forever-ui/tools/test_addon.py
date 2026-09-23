@@ -79,7 +79,23 @@ local function newRegion(kind)
         local c = self.textColor or {1, 1, 1, 1}
         return c[1], c[2], c[3], c[4]
     end
-    function r:SetFontObject(o) self.font = o end
+    -- IL EFFACE LA JUSTIFICATION, et c est tout l interet de le savoir :
+    -- un objet de police porte la sienne. GameFontNormalLeft est a gauche,
+    -- GameFontHighlight n a aucun justifyH -- donc CENTRE, releve dans le
+    -- FontStyles.xml du client. Le faux ne touchait pas a justify : un
+    -- SetJustifyH pose a la creation paraissait donc survivre, alors qu en
+    -- jeu le nom se retrouvait centre et se deplacait au fil du defilement.
+    function r:SetFontObject(o)
+        self.font = o
+        local nom = tostring(o)
+        if string.find(nom, "Left", 1, true) then
+            self.justify = "LEFT"
+        elseif string.find(nom, "Right", 1, true) then
+            self.justify = "RIGHT"
+        else
+            self.justify = "CENTER"
+        end
+    end
     -- Un texte ne revient a la ligne que s il a une boite : le faux client
     -- retient ce reglage pour qu on puisse le verifier.
     function r:SetWordWrap(v) self.wordWrap = (v ~= false) end
@@ -3345,6 +3361,24 @@ def main():
         r3.survol.alpha, r3.nom.text))
     assert abs(r3.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
     assert abs(r1.survol.alpha) < 1e-6, "un en-tete n a pas de survol"
+
+    # LES NOMS SONT CALES A GAUCHE, quel que soit le gabarit.
+    #
+    # SetFontObject EFFACE la justification : GameFontHighlight n a aucun
+    # justifyH -- donc CENTRE -- et le nom se retrouvait centre dans une
+    # boite dont la largeur change d un gabarit a l autre. Il se deplacait
+    # donc horizontalement au fil du defilement. camelot pose la
+    # justification PAR-DESSUS l objet de police :
+    #   <FontString inherits="GameFontHighlight" justifyH="LEFT">
+    justifs = {}
+    for rang, ligne in rangs.items():
+        if ligne.shown:
+            justifs[ligne.nom.text] = (ligne.nom.font, ligne.nom.justify)
+    print("   noms : %s" % ", ".join(
+        "%s=%s/%s" % (n, str(f).replace("GameFont", ""), j)
+        for n, (f, j) in sorted(justifs.items())))
+    assert justifs, "il faut des lignes posees pour juger"
+    assert all(j == "LEFT" for _, j in justifs.values()),         "en-tete, sous-en-tete et entree : tous cales a gauche"
 
     # UNE FACTION EN GUERRE : le voile est ROUGE, pas blanc.
     #

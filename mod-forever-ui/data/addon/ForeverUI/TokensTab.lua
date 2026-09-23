@@ -268,6 +268,19 @@ local function poserSurvol(ligne)
 		or (dessus and SURVOL_ALPHA) or 0)
 end
 
+-- SetFontObject EFFACE LA JUSTIFICATION, ET IL FAUT LA REPOSER.
+--
+-- Un objet de police porte la SIENNE : GameFontNormalLeft est a gauche,
+-- GameFontHighlight n'a aucun justifyH -- donc CENTRE, releve dans le
+-- FontStyles.xml du client. SetJustifyH pose a la creation ne survit donc
+-- pas au premier SetFontObject, et le nom se retrouvait centre dans sa
+-- boite. Comme la boite change de largeur d'un gabarit a l'autre, le nom
+-- se deplacait horizontalement au fil du defilement, selon le role que la
+-- ligne reprenait.
+--
+-- camelot le fait exactement ainsi, et c'est ce qui le trahit :
+--   <FontString parentKey="Name" inherits="GameFontHighlight" justifyH="LEFT">
+-- La justification est posee PAR-DESSUS l'objet de police.
 local function remplirLigne(ligne, donnees)
 	ligne.deviseIndex = donnees.index
 	ligne.deviseNom = donnees.nom
@@ -289,6 +302,7 @@ local function remplirLigne(ligne, donnees)
 
 		ligne.nom:SetHeight(ENTETE_NOM_H)
 		ligne.nom:SetFontObject(GameFontNormalLeft or "GameFontNormal")
+		ligne.nom:SetJustifyH("LEFT")
 		ligne.nom:SetPoint("LEFT", ligne, "LEFT", ENTETE_NOM_X, 0)
 		ligne.nom:SetPoint("RIGHT", ligne, "RIGHT", -FLECHE_PLACE, 0)
 		ligne.nom:SetText(donnees.nom)
@@ -310,7 +324,9 @@ local function remplirLigne(ligne, donnees)
 		local police = (donnees.compte == 0) and (GameFontDisable or "GameFontDisable")
 			or (GameFontHighlight or "GameFontHighlight")
 		ligne.compte:SetFontObject(police)
+		ligne.compte:SetJustifyH("RIGHT")
 		ligne.nom:SetFontObject(police)
+		ligne.nom:SetJustifyH("LEFT")
 
 		if donnees.suivie then
 			ligne.coche:Show()
