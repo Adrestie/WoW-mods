@@ -797,13 +797,38 @@ function ForeverUI.ReputationDebug(filtre)
 	for rang, ligne in ipairs(lignes) do
 		if ligne:IsShown() and garde(ligne.factionNom) then
 			local p, _, _, x, y = ligne:GetPoint(1)
+			-- QUI EST LA CIBLE D'UNE ANCRE. La plupart des morceaux d'une
+			-- ligne n'ont pas de nom : GetName rend nil, et le temoin
+			-- ecrivait "?" -- ce qui cachait justement ce qu'on cherche.
+			-- On les reconnait par IDENTITE.
+			local connus = {
+				[ligne] = "ligne", [ligne.chevron] = "chevron",
+				[ligne.barre] = "barre", [ligne.fleche] = "fleche",
+				[ligne.survol] = "survol", [ligne.nom] = "nom",
+				[panneau] = "panneau",
+			}
+			for rang2, autre in ipairs(lignes) do
+				connus[autre] = connus[autre] or ("ligne" .. rang2)
+				connus[autre.chevron] = connus[autre.chevron]
+					or ("chevron" .. rang2)
+				connus[autre.barre] = connus[autre.barre] or ("barre" .. rang2)
+			end
+
 			local ancres = {}
 			for numero = 1, (ligne.nom:GetNumPoints() or 0) do
 				local np, cible, ncp, nx, ny = ligne.nom:GetPoint(numero)
-				ancres[#ancres + 1] = string.format("%s>%s.%s(%s,%s)",
-					tostring(np),
-					tostring(cible and cible.GetName and cible:GetName() or "?"),
-					tostring(ncp), tostring(nx), tostring(ny))
+				local qui = connus[cible]
+					or (cible and cible.GetName and cible:GetName())
+					or "inconnu"
+				local bord = "?"
+				if cible and cible.GetLeft and cible:GetLeft() then
+					bord = string.format("g=%.1f d=%.1f",
+						cible:GetLeft() - (panneau:GetLeft() or 0),
+						(cible:GetRight() or 0) - (panneau:GetLeft() or 0))
+				end
+				ancres[#ancres + 1] = string.format("%s>%s.%s(%s,%s)[%s]",
+					tostring(np), qui, tostring(ncp), tostring(nx),
+					tostring(ny), bord)
 			end
 			-- LA POSITION RESOLUE, et non l'ancre : c'est elle que l'oeil
 			-- voit. On la prend RELATIVE AU PANNEAU, sinon le defilement
