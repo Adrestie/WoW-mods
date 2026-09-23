@@ -46,7 +46,8 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
     data/addon/ForeverUI/     the addon itself, .lua and .toc -- the source
     data/art/interface/       the .blp that go into the client patch, each with
                               a .png beside it to see what it holds
-    docs/AMELIORATIONS.md     what is known to be improvable, and why
+    docs/AMELIORATIONS.md     the points asked for, and nothing else
+    docs/NOTES.md             working notes: departures, traps, tooling
     docs/reference/           screenshots of the real thing, to check against
     tools/deployer.py         puts the addon in a client and the art in patch-Z
     tools/test_addon.py       a mock client that loads the addon and checks it

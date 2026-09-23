@@ -3929,7 +3929,7 @@ def main():
     print("   detail : titre=\"%s\", description=\"%s\"" % (
         pd.titre.text, (pd.description.text or "").replace(chr(10), " | ")))
     # LE VOLET DROIT PORTE LE MEME TITRE QUE L ECRAN : sans rang, "Civilian".
-    # Ce volet est a reprendre -- voir docs/AMELIORATIONS.md, section 5.
+    # Ce volet est a reprendre -- voir docs/AMELIORATIONS.md.
     assert pd.titre.text == "Civilian", "le volet droit suit le nom du rang"
     assert "4567" in pd.description.text, "les points d honneur courants"
     assert "1234" in pd.description.text, "les victoires honorables de toute une vie"
