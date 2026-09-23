@@ -74,3 +74,9 @@ interface/common/commonbuttonlistc60.blp
 # tombent exactement sur les quatorze rangs de 3.3.5. Le listfile ne la
 # nomme pas : elle entre par son FileDataID.
 fdid:8198433.blp => interface/pvpframe/uicharacterinfohonorc60.blp
+
+# LE SEGMENT DES MONNAIES SUIVIES, sous la bourse du sac a dos.
+# ContainerFrameCurrencyBorderTemplate : common-currencybox-left,
+# -right et _common-currencybox-center, trois morceaux de 16 x 34 dans
+# la planche -- soit 8 x 17 a l'ecran.
+interface/common/commoncurrencybox.blp

@@ -123,6 +123,31 @@ local R = {
 	ecartBourseGrille = 4,  -- ContainerFrameBackpackMixin:GetInitialItemAnchor()
 	bourseCadre = 17,       -- l'encadre de camelot deborde de la bourse
 
+	-- LE SEGMENT DES MONNAIES SUIVIES, sous la bourse.
+	--
+	-- RELEVE -- ContainerFrameTokenWatcherMixin:UpdateCurrencyFrames : le
+	-- segment se pose au BAS de la fenetre, BOTTOMLEFT (8, 8) et
+	-- BOTTOMRIGHT (-8, 8), et c'est LA BOURSE QUI MONTE -- son BOTTOMLEFT
+	-- et son BOTTOMRIGHT sur le TOP du segment, (0, 3). Sans monnaie
+	-- suivie, la bourse reprend le bas, et rien ne change.
+	-- CalculateExtraHeight ajoute alors la hauteur du segment.
+	--
+	-- BackpackTokenFrameTemplate : 17 de haut, encadre par
+	-- ContainerFrameCurrencyBorderTemplate -- deux bouts de 8 x 17 et un
+	-- milieu tendu. BackpackTokenTemplate : 50 x 12, icone de 12 ancree
+	-- RIGHT (4, 1), compte cale a droite jusqu'au bord gauche de l'icone.
+	-- GetInitialTokenAnchor : RIGHT du segment (-17, -1), et les jetons
+	-- s'enchainent vers la GAUCHE.
+	jetonHauteur = 17,      -- BackpackTokenFrameTemplate
+	jetonCote = 8,          -- UpdateCurrencyFrames()
+	jetonEcart = 3,         -- ce que la bourse laisse au-dessus du segment
+	jetonLargeur = 50,      -- BackpackTokenTemplate
+	jetonPiece = 12,        -- sa hauteur, et celle de l'icone
+	jetonIconeX = 4,
+	jetonIconeY = 1,
+	jetonDepartX = -17,     -- GetInitialTokenAnchor()
+	jetonDepartY = -1,
+
 	-- LE COMBLE
 	-- Le champ et le tri redescendent des 6 dont la grille est remontee :
 	-- ancres en haut, ils suivaient sinon le bord superieur, qui s'est
@@ -808,8 +833,13 @@ local function mesures(cadre)
 		m.comble = m.comble + R.bandeRecherche
 	end
 
-	-- CalculateExtraHeight() : la bourse, sur le sac a dos seulement.
+	-- CalculateExtraHeight() : la bourse, sur le sac a dos seulement, plus
+	-- le segment des monnaies suivies quand il y en a.
+	m.jetons = m.sacADos and ForeverUI.BagsWatchedCount() or 0
 	m.extra = m.sacADos and R.bourseHauteur or 0
+	if m.jetons > 0 then
+		m.extra = m.extra + R.jetonHauteur + R.jetonEcart
+	end
 
 	m.hauteur = m.grille + m.comble + m.extra                       -- CalculateHeight()
 	m.largeur = R.largeur                                           -- CalculateWidth()
@@ -885,6 +915,166 @@ local function habillerBourse(bourse)
 	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT")
 
 	bourse.foreverBorde = true
+end
+
+-- ------------------------------------------- les monnaies suivies, sous la bourse
+--
+-- CE QUE 3.3.5 DONNE. GetBackpackCurrencyInfo(i) rend nom, compte,
+-- typeSpecial, icone et identifiant d'objet, pour i de 1 a
+-- MAX_WATCHED_TOKENS -- trois. Le client s'en sert lui-meme dans
+-- BackpackTokenFrame_Update.
+--
+-- DEUX MONNAIES ONT UNE ICONE A PART, la meme regle que l'onglet des
+-- monnaies : typeSpecial 1 les points d'arene, 2 les points d'honneur, ceux-
+-- ci suivant la faction et rognes a 0,03125 .. 0,59375.
+--
+-- LE SEGMENT DU CLIENT SE TAIT. BackpackTokenFrame a son propre art et, pire,
+-- ManageBackpackTokenFrame REPOSE LA HAUTEUR du sac -- BACKPACK_HEIGHT plus
+-- 22 -- ce qui defait la notre. On le masque, et on se greffe sur cette
+-- fonction pour repasser derriere elle.
+local JETON_ARENE = "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
+local JETON_HONNEUR = "Interface\\TargetingFrame\\UI-PVP-%s"
+local JETON_COIN, JETON_COTE = 0.03125, 0.59375
+
+-- LA TAILLE DES CHIFFRES DU SEGMENT.
+--
+-- A LA DEMANDE, et non d'apres la source : camelot ecrit son compte en
+-- GameFontHighlightSmall. Ici c'est GameFontHighlight, d'un cran au-dessus.
+-- Celui de la BOURSE ne bouge pas : il appartient au cadre d'argent du
+-- client, que nous ne touchons pas.
+--
+-- ET LE COMPTE SE CENTRE. camelot l'ancre par son TOPLEFT, ce qui convient a
+-- une police plus petite que le jeton ; avec celle-ci, le texte depassait
+-- vers le bas et ne s'alignait plus sur l'icone. Deux ancres horizontales --
+-- LEFT et RIGHT -- le bornent comme avant ET le centrent en hauteur.
+local JETON_POLICE = "GameFontHighlight"
+
+local function lireJetons()
+	local liste = {}
+	local maximum = MAX_WATCHED_TOKENS or 3
+	for rang = 1, maximum do
+		local nom, compte, special, icone = nil, nil, nil, nil
+        if GetBackpackCurrencyInfo then
+            nom, compte, special, icone = GetBackpackCurrencyInfo(rang)
+        end
+		if nom then
+			liste[#liste + 1] = {
+				nom = nom, compte = compte or 0,
+				special = special, icone = icone,
+			}
+		end
+	end
+	return liste
+end
+
+-- COMBIEN DE MONNAIES SUIVIES. La hauteur de la fenetre en depend : elle se
+-- calcule AVANT que le segment ne soit pose, donc depuis les donnees et non
+-- depuis ce qui est a l'ecran.
+function ForeverUI.BagsWatchedCount()
+	return #lireJetons()
+end
+
+local function poserIconeJeton(texture, donnees)
+	if donnees.special == 1 then
+		texture:SetTexture(JETON_ARENE)
+		texture:SetTexCoord(0, 1, 0, 1)
+	elseif donnees.special == 2 then
+		local faction = UnitFactionGroup and UnitFactionGroup("player")
+		if faction then
+			texture:SetTexture(string.format(JETON_HONNEUR, faction))
+			texture:SetTexCoord(JETON_COIN, JETON_COTE, JETON_COIN, JETON_COTE)
+		else
+			texture:SetTexture("")
+			texture:SetTexCoord(0, 1, 0, 1)
+		end
+	else
+		texture:SetTexture(donnees.icone or "")
+		texture:SetTexCoord(0, 1, 0, 1)
+	end
+end
+
+local function monterSegment(cadre)
+	if cadre.foreverSegment then
+		return cadre.foreverSegment
+	end
+
+	local segment = CreateFrame("Frame", "ForeverUIBagTokens", cadre)
+	segment:SetHeight(R.jetonHauteur)
+
+	-- L'ENCADRE : deux bouts de 8 x 17 et un milieu tendu, le meme
+	-- decoupage que la bourse.
+	local gauche = segment:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(gauche, "common-currencybox-left", true)
+	gauche:SetWidth(R.jetonCote)
+	gauche:SetHeight(R.jetonHauteur)
+	gauche:SetPoint("LEFT", segment, "LEFT", 0, 0)
+
+	local droite = segment:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(droite, "common-currencybox-right", true)
+	droite:SetWidth(R.jetonCote)
+	droite:SetHeight(R.jetonHauteur)
+	droite:SetPoint("RIGHT", segment, "RIGHT", 0, 0)
+
+	local milieu = segment:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(milieu, "_common-currencybox-center", true)
+	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT")
+	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT")
+
+	segment.jetons = {}
+	for rang = 1, (MAX_WATCHED_TOKENS or 3) do
+		local jeton = CreateFrame("Button", "ForeverUIBagToken" .. rang, segment)
+		jeton:SetWidth(R.jetonLargeur)
+		jeton:SetHeight(R.jetonPiece)
+
+		local icone = jeton:CreateTexture(nil, "ARTWORK")
+		icone:SetWidth(R.jetonPiece)
+		icone:SetHeight(R.jetonPiece)
+		icone:SetPoint("RIGHT", jeton, "RIGHT", R.jetonIconeX, R.jetonIconeY)
+		jeton.icone = icone
+
+		local compte = jeton:CreateFontString(nil, "ARTWORK", JETON_POLICE)
+		compte:SetJustifyH("RIGHT")
+		compte:SetPoint("LEFT", jeton, "LEFT", 0, 0)
+		compte:SetPoint("RIGHT", icone, "LEFT", 0, 0)
+		jeton.compte = compte
+
+		-- Les jetons s'enchainent vers la GAUCHE depuis le bord droit.
+		if rang == 1 then
+			jeton:SetPoint("RIGHT", segment, "RIGHT", R.jetonDepartX, R.jetonDepartY)
+		else
+			jeton:SetPoint("RIGHT", segment.jetons[rang - 1], "LEFT", 0, 0)
+		end
+
+		jeton:Hide()
+		segment.jetons[rang] = jeton
+	end
+
+	cadre.foreverSegment = segment
+	return segment
+end
+
+-- LE SEGMENT SUIT LES DONNEES : rend le nombre de monnaies posees.
+local function majSegment(cadre)
+	local segment = monterSegment(cadre)
+	local liste = lireJetons()
+
+	for rang, jeton in ipairs(segment.jetons) do
+		local donnees = liste[rang]
+		if donnees then
+			poserIconeJeton(jeton.icone, donnees)
+			jeton.compte:SetText(donnees.compte)
+			jeton:Show()
+		else
+			jeton:Hide()
+		end
+	end
+
+	if #liste > 0 then
+		segment:Show()
+	else
+		segment:Hide()
+	end
+	return #liste
 end
 
 -- RELEVE -- 3.3.5 ContainerFrame_GenerateFrame : le premier bouton porte le
@@ -965,13 +1155,29 @@ local function poserGrille(cadre)
 	cadre.foreverRelue = cadre:GetHeight()
 	cadre.foreverAncrages = cadre:GetNumPoints()
 
-	-- UpdateCurrencyFrames() : la bourse se pose avant la grille, qui
-	-- s'accroche a elle.
+	-- UpdateCurrencyFrames() : le segment des monnaies prend le bas, la
+	-- bourse monte au-dessus de lui, et la grille s'accroche a la bourse.
+	-- Sans monnaie suivie, la bourse reprend le bas et rien ne change.
 	if m.sacADos and bourse then
 		habillerBourse(bourse)
+		local poses = majSegment(cadre)
+		local segment = cadre.foreverSegment
+
 		bourse:ClearAllPoints()
-		bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", R.bourseCote, R.bourseBas)
-		bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -R.bourseCote, R.bourseBas)
+		if poses > 0 and segment then
+			segment:ClearAllPoints()
+			segment:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT",
+				R.jetonCote, R.bourseBas)
+			segment:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
+				-R.jetonCote, R.bourseBas)
+			bourse:SetPoint("BOTTOMLEFT", segment, "TOPLEFT", 0, R.jetonEcart)
+			bourse:SetPoint("BOTTOMRIGHT", segment, "TOPRIGHT", 0, R.jetonEcart)
+		else
+			bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT",
+				R.bourseCote, R.bourseBas)
+			bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
+				-R.bourseCote, R.bourseBas)
+		end
 		bourse:Show()
 	end
 
@@ -1156,11 +1362,54 @@ if hooksecurefunc then
 	end)
 end
 
+-- LE SEGMENT DU CLIENT SE TAIT, ET SA FONCTION DE TAILLE AUSSI.
+--
+-- ManageBackpackTokenFrame reparente BackpackTokenFrame dans le sac et
+-- REPOSE LA HAUTEUR de celui-ci -- BACKPACK_HEIGHT plus 22 -- ce qui defait
+-- la notre. On masque son segment et on repasse derriere elle.
+local function etoufferSegmentDuClient()
+	local ancien = _G["BackpackTokenFrame"]
+	if ancien then
+		ancien:Hide()
+		if ancien.EnableMouse then
+			ancien:EnableMouse(false)
+		end
+	end
+end
+
+if hooksecurefunc and type(_G["ManageBackpackTokenFrame"]) == "function" then
+	hooksecurefunc("ManageBackpackTokenFrame", function()
+		etoufferSegmentDuClient()
+		for _, cadre in ipairs(cadres) do
+			if cadre:IsShown() and cadre:GetID() == 0 then
+				poserGrille(cadre)
+			end
+		end
+	end)
+end
+
+-- COCHER "Show on Backpack" PASSE PAR SetCurrencyBackpack, et par rien
+-- d'autre : c'est ce que font les deux cases du volet droit de l'onglet des
+-- monnaies, et le clic modifie de la liste du client. On s'y greffe pour
+-- que le sac suive dans la foulee.
+if hooksecurefunc and type(_G["SetCurrencyBackpack"]) == "function" then
+	hooksecurefunc("SetCurrencyBackpack", function()
+		for _, cadre in ipairs(cadres) do
+			if cadre:IsShown() and cadre:GetID() == 0 then
+				poserGrille(cadre)
+			end
+		end
+	end)
+end
+
 local veilleur = CreateFrame("Frame", "ForeverUIBagsWatcher")
 veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
 veilleur:RegisterEvent("BAG_UPDATE")
+-- La quantite d'une monnaie suivie change : le segment la montre.
+veilleur:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 veilleur:SetScript("OnEvent", function()
 	habillerTout()
+	etoufferSegmentDuClient()
 	for _, cadre in ipairs(cadres) do
 		if cadre:IsShown() then
 			poserGrille(cadre)
@@ -1235,6 +1484,23 @@ ForeverUI.BagsDebug = function()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"   cadres habilles %d | case %.0f | champ visible=%s",
 		#cadres, R.emplacement, tostring(champ:IsShown())))
+
+	-- LE SEGMENT DES MONNAIES SUIVIES : ce que le client donne, et ce qu'on
+	-- en pose. Le segment du CLIENT doit etre muet.
+	local suivies = lireJetons()
+	local noms = {}
+	for _, jeton in ipairs(suivies) do
+		noms[#noms + 1] = string.format("%s=%s", jeton.nom, tostring(jeton.compte))
+	end
+	local segment = _G["ForeverUIBagTokens"]
+	local ancien = _G["BackpackTokenFrame"]
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"   monnaies suivies %d/%d : %s", #suivies, MAX_WATCHED_TOKENS or 3,
+		(#noms > 0) and table.concat(noms, ", ") or "aucune"))
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"   segment : le notre visible=%s | celui du client visible=%s",
+		tostring(segment and segment:IsShown()),
+		tostring(ancien and ancien:IsShown())))
 
 	-- Tous les reglages, par ordre alphabetique : la liste ne peut pas se
 	-- demoder quand un reglage apparait ou disparait.
