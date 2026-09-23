@@ -103,16 +103,47 @@ local function faction()
 	return (UnitFactionGroup and UnitFactionGroup("player")) or "Alliance"
 end
 
--- CE QUE LE CLIENT REND, quand il rend quelque chose. UnitPVPRank donne un
--- indice ; GetPVPRankInfo le traduit en nom et en numero ; GetPVPRankProgress
--- donne la fraction jusqu'au rang suivant.
+-- LE NOM D'UN RANG SE LIT DANS LES CHAINES DU CLIENT, ET ELLES DONNENT LE
+-- DECALAGE.
+--
+-- camelot le fait ainsi -- GetPVPRankText :
+--   faction01 = (Alliance) et 1 ou 0
+--   cle = "PVP_RANK_" .. (Rank_1 + rang - 1) .. "_" .. faction01
+--
+-- Ce client porte les QUARANTE chaines, et leur ordre tranche une question
+-- que je n'aurais pas su resoudre autrement -- releve dans GlobalStrings :
+--
+--   PVP_RANK_1..4   Pariah, Outlaw, Exiled, Dishonored : les rangs NEGATIFS
+--   PVP_RANK_5      Scout / Private                    : le rang 1
+--   PVP_RANK_6      Grunt / Corporal                   : le rang 2
+--   PVP_RANK_10     Stone Guard / Knight               : le rang 6
+--
+-- L'INDICE DE UnitPVPRank EST DONC LA CLE, telle quelle : le numero
+-- affichable vaut l'indice moins quatre, et c'est ce decalage-la, celui de
+-- l'epoque des rangs, que la table des chaines confirme.
+--
+-- On nomme ainsi plutot que par GetPVPRankInfo, qui ne rend rien ici --
+-- releve par /fui pvp : UnitPVPRank = 0, nom = nil.
+local function nomDuRang(indice)
+	if not indice or indice <= 0 then
+		return nil
+	end
+	local faction01 = (faction() == "Alliance") and 1 or 0
+	return _G["PVP_RANK_" .. tostring(indice) .. "_" .. tostring(faction01)]
+end
+
 local function lireRang()
-	local indice = UnitPVPRank and UnitPVPRank("player")
+	local indice = UnitPVPRank and UnitPVPRank("player") or 0
 	local nom, numero
-	if indice and GetPVPRankInfo then
+	if indice and indice > 0 and GetPVPRankInfo then
 		nom, numero = GetPVPRankInfo(indice, "player")
 	end
-	numero = numero or 0
+
+	if not numero or numero <= 0 then
+		numero = (indice > 4) and (indice - 4) or 0
+	end
+
+	nom = nom or nomDuRang(indice)
 
 	local progres = 0
 	if GetPVPRankProgress then
@@ -120,6 +151,7 @@ local function lireRang()
 	end
 
 	return {
+		indice = indice,
 		nom = nom,
 		numero = numero,
 		progres = progres,
@@ -183,10 +215,15 @@ local function majBloc()
 
 	local rang = lireRang()
 
-	-- La saison : GetCurrentArenaSeason existe, son intitule non.
+	-- LA SAISON PORTE SON INTITULE.
+	--
+	-- Elle s'ecrivait en chiffre nu, juste au-dessus du rang : un "1" seul
+	-- se lisait comme un rang. camelot ecrit EXPANSION_SEASON_NAME, que ce
+	-- client n'a pas ; ARENA -- "Arena" -- est ce qu'il porte de plus
+	-- proche.
 	local saison = GetCurrentArenaSeason and GetCurrentArenaSeason() or 0
 	if saison and saison > 0 then
-		bloc.saison:SetText(tostring(saison))
+		bloc.saison:SetText(string.format("%s %d", ARENA or "Arena", saison))
 		bloc.saison:Show()
 	else
 		bloc.saison:SetText("")
@@ -212,7 +249,17 @@ local function majBloc()
 		bloc.progres:SetText("")
 	end
 
-	bloc.numero:SetText(rang.numero and rang.numero > 0 and tostring(rang.numero) or "")
+	-- SANS RANG, PAS D'ANNEAU. Un cercle dore vide se lit comme un defaut ;
+	-- le cadran garde sa lueur, son fond de faction et l'embleme.
+	if rang.numero and rang.numero > 0 then
+		bloc.numero:SetText(tostring(rang.numero))
+		bloc.recompense:Show()
+		bloc.numero:Show()
+	else
+		bloc.numero:SetText("")
+		bloc.recompense:Hide()
+		bloc.numero:Hide()
+	end
 
 	if ForeverUI.PvPDetail then
 		ForeverUI.PvPDetail()

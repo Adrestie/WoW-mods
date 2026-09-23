@@ -1051,12 +1051,24 @@ function PVPFrame_Update()
 end
 -- Les trois fonctions de rang : absentes du FrameXML de WotLK, mais dans le
 -- binaire. Le faux client en rend, pour que l essai porte.
-RANG_PVP = 6
+-- Le vrai rend 0 quand le personnage n a pas de rang, et GetPVPRankInfo ne
+-- repond alors rien : releve en jeu par /fui pvp.
+RANG_PVP = 0
 function UnitPVPRank() return RANG_PVP end
 function GetPVPRankInfo(indice)
     if not indice or indice <= 0 then return nil end
-    return "Sergent", indice
+    return nil, nil          -- ce client ne repond pas : on nomme autrement
 end
+ARENA = "Arena"
+-- Les quarante chaines de rang que le client porte vraiment.
+-- Leur ORDRE donne le decalage : 1 a 4 sont les rangs negatifs, 5 est le
+-- rang 1, et ainsi de suite. L indice de UnitPVPRank est donc la cle.
+PVP_RANK_1_0 = "Pariah"
+PVP_RANK_5_0 = "Scout"
+PVP_RANK_6_0 = "Grunt"
+PVP_RANK_9_0 = "First Sergeant"
+PVP_RANK_5_1 = "Private"
+PVP_RANK_9_1 = "Sergeant Major"
 function GetPVPRankProgress() return 0.4 end
 function GetPVPLifetimeStats() return 1234, 0, 8 end
 function GetPVPSessionStats() return 12, 340 end
@@ -3074,29 +3086,35 @@ def main():
     assert (pm[4], pm[5]) == (0, -60), "MainInfoFrame : TOPLEFT (0, -60)"
     # A LA DEMANDE : le titre seul en haut, le numero seul dans l anneau.
     pn = principal.numero.points[1]
-    assert principal.rang.text == "Sergent", "le titre du rang, sans son numero"
-    assert principal.numero.text == "6", "le numero, et lui seul, dans l anneau"
-    print("   numero : %s sur une piece de %s de large (l anneau en fait 54)" % (
-        pn[1], pn[2].width))
-    assert pn[1] == "CENTER" and pn[2].width == 54,         "centre sur le cercle dore, et non sur le cadran"
-    assert principal.cadran.width == 154, "le cadran fait 154"
+    # SANS RANG -- ce que le serveur rend ici -- rien a ecrire, et pas
+    # d anneau dore vide.
+    print("   sans rang : rang=\"%s\", numero=\"%s\", anneau=%s, saison=\"%s\"" % (
+        principal.rang.text, principal.numero.text, principal.recompense.shown,
+        principal.saison.text))
+    assert principal.rang.text == "", "aucun rang, aucun titre"
+    assert not principal.recompense.shown,         "un cercle dore vide se lirait comme un defaut"
+    assert principal.saison.text == "Arena 8",         "la saison porte son intitule : un chiffre nu se lisait comme un rang"
 
-    # LE BADGE SUIT LE RANG, et retombe sur l embleme de faction sans rang.
-    print("   badge au rang 6 : %s" % principal.badge.texture)
+    # AVEC UN RANG : le nom vient des chaines du client, le numero de
+    # l indice decale de quatre.
+    lua.execute("RANG_PVP = 9")          # indice 9 -> rang 5
+    g.ForeverUI.PvPUpdate()
+    pn = principal.numero.points[1]
+    print("   rang 5 : titre=\"%s\", numero=\"%s\", anneau %s de large" % (
+        principal.rang.text, principal.numero.text, pn[2].width))
+    assert principal.numero.text == "5", "UnitPVPRank rend l indice, decale de quatre"
+    assert principal.rang.text in ("First Sergeant", "Sergeant Major"),         "le nom vient de PVP_RANK_<indice>_<faction>, la cle etant l INDICE"
+    assert principal.recompense.shown, "et l anneau reparait"
+    assert pn[1] == "CENTER" and pn[2].width == 54,         "le numero est centre sur le cercle dore"
     lua.execute("RANG_PVP = 0")
     g.ForeverUI.PvPUpdate()
-    print("   sans rang : rang=\"%s\", numero=\"%s\"" % (
-        principal.rang.text, principal.numero.text))
-    assert principal.rang.text == "", "sans rang, rien a ecrire"
-    assert principal.numero.text == "", "ni de numero"
-    lua.execute("RANG_PVP = 6")
-    g.ForeverUI.PvPUpdate()
+    assert principal.cadran.width == 154, "le cadran fait 154"
 
     # LE VOLET DROIT porte ce que WotLK sait vraiment donner : l honneur.
     pd = g.ForeverUIPvPDetail
     print("   detail : titre=\"%s\", description=\"%s\"" % (
         pd.titre.text, (pd.description.text or "").replace(chr(10), " | ")))
-    assert pd.titre.text == "Sergent", "le nom du rang"
+    assert pd.titre.text == g.PVP, "sans rang, l intitule PvP du client"
     assert "4567" in pd.description.text, "les points d honneur courants"
     assert "1234" in pd.description.text, "les victoires honorables de toute une vie"
 
