@@ -793,6 +793,20 @@ function ForeverUI.ReputationDebug()
 					tostring(cible and cible.GetName and cible:GetName() or "?"),
 					tostring(ncp), tostring(nx), tostring(ny))
 			end
+			-- LA POSITION RESOLUE, et non l'ancre : c'est elle que l'oeil
+			-- voit. On la prend RELATIVE AU PANNEAU, sinon le defilement
+			-- brouille la comparaison.
+			local ox = panneau:GetLeft() or 0
+			local oy = panneau:GetTop() or 0
+			local function place(objet)
+				local g = objet.GetLeft and objet:GetLeft()
+				local h = objet.GetTop and objet:GetTop()
+				if not g or not h then
+					return "?"
+				end
+				return string.format("%.1f,%.1f", g - ox, h - oy)
+			end
+
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				"   %d %-24s ligne %s(%s,%s) l=%s h=%s | chevron %sx%s vu=%s"
 				.. " | nom %s : %s",
@@ -803,6 +817,14 @@ function ForeverUI.ReputationDebug()
 				tostring(ligne.chevron:IsShown()),
 				tostring(ligne.nom:GetNumPoints()),
 				table.concat(ancres, " ")))
+			DEFAULT_CHAT_FRAME:AddMessage(string.format(
+				"      resolu : ligne %s | chevron %s | nom %s l=%.1f"
+				.. " justify=%s police=%s",
+				place(ligne), place(ligne.chevron), place(ligne.nom),
+				ligne.nom:GetWidth() or -1,
+				tostring(ligne.nom.GetJustifyH and ligne.nom:GetJustifyH()),
+				tostring(ligne.nom.GetFontObject and ligne.nom:GetFontObject()
+					and ligne.nom:GetFontObject():GetName())))
 		end
 	end
 
