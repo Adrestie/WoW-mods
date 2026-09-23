@@ -287,6 +287,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun reglage du modele disponible.")
 		end
+	elseif command == "onglets" then
+		if ForeverUI.CharacterTabsDebug then
+			ForeverUI.CharacterTabsDebug()
+		else
+			say("aucun diagnostic des onglets disponible.")
+		end
 	elseif command == "perso" then
 		if ForeverUI.CharacterSheetDebug then
 			ForeverUI.CharacterSheetDebug()
@@ -299,11 +305,31 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic du micro-menu disponible.")
 		end
+	elseif command == "titres" or command == "titles" then
+		if ForeverUI.TitlesDebug then
+			ForeverUI.TitlesDebug()
+		else
+			say("aucun diagnostic des titres disponible.")
+		end
 	elseif command == "pvp" then
 		if ForeverUI.PvPDebug then
-			ForeverUI.PvPDebug()
+			-- /fui pvp 0.35 : la jauge circulaire se pose a 35 %, pour la
+			-- voir sans avoir a gagner de l'honneur.
+			ForeverUI.PvPDebug(tonumber(argument))
 		else
 			say("aucun diagnostic PvP disponible.")
+		end
+	elseif command == "familier" then
+		if ForeverUI.PetDebug then
+			ForeverUI.PetDebug()
+		else
+			say("aucun diagnostic du familier disponible.")
+		end
+	elseif command == "monnaie" or command == "monnaies" then
+		if ForeverUI.TokensDebug then
+			ForeverUI.TokensDebug()
+		else
+			say("aucun diagnostic des monnaies disponible.")
 		end
 	elseif command == "skills" then
 		if ForeverUI.SkillsDebug then
@@ -338,6 +364,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui modele, /fui sets, /fui reput, /fui skills, /fui pvp, /fui micro")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput, /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui micro")
 	end
 end
