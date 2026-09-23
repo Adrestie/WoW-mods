@@ -31,4 +31,5 @@ CharacterFrame.lua
 EquipmentManager.lua
 ReputationTab.lua
 SkillsTab.lua
+PvPTab.lua
 IconPicker.lua

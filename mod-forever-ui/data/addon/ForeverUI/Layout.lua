@@ -293,6 +293,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic de la feuille disponible.")
 		end
+	elseif command == "pvp" then
+		if ForeverUI.PvPDebug then
+			ForeverUI.PvPDebug()
+		else
+			say("aucun diagnostic PvP disponible.")
+		end
 	elseif command == "skills" then
 		if ForeverUI.SkillsDebug then
 			ForeverUI.SkillsDebug()
@@ -326,6 +332,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui modele, /fui sets, /fui reput, /fui skills")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui modele, /fui sets, /fui reput, /fui skills, /fui pvp")
 	end
 end

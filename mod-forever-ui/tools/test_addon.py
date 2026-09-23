@@ -1040,6 +1040,33 @@ PVPParentFrame:SetWidth(384)
 PVPParentFrame:SetHeight(512)
 PVPParentFrame:SetToplevel(true)
 PVPParentFrame:Hide()
+-- L ECRAN PvP de 3.3.5 : ses onglets, ses cadres d equipe et son bandeau de
+-- hors-saison, que PVPFrame_Update repose.
+PVPFrameToggleButton = CreateFrame("Button", "PVPFrameToggleButton", PVPParentFrame)
+PVPFrameOffSeason = CreateFrame("Frame", "PVPFrameOffSeason", PVPParentFrame)
+PVPParentFrame:CreateTexture("PVPParentFrameVieilArt", "BACKGROUND")
+function PVPFrame_Update()
+    PVPFrameToggleButton:Show()
+    PVPFrameOffSeason:Show()
+end
+-- Les trois fonctions de rang : absentes du FrameXML de WotLK, mais dans le
+-- binaire. Le faux client en rend, pour que l essai porte.
+RANG_PVP = 6
+function UnitPVPRank() return RANG_PVP end
+function GetPVPRankInfo(indice)
+    if not indice or indice <= 0 then return nil end
+    return "Sergent", indice
+end
+function GetPVPRankProgress() return 0.4 end
+function GetPVPLifetimeStats() return 1234, 0, 8 end
+function GetPVPSessionStats() return 12, 340 end
+function GetPVPYesterdayStats() return 30, 900 end
+function GetHonorCurrency() return 4567 end
+function GetCurrentArenaSeason() return 8 end
+HONOR_POINTS = "Points d'honneur"
+LIFETIME_HONORABLE_KILLS = "Victoires honorables"
+TODAY = "Aujourd hui"
+YESTERDAY = "Hier"
 function TogglePVPFrame() end
 function ShowUIPanel(cadre) cadre:Show() end
 PVP = "JcJ"
@@ -1257,7 +1284,7 @@ def main():
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
-             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua",
+             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "IconPicker.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
@@ -3031,6 +3058,49 @@ def main():
         sd.titre.text, s3.survol.alpha))
     assert sd.titre.text == "Haches", "le detail suit le clic"
     assert abs(s3.survol.alpha - 0.20) < 1e-6, "et la ligne est marquee"
+
+    # L ONGLET PvP. camelot y montre un rang que WotLK n expose plus dans son
+    # FrameXML -- mais UnitPVPRank, GetPVPRankInfo et GetPVPRankProgress sont
+    # dans le binaire, verifie. On s en sert, et le temoin dira ce que le
+    # serveur en fait.
+    g.CharacterFrame_ShowSubFrame("")
+    g.ForeverUI.Panes.ShowGroup("ForeverUIPvPPane")
+    g.ForeverUI.CharacterApplyPanes(perso)
+
+    principal = g.ForeverUIPvPMain
+    pm = principal.points[1]
+    print("   pvp : bloc (%s, %s), rang=\"%s\", badge=%s" % (
+        pm[4], pm[5], principal.rang.text, principal.badge.texture))
+    assert (pm[4], pm[5]) == (0, -60), "MainInfoFrame : TOPLEFT (0, -60)"
+    assert principal.rang.text == "6 : Sergent", "numero et nom du rang"
+    assert principal.numero.text == "6", "le numero dans l anneau de recompense"
+    assert principal.cadran.width == 154, "le cadran fait 154"
+
+    # LE BADGE SUIT LE RANG, et retombe sur l embleme de faction sans rang.
+    print("   badge au rang 6 : %s" % principal.badge.texture)
+    lua.execute("RANG_PVP = 0")
+    g.ForeverUI.PvPUpdate()
+    print("   sans rang : rang=\"%s\", numero=\"%s\"" % (
+        principal.rang.text, principal.numero.text))
+    assert principal.rang.text == "", "sans rang, rien a ecrire"
+    assert principal.numero.text == "", "ni de numero"
+    lua.execute("RANG_PVP = 6")
+    g.ForeverUI.PvPUpdate()
+
+    # LE VOLET DROIT porte ce que WotLK sait vraiment donner : l honneur.
+    pd = g.ForeverUIPvPDetail
+    print("   detail : titre=\"%s\", description=\"%s\"" % (
+        pd.titre.text, (pd.description.text or "").replace(chr(10), " | ")))
+    assert pd.titre.text == "Sergent", "le nom du rang"
+    assert "4567" in pd.description.text, "les points d honneur courants"
+    assert "1234" in pd.description.text, "les victoires honorables de toute une vie"
+
+    # TOUT L ECRAN DU CLIENT SE TAIT, a chaque passage.
+    g.PVPFrame_Update()
+    restants = [n for n in ("PVPFrameToggleButton", "PVPFrameOffSeason") if g[n].shown]
+    print("   ecran du client : %d morceau(x) encore visible(s)" % len(restants))
+    assert restants == [], "il en reste : %s" % restants
+    assert principal.shown, "mais notre bloc demeure"
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):

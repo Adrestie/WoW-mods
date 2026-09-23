@@ -1454,18 +1454,7 @@ local function declarerContenus()
 	Panes.Register({
 		hote = "gauche", groupe = ECRAN_PVP, id = "pvp",
 		construire = function(hote)
-			local cadre = _G["PVPParentFrame"]
-			if not cadre then
-				return nil, {}
-			end
-			cadre:SetParent(hote)
-			if cadre.SetToplevel then
-				cadre:SetToplevel(false)
-			end
-			cadre:ClearAllPoints()
-			cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
-			cadre:SetPoint("BOTTOMLEFT", hote, "BOTTOMLEFT", 0, 0)
-			return nil, { cadre }
+			return ForeverUI.PvPTab.Build(hote)
 		end,
 	})
 
@@ -1478,13 +1467,18 @@ local function declarerContenus()
 		construire = function() return nil, {} end,
 	})
 
-	-- Les deux gardent leur volet droit, vide comme celui des autres onglets.
-	for _, groupe in ipairs({ ECRAN_PVP, ECRAN_STATS }) do
-		Panes.Register({
-			hote = "droit", groupe = groupe, id = groupe .. ".droit",
-			construire = function() return nil, {} end,
-		})
-	end
+	-- Le PvP porte le detail de son rang a droite ; les statistiques
+	-- gardent un volet vide.
+	Panes.Register({
+		hote = "droit", groupe = ECRAN_PVP, id = ECRAN_PVP .. ".droit",
+		construire = function(hote)
+			return ForeverUI.PvPTab.BuildRight(hote)
+		end,
+	})
+	Panes.Register({
+		hote = "droit", groupe = ECRAN_STATS, id = ECRAN_STATS .. ".droit",
+		construire = function() return nil, {} end,
+	})
 
 	-- LE MOBILIER DU VOLET DROIT POUR LE PERSONNAGE : ce qui s'y trouve
 	-- quelle que soit la page ouverte, et qui n'a rien a faire sur les autres

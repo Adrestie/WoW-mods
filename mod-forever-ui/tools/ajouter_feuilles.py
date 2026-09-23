@@ -143,13 +143,30 @@ def exporter(voulues):
     poses = 0
 
     if manquantes:
-        res = _demander("/export", [("dest", STAGING)] + [("file", f) for f in manquantes])
+        params = [("dest", STAGING)]
+        for f in manquantes:
+            if f.startswith("fdid:"):
+                params.append(("fdid", f[5:].split(".")[0]))
+            else:
+                params.append(("file", f))
+        res = _demander("/export", params)
         if res["failed"]:
             raise SystemExit("export en echec : %s" % res)
         for f in manquantes:
             cible = chemin_atelier(f)
             os.makedirs(os.path.dirname(cible), exist_ok=True)
-            shutil.copyfile(os.path.join(STAGING, f.replace("/", os.sep)), cible)
+            if f.startswith("fdid:"):
+                # exporte par identifiant : le pont rend le chemin exact
+                trouve = None
+                for e in res["exported"]:
+                    if str(e.get("fileDataID")) == f[5:].split(".")[0]:
+                        trouve = e["path"]
+                        break
+                if not trouve:
+                    raise SystemExit("export par identifiant sans chemin : %s" % f)
+                shutil.copyfile(trouve, cible)
+            else:
+                shutil.copyfile(os.path.join(STAGING, f.replace("/", os.sep)), cible)
             print("   %-60s %8d o" % (os.path.relpath(cible, RACINE), os.path.getsize(cible)))
             poses += 1
 
@@ -157,8 +174,11 @@ def exporter(voulues):
         # mask 15 : garder la couche alpha. La configuration de l'utilisateur
         # est a 7, ce qui donnerait un apercu opaque, inutilisable pour juger
         # d'un art d'interface.
+        # L'APERCU passe par l'exporteur du logiciel, dont le parametre est
+        # toujours "file" : un identifiant s'y donne tel quel.
+        cle = ("file", f[5:].split(".")[0]) if f.startswith("fdid:") else ("file", f)
         res = _demander("/export-textures", [("dest", STAGING), ("format", "png"),
-                                             ("mask", "15"), ("file", f)])
+                                             ("mask", "15"), cle])
         if res["failed"]:
             print("   PAS D'APERCU pour %s : %s" % (f, res["exported"]))
             continue
@@ -171,11 +191,34 @@ def exporter(voulues):
 
 
 def regenerer_table(voulues):
+    """La table d'atlas, regeneree pour les feuilles voulues.
+
+    UNE FEUILLE QUE LE LISTFILE NE NOMME PAS n'a pas de `file` dans l'index :
+    ses elements n'y sont ranges que par FileDataID. On la reconnait alors a
+    l'identifiant qui figure dans son alias -- "fdid:8198433 => interface/..."
+    -- et on lui donne le chemin d'atelier qu'on a choisi.
+    """
     index = json.load(io.open(INDEX, encoding="utf-8"))["results"]
+
+    # Une feuille demandee sous un alias se reconnait a son nom d'ATELIER,
+    # celui sous lequel on l'a rangee, et non a sa source.
+    voulues = [_ALIAS.get(f, f) for f in voulues]
+
+    # Les feuilles demandees par identifiant : fdid -> chemin voulu.
+    par_identifiant = {}
+    for source, voulu in _ALIAS.items():
+        if source.startswith("fdid:"):
+            par_identifiant[int(source[5:].split(".")[0])] = voulu.lower()
+
     par_feuille = {}
     for r in index:
-        if (r.get("file") or "").lower() in voulues and r["atlas"]:
-            par_feuille.setdefault(r["file"].lower(), []).append(r)
+        if not r["atlas"]:
+            continue
+        nom = (r.get("file") or "").lower()
+        if not nom:
+            nom = par_identifiant.get(r.get("fileDataID"), "")
+        if nom in voulues:
+            par_feuille.setdefault(nom, []).append(r)
 
     absentes = [f for f in voulues if f not in par_feuille]
     if absentes:

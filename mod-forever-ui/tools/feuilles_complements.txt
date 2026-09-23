@@ -68,3 +68,9 @@ interface/buttons/minimalscrollbarverticalc60.blp
 # en-tetes de liste
 interface/common/commonstatbarc60.blp
 interface/common/commonbuttonlistc60.blp
+
+# l'onglet PvP : toute la planche de camelot -- anneau, lueur, fonds de
+# faction, anneau de recompense et les QUATORZE icones de rang, qui
+# tombent exactement sur les quatorze rangs de 3.3.5. Le listfile ne la
+# nomme pas : elle entre par son FileDataID.
+fdid:8198433.blp => interface/pvpframe/uicharacterinfohonorc60.blp
