@@ -183,6 +183,7 @@ function CreateFrame(kind, name, parent, template)
     -- pour un cadre que le vrai client n'a pas encore place. Le code doit
     -- donc y survivre, et c'est ce que ce bouchon verifie.
     function f:GetTop() return self._top end
+    function f:GetEffectiveScale() return self.scale or 1 end
     function f:GetBottom() return self._bottom end
     function f:GetLeft() return self._left end
     function f:GetRight() return self._right end
@@ -1401,6 +1402,10 @@ function VehicleMenuBar_MoveMicroButtons()
     SocialsMicroButton:SetPoint("BOTTOMLEFT", QuestLogMicroButton, "BOTTOMRIGHT", -3, 0)
 end
 function TogglePVPFrame() end
+-- La souris, pour la barre de defilement : le vrai rend des coordonnees
+-- d ECRAN, qu il faut ramener a l echelle du cadre.
+SOURIS_Y = 0
+function GetCursorPosition() return 0, SOURIS_Y end
 function ShowUIPanel(cadre) cadre:Show() end
 function HideUIPanel(cadre) cadre:Hide() end
 
@@ -1665,7 +1670,7 @@ def main():
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua",
-             "Panes.lua", "Layout.lua", "DropDown.lua",
+             "Panes.lua", "ScrollBar.lua", "Layout.lua", "DropDown.lua",
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
@@ -3360,6 +3365,67 @@ def main():
     assert voile(r3) == rouge, "FACTION_AT_WAR_COLOR : 105, 3, 0"
     assert abs(r3.survol.alpha - 0.85) < 1e-6,         "choisie ET en guerre : 0,85"
     lua.execute('TOUTES[3].guerre = false')
+    g.ForeverUI.ReputationLayout()
+
+    # LA BARRE DE DEFILEMENT de camelot, a droite de la liste.
+    #
+    # RELEVE -- camelot/reputationframe.xml : TOPLEFT sur le TOPRIGHT du
+    # ScrollBox (5, -2), BOTTOMLEFT sur son BOTTOMRIGHT (5, 4).
+    barre = g.ForeverUIReputationScrollBar
+    pbh = barre.points[1]
+    pbb = barre.points[2]
+    print("   barre : %s sur %s (%s, %s) et %s sur %s (%s, %s), %d de large" % (
+        pbh[1], pbh[3], pbh[4], pbh[5], pbb[1], pbb[3], pbb[4], pbb[5],
+        barre.width))
+    assert (pbh[1], pbh[3], pbh[4], pbh[5]) == ("TOPLEFT", "TOPRIGHT", 5, -2)
+    assert (pbb[1], pbb[3], pbb[4], pbb[5]) == ("BOTTOMLEFT", "BOTTOMRIGHT", 5, 4)
+    assert pbh[2].name == "ForeverUIReputationList", "ancree sur la liste"
+    assert barre.width == 8, "MinimalScrollBar fait 8 de large"
+
+    # TOUT TIENT : elle s efface. C est ce que fait la source.
+    print("   tout tient (%d factions) : barre visible=%s" % (
+        g.GetNumFactions(), barre.shown))
+    assert not barre.shown, "rien a faire defiler, rien a montrer"
+
+    # ELLE NE CONNAIT PAS LA LISTE : on lui donne trois nombres.
+    # Le banc ne deduit pas une hauteur de deux ancres : on la pose.
+    barre.piste.SetHeight(barre.piste, 300)
+    barre.Regler(barre, 40, 10, 0)
+    print("   40 lignes, 10 tiennent : visible=%s, curseur %s" % (
+        barre.shown, barre.curseur.shown))
+    assert barre.shown and barre.curseur.shown, "elle parait"
+    # LES DEUX BOUTS DU CURSEUR SONT LE MEME MORCEAU, le second RETOURNE :
+    # celui que la source nomme "bottom" est un degrade, pas un embout, et
+    # faisait fondre le curseur dans le noir de la glissiere.
+    bouts = [t2 for t2 in barre.curseur.regions.values()
+             if t2.texcoord is not None and t2.height == 8]
+    assert len(bouts) == 2, "un embout en haut, un en bas"
+    hg = [round(v, 6) for v in bouts[0].texcoord.values()]
+    bg = [round(v, 6) for v in bouts[1].texcoord.values()]
+    print("   bouts du curseur : %s et %s" % (hg, bg))
+    assert hg[0] == bg[0] and hg[1] == bg[1], "le meme morceau"
+    assert hg[2] == bg[3] and hg[3] == bg[2], "le second est retourne"
+    fh = g.ForeverUIReputationScrollBarUp
+    fb = g.ForeverUIReputationScrollBarDown
+    print("   fleches : %dx%d, haut=%s bas=%s" % (
+        fh.width, fh.height, fh.points[1][1], fb.points[1][1]))
+    assert fh.width == 17 and fh.height == 11, "17 x 11, elles debordent la barre"
+    assert fh.points[1][1] == "TOP" and fb.points[1][1] == "BOTTOM"
+
+    # LA FLECHE DU BAS avance d un cran, et rend le nouveau decalage.
+    recu = {}
+    lua.execute("ForeverUIReputationScrollBar.surDefilement = "
+                "function(n) ESSAI_DECALAGE = n end")
+    fb.scripts.OnClick(fb)
+    print("   clic sur la fleche du bas : decalage=%s" % lua.eval("ESSAI_DECALAGE"))
+    assert lua.eval("ESSAI_DECALAGE") == 1, "un cran vers le bas"
+    fh.scripts.OnClick(fh)
+    assert lua.eval("ESSAI_DECALAGE") == 0, "et un cran vers le haut"
+
+    # AU BOUT, ELLE S ARRETE : elle borne elle-meme.
+    barre.Deplacer(barre, 999)
+    print("   au bout : decalage=%d (maximum 30)" % barre.decalage)
+    assert barre.decalage == 30, "40 lignes moins les 10 qui tiennent"
     g.ForeverUI.ReputationLayout()
 
     # LE VOLET DROIT : le detail de la faction choisie.

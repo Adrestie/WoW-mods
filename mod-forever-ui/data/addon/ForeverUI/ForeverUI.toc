@@ -14,6 +14,7 @@ UIAtlas_06_complements.lua
 
 AtlasUtil.lua
 Panes.lua
+ScrollBar.lua
 Layout.lua
 DropDown.lua
 PlayerFrame.lua

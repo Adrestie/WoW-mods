@@ -70,7 +70,9 @@
 --     glancant face a un boss ; il demande des chaines --
 --     WEAPON_SKILL_DETAIL_* -- que ce client n'a pas. A faire si besoin.
 --   * La description ne defile pas : ScrollingFontTemplate n'existe pas.
---   * La barre de defilement reste a faire ; la molette suffit d'ici la.
+--   * La barre de defilement est celle de camelot, MinimalScrollBar, refaite
+--     dans ScrollBar.lua : 3.3.5 n'a ni ce gabarit ni le ScrollBox qui le
+--     pilote.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -424,6 +426,10 @@ local function poserListe()
 
 	visibles = posees
 
+	if panneau.barre then
+		panneau.barre:Regler(total, posees, decalage)
+	end
+
 	if ForeverUI.SkillsDetail then
 		ForeverUI.SkillsDetail()
 	end
@@ -638,6 +644,16 @@ local function monter(hote)
 	local bas = panneau:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
 	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
+
+	-- LA BARRE DE DEFILEMENT de camelot, a droite de la liste. La meme que
+	-- la reputation : elle ne connait pas la liste, on lui donne trois
+	-- nombres et elle rend le nouveau decalage.
+	panneau.barre = ForeverUI.CreateScrollBar("ForeverUISkillsScrollBar",
+		cadre, panneau)
+	panneau.barre.surDefilement = function(nouveau)
+		decalage = nouveau
+		poserListe()
+	end
 
 	panneau:SetScript("OnUpdate", suivreSurvol)
 	panneau:EnableMouseWheel(true)

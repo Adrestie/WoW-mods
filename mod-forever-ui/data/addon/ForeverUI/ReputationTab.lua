@@ -62,7 +62,9 @@
 --   * 3.3.5 n'a pas de MaskTexture : les bouts du remplissage restent carres.
 --   * Ni AccountWideIcon, ni Paragon, ni amitie : ces notions n'existent pas
 --     dans ce client. Seul le retrait qu'imposait la premiere est garde.
---   * La barre de defilement reste a faire ; la molette suffit d'ici la.
+--   * La barre de defilement est celle de camelot, MinimalScrollBar, refaite
+--     dans ScrollBar.lua : 3.3.5 n'a ni ce gabarit ni le ScrollBox qui le
+--     pilote.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -589,6 +591,10 @@ local function poserListe()
 
 	visibles = posees
 
+	if panneau.barre then
+		panneau.barre:Regler(total, posees, decalage)
+	end
+
 	-- Le detail suit la faction choisie. Il est ecrit plus bas : on passe
 	-- par le point publie, sinon son nom se resoudrait en globale.
 	if ForeverUI.ReputationDetail then
@@ -703,6 +709,16 @@ local function monter(hote)
 	local bas = panneau:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
 	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
+
+	-- LA BARRE DE DEFILEMENT de camelot, a droite de la liste. Elle ne
+	-- connait pas la liste : on lui donne trois nombres, elle rend le
+	-- nouveau decalage.
+	panneau.barre = ForeverUI.CreateScrollBar("ForeverUIReputationScrollBar",
+		cadre, panneau)
+	panneau.barre.surDefilement = function(nouveau)
+		decalage = nouveau
+		poserListe()
+	end
 
 	panneau:SetScript("OnUpdate", suivreSurvol)
 	panneau:EnableMouseWheel(true)
