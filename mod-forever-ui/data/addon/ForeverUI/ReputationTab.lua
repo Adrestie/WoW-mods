@@ -774,6 +774,38 @@ function ForeverUI.ReputationDebug()
 			tostring(seuil), tostring(suivant), tostring(valeur)))
 	end
 
+	-- LA GEOMETRIE DE CHAQUE LIGNE POSEE.
+	--
+	-- Un nom qui se deplace de quelques pixels ne se lit nulle part
+	-- ailleurs : ni le texte ni les donnees ne bougent, seuls ses ancrages
+	-- le disent. On imprime donc, ligne par ligne, ou elle est posee et ou
+	-- son nom l'est -- avec le NOMBRE d'ancrages, qui trahit un
+	-- ClearAllPoints oublie.
+	dire("geometrie :")
+	for rang, ligne in ipairs(lignes) do
+		if ligne:IsShown() then
+			local p, _, _, x, y = ligne:GetPoint(1)
+			local ancres = {}
+			for numero = 1, (ligne.nom:GetNumPoints() or 0) do
+				local np, cible, ncp, nx, ny = ligne.nom:GetPoint(numero)
+				ancres[#ancres + 1] = string.format("%s>%s.%s(%s,%s)",
+					tostring(np),
+					tostring(cible and cible.GetName and cible:GetName() or "?"),
+					tostring(ncp), tostring(nx), tostring(ny))
+			end
+			DEFAULT_CHAT_FRAME:AddMessage(string.format(
+				"   %d %-24s ligne %s(%s,%s) l=%s h=%s | chevron %sx%s vu=%s"
+				.. " | nom %s : %s",
+				rang, tostring(ligne.factionNom), tostring(p), tostring(x),
+				tostring(y), tostring(ligne:GetWidth()), tostring(ligne:GetHeight()),
+				tostring(ligne.chevron:GetWidth()),
+				tostring(ligne.chevron:GetHeight()),
+				tostring(ligne.chevron:IsShown()),
+				tostring(ligne.nom:GetNumPoints()),
+				table.concat(ancres, " ")))
+		end
+	end
+
 	dire("ce que nous posons :")
 
 	for rang, ligne in ipairs(lignes) do
