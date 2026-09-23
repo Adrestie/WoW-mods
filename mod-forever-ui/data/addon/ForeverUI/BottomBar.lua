@@ -586,6 +586,57 @@ watcher:SetScript("OnEvent", function()
 	toutPoser()
 end)
 
+-- TEMOIN -- /fui micro. Deux questions a la fois : ou est chaque bouton, et
+-- qui prend la souris a sa place.
+--
+-- L'ANCRAGE dit s'il a bouge : nous les posons une fois, a gauche du
+-- bandeau, d'un pas fixe. Un ancrage sur autre chose que ForeverUIMicroMenu,
+-- ou un decalage qui n'est pas un multiple du pas, veut dire que le client
+-- les a repris -- VehicleMenuBar_MoveMicroButtons est le seul a le faire en
+-- 3.3.5, mais un autre addon le peut aussi.
+--
+-- GetMouseFocus dit qui recoit reellement le clic : un bouton peut etre au
+-- bon endroit et recouvert.
+function ForeverUI.MicroDebug()
+	local dire = function(texte)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	end
+
+	dire(string.format("micro-menu : %d boutons, bandeau %.0f x %.0f, pas %d",
+		#boutonsMicro, micro:GetWidth() or 0, micro:GetHeight() or 0, MICRO_PITCH))
+
+	for index, entree in ipairs(boutonsMicro) do
+		local bouton = entree.bouton
+		local point, cible, pointCible, x, y = bouton:GetPoint(1)
+		DEFAULT_CHAT_FRAME:AddMessage(string.format(
+			"   %2d %-24s %s sur %s (%s, %s) | %.0f x %.0f | attendu x=%d | "
+			.. "visible=%s actif=%s niveau=%d ancres=%d",
+			index, bouton:GetName() or "?", tostring(point),
+			tostring(cible and cible.GetName and cible:GetName()),
+			tostring(x), tostring(y), bouton:GetWidth() or 0, bouton:GetHeight() or 0,
+			(index - 1) * MICRO_PITCH,
+			tostring(bouton:IsShown()), tostring(bouton:IsEnabled()),
+			bouton:GetFrameLevel() or 0, bouton:GetNumPoints() or 0))
+	end
+
+	-- Pendant cinq secondes, ce que le curseur touche reellement.
+	local veille = CreateFrame("Frame")
+	local reste, dernier = 5, nil
+	veille:SetScript("OnUpdate", function(self, ecoule)
+		reste = reste - (ecoule or 0)
+		local sous = GetMouseFocus and GetMouseFocus()
+		local nom = sous and sous.GetName and sous:GetName() or "(rien)"
+		if nom ~= dernier then
+			dernier = nom
+            DEFAULT_CHAT_FRAME:AddMessage("   sous le curseur : " .. nom)
+		end
+		if reste <= 0 then
+			self:SetScript("OnUpdate", nil)
+		end
+	end)
+	dire("promenez le curseur sur le bouton du personnage : cinq secondes.")
+end
+
 ForeverUI.MicroMenu = micro
 ForeverUI.MicroButtons = boutonsMicro
 ForeverUI.BagsBar = sacs
