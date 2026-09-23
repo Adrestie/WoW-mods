@@ -41,7 +41,8 @@
 --                       RefreshBackgroundHighlightOpacity donne les alphas :
 --                       au repos 0 ; au survol 0,10 ; choisie 0,20. En
 --                       guerre 0,50 / 0,65 / 0,85, et teinte par
---                       FACTION_AT_WAR_COLOR.
+--                       FACTION_AT_WAR_COLOR -- sinon WHITE_FONT_COLOR,
+--                       RefreshBackgroundHighlightColor.
 --
 -- ReputationBarTemplate, 160 x 29, herite de ColoredProgressBarTemplate :
 --   fond          common-stat-bar-bg, sans ancrage donc etire sur la barre
@@ -151,6 +152,28 @@ local ATLAS_BARRE_FOND = "common-stat-bar-bg"
 --
 -- Le resultat est un fichier a lui seul, calcule pour une barre de 160 : on
 -- le rogne a la fraction voulue, comme SetFillPercent.
+-- LA TEINTE DE LA LIGNE EN GUERRE.
+--
+-- camelot l'ecrit ainsi -- RefreshBackgroundHighlightColor :
+--   local highlightColor = self:IsAtWar() and FACTION_AT_WAR_COLOR
+--                          or WHITE_FONT_COLOR
+--
+-- FACTION_AT_WAR_COLOR N'EXISTE PAS EN 3.3.5, verifie dans le FrameXML du
+-- client : ni Constants.lua, ni GlobalStrings.lua, ni ReputationFrame.lua ne
+-- la portent. La teinte retombait donc sur le blanc, et une faction en
+-- guerre se voyait recouverte d'un voile CLAIR au lieu d'etre rouge.
+--
+-- LA VALEUR EXACTE SE LIT DANS LE CLIENT MODERNE. Ces couleurs-la ne sont
+-- plus ecrites en Lua : elles sont generees depuis GlobalColor.db2, ou
+-- chaque ligne porte un nom et une couleur ARGB. Relevee dans ce fichier :
+--
+--   FACTION_AT_WAR_COLOR   0xFF690300   105, 3, 0
+--
+-- Le decodage est verifie sur deux temoins de la meme table :
+-- WHITE_FONT_COLOR y vaut 0xFFFFFFFF et RED_FONT_COLOR 0xFFFF2020, les deux
+-- valeurs connues.
+local COULEUR_EN_GUERRE = { r = 105 / 255, g = 3 / 255, b = 0 / 255 }
+
 local CHEMIN_REMPLISSAGE = "Interface\\ForeverUI\\Bars\\statbarfill"
 local ATLAS_ENTETE = "common-button-list-collapseexpand"
 local ATLAS_PLUS = "common-button-list-plus"
@@ -315,7 +338,8 @@ local function poserSurvol(ligne)
 	end
 	ligne.survol:SetAlpha(alpha)
 
-	local teinte = ligne.enGuerre and FACTION_AT_WAR_COLOR
+	local teinte = ligne.enGuerre
+		and (FACTION_AT_WAR_COLOR or COULEUR_EN_GUERRE)
 	for _, piece in ipairs(ligne.survolPieces) do
 		if teinte then
 			piece:SetVertexColor(teinte.r, teinte.g, teinte.b)
