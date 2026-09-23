@@ -397,10 +397,28 @@ local OLD_ART = {
 -- L'art d'epoque de la barre bonus : deux morceaux glissants. On ne se fie
 -- pas a leurs noms -- toutes les regions du cadre lui-meme s'effacent, les
 -- boutons etant des cadres fils et non des regions.
+--
+-- ET LE CADRE CESSE DE PRENDRE LA SOURIS.
+--
+-- BonusActionBarFrame est declaree 505 x 43, strate HIGH, toplevel, avec
+-- enableMouse="true". Effacer son art la rend invisible mais PAS inoffensive :
+-- elle reste une dalle au-dessus du bas de l'ecran, et avale les clics de
+-- tout ce qu'on y a pose -- le micro-menu le premier, dont le bouton du
+-- personnage ne repondait plus. Releve par /fui micro : les dix boutons sont
+-- a leur place, et GetMouseFocus rend BonusActionBarFrame.
+--
+-- C'est le meme piege que CharacterModelFrame sur les emplacements
+-- d'equipement, et le meme remede : un cadre qui ne sert que de contenant
+-- n'a pas a recevoir de clic. Ses douze boutons gardent le leur, etant des
+-- cadres fils.
 local function effacerArtBonus()
 	local barre = BonusActionBarFrame
 	if not barre or not barre.GetRegions then
 		return
+	end
+
+	if barre.EnableMouse then
+		barre:EnableMouse(false)
 	end
 
 	local regions = { barre:GetRegions() }

@@ -2168,6 +2168,14 @@ def main():
     print("   art d'epoque : morceau 0 alpha=%s, morceau 1 alpha=%s" % (
         g.SlidingActionBarTexture0.alpha, g.SlidingActionBarTexture1.alpha))
     assert g.SlidingActionBarTexture0.alpha == 0 and g.SlidingActionBarTexture1.alpha == 0,         "l art d epoque de la barre du familier doit disparaitre"
+    # LA BARRE BONUS NE PREND PLUS LA SOURIS. Declaree 505 x 43, strate HIGH,
+    # toplevel et enableMouse : effacer son art la rend invisible mais pas
+    # inoffensive -- elle avalait les clics du micro-menu.
+    print("   barre bonus : souris=%s, art efface=%s" % (
+        g.BonusActionBarFrame.mouseEnabled,
+        all(r.alpha == 0 for r in g.BonusActionBarFrame.regions.values())))
+    assert g.BonusActionBarFrame.mouseEnabled is False,         "un cadre qui ne sert que de contenant n a pas a recevoir de clic"
+
     tardive = g.PetActionBarFrame.CreateTexture(g.PetActionBarFrame, None, "ARTWORK")
     g.ForeverUI.PetBar.Apply()
     print("   une texture ajoutee apres coup : alpha=%s" % tardive.alpha)
