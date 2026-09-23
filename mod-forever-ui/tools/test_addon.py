@@ -3072,8 +3072,13 @@ def main():
     print("   pvp : bloc (%s, %s), rang=\"%s\", badge=%s" % (
         pm[4], pm[5], principal.rang.text, principal.badge.texture))
     assert (pm[4], pm[5]) == (0, -60), "MainInfoFrame : TOPLEFT (0, -60)"
-    assert principal.rang.text == "6 : Sergent", "numero et nom du rang"
-    assert principal.numero.text == "6", "le numero dans l anneau de recompense"
+    # A LA DEMANDE : le titre seul en haut, le numero seul dans l anneau.
+    pn = principal.numero.points[1]
+    assert principal.rang.text == "Sergent", "le titre du rang, sans son numero"
+    assert principal.numero.text == "6", "le numero, et lui seul, dans l anneau"
+    print("   numero : %s sur une piece de %s de large (l anneau en fait 54)" % (
+        pn[1], pn[2].width))
+    assert pn[1] == "CENTER" and pn[2].width == 54,         "centre sur le cercle dore, et non sur le cadran"
     assert principal.cadran.width == 154, "le cadran fait 154"
 
     # LE BADGE SUIT LE RANG, et retombe sur l embleme de faction sans rang.

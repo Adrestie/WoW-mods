@@ -193,14 +193,14 @@ local function majBloc()
 		bloc.saison:Hide()
 	end
 
-	-- PVP_RANK_NUMBER_AND_TITLE : "Rang N : Nom". Sans rang, le nom seul.
-	if rang.nom and rang.numero and rang.numero > 0 then
-		bloc.rang:SetText(tostring(rang.numero) .. " : " .. rang.nom)
-	elseif rang.nom then
-		bloc.rang:SetText(rang.nom)
-	else
-		bloc.rang:SetText("")
-	end
+	-- LE TITRE EN HAUT, LE NUMERO DANS L'ANNEAU.
+	--
+	-- A LA DEMANDE, et non d'apres la source : camelot ecrit les deux en
+	-- haut -- PVP_RANK_NUMBER_AND_TITLE donne "Rang N : Nom" dans le
+	-- CurrentRankField -- puis repete le numero dans l'anneau de recompense,
+	-- par LevelLabel. Ici le titre reste seul en haut, et le numero n'est
+	-- qu'a un endroit : dans le cercle dore.
+	bloc.rang:SetText(rang.nom or "")
 
 	poserBadge(rang)
 
