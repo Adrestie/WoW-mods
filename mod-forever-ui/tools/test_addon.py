@@ -88,7 +88,8 @@ local function newRegion(kind)
     function r:SetVertexColor(a, b, c) self.vertex = {a, b, c} end
     function r:SetAlpha(a) self.alpha = a end
     function r:GetAlpha() return self.alpha or 1 end
-    function r:SetDrawLayer() end
+    -- 3.3.5 ne prend PAS de sous-calque : un seul argument.
+    function r:SetDrawLayer(calque) self.layer = calque end
     function r:SetBlendMode(m) self.blend = m end
     return r
 end
@@ -127,6 +128,11 @@ function CreateFrame(kind, name, parent, template)
     function f:RegisterForDrag(...) self.dragButtons = { ... } end
     function f:RegisterForClicks() end
     function f:EnableMouse(v) self.mouseEnabled = (v ~= false) end
+    -- IL REND UN NOMBRE, 0 OU 1, comme IsTitleKnown : zero est VRAI en Lua.
+    function f:Enable() self.enabled = true end
+    function f:Disable() self.enabled = false end
+    function f:IsEnabled() if self.enabled == false then return 0 end return 1 end
+    function f:SetDisabledFontObject(o) self.disabledFont = o end
     function f:EnableMouseWheel(v) self.wheelEnabled = (v ~= false) end
     function f:IsMouseOver() return self.souris == true end
     function f:SetMovable(v) self.movable = (v ~= false) end
@@ -231,6 +237,8 @@ function CreateFrame(kind, name, parent, template)
     function f:GetValue() return self.value or 0 end
     function f:SetStatusBarTexture(t) self.barTexture = t end
     function f:SetJustifyH(j) self.justify = j end
+    function f:SetFontString(fs) self.fontString = fs end
+    function f:GetFontString() return self.fontString end
     function f:SetAttribute(k, v) self.attributes[k] = v end
     function f:GetAttribute(k) return self.attributes[k] end
     function f:StartMoving() self.moving = true end
@@ -249,7 +257,13 @@ function CreateFrame(kind, name, parent, template)
     function f:GetNumChildren() return #self.children end
     function f:GetNumRegions() return #self.regions end
     function f:CreateFontString(n, layer, font)
-        local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self; return t
+        local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self
+        -- GetRegions REND AUSSI LES FontString, pas seulement les textures.
+        -- Le faux ne les y mettait pas : un balayage qui les oublie passait
+        -- donc pour complet au banc, et laissait en jeu l intitule du
+        -- client -- "Currency Options" flottant dans le volet droit.
+        table.insert(self.regions, t)
+        return t
     end
     function f:GetPoint(index)
         local p = self.points[index or 1]
@@ -298,12 +312,24 @@ STATE = { health = 50, healthMax = 100, power = 30, powerMax = 100,
                     playerStatRightDropdown = "PLAYERSTAT_MELEE_COMBAT" } }
 
 function UnitHealth(unit) return STATE.health end
-function UnitHealthMax(unit) return STATE.healthMax end
+function UnitHealthMax(unit)
+    if unit == "pet" then return FAMILIER.vie end
+    return STATE.healthMax
+end
 function UnitPower(unit, kind) return STATE.power end
 function UnitPowerMax(unit, kind) return STATE.powerMax end
 function UnitPowerType(unit) return STATE.powerType, STATE.powerToken end
-function UnitName(unit) return STATE.name end
-function UnitLevel(unit) return STATE.level end
+-- LE FAMILIER a son nom et son niveau a lui.
+FAMILIER = { nom = "Sanglier", niveau = 78, famille = "Boar", vie = 5400 }
+function UnitName(unit)
+    if unit == "pet" then return FAMILIER.nom end
+    return STATE.name
+end
+function UnitLevel(unit)
+    if unit == "pet" then return FAMILIER.niveau end
+    return STATE.level
+end
+function UnitCreatureFamily(unit) return FAMILIER.famille end
 UNIT_LEVEL_TEMPLATE = "Level %d"
 NEW = "New"
 CHARACTER_INFO = "Character Info"
@@ -333,7 +359,10 @@ function IsResting() return STATE.resting end
 function UnitThreatSituation(unit) return STATE.threat end
 function IsThreatWarningEnabled() return STATE.threatWarning end
 function UnitIsDeadOrGhost(unit) return STATE.dead end
-function UnitExists(unit) return STATE.hasTarget end
+function UnitExists(unit)
+    if unit == "pet" then return AVEC_FAMILIER end
+    return STATE.hasTarget
+end
 function UnitCanAttack(a, b) return STATE.targetHostile end
 function UnitIsUnit(a, b)
     if a == "targettarget" and b == "player" then return STATE.targetsMe end
@@ -561,6 +590,10 @@ for i = 1, NUM_CONTAINER_FRAMES do
     CreateFrame("Button", nom .. "CloseButton", c)
     local bourse = CreateFrame("Frame", nom .. "MoneyFrame", c)
     bourse:SetHeight(24)
+    -- LE SEGMENT DES MONNAIES SUIVIES du client : celui qu'on fait taire.
+    if i == 1 then
+        BackpackTokenFrame = CreateFrame("Frame", "BackpackTokenFrame", c)
+    end
     for _, suffixe in ipairs({ "BackgroundTop", "BackgroundMiddle1", "BackgroundMiddle2",
                               "BackgroundBottom", "Background1Slot" }) do
         _G[nom .. suffixe] = c:CreateTexture(nom .. suffixe, "ARTWORK")
@@ -584,16 +617,26 @@ CharacterFrameCloseButton = CreateFrame("Button", "CharacterFrameCloseButton", C
 HIGHLIGHT_FONT_COLOR = { r = 1, g = 1, b = 1 }
 NORMAL_FONT_COLOR = { r = 1, g = 0.82, b = 0 }
 REPUTATION, CURRENCY, PVP, SKILLS = "Reputation", "Currency", "PvP", "Skills"
-function UnitPVPName(unite) return "Robert Polson" end
+-- LE NOM SUIT LE TITRE PORTE, comme le vrai : SetCurrentTitle part au
+-- serveur, et c'est UNIT_NAME_UPDATE qui annonce la reponse.
+function UnitPVPName(unite)
+    if TITRE_PORTE and NOMS_DE_TITRE and NOMS_DE_TITRE[TITRE_PORTE] then
+        return (string.gsub(NOMS_DE_TITRE[TITRE_PORTE], "%s*$", "")) .. " Robert Polson"
+    end
+    return "Robert Polson"
+end
 CharacterModelFrame = CreateFrame("Frame", "CharacterModelFrame", CharacterFrame)
 CharacterLevelText = CharacterFrame:CreateFontString("CharacterLevelText", "ARTWORK")
 -- le client compose cette ligne ; le faux client en pose une pour qu'on
 -- puisse verifier qu'elle est bien recopiee
 CharacterLevelText:SetText("Niveau 3 Elfe de la nuit Druide")
+-- LES FLECHES DE ROTATION font 35 x 35 -- releve dans le PaperDollFrame.xml
+-- du client, ligne 484. Le faux leur donnait 16, et l ecart entre les deux
+-- boutons s en trouvait fausse : leur place se calcule sur leur largeur.
 for _, cote in ipairs({ "Left", "Right" }) do
     local nom = "CharacterModelFrameRotate" .. cote .. "Button"
     local b = CreateFrame("Button", nom, CharacterModelFrame)
-    b:SetWidth(16); b:SetHeight(16)
+    b:SetWidth(35); b:SetHeight(35)
 end
 PaperDollFrame = CreateFrame("Frame", "PaperDollFrame", CharacterFrame)
 PaperDollFrameTexture = PaperDollFrame:CreateTexture("PaperDollFrameTexture", "ARTWORK")
@@ -608,11 +651,36 @@ for _, nom in ipairs(EMPLACEMENTS_PERSO) do
     _G[plein .. "IconTexture"] = b:CreateTexture(plein .. "IconTexture", "BORDER")
     _G[plein .. "NormalTexture"] = b:CreateTexture(plein .. "NormalTexture", "ARTWORK")
 end
+-- LES ONGLETS DU CLIENT, AVEC LEUR VRAI CLIC.
+--
+-- Releve dans le CharacterFrame.lua du client : CharacterFrameTab_OnClick
+-- n'appelle PAS CharacterFrame_ShowSubFrame, il passe par ToggleCharacter,
+-- qui FERME la fenetre quand l'ecran demande est deja montre. Le faux ne
+-- posait aucun clic sur ces boutons : tout ce chemin n'etait pas essaye.
 for i = 1, 5 do
     local nom = "CharacterFrameTab" .. i
     local t = CreateFrame("Button", nom, CharacterFrame)
     _G[nom .. "Text"] = t:CreateFontString(nom .. "Text", "ARTWORK")
     t:CreateTexture(nom .. "Fond", "ARTWORK")
+    t:SetScript("OnClick", function(self)
+        -- Un bouton DESACTIVE ne recoit pas son clic : le faux doit en
+        -- faire autant, sinon l essai ne prouve rien.
+        if self:IsEnabled() == 0 then return end
+        CharacterFrameTab_OnClick(self)
+    end)
+end
+
+ECRAN_DE_L_ONGLET = { "PaperDollFrame", "PetPaperDollFrame", "ReputationFrame",
+                      "SkillFrame", "TokenFrame" }
+
+function CharacterFrameTab_OnClick(self)
+    local nom = self:GetName()
+    for i = 1, 5 do
+        if nom == "CharacterFrameTab" .. i then
+            ToggleCharacter(ECRAN_DE_L_ONGLET[i])
+            return
+        end
+    end
 end
 -- L ONGLET DU FAMILIER S EFFACE quand le personnage n en a pas, et le client
 -- rattache le suivant sur le LEFT du masque : sa reparation a lui, pensee
@@ -637,13 +705,52 @@ function HasPetUI() return AVEC_FAMILIER end
 PLAYERSTAT_BASE_STATS = "Attributs"
 PLAYERSTAT_MELEE_COMBAT = "Corps a corps"
 PLAYERSTAT_DEFENSES = "Defenses"
-function UpdatePaperdollStats(prefixe, cle) end
-function PaperDollFrame_UpdateStats() end
--- Le systeme de panneaux : il replace la feuille a SA position, et le
--- gestionnaire d'equipement l'appelle a chaque ouverture et fermeture.
+-- LE CLIENT REMONTRE SES LIGNES A CHAQUE MISE A JOUR.
+--
+-- UpdatePaperdollStats fait `statFrame:Show()` pour chaque ligne qu'elle
+-- remplit -- vingt-trois fois dans le PaperDollFrame.lua du client -- sans
+-- jamais demander si l'ecran est ouvert. Le faux ne faisait rien du tout :
+-- il couvrait donc la faute que le jeu a montree, les statistiques qui
+-- reparaissent par-dessus les ensembles ou les titres a un gain de niveau.
+function UpdatePaperdollStats(prefixe, cle)
+    for i = 1, 6 do
+        local ligne = _G[prefixe .. i]
+        if ligne then
+            ligne:Show()
+        end
+    end
+end
+function PaperDollFrame_UpdateStats()
+    UpdatePaperdollStats("PlayerStatFrameLeft", GetCVar("playerStatLeftDropdown"))
+    UpdatePaperdollStats("PlayerStatFrameRight", GetCVar("playerStatRightDropdown"))
+end
+-- LE SYSTEME DE PANNEAUX. Il replace la feuille a SA position -- le
+-- gestionnaire d'equipement l'appelle a chaque ouverture et fermeture -- ET
+-- TOUT CE QUI EST INSCRIT DANS UIPanelWindows.
+--
+-- C'est ce second geste que le faux ne faisait pas, et c'est lui qui rendait
+-- les onglets lateraux incliquables : la fenetre PvP est inscrite au systeme
+-- -- UIParent.lua ligne 52 -- et le systeme lui rendait ses ancres a
+-- l'ecran. Son art etant eteint, la dalle ne se voyait pas ; elle prenait
+-- la souris.
+UIPanelWindows = {}
+UIPanelWindows["PVPParentFrame"] = { area = "left", pushable = 0, whileDead = 1 }
+UIPanelWindows["TokenFrame"] = { area = "left", pushable = 1, whileDead = 1 }
+UIPanelWindows["CharacterFrame"] = { area = "left", pushable = 1, whileDead = 1 }
+
 function UpdateUIPanelPositions(cadre)
     CharacterFrame:ClearAllPoints()
     CharacterFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    for nom in pairs(UIPanelWindows) do
+        local panneau = _G[nom]
+        if panneau and panneau ~= CharacterFrame and panneau:IsShown() then
+            panneau:SetParent(UIParent)
+            panneau:ClearAllPoints()
+            panneau:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+            panneau:SetWidth(384)
+            panneau:SetHeight(512)
+        end
+    end
 end
 CharacterAttributesFrame = CreateFrame("Frame", "CharacterAttributesFrame", CharacterFrame)
 for _, cote in ipairs({ "Left", "Right" }) do
@@ -661,6 +768,10 @@ for _, cote in ipairs({ "Left", "Right" }) do
     for i = 1, 6 do
         local l = CreateFrame("Frame", "PlayerStatFrame" .. cote .. i, CharacterAttributesFrame)
         l:SetWidth(104); l:SetHeight(13)
+        -- StatFrameTemplate met son intitule au calque BACKGROUND : c'est
+        -- ce qui oblige a le monter quand on glisse une bande derriere.
+        local nom = "PlayerStatFrame" .. cote .. i .. "Label"
+        _G[nom] = l:CreateFontString(nom, "BACKGROUND")
     end
 end
 -- le gestionnaire d'equipement du client : un bouton et son panneau
@@ -850,6 +961,78 @@ ReputationFrame:SetWidth(384)
 ReputationFrame:SetHeight(424)
 ReputationFrame:Hide()
 PetPaperDollFrame = CreateFrame("Frame", "PetPaperDollFrame", CharacterFrame)
+
+-- L ECRAN DU FAMILIER de 3.3.5 : l apercu, les trois cadres ou le client
+-- ecrit ses valeurs, et les cinq resistances.
+--
+-- L APERCU N EST PAS FILS DE L ECRAN, IL EST PETIT-FILS : PetModelFrame vit
+-- dans PetPaperDollFramePetFrame, setAllPoints sur l ecran -- releve dans le
+-- PetPaperDollFrame.xml du client, lignes 128 et 208. Le faux le mettait
+-- directement sous l ecran, et couvrait donc la faute : un balayage qui
+-- n epargne que le modele masquait son PARENT, et l apercu avec lui.
+PetPaperDollFramePetFrame = CreateFrame("Frame", "PetPaperDollFramePetFrame",
+                                        PetPaperDollFrame)
+PetModelFrame = CreateFrame("Frame", "PetModelFrame", PetPaperDollFramePetFrame)
+-- LES FLECHES DE ROTATION sont filles du MODELE, et font 35 x 35 -- les
+-- memes que celles du personnage.
+for _, cote in ipairs({ "Left", "Right" }) do
+    local b = CreateFrame("Button", "PetModelFrameRotate" .. cote .. "Button",
+                          PetModelFrame)
+    b:SetWidth(35); b:SetHeight(35)
+end
+function PetModelFrame:SetUnit(u) self.unit = u end
+NUM_PET_RESISTANCE_TYPES = 5
+RESISTANCES_DU_FAMILIER = { [2] = 95, [3] = 80, [4] = 60, [5] = 45, [6] = 120 }
+ECOLES_DU_FAMILIER = { 6, 2, 3, 4, 5 }
+function PetPaperDollFrame_SetResistances()
+    for i = 1, NUM_PET_RESISTANCE_TYPES do
+        local f = _G["PetMagicResFrame" .. i]
+        _G["PetMagicResText" .. i]:SetText(RESISTANCES_DU_FAMILIER[f:GetID()])
+    end
+end
+for i = 1, NUM_PET_RESISTANCE_TYPES do
+    local f = CreateFrame("Frame", "PetMagicResFrame" .. i, PetPaperDollFrame)
+    -- LES ECOLES, telles que le PetPaperDollFrame.xml du client les pose :
+    -- le premier cadre porte 6 (Arcane), puis 2, 3, 4, 5.
+    f:SetID(ECOLES_DU_FAMILIER[i])
+    -- Chaque cadre porte SON icone et SA valeur, comme
+    -- MagicResistanceFrameTemplate le veut.
+    f:CreateTexture("PetMagicResFrame" .. i .. "Icon", "BACKGROUND")
+    _G["PetMagicResText" .. i] = f:CreateFontString("PetMagicResText" .. i, "ARTWORK")
+end
+function UnitResistance(unit, ecole)
+    local v = RESISTANCES_DU_FAMILIER[ecole] or 0
+    return v, v, 0, 0
+end
+for _, n in ipairs({ "PetArmorFrame", "PetDamageFrame", "PetAttackPowerFrame" }) do
+    local f = CreateFrame("Frame", n, PetPaperDollFrame)
+    _G[n .. "StatText"] = f:CreateFontString(n .. "StatText", "ARTWORK")
+end
+-- Le client calcule ET met en forme : c est de la qu on lit.
+function PaperDollFrame_SetArmor(cadre, unite)
+    PetArmorFrameStatText:SetText("3120")
+end
+function PaperDollFrame_SetDamage(cadre, unite)
+    PetDamageFrameStatText:SetText("45 - 62")
+end
+function PaperDollFrame_SetAttackPower(cadre, unite)
+    PetAttackPowerFrameStatText:SetText("1480")
+end
+function GetCritChanceFromAgility(unit) return 4.25 end
+STAT_FORMAT = "%s:"
+STAT_CATEGORY_GENERAL = "General"
+RESISTANCES = "Resistances"
+HEALTH = "Health"
+ARMOR = "Armor"
+DAMAGE = "Damage"
+ATTACK_POWER = "Attack Power"
+MELEE_CRIT_CHANCE = "Critical Strike"
+RESISTANCE1_NAME = "Holy"
+RESISTANCE2_NAME = "Fire"
+RESISTANCE3_NAME = "Nature"
+RESISTANCE4_NAME = "Frost"
+RESISTANCE5_NAME = "Shadow"
+RESISTANCE6_NAME = "Arcane"
 PetPaperDollFrame:Hide()
 SkillFrame = CreateFrame("Frame", "SkillFrame", CharacterFrame)
 SkillFrame:Hide()
@@ -909,6 +1092,79 @@ function SkillFrame_UpdateSkills()
 end
 TokenFrame = CreateFrame("Frame", "TokenFrame", CharacterFrame)
 TokenFrame:Hide()
+
+-- L ECRAN DES MONNAIES de 3.3.5. GetCurrencyListInfo rend NEUF valeurs :
+--   nom, enTete, deplie, inutilisee, suivie, compte, typeSpecial, icone,
+--   identifiantObjet
+-- Deux monnaies ont une icone a part : typeSpecial 1 pour les points
+-- d arene, 2 pour ceux d honneur.
+TokenFrameContainer = CreateFrame("Frame", "TokenFrameContainer", TokenFrame)
+TokenFramePopup = CreateFrame("Frame", "TokenFramePopup", TokenFrame)
+TokenFramePopup:SetBackdrop({ bgFile = "UI-DialogBox-Background" })
+TokenFramePopup:Hide()
+TokenFramePopupCloseButton = CreateFrame("Button", "TokenFramePopupCloseButton",
+                                         TokenFramePopup)
+-- SON INTITULE EST UN FontString, pas une texture : "Currency Options",
+-- ancre au TOPLEFT du popup. Un balayage qui ne prend que les textures le
+-- laisse a l ecran.
+TokenFramePopupTitle = TokenFramePopup:CreateFontString("TokenFramePopupTitle",
+                                                        "BACKGROUND")
+TokenFramePopupTitle:SetText("Currency Options")
+for _, n in ipairs({ "TokenFramePopupInactiveCheckBox",
+                     "TokenFramePopupBackpackCheckBox" }) do
+    local case = CreateFrame("CheckButton", n, TokenFramePopup)
+    _G[n .. "Text"] = case:CreateFontString(n .. "Text", "ARTWORK")
+end
+
+-- Deux categories, l une depliee, l autre repliee : replier RACCOURCIT la
+-- liste, comme pour les reputations.
+DEVISES = {
+    { nom = "Miscellaneous", entete = true, deplie = true },
+    { nom = "Arena Points", compte = 1234, special = 1 },
+    { nom = "Honor Points", compte = 0, special = 2 },
+    { nom = "Emblem of Frost", compte = 42, icone = "icone_embleme", suivie = true },
+    { nom = "Player vs. Player", entete = true, deplie = false },
+    { nom = "Wintergrasp Mark", compte = 7, icone = "icone_marque" },
+}
+
+function _devisesVisibles()
+    local liste, saute = {}, nil
+    for _, d in ipairs(DEVISES) do
+        if saute and not d.entete then
+            -- avale : sa categorie est repliee
+        else
+            saute = nil
+            liste[#liste + 1] = d
+            if d.entete and not d.deplie then
+                saute = true
+            end
+        end
+    end
+    return liste
+end
+
+function GetCurrencyListSize() return #_devisesVisibles() end
+function GetCurrencyListInfo(i)
+    local d = _devisesVisibles()[i]
+    if not d then return nil end
+    return d.nom, d.entete or false, d.deplie or false, d.inutilisee or false,
+           d.suivie or false, d.compte or 0, d.special, d.icone, d.objet
+end
+function ExpandCurrencyList(i, ouvrir)
+    local d = _devisesVisibles()[i]
+    if d then d.deplie = (ouvrir == 1) end
+end
+function SetCurrencyUnused(i, etat)
+    local d = _devisesVisibles()[i]
+    if d then d.inutilisee = (etat == 1) end
+end
+function SetCurrencyBackpack(i, etat)
+    local d = _devisesVisibles()[i]
+    if d then d.suivie = (etat == 1) end
+end
+function TokenFrame_Update() end
+GameFontDisable = "GameFontDisable"
+GameFontHighlightRight = "GameFontHighlightRight"
 -- L ECRAN DE REPUTATION de 3.3.5 : quinze lignes posees une fois dans le
 -- XML, que ReputationFrame_Update ne fait que remplir.
 NUM_FACTIONS_DISPLAYED = 15
@@ -951,8 +1207,31 @@ for i = 1, 15 do
         _G[n .. suffixe] = r:CreateTexture(n .. suffixe, "BACKGROUND")
     end
 end
+-- LES MONNAIES SUIVIES DU SAC. GetBackpackCurrencyInfo rend nom, compte,
+-- typeSpecial et icone, pour i de 1 a MAX_WATCHED_TOKENS -- trois.
+MAX_WATCHED_TOKENS = 3
+BACKPACK_HEIGHT = 200
+BACKPACK_TOKENFRAME_HEIGHT = 22
+SUIVIES = {}
+function GetBackpackCurrencyInfo(i)
+    local d = SUIVIES[i]
+    if not d then return nil end
+    return d.nom, d.compte, d.special, d.icone
+end
+-- Le vrai reparente son segment dans le sac ET REPOSE SA HAUTEUR : c'est ce
+-- geste-la qui defaisait la notre.
+function ManageBackpackTokenFrame()
+    BackpackTokenFrame:Show()
+    ContainerFrame1:SetHeight(BACKPACK_HEIGHT + BACKPACK_TOKENFRAME_HEIGHT)
+end
+GameFontHighlightSmall = "GameFontHighlightSmall"
 MAX_REPUTATION_REACTION = 8
-FACTION_AT_WAR_COLOR = { r = 0.8, g = 0.2, b = 0.2 }
+-- FACTION_AT_WAR_COLOR N EXISTE PAS EN 3.3.5, verifie dans le FrameXML du
+-- client : ni Constants.lua, ni GlobalStrings.lua, ni ReputationFrame.lua ne
+-- la portent. Le faux l inventait en 0,8 / 0,2 / 0,2 -- une couleur qui n est
+-- celle de personne -- et couvrait donc exactement la faute que le jeu a
+-- montree : une faction en guerre recouverte d un voile BLANC. Comme pour
+-- IsTitleKnown, un faux plus aimable que le client ne prouve rien.
 GameFontNormalLeft = "GameFontNormalLeft"
 GameFontHighlight = "GameFontHighlight"
 function UnitSex() return 2 end
@@ -1069,8 +1348,38 @@ PVP_RANK_6_0 = "Grunt"
 PVP_RANK_9_0 = "First Sergeant"
 PVP_RANK_5_1 = "Private"
 PVP_RANK_9_1 = "Sergeant Major"
-function GetPVPRankProgress() return 0.4 end
-function GetPVPLifetimeStats() return 1234, 0, 8 end
+PROGRES_PVP = 0.4
+function GetPVPRankProgress() return PROGRES_PVP end
+VICTOIRES_PVP = 1234
+function GetPVPLifetimeStats() return VICTOIRES_PVP, 0, 8 end
+-- LES TITRES, la ou mod-pvp-titles ecrit vraiment le rang. Alliance : les
+-- identifiants 1 a 14 de CharTitles.dbc ; Horde : 15 a 28.
+TITRES_CONNUS = {}
+function GetNumTitles() return 177 end
+-- IL REND UN NOMBRE, 0 OU 1, ET NON UN BOOLEEN. Le faux le rendait en
+-- booleen, et laissait donc passer une faute que le jeu a montree tout de
+-- suite : en Lua, 0 est VRAI. Le client ecrit `if ( IsTitleKnown(i) ~= 0 )`.
+function IsTitleKnown(id) if TITRES_CONNUS[id] then return 1 else return 0 end end
+-- LE NOM PORTE SES ESPACES, comme le vrai : CharTitles donne "Private %s",
+-- et GetTitleName rend "Private " -- d ou le strtrim du client.
+NOMS_DE_TITRE = { [1] = "Private ", [5] = "Sergeant Major ",
+                  [14] = "Grand Marshal ", [15] = "Scout ", [42] = "the Explorer" }
+function GetTitleName(id) return NOMS_DE_TITRE[id] end
+TITRE_PORTE = 0
+function GetCurrentTitle() return TITRE_PORTE end
+function SetCurrentTitle(id) TITRE_PORTE = id end
+PLAYER_TITLE_NONE = "None"
+NONE = "None"
+PAPERDOLL_SIDEBAR_TITLES = "Titles"
+function strtrim(s) return (string.gsub(s or "", "^%s*(.-)%s*$", "%1")) end
+-- LE MENU DEROULANT DU CLIENT, celui que l addon doit taire.
+PlayerTitleFrame = CreateFrame("Frame", "PlayerTitleFrame", UIParent)
+PlayerTitlePickerFrame = CreateFrame("Frame", "PlayerTitlePickerFrame", UIParent)
+function PlayerTitleFrame_UpdateTitles()
+    -- Le vrai le REMONTRE a chaque passage : c est tout l interet du faux.
+    PlayerTitleFrame:Show()
+    PlayerTitlePickerFrame:Show()
+end
 function GetPVPSessionStats() return 12, 340 end
 function GetPVPYesterdayStats() return 30, 900 end
 function GetHonorCurrency() return 4567 end
@@ -1090,6 +1399,59 @@ function VehicleMenuBar_MoveMicroButtons()
 end
 function TogglePVPFrame() end
 function ShowUIPanel(cadre) cadre:Show() end
+function HideUIPanel(cadre) cadre:Hide() end
+
+-- ToggleCharacter, repris mot pour mot de l'UIParent.lua du client : c'est
+-- LUI que les onglets appellent, et il ferme la fenetre quand l'ecran
+-- demande est deja montre.
+-- PanelTemplates, repris de UIPanelTemplates.lua. LE POINT QUI COMPTE :
+-- SelectTab DESACTIVE l'onglet choisi -- on ne reclique pas celui ou l'on
+-- est -- et seul DeselectTab lui rend la main.
+function PanelTemplates_SelectTab(onglet) onglet:Disable() end
+function PanelTemplates_DeselectTab(onglet) onglet:Enable() end
+function PanelTemplates_SetNumTabs(cadre, n) cadre.numTabs = n end
+function PanelTemplates_UpdateTabs(cadre)
+    if cadre.selectedTab then
+        for i = 1, cadre.numTabs do
+            local onglet = _G[cadre:GetName() .. "Tab" .. i]
+            if onglet then
+                if i == cadre.selectedTab then
+                    PanelTemplates_SelectTab(onglet)
+                else
+                    PanelTemplates_DeselectTab(onglet)
+                end
+            end
+        end
+    end
+end
+function PanelTemplates_SetTab(cadre, id)
+    cadre.selectedTab = id
+    PanelTemplates_UpdateTabs(cadre)
+end
+PanelTemplates_SetNumTabs(CharacterFrame, 5)
+
+-- ToggleCharacter, repris mot pour mot du CharacterFrame.lua du client.
+ID_DE_L_ECRAN = { PaperDollFrame = 1, PetPaperDollFrame = 2, ReputationFrame = 3,
+                  SkillFrame = 4, TokenFrame = 5 }
+function ToggleCharacter(onglet)
+    local sous = _G[onglet]
+    if not sous then
+        return
+    end
+    if not sous.hidden then
+        PanelTemplates_SetTab(CharacterFrame, ID_DE_L_ECRAN[onglet])
+        if CharacterFrame:IsShown() then
+            if sous:IsShown() then
+                HideUIPanel(CharacterFrame)
+            else
+                CharacterFrame_ShowSubFrame(onglet)
+            end
+        else
+            ShowUIPanel(CharacterFrame)
+            CharacterFrame_ShowSubFrame(onglet)
+        end
+    end
+end
 PVP = "JcJ"
 STATISTICS = "Statistiques"
 function CharacterFrame_ShowSubFrame(nom)
@@ -1306,7 +1668,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "BottomBar.lua", "StatusBars.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
-             "IconPicker.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -2435,24 +2797,59 @@ def main():
     print("   second groupe %d plus bas que la derniere ligne du premier" % (y6 - yr1))
     assert yr1 < y6, "le second groupe vient sous le premier"
 
+    # LE FOND ALTERNE. A LA DEMANDE : ni camelot ni 3.3.5 ne rayent leurs
+    # lignes. Les deux bandes sont celles de paperdollinfopart1c60, la seule
+    # paire de bandes horizontales dont l alpha s eteint aux deux bouts.
+    SOMBRE, CLAIR = "ui-character-info-itemlevel-bounce", "ui-character-info-line-bounce"
+    rects = {}
+    for nom in (SOMBRE, CLAIR):
+        e = lua.eval('UIAtlas.data["%s"]' % nom)
+        rects[nom] = tuple(round(e[i], 6) for i in (2, 3, 4, 5))
+
+    def bande(i):
+        """Laquelle des deux porte la ligne i, d apres son rectangle."""
+        fond = g["PlayerStatFrameLeft" + str(i)].foreverFond
+        if fond is None or fond.texcoord is None:
+            return None
+        tc = tuple(round(v, 6) for v in fond.texcoord.values())
+        for nom, r in rects.items():
+            if tc == r:
+                return "sombre" if nom == SOMBRE else "clair"
+        return "?"
+
+    bandes = [bande(i) for i in range(1, 7)]
+    print("   fond des lignes : %s" % " ".join(str(b) for b in bandes))
+    assert bandes == ["sombre", "clair", "sombre", "clair", "sombre", "clair"],         "la sombre en premier, puis en alternance"
+    assert g.PlayerStatFrameLeft1Label.layer == "ARTWORK",         "l intitule monte d un calque : 3.3.5 n a pas de sous-calque"
+    fond1 = g.PlayerStatFrameLeft1.foreverFond
+    assert fond1.layer == "BACKGROUND", "et la bande reste au fond"
+
+    # LE COMPTE NE RETIENT QUE LES LIGNES VISIBLES, et repart a chaque
+    # categorie : le client en cache selon celle qui est choisie.
+    lua.execute('PlayerStatFrameLeft2:Hide()')
+    g.ForeverUI.CharacterStatStripes()
+    bandes = [bande(i) for i in (1, 3, 4)]
+    print("   une ligne cachee : %s" % " ".join(str(b) for b in bandes))
+    assert bandes == ["sombre", "clair", "sombre"],         "la ligne cachee ne compte pas : pas de trou dans l alternance"
+    lua.execute('PlayerStatFrameLeft2:Show()')
+    g.ForeverUI.CharacterStatStripes()
+
     # LES SELECTEURS DE CATEGORIE. Leur art d origine deborde du cadre et ne
     # le suit pas : il s efface, l en-tete moderne prend sa place.
     selD = g.PlayerStatFrameRightDropDown
     psel = sel.points[len(list(sel.points.values()))]
     print("   selecteur : %d x %d, %s (%s, %s), visible=%s" % (
         sel.width, sel.height, psel[1], psel[4], psel[5], sel.shown))
-    assert sel.width == 203 and sel.height == 34,         "la hauteur propre de l art de bouton ; elargi au volet, il deborde de 5"
+    assert sel.width == 203 and sel.height == 34,         "l atlas fait 201 x 32 ; elargi au volet, il deborde de 5"
     assert psel[4] == 15, "il deborde de 5 a gauche de ses lignes, posees a 20"
     assert sel.shown, "il doit etre visible"
-    # Le selecteur est un bouton tertiaire decoupe, avec ses deux etats.
-    normal = list(sel.foreverNormal.values())
-    presse = list(sel.foreverPresse.values())
-    print("   bouton : %d tranches normales, %d pressees, coin %dx%d" % (
-        len(normal), len(presse), normal[0].width, normal[0].height))
-    assert len(normal) == 9 and len(presse) == 9,         "l art de bouton se decoupe, il ne s etire pas de 46 a 203"
-    assert normal[0].width == 11 and normal[0].height == 11,         "l about arrondi fait 11 px : au-dela le profil ne change plus"
-    assert all(t.texture is not None for t in normal)
-    assert all(not t.shown for t in presse), "au repos, seul l etat normal se voit"
+    # A LA DEMANDE : l encadre de camelot, UI-Character-Info-Title, tendu.
+    fond = sel.foreverFond
+    print("   encadre : %s, tendu=%s" % (fond.texture, bool(fond.allPoints)))
+    assert fond is not None and fond.texture is not None,         "le selecteur porte l encadre de paperdollinfopart1c60"
+    assert "paperdollinfopart1c60" in fond.texture,         "il vient bien de cette planche : %s" % fond.texture
+    assert fond.allPoints,         "tendu du TOPLEFT au BOTTOMRIGHT, comme CharacterStatFrameCategoryTemplate"
+    assert sel.foreverPresse is None,         "l encadre de camelot n a pas d etat presse"
 
     dore = [g.PlayerStatFrameLeftDropDownLeft, g.PlayerStatFrameLeftDropDownMiddle,
             g.PlayerStatFrameLeftDropDownRight, g.PlayerStatFrameLeftDropDownText]
@@ -2462,13 +2859,11 @@ def main():
     print("   fleche du menu masquee : %s" % (not fleche.shown))
     assert not fleche.shown, "toute la barre ouvre le menu, la fleche n a plus lieu d etre"
 
-    # L etat presse tient tant que la liste est ouverte.
+    # LA MECANIQUE DE L ETAT PRESSE RESTE EN PLACE, et ne trouve plus rien a
+    # presser : l encadre de camelot n a pas cet etat.
     lua.execute('UIDROPDOWNMENU_OPEN_MENU = PlayerStatFrameLeftDropDown')
     lua.execute('DropDownList1:Show()')
     g.ForeverUI.CharacterStatTabsState()
-    print("   liste ouverte : presse=%s, normal=%s" % (
-        presse[0].shown, normal[0].shown))
-    assert presse[0].shown and not normal[0].shown, "presse tant que la liste est la"
     print("   ancrage de la liste : %s sur %s de %s, ecart (%s, %s)" % (
         sel.point, sel.relativePoint, sel.relativeTo and sel.relativeTo.name,
         sel.xOffset, sel.yOffset))
@@ -2484,8 +2879,6 @@ def main():
 
     lua.execute('DropDownList1:Hide()')
     g.ForeverUI.CharacterStatTabsState()
-    print("   liste fermee : presse=%s, normal=%s" % (presse[0].shown, normal[0].shown))
-    assert not presse[0].shown and normal[0].shown, "et il se releve quand elle part"
     assert sel.mouseEnabled and sel.scripts.OnMouseUp is not None,         "toute la barre ouvre le menu, pas seulement la fleche de 24"
     print("   intitules : gauche \"%s\" | droite \"%s\"" % (
         sel.foreverIntitule.text, selD.foreverIntitule.text))
@@ -2588,14 +2981,22 @@ def main():
     assert pn[1] == "TOP" and pn[3] == "TOP", "elle se pose sous le haut du volet"
     assert pn[5] == -54, "PaperDollLevelInfo : -4 des onglets lateraux, -50 dessous"
 
-    # LES DEUX ONGLETS DU VOLET, au-dessus de la ligne de niveau.
+    # LES TROIS ONGLETS DU VOLET, au-dessus de la ligne de niveau.
+    #
+    # RELEVE -- camelot/PaperDollFrame_UpdateSidebarTabLayout : a trois, c est
+    # le DEUXIEME qui porte l ancre, au TOP du cadre des onglets (0, -5) ; le
+    # troisieme colle a sa droite, le premier a sa gauche. A deux, la fonction
+    # recentre en decalant le deuxieme d une demi-largeur.
     stats, gear = droit.ongletStats, droit.ongletEquipement
-    ps, pg = stats.points[1], gear.points[1]
-    print("   onglets du volet : %dx%d, stats %s (%s, %s), equipement %s sur %s" % (
-        stats.width, stats.height, ps[1], ps[4], ps[5], pg[1], pg[3]))
+    titres = droit.ongletTitres
+    ps, pg, pt = stats.points[1], gear.points[1], titres.points[1]
+    print("   onglets du volet : %dx%d, equipement %s (%s, %s), stats %s sur %s,"
+          " titres %s sur %s" % (stats.width, stats.height, pg[1], pg[4], pg[5],
+                                 ps[1], ps[3], pt[1], pt[3]))
     assert stats.width == 42 and stats.height == 42,         "PaperDollSidebarTabTemplate fait 42 x 42"
-    assert (ps[1], ps[4], ps[5]) == ("TOP", -21, -9),         "la paire est centree, -4 du cadre des onglets et -5 du premier"
-    assert (pg[1], pg[3]) == ("LEFT", "RIGHT"), "les deux se touchent, comme chez camelot"
+    assert (pg[1], pg[4], pg[5]) == ("TOP", 0, -9),         "a trois, c est le deuxieme qui porte l ancre, et le groupe est centre"
+    assert (ps[1], ps[3]) == ("RIGHT", "LEFT"), "les statistiques a sa gauche"
+    assert (pt[1], pt[3]) == ("LEFT", "RIGHT"), "les titres a sa droite"
 
     print("   icones : stats=%s rogne a %.6f | equipement=%s" % (
         stats.icone.portraitOf, stats.icone.texcoord[1], gear.icone.texture))
@@ -2937,6 +3338,27 @@ def main():
     assert abs(r3.survol.alpha - 0.20) < 1e-6,         "RefreshBackgroundHighlightOpacity : 0,20 pour la ligne choisie"
     assert abs(r1.survol.alpha) < 1e-6, "un en-tete n a pas de survol"
 
+    # UNE FACTION EN GUERRE : le voile est ROUGE, pas blanc.
+    #
+    # camelot : RefreshBackgroundHighlightColor prend FACTION_AT_WAR_COLOR,
+    # qui N EXISTE PAS en 3.3.5 -- la teinte retombait sur le blanc. La
+    # valeur exacte est relevee dans GlobalColor.db2 du client moderne :
+    # 0xFF690300, soit 105, 3, 0.
+    def voile(ligne):
+        return [round(v, 6) for v in ligne.survolPieces[1].vertex.values()]
+
+    print("   hors guerre : voile %s, alpha %.2f" % (voile(r3), r3.survol.alpha))
+    assert voile(r3) == [1.0, 1.0, 1.0], "hors guerre, WHITE_FONT_COLOR"
+
+    lua.execute('TOUTES[3].guerre = true')
+    g.ForeverUI.ReputationLayout()
+    rouge = [round(105 / 255, 6), round(3 / 255, 6), 0.0]
+    print("   en guerre : voile %s, alpha %.2f" % (voile(r3), r3.survol.alpha))
+    assert voile(r3) == rouge, "FACTION_AT_WAR_COLOR : 105, 3, 0"
+    assert abs(r3.survol.alpha - 0.85) < 1e-6,         "choisie ET en guerre : 0,85"
+    lua.execute('TOUTES[3].guerre = false')
+    g.ForeverUI.ReputationLayout()
+
     # LE VOLET DROIT : le detail de la faction choisie.
     detail = g.ReputationDetailFrame
     pd = detail.points[1]
@@ -3100,6 +3522,208 @@ def main():
     assert sd.titre.text == "Haches", "le detail suit le clic"
     assert abs(s3.survol.alpha - 0.20) < 1e-6, "et la ligne est marquee"
 
+    # L ONGLET DU FAMILIER. A LA DEMANDE : l apercu a gauche, et a droite la
+    # meme interface que les statistiques du personnage.
+    lua.execute("AVEC_FAMILIER = true")
+    g.CharacterFrame_ShowSubFrame("PetPaperDollFrame")
+    g.ForeverUI.Panes.ShowGroup("PetPaperDollFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+
+    modele = g.PetModelFrame
+    pm = modele.points[len(list(modele.points.values()))]
+    print("   familier : apercu visible=%s unite=%s, borne a %s" % (
+        modele.shown, modele.unit, pm[2].name))
+    assert modele.shown and modele.unit == "pet", "l apercu montre le familier"
+    assert g.PetPaperDollFramePetFrame.shown,         "l apercu est PETIT-fils de l ecran : son porteur doit survivre au balayage"
+    assert pm[2].name == "ForeverUIPetPane", "et remplit le volet gauche"
+
+    # LES FLECHES DE ROTATION, a la meme place que celles du personnage :
+    # centrees sur le HAUT du volet, cote a cote.
+    fg = g.PetModelFrameRotateLeftButton
+    fd = g.PetModelFrameRotateRightButton
+    pg = fg.points[len(list(fg.points.values()))]
+    pd = fd.points[len(list(fd.points.values()))]
+    cg = g.CharacterModelFrameRotateLeftButton
+    pcg = cg.points[len(list(cg.points.values()))]
+    print("   fleches : familier %s (%s, %s) | personnage %s (%s, %s)" % (
+        pg[1], pg[4], pg[5], pcg[1], pcg[4], pcg[5]))
+    assert (pg[1], pg[4], pg[5]) == (pcg[1], pcg[4], pcg[5]),         "les memes que celles du personnage, au pixel pres"
+    assert pg[3] == "TOP" and pd[4] == -pg[4], "cote a cote, centrees sur le haut"
+    assert fg.shown and fd.shown, "et visibles"
+
+    pet = g.ForeverUIPetStats
+    print("   niveau : \"%s\"" % pet.niveau.text)
+    assert pet.niveau.text == "Level 78 Sanglier", "Niveau X <nom du familier>"
+
+    categories = []
+    rang = 1
+    while g["ForeverUIPetCategory" + str(rang)] is not None:
+        c2 = g["ForeverUIPetCategory" + str(rang)]
+        if c2.shown:
+            categories.append((c2.intitule.text, c2.width, c2.height))
+        rang += 1
+    print("   categories : %s" % categories)
+    assert [n for n, _, _ in categories] == ["General", "Resistances"],         "deux categories, dans cet ordre"
+    assert categories[0][2] == 34, "la meme hauteur d en-tete que les statistiques"
+    assert categories[0][1] == (233 - 2 * 20) + 2 * 5,         "et le meme debord de 5 de chaque cote"
+
+    lignes = []
+    rang = 1
+    while g["ForeverUIPetStat" + str(rang)] is not None:
+        l = g["ForeverUIPetStat" + str(rang)]
+        if l.shown:
+            lignes.append((l.intitule.text, l.valeur.text))
+        rang += 1
+    print("   lignes : %s" % ", ".join("%s %s" % (a2, b2) for a2, b2 in lignes))
+    assert [a2 for a2, _ in lignes[:5]] == ["Health:", "Armor:", "Damage:",
+                                            "Attack Power:", "Critical Strike:"],         "les cinq lignes demandees, dans cet ordre"
+    assert [b2 for _, b2 in lignes[:5]] == ["5400", "3120", "45 - 62", "1480",
+                                            "4.25%"],         "les valeurs viennent du client, mises en forme par lui"
+    # "Attack Power", et non "Power" : ATTACK_POWER vaut "Power" ici.
+    assert lignes[3][0] == "Attack Power:",         "ATTACK_POWER vaut \"Power\" : c est ATTACK_POWER_TOOLTIP qu il faut"
+    assert len(lignes) == 5, "les resistances ne sont plus des lignes de texte"
+
+    # LES RESISTANCES SONT DES ICONES, A L HORIZONTAL. A LA DEMANDE : ce
+    # sont les cadres du client, reparentes dans le volet droit, qui
+    # portent deja l icone d ecole, la valeur et l infobulle.
+    res = [g["PetMagicResFrame" + str(i)] for i in range(1, 6)]
+    xs = []
+    for cadre in res:
+        p = cadre.points[len(list(cadre.points.values()))]
+        xs.append(round(p[4], 2))
+    print("   resistances : %s | tailles %dx%d | parent=%s | valeurs %s" % (
+        xs, res[0].width, res[0].height, res[0].parent.name,
+        [g["PetMagicResText" + str(i)].text for i in range(1, 6)]))
+    assert all(c.shown for c in res), "les cinq paraissent"
+    assert res[0].width == 32 and res[0].height == 29,         "MagicResistanceFrameTemplate fait 32 x 29"
+    assert res[0].parent.name == "ForeverUIPetStats",         "reparentes dans le volet droit, que le balayage ne touche pas"
+    assert xs[0] == 20, "la premiere au bord des lignes"
+    ecarts = [round(xs[i + 1] - xs[i], 2) for i in range(4)]
+    assert len(set(ecarts)) == 1, "a pas egaux : %s" % ecarts
+    assert round(xs[4] + 32, 2) == 20 + (233 - 2 * 20),         "et la derniere au bord oppose"
+    ys = [cadre.points[len(list(cadre.points.values()))][5] for cadre in res]
+    assert len(set(ys)) == 1, "toutes sur la meme ligne : %s" % ys
+    assert g.PetMagicResText1.text == 120,         "le premier cadre porte l ecole 6, l arcane"
+
+    # LE FOND ALTERNE, comme les statistiques du personnage, et le compte
+    # REPART a chaque categorie.
+    SOMBRE2 = "ui-character-info-itemlevel-bounce"
+    r_s = tuple(round(lua.eval('UIAtlas.data["%s"]' % SOMBRE2)[i], 6) for i in (2, 3, 4, 5))
+    def bandePet(rang):
+        fond = g["ForeverUIPetStat" + str(rang)].fond
+        tc = tuple(round(v, 6) for v in fond.texcoord.values())
+        return "sombre" if tc == r_s else "clair"
+    bandes = [bandePet(i) for i in (1, 2, 3, 4, 5)]
+    print("   fonds : %s" % " ".join(bandes))
+    assert bandes == ["sombre", "clair", "sombre", "clair", "sombre"],         "la sombre en premier"
+
+    # SANS FAMILIER, l ecran est vide et l apercu ne montre rien.
+    lua.execute("AVEC_FAMILIER = false")
+    g.ForeverUI.PetPreview()
+    g.ForeverUI.PetDetail()
+    print("   sans familier : apercu=%s, niveau=\"%s\"" % (
+        modele.shown, pet.niveau.text))
+    assert not modele.shown and pet.niveau.text == "",         "sans familier, rien a montrer"
+    lua.execute("AVEC_FAMILIER = true")
+    g.ForeverUI.PetPreview()
+    g.ForeverUI.PetDetail()
+
+    # L ONGLET DES MONNAIES. Le meme gabarit de liste que la reputation et
+    # les competences -- ScrollBox aux memes bornes, meme plaque d en-tete,
+    # meme survol en trois tranches -- mais deux niveaux seulement :
+    # GetCurrencyListInfo ne rend qu un enTete, sans notion d enfant.
+    g.CharacterFrame_ShowSubFrame("TokenFrame")
+    g.ForeverUI.Panes.ShowGroup("TokenFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+
+    liste = g.ForeverUITokenList
+    pl = liste.points[1]
+    pl2 = liste.points[2]
+    print("   monnaies : panneau (%s, %s) a (%s, %s)" % (
+        pl[4], pl[5], pl2[4], pl2[5]))
+    assert (pl[4], pl[5]) == (10, -40) and (pl2[4], pl2[5]) == (-25, 15),         "les memes bornes que la reputation"
+
+    rangs = {}
+    rang = 1
+    while g["ForeverUITokenRow" + str(rang)] is not None:
+        rangs[rang] = g["ForeverUITokenRow" + str(rang)]
+        rang += 1
+    posees = [(l.nom.text, l.entete, l.height) for l in rangs.values() if l.shown]
+    print("   lignes : %s" % ", ".join(
+        "%s%s(%d)" % (n, " [cat]" if e else "", h) for n, e, h in posees))
+    assert [n for n, _, _ in posees] == ["Miscellaneous", "Arena Points",
+                                         "Honor Points", "Emblem of Frost",
+                                         "Player vs. Player"],         "la categorie PvP est repliee : son contenu ne se pose pas"
+    assert posees[0][2] == 26 and posees[1][2] == 22,         "TokenHeaderTemplate 26, TokenEntryTemplate 22"
+
+    # LES DEUX ICONES A PART, que le client nomme lui-meme.
+    r2, r3, r4 = rangs[2], rangs[3], rangs[4]
+    print("   icones : arene=%s | honneur=%s (rogne %.5f) | ordinaire=%s" % (
+        r2.icone.texture.split(chr(92))[-1], r3.icone.texture.split(chr(92))[-1],
+        list(r3.icone.texcoord.values())[0], r4.icone.texture))
+    assert "ArenaPoints" in r2.icone.texture, "typeSpecial 1 : les points d arene"
+    assert "UI-PVP-Alliance" in r3.icone.texture, "typeSpecial 2 : la faction"
+    assert abs(list(r3.icone.texcoord.values())[0] - 0.03125) < 1e-6,         "et son rognage"
+    assert r4.icone.texture == "icone_embleme", "les autres prennent l icone rendue"
+
+    # UNE MONNAIE A ZERO S ECRIT EN GRIS, comme le client le fait.
+    print("   police : zero=%s | non nul=%s" % (r3.nom.font, r4.nom.font))
+    assert r3.nom.font == "GameFontDisable", "compte nul : GameFontDisable"
+    assert r4.nom.font == "GameFontHighlight", "sinon GameFontHighlight"
+    print("   coche de suivi : %s" % [bool(rangs[i].coche.shown) for i in (2, 3, 4)])
+    assert r4.coche.shown and not r2.coche.shown, "seule la monnaie suivie est cochee"
+
+    # DEPLIER LA CATEGORIE PvP rallonge la liste.
+    r5 = rangs[5]
+    r5.scripts.OnClick(r5)
+    posees = [l.nom.text for l in rangs.values() if l.shown]
+    print("   apres depli : %s" % ", ".join(posees))
+    assert "Wintergrasp Mark" in posees, "son contenu arrive"
+
+    # CLIQUER UNE MONNAIE la choisit, et le volet droit suit.
+    td = g.ForeverUITokenDetail or g.TokenFramePopup
+    r4.scripts.OnClick(r4)
+    print("   clic : titre=\"%s\" sous-titre=\"%s\" survol=%.2f" % (
+        td.titre.text, td.sousTitre.text, r4.survol.alpha))
+    assert td.titre.text == "Emblem of Frost", "le detail suit le clic"
+    assert td.sousTitre.text == "42", "sa quantite"
+    assert abs(r4.survol.alpha - 0.20) < 1e-6, "et la ligne est marquee"
+    assert g.TokenFrame.selectedToken == "Emblem of Frost",         "le client agit sur SON indice : on le tient a jour"
+    assert g.TokenFrame.selectedID == 4
+
+    # LES DEUX CASES DU CLIENT, rhabillees, portent l etat de la monnaie.
+    inactive = g.TokenFramePopupInactiveCheckBox
+    sac = g.TokenFramePopupBackpackCheckBox
+    print("   cases : inutilisee=%s suivie=%s" % (
+        inactive.checked, sac.checked))
+    assert inactive.checked is False and sac.checked is True,         "la case du sac suit isWatched"
+    assert inactive.width == 26 and inactive.foreverCoche is not None,         "26 x 26, checkbox-minimal et checkmark-minimal"
+
+    # LE FOND DE FENETRE N EST PAS UNE REGION : SetBackdrop(nil) seul l enleve.
+    print("   fond de fenetre : %s" % td.backdrop)
+    assert td.backdrop is None, "le <Backdrop> de 3.3.5"
+
+    # ET L INTITULE DU CLIENT NON PLUS N EST PAS UNE TEXTURE : un balayage
+    # qui ne prend que les textures laisse "Currency Options" a l ecran.
+    print("   intitule du client : visible=%s" % g.TokenFramePopupTitle.shown)
+    assert not g.TokenFramePopupTitle.shown,         "le FontString du client s en va comme ses textures"
+
+    # ET LUI AUSSI SORT DU SYSTEME DE PANNEAUX : le Blizzard_TokenUI du
+    # client l y inscrit des sa premiere ligne.
+    print("   inscription au systeme de panneaux : %s" % (
+        g.UIPanelWindows["TokenFrame"],))
+    assert g.UIPanelWindows["TokenFrame"] is None,         "il n est plus une fenetre : il sort de UIPanelWindows"
+    g.UpdateUIPanelPositions(g.CharacterFrame)
+    g.ForeverUI.TokensLayout()
+    pl3 = liste.points[1]
+    assert (pl3[4], pl3[5]) == (10, -40), "et reste borne au volet"
+
+    # TOUT L ECRAN DU CLIENT SE TAIT, a chaque passage.
+    g.ForeverUI.TokensLayout()
+    print("   ecran du client : conteneur visible=%s" % g.TokenFrameContainer.shown)
+    assert not g.TokenFrameContainer.shown, "sa liste a lui s en va"
+    assert liste.shown, "mais notre panneau demeure"
+
     # L ONGLET PvP. camelot y montre un rang que WotLK n expose plus dans son
     # FrameXML -- mais UnitPVPRank, GetPVPRankInfo et GetPVPRankProgress sont
     # dans le binaire, verifie. On s en sert, et le temoin dira ce que le
@@ -3139,6 +3763,148 @@ def main():
     g.ForeverUI.PvPUpdate()
     assert principal.cadran.width == 154, "le cadran fait 154"
 
+    # LE RANG VIENT DES TITRES, PAS DU COMPTEUR.
+    #
+    # Releve dans modules/mod-pvp-titles/src/mod_pvp_titles.cpp : le module
+    # pose un TITRE de CharTitles et ne touche jamais au compteur de rang.
+    # UnitPVPRank reste donc a zero, et le rang se demande a IsTitleKnown --
+    # identifiants 1 a 14 pour l Alliance, 15 a 28 pour la Horde.
+    lua.execute("RANG_PVP = 0; PROGRES_PVP = 0; VICTOIRES_PVP = 800")
+    lua.execute("TITRES_CONNUS = { [1] = true, [5] = true }")
+    g.ForeverUI.PvPUpdate()
+    print("   par les titres : titre=\"%s\", numero=\"%s\", anneau=%s" % (
+        principal.rang.text, principal.numero.text, principal.recompense.shown))
+    assert principal.numero.text == "5",         "le rang est le PLUS HAUT titre connu, pas le premier"
+    assert principal.rang.text == "Sergeant Major",         "le nom se lit toujours dans PVP_RANK_<numero + 4>_<faction>"
+
+    # LA PROGRESSION VIENT DES VICTOIRES, comparees aux seuils du serveur.
+    # Rang 5 acquis a 750, rang 6 a 1000 : 800 victoires font un cinquieme.
+    plein = sum(1 for q in range(1, 5) if principal.jauge[q].plein.shown)
+    arc = [q for q in range(1, 5) if principal.jauge[q].arc.shown]
+    print("   progression par les victoires : 800 -> %d quart(s) plein(s),"
+          " arc sur %s" % (plein, arc))
+    assert plein == 0 and arc == [3],         "un cinquieme de tour : rien de plein, l arc dans le premier quart"
+
+    # LE CAS REEL : 67 victoires, seul le titre du rang 1. Avec IsTitleKnown
+    # pris pour un booleen, ce cas rendait 14.
+    lua.execute("TITRES_CONNUS = { [1] = true }; VICTOIRES_PVP = 67")
+    g.ForeverUI.PvPUpdate()
+    arc = [q for q in range(1, 5) if principal.jauge[q].arc.shown]
+    print("   67 victoires, titre du rang 1 : numero=\"%s\" titre=\"%s\","
+          " arc sur %s" % (principal.numero.text, principal.rang.text, arc))
+    assert principal.numero.text == "1", "un seul titre connu : le rang 1"
+    assert principal.rang.text == "Private", "Alliance, rang 1"
+    # De 50 a 100 : 67 victoires font 34 % du tour, soit le quart qui part du
+    # bas en entier, et un tiers du suivant.
+    assert principal.jauge[3].plein.shown and arc == [4],         "34 %% du tour : le quart du bas plein, l arc dans le suivant"
+
+    # LA PROGRESSION S ECRIT EN CHIFFRES, pas en pourcentage : les victoires
+    # honorables et le seuil du palier suivant, comme CurrentRankProgressField.
+    print("   progression ecrite : \"%s\"" % principal.progres.text)
+    assert principal.progres.text == "67 / 100",         "les deux nombres que le module du serveur compare, pas un pourcentage"
+    lua.execute("VICTOIRES_PVP = 800")
+
+    # AU RANG MAXIMAL, la jauge est pleine et il n y a plus de seuil.
+    lua.execute("TITRES_CONNUS = { [14] = true }")
+    g.ForeverUI.PvPUpdate()
+    print("   au rang maximal : \"%s\"" % principal.progres.text)
+    assert principal.progres.text == "800",         "plus de seuil au-dessus : le compte reste seul"
+    plein = sum(1 for q in range(1, 5) if principal.jauge[q].plein.shown)
+    print("   rang 14 : titre=\"%s\", %d quart(s) plein(s)" % (
+        principal.rang.text, plein))
+    assert principal.numero.text == "14", "le quatorzieme titre est le rang 14"
+    assert plein == 4, "plus de seuil au-dessus : la jauge est pleine"
+
+    # SANS AUCUN TITRE, rien : ni numero, ni anneau dore. LE PIEGE EST ICI :
+    # IsTitleKnown rend 0 pour un titre inconnu, et 0 est VRAI en Lua.
+    lua.execute("TITRES_CONNUS = {}")
+    g.ForeverUI.PvPUpdate()
+    assert lua.eval("IsTitleKnown(1)") == 0,         "le faux doit rendre un nombre, comme le client"
+    assert principal.numero.text == "" and not principal.recompense.shown,         "aucun titre, aucun rang -- zero n est pas un titre connu"
+    lua.execute("PROGRES_PVP = 0.4; VICTOIRES_PVP = 1234")
+    g.ForeverUI.PvPUpdate()
+
+    # LA JAUGE CIRCULAIRE, verifiee par la geometrie et non par l oeil.
+    #
+    # camelot la fait avec un Cooldown dont il remplace la texture de
+    # balayage ; 3.3.5 n a pas SetSwipeTexture, et l addon refait le balayage
+    # par quadrants : un quart depasse montre l anneau entier, le quart ou la
+    # jauge s arrete montre un DEMI anneau tourne par SetTexCoord a huit
+    # arguments.
+    #
+    # ON VERIFIE CE QUE CA COUVRE. Pour une serie d angles pris sur le fil de
+    # l anneau, on relit les coordonnees que l addon a posees et on demande a
+    # l image si elle a de la matiere a cet endroit -- la moitie gauche, donc
+    # u < 0.5. Le resultat doit etre l arc qui part du BAS, six heures, et
+    # tourne dans le sens des aiguilles.
+    import math as _m
+
+    DEPART = 180.0          # <Cooldown rotation="180">
+    RAYON = 0.734           # le fil de l anneau, en fraction du demi-cadran
+
+    def _quart_de(u, v):
+        for q in range(1, 5):
+            quart = principal.jauge[q]
+            if quart.u1 <= u <= quart.u2 and quart.v1 <= v <= quart.v2:
+                return quart
+        return None
+
+    def _couvert(angle):
+        """L addon montre-t-il de la matiere a cet angle ?"""
+        r = _m.radians(angle)
+        u = 0.5 + 0.5 * RAYON * _m.sin(r)
+        v = 0.5 - 0.5 * RAYON * _m.cos(r)
+        quart = _quart_de(u, v)
+        if quart is None:
+            return False
+        if quart.plein.shown:
+            return True
+        if not quart.arc.shown:
+            return False
+        # Les quatre coins portent chacun sa coordonnee ; entre eux, le
+        # client interpole. On fait pareil.
+        tc = quart.arc.texcoord8
+        s = (u - quart.u1) / (quart.u2 - quart.u1)
+        w = (v - quart.v1) / (quart.v2 - quart.v1)
+        hg, bg, hd, bd = (tc[1], tc[2]), (tc[3], tc[4]), (tc[5], tc[6]), (tc[7], tc[8])
+        tu = ((1 - s) * (1 - w) * hg[0] + s * (1 - w) * hd[0]
+              + (1 - s) * w * bg[0] + s * w * bd[0])
+        return tu < 0.5          # la moitie gauche de l image, la seule cuite
+
+    for fraction in (0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0):
+        g.ForeverUI.PvPGauge(fraction)
+        etats = []
+        for q in range(1, 5):
+            quart = principal.jauge[q]
+            etats.append("plein" if quart.plein.shown
+                         else ("arc" if quart.arc.shown else "vide"))
+        faux = []
+        for pas in range(0, 360, 5):
+            angle = pas + 2.5              # jamais pile sur une frontiere
+            attendu = ((angle - DEPART) % 360.0) <= fraction * 360.0
+            if fraction >= 1.0:
+                attendu = True
+            if _couvert(angle) != attendu:
+                faux.append(pas)
+        print("   jauge %3d%% : %-28s %s" % (
+            fraction * 100, " ".join(etats),
+            "exacte" if not faux else "FAUX a %s" % faux))
+        assert not faux, "la jauge couvre autre chose que son arc : %s" % faux
+
+    # LE SENS. A un dixieme de tour, la jauge doit avoir quitte le bas par la
+    # GAUCHE -- le sens des aiguilles depuis six heures.
+    g.ForeverUI.PvPGauge(0.1)
+    assert _couvert(200) and not _couvert(160),         "la jauge part du bas et monte par la gauche"
+
+    # ELLE SUIT LA PROGRESSION REELLE.
+    lua.execute("PROGRES_PVP = 0.75")
+    g.ForeverUI.PvPUpdate()
+    plein = sum(1 for q in range(1, 5) if principal.jauge[q].plein.shown)
+    print("   jauge suivie : progres 0.75 -> %d quart(s) plein(s)" % plein)
+    assert plein == 3, "trois quarts entiers a trois quarts de tour"
+    lua.execute("PROGRES_PVP = 0.4")
+    g.ForeverUI.PvPUpdate()
+
     # LE VOLET DROIT porte ce que WotLK sait vraiment donner : l honneur.
     pd = g.ForeverUIPvPDetail
     print("   detail : titre=\"%s\", description=\"%s\"" % (
@@ -3175,6 +3941,137 @@ def main():
     assert g.ForeverUIEquipmentPane.shown
     assert droit.pierre.shown and gear.shown and droit.ligneNiveau.shown,         "le mobilier du personnage revient avec lui"
     assert perso.foreverRepli.shown, "et le bouton de repli avec"
+
+    # LA PAGE DES TITRES, troisieme onglet du volet droit. A LA DEMANDE :
+    # camelot n en a pas -- son PAPERDOLL_SIDEBARS vaut
+    # {STATS, EQUIPMENTMANAGER, PET}.
+    lua.execute("TITRES_CONNUS = { [1] = true, [15] = true, [42] = true };"
+                " TITRE_PORTE = 0")
+    droit.choisirPage("titres")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    volets = g.ForeverUITitlesPane
+    noms = []
+    rang = 1
+    while g["ForeverUITitleRow" + str(rang)] is not None:
+        ligne = g["ForeverUITitleRow" + str(rang)]
+        if ligne.shown:
+            noms.append(ligne.texte.text)
+        rang += 1
+    print("   titres : page=%s, %d ligne(s) : %s" % (
+        Panes.CurrentPage("droit"), len(noms), ", ".join(noms)))
+    assert Panes.CurrentPage("droit") == "titres", "le troisieme onglet ouvre sa page"
+    assert volets.shown, "et son panneau parait"
+    # TRIES PAR NOM, "Aucun" EN TETE quel que soit son intitule.
+    assert noms[0] == "None", "camelot reserve la premiere place a Aucun"
+    assert noms[1:] == ["Private", "Scout", "the Explorer"],         "tries par nom, et LE NOM EST ROGNE : GetTitleName rend \"Private \""
+    assert not droit.ongletStats.choisi.shown and droit.ongletTitres.choisi.shown,         "la marque suit le troisieme onglet"
+
+    # LA LIGNE PREND TOUT LE VOLET, moins la marge des statistiques. A LA
+    # DEMANDE : camelot donne 169 a son gabarit, sur un volet de 233.
+    premiere = g.ForeverUITitleRow1
+    pl = premiere.points[1]
+    ligneStat = g.CharacterStatsPaneCategory1StatFrame1 or g.PlayerStatFrameLeft1
+    print("   ligne de titre : %d de large, TOPLEFT (%s, %s)" % (
+        premiere.width, pl[4], pl[5]))
+    assert premiere.width == 233 - 2 * 20,         "toute la largeur du volet, moins 20 de chaque cote"
+    assert pl[4] == 20, "la meme marge a gauche que les statistiques"
+
+    # ET LE MEME FOND ALTERNE. A LA DEMANDE : les deux bandes de
+    # paperdollinfopart1c60, la sombre en premier.
+    def bandeTitre(rang):
+        fond = g["ForeverUITitleRow" + str(rang)].fond
+        if fond is None or fond.texcoord is None:
+            return None
+        tc = tuple(round(v, 6) for v in fond.texcoord.values())
+        for nom, r in rects.items():
+            if tc == r:
+                return "sombre" if nom == SOMBRE else "clair"
+        return "?"
+
+    bandes = [bandeTitre(r) for r in range(1, 5)]
+    print("   fond des titres : %s" % " ".join(str(b) for b in bandes))
+    assert bandes == ["sombre", "clair", "sombre", "clair"],         "les memes bandes que les statistiques, la sombre en premier"
+
+    # LE TITRE PORTE A SA COCHE, ET LUI SEUL.
+    lignes = [g["ForeverUITitleRow" + str(i)] for i in range(1, len(noms) + 1)]
+    coches = [l.texte.text for l in lignes if l.coche.shown]
+    print("   coche sans titre porte : %s" % coches)
+    assert coches == ["None"],         "GetCurrentTitle rend 0 : c est Aucun qui est coche"
+
+    # CLIQUER CHANGE LE TITRE PORTE.
+    lignes[2].scripts.OnClick(lignes[2])
+    coches = [l.texte.text for l in lignes if l.coche.shown]
+    print("   apres le clic sur %s : GetCurrentTitle=%s, coche %s" % (
+        lignes[2].texte.text, lua.eval("GetCurrentTitle()"), coches))
+    assert lua.eval("GetCurrentTitle()") == 15, "SetCurrentTitle recoit l identifiant"
+    assert coches == ["Scout"], "la coche suit, et il n y en a qu une"
+
+    # LE NOM DE LA FEUILLE SUIT LE TITRE. Il ne change pas au clic --
+    # SetCurrentTitle part au serveur -- mais a UNIT_NAME_UPDATE, que le
+    # client envoie quand la reponse arrive.
+    bande = perso.foreverTitre
+    print("   nom de la feuille apres le clic : \"%s\"" % bande.text)
+    g.ForeverUICharacterWatcher.scripts.OnEvent(
+        g.ForeverUICharacterWatcher, "UNIT_NAME_UPDATE", "player")
+    print("   apres UNIT_NAME_UPDATE : \"%s\"" % bande.text)
+    assert bande.text == "Scout Robert Polson",         "la bande de titre reprend UnitPVPName"
+
+    # Et pas pour une autre unite : l evenement part pour tout le decor.
+    lua.execute("TITRE_PORTE = 1")
+    g.ForeverUICharacterWatcher.scripts.OnEvent(
+        g.ForeverUICharacterWatcher, "UNIT_NAME_UPDATE", "target")
+    assert bande.text == "Scout Robert Polson",         "seule l unite du joueur refait la bande"
+    lua.execute("TITRE_PORTE = 15")
+
+    # "AUCUN" SE POSE PAR -1, comme le client le fait.
+    lignes[0].scripts.OnClick(lignes[0])
+    assert lua.eval("GetCurrentTitle()") == -1, "Aucun vaut -1"
+    g.ForeverUICharacterWatcher.scripts.OnEvent(
+        g.ForeverUICharacterWatcher, "UNIT_NAME_UPDATE", "player")
+    print("   sans titre : \"%s\"" % bande.text)
+    assert bande.text == "Robert Polson", "sans titre, le nom seul"
+
+    # LE MENU DEROULANT DU CLIENT SE TAIT, ET A CHAQUE PASSAGE : le sien se
+    # remontre dans PlayerTitleFrame_UpdateTitles.
+    g.PlayerTitleFrame_UpdateTitles()
+    restants = [n for n in ("PlayerTitleFrame", "PlayerTitlePickerFrame") if g[n].shown]
+    print("   menu du client : %d morceau(x) encore visible(s)" % len(restants))
+    assert restants == [], "il en reste : %s" % restants
+
+    # LES STATISTIQUES NE DOIVENT PAS REPARAITRE TOUTES SEULES.
+    #
+    # UpdatePaperdollStats remontre chacune de ses lignes a chaque mise a
+    # jour -- gain de niveau, changement d equipement -- sans demander si
+    # l ecran est ouvert. Elles se superposaient donc a la page des titres
+    # ou a celle des ensembles.
+    g.PaperDollFrame_UpdateStats()
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   montee de niveau sur la page des titres : stats visibles=%s,"
+          " titres=%s" % (any(lignes), volets.shown))
+    assert not any(lignes),         "les statistiques ne doivent pas revenir par-dessus les titres"
+    assert not g.PlayerStatFrameLeftDropDown.shown, "leurs en-tetes non plus"
+    assert volets.shown, "et la page des titres demeure"
+
+    # LE MEME SUR LA PAGE DES ENSEMBLES.
+    droit.choisirPage("equipement")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    g.PaperDollFrame_UpdateStats()
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   montee de niveau sur la page des ensembles : stats visibles=%s,"
+          " panneau=%s" % (any(lignes), g.ForeverUIEquipmentPane.shown))
+    assert not any(lignes),         "ni par-dessus le gestionnaire d ensembles"
+    assert g.ForeverUIEquipmentPane.shown, "qui demeure"
+
+    # ET SUR LEUR PROPRE PAGE, ELLES REVIENNENT BIEN.
+    droit.choisirPage("stats")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    g.PaperDollFrame_UpdateStats()
+    lignes = [g["PlayerStatFrameLeft" + str(i)].shown for i in range(1, 7)]
+    print("   sur leur propre page : stats visibles=%s" % all(lignes))
+    assert all(lignes), "sur leur page, la mise a jour doit les montrer"
+
+    droit.choisirPage("equipement")
+    g.ForeverUI.CharacterApplyPanes(perso)
 
     # ET LE REPLI VAUT SUR TOUS LES ONGLETS, puisque le volet y est.
     perso.foreverRepli.scripts.OnClick(perso.foreverRepli)
@@ -3242,6 +4139,61 @@ def main():
     assert g.PVPParentFrame.toplevel is False, "et ne se hisse plus au-dessus de tout"
     assert ppvp[2].name == "ForeverUICharacterLeftPane", "bornee au volet"
     assert droit.shown and perso.width == 631, "le volet droit reste, comme ailleurs"
+
+    # LE SYSTEME DE PANNEAUX NE DOIT PLUS LA REPRENDRE.
+    #
+    # UIPanelWindows["PVPParentFrame"] existe dans le client -- UIParent.lua
+    # ligne 52. Tant qu il y est, UpdateUIPanelPositions rend ses ancres a
+    # UIParent et la fenetre redevient une dalle de 384 x 512 posee a
+    # l ecran. Son art etant eteint, elle ne se voit pas, mais elle prend la
+    # souris : les onglets lateraux cessaient de repondre au clic.
+    print("   inscription au systeme de panneaux : %s" % (
+        g.UIPanelWindows["PVPParentFrame"]))
+    assert g.UIPanelWindows["PVPParentFrame"] is None,         "elle n est plus une fenetre : elle sort de UIPanelWindows"
+
+    g.UpdateUIPanelPositions(g.CharacterFrame)
+    ppvp = g.PVPParentFrame.points[len(list(g.PVPParentFrame.points.values()))]
+    print("   apres le systeme de panneaux : parent=%s ancre sur %s" % (
+        g.PVPParentFrame.parent.name, ppvp[2].name))
+    assert g.PVPParentFrame.parent.name == "ForeverUICharacterLeftPane",         "elle reste dans le volet"
+    assert ppvp[2].name == "ForeverUICharacterLeftPane", "et bornee a lui"
+
+    # ET SI QUELQUE CHOSE LUI RENDAIT SES ANCRES, le passage suivant les
+    # reprend : le bornage se refait a chaque mise a jour, pas une seule fois.
+    lua.execute('PVPParentFrame:SetParent(UIParent); PVPParentFrame:ClearAllPoints();'
+                ' PVPParentFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)')
+    g.ForeverUI.PvPUpdate()
+    ppvp = g.PVPParentFrame.points[len(list(g.PVPParentFrame.points.values()))]
+    print("   apres un deplacement force : parent=%s ancre sur %s" % (
+        g.PVPParentFrame.parent.name, ppvp[2].name))
+    assert g.PVPParentFrame.parent.name == "ForeverUICharacterLeftPane"         and ppvp[2].name == "ForeverUICharacterLeftPane",         "le passage suivant la remet dans son volet"
+
+    # DEPUIS LE PvP, L ONGLET DU PERSONNAGE DOIT RAMENER LA FEUILLE.
+    #
+    # Il ne passe PAS par CharacterFrame_ShowSubFrame : CharacterFrameTab_OnClick
+    # appelle ToggleCharacter, qui FERME la fenetre si l ecran demande est deja
+    # montre. C est ce chemin-la qu il faut essayer, et lui seul.
+    #
+    # ET ON Y ARRIVE PAR LE CHEMIN REEL : on choisit d abord l onglet du
+    # personnage par le clic du client -- ce qui le DESACTIVE, c est ce que
+    # fait PanelTemplates_SelectTab -- puis on passe au PvP par le notre.
+    t1 = g.CharacterFrameTab1
+    t1.scripts.OnClick(t1)
+    print("   onglet du personnage choisi : actif=%s" % (t1.enabled,))
+    assert t1.enabled is False,         "PanelTemplates_SelectTab desactive l onglet choisi"
+    pvp.scripts.OnClick(pvp)
+    print("   apres l onglet PvP : onglet du personnage actif=%s" % (t1.enabled,))
+    assert t1.enabled is not False,         "nos ecrans ne passent pas par PanelTemplates : il faut rendre la main"
+
+    t1.scripts.OnClick(t1)
+    visibles = [e for e in list(g.CHARACTERFRAME_SUBFRAMES.values()) if g[e].shown]
+    print("   depuis le PvP, clic sur l onglet du personnage : fenetre=%s,"
+          " ecrans=%s, PvP=%s, page=%s" % (
+        perso.shown, visibles, g.PVPParentFrame.shown, Panes.CurrentGroup("gauche")))
+    assert perso.shown, "la fenetre ne doit pas se fermer"
+    assert visibles == ["PaperDollFrame"], "la feuille revient"
+    assert not g.PVPParentFrame.shown, "et le PvP s en va"
+    pvp.scripts.OnClick(pvp)
 
     # CLIQUER SUR LES STATISTIQUES : l ecran est vide, mais l onglet marche.
     stat.scripts.OnClick(stat)
@@ -3538,6 +4490,66 @@ def main():
     assert x == -8 and y == 14, "la bourse doit etre remontee de 6"
     assert bourse.height == 13, "UpdateMoneyFrame pose 13"
     assert bourse.foreverBorde, "la bourse n'a pas son encadre"
+
+    # LE SEGMENT DES MONNAIES SUIVIES, sous la bourse.
+    #
+    # RELEVE -- ContainerFrameTokenWatcherMixin:UpdateCurrencyFrames : le
+    # segment prend le bas, la bourse MONTE au-dessus de lui (0, 3), et
+    # CalculateExtraHeight ajoute sa hauteur.
+    print("   sans monnaie suivie : segment=%s" % (
+        g.ForeverUIBagTokens is not None and g.ForeverUIBagTokens.shown))
+    assert g.ForeverUIBagTokens is None or not g.ForeverUIBagTokens.shown,         "sans monnaie suivie, pas de segment"
+
+    lua.execute('SUIVIES = { { nom = "Emblem of Frost", compte = 42,'
+                ' icone = "icone_embleme" },'
+                ' { nom = "Honor Points", compte = 7, special = 2 } }')
+    g.ForeverUI.BagsApply()
+    segment = g.ForeverUIBagTokens
+    ps = segment.points[len(list(segment.points.values()))]
+    pb = ancre(bourse)
+    print("   deux monnaies suivies : segment %s (%s, %s) haut de %d |"
+          " bourse %s sur %s (%s, %s)" % (
+        ps[1], ps[4], ps[5], segment.height, pb[0], pb[2], pb[3], pb[4]))
+    assert segment.shown, "le segment parait"
+    assert segment.height == 17, "BackpackTokenFrameTemplate fait 17"
+    assert (ps[1], ps[4], ps[5]) == ("BOTTOMRIGHT", -8, 14),         "il prend le bas, aux memes 8 que la bourse"
+    assert (pb[0], pb[2], pb[3], pb[4]) == ("BOTTOMRIGHT", "TOPRIGHT", 0, 3),         "la bourse monte au-dessus du segment"
+
+    HAUTEUR2 = HAUTEUR + 17 + 3
+    print("   la fenetre grandit : %d (avant %d)" % (
+        g.ContainerFrame1.height, HAUTEUR))
+    assert g.ContainerFrame1.height == HAUTEUR2,         "CalculateExtraHeight doit compter le segment"
+
+    # LES JETONS S ENCHAINENT VERS LA GAUCHE depuis le bord droit.
+    j1, j2, j3 = g.ForeverUIBagToken1, g.ForeverUIBagToken2, g.ForeverUIBagToken3
+    pj1 = j1.points[len(list(j1.points.values()))]
+    print("   jetons : %s %s | comptes %s, %s | troisieme visible=%s" % (
+        j1.width, j1.height, j1.compte.text, j2.compte.text, j3.shown))
+    assert j1.width == 50 and j1.height == 12, "BackpackTokenTemplate"
+    assert (pj1[1], pj1[4], pj1[5]) == ("RIGHT", -17, -1), "GetInitialTokenAnchor"
+    assert j1.compte.text == 42 and j2.compte.text == 7, "les comptes du client"
+    # A LA DEMANDE : d un cran au-dessus du GameFontHighlightSmall de camelot,
+    # et celui de la BOURSE ne bouge pas -- il est au cadre d argent du client.
+    print("   police du compte : %s | ancres %s" % (
+        j1.compte.font, [p[1] for p in j1.compte.points.values()]))
+    assert j1.compte.font == "GameFontHighlight", "les chiffres sont agrandis"
+    assert [p[1] for p in j1.compte.points.values()] == ["LEFT", "RIGHT"],         "deux ancres horizontales : borne comme avant, et centre en hauteur"
+    assert not j3.shown, "la troisieme place reste vide"
+    assert "UI-PVP-Alliance" in j2.icone.texture,         "les points d honneur gardent leur icone de faction"
+
+    # LE SEGMENT DU CLIENT SE TAIT, et sa fonction de taille ne defait plus
+    # la notre.
+    g.ManageBackpackTokenFrame()
+    print("   segment du client : visible=%s | hauteur apres son passage : %d" % (
+        g.BackpackTokenFrame.shown, g.ContainerFrame1.height))
+    assert not g.BackpackTokenFrame.shown, "celui du client s en va"
+    assert g.ContainerFrame1.height == HAUTEUR2,         "ManageBackpackTokenFrame reposait BACKPACK_HEIGHT + 22 : on repasse derriere"
+
+    lua.execute("SUIVIES = {}")
+    g.ForeverUI.BagsApply()
+    print("   plus aucune monnaie suivie : hauteur %d" % g.ContainerFrame1.height)
+    assert g.ContainerFrame1.height == HAUTEUR, "la fenetre retrouve sa taille"
+    assert not segment.shown, "et le segment s en va"
 
     # SetSearchBoxPoint / UpdateSearchBox -- ancres en HAUT, comme la source
     point, _, pointCible, x, y = ancre(champ)
