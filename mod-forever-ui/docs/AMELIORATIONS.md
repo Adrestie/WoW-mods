@@ -11,3 +11,4 @@ chacun est dans `NOTES.md` ; ici, la demande telle qu'elle a été faite.
   haut de l'écran.**
 - **Trouver une icône pour l'onglet « Pet » de la feuille de personnage.**
 - **Revoir le volet droit de l'onglet « PvP » de la feuille de personnage.**
+- **Si joueur niveau max -> descendre la barre de réputation à la place de la barre d'xp**
