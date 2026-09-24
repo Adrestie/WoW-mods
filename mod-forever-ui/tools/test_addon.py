@@ -73,6 +73,10 @@ local function newRegion(kind)
     function r:SetText(t) self.text = t end
     function r:GetText() return self.text end
     function r:SetJustifyH(j) self.justify = j end
+    function r:GetJustifyH() return self.justify end
+    -- 3.3.5 l'a, mais il REND FAUX quand la carte graphique ne sait
+    -- pas desaturer. Le faux rend vrai : c'est le cas courant.
+    function r:SetDesaturated(v) self.desaturated = (v ~= false) return true end
     function r:SetJustifyV(j) self.justifyV = j end
     function r:SetTextColor(rr, vv, bb, aa) self.textColor = {rr, vv, bb, aa} end
     function r:GetTextColor()
@@ -107,6 +111,9 @@ local function newRegion(kind)
     -- 3.3.5 ne prend PAS de sous-calque : un seul argument.
     function r:SetDrawLayer(calque) self.layer = calque end
     function r:SetBlendMode(m) self.blend = m end
+    function r:SetFont(chemin, taille, drapeaux) self.fontFile, self.fontSize, self.fontFlags = chemin, taille, drapeaux end
+    function r:SetShadowOffset(x, y) self.shadowOffset = {x, y} end
+    function r:SetShadowColor(a, b, c, d) self.shadowColor = {a, b, c, d} end
     return r
 end
 
@@ -154,18 +161,13 @@ function CreateFrame(kind, name, parent, template)
     function f:SetMovable(v) self.movable = (v ~= false) end
     function f:IsMovable() return self.movable end
     function f:SetClampedToScreen() end
-    function f:GetNormalTexture()
-        if not self._normal then self._normal = newRegion("texture") end
-        return self._normal
-    end
-    function f:GetPushedTexture()
-        if not self._pushed then self._pushed = newRegion("texture") end
-        return self._pushed
-    end
-    function f:GetDisabledTexture()
-        if not self._disabled then self._disabled = newRegion("texture") end
-        return self._disabled
-    end
+    -- UN BOUTON N'A QUE LES ETATS QUE SON XML DECLARE. Le vrai client rend
+    -- nil pour une NormalTexture jamais posee : MiniMapTrackingButton n'a
+    -- qu'une HighlightTexture en 3.3.5, et le faux qui en fabriquait une a
+    -- laisse passer une erreur au chargement de Minimap.lua (2026-09-24).
+    function f:GetNormalTexture() return self._normal end
+    function f:GetPushedTexture() return self._pushed end
+    function f:GetDisabledTexture() return self._disabled end
     function f:SetBackdrop(b) self.backdrop = b end
     function f:GetBackdrop() return self.backdrop end
     function f:SetNormalFontObject(o) self.normalFont = o end
@@ -175,14 +177,8 @@ function CreateFrame(kind, name, parent, template)
     function f:GetButtonState() return self.buttonState or "NORMAL" end
     function f:SetChecked(v) self.checked = v and true or false end
     function f:GetChecked() return self.checked end
-    function f:GetCheckedTexture()
-        if not self._checked then self._checked = newRegion("texture") end
-        return self._checked
-    end
-    function f:GetHighlightTexture()
-        if not self._highlight then self._highlight = newRegion("texture") end
-        return self._highlight
-    end
+    function f:GetCheckedTexture() return self._checked end
+    function f:GetHighlightTexture() return self._highlight end
     function f:SetParent(p)
         if self.parent and self.parent.children then
             for i, c in ipairs(self.parent.children) do
@@ -247,6 +243,7 @@ function CreateFrame(kind, name, parent, template)
     function f:SetPushedTexture(v) return poserTexture(self, "_pushed", v) end
     function f:SetHighlightTexture(v) return poserTexture(self, "_highlight", v) end
     function f:SetDisabledTexture(v) return poserTexture(self, "_disabled", v) end
+    function f:SetCheckedTexture(v) return poserTexture(self, "_checked", v) end
     -- Une StatusBar porte une valeur et des bornes.
     function f:SetMinMaxValues(mini, maxi) self.mini, self.maxi = mini, maxi end
     function f:GetMinMaxValues() return self.mini or 0, self.maxi or 0 end
@@ -526,6 +523,154 @@ MainMenuExpBar = CreateFrame("StatusBar", "MainMenuExpBar", UIParent)
 ExhaustionTick = CreateFrame("Frame", "ExhaustionTick", UIParent)
 RuneFrame = CreateFrame("Frame", "RuneFrame", UIParent)
 
+-- LA MINIMAP DU CLIENT 3.3.5, telle que Minimap.xml la monte. Les tailles et
+-- les parentes sont celles du gabarit : la carte fait 140 dans un cluster de
+-- 192, MinimapBackdrop est fils de la CARTE, et MinimapCompassTexture porte
+-- ici la boussole a jeter -- pas le cadre, contrairement a camelot.
+MinimapCluster = CreateFrame("Frame", "MinimapCluster", UIParent)
+MinimapCluster:SetWidth(192) MinimapCluster:SetHeight(192)
+MinimapBorderTop = MinimapCluster:CreateTexture("MinimapBorderTop", "ARTWORK")
+MinimapBorderTop:SetTexture("Interface\\\\Minimap\\\\UI-Minimap-Border")
+
+Minimap = CreateFrame("Frame", "Minimap", MinimapCluster)
+Minimap:SetWidth(140) Minimap:SetHeight(140)
+Minimap.zoom = 0
+Minimap.zoomLevels = 5
+function Minimap:SetMaskTexture(chemin) self.mask = chemin end
+function Minimap:GetZoom() return self.zoom end
+function Minimap:GetZoomLevels() return self.zoomLevels end
+function Minimap:SetZoom(v) self.zoom = v end
+Minimap.fleches = {}
+function Minimap:SetPOIArrowTexture(c) self.fleches.poi = c end
+function Minimap:SetStaticPOIArrowTexture(c) self.fleches.statique = c end
+function Minimap:SetCorpsePOIArrowTexture(c) self.fleches.cadavre = c end
+
+MinimapBackdrop = CreateFrame("Frame", "MinimapBackdrop", Minimap)
+MinimapBackdrop:SetWidth(192) MinimapBackdrop:SetHeight(192)
+MinimapBorder = MinimapBackdrop:CreateTexture("MinimapBorder", "ARTWORK")
+MinimapBorder:SetTexture("Interface\\\\Minimap\\\\UI-Minimap-Border")
+MinimapNorthTag = MinimapBackdrop:CreateTexture("MinimapNorthTag", "OVERLAY")
+MinimapNorthTag:SetTexture("Interface\\\\Minimap\\\\CompassNorthTag")
+MinimapCompassTexture = MinimapBackdrop:CreateTexture("MinimapCompassTexture", "OVERLAY")
+MinimapCompassTexture:SetTexture("Interface\\\\Minimap\\\\CompassRing")
+
+MinimapZoneTextButton = CreateFrame("Button", "MinimapZoneTextButton", MinimapCluster)
+MinimapZoneTextButton:SetWidth(150) MinimapZoneTextButton:SetHeight(12)
+MinimapZoneText = MinimapZoneTextButton:CreateFontString("MinimapZoneText", "BACKGROUND")
+-- GameFontNormal ne porte AUCUNE justification : donc centre, et c'est bien
+-- ce que le vrai client donne avant qu'on y touche.
+MinimapZoneText:SetFontObject("GameFontNormal")
+MinimapZoneText:SetText("Hurlevent")
+
+MinimapZoomIn = CreateFrame("Button", "MinimapZoomIn", MinimapBackdrop)
+MinimapZoomIn:SetWidth(32) MinimapZoomIn:SetHeight(32)
+MinimapZoomIn:SetHitRectInsets(4, 4, 2, 6)
+MinimapZoomOut = CreateFrame("Button", "MinimapZoomOut", MinimapBackdrop)
+MinimapZoomOut:SetWidth(32) MinimapZoomOut:SetHeight(32)
+MinimapZoomOut:SetHitRectInsets(4, 4, 2, 6)
+for _, b in ipairs({ MinimapZoomIn, MinimapZoomOut }) do
+    b:SetNormalTexture("zoom-up")
+    b:SetPushedTexture("zoom-down")
+    b:SetDisabledTexture("zoom-disabled")
+    b:SetHighlightTexture("zoom-highlight")
+end
+
+MiniMapTracking = CreateFrame("Frame", "MiniMapTracking", MinimapBackdrop)
+MiniMapTracking:SetWidth(32) MiniMapTracking:SetHeight(32)
+MiniMapTrackingBackground = MiniMapTracking:CreateTexture("MiniMapTrackingBackground", "BACKGROUND")
+MiniMapTrackingBackground:SetTexture("Interface\\\\Minimap\\\\UI-Minimap-Background")
+MiniMapTrackingIcon = MiniMapTracking:CreateTexture("MiniMapTrackingIcon", "ARTWORK")
+MiniMapTrackingIcon:SetTexture("Interface\\\\Icons\\\\INV_Misc_Map_01")
+MiniMapTrackingIconOverlay = MiniMapTracking:CreateTexture("MiniMapTrackingIconOverlay", "OVERLAY")
+MiniMapTrackingButton = CreateFrame("Button", "MiniMapTrackingButton", MiniMapTracking)
+MiniMapTrackingButton:SetWidth(32) MiniMapTrackingButton:SetHeight(32)
+MiniMapTrackingButtonBorder = MiniMapTrackingButton:CreateTexture("MiniMapTrackingButtonBorder", "BORDER")
+MiniMapTrackingButtonBorder:SetTexture("Interface\\\\Minimap\\\\MiniMap-TrackingBorder")
+MiniMapTrackingButtonShine = MiniMapTrackingButton:CreateTexture("MiniMapTrackingButtonShine", "OVERLAY")
+MiniMapTrackingButtonShine:SetTexture("Interface\\\\ComboFrame\\\\ComboPoint")
+-- Minimap.xml de 3.3.5 : ce bouton ne declare QUE sa HighlightTexture.
+-- GetNormalTexture y rend nil -- c'est ce qui a casse Minimap.lua en jeu.
+MiniMapTrackingButton:SetHighlightTexture("Interface\\\\Minimap\\\\UI-Minimap-ZoomButton-Highlight")
+-- LE VRAI REND SON FICHIER A L ICONE a chaque mise a jour du pistage : un
+-- faux qui se tairait laisserait croire qu un simple Hide suffit.
+function MiniMapTracking_Update()
+    MiniMapTrackingIcon:SetTexture("Interface\\\\Icons\\\\INV_Misc_Map_01")
+end
+-- ET IL REMONTRE la boussole et la fleche du nord a chaque bascule du CVar.
+function Minimap_UpdateRotationSetting()
+    if GetCVar("rotateMinimap") == "1" then
+        MinimapCompassTexture:Show() MinimapNorthTag:Hide()
+    else
+        MinimapCompassTexture:Hide() MinimapNorthTag:Show()
+    end
+end
+
+MiniMapMailFrame = CreateFrame("Frame", "MiniMapMailFrame", Minimap)
+MiniMapMailFrame:SetWidth(33) MiniMapMailFrame:SetHeight(33)
+MiniMapMailIcon = MiniMapMailFrame:CreateTexture("MiniMapMailIcon", "ARTWORK")
+MiniMapMailIcon:SetTexture("Interface\\\\Icons\\\\INV_Letter_15")
+MiniMapMailBorder = MiniMapMailFrame:CreateTexture("MiniMapMailBorder", "OVERLAY")
+MiniMapMailBorder:SetTexture("Interface\\\\Minimap\\\\MiniMap-TrackingBorder")
+
+MiniMapInstanceDifficulty = CreateFrame("Frame", "MiniMapInstanceDifficulty", MinimapCluster)
+MiniMapInstanceDifficulty:SetWidth(38) MiniMapInstanceDifficulty:SetHeight(46)
+
+-- GameTime.xml de 3.3.5 : 40 x 40, Normal, Pushed, Highlight, et un
+-- ButtonText ou GameTimeFrame_SetDate ECRIT LE JOUR.
+GameTimeFrame = CreateFrame("Button", "GameTimeFrame", Minimap)
+GameTimeFrame:SetWidth(40) GameTimeFrame:SetHeight(40)
+GameTimeFrame:SetHitRectInsets(6, 0, 5, 10)
+GameTimeFrame:SetNormalTexture("Interface\\\\Calendar\\\\UI-Calendar-Button")
+GameTimeFrame:SetPushedTexture("Interface\\\\Calendar\\\\UI-Calendar-Button")
+GameTimeFrame:SetHighlightTexture("Interface\\\\Minimap\\\\UI-Minimap-ZoomButton-Highlight")
+GameTimeFrame:SetFontString(GameTimeFrame:CreateFontString(nil, "OVERLAY"))
+function CalendarGetDate() return 5, 9, 24, 2026 end
+function GameTimeFrame_SetDate()
+    local _, _, jour = CalendarGetDate()
+    GameTimeFrame:GetFontString():SetText(jour)
+end
+GameTimeFrame_SetDate()
+
+-- Blizzard_TimeManager se charge A LA DEMANDE : l'horloge n'existe pas au
+-- chargement de l'addon. CHARGER_HORLOGE la monte comme son XML de 3.3.5 --
+-- 60 x 28 sur la carte, un fond SANS NOM, le texte, la lueur d'alarme --
+-- puis previent les cadres qui ecoutent ADDON_LOADED.
+function CHARGER_HORLOGE()
+    local b = CreateFrame("Button", "TimeManagerClockButton", Minimap)
+    b:SetWidth(60) b:SetHeight(28)
+    local fond = b:CreateTexture(nil, "BORDER")
+    fond:SetTexture("Interface\\\\TimeManager\\\\ClockBackground")
+    TimeManagerClockTicker = b:CreateFontString("TimeManagerClockTicker", "ARTWORK")
+    TimeManagerClockTicker:SetFontObject("GameFontHighlightSmall")
+    TimeManagerClockTicker:SetText("14:30")
+    TimeManagerAlarmFiredTexture = b:CreateTexture("TimeManagerAlarmFiredTexture", "ARTWORK")
+    TimeManagerAlarmFiredTexture:SetTexture("Interface\\\\TimeManager\\\\ClockBackground")
+    TimeManagerAlarmFiredTexture:Hide()
+    b.fondSansNom = fond
+    for _, f in ipairs(FRAMES) do
+        if f.events and f.events["ADDON_LOADED"] and f.scripts and f.scripts.OnEvent then
+            f.scripts.OnEvent(f, "ADDON_LOADED", "Blizzard_TimeManager")
+        end
+    end
+end
+
+-- La position du joueur : 3.3.5 repond sur la carte AFFICHEE, (0, 0) quand
+-- ce n'est pas la sienne.
+POSITION = { x = 0.4567, y = 0.6234, recentrages = 0 }
+function GetPlayerMapPosition(unite) return POSITION.x, POSITION.y end
+function SetMapToCurrentZone() POSITION.recentrages = POSITION.recentrages + 1 end
+WorldMapFrame = CreateFrame("Frame", "WorldMapFrame", UIParent)
+WorldMapFrame:Hide()
+
+-- Les quatre boutons que camelot n a pas.
+MiniMapWorldMapButton = CreateFrame("Button", "MiniMapWorldMapButton", MinimapBackdrop)
+MiniMapLFGFrame = CreateFrame("Button", "MiniMapLFGFrame", MinimapBackdrop)
+MiniMapBattlefieldFrame = CreateFrame("Button", "MiniMapBattlefieldFrame", Minimap)
+MiniMapRecordingButton = CreateFrame("Button", "MiniMapRecordingButton", MinimapBackdrop)
+
+-- L heure du serveur : 14 h, donc le jour.
+function GetGameTime() return 14, 30 end
+
 -- la barre d'action du client, telle que l'addon la trouve
 MainMenuBar = CreateFrame("Frame", "MainMenuBar", UIParent)
 MainMenuBarLeftEndCap = UIParent:CreateTexture(nil, "ARTWORK")
@@ -539,11 +684,31 @@ end
 MainMenuBarExpText = UIParent:CreateFontString(nil, "OVERLAY")
 ActionBarUpButton = CreateFrame("Button", "ActionBarUpButton", UIParent)
 ActionBarDownButton = CreateFrame("Button", "ActionBarDownButton", UIParent)
+-- ActionBarFrame.xml : les deux fleches declarent Normal, Pushed, Disabled
+-- et Highlight.
+for _, b in ipairs({ ActionBarUpButton, ActionBarDownButton }) do
+    b:SetNormalTexture("fleche-up")
+    b:SetPushedTexture("fleche-down")
+    b:SetDisabledTexture("fleche-disabled")
+    b:SetHighlightTexture("fleche-highlight")
+end
 NumberFontNormalSmallGray = "NumberFontNormalSmallGray"
 NumberFontNormal = "NumberFontNormal"
 GameFontHighlightSmallOutline = "GameFontHighlightSmallOutline"
+-- ActionButtonTemplate (ActionButtonTemplate.xml de 3.3.5) declare ses
+-- quatre etats : Normal, Pushed, Highlight, Checked. Tous les boutons
+-- d'action du client en heritent -- barre principale, bonus, postures,
+-- familier.
+function DECLARER_ETATS_ACTION(b)
+    b:SetNormalTexture("Interface\\\\Buttons\\\\UI-Quickslot2")
+    b:SetPushedTexture("Interface\\\\Buttons\\\\UI-Quickslot-Depress")
+    b:SetHighlightTexture("Interface\\\\Buttons\\\\ButtonHilight-Square")
+    b:SetCheckedTexture("Interface\\\\Buttons\\\\CheckButtonHilight")
+end
+
 for i = 1, 12 do
     local b = CreateFrame("CheckButton", "ActionButton" .. i, MainMenuBar)
+    DECLARER_ETATS_ACTION(b)
     _G["ActionButton" .. i .. "Icon"] = b:CreateTexture(nil, "ARTWORK")
     _G["ActionButton" .. i .. "Border"] = b:CreateTexture(nil, "OVERLAY")
     _G["ActionButton" .. i .. "Flash"] = b:CreateTexture(nil, "ARTWORK")
@@ -564,6 +729,12 @@ for _, nom in ipairs(MICROS) do
     local b = CreateFrame("Button", nom, MainMenuBarArtFrame)
     b:SetWidth(28)
     b:SetHeight(58)
+    -- LoadMicroButtonTextures (MainMenuBarMicroButtons.lua de 3.3.5) leur
+    -- pose les quatre etats des l'OnLoad.
+    b:SetNormalTexture("micro-up")
+    b:SetPushedTexture("micro-down")
+    b:SetDisabledTexture("micro-disabled")
+    b:SetHighlightTexture("micro-highlight")
 end
 MicroButtonPortrait = CharacterMicroButton:CreateTexture("MicroButtonPortrait", "OVERLAY")
 PVPMicroButtonTexture = PVPMicroButton:CreateTexture("PVPMicroButtonTexture", "OVERLAY")
@@ -573,10 +744,19 @@ function UpdateMicroButtons() end
 for _, nom in ipairs({ "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot",
                        "CharacterBag2Slot", "CharacterBag3Slot" }) do
     local b = CreateFrame("CheckButton", nom, MainMenuBarArtFrame)
+    -- ItemButtonTemplate declare Normal, Pushed, Highlight ; le sac a dos et
+    -- BagSlotButtonTemplate y ajoutent Checked.
+    b:SetNormalTexture("sac-up")
+    b:SetPushedTexture("sac-down")
+    b:SetHighlightTexture("sac-highlight")
+    b:SetCheckedTexture("sac-checked")
     _G[nom .. "IconTexture"] = b:CreateTexture(nom .. "IconTexture", "BORDER")
     _G[nom .. "Count"] = b:CreateFontString(nom .. "Count", "OVERLAY")
 end
 KeyRingButton = CreateFrame("CheckButton", "KeyRingButton", MainMenuBarArtFrame)
+KeyRingButton:SetNormalTexture("trousseau-up")
+KeyRingButton:SetPushedTexture("trousseau-down")
+KeyRingButton:SetHighlightTexture("trousseau-highlight")
 KeyRingButton:Hide()
 
 -- les sacs du client
@@ -617,6 +797,11 @@ for i = 1, NUM_CONTAINER_FRAMES do
     end
     for j = 1, MAX_CONTAINER_ITEMS do
         local b = CreateFrame("Button", nom .. "Item" .. j, c)
+        -- ContainerFrameItemButtonTemplate herite d'ItemButtonTemplate :
+        -- Normal, Pushed, Highlight.
+        b:SetNormalTexture("emplacement-up")
+        b:SetPushedTexture("emplacement-down")
+        b:SetHighlightTexture("emplacement-highlight")
         b:SetID(j)
         _G[nom .. "Item" .. j .. "IconTexture"] = b:CreateTexture(nil, "BORDER")
     end
@@ -631,6 +816,14 @@ for _, coin in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
 end
 CharacterNameText = CharacterFrame:CreateFontString("CharacterNameText", "ARTWORK")
 CharacterFrameCloseButton = CreateFrame("Button", "CharacterFrameCloseButton", CharacterFrame)
+-- UIPanelCloseButton (UIPanelTemplates.xml de 3.3.5) declare Normal,
+-- Pushed et Highlight -- pas de Disabled.
+function DECLARER_FERMETURE(b)
+    b:SetNormalTexture("fermeture-up")
+    b:SetPushedTexture("fermeture-down")
+    b:SetHighlightTexture("fermeture-highlight")
+end
+DECLARER_FERMETURE(CharacterFrameCloseButton)
 HIGHLIGHT_FONT_COLOR = { r = 1, g = 1, b = 1 }
 NORMAL_FONT_COLOR = { r = 1, g = 0.82, b = 0 }
 REPUTATION, CURRENCY, PVP, SKILLS = "Reputation", "Currency", "PvP", "Skills"
@@ -803,6 +996,11 @@ MAX_EQUIPMENT_SETS_PER_PLAYER = 10
 for i = 1, MAX_EQUIPMENT_SETS_PER_PLAYER do
     local b = CreateFrame("CheckButton", "GearSetButton" .. i, GearManagerDialog)
     b:SetWidth(36); b:SetHeight(36)
+    -- PopupButtonTemplate (ItemButtonTemplate.xml de 3.3.5) : Normal -- qui
+    -- porte l'icone --, Highlight, Checked.
+    b:SetNormalTexture("")
+    b:SetHighlightTexture("Interface\\\\Buttons\\\\ButtonHilight-Square")
+    b:SetCheckedTexture("Interface\\\\Buttons\\\\CheckButtonHilight")
     local vide = b:CreateTexture(nil, "BACKGROUND")
     vide:SetTexture("UI-EmptySlot-Disabled")   -- chemin sans antislash
     _G["GearSetButton" .. i .. "Name"] = b:CreateFontString(
@@ -1121,6 +1319,7 @@ TokenFramePopup:SetBackdrop({ bgFile = "UI-DialogBox-Background" })
 TokenFramePopup:Hide()
 TokenFramePopupCloseButton = CreateFrame("Button", "TokenFramePopupCloseButton",
                                          TokenFramePopup)
+DECLARER_FERMETURE(TokenFramePopupCloseButton)
 -- SON INTITULE EST UN FontString, pas une texture : "Currency Options",
 -- ancre au TOPLEFT du popup. Un balayage qui ne prend que les textures le
 -- laisse a l ecran.
@@ -1305,6 +1504,7 @@ ReputationDetailFrame:SetBackdrop({ bgFile = "UI-DialogBox-Background" })
 ReputationDetailFrame:Hide()
 ReputationDetailCloseButton = CreateFrame("Button", "ReputationDetailCloseButton",
                                           ReputationDetailFrame)
+DECLARER_FERMETURE(ReputationDetailCloseButton)
 ReputationDetailFactionName = ReputationDetailFrame:CreateFontString(
     "ReputationDetailFactionName", "ARTWORK")
 ReputationDetailFactionDescription = ReputationDetailFrame:CreateFontString(
@@ -1493,6 +1693,7 @@ BonusActionBarTexture1 = BonusActionBarFrame:CreateTexture("BonusActionBarTextur
 for i = 1, 12 do
     local nom = "BonusActionButton" .. i
     local b = CreateFrame("CheckButton", nom, BonusActionBarFrame)
+    DECLARER_ETATS_ACTION(b)
     b:SetID(i)
     _G[nom .. "Icon"] = b:CreateTexture(nom .. "Icon", "BORDER")
     _G[nom .. "IconTexture"] = _G[nom .. "Icon"]
@@ -1515,6 +1716,7 @@ end
 for i = 1, NUM_SHAPESHIFT_SLOTS do
     local nom = "ShapeshiftButton" .. i
     local b = CreateFrame("CheckButton", nom, ShapeshiftBarFrame)
+    DECLARER_ETATS_ACTION(b)
     b:SetID(i)
     _G[nom .. "Icon"] = b:CreateTexture(nom .. "Icon", "BORDER")
     _G[nom .. "Cooldown"] = CreateFrame("Frame", nom .. "Cooldown", b)
@@ -1533,6 +1735,7 @@ SlidingActionBarTexture1 = PetActionBarFrame:CreateTexture("SlidingActionBarText
 for i = 1, NUM_PET_ACTION_SLOTS do
     local nom = "PetActionButton" .. i
     local b = CreateFrame("CheckButton", nom, PetActionBarFrame)
+    DECLARER_ETATS_ACTION(b)
     b:SetID(i)
     _G[nom .. "Icon"] = b:CreateTexture(nom .. "Icon", "BORDER")
     _G[nom .. "Cooldown"] = CreateFrame("Frame", nom .. "Cooldown", b)
@@ -1690,7 +1893,7 @@ def main():
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Bags.lua",
+             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
@@ -1698,6 +1901,25 @@ def main():
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
     listes = [l.strip() for l in toc.splitlines() if l.strip() and not l.startswith("##")]
     assert listes == ordre, "l'ordre du toc a change : %s" % listes
+
+    # LE CLIENT EST EN LUA 5.1, le banc en 5.5. Le compilateur de 5.1 refuse
+    # ce que 5.5 accepte -- plus de 60 upvalues dans une fonction, par
+    # exemple : Minimap.lua ne se chargeait plus du tout en jeu le
+    # 2026-09-24, et le banc restait vert. Chaque fichier passe donc d'abord
+    # par un vrai compilateur 5.1, sans rien executer.
+    import importlib
+    compilateur = importlib.import_module("lupa.lua51").LuaRuntime(unpack_returned_tuples=True)
+    compiler = compilateur.eval("function(code, nom) local f, err = loadstring(code, nom) return err end")
+    refus = []
+    for fn in ordre:
+        erreur = compiler(io.open(os.path.join(ADDON, fn), encoding="utf-8").read(), fn)
+        if erreur:
+            refus.append(erreur)
+    if refus:
+        for erreur in refus:
+            print("  REFUS LUA 5.1 %s" % erreur)
+        sys.exit("le client 3.3.5 ne chargerait pas ces fichiers")
+    print("compilation Lua 5.1 : %d fichiers acceptes" % len(ordre))
 
     echecs = []
     for fn in ordre:
@@ -5346,6 +5568,204 @@ def main():
     choix.scripts.OnClick(choix)
     print("   clic sur le choix : %d saut(s) vers la liste" % ((g.RECALCULE or 0) - avant))
     assert (g.RECALCULE or 0) > avant,         "cliquer ramene la liste sur l icone retenue"
+
+
+    # ------------------------------------------------------------------
+    # LA MINIMAP
+    # ------------------------------------------------------------------
+    print("\n--- minimap ---")
+    cluster = g.MinimapCluster
+    carte = g.Minimap
+    conteneur = g.ForeverUIMinimapContainer
+    print("   cluster %dx%d | conteneur %dx%d | carte %dx%d" % (
+        cluster.width, cluster.height, conteneur.width, conteneur.height,
+        carte.width, carte.height))
+    assert (cluster.width, cluster.height) == (256, 256), "MinimapCluster 256 x 256"
+    assert (conteneur.width, conteneur.height) == (253, 253), "le conteneur prend la taille de l atlas, comme Skin.lua"
+    # LA CARTE GARDE SA TAILLE DE 3.3.5 ET PREND L ECHELLE 198 / 140 : les
+    # fleches du bord suivent l echelle, pas la taille (releve en jeu).
+    print("   carte %s x echelle %.4f = %.2f a l ecran | cadre %.4f" % (
+        carte.width, carte.scale, carte.width * carte.scale, g.MinimapBackdrop.scale))
+    assert (carte.width, carte.height) == (140, 140), "la carte garde la taille de 3.3.5"
+    assert abs(carte.width * carte.scale - 198) < 1e-9, "et fait 198 a l ecran, comme chez camelot"
+    assert abs(g.MinimapBackdrop.scale * carte.scale - 1) < 1e-9, "le cadre garde sa taille"
+    assert abs(g.ForeverUIMinimapZoomHitArea.scale * carte.scale - 1) < 1e-9, "la zone du zoom aussi"
+    base = "interface" + chr(92) + "ForeverUI" + chr(92) + "minimap" + chr(92)
+    print("   fleches : %s" % dict(carte.fleches.items()))
+    assert carte.fleches.statique == base + "rotating-minimaparrow"
+    assert carte.fleches.poi == base + "rotating-minimapguidearrow"
+    assert carte.fleches.cadavre == base + "rotating-minimapcorpsearrow"
+    pc = conteneur.points[1]
+    assert (pc[1], pc[3], pc[4], pc[5]) == ("TOP", "TOP", 10, -30), pc
+    print("   marges de souris : %s" % list(cluster.hitRect.values()))
+    assert list(cluster.hitRect.values()) == [30, 10, 0, 30], "les memes marges de souris qu en 3.3.5"
+
+    masque = ("interface" + chr(92) + "ForeverUI" + chr(92) + "hud" + chr(92)
+              + "uiminimapmaskgeneralc60")
+    print("   masque pose : %s" % carte.mask)
+    assert carte.mask == masque, "SetMaskTexture prend un CHEMIN en 3.3.5, pas un atlas"
+
+    # LE FAUX REND SON FICHIER A L ICONE et REMONTRE la boussole : c est
+    # exactement ce que le vrai fait. Un simple Hide ne tiendrait pas.
+    lua.execute("STATE.cvars.rotateMinimap = " + chr(34) + "1" + chr(34) + " Minimap_UpdateRotationSetting() MiniMapTracking_Update()")
+    for nom in ("MinimapBorderTop", "MinimapBorder", "MinimapNorthTag",
+                "MinimapCompassTexture", "MiniMapTrackingIcon",
+                "MiniMapTrackingButtonBorder", "MiniMapTrackingButtonShine",
+                "MiniMapMailIcon", "MiniMapMailBorder"):
+        r = g[nom]
+        print("   %-28s texture=%s alpha=%s visible=%s" % (
+            nom, r.texture, r.alpha, r.shown))
+        assert r.alpha == 0, "%s doit rester invisible apres le retour du client" % nom
+    lua.execute("STATE.cvars.rotateMinimap = " + chr(34) + "0" + chr(34) + " Minimap_UpdateRotationSetting()")
+
+    # LA BARRE DU NOM DE ZONE : neuf morceaux, neuf atlas.
+    barre = g.ForeverUIMinimapBorderTop
+    pieces = [r for r in barre.regions.values() if r.texture]
+    print("   barre %dx%d, %d morceaux d atlas" % (barre.width, barre.height, len(pieces)))
+    assert (barre.width, barre.height) == (175, 16), "BorderTop 175 x 16"
+    assert len(pieces) == 9, "UniqueCornersLayout : neuf morceaux, pas huit"
+    pb = barre.points[1]
+    assert (pb[1], pb[3], pb[4], pb[5]) == ("TOP", "TOP", 15, -4), pb
+
+    texte = g.MinimapZoneText
+    print("   zone : %s | largeur %s | justifie %s" % (texte.text, texte.width, texte.justify))
+    assert texte.width == 130, "MinimapZoneText 130 de large"
+    assert texte.justify == "LEFT", "camelot ecrit justifyH=LEFT : GameFontNormal n en porte aucune"
+
+    # LE SUIVI
+    suivi = g.MiniMapTracking
+    bouton = g.MiniMapTrackingButton
+    print("   suivi %dx%d, bouton %dx%d, image %s" % (
+        suivi.width, suivi.height, bouton.width, bouton.height, bouton._normal.texture))
+    assert (suivi.width, suivi.height) == (17, 17), "le plateau du suivi"
+    assert (bouton.width, bouton.height) == (13, 14), "les jumelles"
+    ps = suivi.points[1]
+    assert (ps[1], ps[3], ps[4]) == ("RIGHT", "LEFT", -2), ps
+    assert bouton._highlight.blend == "BLEND", "le survol de camelot est une image complete, pas une lueur additive"
+
+    # LE COURRIER
+    courrier = g.MiniMapMailFrame
+    print("   courrier %dx%d sous le suivi" % (courrier.width, courrier.height))
+    assert (courrier.width, courrier.height) == (20, 15), "MailFrame 20 x 15"
+
+    # LE ZOOM : masque au repos, montre au survol de la carte.
+    plus, moins = g.MinimapZoomIn, g.MinimapZoomOut
+    print("   zoom + %dx%d marges %s | zoom - %dx%d" % (
+        plus.width, plus.height, list(plus.hitRect.values()), moins.width, moins.height))
+    assert (plus.width, plus.height) == (17, 17), "ZoomIn 17 x 17"
+    assert (moins.width, moins.height) == (17, 9), "ZoomOut 17 x 9"
+    assert list(plus.hitRect.values()) == [0, 0, 0, 0], "les marges de 4 px du client ne laisseraient rien a cliquer sur 17"
+    assert not plus.shown and not moins.shown, "masques tant que la souris n est pas la"
+    # ATTENTION AU FAUX : Minimap.lua GREFFE son OnEnter (HookScript) pour ne
+    # pas ecraser ce que le client aurait pose. Le vrai client, lui, range la
+    # fonction greffee dans le script quand il n y en avait aucun ; le banc la
+    # range a part, dans hooks. On appelle donc la ou elle est.
+    carte.hooks["OnEnter"](carte)
+    print("   apres survol de la carte : + visible=%s, - visible=%s" % (plus.shown, moins.shown))
+    assert plus.shown and moins.shown, "MinimapMixin:OnEnter les montre"
+    lua.execute("Minimap.souris = false MinimapZoomIn.souris = false MinimapZoomOut.souris = false ForeverUIMinimapZoomHitArea.souris = false")
+    carte.hooks["OnLeave"](carte)
+    assert not plus.shown, "et OnLeave les reprend quand la souris n est nulle part"
+
+    # LE CYCLE JOUR / NUIT : le faux dit 14 h.
+    print("   cycle : %s" % ("jour" if g.ForeverUI.Minimap.jour else "nuit"))
+    assert g.ForeverUI.Minimap.jour, "14 h tombe entre 6 h et 18 h"
+
+    # LE SUIVI PORTE SES JUMELLES : trois etats, dont deux que le bouton du
+    # client n'avait pas.
+    for etat in ("_normal", "_pushed", "_highlight"):
+        t = bouton[etat]
+        print("   jumelles %-10s %s %s" % (etat, t and t.texture, t and list(t.texcoord.values())))
+        assert t is not None and t.texcoord is not None, "le suivi doit porter l etat %s" % etat
+    assert bouton._normal.texture == g.UIAtlas.data["ui-hud-minimap-tracking-up"][1]
+
+    # LE ZOOM PORTE L ART DE CAMELOT
+    for b, nom in ((plus, "ui-hud-minimap-zoom-in"), (moins, "ui-hud-minimap-zoom-out")):
+        e = g.UIAtlas.data[nom]
+        print("   %s : %s %s" % (nom, b._normal.texture, list(b._normal.texcoord.values())))
+        assert b._normal.texture == e[1] and b._normal.texcoord[1] == e[2], nom
+        assert b._highlight.blend == "BLEND"
+
+    # LE CALENDRIER, a droite de la barre, le jour dans l image.
+    cal = g.GameTimeFrame
+    pt = cal.points[1]
+    e24 = g.UIAtlas.data["ui-hud-calendar-24-up"]
+    print("   calendrier %dx%d %s sur %s (%s, %s) | image %s | texte alpha %s" % (
+        cal.width, cal.height, pt[1], pt[3], pt[4], pt[5],
+        cal._normal.texture, cal.fontString.alpha))
+    assert (cal.width, cal.height) == (19, 18), "GameTimeFrame 19 x 18"
+    assert (pt[1], pt[2].name, pt[3], pt[4], pt[5]) == ("TOPLEFT", "ForeverUIMinimapBorderTop", "TOPRIGHT", 1, 0), list(pt.values())
+    assert cal._normal.texcoord[1] == e24[2] and cal._normal.texcoord[3] == e24[4], "le 24 du mois"
+    assert cal.fontString.alpha == 0, "camelot n ecrit plus le jour en texte"
+    assert list(cal.hitRect.values()) == [0, 0, 0, 0]
+    # le client re-ecrit le jour : l image doit suivre
+    lua.execute("function CalendarGetDate() return 6, 9, 25, 2026 end GameTimeFrame_SetDate()")
+    e25 = g.UIAtlas.data["ui-hud-calendar-25-up"]
+    assert cal._normal.texcoord[1] == e25[2] and cal._normal.texcoord[3] == e25[4], "le lendemain, le 25"
+    assert cal.fontString.alpha == 0
+
+    # L HORLOGE : absente au chargement, habillee a ADDON_LOADED.
+    assert g.TimeManagerClockButton is None, "le faux ne doit pas la monter avant la demande"
+    lua.execute("CHARGER_HORLOGE()")
+    h = g.TimeManagerClockButton
+    ph = h.points[1]
+    tick = g.TimeManagerClockTicker
+    print("   horloge %dx%d %s sur %s (%s, %s) | marges %s | fond alpha %s | police %s %s" % (
+        h.width, h.height, ph[1], ph[3], ph[4], ph[5], list(h.hitRect.values()),
+        h.fondSansNom.alpha, tick.fontFile, tick.fontSize))
+    assert (h.width, h.height) == (40, 16)
+    assert (ph[1], ph[2].name, ph[3], ph[4], ph[5]) == ("TOPRIGHT", "ForeverUIMinimapBorderTop", "TOPRIGHT", -4, 0), list(ph.values())
+    assert list(h.hitRect.values()) == [8, 5, 3, 3]
+    assert h.fondSansNom.alpha == 0, "camelot n a pas de fond d horloge"
+    assert g.TimeManagerAlarmFiredTexture.alpha != 0, "la lueur d alarme reste"
+    assert tick.alpha != 0 and tick.fontSize == 10
+    assert list(tick.points[1].values())[3:5] == [3, 1], tick.points[1]
+    assert h.parent.name == "MinimapCluster" and (h.frameLevel or 0) > (barre.frameLevel or 1)
+
+    # LES COORDONNEES, sous la carte.
+    co = g.ForeverUIMinimapPlayerCoords
+    pco = co.points[1]
+    co.scripts["OnUpdate"](co, 0.2)
+    print("   coordonnees %dx%d %s sur %s (%s, %s) : '%s'" % (
+        co.width, co.height, pco[1], pco[3], pco[4], pco[5], co.texte.text))
+    assert (co.width, co.height) == (90, 10)
+    assert (pco[1], pco[2].name, pco[3], pco[4], pco[5]) == ("BOTTOM", "Minimap", "BOTTOM", 0, -18), list(pco.values())
+    assert co.texte.text == "46, 62", co.texte.text
+    lua.execute("STATE.cvars.coordsByTenths = " + chr(34) + "1" + chr(34))
+    co.scripts["OnUpdate"](co, 0.2)
+    assert co.texte.text == "45.7, 62.3", co.texte.text
+    lua.execute("STATE.cvars.coordsByTenths = nil POSITION.x = 0 POSITION.y = 0")
+    co.scripts["OnUpdate"](co, 0.2)
+    assert co.texte.text == "", "en instance, 3.3.5 rend (0, 0) : rien n est ecrit"
+    avant = g.POSITION.recentrages
+    lua.execute("WorldMapFrame:Show()")
+    g.ForeverUI.Minimap.recentrerCarteDuMonde()
+    assert g.POSITION.recentrages == avant, "jamais pendant que la carte du monde est ouverte"
+    lua.execute("WorldMapFrame:Hide()")
+    assert g.POSITION.recentrages == avant + 1, "a la fermeture de la carte du monde"
+
+    # LE TEMOIN DES FLECHES DU BORD : la carte reste a 198 a l ecran, le cadre
+    # et la zone de zoom gardent leur taille, et k = 1 rend l etat d origine.
+    lua.execute('ForeverUI.MinimapDebug("echelle 1.5")')
+    print("   echelle 1.5 : carte %.1f x %.2f = %.1f | cadre %.3f" % (
+        carte.width, carte.scale, carte.width * carte.scale,
+        g.MinimapBackdrop.scale))
+    assert abs(carte.width * carte.scale - 198) < 0.01, "la carte reste a 198 a l ecran"
+    assert abs(g.MinimapBackdrop.scale * carte.scale - 1) < 1e-9, "le cadre garde sa taille"
+    assert abs(g.ForeverUIMinimapZoomHitArea.scale * carte.scale - 1) < 1e-9
+    lua.execute('ForeverUI.MinimapDebug("echelle 1")')
+    assert carte.width == 198 and carte.scale == 1 and g.MinimapBackdrop.scale == 1
+    lua.execute('ForeverUI.MinimapDebug("echelle")')
+    assert carte.width == 140 and abs(carte.width * carte.scale - 198) < 1e-9, "sans nombre : l echelle du projet"
+
+    # LES QUATRE BOUTONS QUE CAMELOT N A PAS, poses sur l anneau a 100 du centre.
+    for nom in ("MiniMapWorldMapButton", "MiniMapLFGFrame",
+                "MiniMapBattlefieldFrame", "MiniMapRecordingButton"):
+        b = g[nom]
+        pt = b.points[1]
+        rayon = (pt[4] ** 2 + pt[5] ** 2) ** 0.5
+        print("   %-26s CENTER (%7.2f, %7.2f) rayon %.1f" % (nom, pt[4], pt[5], rayon))
+        assert abs(rayon - 100) < 0.5, "%s doit tomber sur le metal de l anneau" % nom
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

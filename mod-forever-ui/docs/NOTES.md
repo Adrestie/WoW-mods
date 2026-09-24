@@ -1158,6 +1158,176 @@ hasard.
 
 ---
 
+### 1.12 La minimap
+
+Livrée le 2026-09-23, pas encore validée en jeu.
+`data/addon/ForeverUI/Minimap.lua`. Ce qui suit est la liste des murs
+rencontrés et de ce qui les a fait tomber.
+
+**La carte n'est PAS refaite.** C'est la seule reprise du chantier qui garde
+le cadre du client au lieu de le remplacer : `Minimap` est un type de cadre
+que seul le moteur sait fabriquer, et c'est lui qui dessine le terrain, les
+points et la flèche du joueur. On le garde, on le retaille, on le masque, et
+on remplace tout ce qui l'entoure. La règle du cœur d'abord le commande.
+
+#### a. Il n'y a pas de source camelot pour la minimap — et pourtant si
+
+`blizzard_minimap.toc` charge `[Family]\Minimap.lua` et `[Family]\Minimap.xml`
+pour **tous** les types de jeu, et camelot appartient à la famille mainline.
+Le gabarit de mainline **est** donc celui de camelot, qui n'ajoute que
+`[Game]\Skin.lua` et `[Game]\Diel.lua`.
+
+La règle « un fichier qui n'existe que dans `mainline/` est une question à
+poser » ne s'applique donc pas ici : c'est le `.toc` qui tranche, pas
+l'arborescence. Le lire en premier a évité de venir demander pour rien.
+
+#### b. La chaîne d'archives ne trouvait pas le FrameXML de 3.3.5
+
+`has("Interface\FrameXML\Minimap.xml")` rendait **False**, pour ce fichier
+comme pour `ContainerFrame.xml` qui avait pourtant déjà été extrait. Ce
+n'était pas le client : c'était l'appel.
+
+Le script du bac à sable appelait `stellartarot.mpq.open_client(data)` — sans
+langue. Or le FrameXML de ce client est dans `Data\enUS`, et cette chaîne-là
+ne monte que les archives de `Data`. L'atelier a la sienne :
+
+```python
+from foreverui import mpq
+chaine = mpq.open_client(dossierData, "enUS")   # la langue N'EST PAS optionnelle
+```
+
+Vérifié après coup : la chaîne désigne `Data\enUS\patch-enus-3.mpq`, et son
+contenu est **identique octet pour octet** à ce qui a servi au relevé — le
+relevé tient. Mais il a tenu par chance : ouvrir une archive à la main court
+le risque de relever un fichier que le client ne charge pas.
+
+#### c. Le découpage en neuf est éclaté sur TROIS feuilles
+
+La barre du nom de zone est un `NineSliceCodeTemplate` en
+`UniqueCornersLayout` : neuf atlas distincts, et non un seul découpé en neuf
+comme le fait `ForeverUI.SetAtlasNineSlice`. Pire, les neuf ne sont pas sur la
+même feuille :
+
+| Morceaux | Feuille |
+|---|---|
+| les 4 coins, les bords haut et bas | `interface/hud/uiminimap.blp` |
+| les bords gauche et droit | `interface/hud/uiminimapvertical.blp` |
+| le centre | `interface/hud/uiminimapbackground.blp` |
+
+`uiminimapvertical.blp` manquait : sans elle, la barre n'avait que sept
+morceaux sur neuf. Les préfixes `_` et `!` du nom d'atlas font partie du nom
+— ils disent au client moderne de **répéter** le morceau. 3.3.5 ne sait pas
+répéter un rectangle pris dans un atlas (il lui faudrait le fichier entier) :
+on étire. Ces quatre bords sont des dégradés, l'étirement ne se voit pas.
+
+#### d. Deux régions du client reviennent toutes seules
+
+Le piège classique, sous deux formes nouvelles :
+
+- `Minimap_UpdateRotationSetting()` **remontre** `MinimapCompassTexture` et
+  `MinimapNorthTag` à chaque bascule du CVar `rotateMinimap` ;
+- `MiniMapTracking_Update()` **rend son fichier** à `MiniMapTrackingIcon`,
+  puis lance l'éclat `MiniMapTrackingButtonShine`.
+
+Un `Hide()` ne tient donc pas, et un `SetTexture(nil)` non plus pour la
+seconde. Remède : les **trois** à la fois — image à `nil`, alpha à 0, et
+`Hide()`. C'est la fonction `etouffer()` du fichier.
+
+Le banc le prouve : après un appel aux deux fonctions, `MiniMapTrackingIcon`
+a récupéré `Interface\Icons\INV_Misc_Map_01` et `MinimapCompassTexture` est
+redevenue `visible=True`. Seul l'alpha les retient.
+
+#### e. `MinimapCompassTexture` ne désigne pas la même chose des deux côtés
+
+Chez camelot, c'est **le cadre lui-même** (`Skin.lua` lui pose l'atlas
+`UI-HUD-Minimap-Frame`). En 3.3.5, c'est l'anneau de boussole `CompassRing`
+de 365 x 365, à jeter. Le même nom, deux objets opposés : lire le nom sans
+regarder ce qu'il porte aurait supprimé le cadre ou gardé la boussole.
+
+#### f. Le masque prend un CHEMIN, pas un nom d'atlas
+
+`Minimap:SetMaskTexture` est la **seule** méthode de masquage du client
+(relevée dans `Wow.exe` avec `GetZoom`, `GetZoomLevels`, `SetBlipTexture`),
+et elle prend un chemin de fichier. `uiminimapmaskgeneralc60.blp` entre donc
+par `tools/fichiers_simples.txt` et non par les feuilles : elle ne donne
+aucune entrée de table.
+
+Mesuré : c'est un disque d'alpha qui **remplit tout** le carré de 256, donc
+mis à l'échelle sur une carte de 198 il donne un disque de 198.
+
+#### g. Géométrie mesurée sur l'art
+
+`ui-hud-minimap-frame-c60` fait 253 x 253. Sur sa ligne médiane, l'opacité
+court de 19 à 33 puis de 219 à 233 : **métal de 15, trou de 185**, centré à
+126. La carte de 198 passe donc 6 px sous le métal de chaque côté — c'est
+voulu, et c'est pourquoi camelot ne redimensionne **pas** la carte dans
+`Skin.lua`, seulement le conteneur et le fond.
+
+Le milieu du métal est à **100** du centre : c'est le rayon sur lequel les
+cinq boutons de 3.3.5 sont posés.
+
+#### h. Les marges de souris du zoom
+
+`MinimapZoomIn` porte `AbsInset 4/4/2/6`, calculé pour un bouton de 32. Sur
+les 17 de camelot il ne resterait que 9 x 9 à cliquer.
+`SetHitRectInsets(0, 0, 0, 0)`.
+
+#### i. Le survol : additif contre image complète
+
+Le survol des boutons de 3.3.5 est `alphaMode="ADD"` — une lueur posée
+par-dessus. Celui de camelot (`-mouseover`) est **l'image entière en plus
+clair**. La poser en additif la ferait blanchir : `SetBlendMode("BLEND")`.
+
+#### j. Le cycle jour/nuit n'a aucune source côté client
+
+`Diel.lua` écoute `DIEL_CYCLE_CHANGED` et demande
+`C_DateAndTime.IsDayTime()`. 3.3.5 n'a **ni l'un ni l'autre** : il n'a que
+`GetGameTime()`, l'heure du serveur. Le partage est donc le nôtre — **jour de
+6 h à 18 h**, relu une fois par minute. C'est le seul chiffre de cet écran que
+le client ne peut pas confirmer, comme les paliers de victoires du PvP.
+
+#### k. Quatre pièges du harnais, tous du même genre
+
+Encore la règle « un faux plus aimable que le client ne prouve rien » :
+
+| Ce qui a cassé | Ce qu'il fallait |
+|---|---|
+| `carte.scripts["OnEnter"]` valait `nil` | `Minimap.lua` **greffe** (`HookScript`). Le vrai client range la fonction greffée dans le script quand il n'y en avait aucun ; le banc la range à part, dans `hooks`. L'essai l'appelle là où elle est. |
+| `list(cadre.hitRect)` rendait les clés | `hitRect` est une table Lua : `list(cadre.hitRect.values())` |
+| `SetCVar` n'existait pas dans le faux | écrire `STATE.cvars.<nom>` directement |
+| `GetJustifyH` et `SetDesaturated` manquaient | ajoutés ; `SetDesaturated` rend **vrai**, comme le vrai quand la carte graphique sait le faire |
+
+Et le piège de transport, pour la troisième fois du chantier : **les
+antislashs**. Lua veut `\\`, donc le littéral `MOCK` de Python en veut quatre,
+et un heredoc du terminal en mange encore la moitié au passage. Les construire
+par `chr(92)`, jamais les taper.
+
+#### l. Ce qui reste, et qui est à trancher
+
+- **Les quatre boutons que camelot n'a pas** — carte du monde, œil du
+  groupe, champ de bataille, enregistrement (le calendrier est à sa place de
+  camelot depuis le 2026-09-24, à droite de la barre). camelot les a rangés
+  ailleurs : la source ne dit **rien** de leur place. Les laisser où 3.3.5 les
+  met les poserait dans le vide (décalages calculés pour une carte de 140 dans
+  un cluster de 192). Posés sur le métal à 100 du centre, à des angles
+  **inventés**, et **non rhabillés** : ils portent encore leur cercle doré
+  d'origine.
+- **Le mode carte tournante** (`rotateMinimap`) — camelot échange alors le
+  cadre contre `-pointer` + `-circle`. Les deux atlas sont versés, rien n'est
+  branché.
+- **`PlayerCoords`**, les coordonnées sous la carte : faites le 2026-09-24.
+- **Les flèches du bord** : la carte garde sa taille de 3.3.5 (140) à l'échelle
+  198 / 140, seul moyen de porter ces flèches au bord du trou. Les quatre
+  flèches ont une image réduite (`tools/reduire_fleches.py`) ; celle du groupe,
+  sans méthode, **remplace le fichier d'origine** dans patch-Z (exception à la
+  règle du préfixe, que `deployer.py` ne retirera pas seul). Les points de la
+  carte et la flèche du joueur grossissent de 41 %.
+- **Les points de la carte** (`ui-hud-minimap-arrow-player`, `-corpse`,
+  `-group`, `-guard`) : 3.3.5 garde les siens.
+- **La difficulté d'instance** est replacée mais garde l'art de 3.3.5.
+
+---
+
 ## 2. Ce que 3.3.5 ne sait pas faire
 
 | Manque | Conséquence | Contournement possible |
@@ -1198,8 +1368,8 @@ a pas d'élément XML `MaskTexture`. Le seul `SetMaskTexture` présent est
 `Minimap:SetMaskTexture("file")` — une méthode du widget **Minimap**, voisine
 de `SetBlipTexture` et `SetIconTexture`, avec `Textures\MinimapMask` par
 défaut. Elle arrondit la minimap, et rien d'autre : une icône d'objet ne peut
-pas y passer. C'est utilisable le jour où la minimap sera reproduite, pas
-avant.
+pas y passer. **Employée depuis le 2026-09-23** par `Minimap.lua`, avec le
+masque de camelot `uiminimapmaskgeneralc60.blp` — voir 1.12.f.
 
 
 ---
@@ -1289,9 +1459,12 @@ les captures du vrai client pour la comparaison.
 
 ## 5. Reste à reproduire
 
-Minicarte, fenêtre de discussion, infobulles, améliorations et afflictions,
-cadres de groupe et de raid, livre de sorts, talents, feuille de personnage,
-écrans de sélection et de création de personnage.
+Fenêtre de discussion, infobulles, améliorations et afflictions, cadres de
+groupe et de raid, livre de sorts, talents, écrans de sélection et de
+création de personnage.
+
+La minicarte est livrée mais pas validée, et il lui manque cinq points —
+voir 1.12.l.
 
 Les barres d'action secondaires (`MultiBar*`) sont habillées mais ne sont ni
 placées ni encadrées comme la référence le fait.

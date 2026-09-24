@@ -74,3 +74,9 @@ interface/friendsframe/ui-friendsframe-highlightbar-blue.blp
 # PaperDollSidebarTabs, rognee a 0,015625 / 0,53125 / 0,32421875 /
 # 0,46093750 : cette planche n'existe pas dans 3.3.5.
 interface/paperdollinfoframe/paperdollsidebartabs.blp
+
+# LE MASQUE DE LA MINIMAP. camelot le pose par Minimap:SetMaskTexture, et
+# cette methode existe en 3.3.5 -- c'est meme la SEULE du client qui sache
+# masquer -- mais elle y prend un CHEMIN, pas un nom d'atlas. La feuille ne
+# porte que lui : elle entre donc telle quelle.
+interface/hud/uiminimapmaskgeneralc60.blp

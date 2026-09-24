@@ -80,3 +80,26 @@ fdid:8198433.blp => interface/pvpframe/uicharacterinfohonorc60.blp
 # -right et _common-currencybox-center, trois morceaux de 16 x 34 dans
 # la planche -- soit 8 x 17 a l'ecran.
 interface/common/commoncurrencybox.blp
+
+# LA MINIMAP. camelot garde le Minimap.xml de mainline et le rhabille par
+# camelot/Skin.lua : le cadre, son fond et sa texture de boussole prennent
+# la taille de l'atlas, 253 x 253 dans la variante c60 -- la ou mainline en
+# donne 215 x 226.
+#   uiminimapc60      le cadre fixe, celui a fleche, le cercle du dessous,
+#                     l'anneau du cycle jour/nuit et ses deux astres
+#   uiminimap         les boutons : suivi, courrier, zoom, et le decoupage
+#                     en neuf de la barre du nom de zone
+interface/hud/uiminimapc60.blp
+interface/hud/uiminimap.blp
+interface/hud/uiminimapbackground.blp
+
+# Les deux bords VERTICAUX du decoupage en neuf de la barre du nom de zone.
+# UniqueCornersLayout va les chercher dans une feuille a part -- les quatre
+# coins et les bords horizontaux sont dans uiminimap, le centre dans
+# uiminimapbackground, et la gauche et la droite ici.
+interface/hud/uiminimapvertical.blp
+
+# Le bouton du calendrier, a droite de la barre du nom de zone
+# (mainline/GameTime.xml). GameTimeFrame_SetDate y prend le jour du mois :
+# ui-hud-calendar-<jour>-up, -down et -mouseover, 21 x 19.
+fdid:4618663.blp => interface/hud/uicalendar.blp

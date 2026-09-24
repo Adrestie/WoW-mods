@@ -139,12 +139,27 @@ def decoder(donnees):
 DEBUT_DONNEES = 148 + 1024
 
 
-def encoder(largeur, hauteur, rgba):
-    """Ecrit un BLP2 non compresse en BGRA, sans mipmap.
+def _bgra(largeur, hauteur, rgba):
+    assert len(rgba) == largeur * hauteur * 4, "taille d'image incoherente"
+    corps = bytearray(largeur * hauteur * 4)
+    for i in range(largeur * hauteur):
+        r, v, b, a = rgba[i*4:i*4+4]
+        corps[i*4:i*4+4] = bytes((b, v, r, a))
+    return bytes(corps)
+
+
+def encoder(largeur, hauteur, rgba, mipmaps=None):
+    """Ecrit un BLP2 non compresse en BGRA.
 
     rgba : une suite d'octets R, V, B, A, ligne par ligne depuis le haut.
+    mipmaps : les niveaux reduits, du plus grand au plus petit, chacun en
+    (largeur, hauteur, rgba) -- au plus 15. Sans eux, le fichier n'a que son
+    image pleine, comme avant. Une image que le client affiche plus petite
+    que sa taille en a besoin : les fleches de la minimap d'origine en
+    portent six niveaux.
     """
-    assert len(rgba) == largeur * hauteur * 4, "taille d'image incoherente"
+    niveaux = [(largeur, hauteur, rgba)] + list(mipmaps or [])
+    assert len(niveaux) <= 16, "un BLP2 porte au plus 16 niveaux"
 
     entete = bytearray(DEBUT_DONNEES)
     entete[0:4] = b"BLP2"
@@ -152,13 +167,13 @@ def encoder(largeur, hauteur, rgba):
     entete[8] = 3                                   # encodage : BGRA
     entete[9] = 8                                   # profondeur d'alpha
     entete[10] = 8                                  # encodage d'alpha
-    entete[11] = 0                                  # aucun mipmap
+    entete[11] = 1 if mipmaps else 0                # mipmaps presents
     struct.pack_into("<II", entete, 12, largeur, hauteur)
-    struct.pack_into("<I", entete, 20, DEBUT_DONNEES)          # mipOffsets[0]
-    struct.pack_into("<I", entete, 84, largeur * hauteur * 4)  # mipSizes[0]
 
-    corps = bytearray(largeur * hauteur * 4)
-    for i in range(largeur * hauteur):
-        r, v, b, a = rgba[i*4:i*4+4]
-        corps[i*4:i*4+4] = bytes((b, v, r, a))
+    corps = bytearray()
+    for i, (l, h, pixels) in enumerate(niveaux):
+        donnees = _bgra(l, h, pixels)
+        struct.pack_into("<I", entete, 20 + 4 * i, DEBUT_DONNEES + len(corps))  # mipOffsets[i]
+        struct.pack_into("<I", entete, 84 + 4 * i, len(donnees))               # mipSizes[i]
+        corps += donnees
     return bytes(entete) + bytes(corps)

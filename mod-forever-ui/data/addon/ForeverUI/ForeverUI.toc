@@ -27,6 +27,7 @@ StanceBar.lua
 PetBar.lua
 BottomBar.lua
 StatusBars.lua
+Minimap.lua
 Bags.lua
 CharacterFrame.lua
 EquipmentManager.lua
