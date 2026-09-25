@@ -73,3 +73,9 @@ Réglages complétés le 2026-09-25 : « Group Similar Spells on Flyouts » (gro
 Groupes complétés et validés le 2026-09-25 : sorts de Burning Crusade et WotLK ajoutés aux familles de Camelot ; deux groupes hors Camelot, « Seals » et « Judgements ».
 
 Étape 2 livrée le 2026-09-25 (non validée) : contrôleur sécurisé ; hors combat tout est calculé et publié, en combat onglets, pages, roulette et menus volants passent par des blocs sécurisés, les images suivent par `CallMethod`.
+
+Étape 2 VALIDÉE le 2026-09-25, avec les réglages immédiats en combat (menu en boutons sécurisés) ; poussée (9b2f68a).
+
+Étape 3 livrée le 2026-09-25 (non validée) : `SpellBookSearch.lua` (champ, aperçu, recherche entière en sections, « Missing from action bar ») ; relevé et écarts en tête du fichier.
+
+Étape 3 VALIDÉE le 2026-09-25 : la recherche suit « Hide Passives » et « Show all spell ranks » (ce dernier reste actif pendant une recherche), ne groupe jamais en menus volants, et l'aperçu montre 5 résultats — écarts à Camelot demandés.
