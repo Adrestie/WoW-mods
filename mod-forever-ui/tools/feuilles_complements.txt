@@ -136,3 +136,15 @@ interface/questframe/questlogbackground2x.blp
 # deplier / filtre, coche des objectifs remplis, lueurs, cadre de l'objet de
 # quete. Variante c60, celle que camelot montre.
 interface/questframe/questtrackerc60.blp
+
+# LE GRIMOIRE (docs/GRIMOIRE.md). Les deux pages du livre ouvert en DOUBLE
+# DENSITE (le listfile ne les nomme pas : par identifiant), les elements
+# (cadres des sorts, en-tetes, separateurs, survols), leurs variantes c60,
+# les onglets-icones des categories, et la feuille des talents pour le cercle
+# des sorts passifs (talents-node-circle-gray).
+fdid:8116706.blp => interface/spellbook/spellbookbackgroundpageleft2xc60.blp
+fdid:8116704.blp => interface/spellbook/spellbookbackgroundpageright2xc60.blp
+interface/spellbook/spellbookelements.blp
+interface/spellbook/spellbookelementsc60.blp
+interface/spellbook/spellbooktabsc60.blp
+interface/talentframe/talents.blp

@@ -55,7 +55,32 @@ local function newRegion(kind)
     function r:SetPoint(...) table.insert(self.points, {...}) end
     function r:SetAllPoints(...) self.allPoints = true end
     function r:ClearAllPoints() self.points = {} end
-    function r:Show() self.shown = true end
+    -- Le vrai declenche le OnShow en se montrant, comme le OnHide en se
+    -- cachant ; le banc ne le faisait pas.
+    -- LE CLIENT PREVIENT AUSSI LES DESCENDANTS : un cadre qui se montre (ou
+    -- se cache) declenche le OnShow (OnHide) de ses enfants eux-memes
+    -- montres. Le banc ne le faisait que pour le cadre lui-meme, et ne
+    -- voyait donc pas ce qu'un enfant fait quand son livre se ferme.
+    local function prevenir(f, script)
+        for _, c in ipairs(f.children or {}) do
+            if c.shown then
+                if c.scripts and c.scripts[script] then c.scripts[script](c) end
+                if c.hooks and c.hooks[script] then c.hooks[script](c) end
+                prevenir(c, script)
+            end
+        end
+    end
+    function r:Show()
+        local avant = self.shown
+        self.shown = true
+        if not avant and self.scripts and self.scripts.OnShow then
+            self.scripts.OnShow(self)
+        end
+        if not avant and self.hooks and self.hooks.OnShow then
+            self.hooks.OnShow(self)
+        end
+        if not avant then prevenir(self, "OnShow") end
+    end
     -- Le vrai declenche le OnHide en se cachant. Le banc ne le faisait pas,
     -- et laissait donc passer tout ce qui depend de ce que le client y
     -- efface.
@@ -68,6 +93,7 @@ local function newRegion(kind)
         if avant and self.hooks and self.hooks.OnHide then
             self.hooks.OnHide(self)
         end
+        if avant then prevenir(self, "OnHide") end
     end
     function r:IsShown() return self.shown end
     function r:SetText(t) self.text = t end
@@ -149,6 +175,18 @@ function CreateFrame(kind, name, parent, template)
             error("Usage: " .. tostring(self.name) .. ':HookScript("type", function)')
         end
         self.hooks = self.hooks or {}
+        -- UN GREFFON EST DU CODE D'ADDON : meme accroche a un script du
+        -- client appele par un chemin securise, il tourne sans securite
+        -- (SECURISE remis a zero le temps de l'appel).
+        local brutFn = fn
+        fn = function(...)
+            local avant = SECURISE or 0
+            SECURISE = 0
+            local r = table.pack(pcall(brutFn, ...))
+            SECURISE = avant
+            if not r[1] then error(r[2], 0) end
+            return table.unpack(r, 2, r.n)
+        end
         -- Le vrai ENCHAINE les greffons : chacun passe apres le precedent.
         -- Le banc n'en gardait qu'un, et le dernier pose effacait les autres
         -- (le volet de quetes et la minimap ecoutent tous deux la fermeture
@@ -227,6 +265,7 @@ function CreateFrame(kind, name, parent, template)
     function f:GetRight() return self._right end
     function f:IsShown() return self.shown end
     function f:SetFrameStrata(s) self.strata = s end
+    function f:GetFrameStrata() return self.strata or "MEDIUM" end
     function f:SetModelScale(v) self.modelScale = v end
     function f:SetPosition(x, y, z) self.pos = { x, y, z } end
     function f:GetPosition()
@@ -1330,6 +1369,314 @@ function QuestPOI_HideButtons(parent, type, debut)
     end
 end
 function QuestPOI_SelectButtonByQuestId() end
+-- ---------------------------------------------------------------- securite
+-- LE MODELE DE SECURITE DE 3.3.5, relu dans la chaine d'archives du client
+-- (SecureHandlers.lua, RestrictedFrames.lua, RestrictedExecution.lua,
+-- RestrictedEnvironment.lua) :
+--   * un cadre est PROTEGE s'il vient d'un gabarit securise (explicite) ou
+--     s'il a un descendant protege (implicite) ; en combat, le code
+--     ordinaire ne peut ni le montrer, ni le cacher, ni le placer, ni le
+--     dimensionner, ni changer ses attributs (ADDON_ACTION_BLOCKED) --
+--     verifie ici quand STATE.verifierProtection est vrai ;
+--   * un gestionnaire (SecureHandler*Template) execute des blocs restreints :
+--     ni accolade, ni le mot "function" (BuildRestrictedClosure) ; des
+--     poignees au lieu des cadres ; SetPoint ne vise qu'un cadre
+--     EXPLICITEMENT protege, "$parent" ou l'ecran ; en combat, une poignee
+--     de cadre non protege est invalide ;
+--   * control:CallMethod rend la main a du code ordinaire (forceinsecure) ;
+--   * l'API (Execute, SetFrameRef, WrapScript) est refusee en combat ;
+--   * un script enveloppe ne passe par son bloc que si son cadre est
+--     explicitement protege (GetFrameHandle(self, true)).
+SECURISE = 0
+LANCES = {}
+local function estExplicite(f)
+    return type(f) == "table" and type(f.template) == "string"
+        and string.find(f.template, "Secure", 1, true) ~= nil
+end
+local function estProtege(f)
+    if estExplicite(f) then return true end
+    for _, c in ipairs(f.children or {}) do
+        if estProtege(c) then return true end
+    end
+    return false
+end
+ESTPROTEGE = estProtege
+
+local poignees = setmetatable({}, { __mode = "k" })
+local function poignee(f)
+    if f == nil then return nil end
+    if poignees[f] then return poignees[f] end
+    local h = { cadre = f }
+    local function cadre()
+        if STATE.inLockdown and not estProtege(f) then error("Invalid frame handle") end
+        return f
+    end
+    for _, m in ipairs({ "Show", "Hide", "IsShown", "GetAttribute", "ClearAllPoints", "SetWidth",
+            "SetHeight", "Enable", "Disable", "GetID", "GetWidth", "GetHeight" }) do
+        h[m] = function(self, ...)
+            local c = cadre()
+            return c[m](c, ...)
+        end
+    end
+    function h:SetAttribute(nom, valeur)
+        if type(nom) ~= "string" or string.match(nom, "^_") then error("Invalid attribute name") end
+        local t = type(valeur)
+        if t ~= "string" and t ~= "nil" and t ~= "number" and t ~= "boolean" then
+            error("Invalid attribute value")
+        end
+        local c = cadre()
+        return c:SetAttribute(nom, valeur)
+    end
+    function h:SetPoint(point, rel, relpoint, x, y)
+        if type(relpoint) == "number" then relpoint, x, y = nil, relpoint, x end
+        relpoint = relpoint or point
+        local cible
+        if rel == "$parent" then
+            cible = f.parent
+        elseif rel == nil or rel == "$screen" then
+            cible = nil
+        elseif type(rel) == "table" and rel.cadre then
+            if not estExplicite(rel.cadre) then error("Invalid relative frame handle") end
+            cible = rel.cadre
+        else
+            error("Invalid relative frame id '" .. tostring(rel) .. "'")
+        end
+        local c = cadre()
+        return c:SetPoint(point, cible, relpoint, tonumber(x) or 0, tonumber(y) or 0)
+    end
+    function h:GetFrameRef(etiquette)
+        return poignee(f.attributes["frameref-" .. etiquette])
+    end
+    function h:RegisterAutoHide(duree) cadre().autoHide = duree end
+    function h:AddToAutoHide(autre) cadre().autoHideAvec = autre.cadre end
+    poignees[f] = h
+    return h
+end
+
+local PORTEE = {
+    newtable = function(...) return { ... } end,
+    wipe = function(t) for k in pairs(t) do t[k] = nil end return t end,
+    string = string, math = math, tonumber = tonumber, tostring = tostring, select = select,
+    format = string.format, floor = math.floor, ceil = math.ceil, max = math.max, min = math.min,
+    IsModifierKeyDown = function(...) return IsModifierKeyDown(...) end,
+    IsModifiedClick = function(...) return IsModifiedClick(...) end,
+    IsShiftKeyDown = function(...) return IsShiftKeyDown(...) end,
+}
+
+local function executer(entete, signature, corps, ...)
+    if type(corps) ~= "string" then return end
+    if string.find(corps, "[{}]") then error("bloc securise : accolade interdite") end
+    if string.find(corps, "function", 1, true) then error("The function keyword is not permitted") end
+    local fabrique, err = load("return function(" .. signature .. ") " .. corps .. " end", "bloc", "t", entete.envSecurise)
+    if not fabrique then error("bloc securise : " .. tostring(err)) end
+    local fn = fabrique()
+    SECURISE = SECURISE + 1
+    local r = table.pack(pcall(fn, ...))
+    SECURISE = SECURISE - 1
+    if not r[1] then error(r[2], 0) end
+    return table.unpack(r, 2, r.n)
+end
+
+local function installerGestionnaire(f, gabarit)
+    local controle = {}
+    function controle:RunAttribute(nom, ...)
+        return executer(f, "self,...", f.attributes[nom], poignee(f), ...)
+    end
+    function controle:Run(corps, ...) return executer(f, "self,...", corps, poignee(f), ...) end
+    function controle:CallMethod(nom, ...)
+        local m = f[nom]
+        if type(m) ~= "function" then error("Invalid method '" .. tostring(nom) .. "'") end
+        local avant = SECURISE
+        SECURISE = 0                     -- forceinsecure()
+        local ok, err = pcall(m, f, ...)
+        SECURISE = avant
+        if not ok then error(err, 0) end -- le vrai en fait un SoftError ; le banc veut le voir
+    end
+    f.envSecurise = setmetatable({}, { __index = function(t, k)
+        if k == "control" then return controle end
+        if k == "owner" then return poignee(f) end
+        return PORTEE[k]
+    end })
+    local function api()
+        if STATE.inLockdown then error("Cannot use SecureHandlers API during combat") end
+    end
+    function f:Execute(corps)
+        api()
+        return executer(self, "self", corps, poignee(self))
+    end
+    function f:SetFrameRef(etiquette, cible)
+        api()
+        self.attributes["frameref-" .. etiquette] = cible
+    end
+    function f:WrapScript(cadre, script, avant, apres)
+        api()
+        local entete = self
+        local origine = cadre.scripts[script]
+        local sig, sigApres = "self", "self,message"
+        if script == "OnClick" or script == "PreClick" or script == "PostClick" then
+            sig, sigApres = "self,button,down", "self,message,button,down"
+        elseif script == "OnMouseWheel" then
+            sig, sigApres = "self,offset", "self,message,offset"
+        end
+        cadre.scripts[script] = function(this, ...)
+            local nouveau, message
+            if ((not STATE.inLockdown) or estProtege(this)) and estExplicite(this) then
+                nouveau, message = executer(entete, sig, avant, poignee(this), ...)
+            end
+            if nouveau == false then return end
+            if origine then origine(this, ...) end
+            if apres and message ~= nil then executer(entete, sigApres, apres, poignee(this), message, ...) end
+        end
+    end
+    if string.find(gabarit, "Attribute", 1, true) then
+        local brut = f.SetAttribute
+        function f:SetAttribute(nom, valeur)
+            brut(self, nom, valeur)
+            if not string.match(nom, "^_") and self.attributes._onattributechanged then
+                executer(self, "self,name,value", self.attributes._onattributechanged, poignee(self), nom, valeur)
+            end
+        end
+    end
+    if string.find(gabarit, "Click", 1, true) then
+        f.scripts.OnClick = function(self, bouton, bas)
+            executer(self, "self,button,down", self.attributes._onclick, poignee(self), bouton, bas)
+        end
+    end
+    if string.find(gabarit, "MouseWheel", 1, true) then
+        f.scripts.OnMouseWheel = function(self, delta)
+            executer(self, "self,delta", self.attributes._onmousewheel, poignee(self), delta)
+        end
+    end
+end
+
+-- SecureActionButton_OnClick, reduit a ce que le banc verifie : le sort (ou
+-- la macro) que le clic lance, selon le bouton et le modificateur
+local function clicAction(self, bouton)
+    local suffixe = (bouton == "RightButton") and "2" or "1"
+    local t = (MODIFICATEUR and self.attributes["shift-type" .. suffixe])
+        or self.attributes["type" .. suffixe] or self.attributes.type
+    if t == "spell" then
+        table.insert(LANCES, self.attributes["spell" .. suffixe] or self.attributes.spell)
+    elseif t == "macro" then
+        table.insert(LANCES, "macro:" .. tostring(self.attributes["macrotext" .. suffixe] or self.attributes.macrotext))
+    end
+end
+
+local PROTEGEES = { "Show", "Hide", "SetPoint", "ClearAllPoints", "SetAllPoints", "SetAttribute",
+    "SetWidth", "SetHeight", "Enable", "Disable", "SetParent", "SetScale" }
+local creerAvant = CreateFrame
+function CreateFrame(kind, name, parent, template)
+    local f = creerAvant(kind, name, parent, template)
+    for _, m in ipairs(PROTEGEES) do
+        local brut = f[m]
+        if brut then
+            f[m] = function(self, ...)
+                if STATE.verifierProtection and STATE.inLockdown and SECURISE == 0 and estProtege(self) then
+                    error("ADDON_ACTION_BLOCKED : " .. tostring(self.name) .. ":" .. m .. "()")
+                end
+                return brut(self, ...)
+            end
+        end
+    end
+    if type(template) == "string" and string.find(template, "SecureActionButtonTemplate", 1, true) then
+        f.scripts.OnClick = clicAction
+    end
+    if type(template) == "string" and string.find(template, "SecureHandler", 1, true) then
+        installerGestionnaire(f, template)
+    end
+    return f
+end
+
+-- LE CHEMIN SECURISE DU CLIENT : la touche P, le micro-bouton,
+-- ToggleSpellBook, la croix (HideUIPanel) -- du code de Blizzard, non
+-- souille, qui peut montrer ou cacher un cadre protege en combat
+function PAR_BLIZZARD(fn, ...)
+    SECURISE = SECURISE + 1
+    local r = table.pack(pcall(fn, ...))
+    SECURISE = SECURISE - 1
+    if not r[1] then error(r[2], 0) end
+    return table.unpack(r, 2, r.n)
+end
+
+-- un clic complet : OnClick, ses greffons, PostClick -- l'ordre du client
+function CLIQUER(b, bouton)
+    bouton = bouton or "LeftButton"
+    if b.scripts.OnClick then b.scripts.OnClick(b, bouton, false) end
+    if b.hooks and b.hooks.OnClick then b.hooks.OnClick(b, bouton) end
+    if b.scripts.PostClick then b.scripts.PostClick(b, bouton) end
+end
+
+-- LE GRIMOIRE DE 3.3.5 (SpellBookFrame.xml / .lua) : le panneau, son art,
+-- ses douze boutons, ses onglets, sa croix -- dont le OnClick ferme SON
+-- PARENT, comme UIPanelCloseButton.
+BOOKTYPE_SPELL, BOOKTYPE_PET = "spell", "pet"
+SpellBookFrame = CreateFrame("Frame", "SpellBookFrame", UIParent)
+SpellBookFrame:SetWidth(384) SpellBookFrame:SetHeight(512)
+SpellBookFrame:EnableMouse(true)
+SpellBookFrame.bookType = BOOKTYPE_SPELL
+SpellBookFrame:Hide()
+for _, nom in ipairs({ "SpellBookFrameIcon", "SpellBookFrameTopLeft", "SpellBookFrameTopRight", "SpellBookTitleText" }) do
+    local t = SpellBookFrame:CreateTexture(nil, "BACKGROUND")
+    t:SetTexture("wotlk:" .. nom)
+    _G[nom] = t
+end
+for i = 1, 12 do
+    local b = CreateFrame("CheckButton", "SpellButton" .. i, SpellBookFrame)
+    b:EnableMouse(true)
+end
+for i = 1, 8 do CreateFrame("CheckButton", "SpellBookSkillLineTab" .. i, SpellBookFrame) end
+for _, nom in ipairs({ "SpellBookPrevPageButton", "SpellBookNextPageButton", "ShowAllSpellRanksCheckBox" }) do
+    CreateFrame("Button", nom, SpellBookFrame)
+end
+SpellBookCloseButton = CreateFrame("Button", "SpellBookCloseButton", SpellBookFrame)
+SpellBookCloseButton:SetNormalTexture("close-up") SpellBookCloseButton:SetPushedTexture("close-down")
+SpellBookCloseButton:SetHighlightTexture("close-highlight")
+SpellBookCloseButton:SetScript("OnClick", function(self) HideUIPanel(self:GetParent()) end)
+function SpellBookFrame_Update() end
+-- le livre : trois lignes (General, Frost), des rangs, un passif ; et le familier
+LIVRE = {
+    spell = {
+        { "Attack", "", false, "icone:attaque" },
+        { "Shoot", "", false, "icone:tir" },
+        { "Frostbolt", "Rank 1", false, "icone:eclair" },
+        { "Frostbolt", "Rank 2", false, "icone:eclair" },
+        { "Frostbolt", "Rank 3", false, "icone:eclair" },
+        { "Frost Armor", "Rank 1", false, "icone:armure" },
+        { "Ice Shards", "", true, "icone:eclats" },
+    },
+    pet = { { "Growl", "", false, "icone:grogne" }, { "Bite", "Rank 2", false, "icone:morsure" } },
+}
+ONGLETS = { { "General", "icone:livre", 0, 2 }, { "Frost", "icone:givre", 2, 5 } }
+function GetNumSpellTabs() return #ONGLETS end
+function GetSpellTabInfo(i) local o = ONGLETS[i] if o then return o[1], o[2], o[3], o[4] end end
+function GetSpellName(slot, livre) local e = LIVRE[livre][slot] if e then return e[1], e[2] end end
+function IsPassiveSpell(slot, livre) local e = LIVRE[livre][slot] return e and e[3] and 1 or nil end
+function GetSpellTexture(slot, livre) local e = LIVRE[livre][slot] return e and e[4] end
+function HasPetSpells() if FAMILIER_LIVRE then return #LIVRE.pet, "PET" end end
+function GetPetIcon() return "icone:familier" end
+function GetSpellCooldown() return 0, 0, 1 end
+function GetSpellAutocast(slot, livre) if livre == "pet" and slot == 1 then return 1, 1 end end
+function GetSpellLink(slot, livre) return "lien:" .. livre .. slot end
+PRIS = {}
+function PickupSpell(slot, livre) table.insert(PRIS, livre .. slot) end
+-- Spell.dbc, en abrege : les identifiants des groupes de camelot qui servent
+-- au banc ; les autres n'existent pas (nil, comme ceux propres a camelot)
+SORTS_PAR_ID = { [3565] = "Teleport: Darnassus", [3562] = "Teleport: Ironforge",
+    [3561] = "Teleport: Stormwind", [10059] = "Portal: Stormwind", [11416] = "Portal: Ironforge",
+    [53140] = "Teleport: Dalaran", [3567] = "Teleport: Orgrimmar", [32271] = "Teleport: Exodar",
+    [1038] = "Hand of Salvation", [1022] = "Hand of Protection", [20217] = "Blessing of Kings",
+    [13165] = "Aspect of the Hawk", [34074] = "Aspect of the Viper",
+    [21084] = "Seal of Righteousness", [20165] = "Seal of Light", [20271] = "Judgement of Light",
+    [53408] = "Judgement of Wisdom" }
+function GetSpellInfo(id) return SORTS_PAR_ID[id] end
+function IsCurrentSpell(slot, livre) return SORT_EN_COURS == livre .. slot end
+function IsModifierKeyDown() return MODIFICATEUR and true or false end
+GameTooltip.SetSpell = function(self, slot, livre) self.sort = { slot, livre } end
+STATE.cvars.ShowAllSpellRanks = "0"
+SPELLBOOK = "Spellbook"
+SPELL_PASSIVE = "Passive"
+PET = "Pet"
+
 -- UIParent.lua de 3.3.5 : le suivi recolle sous MinimapCluster, et un point
 -- BOTTOMRIGHT sur le bas de l'ecran, a chaque passage
 CONTAINER_OFFSET_X, CONTAINER_OFFSET_Y = 0, 60
@@ -2718,7 +3065,7 @@ def main():
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "Bags.lua",
+             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
@@ -7281,6 +7628,411 @@ def main():
     assert g.ForeverUIDB.positions.suivi.x == -200 and wf.height == 240
     lua.execute("ForeverUI.Layout.Reset('suivi')")
     assert not g.ForeverUIDB.positions.suivi
+
+    # ------------------------------------------------------------------
+    # LE GRIMOIRE (docs/GRIMOIRE.md, etape 1)
+    # ------------------------------------------------------------------
+    print("\n--- grimoire ---")
+    meme = lua.eval("function(a, b) return rawequal(a, b) end")
+    livre = g.ForeverUISpellBookFrame
+    assert livre and meme(livre.parent, g.SpellBookFrame), "le livre vit dans SpellBookFrame : il s'ouvre et se ferme avec lui"
+    assert g.SpellBookFrame.mouseEnabled == False, "le panneau vide de WotLK n'attrape plus la souris"
+    assert g.ForeverUISpellBookButton48 and g.ForeverUISpellBookButton48.template == "SecureActionButtonTemplate", "48 cases securisees"
+    lua.execute("SpellBookFrame:Show()")
+    print("   livre %s x %s | SpellButton1 alpha %s | croix montree=%s" % (livre.width, livre.height, g.SpellButton1.alpha, g.SpellBookCloseButton.shown))
+    assert (livre.width, livre.height) == (1618, 720)
+    pl = list(livre.points[1].values())
+    assert (pl[0], pl[2], pl[3], pl[4]) == ("TOP", "TOP", 0, -116), "panneau center de camelot"
+    assert g.SpellButton1.alpha == 0 and g.SpellBookSkillLineTab1.alpha == 0 and g.SpellBookFrameIcon.alpha == 0, "WotLK s'efface"
+    assert g.SpellBookCloseButton.alpha != 0, "la croix de WotLK reste, rhabillee"
+    pf = list(g.SpellBookCloseButton.points[1].values())
+    assert meme(pf[1], livre) and pf[0] == "TOPRIGHT" and meme(g.SpellBookCloseButton.parent, g.SpellBookFrame), \
+        "ancree sur le livre, mais toujours l'enfant de SpellBookFrame (elle ferme son parent)"
+    t1, t2 = g.ForeverUISpellBookTab1, g.ForeverUISpellBookTab2
+    print("   onglets : %s (%s) | %s | 3e %s" % (t1.nom, t1.icone.texture, t2.nom, g.ForeverUISpellBookTab3))
+    assert t1.nom == "General" and t1.icone.texture.endswith("classicon_deathknight"), "la Generale porte l'icone de la classe"
+    assert t2.nom == "Frost" and g.ForeverUISpellBookTab3 is None, "pas de familier : deux onglets"
+    assert t1.actif.shown and not t1.cadre.shown and t2.cadre.shown and not t2.actif.shown
+    pt2 = list(t2.points[1].values())
+    assert pt2[3] == 45, "44 de large, ecart 1"
+
+    # la ligne Frost : le rang le plus haut seulement, le passif rond
+    lua.execute("ForeverUISpellBookTab2:GetScript('OnClick')(ForeverUISpellBookTab2)")
+    vue = g.ForeverUISpellBookView1
+    cases = [c for c in vue.cases.values() if c.shown]
+    print("   Frost : %s | en-tete '%s'" % ([(c.nom.text, c.sous.text, c.bouton.attributes.spell) for c in cases], vue.entete.texte.text))
+    assert [c.nom.text for c in cases] == ["Frostbolt", "Frost Armor", "Ice Shards"], "un seul Frostbolt : son rang le plus haut"
+    assert cases[0].bouton.attributes.spell == "Frostbolt(Rank 3)" and cases[0].bouton.attributes.type1 == "spell"
+    passif = cases[2]
+    assert passif.sous.text == "Passive" and passif.bouton.attributes.type1 is None, "un passif ne se lance pas"
+    assert passif.bouton.cadre.texture == g.UIAtlas.data["talents-node-circle-gray"][1], "cadre rond"
+    assert cases[0].bouton.cadre.texture == g.UIAtlas.data["spellbook-item-iconframe-c60"][1], "cadre carre, variante c60"
+    print("   ombre carree : actif %s, passif %s" % (cases[0].bouton.ombre.shown, passif.bouton.ombre.shown))
+    assert cases[0].bouton.ombre.shown and not passif.bouton.ombre.shown, "un passif : l'icone ronde seule"
+    print("   portrait : %s" % livre.portrait.texture)
+    assert livre.portrait.texture.endswith("spellbook\\portrait"), "l'icone cuite ronde, pas celle de WotLK"
+    niveau_croix = g.SpellBookCloseButton.frameLevel
+    print("   croix niveau %s, livre %s, toplevel %s" % (niveau_croix, livre.GetFrameLevel(livre), livre.toplevel))
+    assert not livre.toplevel, "un livre toplevel se leverait par-dessus la croix"
+    assert niveau_croix == livre.GetFrameLevel(livre) + 22, "au-dessus du metal (+20) et du titre (+21)"
+
+    # les reglages : la fleche en haut a droite, deux cases
+    rb = g.ForeverUISpellBookSettingsButton
+    pr = list(rb.points[1].values())
+    assert meme(pr[1], g.ForeverUISpellBookPages) and (pr[0], pr[2], pr[3], pr[4]) == ("TOPRIGHT", "TOPRIGHT", -30, -27)
+    assert (rb.width, rb.height) == (15, 16) and rb.icone.texture == g.UIAtlas.data["common-dropdown-a-button"][1]
+    # useAtlasSize : une texture ancree par son seul centre et sans taille
+    # s'afficherait a la taille de la feuille entiere
+    print("   fleche des reglages : %s x %s" % (rb.icone.width, rb.icone.height))
+    assert (rb.icone.width, rb.icone.height) == (27, 27), "la taille d'atlas, pas celle de la feuille"
+    # LE MENU, EN BOUTONS SECURISES (pour le combat) : la fleche l'ouvre, trois
+    # lignes dans l'ordre de SetupSettingsDropdown, groupe par defaut
+    liste = g.ForeverUISpellBookSettingsList
+    assert not liste.shown
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsButton)")
+    lignes = [g["ForeverUISpellBookSettingsEntry%d" % i] for i in (1, 2, 3)]
+    entrees = [(l.texte.text, l.coche.shown) for l in lignes]
+    pl = list(liste.points[1].values())
+    print("   reglages : %s | liste %s x %s, %s de %s" % (entrees, liste.width, liste.height, pl[0], pl[2]))
+    assert liste.shown and liste.strata == "DIALOG" and liste.autoHide == 2, "ouverte ; fermee 2 s apres la souris"
+    assert meme(pl[1], rb) and (pl[0], pl[2], pl[3], pl[4]) == ("TOPLEFT", "BOTTOMLEFT", 0, 0)
+    assert entrees == [("Hide Passives", False), ("Group Similar Spells on Flyouts", True), ("Show all spell ranks", False)]
+    assert liste.height == 3 * 20 + 2 * 15
+    assert liste.width == max(len(l.texte.text) * 6 for l in lignes) + 40 + 25 and lignes[0].width == liste.width - 25
+    p2 = list(lignes[1].points[1].values())
+    assert (p2[0], p2[3], p2[4]) == ("TOPLEFT", 11, -35), "x = 5 + 12 - 6, y = -15 - 20"
+    # masquer les passifs : Ice Shards disparait, la case se coche, la liste
+    # reste ouverte ; et retour
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry1)")
+    assert [c.nom.text for c in vue.cases.values() if c.shown] == ["Frostbolt", "Frost Armor"]
+    assert lignes[0].coche.shown and liste.shown and g.ForeverUIDB.grimoire.masquerPassifs
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry1)")
+    assert [c.nom.text for c in vue.cases.values() if c.shown] == ["Frostbolt", "Frost Armor", "Ice Shards"]
+    assert not lignes[0].coche.shown
+    # tous les rangs
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry3)")
+    assert g.STATE.cvars.ShowAllSpellRanks == "1" and lignes[2].coche.shown
+    assert [c.nom.text for c in vue.cases.values() if c.shown][:3] == ["Frostbolt", "Frostbolt", "Frostbolt"]
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry3)")
+    assert g.STATE.cvars.ShowAllSpellRanks == "0"
+    # la fleche referme
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsButton)")
+    assert not liste.shown
+    assert vue.entete.texte.text == "Frost" and vue.entete.shown
+    xs = [list(c.points[1].values())[3] for c in cases]
+    ys = [list(c.points[1].values())[4] for c in cases]
+    print("   positions x %s, y %s" % ([round(x, 2) for x in xs], ys))
+    assert abs(xs[1] - (680 - 30) / 3 - 15) < 1e-6 and ys == [-61, -61, -61], "trois colonnes, une rangee, sous l'en-tete (51 + 10)"
+    assert g.ForeverUISpellBookPages.parent and not g.ForeverUISpellBookPrevPage.enabled and not g.ForeverUISpellBookNextPage.enabled
+    # tous les rangs (CVar ShowAllSpellRanks)
+    lua.execute("STATE.cvars.ShowAllSpellRanks = '1' ForeverUI.SpellBook.maj()")
+    assert [c.nom.text for c in vue.cases.values() if c.shown][:3] == ["Frostbolt", "Frostbolt", "Frostbolt"]
+    lua.execute("STATE.cvars.ShowAllSpellRanks = '0' ForeverUI.SpellBook.maj()")
+    # glisser : PickupSpell, sur l'emplacement du livre
+    lua.execute("PRIS = {} ForeverUISpellBookButton1:GetScript('OnDragStart')(ForeverUISpellBookButton1)")
+    assert list(g.PRIS.values()) == ["spell5"], "l'emplacement du rang le plus haut"
+
+    # la mise en page de camelot : 30 sorts -> 7 rangees sous l'en-tete, puis
+    # l'en-tete REPETE et 3 rangees
+    vues = g.ForeverUI.SpellBook.mettreEnPage("X", lua.eval("(function() local t = {} for i = 1, 30 do t[i] = { nom = 'S' .. i } end return t end)()"))
+    v1 = [e for e in vues[1].values()]
+    v2 = [e for e in vues[2].values()]
+    print("   30 sorts : vue 1 %d elements, vue 2 %d" % (len(v1), len(v2)))
+    assert len(v1) == 1 + 21 and len(v2) == 1 + 9
+    assert v1[1].sort.nom == "S1" and v1[2].sort.nom == "S2" and v1[1].colonne == 1 and v1[8].colonne == 2, "colonne par colonne"
+    assert v2[0].entete == "X" and v2[0].y == 0, "le nom de la categorie reste en tete de la vue suivante"
+    assert v2[1].y == 61 and v2[1].sort.nom == "S22" and v2[4].colonne == 2, "la vue 2 recompte ses rangees sous l'en-tete : 3"
+
+    # LES MENUS VOLANTS (SPELLBOOK_USE_FLYOUTS). Une ligne Arcane : deux
+    # teleportations (groupe 250), deux portails (groupe 248), un sort seul.
+    lua.execute("""
+        LIVRE.spell[8] = { "Teleport: Stormwind", "", false, "icone:tp_hurlevent" }
+        LIVRE.spell[9] = { "Portal: Stormwind", "", false, "icone:portail" }
+        LIVRE.spell[10] = { "Teleport: Ironforge", "", false, "icone:tp_forgefer" }
+        LIVRE.spell[11] = { "Arcane Missiles", "Rank 1", false, "icone:projectiles" }
+        LIVRE.spell[12] = { "Portal: Ironforge", "", false, "icone:portail_forgefer" }
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 5 }
+        ForeverUI.SpellBook.maj()
+        ForeverUISpellBookTab3:GetScript('OnClick')(ForeverUISpellBookTab3)
+    """)
+    montrees = [c for c in vue.cases.values() if c.shown]
+    print("   groupes : %s" % [(c.nom.text, c.sous.text, c.bouton.fleche.shown) for c in montrees])
+    assert [c.nom.text for c in montrees] == ["Teleport", "Portal", "Arcane Missiles"], \
+        "chaque groupe a la place de son premier sort, ses membres retires"
+    tp = montrees[0]
+    assert tp.sort.volant.id == 250 and tp.bouton.icone.texture.endswith("spell_arcane_teleportstormwind")
+    assert tp.bouton.attributes.type1 is None and tp.bouton.attributes.spell is None, "un groupe ne lance rien"
+    assert tp.sous.text == "" and tp.bouton.fleche.shown and not montrees[2].bouton.fleche.shown
+    assert [m.nom for m in tp.sort.membres.values()] == ["Teleport: Ironforge", "Teleport: Stormwind"], \
+        "l'ordre du groupe (Darnassus, Ironforge, Stormwind), pas celui du livre"
+    # la fleche : 15 x 6 tournee vers la droite (90), a 4 du bord
+    fl = tp.bouton.fleche
+    e = g.UIAtlas.data["ui-hud-actionbar-flyout"]
+    tc = list(fl.texcoord8.values())
+    pf = list(fl.points[1].values())
+    print("   fleche : %s x %s, %s (%s) | coords %s" % (fl.width, fl.height, pf[0], pf[3], [round(x, 4) for x in tc]))
+    assert (fl.width, fl.height) == (6, 15) and fl.texture == e[1]
+    assert tc == [e[2], e[5], e[3], e[5], e[2], e[4], e[3], e[4]], "SetClampedTextureRotation(90) : UL <- LL, LL <- LR, UR <- UL, LR <- UR"
+    assert pf[0] == "RIGHT" and pf[3] == 4
+    # l'infobulle : le nom et la description du groupe
+    lua.execute("ForeverUISpellBookButton1:GetScript('OnEnter')(ForeverUISpellBookButton1)")
+    print("   infobulle : '%s' | survol %s" % (g.GameTooltip.text, fl.texture == g.UIAtlas.data["ui-hud-actionbar-flyout-mouseover"][1]))
+    assert g.GameTooltip.text == "Teleport"
+    assert list(fl.texcoord8.values())[0] == g.UIAtlas.data["ui-hud-actionbar-flyout-mouseover"][2], "fleche survolee"
+    lua.execute("ForeverUISpellBookButton1:GetScript('OnLeave')(ForeverUISpellBookButton1)")
+    # un glisser ne prend rien
+    lua.execute("PRIS = {} ForeverUISpellBookButton1:GetScript('OnDragStart')(ForeverUISpellBookButton1)")
+    assert len(g.PRIS) == 0, "3.3.5 ne met pas de menu volant sur une barre"
+
+    # le clic ouvre le menu : un petit bouton securise par sort
+    lua.execute("CLIQUER(ForeverUISpellBookButton1)")
+    vol = g.ForeverUISpellFlyout
+    p1, p2 = g.ForeverUISpellFlyoutButton1, g.ForeverUISpellFlyoutButton2
+    pv = list(vol.points[1].values())
+    print("   menu volant : %s x %s, %s de %s | %s, %s" % (vol.width, vol.height, pv[0], pv[2], p1.attributes.spell, p2.attributes.spell))
+    assert vol.shown and vol.strata == "DIALOG"
+    assert (vol.width, vol.height) == (9 + 2 * 30 + 4 + 9, 42), "9, deux boutons de 30 ecartes de 4, 9"
+    assert pv[0] == "LEFT" and meme(pv[1], tp.bouton) and pv[2] == "RIGHT" and pv[3] == -4
+    assert p1.template == "SecureActionButtonTemplate" and p1.attributes.type1 == "spell"
+    assert p1.attributes.spell == "Teleport: Ironforge" and p2.attributes.spell == "Teleport: Stormwind"
+    assert list(p2.points[1].values())[3] == 9 + 34 and (p1.width, p1.height) == (30, 30)
+    assert p1.icone.texture == "icone:tp_forgefer"
+    tco = list(fl.texcoord8.values())
+    assert tco[0] == g.UIAtlas.data["ui-hud-actionbar-flyout"][3] and list(fl.points[1].values())[3] == 2, \
+        "ouvert : la fleche se retourne (270) et passe a 2"
+    # le glisser d'un petit bouton prend son sort ; le clic ferme le menu
+    lua.execute("PRIS = {} ForeverUISpellFlyoutButton2:GetScript('OnDragStart')(ForeverUISpellFlyoutButton2)")
+    assert list(g.PRIS.values()) == ["spell8"]
+    lua.execute("LANCES = {} CLIQUER(ForeverUISpellFlyoutButton1)")
+    assert list(g.LANCES.values()) == ["Teleport: Ironforge"], "le petit bouton lance son sort"
+    assert not vol.shown and list(fl.points[1].values())[3] == 4, "lance, le menu se ferme et la fleche revient"
+    # le meme groupe deux fois : ouvert puis ferme ; un autre : le menu le suit
+    lua.execute("CLIQUER(ForeverUISpellBookButton1)")
+    lua.execute("CLIQUER(ForeverUISpellBookButton1)")
+    assert not vol.shown
+    lua.execute("CLIQUER(ForeverUISpellBookButton1)")
+    lua.execute("CLIQUER(ForeverUISpellBookButton2)")
+    assert vol.shown and meme(list(vol.points[1].values())[1], montrees[1].bouton)
+    assert p1.attributes.spell == "Portal: Ironforge" and p2.attributes.spell == "Portal: Stormwind" and p2.shown
+    # EN COMBAT AUSSI (etape 2) : le bloc securise ouvre le groupe
+    lua.execute("CLIQUER(ForeverUISpellBookButton2)")
+    assert not vol.shown
+    lua.execute("STATE.verifierProtection = true STATE.inLockdown = true CLIQUER(ForeverUISpellBookButton1)")
+    assert vol.shown and p1.attributes.spell == "Teleport: Ironforge", "en combat, le groupe s'ouvre"
+    lua.execute("CLIQUER(ForeverUISpellBookButton1) STATE.inLockdown = false STATE.verifierProtection = false")
+    assert not vol.shown
+    # sans groupes : les sorts reviennent, a leur place
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry2)")
+    print("   sans groupes : %s" % [c.nom.text for c in vue.cases.values() if c.shown])
+    assert [c.nom.text for c in vue.cases.values() if c.shown] == ["Teleport: Stormwind", "Portal: Stormwind",
+        "Teleport: Ironforge", "Arcane Missiles", "Portal: Ironforge"]
+    assert g.ForeverUIDB.grimoire.sansVolants
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry2)")
+    # UN GROUPE NE PASSE PAS D'UN ONGLET A L'AUTRE (les postures du guerrier,
+    # une par arbre) : Arcane garde une teleportation et un portail, Feu les
+    # deux autres ; seul, un sort reste un sort
+    lua.execute("""
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 2 }
+        ONGLETS[4] = { "Fire", "icone:feu", 9, 3 }
+        ForeverUI.SpellBook.maj()
+        ForeverUISpellBookTab3:GetScript('OnClick')(ForeverUISpellBookTab3)
+    """)
+    arcane = [c.nom.text for c in vue.cases.values() if c.shown]
+    lua.execute("ForeverUISpellBookTab4:GetScript('OnClick')(ForeverUISpellBookTab4)")
+    feu = [c.nom.text for c in vue.cases.values() if c.shown]
+    print("   un groupe par onglet : Arcane %s | Fire %s" % (arcane, feu))
+    assert arcane == ["Teleport: Stormwind", "Portal: Stormwind"], "rien a grouper dans l'onglet : chacun seul"
+    assert feu == ["Teleport: Ironforge", "Arcane Missiles", "Portal: Ironforge"]
+    # deux rangs d'un meme sort ne font pas un groupe
+    lua.execute("""
+        LIVRE.spell[10] = { "Portal: Ironforge", "Rank 1", false, "icone:portail_forgefer" }
+        STATE.cvars.ShowAllSpellRanks = '1' ForeverUI.SpellBook.maj()
+    """)
+    print("   deux rangs : %s" % [c.nom.text for c in vue.cases.values() if c.shown])
+    assert [c.nom.text for c in vue.cases.values() if c.shown] == ["Portal: Ironforge", "Arcane Missiles", "Portal: Ironforge"]
+    lua.execute("STATE.cvars.ShowAllSpellRanks = '0'")
+    # LES VILLES DE BURNING CRUSADE ET WOTLK, et Dalaran commun aux deux
+    # factions : il rejoint le groupe de la faction du joueur
+    lua.execute("""
+        LIVRE.spell[8] = { "Teleport: Dalaran", "", false, "icone:tp_dalaran" }
+        LIVRE.spell[9] = { "Teleport: Stormwind", "", false, "icone:tp_hurlevent" }
+        LIVRE.spell[10] = { "Teleport: Exodar", "", false, "icone:tp_exodar" }
+        LIVRE.spell[11] = { "Teleport: Orgrimmar", "", false, "icone:tp_orgrimmar" }
+        LIVRE.spell[12] = nil
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 4 } ONGLETS[4] = nil
+        ForeverUI.SpellBook.maj()
+        ForeverUISpellBookTab3:GetScript('OnClick')(ForeverUISpellBookTab3)
+    """)
+    alliance = [(c.nom.text, [m.nom for m in c.sort.membres.values()] if c.sort.membres else None)
+        for c in vue.cases.values() if c.shown]
+    print("   Alliance : %s" % alliance)
+    assert alliance == [("Teleport", ["Teleport: Stormwind", "Teleport: Exodar", "Teleport: Dalaran"]),
+        ("Teleport: Orgrimmar", None)], "Stormwind (camelot), puis Exodar et Dalaran ; Orgrimmar n'est pas de la faction"
+    lua.execute("STATE.faction = 'Horde' ForeverUI.SpellBook.maj()")
+    horde = [(c.nom.text, [m.nom for m in c.sort.membres.values()] if c.sort.membres else None)
+        for c in vue.cases.values() if c.shown]
+    print("   Horde : %s" % horde)
+    assert horde[0] == ("Teleport", ["Teleport: Orgrimmar", "Teleport: Dalaran"]) and         vue.cases[1].bouton.icone.texture.endswith("spell_arcane_teleportorgrimmar"), "Dalaran rejoint le groupe de la Horde"
+    lua.execute("STATE.faction = 'Alliance'")
+    # LES AJOUTS DE BURNING CRUSADE ET WOTLK aux autres familles : Aspect of
+    # the Viper rejoint les aspects ; Hand of Salvation (Blessing of
+    # Salvation chez camelot) passe avec les autres Hand
+    lua.execute("""
+        LIVRE.spell[8] = { "Aspect of the Hawk", "Rank 1", false, "icone:faucon" }
+        LIVRE.spell[9] = { "Aspect of the Viper", "", false, "icone:vipere" }
+        LIVRE.spell[10] = { "Blessing of Kings", "", false, "icone:rois" }
+        LIVRE.spell[11] = { "Hand of Salvation", "", false, "icone:salut" }
+        LIVRE.spell[12] = { "Hand of Protection", "Rank 1", false, "icone:protection" }
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 5 }
+        ForeverUI.SpellBook.maj()
+    """)
+    ajouts = [(c.nom.text, [m.nom for m in c.sort.membres.values()] if c.sort.membres else None)
+        for c in vue.cases.values() if c.shown]
+    print("   ajouts : %s" % ajouts)
+    assert ajouts == [("Aspect", ["Aspect of the Hawk", "Aspect of the Viper"]), ("Blessing of Kings", None),
+        ("Utility Blessings", ["Hand of Protection", "Hand of Salvation"])]
+    # les sceaux et les jugements : deux groupes que camelot n'a pas, sans
+    # description, a l'icone de leur premier sort
+    lua.execute("""
+        LIVRE.spell[8] = { "Seal of Light", "", false, "icone:sceau_lumiere" }
+        LIVRE.spell[9] = { "Judgement of Light", "", false, "icone:jugement_lumiere" }
+        LIVRE.spell[10] = { "Seal of Righteousness", "", false, "icone:sceau_piete" }
+        LIVRE.spell[11] = { "Judgement of Wisdom", "", false, "icone:jugement_sagesse" }
+        LIVRE.spell[12] = nil
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 4 }
+        ForeverUI.SpellBook.maj()
+    """)
+    paladin = [(c.nom.text, c.bouton.icone.texture, [m.nom for m in c.sort.membres.values()])
+        for c in vue.cases.values() if c.shown]
+    print("   paladin : %s" % paladin)
+    assert paladin == [("Seals", "icone:sceau_piete", ["Seal of Righteousness", "Seal of Light"]),
+        ("Judgements", "icone:jugement_lumiere", ["Judgement of Light", "Judgement of Wisdom"])]
+    lua.execute("ForeverUISpellBookButton1:GetScript('OnEnter')(ForeverUISpellBookButton1)")
+    assert g.GameTooltip.text == "Seals", "l'infobulle : le nom seul"
+    lua.execute("ForeverUISpellBookButton1:GetScript('OnLeave')(ForeverUISpellBookButton1)")
+    lua.execute("for i = 8, 12 do LIVRE.spell[i] = nil end ONGLETS[3] = nil ONGLETS[4] = nil")
+    lua.execute("ForeverUISpellBookTab1:GetScript('OnClick')(ForeverUISpellBookTab1)")
+
+    # le familier : son onglet, lance par le nom, clic droit = lancement automatique
+    lua.execute("FAMILIER_LIVRE = true SpellBookFrame:Hide() SpellBookFrame.bookType = 'pet' SpellBookFrame:Show()")
+    t3 = g.ForeverUISpellBookTab3
+    gr = [c for c in vue.cases.values() if c.shown][0]
+    print("   familier : onglet %s choisi=%s | %s -> %s / %s" % (t3.nom, t3.actif.shown, gr.nom.text,
+        gr.bouton.attributes.spell, gr.bouton.attributes.macrotext2))
+    assert t3.nom == "Pet" and t3.actif.shown, "ToggleSpellBook(BOOKTYPE_PET) ouvre sur le familier"
+    assert gr.bouton.attributes.spell == "Growl" and gr.bouton.attributes.macrotext2 == "/petautocasttoggle Growl"
+    assert gr.bouton.auto.shown, "lancement automatique allume"
+    lua.execute("SpellBookFrame:Hide() SpellBookFrame.bookType = 'spell' FAMILIER_LIVRE = nil SpellBookFrame:Show()")
+
+    # une page : 809, la vue 2 cachee
+    lua.execute("CLIQUER(ForeverUISpellBookFrame.taille)")
+    print("   reduit : %s de large, vue 2 %s" % (livre.width, g.ForeverUISpellBookView2.shown))
+    assert livre.width == 809 and not g.ForeverUISpellBookView2.shown and g.ForeverUIDB.grimoire.reduit
+    lua.execute("CLIQUER(ForeverUISpellBookFrame.taille)")
+    assert livre.width == 1618 and g.ForeverUISpellBookView2.shown
+
+    # ------------------------------------------------------------------
+    # EN COMBAT (etape 2). Le faux client bloque toute action protegee du
+    # code ordinaire (ADDON_ACTION_BLOCKED) : tout passe par les blocs
+    # securises, et les images suivent par CallMethod.
+    # ------------------------------------------------------------------
+    lua.execute("""
+        LIVRE.spell[8] = { "Teleport: Stormwind", "", false, "icone:tp_hurlevent" }
+        LIVRE.spell[9] = { "Teleport: Ironforge", "", false, "icone:tp_forgefer" }
+        for i = 10, 57 do LIVRE.spell[i] = { "Sort " .. i, "", false, "icone:" .. i } end
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 50 }
+        SpellBookFrame:Hide()
+    """)
+    # hors combat, le livre est publie sans etre ouvert (SPELLS_CHANGED)
+    lua.execute("ForeverUI.SpellBook.maj()")
+    lua.execute("STATE.verifierProtection = true STATE.inLockdown = true PAR_BLIZZARD(function() SpellBookFrame:Show() end)")
+    print("   combat : livre ouvert, categorie %s" % g.ForeverUI.SpellBook.etat.categorie)
+    # un onglet : la categorie change, et ses cases avec leurs sorts
+    lua.execute("CLIQUER(ForeverUISpellBookTab3)")
+    montrees = [c for c in vue.cases.values() if c.shown]
+    print("   combat, onglet Arcane : %s ... (%d cases), %s" % ([c.nom.text for c in montrees[:3]], len(montrees),
+        g.ForeverUISpellBookView1.entete.texte.text))
+    assert g.ForeverUI.SpellBook.etat.categorie == 3 and montrees[0].nom.text == "Teleport"
+    assert montrees[1].bouton.attributes.spell == "Sort 10" and montrees[1].nom.text == "Sort 10"
+    assert not g.ForeverUISpellBookTab3.enabled and g.ForeverUISpellBookTab3.actif.shown, "l'onglet choisi s'allume"
+    assert g.ForeverUISpellBookTab1.enabled != False and not g.ForeverUISpellBookTab1.actif.shown
+    # une case lance son sort
+    lua.execute("LANCES = {} CLIQUER(ForeverUISpellBookButton2)")
+    assert list(g.LANCES.values()) == ["Sort 10"], "en combat, la case lance le sort qu'elle montre"
+    # la page suivante : 49 elements, 21 par vue -- trois vues, deux pages
+    lua.execute("CLIQUER(ForeverUISpellBookNextPage)")
+    page2 = [c for c in vue.cases.values() if c.shown]
+    print("   combat, page suivante : %s | %s" % ([c.nom.text for c in page2], g.ForeverUI.SpellBook.pager.texte.text))
+    assert g.ForeverUI.SpellBook.etat.page == 2 and g.ForeverUI.SpellBook.pager.texte.text == "Page 2/2"
+    assert page2[0].nom.text == "Sort 51" and page2[0].bouton.attributes.spell == "Sort 51"
+    assert not g.ForeverUISpellBookView2.cases[1].shown, "la page 2 n'a qu'une vue"
+    assert not g.ForeverUISpellBookNextPage.enabled and g.ForeverUISpellBookPrevPage.enabled != False
+    assert g.ForeverUISpellBookView1.entete.texte.text == "Arcane", "l'en-tete suit, en combat aussi"
+    lua.execute("LANCES = {} CLIQUER(ForeverUISpellBookButton1)")
+    assert list(g.LANCES.values()) == ["Sort 51"]
+    # la roulette revient a la page 1
+    lua.execute("ForeverUISpellBookContent.scripts.OnMouseWheel(ForeverUISpellBookContent, 1)")
+    assert g.ForeverUI.SpellBook.etat.page == 1 and [c for c in vue.cases.values() if c.shown][1].nom.text == "Sort 10"
+    # le groupe s'ouvre, son petit bouton lance, le menu se ferme
+    lua.execute("CLIQUER(ForeverUISpellBookButton1)")
+    assert vol.shown and p1.attributes.spell == "Teleport: Ironforge" and p1.icone.texture == "icone:tp_forgefer"
+    lua.execute("LANCES = {} CLIQUER(ForeverUISpellFlyoutButton2)")
+    assert list(g.LANCES.values()) == ["Teleport: Stormwind"] and not vol.shown
+    # le livre se ferme : le menu ouvert se ferme avec lui
+    lua.execute("CLIQUER(ForeverUISpellBookButton1) PAR_BLIZZARD(function() SpellBookFrame:Hide() end)")
+    assert not vol.shown, "FlyoutButtonMixin:OnHide : le menu ne revient pas a la reouverture"
+    lua.execute("PAR_BLIZZARD(function() SpellBookFrame:Show() end)")
+    # AGRANDIR / REDUIRE EN COMBAT : en page 2 de deux pages (vues 3 et 4),
+    # une page montre la vue 3 -- page 3 ; et retour
+    lua.execute("CLIQUER(ForeverUISpellBookTab3) CLIQUER(ForeverUISpellBookNextPage) CLIQUER(ForeverUISpellBookFrame.taille)")
+    une = [c.nom.text for c in vue.cases.values() if c.shown]
+    print("   combat, reduit : %s de large, vue 2 %s, %s | %s" % (livre.width, g.ForeverUISpellBookView2.shown,
+        g.ForeverUI.SpellBook.pager.texte.text, une[:2]))
+    assert livre.width == 809 and g.ForeverUISpellBookPages.width == 806 and not g.ForeverUISpellBookView2.shown
+    assert g.ForeverUI.SpellBook.pager.texte.text == "Page 3/3" and une[0] == "Sort 51"
+    assert g.ForeverUIDB.grimoire.reduit and g.ForeverUISpellBookPages.seule.shown, "retenu, et l'image d'une page"
+    lua.execute("CLIQUER(ForeverUISpellBookPrevPage)")
+    assert g.ForeverUI.SpellBook.pager.texte.text == "Page 2/3" and [c.nom.text for c in vue.cases.values() if c.shown][0] == "Sort 30"
+    lua.execute("CLIQUER(ForeverUISpellBookFrame.taille)")
+    print("   combat, agrandi : %s de large, %s" % (livre.width, g.ForeverUI.SpellBook.pager.texte.text))
+    assert livre.width == 1618 and g.ForeverUISpellBookView2.shown and g.ForeverUI.SpellBook.pager.texte.text == "Page 1/2"
+    assert g.ForeverUISpellBookView2.cases[1].shown and g.ForeverUISpellBookView2.cases[1].nom.text == "Sort 30"
+    assert not g.ForeverUIDB.grimoire.reduit
+    # LES REGLAGES EN COMBAT : tout de suite, par la liste securisee
+    lua.execute("CLIQUER(ForeverUISpellBookTab2) CLIQUER(ForeverUISpellBookSettingsButton) CLIQUER(ForeverUISpellBookSettingsEntry3)")
+    rangs = [c.nom.text for c in vue.cases.values() if c.shown]
+    print("   combat, tous les rangs : %s" % rangs)
+    assert rangs[:3] == ["Frostbolt", "Frostbolt", "Frostbolt"] and g.STATE.cvars.ShowAllSpellRanks == "1"
+    lua.execute("LANCES = {} CLIQUER(ForeverUISpellBookButton1)")
+    assert list(g.LANCES.values()) == ["Frostbolt(Rank 1)"], "le rang montre est celui qui part"
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry3) CLIQUER(ForeverUISpellBookSettingsEntry1)")
+    assert [c.nom.text for c in vue.cases.values() if c.shown] == ["Frostbolt", "Frost Armor"]
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry1) CLIQUER(ForeverUISpellBookTab3) CLIQUER(ForeverUISpellBookSettingsEntry2)")
+    assert [c.nom.text for c in vue.cases.values() if c.shown][:2] == ["Teleport: Stormwind", "Teleport: Ironforge"], \
+        "sans groupes, en combat"
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry2) CLIQUER(ForeverUISpellBookSettingsButton)")
+    assert [c.nom.text for c in vue.cases.values() if c.shown][0] == "Teleport" and g.STATE.cvars.ShowAllSpellRanks == "0"
+    # ce qui reste interdit en combat ne leve rien : le calcul attend
+    lua.execute("ForeverUI.SpellBook.maj()")
+    assert g.ForeverUI.SpellBook.enAttente
+    lua.execute("ForeverUI.SpellBook.majEtats()")
+    print("   combat : rien de bloque (ADDON_ACTION_BLOCKED leve sinon)")
+    lua.execute("STATE.inLockdown = false STATE.verifierProtection = false")
+    # LE REGLAGE ARRIVE APRES LE LIVRE : les variables sauvegardees se
+    # chargent apres le fichier. Le calcul suivant doit remettre la mise en
+    # page d'accord avec lui -- dans un sens comme dans l'autre.
+    lua.execute("ForeverUIDB.grimoire.reduit = true ForeverUI.SpellBook.maj()")
+    assert livre.width == 809 and not g.ForeverUISpellBookView2.shown
+    lua.execute("ForeverUIDB.grimoire.reduit = nil ForeverUI.SpellBook.maj() CLIQUER(ForeverUISpellBookTab3)")
+    print("   reglage arrive apres : %s de large, vue 2 : %s ..." % (livre.width,
+        [c.nom.text for c in g.ForeverUISpellBookView2.cases.values() if c.shown][:2]))
+    assert livre.width == 1618 and g.ForeverUISpellBookView2.shown and g.ForeverUISpellBookView2.cases[1].nom.text == "Sort 30",         "deux pages : la page de droite est peuplee"
+    lua.execute("for i = 8, 57 do LIVRE.spell[i] = nil end ONGLETS[3] = nil ForeverUI.SpellBook.maj()")
+    lua.execute("CLIQUER(ForeverUISpellBookTab1)")
+
+    # la croix de WotLK ferme le panneau
+    lua.execute("ForeverUISpellBookTab1:GetScript('OnClick')(ForeverUISpellBookTab1) SpellBookCloseButton:GetScript('OnClick')(SpellBookCloseButton)")
+    assert not g.SpellBookFrame.shown
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

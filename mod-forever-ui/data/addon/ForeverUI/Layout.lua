@@ -323,6 +323,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic du suivi de quetes disponible.")
 		end
+	elseif command == "grimoire" then
+		if ForeverUI.SpellBookDebug then
+			ForeverUI.SpellBookDebug()
+		else
+			say("aucun diagnostic du grimoire disponible.")
+		end
 	elseif command == "micro" then
 		if ForeverUI.MicroDebug then
 			ForeverUI.MicroDebug()
@@ -389,6 +395,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui minimap [echelle k], /fui carte, /fui journal, /fui suivi, /fui micro")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui minimap [echelle k], /fui carte, /fui journal, /fui suivi, /fui grimoire, /fui micro")
 	end
 end
