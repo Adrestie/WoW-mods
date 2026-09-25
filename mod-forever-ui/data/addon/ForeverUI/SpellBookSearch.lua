@@ -243,6 +243,12 @@ local function etatDesBarres()
 	return cache.barres
 end
 
+-- pour la recherche des talents (TalentsSearch.lua) : les barres, relues
+function R.barres()
+	cache.barres = nil
+	return etatDesBarres()
+end
+
 -- l'etat d'un sort : nil s'il est sur une barre active (ou exclu)
 local function typeBarre(sort)
 	if sort.passif then return end
@@ -781,3 +787,22 @@ veille:SetScript("OnEvent", function(_, ev)
 		majEffacer()
 	end
 end)
+
+-- LES BARRES CHANGENT (un sort pose, retire, une page ou une posture) : une
+-- recherche "Missing from action bar" se refait (demande du 2026-09-25) --
+-- une fois par image, un glisser en declenchant plusieurs ; en combat, S.maj
+-- attend la fin du combat, comme pour tout le reste
+local barres = CreateFrame("Frame")
+barres:Hide()
+for _, ev in ipairs({ "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR",
+	"PET_BAR_UPDATE", "UPDATE_MULTI_ACTIONBAR" }) do
+	barres:RegisterEvent(ev)
+end
+barres:SetScript("OnEvent", function(self)
+	if R.etat and R.etat.filtre == "barres" then self:Show() end
+end)
+barres:SetScript("OnUpdate", function(self)
+	self:Hide()
+	if R.etat and R.etat.filtre == "barres" and S.livre:IsVisible() then S.maj() end
+end)
+R.veilleBarres = barres

@@ -79,3 +79,5 @@ Groupes complétés et validés le 2026-09-25 : sorts de Burning Crusade et WotL
 Étape 3 livrée le 2026-09-25 (non validée) : `SpellBookSearch.lua` (champ, aperçu, recherche entière en sections, « Missing from action bar ») ; relevé et écarts en tête du fichier.
 
 Étape 3 VALIDÉE le 2026-09-25 : la recherche suit « Hide Passives » et « Show all spell ranks » (ce dernier reste actif pendant une recherche), ne groupe jamais en menus volants, et l'aperçu montre 5 résultats — écarts à Camelot demandés.
+
+Ajout du 2026-09-25 : fenêtre déplaçable par son titre (place retenue dans ForeverUIDB) et superposée entière aux autres grandes fenêtres (`Superposition.lua`).

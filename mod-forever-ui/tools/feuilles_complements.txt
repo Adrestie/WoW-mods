@@ -152,3 +152,26 @@ interface/talentframe/talents.blp
 # LA RECHERCHE DU GRIMOIRE (etape 3) : les lignes de l'apercu
 # (SpellSearchPreviewResultTemplate) -- _search-rowbg, search-highlight
 interface/common/search.blp
+
+# LES TALENTS (docs/TALENTS.md, etape 1) : le cadre et ses pieces (c60), les
+# noeuds, les portes et les pointes (talents.blp, deja la), les traits des
+# fleches, le fond de chaque classe (talent-background-<classe>) et, pour le
+# chevalier de la mort que camelot n'a pas, les fonds modernes de ses trois
+# specialisations (talents-background-deathknight-blood / -frost / -unholy)
+interface/talentframe/talentsc60.blp
+interface/talentframe/talentsarrowline.blp
+interface/talentframe/talentbackgrounddruid.blp
+interface/talentframe/talentbackgroundhunter.blp
+interface/talentframe/talentbackgroundmage.blp
+interface/talentframe/talentbackgroundpaladin.blp
+interface/talentframe/talentbackgroundpriest.blp
+interface/talentframe/talentbackgroundrogue.blp
+interface/talentframes/talentbackgroundshaman.blp
+interface/talentframe/talentbackgroundwarlock.blp
+interface/talentframe/talentbackgroundwarrior.blp
+interface/talentframe/talentsclassbackgrounddeathknight1.blp
+interface/talentframe/talentsclassbackgrounddeathknight2.blp
+
+# LES TALENTS, etape 2 : la lueur jaune du bouton Apply quand des changements
+# attendent (newplayertutorial-yellowGlow-redbutton-left / -middle / -right)
+interface/helpframe/newplayerexperienceparts.blp

@@ -116,3 +116,38 @@ interface/icons/pvpcurrency-honor-horde.blp
 # tools/cuire_masque.py cuit le masque dans l'icone (spellbook/).
 interface/icons/inv_misc_book_09.blp
 interface/characterframe/tempportraitalphamask.blp
+
+# LES ONGLETS DES SPECIALISATIONS (talents, etape 2) : l'icone de l'arbre
+# principal (TalentTab.dbc -> SpellIcon.dbc), et l'icone hybride de WotLK ;
+# cuites avec le masque des onglets lateraux par tools/cuire_masque.py
+interface/icons/ability_backstab.blp
+interface/icons/ability_hunter_beasttaming.blp
+interface/icons/ability_hunter_swiftstrike.blp
+interface/icons/ability_marksmanship.blp
+interface/icons/ability_racial_bearform.blp
+interface/icons/ability_rogue_eviscerate.blp
+interface/icons/ability_stealth.blp
+interface/icons/ability_warrior_innerrage.blp
+interface/icons/inv_shield_06.blp
+interface/icons/spell_deathknight_bloodpresence.blp
+interface/icons/spell_deathknight_frostpresence.blp
+interface/icons/spell_deathknight_unholypresence.blp
+interface/icons/spell_fire_firebolt02.blp
+interface/icons/spell_frost_frostbolt02.blp
+interface/icons/spell_holy_auraoflight.blp
+interface/icons/spell_holy_devotionaura.blp
+interface/icons/spell_holy_guardianspirit.blp
+interface/icons/spell_holy_holybolt.blp
+interface/icons/spell_holy_magicalsentry.blp
+interface/icons/spell_holy_wordfortitude.blp
+interface/icons/spell_nature_healingtouch.blp
+interface/icons/spell_nature_lightning.blp
+interface/icons/spell_nature_lightningshield.blp
+interface/icons/spell_nature_magicimmunity.blp
+interface/icons/spell_nature_starfall.blp
+interface/icons/spell_shadow_deathcoil.blp
+interface/icons/spell_shadow_metamorphosis.blp
+interface/icons/spell_shadow_rainoffire.blp
+interface/icons/spell_shadow_shadowwordpain.blp
+interface/icons/ability_dualwieldspecialization.blp
+interface/icons/inv_inscription_tradeskill01.blp

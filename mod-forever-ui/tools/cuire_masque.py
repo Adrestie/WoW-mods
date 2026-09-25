@@ -80,6 +80,44 @@ ICONES = [
     "inv_sidetab_stats_c60.blp",
 ]
 
+# Les onglets des specialisations (ecran des talents) : l'icone de l'arbre
+# principal de chaque classe, et l'icone hybride de WotLK.
+ICONES += ["%s.blp" % n for n in (
+    "ability_backstab",
+    "ability_hunter_beasttaming",
+    "ability_hunter_swiftstrike",
+    "ability_marksmanship",
+    "ability_racial_bearform",
+    "ability_rogue_eviscerate",
+    "ability_stealth",
+    "ability_warrior_innerrage",
+    "inv_shield_06",
+    "spell_deathknight_bloodpresence",
+    "spell_deathknight_frostpresence",
+    "spell_deathknight_unholypresence",
+    "spell_fire_firebolt02",
+    "spell_frost_frostbolt02",
+    "spell_holy_auraoflight",
+    "spell_holy_devotionaura",
+    "spell_holy_guardianspirit",
+    "spell_holy_holybolt",
+    "spell_holy_magicalsentry",
+    "spell_holy_wordfortitude",
+    "spell_nature_healingtouch",
+    "spell_nature_lightning",
+    "spell_nature_lightningshield",
+    "spell_nature_magicimmunity",
+    "spell_nature_starfall",
+    "spell_shadow_deathcoil",
+    "spell_shadow_metamorphosis",
+    "spell_shadow_rainoffire",
+    "spell_shadow_shadowwordpain",
+    "ability_dualwieldspecialization")]
+
+# L'onglet des glyphes (ecran des talents) : l'icone de la calligraphie,
+# WotLK n'en donnant aucune a son onglet du bas.
+ICONES += ["inv_inscription_tradeskill01.blp"]
+
 # L'onglet du personnage porte l'icone de SA classe : un fichier par
 # classe, cuit comme les autres.
 ICONES += ["classicon_%s.blp" % c for c in (
@@ -501,6 +539,12 @@ PORTRAIT_MASQUE_FICHIER = os.path.join(ART, "characterframe",
                                        "tempportraitalphamask.blp")
 PORTRAITS = {"inv_misc_book_09.blp": os.path.join(ART, "spellbook",
                                                   "portrait.blp")}
+# LE PORTRAIT DES TALENTS : l'icone de la classe (SetTalentPortrait,
+# SetPortraitToClassIcon), dans le meme masque
+for _classe in ("deathknight", "druid", "hunter", "mage", "paladin",
+                "priest", "rogue", "shaman", "warlock", "warrior"):
+    PORTRAITS["classicon_%s.blp" % _classe] = os.path.join(
+        ART, "talents", "portrait_%s.blp" % _classe)
 
 
 def cuire_portrait(nom, cible):
