@@ -103,3 +103,36 @@ interface/hud/uiminimapvertical.blp
 # (mainline/GameTime.xml). GameTimeFrame_SetDate y prend le jour du mois :
 # ui-hud-calendar-<jour>-up, -down et -mouseover, 21 x 19.
 fdid:4618663.blp => interface/hud/uicalendar.blp
+
+# LA CARTE DU MONDE ET LE JOURNAL DE QUETES (docs/CARTE_ET_JOURNAL.md).
+#   questmaplogatlas      bascule du volet (QuestCollapse-*), ombre de coin,
+#                         fond du detail, cadre des objets de recompense
+#   questlogbackground    fond de la liste, liste vide
+#   gamepadmap*           fond tuile et vignettes derriere la carte
+#                         (OverscrollBG de blizzard_worldmap.xml)
+#   uiframehorizontal / uiframevertical / uiframe
+#                         lisere interieur sous le bandeau et autour de la
+#                         barre de navigation, separateurs des boutons
+#   minimalscrollbarsmallproportionalc60
+#                         pouce de la barre de defilement du volet
+interface/questframe/questmaplogatlas.blp
+interface/questframe/questlogbackground.blp
+interface/gamepad/gamepadmapbackgroundtile.blp
+interface/gamepad/gamepadmapframe.blp
+interface/framegeneral/uiframehorizontal.blp
+interface/framegeneral/uiframevertical.blp
+# Le listfile la range sous interface/interface/framegeneral/ : par identifiant.
+fdid:1723831.blp => interface/framegeneral/uiframe.blp
+interface/buttons/minimalscrollbarsmallproportionalc60.blp
+
+# Le fond de la liste du journal, en DOUBLE DENSITE. Le client tourne en
+# 3840 x 1600 a l'echelle 0,64 : une unite d'interface y vaut 1,33 pixel, et
+# la variante 1x de ce grand fond lisse s'y voyait pixelisee (2026-09-25).
+# camelot montre la variante 2x sur un tel ecran ; ajouter_feuilles.py la
+# ramene a sa taille logique (307 x 510).
+interface/questframe/questlogbackground2x.blp
+
+# LE SUIVI DE QUETES (docs/SUIVI_DES_QUETES.md) : en-tetes, boutons reduire /
+# deplier / filtre, coche des objectifs remplis, lueurs, cadre de l'objet de
+# quete. Variante c60, celle que camelot montre.
+interface/questframe/questtrackerc60.blp

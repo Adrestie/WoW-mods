@@ -305,6 +305,24 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic de la minimap disponible.")
 		end
+	elseif command == "carte" then
+		if ForeverUI.WorldMapDebug then
+			ForeverUI.WorldMapDebug()
+		else
+			say("aucun diagnostic de la carte du monde disponible.")
+		end
+	elseif command == "journal" then
+		if ForeverUI.QuestLogDebug then
+			ForeverUI.QuestLogDebug()
+		else
+			say("aucun diagnostic du journal de quetes disponible.")
+		end
+	elseif command == "suivi" then
+		if ForeverUI.ObjectiveTrackerDebug then
+			ForeverUI.ObjectiveTrackerDebug()
+		else
+			say("aucun diagnostic du suivi de quetes disponible.")
+		end
 	elseif command == "micro" then
 		if ForeverUI.MicroDebug then
 			ForeverUI.MicroDebug()
@@ -371,6 +389,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui minimap [echelle k], /fui micro")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui minimap [echelle k], /fui carte, /fui journal, /fui suivi, /fui micro")
 	end
 end

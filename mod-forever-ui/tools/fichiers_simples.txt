@@ -80,3 +80,32 @@ interface/paperdollinfoframe/paperdollsidebartabs.blp
 # masquer -- mais elle y prend un CHEMIN, pas un nom d'atlas. La feuille ne
 # porte que lui : elle entre donc telle quelle.
 interface/hud/uiminimapmaskgeneralc60.blp
+
+# LA FENETRE DE LA CARTE DU MONDE (docs/CARTE_ET_JOURNAL.md). Des fichiers
+# entiers, pas des atlas : camelot les pose par leur chemin.
+#   cs_helptextures(_tile)   toute la barre de navigation en fil d'Ariane
+#                            (navigationbar.xml) ; absents de 3.3.5
+#   shadowoverlay-left       ombre du bouton racine de la barre
+#   squarebuttontextures, ui-squarebutton-up/-down, ui-common-mousehilight
+#                            fleche de menu des boutons de la barre, et
+#                            surbrillance de la bascule du volet
+#   ui-background-rock       fond de la fenetre (PortraitFrameTexturedBase)
+#   ui-questlog-bookicon     portrait de la fenetre en mode reduit
+interface/helpframe/cs_helptextures.blp
+interface/helpframe/cs_helptextures_tile.blp
+interface/common/shadowoverlay-left.blp
+interface/buttons/squarebuttontextures.blp
+interface/buttons/ui-squarebutton-up.blp
+interface/buttons/ui-squarebutton-down.blp
+interface/buttons/ui-common-mousehilight.blp
+interface/framegeneral/ui-background-rock.blp
+interface/questframe/ui-questlog-bookicon.blp
+
+# LA PAGE D'UNE QUETE, DANS LE VOLET (etape 3). Les icones que camelot pose
+# par leur chemin sur ses recompenses (MapQuestInfoRewardsFrame et
+# QuestInfo_ShowRewards) ; aucune n'existe en 3.3.5.
+#   xp_icon                          l'experience (XPFrame)
+#   pvpcurrency-honor-alliance/horde l'honneur, selon la faction (HonorFrame)
+interface/icons/xp_icon.blp
+interface/icons/pvpcurrency-honor-alliance.blp
+interface/icons/pvpcurrency-honor-horde.blp

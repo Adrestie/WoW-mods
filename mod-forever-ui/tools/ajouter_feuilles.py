@@ -214,9 +214,10 @@ def regenerer_table(voulues):
     for r in index:
         if not r["atlas"]:
             continue
-        nom = (r.get("file") or "").lower()
-        if not nom:
-            nom = par_identifiant.get(r.get("fileDataID"), "")
+        # Un alias par identifiant l'emporte sur le chemin de l'index : le
+        # listfile en donne parfois un faux (uiframe.blp y est rangee sous
+        # interface/interface/framegeneral/).
+        nom = par_identifiant.get(r.get("fileDataID")) or (r.get("file") or "").lower()
         if nom in voulues:
             par_feuille.setdefault(nom, []).append(r)
 
