@@ -131,7 +131,7 @@ local function newRegion(kind)
     function r:SetWordWrap(v) self.wordWrap = (v ~= false) end
     function r:SetJustifyV(j) self.justifyV = j end
     function r:SetHorizTile(v) self.tile = v end
-    function r:SetVertexColor(a, b, c) self.vertex = {a, b, c} end
+    function r:SetVertexColor(a, b, c, d) self.vertex = {a, b, c} self.vertexAlpha = d end
     function r:SetAlpha(a) self.alpha = a end
     function r:GetAlpha() return self.alpha or 1 end
     -- 3.3.5 ne prend PAS de sous-calque : un seul argument.
@@ -337,6 +337,10 @@ function CreateFrame(kind, name, parent, template)
     function f:StartMoving() self.moving = true; self.userPlaced = true end
     function f:IsUserPlaced() return self.userPlaced == true end
     function f:StopMovingOrSizing() self.moving = false end
+    function f:SetUserPlaced(v) self.userPlaced = (v ~= false) end
+    function f:GetCenter() return self._cx, self._cy end
+    -- protege : pose par le banc (un cadre qui porte des boutons securises)
+    function f:IsProtected() return self.protege == true end
     function f:CreateTexture(n, layer)
         local t = newRegion("texture"); t.layer = layer; t.owner = self
         table.insert(self.regions, t)
@@ -1618,6 +1622,17 @@ function CreateFrame(kind, name, parent, template)
             _G[nom]:SetText(texte)
             if i > self.lignes then self.lignes = i end
         end
+        function f:SetTalent(o, i, inspect, pet, groupe)
+            self.lignes = 0
+            local nom, _, _, _, rang, max = GetTalentInfo(o, i, inspect, pet, groupe)
+            if not nom then return end
+            ligne(self, 1, nom)
+            ligne(self, 2, string.format(TOOLTIP_TALENT_RANK, rang, max))
+            ligne(self, 3, "Requires 5 points in Arcane Talents")
+            local d = DESCRIPTIONS_TALENTS and DESCRIPTIONS_TALENTS[nom]
+            if d then ligne(self, 4, d) end
+            ligne(self, self.lignes + 1, TOOLTIP_TALENT_LEARN)
+        end
         function f:SetSpell(slot, livre)
             self.lignes = 0
             local e = LIVRE[livre][slot]
@@ -1651,6 +1666,107 @@ function CLIQUER(b, bouton)
     if b.hooks and b.hooks.OnClick then b.hooks.OnClick(b, bouton) end
     if b.scripts.PostClick then b.scripts.PostClick(b, bouton) end
 end
+
+-- LES TALENTS DE 3.3.5 (Blizzard_TalentUI, charge a la demande). TALENTS[o] :
+-- un onglet ; ses talents { nom, icone, palier, colonne, rang, max,
+-- prerequis rempli, pre = { palier, colonne, rempli } }
+TALENTS = {}
+POINTS_TALENTS = 0
+-- la seconde specialisation (TALENTS_2, sinon la premiere) et le familier
+-- (TALENTS_FAMILIER, ses points dans POINTS_FAMILIER)
+TALENTS_2 = nil
+TALENTS_FAMILIER = {}
+POINTS_FAMILIER = 0
+GROUPE_ACTIF = 1
+NB_GROUPES = 1
+local function jeu(pet, groupe)
+    if pet then return TALENTS_FAMILIER end
+    if groupe == 2 and TALENTS_2 then return TALENTS_2 end
+    return TALENTS
+end
+function GetNumTalentTabs(inspect, pet) return #jeu(pet) end
+-- L'APERCU DE WOTLK : t.attente = les points en attente d'un talent
+local function attenteOnglet(j, o)
+    local n = 0
+    for _, t in ipairs(j[o].talents) do n = n + (t.attente or 0) end
+    return n
+end
+function GetTalentTabInfo(o, inspect, pet, groupe)
+    local j = jeu(pet, groupe) local t = j[o]
+    return t.nom, t.icone, t.depenses, t.fond, attenteOnglet(j, o)
+end
+function GetNumTalents(o, inspect, pet) return #jeu(pet)[o].talents end
+function GetTalentInfo(o, i, inspect, pet, groupe)
+    local t = jeu(pet, groupe)[o].talents[i]
+    return t[1], t[2], t[3], t[4], t[5], t[6], false, t[7], t[5] + (t.attente or 0), t[7]
+end
+function GetGroupPreviewTalentPointsSpent(pet, groupe)
+    local j, n = jeu(pet, groupe), 0
+    for o = 1, #j do n = n + attenteOnglet(j, o) end
+    return n
+end
+function GetUnspentTalentPoints(inspect, pet) if pet then return POINTS_FAMILIER end return POINTS_TALENTS end
+function AddPreviewTalentPoints(o, i, n, pet, groupe)
+    local t = jeu(pet, groupe)[o].talents[i]
+    local a = t.attente or 0
+    if n > 0 and GetGroupPreviewTalentPointsSpent(pet, groupe) < GetUnspentTalentPoints(false, pet) and t[5] + a < t[6] then a = a + 1 end
+    if n < 0 and a > 0 then a = a - 1 end
+    t.attente = a
+end
+function LearnPreviewTalents(pet)
+    local j = jeu(pet, GROUPE_ACTIF)
+    for o = 1, #j do
+        for _, t in ipairs(j[o].talents) do
+            if (t.attente or 0) > 0 then
+                t[5] = t[5] + t.attente
+                j[o].depenses = j[o].depenses + t.attente
+                if pet then POINTS_FAMILIER = POINTS_FAMILIER - t.attente
+                else POINTS_TALENTS = POINTS_TALENTS - t.attente end
+                t.attente = 0
+            end
+        end
+    end
+end
+function ResetGroupPreviewTalentPoints(pet, groupe)
+    local j = jeu(pet, groupe)
+    for o = 1, #j do
+        for _, t in ipairs(j[o].talents) do t.attente = 0 end
+    end
+end
+function GetTalentLink(o, i) return "lien talent:" .. o .. ":" .. i end
+function GetTalentPrereqs(o, i, inspect, pet, groupe)
+    local t = jeu(pet, groupe)[o].talents[i]
+    if t.pre then return t.pre[1], t.pre[2], t.pre[3], t.pre[3] end
+end
+function GetActiveTalentGroup(inspect, pet) if pet then return 1 end return GROUPE_ACTIF end
+function GetNumTalentGroups() return NB_GROUPES end
+-- l'activation est un sort incante (63645 / 63644) : il reste "en cours"
+-- jusqu'a ce que le banc le termine
+function SetActiveTalentGroup(groupe)
+    ACTIVATION_DEMANDEE = groupe
+    SORT_EN_COURS = groupe == 1 and 63645 or 63644
+end
+-- le chargement a la demande : le cadre de WotLK, sa croix (qui ferme SON
+-- PARENT), un bouton de son arbre, puis ADDON_LOADED
+function CHARGER_TALENTS()
+    PlayerTalentFrame = CreateFrame("Frame", "PlayerTalentFrame", UIParent)
+    PlayerTalentFrame:SetWidth(384) PlayerTalentFrame:SetHeight(512)
+    PlayerTalentFrame:EnableMouse(true)
+    PlayerTalentFrame:Hide()
+    local fond = PlayerTalentFrame:CreateTexture(nil, "BACKGROUND")
+    fond:SetTexture("wotlk:talents")
+    CreateFrame("Button", "PlayerTalentFrameTalent1", PlayerTalentFrame)
+    PlayerTalentFrameCloseButton = CreateFrame("Button", "PlayerTalentFrameCloseButton", PlayerTalentFrame)
+    PlayerTalentFrameCloseButton:SetNormalTexture("close-up")
+    PlayerTalentFrameCloseButton:SetScript("OnClick", function(self) HideUIPanel(self:GetParent()) end)
+    function PlayerTalentFrame_Refresh() end
+    for _, f in ipairs(FRAMES) do
+        if f.events and f.events["ADDON_LOADED"] and f.scripts and f.scripts.OnEvent then
+            f.scripts.OnEvent(f, "ADDON_LOADED", "Blizzard_TalentUI")
+        end
+    end
+end
+GameTooltip.SetTalent = function(self, o, i) self.talent = { o, i } end
 
 -- LE GRIMOIRE DE 3.3.5 (SpellBookFrame.xml / .lua) : le panneau, son art,
 -- ses douze boutons, ses onglets, sa croix -- dont le OnClick ferme SON
@@ -1715,7 +1831,10 @@ SORTS_PAR_ID = { [3565] = "Teleport: Darnassus", [3562] = "Teleport: Ironforge",
     [21084] = "Seal of Righteousness", [20165] = "Seal of Light", [20271] = "Judgement of Light",
     [53408] = "Judgement of Wisdom" }
 function GetSpellInfo(id) return SORTS_PAR_ID[id] end
-function IsCurrentSpell(slot, livre) return SORT_EN_COURS == livre .. slot end
+function IsCurrentSpell(slot, livre)
+    if livre == nil then return SORT_EN_COURS == slot end
+    return SORT_EN_COURS == livre .. slot
+end
 function IsModifierKeyDown() return MODIFICATEUR and true or false end
 -- LES BARRES D'ACTION : ACTIONS[emplacement] = { type, id, sous-type,
 -- identifiant global } (GetActionInfo de 3.3.5) ; barres multiples
@@ -1732,6 +1851,9 @@ function GetBonusBarOffset() return STATE.posture or 0 end
 function IsAttackSpell(nom) return nom == "Attack" end
 function IsAutoRepeatSpell(nom) return nom == "Shoot" end
 function MouseIsOver(f) return f and f.souris == true end
+-- les boutons de la souris : SOURIS[bouton] = true tant qu'il est enfonce
+SOURIS = {}
+function IsMouseButtonDown(b) return SOURIS[b] == true end
 GameTooltip.SetSpell = function(self, slot, livre) self.sort = { slot, livre } end
 STATE.cvars.ShowAllSpellRanks = "0"
 SPELLBOOK = "Spellbook"
@@ -2102,7 +2224,25 @@ function PetPaperDollFrame_UpdateIsAvailable()
     end
 end
 AVEC_FAMILIER = true
-function HasPetUI() return AVEC_FAMILIER end
+-- le second retour : un familier de CHASSEUR (humeur, loyaute)
+FAMILIER_CHASSEUR = true
+function HasPetUI() return AVEC_FAMILIER, AVEC_FAMILIER and FAMILIER_CHASSEUR end
+-- humeur 1..3, degats en %, loyaute (<0 perdue, >0 gagnee)
+HUMEUR = { 3, 125, 1 }
+function GetPetHappiness() if not AVEC_FAMILIER then return nil end return HUMEUR[1], HUMEUR[2], HUMEUR[3] end
+function GetPetFoodTypes() return "Meat", "Fish" end
+PET_HAPPINESS1, PET_HAPPINESS2, PET_HAPPINESS3 = "Unhappy", "Content", "Happy"
+PET_DAMAGE_PERCENTAGE = "Pet is doing %d%% damage"
+GAINING_LOYALTY, LOSING_LOYALTY = "Gaining Loyalty", "Losing Loyalty"
+PET_DIET_TEMPLATE = "Diet: %s"
+function UnitFrame_OnEnter(self) GameTooltip.unitTooltip = self.unit end
+function UnitFrame_OnLeave(self) end
+-- 3.3.5 : PartyMemberBuffTooltip_Update(self) lit self:GetID() et self.unit
+PartyMemberBuffTooltip = CreateFrame("Frame", "PartyMemberBuffTooltip", UIParent)
+function PartyMemberBuffTooltip_Update(self)
+    PartyMemberBuffTooltip:SetID(self:GetID())
+    PartyMemberBuffTooltip.unitOf = self.unit
+end
 -- les statistiques telles que le client les CHARGE (patch-enUS-2 et -3, le
 -- FrameXML d'origine) : deux groupes de six lignes StatFrameTemplate de
 -- 104 x 13, chacun coiffe de son UIDropDownMenuTemplate. La categorie
@@ -2282,6 +2422,13 @@ ERR_CLIENT_LOCKED_OUT = "verrouille"
 UIErrorsFrame = CreateFrame("Frame", "UIErrorsFrame", UIParent)
 function UIErrorsFrame:AddMessage() end
 POPUPS = {}
+TOOLTIP_TALENT_RANK = "Rank %d/%d"
+TOOLTIP_TALENT_LEARN = "Click to learn"
+TOOLTIP_TALENT_NEXT_RANK = "Next rank:"
+TOOLTIP_TALENT_PREREQ = "Requires %s"
+-- le client numerote ses arguments (enUS : %1$d, %2$s)
+TOOLTIP_TALENT_TIER_POINTS = "Requires %1$d points in %2$s Talents"
+CONTINUE, CANCEL = "Continue", "Cancel"
 function StaticPopup_Show(quoi, texte)
     table.insert(POPUPS, { quoi = quoi, texte = texte })
     return { }
@@ -3122,11 +3269,11 @@ def main():
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua",
-             "Panes.lua", "ScrollBar.lua", "Layout.lua", "DropDown.lua",
+             "Panes.lua", "ScrollBar.lua", "Layout.lua", "Superposition.lua", "DropDown.lua",
              "PlayerFrame.lua",
-             "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
+             "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "Bags.lua",
+             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
@@ -6343,6 +6490,55 @@ def main():
         totcadre.nameText.text, totcadre.healthFill.shown, totcadre.unitWatch))
     assert totcadre.healthFill.shown, "la vie de la cible de la cible est vide"
 
+    # ------------------------------------------------ cadre du familier
+    meme = lua.eval("function(a, b) return rawequal(a, b) end")
+    pf = g.ForeverUIPetFrame
+    ppf = list(pf.points[1].values())
+    print("familier : %s x %s, %s sur %s de %s (%s, %s), strate %s, surveille=%s, parent=%s" % (pf.width, pf.height,
+        ppf[0], ppf[2], ppf[1].name, ppf[3], ppf[4], pf.strata, pf.unitWatch, pf.parent.name))
+    assert (pf.width, pf.height) == (120, 49) and pf.unitWatch and pf.attributes["unit"] == "pet"
+    # le banc joue un chevalier de la mort : sous ses runes, a 2 d'ecart
+    assert (ppf[0], ppf[2], ppf[3], ppf[4]) == ("TOP", "BOTTOM", 7.5, -2) and meme(ppf[1], g.ForeverUIClassResourceContainer),         "sous les runes, marge gauche 15 centree"
+    assert pf.attributes["toggleForVehicle"] and pf.attributes["*type2"] == "menu"
+    lua.execute("ForeverUIPetFrame:Hide() ForeverUIPetFrame:Show()")
+    print("   portrait %s, nom %s, vie %s (visible %s), humeur visible=%s coords %s" % (pf.portrait.portraitOf, pf.nameText.text,
+        pf.healthFill.width, pf.healthFill.shown, pf.happiness.shown, list(pf.happinessTexture.texcoord.values())))
+    assert pf.portrait.portraitOf == "pet" and pf.nameText.text == "Sanglier" and pf.happiness.shown
+    assert list(pf.happinessTexture.texcoord.values()) == [0, 0.1875, 0, 0.359375], "content : la premiere vignette"
+    assert list(pf.healthFill.points[1].values())[1:] == [44, -17] and list(pf.powerFill.points[1].values())[1:] == [40, -28]
+    # l'humeur au survol
+    lua.execute("ForeverUIPetFrameHappiness.scripts.OnEnter(ForeverUIPetFrameHappiness)")
+    assert g.GameTooltip.text == "Happy"
+    # un familier de demoniste : pas d'humeur
+    lua.execute("FAMILIER_CHASSEUR = false ForeverUI.PetFrameUpdate()")
+    assert not pf.happiness.shown
+    lua.execute("FAMILIER_CHASSEUR = true ForeverUI.PetFrameUpdate()")
+    # l'attaque : la pulsation rouge
+    lua.execute("ForeverUIPetFrame.scripts.OnEvent(ForeverUIPetFrame, 'PET_ATTACK_START')")
+    assert pf.attack.shown and pf.attack.blend == "ADD"
+    lua.execute("ForeverUIPetFrame.scripts.OnUpdate(ForeverUIPetFrame, 0.2)")
+    print("   attaque : alpha %.3f" % pf.attack.vertexAlpha)
+    assert abs(pf.attack.vertexAlpha - (255 - 0.2 * 400) / 255) < 1e-6
+    lua.execute("ForeverUIPetFrame.scripts.OnEvent(ForeverUIPetFrame, 'PET_ATTACK_STOP')")
+    assert not pf.attack.shown
+    # la menace du familier
+    lua.execute("STATE.threat = 3 ForeverUIPetFrame.scripts.OnEvent(ForeverUIPetFrame, 'UNIT_THREAT_SITUATION_UPDATE', 'pet')")
+    assert pf.threat.shown and pf.threat.vertex[1] == 1.0 and pf.threat.vertex[2] == 0.0
+    lua.execute("STATE.threat = nil ForeverUIPetFrame.scripts.OnEvent(ForeverUIPetFrame, 'UNIT_THREAT_SITUATION_UPDATE', 'pet')")
+    assert not pf.threat.shown
+    # le texte au survol, et l'infobulle de l'unite
+    lua.execute("ForeverUIPetFrame.scripts.OnEnter(ForeverUIPetFrame)")
+    print("   survol : vie '%s', infobulle %s" % (pf.healthText.text, g.GameTooltip.unitTooltip))
+    assert pf.healthText.shown and g.GameTooltip.unitTooltip == "pet"
+    assert g.PartyMemberBuffTooltip.unitOf == "pet", "le cadre, pas un booleen"
+    lua.execute("ForeverUIPetFrame.scripts.OnLeave(ForeverUIPetFrame)")
+    assert not pf.healthText.shown
+    # en vehicule : le joueur
+    lua.execute("STATE.vehicle = true ForeverUIPetFrame.scripts.OnEvent(ForeverUIPetFrame, 'UNIT_ENTERED_VEHICLE', 'player')")
+    assert pf.portrait.portraitOf == "player" and pf.unit == "player"
+    lua.execute("STATE.vehicle = false ForeverUIPetFrame.scripts.OnEvent(ForeverUIPetFrame, 'UNIT_EXITED_VEHICLE', 'player')")
+    assert pf.portrait.portraitOf == "pet"
+
     # ------------------------------------ listes des menus deroulants
     # Deux lignes : la premiere porte une case a cocher, la seconde non.
     lua.execute("""
@@ -8136,6 +8332,32 @@ def main():
     assert "Frostbolt" not in montrees and "Attack" not in montrees and "Shoot" not in montrees and "Ice Shards" not in montrees
     assert montrees[-2:] == ["Arcane Missiles", "Frost Armor"], "absents, puis posture inactive, puis barre desactivee"
     assert "Teleport: Stormwind" in montrees and "Teleport" not in montrees, "jamais de groupe dans la recherche"
+    # Arcane Missiles posee sur la barre principale : elle quitte la liste,
+    # a l'image suivante (ACTIONBAR_SLOT_CHANGED)
+    lua.execute("""
+        ACTIONS[2] = { "spell", 8, "spell" }
+        local v = ForeverUI.SpellBookSearch.veilleBarres
+        v.scripts.OnEvent(v, "ACTIONBAR_SLOT_CHANGED", 2)
+        v.scripts.OnEvent(v, "ACTIONBAR_SLOT_CHANGED", 2)
+    """)
+    vb = g.ForeverUI.SpellBookSearch.veilleBarres
+    assert vb.shown, "une seule mise a jour, a l'image suivante"
+    lua.execute("local v = ForeverUI.SpellBookSearch.veilleBarres v.scripts.OnUpdate(v)")
+    montrees2 = [c.nom.text for c in vue.cases.values() if c.shown] +         [c.nom.text for c in g.ForeverUISpellBookView2.cases.values() if c.shown]
+    print("   posee sur la barre : %s" % montrees2[-2:])
+    assert "Arcane Missiles" not in montrees2 and montrees2[-1] == "Frost Armor" and not vb.shown
+    # en combat : la mise a jour attend la fin du combat
+    lua.execute("""
+        STATE.inLockdown = true
+        ACTIONS[2] = nil
+        local v = ForeverUI.SpellBookSearch.veilleBarres
+        v.scripts.OnEvent(v, "ACTIONBAR_SLOT_CHANGED", 2)
+        v.scripts.OnUpdate(v)
+    """)
+    assert g.ForeverUI.SpellBook.enAttente, "publiee a la fin du combat"
+    lua.execute("STATE.inLockdown = false ForeverUI.SpellBook.maj()")
+    montrees3 = [c.nom.text for c in vue.cases.values() if c.shown] +         [c.nom.text for c in g.ForeverUISpellBookView2.cases.values() if c.shown]
+    assert "Arcane Missiles" in montrees3
     # une recherche de sorts groupes dans leur onglet : un par un
     lua.execute("CLIQUER(ForeverUISpellBookSearchClear) ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('tele')")
     assert [l.nom.text for l in apercu.lignes.values() if l.shown] == ["Teleport: Stormwind", "Teleport: Ironforge"]
@@ -8257,6 +8479,713 @@ def main():
     # la croix de WotLK ferme le panneau
     lua.execute("ForeverUISpellBookTab1:GetScript('OnClick')(ForeverUISpellBookTab1) SpellBookCloseButton:GetScript('OnClick')(SpellBookCloseButton)")
     assert not g.SpellBookFrame.shown
+
+
+    # ------------------------------------------------------------------
+    # LES TALENTS (docs/TALENTS.md, etape 1)
+    # ------------------------------------------------------------------
+    print("\n--- talents ---")
+    assert g.ForeverUITalentsFrame is None, "rien avant le chargement de Blizzard_TalentUI"
+    lua.execute("""
+        TALENTS = {
+            { nom = "Arcane", icone = "icone:arcane", fond = "MageArcane", depenses = 6, talents = {
+                { "Arcane Subtlety", "ic:subtilite", 1, 1, 2, 2, true },
+                { "Arcane Focus", "ic:focalisation", 1, 2, 1, 3, true },
+                { "Magic Absorption", "ic:absorption", 2, 1, 0, 2, true },
+                { "Arcane Concentration", "ic:concentration", 3, 2, 0, 5, false, pre = { 1, 2, false } },
+                { "Presence of Mind", "ic:presence", 5, 2, 0, 1, false },
+                { "Arcane Mind", "ic:esprit", 2, 3, 0, 5, false, pre = { 2, 1, false } },
+                { "Arcane Instability", "ic:instabilite", 4, 3, 0, 3, false, pre = { 3, 2, false } },
+            } },
+            { nom = "Fire", icone = "icone:feu", fond = "MageFire", depenses = 0, talents = {
+                { "Improved Fire Blast", "ic:trait", 1, 1, 0, 2, true },
+                { "Ignite", "ic:enflammer", 2, 2, 0, 5, true },
+            } },
+            { nom = "Frost", icone = "icone:givre", fond = "MageFrost", depenses = 0, talents = {
+                { "Frostbite", "ic:morsure", 1, 1, 0, 3, true },
+            } },
+        }
+        POINTS_TALENTS = 3
+        CHARGER_TALENTS()
+        PlayerTalentFrame:Show()
+    """)
+    tl = g.ForeverUITalentsFrame
+    pl = list(tl.points[1].values())
+    print("   livre %s x %s, %s de l'ecran (%s, %s) | art WotLK alpha %s, croix alpha %s" % (tl.width, tl.height, pl[0],
+        pl[3], pl[4], g.PlayerTalentFrameTalent1.alpha, g.PlayerTalentFrameCloseButton.alpha))
+    assert meme(tl.parent, g.PlayerTalentFrame) and (tl.width, tl.height) == (1218, 708)
+    assert (pl[0], pl[2], pl[3], pl[4]) == ("TOP", "TOP", 0, -116)
+    assert g.PlayerTalentFrameTalent1.alpha == 0 and g.PlayerTalentFrameCloseButton.alpha != 0
+    assert g.PlayerTalentFrame.mouseEnabled == False
+    assert tl.portrait.texture.endswith("portrait_deathknight"), "l'icone de la classe, cuite ronde"
+    # le chevalier de la mort : un fond moderne par arbre
+    fonds = [t for t in g.ForeverUI.Talents.classe.textures.values() if t.shown]
+    print("   fonds (chevalier de la mort) : %d, largeur %s" % (len(fonds), fonds[0].width))
+    assert len(fonds) == 3 and abs(fonds[0].width - 404) < 1e-6
+    Tl = g.ForeverUI.Talents
+    assert Tl.classe.GetFrameLevel(Tl.classe) > Tl.fond.GetFrameLevel(Tl.fond),         "l'illustration au-dessus de la pierre (freres de meme niveau : ordre non garanti)"
+    assert fonds[2].texture == g.UIAtlas.data["talents-background-deathknight-unholy"][1]
+    # en-tetes
+    h1 = g.ForeverUITalentsHeader1
+    ph = list(h1.points[1].values())
+    print("   en-tete 1 : '%s', %s points, icone %s, a (%s, %s)" % (h1.nom.text, h1.depenses.text, h1.icone.portrait, ph[3], ph[4]))
+    assert h1.nom.text == "Arcane" and h1.depenses.text == "6" and h1.icone.portrait == "icone:arcane"
+    assert (ph[0], ph[2], ph[3], ph[4]) == ("CENTER", "TOPLEFT", 140, -38.5), "anneau a 5 pixels sous le trait de la barre"
+    assert list(g.ForeverUITalentsHeader2.points[1].values())[3] == 540
+    # les points non depenses
+    pts = g.ForeverUI.Talents.points.nombre
+    assert pts.text == "3" and pts.textColor[2] == 1, "vert s'il en reste"
+    assert pts.fontSize == 24 and list(g.ForeverUI.Talents.points.points[1].values())[4] == 20, "compteur remonte, chiffre en 24"
+    # les noeuds
+    T = g.ForeverUI.Talents
+    n = [b for b in T.arbre.noeuds.values() if b.shown]
+    print("   noeuds : %d | %s" % (len(n), [(b.talent.nom, b.talent.etat, b.rang.text) for b in n[:5]]))
+    E = 518 / (40 * 15)
+    assert len(n) == 10 and abs(T.arbre.scale - E) < 1e-9, "11 paliers dans 518 pixels (rangees 1,4 noeud)"
+    b1, b2, b3, b4, b5 = n[0], n[1], n[2], n[3], n[4]
+    e = g.UIAtlas.data
+    assert b1.talent.etat == "maxed" and b1.bordure.texture == e["talents-node-circle-yellow"][1]
+    assert (b1.bordure.width, b1.bordure.height) == (40, 40), "la taille LOGIQUE de l'atlas (UiTextureAtlasMember)"
+    assert b1.rang.text == "2" and b1.rang.textColor[1] == 1 and b1.icone.portrait == "ic:subtilite", "rond : l'icone arrondie"
+    assert b2.talent.etat == "selectable" and b2.rang.text == "1" and b2.rang.textColor[2] == 1, "entame : vert"
+    assert b3.talent.etat == "selectable" and b3.rang.text == "0", "palier 2 ouvert (6 points), achetable"
+    assert b4.talent.etat == "locked" and b4.rang.text == "" and b4.icone.vertex[1] == 0.3
+    assert b5.talent.carre and b5.bordure.texture == e["talents-node-square-locked"][1] and b5.icone.texture == "ic:presence", \
+        "Presence of Mind : un sort actif, carre (TalentsData.lua)"
+    pb = list(b1.points[1].values())
+    print("   echelle %.4f | noeud 1 : centre (%.1f, %.1f) de la page" % (E, pb[3] * E, pb[4] * E))
+    assert abs(pb[3] * E - (202 - 1.5 * 60 * E)) < 1e-6, "arbre centre dans sa colonne (pas 1,5 noeud)"
+    pv = [list(v.points[1].values()) for v in T.verticaux.values()]
+    print("   separateurs verticaux : x %s de la page, haut %s du cadre" % ([p_[3] - 2 for p_ in pv], pv[0][4]))
+    assert [p_[3] - 2 for p_ in pv] == [404, 808] and pv[0][4] == -46, "sur les transitions ; 60 sous le centre de la barre"
+    assert abs(pb[4] * E - (-123 - 20 * E)) < 1e-6, "premier noeud a 10 pixels sous le petit separateur"
+    pb5 = list(b5.points[1].values())
+    assert abs(pb5[4] * E - (-123 - 20 * E - 4 * 56 * E)) < 1e-6
+    bas = -123 - 20 * E - 10 * 56 * E - 20 * E
+    assert abs(bas + 641) < 1e-6, "le 11e palier finit a 40 du bas"
+    # les fleches : verticale (1,2 -> 3,2), horizontale (2,1 -> 2,3), en L (3,2 -> 4,3)
+    traits = [t for t in T.arbre.traits.values() if t.shown]
+    pointes = [t for t in T.arbre.pointes.values() if t.shown]
+    print("   fleches : %d traits, %d pointes | %s" % (len(traits), len(pointes), [(round(t.width, 1), round(t.height, 1)) for t in traits]))
+    assert len(traits) == 4 and len(pointes) == 3
+    assert traits[0].width == 6 and traits[0].texture == e["talents-arrow-line-locked"][1], "vers un palier ferme : verrou"
+    assert traits[0].texcoord8 is not None, "le trait vertical : la bande tournee"
+    assert traits[1].height == 6 and traits[1].texture == e["talents-arrow-line-gray"][1], "prerequis non rempli : gris"
+    # les portes : Arcane au palier 3 (4 points encore), Fire au palier 2 (5)
+    portes = [p for p in T.arbre.portes.values() if p.shown]
+    print("   portes : %s" % [p.texte.text for p in portes])
+    assert [p.texte.text for p in portes] == ["4", "5"]
+    lua.execute("ForeverUITalentsGate1.scripts.OnEnter(ForeverUITalentsGate1)")
+    assert g.GameTooltip.text == "Spend 4 more points to unlock this row"
+    # l'infobulle d'un noeud : celle de WotLK
+    lua.execute("ForeverUITalentsNode1.scripts.OnEnter(ForeverUITalentsNode1)")
+    assert list(g.GameTooltip.talent.values()) == [1, 1]
+    # une autre classe : son fond unique
+    lua.execute("CLASSE_AVANT = STATE.classToken STATE.classToken = 'MAGE' ForeverUI.Talents.maj()")
+    fonds = [t for t in T.classe.textures.values() if t.shown]
+    assert len(fonds) == 1 and fonds[0].texture == e["talent-background-mage"][1]
+    lua.execute("STATE.classToken = CLASSE_AVANT")
+    # plus de points : le compteur gris a zero
+    lua.execute("POINTS_TALENTS = 0 ForeverUI.Talents.maj()")
+    assert pts.text == "0" and pts.textColor[1] == 0.5
+    assert [b for b in T.arbre.noeuds.values() if b.shown][2].talent.etat == "disabled", "plus de point : gris"
+    # ETAPE 2 : LES CHANGEMENTS ATTENDENT. Trois points ; Magic Absorption
+    # (palier 2, 0/2) et Arcane Focus (1/3) s'achetent
+    lua.execute("POINTS_TALENTS = 3 ForeverUI.Talents.maj()")
+    ap, an = g.ForeverUITalentsApplyButton, g.ForeverUITalentsUndoButton
+    pa = list(ap.points[1].values())
+    print("   Apply : %s x %s, BOTTOM du fond (%s) | '%s' actif=%s | Undo montre=%s" % (ap.width, ap.height, pa[4],
+        ap.fontString.text, ap.actif, an.shown))
+    assert (ap.width, ap.height) == (164, 22) and pa[0] == "BOTTOM" and pa[4] == 8 and ap.fontString.text == "Apply Changes"
+    assert not ap.actif and not an.shown and not ap.lueur.shown, "rien en attente"
+    noeud = lambda i: [b for b in T.arbre.noeuds.values() if b.shown][i]
+    lua.execute("CLIQUER(ForeverUITalentsNode3)")
+    lua.execute("CLIQUER(ForeverUITalentsNode3)")
+    b3 = noeud(2)
+    print("   2 clics sur Magic Absorption : rang %s (%s), points %s, Apply actif=%s, Undo=%s" % (b3.rang.text, b3.talent.etat,
+        pts.text, ap.actif, an.shown))
+    assert b3.rang.text == "2" and b3.talent.etat == "maxed" and pts.text == "1"
+    assert ap.actif and ap.lueur.shown and an.shown, "des changements attendent : Apply luit, Undo parait"
+    assert g.ForeverUITalentsHeader1.depenses.text == "8", "les points en attente comptent dans l'arbre"
+    # le clic droit retire un point EN ATTENTE, pas un point appris
+    lua.execute("CLIQUER(ForeverUITalentsNode3, 'RightButton')")
+    assert noeud(2).rang.text == "1" and pts.text == "2"
+    lua.execute("CLIQUER(ForeverUITalentsNode1, 'RightButton')")
+    assert noeud(0).rang.text == "2", "Arcane Subtlety est appris : le clic droit n'y touche pas"
+    # Undo : tout ce qui attend s'en va
+    lua.execute("CLIQUER(ForeverUITalentsUndoButton)")
+    assert noeud(2).rang.text == "0" and pts.text == "3" and not an.shown and not ap.actif
+    # Apply : l'attente s'apprend
+    lua.execute("CLIQUER(ForeverUITalentsNode2) CLIQUER(ForeverUITalentsNode3) CLIQUER(ForeverUITalentsApplyButton)")
+    print("   Apply : Arcane Focus %s, Magic Absorption %s, points %s, Undo=%s" % (noeud(1).rang.text, noeud(2).rang.text,
+        pts.text, an.shown))
+    assert noeud(1).rang.text == "2" and noeud(2).rang.text == "1" and pts.text == "1" and not an.shown
+    assert g.TALENTS[1].talents[2][5] == 2, "appris pour de bon (LearnPreviewTalents)"
+    # un talent derriere une porte ne s'achete pas
+    lua.execute("CLIQUER(ForeverUITalentsNode4)")
+    assert noeud(3).rang.text == "" and pts.text == "1"
+
+    # ETAPE 2 : LES ONGLETS LATERAUX. Une seule specialisation, pas de familier
+    barre = g.ForeverUITalentsTabs
+    pbar = list(barre.points[1].values())
+    o1, o2 = g.ForeverUITalentsTab1, g.ForeverUITalentsTab2
+    print("   onglets : barre %s x %s a %s du livre (%s, %s) | 1 '%s' choisi=%s coche=%s | 2 verrou=%s gris=%s | 3 : %s" % (
+        barre.width, barre.height, pbar[2], pbar[3], pbar[4], o1.titre, o1.choisi.shown, o1.coche.shown,
+        o2.cadenas.shown, o2.icone.desaturated, g.ForeverUITalentsTab4))
+    assert (barre.width, barre.height) == (64, 384) and (pbar[0], pbar[2], pbar[3], pbar[4]) == ("TOPLEFT", "TOPRIGHT", 1, -30)
+    assert (o1.width, o1.height) == (55, 55) and list(o2.points[1].values())[4] == -2, "la facture de la feuille"
+    assert o1.choisi.shown and o1.coche.shown and not o2.choisi.shown and o2.cadenas.shown and o2.icone.desaturated
+    assert g.ForeverUITalentsTab3.cle == "glyphes" and g.ForeverUITalentsTab4 is None, "glyphes (niveau 80), pas de familier"
+    assert o1.icone.texture.endswith("TabIcons" + chr(92) + "icone:arcane"), "l'arbre principal (Arcane)"
+    lua.execute("CLIQUER(ForeverUITalentsTab2)")
+    assert o1.choisi.shown and T.actif, "verrouillee : le clic n'y mene pas"
+    # deux specialisations : la seconde se consulte, "Activate" a la place d'Apply
+    lua.execute("""
+        NB_GROUPES = 2
+        -- les memes arbres (le client n'a qu'un jeu de talents), d'autres rangs
+        TALENTS_2 = {}
+        for o, onglet in ipairs(TALENTS) do
+            local copie = { nom = onglet.nom, icone = onglet.icone, fond = onglet.fond, depenses = 0, talents = {} }
+            for i, t in ipairs(onglet.talents) do
+                copie.talents[i] = { t[1], t[2], t[3], t[4], 0, t[6], t[7], pre = t.pre }
+            end
+            TALENTS_2[o] = copie
+        end
+        TALENTS_2[2].depenses = 10 TALENTS_2[2].talents[1][5] = 2
+        TALENTS_2[3].depenses = 5 TALENTS_2[3].talents[1][5] = 3
+        ForeverUI.Talents.maj()
+        CLIQUER(ForeverUITalentsTab2)
+    """)
+    ac = g.ForeverUITalentsActivateButton
+    print("   seconde : choisie=%s coche=%s | Apply=%s Undo=%s Activate=%s ('%s', actif=%s) | Fire %s | icone %s" % (
+        o2.choisi.shown, o2.coche.shown, ap.shown, an.shown, ac.shown, ac.fontString.text, ac.actif,
+        g.ForeverUITalentsHeader2.depenses.text, o2.icone.texture.split(chr(92))[-1]))
+    assert o2.choisi.shown and not o1.choisi.shown and o1.coche.shown and not o2.coche.shown
+    assert not ap.shown and not an.shown and ac.shown and ac.actif and ac.fontString.text == "Activate"
+    assert g.ForeverUITalentsHeader2.depenses.text == "10" and o2.icone.texture.endswith("icone:feu")
+    lua.execute("CLIQUER(ForeverUITalentsNode1)")
+    assert g.GetGroupPreviewTalentPointsSpent(False, 2) == 0, "inactive : on consulte seulement"
+    lua.execute("ForeverUITalentsTab2.scripts.OnEnter(ForeverUITalentsTab2)")
+    assert g.GameTooltip.text == "Secondary"
+    # Activate : le sort part, le bouton attend
+    lua.execute("CLIQUER(ForeverUITalentsActivateButton)")
+    print("   Activate : groupe demande %s, bouton actif=%s" % (g.ACTIVATION_DEMANDEE, ac.actif))
+    assert g.ACTIVATION_DEMANDEE == 2 and not ac.actif
+    lua.execute("SORT_EN_COURS = nil GROUPE_ACTIF = 2 ForeverUI.Talents.maj()")
+    assert T.actif and ap.shown and not ac.shown and o2.coche.shown and not o1.coche.shown
+    lua.execute("GROUPE_ACTIF = 1 ForeverUI.Talents.maj()")
+    # LE FAMILIER : un onglet de plus ; la fenetre se reduit a un arbre
+    lua.execute("""
+        TALENTS_FAMILIER = {
+            { nom = "Ferocity", icone = "icone:ferocite", fond = "HunterPetFerocity", depenses = 3, talents = {
+                { "Cobra Reflexes", "ic:cobra", 1, 1, 2, 2, true },
+                { "Dive", "ic:plongeon", 2, 2, 0, 1, true },
+            } },
+        }
+        POINTS_FAMILIER = 1
+        ForeverUI.Talents.maj()
+        CLIQUER(ForeverUITalentsTab4)
+    """)
+    o3 = g.ForeverUITalentsTab4
+    vis = [b for b in T.arbre.noeuds.values() if b.shown]
+    print("   familier : livre %s, page %s | verticaux %s | en-tetes %s | portrait %s | noeuds %s" % (tl.width, T.page.width,
+        [v.shown for v in T.verticaux.values()], [g["ForeverUITalentsHeader%d" % i].shown for i in (1, 2, 3)],
+        o3.icone.portraitOf, [(b.talent.nom, b.talent.etat) for b in vis]))
+    assert o3.choisi.shown and o3.icone.portraitOf == "pet" and T.pet
+    assert tl.width == 410 and T.page.width == 404, "un arbre : la premiere colonne"
+    assert not any(v.shown for v in T.verticaux.values())
+    assert [g["ForeverUITalentsHeader%d" % i].shown for i in (1, 2, 3)] == [True, False, False]
+    assert len(vis) == 2 and vis[1].talent.etat == "selectable", "paliers de 3 points"
+    lua.execute("CLIQUER(ForeverUITalentsNode2)")
+    assert g.GetGroupPreviewTalentPointsSpent(True) == 1 and ap.actif, "le familier aussi attend"
+    lua.execute("CLIQUER(ForeverUITalentsApplyButton)")
+    assert g.TALENTS_FAMILIER[1].talents[2][5] == 1 and g.POINTS_FAMILIER == 0
+    # retour aux arbres du joueur : pleine largeur
+    lua.execute("CLIQUER(ForeverUITalentsTab1)")
+    assert tl.width == 1218 and all(v.shown for v in T.verticaux.values()) and not T.pet
+    # a la reouverture, la specialisation active
+    lua.execute("CLIQUER(ForeverUITalentsTab4) PlayerTalentFrame:Hide() PlayerTalentFrame:Show()")
+    assert not T.pet and tl.width == 1218 and o1.choisi.shown
+
+    # ETAPE 3 : LES GLYPHES. Le squelette de WotLK : ses onglets de
+    # specialisation (PlayerSpecTabN.specIndex), ses onglets du bas, et
+    # Blizzard_GlyphUI charge a la demande (ADDON_LOADED le rattache a
+    # PlayerTalentFrame, SetAllPoints)
+    lua.execute("""
+        GLYPH_TALENT_TAB = 4
+        SHOW_INSCRIPTION_LEVEL = 15
+        ONGLET_BAS = 1
+        for i, cle in ipairs({ "spec1", "spec2", "petspec1" }) do
+            local b = CreateFrame("CheckButton", "PlayerSpecTab" .. i, PlayerTalentFrame)
+            b.specIndex = cle
+        end
+        for i = 1, 4 do CreateFrame("Button", "PlayerTalentFrameTab" .. i, PlayerTalentFrame):SetID(i) end
+        function PlayerSpecTab_OnClick(self)
+            PlayerTalentFrame.talentGroup = (self.specIndex == "spec2") and 2 or 1
+            PlayerTalentFrame.pet = self.specIndex == "petspec1"
+            PlayerTalentFrame_Refresh()
+        end
+        function PlayerTalentTab_OnClick(self)
+            ONGLET_BAS = self:GetID()
+            PlayerTalentFrame_Refresh()
+        end
+        -- PlayerTalentFrame_Refresh / _ShowGlyphFrame de WotLK
+        local refresh = PlayerTalentFrame_Refresh
+        function PlayerTalentFrame_Refresh()
+            if GlyphFrame then
+                if ONGLET_BAS == GLYPH_TALENT_TAB then
+                    GlyphFrameTitleText:SetText(PlayerTalentFrame.talentGroup == 2 and "Secondary Glyphs" or "Primary Glyphs")
+                    GlyphFrame:Show()
+                else
+                    GlyphFrame:Hide()
+                end
+            end
+            refresh()
+        end
+        -- Blizzard_GlyphUI
+        GlyphFrame = CreateFrame("Frame", "GlyphFrame", UIParent)
+        GlyphFrame:SetWidth(384) GlyphFrame:SetHeight(512)
+        GlyphFrame:Hide()
+        GlyphFrameBackground = GlyphFrame:CreateTexture("GlyphFrameBackground", "ARTWORK")
+        GlyphFrameBackground:SetWidth(352) GlyphFrameBackground:SetHeight(441)
+        GlyphFrame.glow = GlyphFrame:CreateTexture(nil, "OVERLAY")
+        GlyphFrameTitleText = GlyphFrame:CreateFontString("GlyphFrameTitleText", "ARTWORK", "GameFontNormal")
+        -- les six alveoles, leur surbrillance, et les fonctions de WotLK que
+        -- ForeverUI greffe (Blizzard_GlyphUI.lua)
+        for i = 1, 6 do
+            local b = CreateFrame("Button", "GlyphFrameGlyph" .. i, GlyphFrame)
+            b.highlight = b:CreateTexture(nil, "BORDER")
+            b.highlight:SetTexture("wotlk:UI-GlyphFrame")
+        end
+        function GlyphFrameGlyph_SetGlyphType(glyph, kind)
+            glyph.highlight:SetWidth(kind == 1 and 108 or 86)
+            glyph.highlight:SetTexCoord(0.765625, 0.927734375, 0.15625, 0.31640625)
+        end
+        function GlyphFrame_PulseGlow() GlyphFrame.glow:Show() end
+        function GlyphFrame_StartSlotAnimation(id, duree, taille)
+            local e = _G["GlyphFrameSparkle" .. id] or GlyphFrame:CreateTexture("GlyphFrameSparkle" .. id, "OVERLAY")
+            _G["GlyphFrameSparkle" .. id] = e
+            e:SetTexture("wotlk:UI-ItemSockets")
+            e:SetWidth(13) e:SetHeight(13)
+        end
+        function GlyphFrame_Update() end
+        function GlyphFrameGlyph_UpdateSlot(self) end
+        -- GLYPHES_GRAVES[groupe][alveole] = sort du glyphe grave
+        GLYPHES_GRAVES = { {}, {} }
+        function GetGlyphSocketInfo(id, groupe)
+            local sort = GLYPHES_GRAVES[groupe or 1][id]
+            return true, (id == 1 or id == 4 or id == 6) and 1 or 2, sort, sort and "rune" or nil
+        end
+        GlyphFrame:SetParent(PlayerTalentFrame)
+        GlyphFrame:SetAllPoints()
+        for _, f in ipairs(FRAMES) do
+            if f.events and f.events["ADDON_LOADED"] and f.scripts and f.scripts.OnEvent then
+                f.scripts.OnEvent(f, "ADDON_LOADED", "Blizzard_GlyphUI")
+            end
+        end
+    """)
+    og = g.ForeverUITalentsTab3
+    print("   onglet des glyphes : '%s', icone %s" % (og.titre, og.icone.texture.split(chr(92))[-1]))
+    assert og.icone.texture.endswith("inv_inscription_tradeskill01") and og.titre == "Primary Glyphs"
+    lua.execute("CLIQUER(ForeverUITalentsTab3)")
+    gf = g.GlyphFrame
+    pg = list(gf.points[1].values())
+    k = 1
+    print("   glyphes : montre=%s, parent %s, echelle %s, TOPLEFT (%.2f, %.2f) | livre %s | titre '%s' | choisi %s" % (
+        gf.shown, gf.parent.name if hasattr(gf.parent, "name") else gf.parent, gf.scale, pg[3], pg[4], tl.width,
+        tl.titre.text, og.choisi.shown))
+    assert gf.shown and meme(gf.parent, g.PlayerTalentFrame) and gf.scale in (None, 1), "laisse sous PlayerTalentFrame (comme WotLK), sans echelle"
+    assert tl.width == 410 and tl.titre.text == "Primary Glyphs" and og.choisi.shown and not o1.choisi.shown
+    assert not g.GlyphFrameTitleText.shown, "son titre passe dans la barre de la fenetre"
+    # la croix au-dessus de tout, glyphes compris (Blizzard_GlyphUI la repose
+    # sous notre livre en se chargeant)
+    lua.execute("PlayerTalentFrameCloseButton:SetFrameLevel(GlyphFrame:GetFrameLevel() + 1) GlyphFrame:Hide() GlyphFrame:Show()")
+    lua.execute("""
+        function PLUS_HAUT(c)
+            local n = c:GetFrameLevel()
+            for _, e in ipairs({ c:GetChildren() }) do n = math.max(n, PLUS_HAUT(e)) end
+            return n
+        end
+    """)
+    cx = g.PlayerTalentFrameCloseButton
+    print("   croix : niveau %s | livre jusqu'a %s, glyphes jusqu'a %s" % (cx.frameLevel, g.PLUS_HAUT(tl), g.PLUS_HAUT(gf)))
+    assert cx.frameLevel > g.PLUS_HAUT(tl) and cx.frameLevel > g.PLUS_HAUT(gf)
+    # LE DECOR REFAIT : parchemin, cercle, coins (glyphes-fond) ; le decor de
+    # WotLK s'efface
+    tex = list(T.decor.textures.values())
+    pa, ce = tex[0], tex[1]
+    print("   decor : %d images sur le cadre interieur | parchemin %s sur %s | fond WotLK montre=%s" % (
+        len(tex), pa.layer, "l'illustration" if pa.allPoints else "?", g.GlyphFrameBackground.shown))
+    assert len(tex) == 6 and all(t.texture.endswith("glyphes-fond") and t.shown for t in tex)
+    assert all(meme(t.owner, T.cadre) for t in tex), "sur le cadre interieur : il passe devant"
+    assert pa.layer == "BACKGROUND" and pa.allPoints and not g.GlyphFrameBackground.shown, "toute la fenetre"
+    pc = list(ce.points[1].values())
+    assert meme(pc[1], T.classe) and pc[2] == "CENTER" and abs(pc[3] + 179.65) < 1e-9 and abs(pc[4] - 202.41) < 1e-9, \
+        "le centre du cercle sur l'etoile"
+    assert abs(ce.width - 360.84) < 1e-9 and list(ce.texcoord.values())[0] == 543 / 1024
+    coins = [list(t.points[1].values()) for t in tex[2:]]
+    print("   coins : %s" % [(c[0], c[3], c[4]) for c in coins])
+    assert [(c[0], c[3], c[4]) for c in coins] == [("TOPLEFT", 7, -5), ("TOPRIGHT", -7, -5),
+        ("BOTTOMLEFT", 7, 5), ("BOTTOMRIGHT", -7, 5)] and all(meme(c[1], T.classe) for c in coins), \
+        "contre le trait du cadre interieur"
+    # l'etoile des alveoles au centre de l'illustration : (178, -238.5) du GlyphFrame
+    assert meme(pg[1], T.classe) and (pg[2], pg[3], pg[4]) == ("CENTER", -178, 238.5)
+    lv = g.ForeverUIGlyphGlow
+    assert T.cadre.frameLevel < lv.frameLevel < gf.frameLevel, "cadre (et decor), lueurs, puis alveoles"
+    # la surbrillance : l'anneau orange, reposee apres SetGlyphType
+    b1 = g.GlyphFrameGlyph1
+    lua.execute("GlyphFrameGlyph_SetGlyphType(GlyphFrameGlyph1, 1)")
+    print("   surbrillance : %s, u %s" % (b1.highlight.texture.split(chr(92))[-1], list(b1.highlight.texcoord.values())[0]))
+    assert b1.highlight.texture.endswith("glyphes-lueurs") and list(b1.highlight.texcoord.values())[0] == 851 / 1024
+    # la pulsation : nos lueurs montent en 0,1 s, redescendent en 1,5 s
+    lua.execute("GlyphFrame_PulseGlow()")
+    assert lv.shown and not gf.glow.shown
+    lua.execute("ForeverUIGlyphGlow.scripts.OnUpdate(ForeverUIGlyphGlow, 0.05)")
+    a1 = lv.alpha
+    lua.execute("ForeverUIGlyphGlow.scripts.OnUpdate(ForeverUIGlyphGlow, 0.8)")
+    a2 = lv.alpha
+    lua.execute("ForeverUIGlyphGlow.scripts.OnUpdate(ForeverUIGlyphGlow, 1.0)")
+    print("   pulsation : %.3f, %.3f, puis montree=%s" % (a1, a2, lv.shown))
+    assert abs(a1 - 0.5) < 1e-9 and abs(a2 - (1 - 0.75 / 1.5)) < 1e-9 and not lv.shown
+    lueurs = list(lv.textures.values()) if hasattr(lv.textures, "values") else []
+    assert all(t.blend == "ADD" for t in lueurs)
+    # une etincelle : l'etoile, agrandie
+    lua.execute("GlyphFrame_StartSlotAnimation(1, 2, 3)")
+    e1 = g.GlyphFrameSparkle1
+    assert e1.texture.endswith("glyphes-lueurs") and e1.width == 13 * 2.5
+    assert list(e1.texcoord.values())[0] == 851 / 1024, "l'etoile refaite"
+    # LES CERCLES CONCENTRIQUES : une paire d'alveoles par anneau ; ils
+    # tournent (coordonnees tournees), en sens contraires
+    rg = g.ForeverUIGlyphRings
+    anx = [a for a in rg.anneaux.values()]
+    print("   cercles : montres=%s, niveau %s (cadre %s, lueurs %s) | %s" % (rg.shown, rg.frameLevel, T.cadre.frameLevel,
+        lv.frameLevel, [(a["def"].cle, a["def"].tour, a.cible) for a in anx]))
+    assert rg.shown and T.cadre.frameLevel < rg.frameLevel < lv.frameLevel
+    assert [a.cible for a in anx] == [0, 0, 0], "aucun glyphe grave : rien"
+    lua.execute("GLYPHES_GRAVES[1][1] = 58001 GlyphFrameGlyph_UpdateSlot(GlyphFrameGlyph1)")
+    assert abs(anx[0].cible - 0.175) < 1e-9 and anx[1].cible == 0, "la moitie du premier anneau"
+    lua.execute("GLYPHES_GRAVES[1][2] = 58002 GLYPHES_GRAVES[1][6] = 58006 GlyphFrame_Update()")
+    print("   cibles : %s" % [a.cible for a in anx])
+    assert [round(a.cible, 3) for a in anx] == [0.35, 0, 0.175]
+    lua.execute("ForeverUIGlyphRings.scripts.OnUpdate(ForeverUIGlyphRings, 0.2)")
+    t0 = anx[0].texture
+    tc = list(t0.texcoord8.values())
+    print("   apres 0,2 s : alpha %.3f, angle %.4f, coins %s" % (anx[0].alpha, anx[0].angle, [round(v, 4) for v in tc]))
+    assert abs(anx[0].alpha - 0.1) < 1e-9, "apparition progressive (0,5 par seconde)"
+    assert abs(anx[0].angle - 2 * 3.141592653589793 * 0.2 / 90) < 1e-9 and anx[1].angle > 3, "sens contraires"
+    cx, cy, h = (669 + 72.5) / 1024, (405 + 72.5) / 1024, 72.5 / 1024
+    assert abs(((tc[0] - cx) ** 2 + (tc[1] - cy) ** 2) ** 0.5 - h * 2 ** 0.5) < 1e-9, "le coin tourne autour du centre"
+    # une autre specialisation : ses propres alveoles
+    lua.execute("PlayerTalentFrame.talentGroup = 2 ForeverUI.Talents.compterGlyphes() PlayerTalentFrame.talentGroup = 1 ForeverUI.Talents.compterGlyphes()")
+    assert not T.classe.shown and not T.arbre.shown and not T.points.shown and not g.ForeverUITalentsHeader1.shown
+    assert not ap.shown and not an.shown and not ac.shown, "specialisation active : ni Apply ni Activate"
+    assert gf.frameLevel > T.cadre.frameLevel
+    # la seconde : ses glyphes, Activate
+    lua.execute("CLIQUER(ForeverUITalentsTab2) CLIQUER(ForeverUITalentsTab3)")
+    print("   seconde puis glyphes : groupe %s, titre '%s', Activate=%s" % (g.PlayerTalentFrame.talentGroup, tl.titre.text, ac.shown))
+    assert g.PlayerTalentFrame.talentGroup == 2 and tl.titre.text == "Secondary Glyphs" and ac.shown and gf.shown
+    # inactive : le decor grise (GlyphFrame_Update)
+    lua.execute("GlyphFrame_Update()")
+    assert all(t.desaturated for t in T.decor.textures.values())
+    # retour a un arbre : WotLK quitte l'onglet des glyphes
+    lua.execute("CLIQUER(ForeverUITalentsTab1)")
+    assert not gf.shown and g.ONGLET_BAS == 1 and tl.width == 1218 and T.classe.shown and T.arbre.shown
+    assert not any(t.shown for t in T.decor.textures.values()), "le decor part avec la page"
+    assert not g.ForeverUIGlyphRings.shown, "les cercles aussi"
+    print("   retour : titre %r, choisis %s" % (tl.titre.text, [g["ForeverUITalentsTab%d" % i].choisi.shown for i in (1, 2, 3)]))
+    # TEXTE.titre = TALENTS, que le banc emploie pour ses talents factices
+    assert not (isinstance(tl.titre.text, str) and "Glyphs" in tl.titre.text) and o1.choisi.shown and not og.choisi.shown
+    # un glyphe utilise depuis le sac : WotLK ouvre la page lui-meme
+    lua.execute("PlayerSpecTab_OnClick(PlayerSpecTab1) PlayerTalentTab_OnClick(PlayerTalentFrameTab4)")
+    assert gf.shown and og.choisi.shown and tl.width == 410
+    # l'etouffement de WotLK ne touche pas le GlyphFrame, meme rattache
+    lua.execute("GlyphFrame:SetParent(PlayerTalentFrame) ForeverUI.Talents.etoufferWotLK() ForeverUI.Talents.poserGlyphes()")
+    assert gf.shown and gf.alpha != 0
+    # LA DECONNEXION : le client cache le GlyphFrame en detruisant
+    # l'interface ; la fenetre ne doit plus bouger
+    lua.execute("""
+        local veille
+        for _, f in ipairs(FRAMES) do
+            if f.events and f.events["PLAYER_LOGOUT"] and f.events["PREVIEW_TALENT_POINTS_CHANGED"] then veille = f end
+        end
+        VEILLE_TALENTS = veille
+        veille.scripts.OnEvent(veille, "PLAYER_LOGOUT")
+        GlyphFrame:Hide()
+    """)
+    print("   deconnexion : livre %s, glyphes montres=%s, parent %s" % (tl.width, gf.shown, gf.parent.name))
+    assert tl.width == 410 and not gf.shown, "rien ne bouge pendant la destruction de l'interface"
+    assert meme(gf.parent, g.PlayerTalentFrame) and gf.allPoints,         "le GlyphFrame rendu a WotLK avant la destruction"
+    lua.execute("VEILLE_TALENTS.scripts.OnEvent(VEILLE_TALENTS, 'PLAYER_ENTERING_WORLD') ForeverUI.Talents.maj()")
+    assert tl.width == 1218, "de retour dans le monde, la fenetre vit de nouveau"
+    lua.execute("CLIQUER(ForeverUITalentsTab1)")
+
+    # ETAPE 4 : LA RECHERCHE. A gauche du compteur (decision du 2026-09-25)
+    rb = g.ForeverUITalentsSearchBox
+    fl = g.ForeverUITalentsSearchOptions
+    pf, prb = list(fl.points[1].values()), list(rb.points[1].values())
+    print("   recherche : champ %s x %s, RIGHT sur LEFT de la fleche (%s, %s) | fleche %s x %s, RIGHT sur LEFT du libelle (%s, %s)" % (
+        rb.width, rb.height, prb[3], prb[4], fl.width, fl.height, pf[3], pf[4]))
+    assert (rb.width, rb.height) == (184, 30) and rb.maxLetters == 40 and rb.shown
+    assert meme(prb[1], fl) and (prb[0], prb[2], prb[3], prb[4]) == ("RIGHT", "LEFT", -3, 2)
+    assert meme(pf[1], T.points.libelle) and (pf[0], pf[2], pf[3], pf[4]) == ("RIGHT", "LEFT", -10, -3)
+    assert rb.consigne.text == g.SEARCH, "SEARCH, la consigne de SearchBoxTemplate"
+    lua.execute("""
+        DESCRIPTIONS_TALENTS = {
+            ["Arcane Focus"] = "Reduces the chance your spells are resisted. Improves Arcane Mind.",
+            ["Magic Absorption"] = "Increases resistances. Works with Arcane Focus.",
+        }
+        ForeverUITalentsSearchBox:SetFocus()
+    """)
+    ap4 = g.ForeverUITalentsSearchPreview
+    print("   focus : apercu %s, suggestion '%s' | largeur %s" % (ap4.shown, ap4.suggestion.texte.text, ap4.width))
+    assert ap4.shown and ap4.suggestion.shown and ap4.width == 176
+    pa4 = list(ap4.points[1].values())
+    assert meme(pa4[1], rb) and (pa4[0], pa4[2], pa4[3], pa4[4]) == ("TOPRIGHT", "BOTTOMRIGHT", -4, 2)
+    lua.execute("ForeverUITalentsSearchBox:Taper('arc')")
+    noms = [l.nom.text for l in ap4.lignes.values() if l.shown]
+    print("   'arc' : %s" % noms)
+    # l'ordre de l'ecran : arbre, palier, colonne
+    assert noms == ["Arcane Subtlety", "Arcane Focus", "Arcane Mind", "Arcane Concentration", "Arcane Instability"]
+    # Show Ranks : "Nom (rang/max)" ; Hide Passives : les sorts actifs seuls
+    lua.execute("CLIQUER(ForeverUITalentsSearchOptions) CLIQUER(ForeverUITalentsSearchOption2)")
+    assert g.ForeverUITalentsSearchOptionsList.shown and g.ForeverUITalentsSearchOption2.coche.shown
+    noms = [l.nom.text for l in ap4.lignes.values() if l.shown]
+    print("   Show Ranks : %s" % noms[:2])
+    assert noms[0] == "Arcane Subtlety (2/2)" and noms[1] == "Arcane Focus (2/3)"
+    lua.execute("CLIQUER(ForeverUITalentsSearchOption2) ForeverUITalentsSearchBox:Taper('presence')")
+    assert [l.nom.text for l in ap4.lignes.values() if l.shown] == ["Presence of Mind"]
+    lua.execute("CLIQUER(ForeverUITalentsSearchOption1) ForeverUITalentsSearchBox:Taper('arcane')")
+    assert not ap4.shown, "Hide Passives : aucun sort actif ne s'appelle 'arcane'"
+    lua.execute("CLIQUER(ForeverUITalentsSearchOption1)")
+    # la recherche entiere : Arcane Focus exact, Magic Absorption par sa
+    # description, Arcane Mind "apparente" (dans la description d'Arcane Focus)
+    lua.execute("ForeverUITalentsSearchBox:Taper('Arcane Focus') ForeverUITalentsSearchBox.scripts.OnEnterPressed(ForeverUITalentsSearchBox)")
+    marques = {b.talent.nom: b.marque for b in T.arbre.noeuds.values() if b.shown and b.marque and b.marque.shown}
+    print("   'Arcane Focus' : %s" % {k: v.icone.texture and list(v.icone.texcoord.values())[0] for k, v in marques.items()})
+    e = g.UIAtlas.data
+    assert set(marques) == {"Arcane Focus", "Magic Absorption", "Arcane Mind"}
+    assert list(marques["Arcane Focus"].icone.texcoord.values())[0] == e["talents-search-exactmatch"][2]
+    assert list(marques["Magic Absorption"].icone.texcoord.values())[0] == e["talents-search-match"][2]
+    assert list(marques["Arcane Mind"].icone.texcoord.values())[0] == e["talents-search-relatedmatch"][2]
+    mf = marques["Arcane Focus"]
+    pm = list(mf.points[1].values())
+    assert (mf.width, mf.height) == (63, 63) and pm[0] == "CENTER" and pm[2] == "TOPRIGHT"
+    assert mf.battant.blend == "ADD"
+    lua.execute("local m = ForeverUITalentsNode2.marque m.scripts.OnUpdate(m, 0.5)")
+    assert abs(mf.battant.alpha - 0.25) < 1e-9, "le battement : 0 -> 0,5 en 1 s"
+    lua.execute("local m = ForeverUITalentsNode2.marque.survol m.scripts.OnEnter(m)")
+    assert g.GameTooltip.text == "Exact search match"
+    # la ligne de palier (format numerote du client) est ecartee sans erreur
+    lua.execute("ForeverUITalentsSearchBox:Taper('requires') ForeverUITalentsSearchBox.scripts.OnEnterPressed(ForeverUITalentsSearchBox)")
+    assert not any(b.marque and b.marque.shown for b in T.arbre.noeuds.values()), "'Requires 5 points in ...' ecartee"
+    # la description ne compte pas le rang ni l'invite : 'rank' ne trouve rien
+    lua.execute("ForeverUITalentsSearchBox:Taper('rank') ForeverUITalentsSearchBox.scripts.OnEnterPressed(ForeverUITalentsSearchBox)")
+    assert not any(b.marque and b.marque.shown for b in T.arbre.noeuds.values())
+    # l'effacement : plus de marques
+    lua.execute("ForeverUITalentsSearchBox:Taper('mind') ForeverUITalentsSearchBox.scripts.OnEnterPressed(ForeverUITalentsSearchBox)")
+    assert any(b.marque and b.marque.shown for b in T.arbre.noeuds.values())
+    lua.execute("CLIQUER(ForeverUITalentsSearchClear)")
+    assert not any(b.marque and b.marque.shown for b in T.arbre.noeuds.values()) and rb.text == ""
+    # "Missing from action bar" : Presence of Mind apprise, sur aucune barre
+    lua.execute("""
+        TALENTS[1].talents[5][5] = 1
+        ACTIONS = {}
+        ForeverUI.Talents.maj()
+        ForeverUITalentsSearchBox:SetFocus()
+        CLIQUER(ForeverUITalentsSearchResultSuggestion)
+    """)
+    marques = {b.talent.nom: b.marque for b in T.arbre.noeuds.values() if b.shown and b.marque and b.marque.shown}
+    print("   barres : %s, texte '%s'" % (list(marques), rb.text))
+    assert list(marques) == ["Presence of Mind"] and rb.text == "Missing from action bar"
+    assert list(marques["Presence of Mind"].icone.texcoord.values())[0] == e["talents-search-notonactionbar"][2]
+    # le sort pose sur une barre : sa marque s'en va (ACTIONBAR_SLOT_CHANGED)
+    lua.execute("""
+        SORTS_PAR_ID[12043] = "Presence of Mind"
+        ACTIONS[1] = { "spell", nil, nil, 12043 }
+        local v = ForeverUI.TalentsSearch.veilleBarres
+        v.scripts.OnEvent(v, "ACTIONBAR_SLOT_CHANGED", 1)
+    """)
+    reste = [b.talent.nom for b in T.arbre.noeuds.values() if b.shown and b.marque and b.marque.shown]
+    print("   pose sur la barre : marques restantes %s" % reste)
+    assert reste == [], "posee sur une barre active : plus absente"
+    # retiree de la barre : la marque revient
+    lua.execute("ACTIONS[1] = nil local v = ForeverUI.TalentsSearch.veilleBarres v.scripts.OnEvent(v, 'ACTIONBAR_SLOT_CHANGED', 1)")
+    assert [b.talent.nom for b in T.arbre.noeuds.values() if b.shown and b.marque and b.marque.shown] == ["Presence of Mind"]
+    lua.execute("ForeverUI.TalentsSearch.quitter() TALENTS[1].talents[5][5] = 0 ForeverUI.Talents.maj()")
+    # fenetre reduite (familier) : le champ se retrecit
+    lua.execute("CLIQUER(ForeverUITalentsTab4)")
+    wl = len("Unspent Talents") * 6
+    attendu = min(184, 404 + 4 + T.points.droiteLibelle - wl - 10 - 25 - 3 - 10)
+    print("   familier : champ %s (attendu %s)" % (rb.width, attendu))
+    assert abs(rb.width - attendu) < 1e-9
+    # un libelle plus long (une autre langue) : le champ cede la place
+    lua.execute("ForeverUI.Talents.points.libelle:SetText('Unspent Talent Points Here') ForeverUI.Talents.maj()")
+    attendu = min(184, 404 + 4 + T.points.droiteLibelle - len("Unspent Talent Points Here") * 6 - 10 - 25 - 3 - 10)
+    print("   libelle long : champ %s (attendu %s)" % (rb.width, attendu))
+    assert abs(rb.width - attendu) < 1e-9 and rb.width < 184
+    lua.execute("ForeverUI.Talents.points.libelle:SetText('Unspent Talents')")
+    lua.execute("CLIQUER(ForeverUITalentsTab1)")
+    assert rb.width == 184
+    # les glyphes : pas de champ
+    lua.execute("CLIQUER(ForeverUITalentsTab3)")
+    assert not rb.shown and not fl.shown
+    lua.execute("CLIQUER(ForeverUITalentsTab1)")
+    assert rb.shown
+
+    # GLISSER UN SORT DE TALENT vers une barre : Presence of Mind (carre,
+    # MageArcane "5:2" -> 12043 dans TalentsData.lua), appris, dans le grimoire
+    lua.execute("""
+        LIENS = { spell8 = 12043 }
+        GLISSE_LIEN = GetSpellLink
+        function GetSpellLink(slot, livre)
+            local id = LIENS[livre .. slot]
+            if id then return "|cff71d5ff|Hspell:" .. id .. "|h[x]|h|r" end
+            return GLISSE_LIEN(slot, livre)
+        end
+        LIVRE.spell[8] = { "Presence of Mind", "", false, "ic:presence" }
+        ONGLETS[2][4] = ONGLETS[2][4] + 1
+        PRIS = {}
+        function NOEUD(nom)
+            for _, b in pairs(ForeverUI.Talents.arbre.noeuds) do
+                if b:IsShown() and b.talent and b.talent.nom == nom then return b end
+            end
+        end
+        function GLISSER(nom) local b = NOEUD(nom) b.scripts.OnDragStart(b) end
+        GLISSER("Presence of Mind")
+    """)
+    assert len(list(g.PRIS.values())) == 0, "pas encore appris : rien"
+    lua.execute("TALENTS[1].talents[5][5] = 1 ForeverUI.Talents.maj() GLISSER('Presence of Mind')")
+    pris = list(g.PRIS.values())
+    print("   glisser Presence of Mind : %s | glisser : %s" % (pris, list(g.NOEUD("Presence of Mind").dragButtons.values())))
+    assert pris == ["spell8"] and list(g.NOEUD("Presence of Mind").dragButtons.values()) == ["LeftButton"]
+    # un passif (rond) ne se glisse pas
+    lua.execute("PRIS = {} GLISSER('Arcane Focus')")
+    assert len(list(g.PRIS.values())) == 0
+    # sans l'identifiant du sort, le nom suffit (le plus haut rang)
+    lua.execute("LIENS = {} PRIS = {} GLISSER('Presence of Mind')")
+    assert list(g.PRIS.values()) == ["spell8"]
+    lua.execute("""
+        GetSpellLink = GLISSE_LIEN
+        LIVRE.spell[8] = nil
+        ONGLETS[2][4] = ONGLETS[2][4] - 1
+        TALENTS[1].talents[5][5] = 0
+        ForeverUI.Talents.maj()
+    """)
+
+    # LA CONFIRMATION A LA FERMETURE : un point en attente
+    lua.execute("POINTS_TALENTS = 3 ForeverUI.Talents.maj() CLIQUER(ForeverUITalentsNode3) POPUPS = {}")
+    assert g.GetGroupPreviewTalentPointsSpent(False, 1) == 1
+    lua.execute("PlayerTalentFrame:Hide()")
+    ro = T.rouvreur
+    assert ro.shown, "la fenetre se rouvrira a l'image suivante"
+    lua.execute("ForeverUI.Talents.rouvreur.scripts.OnUpdate(ForeverUI.Talents.rouvreur)")
+    pop = list(g.POPUPS.values())
+    print("   fermeture avec attente : rouverte=%s, fenetre %s | %s" % (g.PlayerTalentFrame.shown, pop[-1].quoi,
+        g.StaticPopupDialogs["FOREVERUI_TALENTS_CONFIRM_CLOSE"].text))
+    assert g.PlayerTalentFrame.shown and pop[-1].quoi == "FOREVERUI_TALENTS_CONFIRM_CLOSE"
+    dlg = g.StaticPopupDialogs["FOREVERUI_TALENTS_CONFIRM_CLOSE"]
+    assert dlg.text == "You will lose any pending changes if you continue." and dlg.button1 == "Continue" and dlg.button2 == "Cancel"
+    assert g.GetGroupPreviewTalentPointsSpent(False, 1) == 1, "rien n'est perdu tant qu'on n'a pas continue"
+    # Continue : l'attente s'en va, la fenetre se ferme pour de bon
+    lua.execute("StaticPopupDialogs.FOREVERUI_TALENTS_CONFIRM_CLOSE.OnAccept()")
+    assert not g.PlayerTalentFrame.shown and not ro.shown and g.GetGroupPreviewTalentPointsSpent(False, 1) == 0
+    # sans attente : on ferme sans question
+    lua.execute("PlayerTalentFrame:Show() POPUPS = {} PlayerTalentFrame:Hide()")
+    assert not ro.shown and len(list(g.POPUPS.values())) == 0
+    # la vue est gardee quand elle se rouvre (ici, le familier)
+    lua.execute("""
+        PlayerTalentFrame:Show()
+        CLIQUER(ForeverUITalentsTab4)
+        POINTS_FAMILIER = 1
+        TALENTS_FAMILIER[1].talents[1][5] = 0
+        ForeverUI.Talents.maj()
+        CLIQUER(ForeverUITalentsNode1)
+        PlayerTalentFrame:Hide()
+        ForeverUI.Talents.rouvreur.scripts.OnUpdate(ForeverUI.Talents.rouvreur)
+    """)
+    print("   familier en attente : rouverte=%s, vue familier=%s" % (g.PlayerTalentFrame.shown, T.pet))
+    assert g.PlayerTalentFrame.shown and T.pet, "rouverte telle qu'elle etait"
+    lua.execute("StaticPopupDialogs.FOREVERUI_TALENTS_CONFIRM_CLOSE.OnAccept() PlayerTalentFrame:Show() CLIQUER(ForeverUITalentsTab1)")
+
+    # LA SUPERPOSITION : grimoire et talents ouverts ensemble
+    lua.execute("""
+        PlayerTalentFrame:Hide()
+        SpellBookFrame:Show()
+        PlayerTalentFrame:Show()
+        function NIVEAUX(c, l)
+            l = l or {}
+            table.insert(l, c:GetFrameLevel())
+            for _, e in ipairs({ c:GetChildren() }) do NIVEAUX(e, l) end
+            return l
+        end
+        function BORNES(c)
+            local l = NIVEAUX(c)
+            table.sort(l)
+            return l[1], l[#l]
+        end
+    """)
+    bmin, bmax = g.BORNES(g.SpellBookFrame)
+    tmin, tmax = g.BORNES(g.PlayerTalentFrame)
+    print("   superposition : grimoire %s..%s, talents %s..%s" % (bmin, bmax, tmin, tmax))
+    assert tmin > bmax, "les talents, ouverts en dernier, entierement devant"
+    premier = (bmin, bmax, tmin, tmax)
+    # un clic sur le grimoire le ramene devant
+    lua.execute("""
+        ForeverUISpellBookFrame.souris = true
+        SOURIS.LeftButton = true
+        ForeverUI.Superposition.veille:GetScript("OnUpdate")(ForeverUI.Superposition.veille)
+        SOURIS.LeftButton = false
+        ForeverUI.Superposition.veille:GetScript("OnUpdate")(ForeverUI.Superposition.veille)
+        ForeverUISpellBookFrame.souris = false
+    """)
+    bmin, bmax = g.BORNES(g.SpellBookFrame)
+    tmin, tmax = g.BORNES(g.PlayerTalentFrame)
+    print("   clic sur le grimoire : grimoire %s..%s, talents %s..%s" % (bmin, bmax, tmin, tmax))
+    assert bmin > tmax, "le grimoire entierement devant"
+    # et un clic sur un onglet des talents (dehors) les ramene devant
+    lua.execute("""
+        ForeverUITalentsTabs.souris = true
+        SOURIS.RightButton = true
+        ForeverUI.Superposition.veille:GetScript("OnUpdate")(ForeverUI.Superposition.veille)
+        SOURIS.RightButton = false
+        ForeverUI.Superposition.veille:GetScript("OnUpdate")(ForeverUI.Superposition.veille)
+        ForeverUITalentsTabs.souris = false
+    """)
+    bmin2, bmax2 = g.BORNES(g.SpellBookFrame)
+    tmin2, tmax2 = g.BORNES(g.PlayerTalentFrame)
+    print("   clic sur un onglet des talents : grimoire %s..%s, talents %s..%s" % (bmin2, bmax2, tmin2, tmax2))
+    assert (bmin2, bmax2, tmin2, tmax2) == premier, "le fond reprend son niveau : pas de derive"
+    # en combat, le grimoire protege ne bouge pas
+    lua.execute("""
+        SpellBookFrame.protege = true STATE.inLockdown = true
+        ForeverUI.Superposition.devant("grimoire")
+        STATE.inLockdown = false SpellBookFrame.protege = nil
+    """)
+    assert g.BORNES(g.SpellBookFrame) == (bmin2, bmax2)
+    lua.execute("SpellBookFrame:Hide()")
+    # LE DEPLACEMENT : la barre du titre, reancree par le haut-centre
+    lua.execute("""
+        UIParent._cx, UIParent._top = 960, 1080
+        ForeverUITalentsFrame._cx, ForeverUITalentsFrame._top = 900, 900
+        local b = ForeverUITalentsFrame.bandeau
+        b.scripts.OnDragStart(b)
+        b.scripts.OnDragStop(b)
+    """)
+    pd = list(tl.points[1].values())
+    print("   deplace : %s de %s (%s, %s), retenu %s" % (pd[0], pd[2], pd[3], pd[4], dict(g.ForeverUIDB.positions.talents)))
+    assert (pd[0], pd[2], pd[3], pd[4]) == ("TOP", "TOP", -60, -180) and tl.movable and g.ForeverUITalentsFrame.bandeau.dragButtons[1] == "LeftButton"
+    assert not tl.userPlaced, "la place est a nous, pas au client"
+    lua.execute("ForeverUITalentsFrame:ClearAllPoints() PlayerTalentFrame:Hide() PlayerTalentFrame:Show()")
+    pd = list(tl.points[1].values())
+    assert (pd[3], pd[4]) == (-60, -180), "reposee a l'ouverture"
+    # en combat, pas de deplacement
+    lua.execute("STATE.inLockdown = true ForeverUITalentsFrame.moving = false ForeverUITalentsFrame.bandeau.scripts.OnDragStart(ForeverUITalentsFrame.bandeau) STATE.inLockdown = false")
+    assert not tl.moving
+    assert g.ForeverUISpellBookFrame.bandeau.dragButtons[1] == "LeftButton" and g.ForeverUISpellBookFrame.movable
+
+    # la croix de WotLK ferme le panneau
+    lua.execute("PlayerTalentFrameCloseButton:GetScript('OnClick')(PlayerTalentFrameCloseButton)")
+    assert not g.PlayerTalentFrame.shown
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

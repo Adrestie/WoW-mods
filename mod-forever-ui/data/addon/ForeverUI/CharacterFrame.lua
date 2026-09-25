@@ -2240,6 +2240,10 @@ local function habiller()
 			niveau = NIVEAU_ART,
 		})
 		cadre.foreverSkinned = true
+		-- devant quand elle s'ouvre ou qu'on la clique (Superposition.lua)
+		ForeverUI.Superposition.inscrire("feuille", cadre, function()
+			return { cadre, barreOnglets }
+		end)
 	end
 
 	effacerArtDepoque()

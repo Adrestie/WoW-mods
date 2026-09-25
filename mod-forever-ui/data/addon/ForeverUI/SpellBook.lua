@@ -962,6 +962,7 @@ local function construireCadre(livre)
 	titre:SetPoint("TOP", bandeau, "TOP", 0, -5)
 	titre:SetText(TEXTE.titre)
 	livre.titre = titre
+	livre.bandeau = bandeau
 
 	-- la croix : celle de WotLK, rhabillee. Elle reste l'enfant de
 	-- SpellBookFrame : son OnClick ferme SON PARENT (HideUIPanel), et la
@@ -1755,6 +1756,12 @@ end
 construire()
 
 if S.livre then
+	-- deplacable par son titre ; devant quand il s'ouvre ou qu'on le clique
+	ForeverUI.Superposition.deplacable(S.livre, S.livre.bandeau, "grimoire")
+	ForeverUI.Superposition.inscrire("grimoire", SpellBookFrame, function()
+		return { S.livre, _G.ForeverUISpellFlyout, _G.ForeverUISpellBookSettingsList,
+			_G.ForeverUISpellBookSearchPreview }
+	end)
 	-- a chaque ouverture : le livre demande (sorts ou familier) et son contenu
 	SpellBookFrame:HookScript("OnShow", function()
 		S.etoufferWotLK()

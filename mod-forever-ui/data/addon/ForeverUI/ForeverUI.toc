@@ -16,10 +16,12 @@ AtlasUtil.lua
 Panes.lua
 ScrollBar.lua
 Layout.lua
+Superposition.lua
 DropDown.lua
 PlayerFrame.lua
 PlayerFrameExtras.lua
 PlayerRunes.lua
+PetFrame.lua
 TargetFrame.lua
 CastBar.lua
 ActionBar.lua
@@ -33,6 +35,9 @@ QuestLog.lua
 ObjectiveTracker.lua
 SpellBook.lua
 SpellBookSearch.lua
+TalentsData.lua
+Talents.lua
+TalentsSearch.lua
 Bags.lua
 CharacterFrame.lua
 EquipmentManager.lua
