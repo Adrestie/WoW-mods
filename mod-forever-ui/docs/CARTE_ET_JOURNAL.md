@@ -143,3 +143,5 @@ suivante.
 
 Étape 3 livrée le 2026-09-25 (non validée) : relevé et écarts en tête de la
 section « la page d'une quête » de `QuestLog.lua`.
+
+Étape 4 livrée le 2026-09-25 (non validée) : relevé et principe en tête de `WorldMap.lua`.

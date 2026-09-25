@@ -898,13 +898,62 @@ function WorldMap_ToggleSizeDown()
     WorldMapFrame_SetMiniMode()
     WorldMapFrame_SetOpacity(WORLDMAP_SETTINGS.opacity)
 end
+WORLD_MAP = "World Map"
+for i = 1, 18 do
+    WorldMapFrame:CreateTexture("WorldMapFrameTexture" .. i, "ARTWORK")
+    _G["WorldMapFrameTexture" .. i] = WorldMapFrame.regions[#WorldMapFrame.regions]
+end
+PLEIN_ECRAN = { "WorldMapZoneMinimapDropDown", "WorldMapZoomOutButton", "WorldMapZoneDropDown",
+    "WorldMapContinentDropDown", "WorldMapQuestScrollFrame", "WorldMapQuestDetailScrollFrame",
+    "WorldMapQuestRewardScrollFrame", "WorldMapLevelUpButton", "WorldMapLevelDownButton" }
+for _, nom in ipairs(PLEIN_ECRAN) do
+    local f = CreateFrame("Frame", nom, WorldMapFrame)
+    f:Hide()
+end
+WorldMapPositioningGuide = CreateFrame("Frame", "WorldMapPositioningGuide", WorldMapFrame)
+function WorldMapFrame_SetPOIMaxBounds() BORNES_POI = WORLDMAP_SETTINGS.size end
+function WorldMapFrame_SetQuestMapView()
+    WORLDMAP_SETTINGS.size = WORLDMAP_QUESTLIST_SIZE
+    WorldMapDetailFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapButton:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapFrameAreaFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapDetailFrame:SetPoint("TOPLEFT", WorldMapPositioningGuide, "TOP", -726, -99)
+    WorldMapQuestDetailScrollFrame:Show()
+    WorldMapQuestRewardScrollFrame:Show()
+    WorldMapQuestScrollFrame:Show()
+    for i = 13, 18 do _G["WorldMapFrameTexture" .. i]:Hide() end
+end
+function WorldMapFrame_SetFullMapView()
+    WORLDMAP_SETTINGS.size = WORLDMAP_FULLMAP_SIZE
+    WorldMapDetailFrame:SetScale(WORLDMAP_FULLMAP_SIZE)
+    WorldMapButton:SetScale(WORLDMAP_FULLMAP_SIZE)
+    WorldMapFrameAreaFrame:SetScale(WORLDMAP_FULLMAP_SIZE)
+    WorldMapDetailFrame:SetPoint("TOPLEFT", WorldMapPositioningGuide, "TOP", -502, -69)
+    WorldMapQuestDetailScrollFrame:Hide()
+    WorldMapQuestRewardScrollFrame:Hide()
+    WorldMapQuestScrollFrame:Hide()
+    for i = 13, 18 do _G["WorldMapFrameTexture" .. i]:Show() end
+end
 function WorldMap_ToggleSizeUp()
     WORLDMAP_SETTINGS.size = WORLDMAP_QUESTLIST_SIZE
     WorldMapFrame:SetParent(nil)
     WorldMapFrame_ResetFrameLevels()
     WorldMapFrame:ClearAllPoints()
+    WorldMapFrame:SetAllPoints()
+    -- SetupFullscreenScale : une echelle propre au plein ecran
+    WorldMapFrame:SetScale(1)
     WorldMapDetailFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapDetailFrame:SetPoint("TOPLEFT", WorldMapPositioningGuide, "TOP", -726, -99)
     WorldMapButton:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapFrameAreaFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapBlobFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    for _, nom in ipairs(PLEIN_ECRAN) do
+        if nom ~= "WorldMapLevelUpButton" and nom ~= "WorldMapLevelDownButton" then _G[nom]:Show() end
+    end
+    for i = 1, 18 do
+        _G["WorldMapFrameTexture" .. i]:SetTexture("plein-ecran-" .. i)
+        _G["WorldMapFrameTexture" .. i]:Show()
+    end
     BlackoutWorld:Show()
     WorldMapFrameMiniBorderLeft:Hide()
     WorldMapFrameMiniBorderRight:Hide()
@@ -6697,6 +6746,31 @@ def main():
     lua.execute("CARTE.etages = 3 CARTE.etage = 2 WorldMapFrame_UpdateMap()")
     print("   etages : %s, '%s', %sx%s" % (etages.shown, etages.Text.text, etages.width, etages.height))
     assert etages.shown and etages.Text.text == "Area 2" and (etages.width, etages.height) == (160, 25)
+    # LE FOND DU SELECTEUR, EN TROIS (tranches 16 / 19 de camelot) : etire
+    # d'une piece, son ombre transparente triplait et decalait la boite
+    e = g.UIAtlas.data["common-dropdown-textholder-c60"]
+    g_, m_, d_ = list(etages.fond.values())
+    du = (e[3] - e[2]) / e[6]
+    print("   fond du selecteur : %s | %s | %s" % (g_.width, "etire", d_.width))
+    assert (g_.width, d_.width) == (16, 19), "les bouts gardent leur taille"
+    assert abs(list(g_.texcoord.values())[1] - (e[2] + 16 * du)) < 1e-9
+    assert abs(list(d_.texcoord.values())[0] - (e[3] - 19 * du)) < 1e-9
+    assert g_.texture == e[1], "variante c60"
+    # un nom trop long se termine par des points de suspension
+    lua.execute("DUNGEON_FLOOR_ULDUAR2 = 'The Antechamber of Ulduar and its Keepers' WorldMapFrame_UpdateMap()")
+    place = g.ForeverUI.WorldMap.largeurTexteEtage()
+    print("   nom long : '%s' (%d pour %d de place)" % (etages.Text.text, len(etages.Text.text) * 6, place))
+    assert etages.Text.text.endswith("...") and len(etages.Text.text) * 6 <= place
+    assert etages.Text.text.startswith("The Antechamber")
+    lua.execute("DUNGEON_FLOOR_ULDUAR2 = nil")
+    # la liste ouverte ne descend pas sous la largeur du selecteur
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = ForeverUIWorldMapNavMenu ForeverUIWorldMapFloorButton:GetScript('OnClick')(ForeverUIWorldMapFloorButton) ForeverUIWorldMapNavMenu.initFn()")
+    assert g.ForeverUIWorldMapNavMenu.foreverMinimum == 160
+    lua.execute("DropDownList1:SetWidth(40)")
+    g.DropDownList1.hooks.OnShow(g.DropDownList1)
+    print("   liste des etages : %s de large" % g.DropDownList1.width)
+    assert g.DropDownList1.width == 160, "au moins la largeur du selecteur (SetMinimumWidth)"
+    lua.execute("ForeverUIWorldMapNavMenu.foreverMinimum = nil")
     lua.execute("CARTE.etages = 0 WorldMapFrame_UpdateMap()")
 
     # les coordonnees
@@ -6987,19 +7061,71 @@ def main():
     print("   L encore : carte %s" % carteMonde.shown)
     assert not carteMonde.shown and not g.QuestLogFrame.shown, "L referme le journal"
 
-    # le plein ecran de WotLK : on s'efface, le titre revient a la carte
-    lua.execute("WorldMap_ToggleSizeUp()")
-    print("   plein ecran : cadre visible=%s, titre dans %s" % (
-        g.ForeverUIWorldMapBorder.shown, titre.parent.name))
-    assert not g.ForeverUIWorldMapBorder.shown and not barre.shown
-    assert titre.parent.name == "WorldMapFrame", "WotLK ancre le titre sur la carte en plein ecran"
-    assert g.WorldMapTrackQuest.alpha == 1
-    assert (g.WorldMapDetailTile12.width, g.WorldMapDetailTile12.height) == (256, 256),         "en plein ecran, l'habillage de WotLK recouvre le debord : tuiles entieres"
+    # LE MODE AGRANDI (etape 4) : le plein ecran de WotLK habille a la camelot.
+    # L'ecran de l'utilisateur : 3840 x 1600 a l'echelle 0,64, soit une
+    # interface de 2880 x 1200 unites.
+    lua.execute("UIParent:SetWidth(2880) UIParent:SetHeight(1200) UIParent:SetScale(0.64)")
+    lua.execute("WorldMap_ToggleSizeUp() WorldMapFrame:Show()")
+    sup = g.ForeverUIWorldMapMaximized
+    can = g.ForeverUIWorldMapCanvas
+    ps = list(sup.points[1].values())
+    print("   agrandi : support %s x %s a l'echelle %s, %s de la carte | canevas %s x %s" % (
+        sup.width, sup.height, sup.scale, ps[0], can.width, can.height))
+    assert (sup.width, sup.height) == (1703, 1200), "UpdateMaximizedSize : hauteur de l'ecran, largeur au prorata"
+    assert abs(sup.scale - 0.64) < 1e-9, "le support revient a l'unite de l'interface"
+    assert ps[0] == "TOP" and ps[1].name == "WorldMapFrame" and (ps[3], ps[4]) == (0, 0), "maximizePoint TOP"
+    assert (can.width, can.height) == (1703 - 5, 1200 - 69)
+    attendu = min(1698 / 1002, 1131 / 668) * 0.64
+    print("   echelle de la carte %.5f (attendu %.5f), vue %.5f" % (g.WorldMapDetailFrame.scale, attendu, g.WORLDMAP_SETTINGS.size))
+    for f in (g.WorldMapDetailFrame, g.WorldMapButton, g.WorldMapFrameAreaFrame, g.WorldMapBlobFrame):
+        assert abs(f.scale - attendu) < 1e-9, f.name
+    assert abs(g.WORLDMAP_QUESTLIST_SIZE - attendu) < 1e-9 and abs(g.WORLDMAP_FULLMAP_SIZE - attendu) < 1e-9, \
+        "les constantes que WotLK lit pour placer fleche et reperes"
+    assert abs(g.WORLDMAP_SETTINGS.size - attendu) < 1e-9
+    pd = [list(x.values()) for x in g.WorldMapDetailFrame.points.values()]
+    assert len(pd) == 1 and pd[0][0] == "CENTER" and pd[0][1].name == "ForeverUIWorldMapCanvas", pd
+    # le cadre de camelot, sans portrait
+    cadre = g.ForeverUIWorldMapBorder
+    hg = cadre.coins.hg
+    php = list(hg.points[1].values())
+    print("   cadre : montre=%s echelle %s | portrait %s | coin haut-gauche %s (%s, %s)" % (
+        cadre.shown, cadre.scale, cadre.portraitCadre.shown, hg.texture, php[3], php[4]))
+    assert cadre.shown and abs(cadre.scale - 0.64) < 1e-9 and not cadre.portraitCadre.shown
+    assert hg.texture == g.UIAtlas.data["ui-frame-metal-cornertopleft"][1] and (php[3], php[4]) == (-12, 16)
+    print("   titre '%s'" % titre.text)
+    assert titre.text == "World Map" and meme(titre.parent, cadre.bandeau), "WORLD_MAP, dans le bandeau"
+    assert list(barre.points[1].values())[3] == 10, "NavBar a (8, -25) du bandeau"
+    assert barre.shown and not g.ForeverUIWorldMapSidePanelToggle.shown and not g.ForeverUIQuestLogPanel.shown, \
+        "la carte seule : ni volet ni bascule"
+    # ce que le plein ecran de WotLK montre et que camelot n'a pas
+    assert all(g["WorldMapFrameTexture%d" % i].alpha == 0 for i in range(1, 19)), "la bordure de WotLK s'efface"
+    for nom in ("WorldMapZoomOutButton", "WorldMapZoneDropDown", "WorldMapContinentDropDown", "WorldMapQuestScrollFrame"):
+        assert not g[nom].shown, nom
+    # les boutons rouges : fermer, et reduire a sa gauche
+    fermer, reduire = g.WorldMapFrameCloseButton, g.WorldMapFrameSizeDownButton
+    pr = list(reduire.points[1].values())
+    assert list(fermer.points[1].values())[1].name == "ForeverUIWorldMapMaximized" and abs(fermer.scale - 0.64) < 1e-9
+    assert pr[0] == "RIGHT" and pr[1].name == "WorldMapFrameCloseButton" and abs(reduire.scale - 0.64) < 1e-9
+    assert reduire.GetNormalTexture(reduire).texcoord[1] == g.UIAtlas.data["redbutton-condense"][2], "RedButton-Condense"
+    assert (g.WorldMapDetailTile12.width, g.WorldMapDetailTile12.height) == (234, 156), "les tuiles rognees a la carte"
+    # une vue de WotLK repose la carte et la liste : on repasse derriere
+    lua.execute("WorldMapFrame_SetQuestMapView()")
+    pd = [list(x.values()) for x in g.WorldMapDetailFrame.points.values()]
+    assert len(pd) == 1 and pd[0][0] == "CENTER" and not g.WorldMapQuestScrollFrame.shown
+    lua.execute("WorldMapFrame_SetFullMapView()")
+    assert not g.WorldMapFrameTexture14.shown and abs(g.WorldMapDetailFrame.scale - attendu) < 1e-9
+    lua.execute("UIParent:SetScale(1) WorldMapFrame:SetScale(1)")
 
     # et retour
     lua.execute("WorldMap_ToggleSizeDown()")
     attendu = 702 + (333 if g.ForeverUI.QuestLog.reglages().volet else 0)
     assert g.ForeverUIWorldMapBorder.shown and (carteMonde.width, carteMonde.height) == (attendu, 534)
+    print("   retour : cadre echelle %s, portrait %s, titre '%s', coin %s" % (
+        g.ForeverUIWorldMapBorder.scale, g.ForeverUIWorldMapBorder.portraitCadre.shown, titre.text,
+        list(g.ForeverUIWorldMapBorder.coins.hg.points[1].values())[3]))
+    assert g.ForeverUIWorldMapBorder.scale == 1 and g.ForeverUIWorldMapBorder.portraitCadre.shown
+    assert titre.text == "Map & Quest Log" and list(g.ForeverUIWorldMapBorder.coins.hg.points[1].values())[3] == -13
+    assert g.WorldMapFrameCloseButton.scale == 1 and list(barre.points[1].values())[3] == 66
     assert g.ForeverUIQuestLogPanel.shown == bool(g.ForeverUI.QuestLog.reglages().volet), "le volet revient avec la petite fenetre"
 
     # ------------------------------------------------------------------
