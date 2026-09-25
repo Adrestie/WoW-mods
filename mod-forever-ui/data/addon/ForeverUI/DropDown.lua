@@ -138,7 +138,10 @@ local function ajusterLargeur(liste)
 	if niveau ~= 1 or not ouvreur or not ouvreur.GetWidth or ouvreur.displayMode == "MENU" then
 		local contenu = liste.foreverContenu
 		if contenu and contenu > 0 then
-			fixerLargeur(liste, contenu + LISTE_MARGE)
+			-- un menu de ForeverUI peut demander un plancher : la largeur du
+			-- bouton qui l'ouvre, comme camelot (SetMinimumWidth)
+			local minimum = niveau == 1 and ouvreur and ouvreur.foreverMinimum or 0
+			fixerLargeur(liste, math.max(contenu + LISTE_MARGE, minimum))
 		end
 		return
 	end
