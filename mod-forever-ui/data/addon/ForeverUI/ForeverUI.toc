@@ -28,6 +28,9 @@ PetBar.lua
 BottomBar.lua
 StatusBars.lua
 Minimap.lua
+WorldMap.lua
+QuestLog.lua
+ObjectiveTracker.lua
 Bags.lua
 CharacterFrame.lua
 EquipmentManager.lua

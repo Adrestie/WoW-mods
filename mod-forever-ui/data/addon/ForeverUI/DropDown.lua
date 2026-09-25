@@ -107,29 +107,67 @@ local LISTE_MARGE = 25
 -- qu'elle tient dans l'ecran qu'APRES -- la largeur doit donc etre acquise
 -- a ce moment-la, sinon le recadrage se ferait sur l'ancienne.
 --
--- Seul le premier niveau est concerne : un sous-menu n'est ouvert par aucun
--- bouton de menu deroulant.
-local function ajusterLargeur(liste)
-	if (liste.foreverNiveau or liste:GetID()) ~= 1 then
+-- Seul le premier niveau d'un MENU DEROULANT est concerne. Un menu
+-- contextuel (displayMode "MENU" : clic droit, menus de la carte, du journal,
+-- du suivi) n'a pas de bouton a epouser -- son ouvreur est un cadre
+-- invisible de 40 de large -- et un sous-menu n'est ouvert par aucun bouton :
+-- ceux-la prennent la largeur de leur CONTENU (corrige le 2026-09-25 : ils
+-- etaient ecrases a 40).
+--
+-- LE CONTENU SE MESURE DANS LA POLICE AFFICHEE. Le client mesure chaque
+-- ligne en GameFontHighlightSmallLeft, avant que nous passions a
+-- GameFontHighlightLeft, plus grande : sa largeur (maxWidth) serait trop
+-- courte. La mesure est refaite a chaque ligne posee (mesurerBouton) avec la
+-- formule de UIDropDownMenu_AddButton.
+local function fixerLargeur(liste, voulue)
+	if math.abs(liste:GetWidth() - voulue) < 0.5 then
 		return
 	end
-
-	local ouvreur = UIDROPDOWNMENU_OPEN_MENU
-	if not ouvreur or not ouvreur.GetWidth then
-		return
-	end
-
-	local voulue = ouvreur:GetWidth()
-	if not voulue or voulue <= 0 or math.abs(liste:GetWidth() - voulue) < 0.5 then
-		return
-	end
-
 	liste:SetWidth(voulue)
 	for index = 1, (liste.numButtons or 0) do
 		local bouton = _G[liste:GetName() .. "Button" .. index]
 		if bouton then
 			bouton:SetWidth(voulue - LISTE_MARGE)
 		end
+	end
+end
+
+local function ajusterLargeur(liste)
+	local ouvreur = UIDROPDOWNMENU_OPEN_MENU
+	local niveau = liste.foreverNiveau or liste:GetID()
+	if niveau ~= 1 or not ouvreur or not ouvreur.GetWidth or ouvreur.displayMode == "MENU" then
+		local contenu = liste.foreverContenu
+		if contenu and contenu > 0 then
+			fixerLargeur(liste, contenu + LISTE_MARGE)
+		end
+		return
+	end
+
+	local voulue = ouvreur:GetWidth()
+	if not voulue or voulue <= 0 then
+		return
+	end
+	fixerLargeur(liste, voulue)
+end
+
+-- La largeur d'une ligne, par la formule de UIDropDownMenu_AddButton : texte
+-- + 40, + 10 pour une fleche ou un nuancier, - 30 sans case, + 10 pour une
+-- icone, + le rembourrage demande.
+local function mesurerBouton(liste, bouton, info)
+	if liste.numButtons == 1 then
+		liste.foreverContenu = 0
+	end
+	local texte = _G[bouton:GetName() .. "NormalText"]
+	if not (texte and info and info.text) then
+		return
+	end
+	local largeur = texte:GetStringWidth() + 40
+	if info.hasArrow or info.hasColorSwatch then largeur = largeur + 10 end
+	if info.notCheckable then largeur = largeur - 30 end
+	if info.icon then largeur = largeur + 10 end
+	if info.padding then largeur = largeur + info.padding end
+	if largeur > (liste.foreverContenu or 0) then
+		liste.foreverContenu = largeur
 	end
 end
 
@@ -231,6 +269,7 @@ if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 		if bouton then
 			habillerBouton(bouton)
 			reglerBouton(bouton)
+			mesurerBouton(liste, bouton, info)
 		end
 	end)
 end

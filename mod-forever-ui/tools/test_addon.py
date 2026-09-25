@@ -112,6 +112,13 @@ local function newRegion(kind)
     function r:SetDrawLayer(calque) self.layer = calque end
     function r:SetBlendMode(m) self.blend = m end
     function r:SetFont(chemin, taille, drapeaux) self.fontFile, self.fontSize, self.fontFlags = chemin, taille, drapeaux end
+    -- 6 pixels par caractere : assez pour verifier une largeur calculee.
+    function r:GetStringWidth() return string.len(self.text or "") * 6 end
+    function r:SetVertTile(v) self.vtile = v end
+    -- Une region change de parent en 3.3.5 : PlayerFrame.lua le fait sur
+    -- PlayerFrameManaBarText.
+    function r:SetParent(p) self.parent = p; self.owner = p end
+    function r:GetParent() return self.parent or self.owner end
     function r:SetShadowOffset(x, y) self.shadowOffset = {x, y} end
     function r:SetShadowColor(a, b, c, d) self.shadowColor = {a, b, c, d} end
     return r
@@ -142,7 +149,16 @@ function CreateFrame(kind, name, parent, template)
             error("Usage: " .. tostring(self.name) .. ':HookScript("type", function)')
         end
         self.hooks = self.hooks or {}
-        self.hooks[event] = fn
+        -- Le vrai ENCHAINE les greffons : chacun passe apres le precedent.
+        -- Le banc n'en gardait qu'un, et le dernier pose effacait les autres
+        -- (le volet de quetes et la minimap ecoutent tous deux la fermeture
+        -- de la carte).
+        local avant = self.hooks[event]
+        if avant then
+            self.hooks[event] = function(...) avant(...) fn(...) end
+        else
+            self.hooks[event] = fn
+        end
     end
     function f:GetScript(event) return self.scripts[event] end
     function f:GetName() return self.name end
@@ -177,6 +193,16 @@ function CreateFrame(kind, name, parent, template)
     function f:GetButtonState() return self.buttonState or "NORMAL" end
     function f:SetChecked(v) self.checked = v and true or false end
     function f:GetChecked() return self.checked end
+    -- Le vrai Click d'un CheckButton bascule la coche PUIS joue OnClick.
+    function f:Click()
+        if self.checked ~= nil or self.kind == "CheckButton" then self.checked = not self.checked end
+        if self.scripts.OnClick then self.scripts.OnClick(self, "LeftButton") end
+    end
+    function f:IsVisible() return self.shown ~= false end
+    function f:SetScrollChild(c) self.scrollChild = c end
+    function f:SetVerticalScroll(v) self.verticalScroll = v end
+    function f:GetVerticalScroll() return self.verticalScroll or 0 end
+    function f:SetFontObject(o) self.font = o end
     function f:GetCheckedTexture() return self._checked end
     function f:GetHighlightTexture() return self._highlight end
     function f:SetParent(p)
@@ -223,8 +249,19 @@ function CreateFrame(kind, name, parent, template)
     function f:SetAutoFocus(v) self.autoFocus = v end
     function f:SetMaxLetters(v) self.maxLetters = v end
     function f:SetTextInsets(a, b, c, d) self.insets = {a, b, c, d} end
-    function f:SetText(t) self.text = t end
-    function f:GetText() return self.text or "" end
+    -- Le vrai SetText d'un bouton ecrit dans sa FontString et ne touche a
+    -- AUCUN champ Lua du cadre. Le faux ecrasait `text` : un bouton qui y
+    -- rangeait sa FontString (bouton.text = fs, comme les NavButton de
+    -- camelot) la perdait au premier SetText.
+    function f:SetText(t)
+        if self.fontString then self.fontString:SetText(t) end
+        if type(self.text) ~= "table" then self.text = t end
+    end
+    function f:GetText()
+        if self.fontString then return self.fontString:GetText() or "" end
+        if type(self.text) == "table" then return "" end
+        return self.text or ""
+    end
     function f:HasFocus() return self.focused end
     function f:SetFocus() self.focused = true end
     function f:ClearFocus() self.focused = false end
@@ -250,12 +287,16 @@ function CreateFrame(kind, name, parent, template)
     function f:SetValue(v) self.value = v end
     function f:GetValue() return self.value or 0 end
     function f:SetStatusBarTexture(t) self.barTexture = t end
+    function f:SetStatusBarColor(r, v, b) self.barColor = { r, v, b } end
     function f:SetJustifyH(j) self.justify = j end
     function f:SetFontString(fs) self.fontString = fs end
     function f:GetFontString() return self.fontString end
     function f:SetAttribute(k, v) self.attributes[k] = v end
     function f:GetAttribute(k) return self.attributes[k] end
-    function f:StartMoving() self.moving = true end
+    -- Un cadre deplace par StartMoving devient "place par l'utilisateur" : le
+    -- client retient alors sa position.
+    function f:StartMoving() self.moving = true; self.userPlaced = true end
+    function f:IsUserPlaced() return self.userPlaced == true end
     function f:StopMovingOrSizing() self.moving = false end
     function f:CreateTexture(n, layer)
         local t = newRegion("texture"); t.layer = layer; t.owner = self
@@ -359,7 +400,19 @@ function SetPortraitTexture(texture, unit)
 end
 -- Ce que fait le vrai : UIDropDownMenu_InitializeHelper finit par
 -- frame:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2).
-function UIDropDownMenu_Initialize(cadre)
+-- Le vrai n'ouvre rien : il retient la fonction qui remplira la liste. Le
+-- banc la garde pour pouvoir la jouer.
+function UIDropDownMenu_Initialize(cadre, fonction, mode)
+    if cadre then cadre.initFn, cadre.menuMode = fonction, mode end
+    -- le vrai ecrit frame.displayMode = "MENU" (UIDropDownMenu.lua:85) ; le
+    -- banc ne le faisait pas, et un menu contextuel passait pour un menu
+    -- deroulant
+    if cadre and mode == "MENU" then cadre.displayMode = "MENU" end
+    -- et il vide la liste avant qu'on la remplisse
+    for niveau = 1, 2 do
+        local liste = _G["DropDownList" .. niveau]
+        if liste then liste.numButtons = 0 end
+    end
     if cadre and cadre.SetHeight then
         cadre:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)
     end
@@ -478,12 +531,17 @@ function ToggleDropDownMenu() end
 -- une interface qui change un intitule sous un curseur immobile doit la
 -- redemander depuis le meme bouton.
 GameTooltip = {
+    ClearAllPoints = function() end,
+    SetPoint = function() end,
     SetOwner = function(self, cadre, ancre)
         self.owner, self.anchor = cadre, ancre
     end,
     GetOwner = function(self) return self.owner end,
     SetText = function(self, texte) self.text = texte end,
-    AddLine = function() end,
+    AddLine = function(self, texte)
+        self.lignes = self.lignes or {}
+        table.insert(self.lignes, texte)
+    end,
     Show = function(self) self.shown = true end,
     Hide = function(self) self.shown = false end,
 }
@@ -667,6 +725,687 @@ MiniMapWorldMapButton = CreateFrame("Button", "MiniMapWorldMapButton", MinimapBa
 MiniMapLFGFrame = CreateFrame("Button", "MiniMapLFGFrame", MinimapBackdrop)
 MiniMapBattlefieldFrame = CreateFrame("Button", "MiniMapBattlefieldFrame", Minimap)
 MiniMapRecordingButton = CreateFrame("Button", "MiniMapRecordingButton", MinimapBackdrop)
+
+-- LA CARTE DU MONDE DE WOTLK (WorldMapFrame.xml / .lua, patch-enUS-3). Les
+-- fonctions ci-dessous recopient ce que le vrai fait aux cadres qu'on touche,
+-- Y COMPRIS ce qu'il remontre de lui-meme : SetOpacity rend son alpha a la
+-- bordure, UpdateMap remontre le menu des etages, DisplayQuests la case de
+-- suivi.
+function SetCVar(nom, valeur) STATE.cvars[nom] = valeur end
+function PlaySound() end
+-- 3.3.5 expose string.format en global (FrameXML s'en sert partout)
+format = format or string.format
+strupper = string.upper
+FLOOR_NUMBER = "Area %d"
+MAP_QUEST_DIFFICULTY_TEXT = "Quest Difficulty Color"
+SHOW_QUEST_OBJECTIVES_ON_MAP_TEXT = "Show Quest Objectives"
+MAP_QUEST_DIFFICULTY = "0"
+WORLDMAP_POI_FRAMELEVEL = 100
+WORLDMAP_WINDOWED_SIZE = 0.573
+WORLDMAP_QUESTLIST_SIZE = 0.691
+WORLDMAP_FULLMAP_SIZE = 1.0
+WORLDMAP_WORLD_ID = 0
+WORLDMAP_SETTINGS = { opacity = 0, locked = true, advanced = nil, size = WORLDMAP_QUESTLIST_SIZE }
+CARTE = { continent = 2, zone = 5, etages = 0, etage = 0, zooms = {} }
+function GetCurrentMapContinent() return CARTE.continent end
+function GetCurrentMapZone() return CARTE.zone end
+function GetMapContinents() return "Kalimdor", "Eastern Kingdoms", "Outland", "Northrend" end
+function GetMapZones(c) return "Alterac Mountains", "Arathi Highlands", "Badlands", "Blasted Lands", "Burning Steppes" end
+function SetMapZoom(c, z) table.insert(CARTE.zooms, { c, z }) end
+function GetNumDungeonMapLevels() return CARTE.etages end
+function GetCurrentMapDungeonLevel() return CARTE.etage end
+function SetDungeonMapLevel(n) CARTE.etage = n end
+function GetMapInfo() return "Ulduar" end
+function DungeonUsesTerrainMap() return false end
+function SetPortraitToTexture(t, chemin) t.portrait = chemin; t.texture = chemin end
+
+WorldMapFrame = CreateFrame("Frame", "WorldMapFrame", UIParent)
+WorldMapFrame:SetFrameLevel(87)
+WorldMapFrame:Hide()
+BlackoutWorld = WorldMapFrame:CreateTexture("BlackoutWorld", "BACKGROUND")
+WorldMapFrameMiniBorderLeft = WorldMapFrame:CreateTexture("WorldMapFrameMiniBorderLeft", "ARTWORK")
+WorldMapFrameMiniBorderLeft:SetTexture("Interface\\\\WorldMap\\\\UI-WorldMapSmall-Left")
+WorldMapFrameMiniBorderRight = WorldMapFrame:CreateTexture("WorldMapFrameMiniBorderRight", "ARTWORK")
+WorldMapFrameMiniBorderRight:SetTexture("Interface\\\\WorldMap\\\\UI-WorldMapSmall-Right")
+WorldMapFrameTitle = WorldMapFrame:CreateFontString("WorldMapFrameTitle", "ARTWORK")
+WorldMapFrameTitle:SetFontObject("GameFontNormal")
+WorldMapFrameTitle:SetText("World Map")
+WorldMapPositioningGuide = CreateFrame("Frame", "WorldMapPositioningGuide", WorldMapFrame)
+WorldMapDetailFrame = CreateFrame("Frame", "WorldMapDetailFrame", WorldMapFrame)
+WorldMapDetailFrame:SetWidth(1002) WorldMapDetailFrame:SetHeight(668)
+WorldMapBlobFrame = CreateFrame("Frame", "WorldMapBlobFrame", WorldMapDetailFrame)
+-- Douze tuiles de 256 x 256 en 4 x 3 (WorldMapFrame.xml:541-636) : 1024 x 768
+-- pour une carte utile de 1002 x 668.
+for i = 1, 12 do
+    local t = WorldMapDetailFrame:CreateTexture("WorldMapDetailTile" .. i, "BACKGROUND")
+    t:SetWidth(256) t:SetHeight(256)
+    _G["WorldMapDetailTile" .. i] = t
+end
+-- WorldMapFrame_Update recharge chaque tuile par SetTexture. Le banc suppose
+-- le pire : que le rechargement rende a la tuile ses coordonnees entieres.
+function WorldMapFrame_Update()
+    for i = 1, 12 do
+        local t = _G["WorldMapDetailTile" .. i]
+        local bs = string.char(92)
+        t:SetTexture("Interface" .. bs .. "WorldMap" .. bs .. "Azeroth" .. i)
+        t:SetTexCoord(0, 1, 0, 1)
+    end
+end
+WorldMapButton = CreateFrame("Button", "WorldMapButton", WorldMapDetailFrame)
+WorldMapButton:SetWidth(1002) WorldMapButton:SetHeight(668)
+WorldMapPOIFrame = CreateFrame("Frame", "WorldMapPOIFrame", WorldMapDetailFrame)
+WorldMapFrameAreaFrame = CreateFrame("Frame", "WorldMapFrameAreaFrame", WorldMapButton)
+WorldMapTitleButton = CreateFrame("Button", "WorldMapTitleButton", WorldMapFrame)
+WorldMapTitleButton:SetWidth(544) WorldMapTitleButton:SetHeight(22)
+-- UIPanelCloseButton : Normal, Pushed, Highlight.
+WorldMapFrameCloseButton = CreateFrame("Button", "WorldMapFrameCloseButton", WorldMapFrame)
+WorldMapFrameCloseButton:SetNormalTexture("fermeture-up")
+WorldMapFrameCloseButton:SetPushedTexture("fermeture-down")
+WorldMapFrameCloseButton:SetHighlightTexture("fermeture-highlight")
+-- Les deux boutons de taille : Normal, Pushed, Highlight (WorldMapFrame.xml:506-526).
+for _, nom in ipairs({ "WorldMapFrameSizeDownButton", "WorldMapFrameSizeUpButton" }) do
+    local b = CreateFrame("Button", nom, WorldMapFrame)
+    b:SetWidth(32) b:SetHeight(32)
+    b:SetNormalTexture("taille-up") b:SetPushedTexture("taille-down") b:SetHighlightTexture("taille-highlight")
+end
+WorldMapQuestShowObjectives = CreateFrame("CheckButton", "WorldMapQuestShowObjectives", WorldMapFrame)
+WorldMapQuestShowObjectives.kind = "CheckButton"
+WorldMapQuestShowObjectives.checked = true
+WorldMapQuestShowObjectives:SetScript("OnClick", function(self)
+    SetCVar("questPOI", self:GetChecked() and "1" or "0")
+    WatchFrame.showObjectives = self:GetChecked()
+end)
+WorldMapTrackQuest = CreateFrame("CheckButton", "WorldMapTrackQuest", WorldMapFrame)
+WorldMapLevelDropDown = CreateFrame("Frame", "WorldMapLevelDropDown", WorldMapFrame)
+WatchFrame = WatchFrame or CreateFrame("Frame", "WatchFrame", UIParent)
+WatchFrame.showObjectives = true
+
+function WorldMapFrame_ResetFrameLevels()
+    WorldMapFrame:SetFrameLevel(WORLDMAP_POI_FRAMELEVEL - 13)
+    WorldMapDetailFrame:SetFrameLevel(WORLDMAP_POI_FRAMELEVEL - 12)
+    WorldMapBlobFrame:SetFrameLevel(WORLDMAP_POI_FRAMELEVEL - 11)
+    WorldMapButton:SetFrameLevel(WORLDMAP_POI_FRAMELEVEL - 10)
+    WorldMapPOIFrame:SetFrameLevel(WORLDMAP_POI_FRAMELEVEL)
+end
+function WorldMapFrame_SetOpacity(opacity)
+    local alpha = 0.5 + (1.0 - opacity) * 0.50
+    WorldMapFrameMiniBorderLeft:SetAlpha(alpha)
+    WorldMapFrameMiniBorderRight:SetAlpha(alpha)
+    WorldMapFrameSizeUpButton:SetAlpha(alpha)
+    WorldMapFrameCloseButton:SetAlpha(alpha)
+end
+function WorldMapFrame_SetMiniMode()
+    WorldMapFrame:ClearAllPoints()
+    if WORLDMAP_SETTINGS.advanced then
+        WorldMapFrame:SetAttribute("UIPanelLayout-area", "center")
+        WorldMapFrame:SetAttribute("UIPanelLayout-allowOtherPanels", true)
+        WorldMapFrame:SetMovable("true")
+        WorldMapFrame:SetWidth(593)
+        WorldMapFrame:SetPoint("TOPLEFT", WorldMapScreenAnchor, 0, 0)
+        WorldMapFrameMiniBorderLeft:SetPoint("TOPLEFT", 0, 0)
+        WorldMapDetailFrame:SetPoint("TOPLEFT", 19, -42)
+    else
+        WorldMapFrame:SetAttribute("UIPanelLayout-area", "doublewide")
+        WorldMapFrame:SetAttribute("UIPanelLayout-allowOtherPanels", false)
+        -- "false" est une CHAINE, donc vraie en Lua : comme dans le vrai
+        WorldMapFrame:SetMovable("false")
+        WorldMapFrame:SetWidth(623)
+        WorldMapFrameMiniBorderLeft:SetPoint("TOPLEFT", 10, -14)
+        -- tel quel dans le vrai : SANS ClearAllPoints, le point s'ajoute
+        WorldMapDetailFrame:SetPoint("TOPLEFT", 37, -66)
+    end
+    WorldMapFrame:SetHeight(437)
+end
+-- WorldMapScreenAnchor : 1 x 1, deplacable, au coin haut-gauche (XML:1148).
+WorldMapScreenAnchor = CreateFrame("Frame", "WorldMapScreenAnchor", UIParent)
+WorldMapScreenAnchor:SetMovable(true)
+WorldMapScreenAnchor:SetPoint("TOPLEFT")
+-- La barre de titre : elle ne fait glisser la carte qu'en mode avance et
+-- deverrouille (WorldMapFrame.lua:2062-2085).
+WorldMapTitleButton:SetScript("OnDragStart", function()
+    if WORLDMAP_SETTINGS.advanced and not WORLDMAP_SETTINGS.locked then
+        WorldMapScreenAnchor:ClearAllPoints()
+        WorldMapFrame:ClearAllPoints()
+        WorldMapFrame:StartMoving()
+    end
+end)
+WorldMapTitleButton:SetScript("OnDragStop", function()
+    if WORLDMAP_SETTINGS.advanced and not WORLDMAP_SETTINGS.locked then
+        WorldMapFrame:StopMovingOrSizing()
+        WorldMapScreenAnchor:StartMoving()
+        WorldMapScreenAnchor:SetPoint("TOPLEFT", WorldMapFrame)
+        WorldMapScreenAnchor:StopMovingOrSizing()
+    end
+end)
+function WorldMap_ToggleSizeDown()
+    WORLDMAP_SETTINGS.size = WORLDMAP_WINDOWED_SIZE
+    WorldMapFrame:SetParent(UIParent)
+    WorldMapFrame_ResetFrameLevels()
+    WorldMapDetailFrame:SetScale(WORLDMAP_WINDOWED_SIZE)
+    WorldMapButton:SetScale(WORLDMAP_WINDOWED_SIZE)
+    WorldMapFrameAreaFrame:SetScale(WORLDMAP_WINDOWED_SIZE)
+    WorldMapBlobFrame:SetScale(WORLDMAP_WINDOWED_SIZE)
+    BlackoutWorld:Hide()
+    WorldMapQuestShowObjectives:Show()
+    WorldMapFrameSizeDownButton:Hide()
+    WorldMapTitleButton:Show()
+    WorldMapFrameMiniBorderLeft:Show()
+    WorldMapFrameMiniBorderRight:Show()
+    WorldMapFrameSizeUpButton:Show()
+    WorldMapFrameCloseButton:SetPoint("TOPRIGHT", WorldMapFrameMiniBorderRight, "TOPRIGHT", -44, 5)
+    WorldMapFrameTitle:ClearAllPoints()
+    WorldMapFrameTitle:SetPoint("TOP", WorldMapDetailFrame, 0, 20)
+    WorldMapFrame_SetMiniMode()
+    WorldMapFrame_SetOpacity(WORLDMAP_SETTINGS.opacity)
+end
+function WorldMap_ToggleSizeUp()
+    WORLDMAP_SETTINGS.size = WORLDMAP_QUESTLIST_SIZE
+    WorldMapFrame:SetParent(nil)
+    WorldMapFrame_ResetFrameLevels()
+    WorldMapFrame:ClearAllPoints()
+    WorldMapDetailFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    WorldMapButton:SetScale(WORLDMAP_QUESTLIST_SIZE)
+    BlackoutWorld:Show()
+    WorldMapFrameMiniBorderLeft:Hide()
+    WorldMapFrameMiniBorderRight:Hide()
+    WorldMapFrameSizeUpButton:Hide()
+    WorldMapFrameSizeDownButton:Show()
+    WorldMapFrameTitle:ClearAllPoints()
+    WorldMapFrameTitle:SetPoint("CENTER", 0, 372)
+    WorldMapFrame_SetOpacity(0)
+end
+function WorldMapLevelDropDown_Update()
+    if GetNumDungeonMapLevels() == 0 then
+        WorldMapLevelDropDown:Hide()
+    else
+        WorldMapLevelDropDown:Show()
+    end
+end
+function WorldMapFrame_SetMapName()
+    local nom = "World Map"
+    if WORLDMAP_SETTINGS.size == WORLDMAP_WINDOWED_SIZE then nom = "Burning Steppes" end
+    WorldMapFrameTitle:SetText(nom)
+end
+function WorldMapFrame_DisplayQuests()
+    WorldMapTrackQuest:Show()
+end
+-- (redefinie avec la selection plus bas, apres les reperes)
+function WorldMapFrame_ResetQuestColors() end
+function WorldMapFrame_UpdateMap(questId)
+    WorldMapFrame_Update()
+    WorldMapLevelDropDown_Update()
+    WorldMapFrame_SetMapName()
+    if WatchFrame.showObjectives then WorldMapFrame_DisplayQuests(questId) end
+end
+
+-- LE JOURNAL DE QUETES DE 3.3.5. Un en-tete REPLIE retire ses quetes de la
+-- liste que rendent GetNumQuestLogEntries et GetQuestLogTitle : c'est ce qui
+-- oblige a tout deplier pour chercher.
+JOURNAL = {
+    { title = "Elwynn Forest", header = true, collapsed = false },
+    { title = "A Threat Within", level = 5, questID = 783, objectifs = { { "Kobold Vermin slain: 3/10", false }, { "Report found", true } } },
+    { title = "The Fargodeep Mine", level = 12, tag = "Elite", questID = 62, objectifs = { { "Explore the mine", false }, { "Kobolds slain: 5/5", true } },
+      description = "Kobolds have overrun the mine.", texte = "Explore the Fargodeep Mine.", groupe = 3, temps = 125,
+      choix = { { "Mining Pick", "icone:pioche", 1, 2, true }, { "Leather Boots", "icone:bottes", 1, 3, false } },
+      recompenses = { { "Linen Cloth", "icone:lin", 5, 1, true } }, argent = 250, xp = 850, honneur = 12,
+      partageable = true, objet = { "icone:pioche", 3 }, minuteur = 90 },
+    { title = "Westfall", header = true, collapsed = true },
+    { title = "The People's Militia", level = 14, complete = 1, questID = 12, objectifs = {} },
+}
+SUIVIES = {}
+SELECTION = 0
+REPLIS = {}
+local function visibles()
+    local l, dansReplie = {}, false
+    for _, e in ipairs(JOURNAL) do
+        if e.header then
+            table.insert(l, e)
+            dansReplie = e.collapsed
+        elseif not dansReplie then
+            table.insert(l, e)
+        end
+    end
+    return l
+end
+function GetNumQuestLogEntries()
+    local n, q = 0, 0
+    for _, e in ipairs(visibles()) do
+        n = n + 1
+    end
+    for _, e in ipairs(JOURNAL) do if not e.header then q = q + 1 end end
+    return n, q
+end
+function GetQuestLogTitle(i)
+    local e = visibles()[i]
+    if not e then return nil end
+    if e.header then return e.title, 0, nil, 0, 1, e.collapsed and 1 or nil end
+    return e.title, e.level, e.tag, 0, nil, nil, e.complete, nil, e.questID
+end
+function ExpandQuestHeader(i) local e = visibles()[i]; e.collapsed = false; table.insert(REPLIS, "+" .. e.title) end
+function CollapseQuestHeader(i) local e = visibles()[i]; e.collapsed = true; table.insert(REPLIS, "-" .. e.title) end
+-- Sans index, 3.3.5 repond pour la quete CHOISIE (SelectQuestLogEntry).
+function GetNumQuestLeaderBoards(i) local e = visibles()[i or SELECTION]; return e and e.objectifs and #e.objectifs or 0 end
+function GetQuestLogLeaderBoard(j, i)
+    local o = visibles()[i or SELECTION].objectifs[j]
+    return o[1], "monster", o[2] and 1 or nil
+end
+function GetQuestLogRequiredMoney() return 0 end
+function GetMoney() return 0 end
+function GetMoneyString(v) return tostring(v) end
+function GetQuestLogCompletionText(i) return "Return to Gryan Stoutmantle." end
+function GetQuestLogSelection() return SELECTION end
+function SelectQuestLogEntry(i) SELECTION = i end
+function GetQuestLogQuestText() local e = visibles()[SELECTION]; return e and e.description or "", e and e.texte or "" end
+-- LA PAGE D'UNE QUETE : tout ce que 3.3.5 dit de la quete CHOISIE.
+local function choisie() return visibles()[SELECTION] or {} end
+function GetQuestLogTimeLeft() return choisie().temps end
+function GetQuestLogGroupNum() return choisie().groupe or 0 end
+function GetNumQuestLogRewards() return #(choisie().recompenses or {}) end
+function GetNumQuestLogChoices() return #(choisie().choix or {}) end
+function GetQuestLogRewardInfo(i) local o = choisie().recompenses[i]; return o[1], o[2], o[3], o[4], o[5] end
+function GetQuestLogChoiceInfo(i) local o = choisie().choix[i]; return o[1], o[2], o[3], o[4], o[5] end
+function GetQuestLogRewardMoney() return choisie().argent or 0 end
+function GetQuestLogRewardXP() return choisie().xp or 0 end
+function GetQuestLogRewardHonor() return choisie().honneur or 0 end
+function GetQuestLogRewardArenaPoints() return 0 end
+function GetQuestLogRewardTitle() return choisie().titreJoueur end
+function GetQuestLogRewardSpell() local s = choisie().sort; if s then return s[1], s[2], s[3], s[4] end end
+function GetQuestLogItemLink(t, i) return "lien:" .. t .. i end
+function GetQuestLogSpellLink() return "lien:sort" end
+-- SetAbandonQuest retient la quete choisie ; GetAbandonQuestName la nomme.
+ABANDON = 0
+function SetAbandonQuest() ABANDON = SELECTION end
+function GetAbandonQuestName() local e = visibles()[ABANDON]; return e and not e.header and e.title or nil end
+function GetAbandonQuestItems() return nil end
+function GetQuestLogPushable() return choisie().partageable end
+function QuestLogPushQuest() end
+POPUPS_CACHES = {}
+function StaticPopup_Hide(quoi) table.insert(POPUPS_CACHES, quoi) end
+-- MoneyFrame.lua : le porte-monnaie par son NOM
+function MoneyFrame_Update(nom, v) _G[nom].argent = v end
+function MoneyFrame_SetType(f, t) f.moneyType = t end
+function SetMoneyFrameColor(nom, c) _G[nom].couleur = c end
+function SecondsToTime(s) return tostring(math.floor(s)) .. " sec" end
+function HandleModifiedItemClick(lien) LIEN_CLIQUE = lien end
+function GameTooltip_ShowCompareItem() end
+GameTooltip.SetQuestLogItem = function(self, t, i) self.objetQuete = { t, i } end
+GameTooltip.SetQuestLogRewardSpell = function(self) self.sortQuete = true end
+TIME_REMAINING = "Time Remaining:"
+BACK = "Back"
+ABANDON_QUEST_ABBREV = "Abandon"
+SHARE_QUEST_ABBREV = "Share"
+TRACK_QUEST_ABBREV = "Track"
+QUEST_DESCRIPTION = "Description"
+REQUIRED_MONEY = "Required Money:"
+REWARD_ITEMS = "You will also receive:"
+REWARD_ITEMS_ONLY = "You will receive:"
+REWARD_CHOICES = "You will be able to choose one of these rewards:"
+REWARD_TITLE = "You shall be granted the title:"
+REWARD_SPELL = "You will learn:"
+REWARD_AURA = "The following spell will be cast on you:"
+REWARD_TRADESKILL_SPELL = "You will learn how to create:"
+QUEST_SUGGESTED_GROUP_NUM = "Suggested Players [%d]"
+COMPLETE = "Complete"
+HONOR = "Honor"
+HONOR_POINTS = "Honor Points"
+ARENA_POINTS = "Arena Points"
+function IsQuestWatched(i) return SUIVIES[visibles()[i].title] and 1 or nil end
+function AddQuestWatch(i) SUIVIES[visibles()[i].title] = true end
+function RemoveQuestWatch(i) SUIVIES[visibles()[i].title] = nil end
+function GetNumQuestWatches() local n = 0 for _ in pairs(SUIVIES) do n = n + 1 end return n end
+-- LE SUIVI DE QUETES DE 3.3.5 (WatchFrame.xml / WatchFrame.lua, chaine
+-- d'archives). Recopie pour ce que ForeverUI touche : le cadre et ses fils,
+-- WatchFrame_Update qui appelle les GESTIONNAIRES d'objectifs, repli,
+-- largeur, filtres, et les fonctions de menu.
+-- 3.3.5 porte table.wipe (alias de wipe) ; Lua 5.5 non
+table.wipe = table.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
+bit = bit or { band = function(a, b)
+    local r, m = 0, 1
+    while a > 0 and b > 0 do
+        if a % 2 == 1 and b % 2 == 1 then r = r + m end
+        a, b, m = math.floor(a / 2), math.floor(b / 2), m * 2
+    end
+    return r
+end }
+WatchFrame:SetWidth(204) WatchFrame:SetHeight(500)
+WatchFrame._top, WatchFrame._bottom = 700, 200
+WatchFrameLines = CreateFrame("Frame", "WatchFrameLines", WatchFrame)
+WatchFrameLines:SetPoint("TOPLEFT", WatchFrame, "TOPLEFT", 0, -30)
+WatchFrameLines:SetPoint("BOTTOMRIGHT", WatchFrame, "BOTTOMRIGHT", -24, 12)
+WatchFrameHeader = CreateFrame("Button", "WatchFrameHeader", WatchFrame)
+WatchFrameTitle = WatchFrameHeader:CreateFontString("WatchFrameTitle", "OVERLAY", "GameFontNormal")
+WatchFrameCollapseExpandButton = CreateFrame("Button", "WatchFrameCollapseExpandButton", WatchFrame)
+WatchFrameCollapseExpandButton:SetNormalTexture("quest-hide-button")
+WatchFrameCollapseExpandButton:SetPushedTexture("quest-hide-button")
+OBJECTIVES_TRACKER_LABEL = "Objectives"
+WATCHFRAME_COLLAPSEDWIDTH = 140
+WATCHFRAME_EXPANDEDWIDTH = 204
+WATCHFRAME_MAXLINEWIDTH = 192
+WATCHFRAME_INITIAL_OFFSET = 0
+WATCHFRAME_TYPE_OFFSET = 10
+WATCHFRAME_NUM_ITEMS = 0
+WATCHFRAME_OBJECTIVEHANDLERS = {}
+WATCHFRAME_TIMEDCRITERIA = {}
+WATCHFRAME_ACHIEVEMENT_ARENA_CATEGORY = 165
+WATCHFRAME_SORT_PROXIMITY, WATCHFRAME_SORT_DIFFICULTY_HIGH, WATCHFRAME_SORT_DIFFICULTY_LOW, WATCHFRAME_SORT_MANUAL = 1, 2, 3, 0
+WATCHFRAME_FILTER_ACHIEVEMENTS, WATCHFRAME_FILTER_COMPLETED_QUESTS, WATCHFRAME_FILTER_REMOTE_ZONES = 1, 2, 4
+WATCHFRAME_SORT_TYPE = 0
+WATCHFRAME_FILTER_TYPE = 7
+CURRENT_MAP_QUESTS = { [783] = 1 }
+LOCAL_MAP_QUESTS = {}
+VISIBLE_WATCHES = {}
+ACHIEVEMENT_CRITERIA_PROGRESS_BAR = 1
+TRACKER_SORT_LABEL = "Sort Quests"
+TRACKER_SORT_PROXIMITY = "Proximity"
+TRACKER_SORT_DIFFICULTY_HIGH = "Difficulty High"
+TRACKER_SORT_DIFFICULTY_LOW = "Difficulty Low"
+TRACKER_SORT_MANUAL = "Manual"
+TRACKER_FILTER_LABEL = "Display"
+TRACKER_FILTER_ACHIEVEMENTS = "Achievements"
+TRACKER_FILTER_COMPLETED_QUESTS = "Completed Quests"
+TRACKER_FILTER_REMOTE_ZONES = "Remote Zones"
+TRACKER_SORT_MANUAL_UP = "Move Up"
+TRACKER_SORT_MANUAL_TOP = "Move to Top"
+TRACKER_SORT_MANUAL_DOWN = "Move Down"
+TRACKER_SORT_MANUAL_BOTTOM = "Move to Bottom"
+GameFontHighlightMedium = "GameFontHighlightMedium"
+function WatchFrame_AddObjectiveHandler(func)
+    for i = 1, #WATCHFRAME_OBJECTIVEHANDLERS do
+        if WATCHFRAME_OBJECTIVEHANDLERS[i] == func then return end
+    end
+    table.insert(WATCHFRAME_OBJECTIVEHANDLERS, func)
+    return true
+end
+function WatchFrame_RemoveObjectiveHandler(func)
+    for i = 1, #WATCHFRAME_OBJECTIVEHANDLERS do
+        if WATCHFRAME_OBJECTIVEHANDLERS[i] == func then
+            table.remove(WATCHFRAME_OBJECTIVEHANDLERS, i)
+            return true
+        end
+    end
+end
+-- les trois gestionnaires d'affichage de WotLK : ils ne doivent plus tourner
+WOTLK_DESSINE = 0
+function WatchFrame_HandleDisplayQuestTimers() WOTLK_DESSINE = WOTLK_DESSINE + 1 return 0, 0, 0 end
+function WatchFrame_HandleDisplayTrackedAchievements() WOTLK_DESSINE = WOTLK_DESSINE + 1 return 0, 0, 0 end
+function WatchFrame_DisplayTrackedQuests() WOTLK_DESSINE = WOTLK_DESSINE + 1 return 0, 0, 0 end
+WatchFrame_AddObjectiveHandler(WatchFrame_HandleDisplayQuestTimers)
+WatchFrame_AddObjectiveHandler(WatchFrame_HandleDisplayTrackedAchievements)
+WatchFrame_AddObjectiveHandler(WatchFrame_DisplayTrackedQuests)
+-- WatchFrame_Update, recopie (sans les boutons de lien, disparus avec les
+-- gestionnaires de WotLK)
+WATCHFRAME_DECALAGES = {}
+function WatchFrame_Update(self)
+    self = self or WatchFrame
+    if self.updating then return end
+    self.updating = true
+    self.watchMoney = false
+    local totalOffset = WATCHFRAME_INITIAL_OFFSET
+    local maxHeight = WatchFrame:GetTop() - WatchFrame:GetBottom()
+    local totalObjectives = 0
+    WATCHFRAME_DECALAGES = {}
+    for i = 1, #WATCHFRAME_OBJECTIVEHANDLERS do
+        table.insert(WATCHFRAME_DECALAGES, totalOffset)
+        local pixelsUsed, maxLineWidth, numObjectives = WATCHFRAME_OBJECTIVEHANDLERS[i](WatchFrameLines, totalOffset, maxHeight, WATCHFRAME_MAXLINEWIDTH)
+        totalObjectives = totalObjectives + numObjectives
+        if pixelsUsed > 0 then
+            totalOffset = totalOffset - WATCHFRAME_TYPE_OFFSET - pixelsUsed
+        end
+    end
+    if totalObjectives > 0 then
+        WatchFrameHeader:Show()
+        WatchFrameCollapseExpandButton:Show()
+        WatchFrameTitle:SetText(OBJECTIVES_TRACKER_LABEL .. " (" .. totalObjectives .. ")")
+        if totalOffset < WATCHFRAME_INITIAL_OFFSET then
+            if self.collapsed and not self.userCollapsed then WatchFrame_Expand(self) end
+            WatchFrameCollapseExpandButton:Enable()
+        else
+            if not self.collapsed then WatchFrame_Collapse(self) end
+            WatchFrameCollapseExpandButton:Disable()
+        end
+    else
+        WatchFrameHeader:Hide()
+        WatchFrameCollapseExpandButton:Hide()
+    end
+    self.updating = nil
+    self.nextOffset = totalOffset
+end
+function WatchFrame_Collapse(self)
+    self.collapsed = true
+    self:SetWidth(WATCHFRAME_COLLAPSEDWIDTH)
+    WatchFrameLines:Hide()
+end
+function WatchFrame_Expand(self)
+    self.collapsed = nil
+    self:SetWidth(WATCHFRAME_EXPANDEDWIDTH)
+    WatchFrameLines:Show()
+    WatchFrame_Update(self)
+end
+function WatchFrame_SetWidth(width)
+    if width == "0" then
+        WATCHFRAME_EXPANDEDWIDTH = 204
+        WATCHFRAME_MAXLINEWIDTH = 192
+    else
+        WATCHFRAME_EXPANDEDWIDTH = 306
+        WATCHFRAME_MAXLINEWIDTH = 294
+    end
+    if WatchFrame:IsShown() and not WatchFrame.collapsed then
+        WatchFrame:SetWidth(WATCHFRAME_EXPANDEDWIDTH)
+        WatchFrame_Update()
+    end
+end
+function WatchFrame_ReverseQuestObjective(text)
+    local _, _, arg1, arg2 = string.find(text, "(.*):%s(.*)")
+    if arg1 and arg2 then return arg2 .. " " .. arg1 end
+    return text
+end
+function WatchFrame_GetVisibleIndex(questLogIndex)
+    for i = 1, #VISIBLE_WATCHES do
+        if VISIBLE_WATCHES[i] == questLogIndex then return i end
+    end
+end
+SUIVI_APPELS = {}
+function WatchFrame_MoveQuest(button, questLogIndex, numMoves) table.insert(SUIVI_APPELS, "deplacer " .. questLogIndex .. " " .. numMoves) end
+function WatchFrame_StopTrackingQuest(button, arg1) table.insert(SUIVI_APPELS, "ne plus suivre " .. arg1) end
+function WatchFrame_OpenMapToQuest(button, arg1) table.insert(SUIVI_APPELS, "carte " .. arg1) end
+function WatchFrame_ShareQuest(button, arg1) table.insert(SUIVI_APPELS, "partager " .. arg1) end
+function WatchFrame_AbandonQuest(button, arg1) table.insert(SUIVI_APPELS, "abandonner " .. arg1) end
+function WatchFrame_OpenAchievementFrame(button, arg1) table.insert(SUIVI_APPELS, "haut fait " .. arg1) end
+function WatchFrame_StopTrackingAchievement(button, arg1) table.insert(SUIVI_APPELS, "ne plus suivre le haut fait " .. arg1) end
+function WatchFrame_SetSorting(button, arg1) WATCHFRAME_SORT_TYPE = arg1 WatchFrame_Update() end
+function WatchFrame_SetFilter(button, arg1)
+    if bit.band(WATCHFRAME_FILTER_TYPE, arg1) == arg1 then
+        WATCHFRAME_FILTER_TYPE = WATCHFRAME_FILTER_TYPE - arg1
+    else
+        WATCHFRAME_FILTER_TYPE = WATCHFRAME_FILTER_TYPE + arg1
+    end
+    WatchFrame_Update()
+end
+function WatchFrameItem_UpdateCooldown(b) end
+function SetItemButtonTexture(b, t) b.icone = t end
+function SetItemButtonCount(b, c) b.nombre = c end
+function CloseDropDownMenus() end
+function ChatEdit_GetActiveWindow() return nil end
+-- les quetes suivies, dans l'ordre du journal
+local function suivies()
+    local l = {}
+    for i, e in ipairs(visibles()) do
+        if not e.header and SUIVIES[e.title] then table.insert(l, i) end
+    end
+    return l
+end
+function GetQuestIndexForWatch(w) return suivies()[w] end
+function GetQuestSortIndex(i) return i end
+function GetQuestLogSpecialItemInfo(i)
+    local o = visibles()[i] and visibles()[i].objet
+    if o then return "lien:" .. o[1], o[1], o[2] end
+end
+-- GetQuestTimers rend les secondes RESTANTES, GetQuestIndexForTimer l'index
+function GetQuestTimers()
+    local r = {}
+    for i, e in ipairs(visibles()) do
+        if e.minuteur and SUIVIES[e.title] then table.insert(r, e.minuteur) end
+    end
+    return (table.unpack or unpack)(r)
+end
+function GetQuestIndexForTimer(n)
+    local k = 0
+    for i, e in ipairs(visibles()) do
+        if e.minuteur and SUIVIES[e.title] then
+            k = k + 1
+            if k == n then return i end
+        end
+    end
+end
+-- les hauts faits suivis
+HAUTS_FAITS = {
+    [1001] = { nom = "Explorer", description = "Explore the world.", criteres = {
+        { "Elwynn", false }, { "Westfall", true }, { "Duskwood", false }, { "Redridge", false },
+        { "Darkshire", false }, { "Stranglethorn", false }, { "Badlands", false }, { "Arathi", false } } },
+    [1002] = { nom = "Loremaster", description = "Complete 700 quests.", criteres = {} },
+}
+HAUTS_FAITS_SUIVIS = {}
+function GetTrackedAchievements() return (table.unpack or unpack)(HAUTS_FAITS_SUIVIS) end
+function GetAchievementInfo(id) local h = HAUTS_FAITS[id] return id, h.nom, 10, false, nil, nil, nil, h.description end
+function GetAchievementCategory(id) return 92 end
+function GetAchievementNumCriteria(id) return #HAUTS_FAITS[id].criteres end
+function GetAchievementCriteriaInfo(id, j)
+    local c = HAUTS_FAITS[id].criteres[j]
+    return c[1], 0, c[2], 0, 1, "", 0, 0, "0/1", id * 100 + j
+end
+function GetAchievementLink(id) return "haut fait:" .. id end
+function QuestPOI_HideButtons(parent, type, debut)
+    for i = debut, (POI_MAX[parent .. type] or 0) do
+        local b = _G["poi" .. parent .. type .. "_" .. i]
+        if b then b:Hide() end
+    end
+end
+function QuestPOI_SelectButtonByQuestId() end
+-- UIParent.lua de 3.3.5 : le suivi recolle sous MinimapCluster, et un point
+-- BOTTOMRIGHT sur le bas de l'ecran, a chaque passage
+CONTAINER_OFFSET_X, CONTAINER_OFFSET_Y = 0, 60
+PLACEMENTS_WOTLK = 0
+function UIParent_ManageFramePositions()
+    PLACEMENTS_WOTLK = PLACEMENTS_WOTLK + 1
+    if not WatchFrame:IsUserPlaced() then
+        WatchFrame:ClearAllPoints()
+        WatchFrame:SetPoint("TOPRIGHT", "MinimapCluster", "BOTTOMRIGHT", -CONTAINER_OFFSET_X, 20)
+    end
+    WatchFrame:SetPoint("BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -CONTAINER_OFFSET_X, CONTAINER_OFFSET_Y)
+end
+function GetQuestLink(i) return "[" .. visibles()[i].title .. "]" end
+function GetNumPartyMembers() return 0 end
+function GetNumRaidMembers() return 0 end
+function GetRealZoneText() return "Elwynn Forest" end
+function IsModifiedClick() return false end
+function IsShiftKeyDown() return false end
+function GetDailyQuestsCompleted() return 2 end
+function GetMaxDailyQuests() return 25 end
+MAX_WATCHABLE_QUESTS = 25
+MAX_QUESTLOG_QUESTS = 25
+RED_FONT_COLOR_CODE = "|cffff2020"
+ELITE = "Elite"
+PARENS_TEMPLATE = "(%s)"
+QUEST_DASH = "- "
+FAILED = "Failed"
+TRACK_QUEST = "Track Quest"
+SHARE_QUEST = "Share Quest"
+ABANDON_QUEST = "Abandon Quest"
+QUEST_WATCH_TOO_MANY = "You may only watch %d quests at a time."
+QUEST_LOG_DAILY_COUNT_TEMPLATE = "Daily: |cffffffff%d/%d|r"
+-- GetQuestDifficultyColor rend une des tables de QuestDifficultyColors
+QuestDifficultyColors = {
+    impossible = { r = 1, g = 0.1, b = 0.1 }, verydifficult = { r = 1, g = 0.5, b = 0.25 },
+    difficult = { r = 1, g = 1, b = 0 }, standard = { r = 0.25, g = 0.75, b = 0.25 },
+    trivial = { r = 0.5, g = 0.5, b = 0.5 }, header = { r = 0.7, g = 0.7, b = 0.7 },
+}
+function GetQuestDifficultyColor(niveau)
+    if niveau >= 12 then return QuestDifficultyColors.verydifficult end
+    return QuestDifficultyColors.standard
+end
+-- LES REPERES DE QUETE (QuestPOI.lua de 3.3.5, recopie pour ce qu'on touche) :
+-- un bouton par parent, type et numero, cree a la demande et nomme
+-- "poi" .. parent .. type .. "_" .. numero.
+QUEST_POI_NUMERIC, QUEST_POI_COMPLETE_IN, QUEST_POI_COMPLETE_OUT, QUEST_POI_COMPLETE_SWAP = 1, 2, 3, 4
+POI_MAX = {}
+POI_CHOISI = {}
+function QuestPOI_DisplayButton(parent, type, index, questId)
+    local nom = "poi" .. parent .. type .. "_" .. index
+    local b = _G[nom]
+    if not b then
+        b = CreateFrame("Button", nom, _G[parent])
+        b:SetWidth(32) b:SetHeight(32)
+        b.index, b.type, b.parentName = index, type, parent
+        POI_MAX[parent .. type] = math.max(POI_MAX[parent .. type] or 0, index)
+    end
+    b.questId = questId
+    b.isSelected = false
+    b:Show()
+    return b
+end
+function QuestPOI_HideAllButtons(parent)
+    for type = 1, 4 do
+        for i = 1, (POI_MAX[parent .. type] or 0) do
+            local b = _G["poi" .. parent .. type .. "_" .. i]
+            if b then b:Hide() end
+        end
+    end
+end
+function QuestPOI_SelectButton(b)
+    if b then
+        local avant = POI_CHOISI[b.parentName]
+        if avant and avant ~= b then avant.isSelected = false end
+        POI_CHOISI[b.parentName] = b
+        b.isSelected = true
+    end
+end
+-- la tache de zone : le QuestPOIFrame du moteur
+ZONES = {}
+function WorldMapBlobFrame:DrawQuestBlob(questId, montrer) ZONES[questId] = montrer end
+-- WorldMapFrame_UpdateQuests : les quetes qui ont un repere sur la carte
+-- AFFICHEE. Ici : 783 et 12 (terminee) ; 62 n'a pas de repere sur cette carte.
+CARTE_QUETES = { { id = 783, index = 2, termine = false }, { id = 12, index = 5, termine = true } }
+function WorldMapFrame_UpdateQuests()
+    local n = 0
+    for i, q in ipairs(CARTE_QUETES) do
+        n = n + 1
+        local f = _G["WorldMapQuestFrame" .. i] or CreateFrame("Frame", "WorldMapQuestFrame" .. i, WorldMapFrame)
+        f.questId, f.questLogIndex, f.completed = q.id, q.index, q.termine
+    end
+    WorldMapFrame.numQuests = n
+    return n
+end
+function WorldMapFrame_DisplayQuests(selection)
+    WorldMapTrackQuest:Show()
+    if WorldMapFrame_UpdateQuests() > 0 and selection then
+        WORLDMAP_SETTINGS.selectedQuestId = selection
+        WorldMapBlobFrame:DrawQuestBlob(selection, true)
+    end
+end
+-- WorldMap_OpenToQuest : la carte de la quete, puis UpdateMap(questID)
+OUVERTURES = {}
+function GetQuestWorldMapAreaID(questID) return 39, 0 end
+function SetMapByID(id) table.insert(OUVERTURES, id) CARTE.id = id end
+CARTE.id = 30
+function GetCurrentMapAreaID() return CARTE.id end
+function WorldMap_OpenToQuest(questID)
+    ShowUIPanel(WorldMapFrame)
+    local carte, etage = GetQuestWorldMapAreaID(questID)
+    if carte ~= 0 then SetMapByID(carte) end
+    WorldMapFrame_UpdateMap(questID)
+end
+
+-- La premiere ligne de l'infobulle existe toujours dans le vrai client, et
+-- une fenetre montree a toujours un bord droit.
+GameTooltipTextLeft1 = UIParent:CreateFontString("GameTooltipTextLeft1", "ARTWORK")
+UIParent._right = 1920
+WorldMapFrame._right = 1051
+-- QuestLogFrame reste la fenetre de WotLK : on la garde vivante.
+QuestLogFrame = CreateFrame("Frame", "QuestLogFrame", UIParent)
+QuestLogFrame:Hide()
+function ToggleFrame(cadre)
+    if cadre:IsShown() then HideUIPanel(cadre) else ShowUIPanel(cadre) end
+end
 
 -- L heure du serveur : 14 h, donc le jour.
 function GetGameTime() return 14, 30 end
@@ -1622,7 +2361,15 @@ function TogglePVPFrame() end
 -- d ECRAN, qu il faut ramener a l echelle du cadre.
 SOURIS_Y = 0
 function GetCursorPosition() return 0, SOURIS_Y end
-function ShowUIPanel(cadre) cadre:Show() end
+function ShowUIPanel(cadre)
+    local carte = rawget(_G, "WorldMapFrame")
+    if carte and cadre ~= carte and carte:IsShown()
+       and carte.attributes and carte.attributes["UIPanelLayout-area"] == "center"
+       and carte.attributes["UIPanelLayout-allowOtherPanels"] then
+        carte:Hide()
+    end
+    cadre:Show()
+end
 function HideUIPanel(cadre) cadre:Hide() end
 
 -- ToggleCharacter, repris mot pour mot de l'UIParent.lua du client : c'est
@@ -1828,7 +2575,21 @@ HOOKS = {}
 -- greffon, et les valeurs rendues sont celles de l originale. Le banc se
 -- contentait d enregistrer le greffon, si bien qu appeler la fonction ne
 -- declenchait rien.
-function hooksecurefunc(nom, fn)
+function hooksecurefunc(nom, fn, greffon)
+    -- La forme a trois arguments accroche la methode d'une TABLE :
+    -- hooksecurefunc(table, "Methode", fonction). Le vrai la connait ; le
+    -- banc la prenait pour un nom et n'accrochait rien.
+    if type(nom) == "table" then
+        local t, cle = nom, fn
+        local ancienne = t[cle]
+        HOOKS[cle] = greffon
+        t[cle] = function(...)
+            local rendus = { ancienne(...) }
+            greffon(...)
+            return (table.unpack or unpack)(rendus)
+        end
+        return
+    end
     HOOKS[nom] = fn
     if type(nom) == "string" and type(_G[nom]) == "function" then
         local ancienne = _G[nom]
@@ -1859,18 +2620,33 @@ for niveau = 1, 2 do
         local bouton = CreateFrame("Button", nom .. "Button" .. i, liste)
         bouton:SetWidth(100)
         bouton:SetHeight(16)
+        bouton:SetFontString(bouton:CreateFontString(nom .. "Button" .. i .. "NormalText", "ARTWORK"))
+        _G[nom .. "Button" .. i .. "NormalText"] = bouton:GetFontString()
         _G[nom .. "Button" .. i .. "Check"] = bouton:CreateTexture(
             nom .. "Button" .. i .. "Check", "ARTWORK")
         _G[nom .. "Button" .. i .. "Check"]:SetWidth(18)
         _G[nom .. "Button" .. i .. "Check"]:SetHeight(18)
     end
 end
+function UIDropDownMenu_CreateInfo() return {} end
+MENU_ENTREES = {}
 function UIDropDownMenu_AddButton(info, level)
+    table.insert(MENU_ENTREES, info)
     level = level or 1
     local liste = _G["DropDownList" .. level]
     liste.numButtons = liste.numButtons + 1
     local bouton = _G[liste:GetName() .. "Button" .. liste.numButtons]
+    -- Au-dela de huit lignes, le vrai en cree d'autres
+    -- (UIDropDownMenu_CreateFrames : UIDROPDOWNMENU_MAXBUTTONS grandit).
+    if not bouton then
+        bouton = CreateFrame("Button", liste:GetName() .. "Button" .. liste.numButtons, liste)
+        bouton:SetWidth(100)
+        bouton:SetHeight(16)
+        bouton:SetFontString(bouton:CreateFontString(bouton:GetName() .. "NormalText", "ARTWORK"))
+        _G[bouton:GetName() .. "NormalText"] = bouton:GetFontString()
+    end
     bouton.notCheckable = info.notCheckable
+    if info.text then bouton:SetText(info.text) end
     bouton:SetNormalFontObject(GameFontHighlightSmallLeft)
     bouton:SetHighlightFontObject(GameFontHighlightSmallLeft)
     return bouton
@@ -1893,7 +2669,7 @@ def main():
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "Bags.lua",
+             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
@@ -5183,6 +5959,28 @@ def main():
     assert liste.width == 203, "la liste prend exactement la largeur de son bouton"
     assert b1.width == 203 - 25, "les lignes suivent"
 
+    # UN MENU CONTEXTUEL prend la largeur de son CONTENU (corrige le
+    # 2026-09-25) : son ouvreur est un cadre invisible de 40, qu'il ne faut
+    # pas epouser. Mesure dans la police affichee, formule du client.
+    lua.execute("""
+        ForeverUIMenuContextuel = CreateFrame("Frame", "ForeverUIMenuContextuel", UIParent)
+        ForeverUIMenuContextuel:SetWidth(40)
+        UIDropDownMenu_Initialize(ForeverUIMenuContextuel, function() end, "MENU")
+        UIDROPDOWNMENU_OPEN_MENU = ForeverUIMenuContextuel
+        DropDownList1.numButtons = 0
+        UIDropDownMenu_AddButton({ text = "Court", notCheckable = 1 }, 1)
+        UIDropDownMenu_AddButton({ text = "Une entree nettement plus longue" }, 1)
+        DropDownList1:SetWidth(65)
+    """)
+    liste.hooks.OnShow(liste)
+    attendu = len("Une entree nettement plus longue") * 6 + 40 + 25
+    print("   menu contextuel : liste %d (attendu %d), ligne %d" % (liste.width, attendu, b1.width))
+    assert liste.width == attendu, "texte le plus long + 40 + les 25 du client"
+    assert b1.width == attendu - 25
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = ForeverUIMenuTemoin DropDownList1:SetWidth(300)")
+    liste.hooks.OnShow(liste)
+    assert liste.width == 203, "le menu deroulant garde la largeur de son bouton"
+
     # ------------------------------- gestionnaire d equipement
     pane = g.ForeverUIEquipmentPane
     pp3 = pane.points[1]
@@ -5766,6 +6564,597 @@ def main():
         rayon = (pt[4] ** 2 + pt[5] ** 2) ** 0.5
         print("   %-26s CENTER (%7.2f, %7.2f) rayon %.1f" % (nom, pt[4], pt[5], rayon))
         assert abs(rayon - 100) < 0.5, "%s doit tomber sur le metal de l anneau" % nom
+
+    # ------------------------------------------------------------------
+    # LA CARTE DU MONDE, MODE REDUIT (etape 1)
+    # ------------------------------------------------------------------
+    print("\n--- carte du monde ---")
+    ech = 697.0 / 1002.0
+    print("   WORLDMAP_WINDOWED_SIZE = %.6f (attendu %.6f)" % (g.WORLDMAP_WINDOWED_SIZE, ech))
+    assert abs(g.WORLDMAP_WINDOWED_SIZE - ech) < 1e-9, "la constante de la petite fenetre suit camelot"
+
+    # LE DEPLACEMENT : le mode avance de WotLK, deverrouille.
+    print("   advancedWorldMap = %s | verrou = %s" % (g.STATE.cvars.advancedWorldMap, g.WORLDMAP_SETTINGS.locked))
+    assert g.STATE.cvars.advancedWorldMap == "1", "la CVar est posee avant VARIABLES_LOADED"
+    assert g.WORLDMAP_SETTINGS.locked == False, "la barre de titre fait glisser sans passer par le menu"
+
+    # VARIABLES_LOADED : le vrai lit la CVar, puis appelle ToggleSizeDown
+    # quand miniWorldMap vaut 1.
+    # etape 1 : volet de quetes ferme, la fenetre fait 702
+    lua.execute("ForeverUI.QuestLog.reglages().volet = false")
+    lua.execute("WORLDMAP_SETTINGS.advanced = GetCVar('advancedWorldMap') == '1' WorldMap_ToggleSizeDown()")
+    carteMonde = g.WorldMapFrame
+    detail = g.WorldMapDetailFrame
+    print("   fenetre %sx%s | carte echelle %.6f | points de la carte : %d" % (
+        carteMonde.width, carteMonde.height, detail.scale, len(list(detail.points.values()))))
+    assert (carteMonde.width, carteMonde.height) == (702, 534), "702 x 534, pas les 623 x 437 de SetMiniMode"
+    assert abs(detail.scale - ech) < 1e-9
+    pd = list(detail.points.values())
+    assert len(pd) == 1, "SetMiniMode AJOUTE un point sans ClearAllPoints : il faut le retirer"
+    pd = pd[0]
+    assert (pd[1], pd[3]) == ("TOPLEFT", "TOPLEFT") and abs(pd[4] * ech - 2) < 1e-6 and abs(pd[5] * ech + 67) < 1e-6, list(pd.values())
+
+    pc = carteMonde.points[1]
+    ancre = g.WorldMapScreenAnchor
+    pa0 = ancre.points[1]
+    print("   panneau %s | deplacable %s | ancre %s (%s, %s), placee par l'utilisateur %s" % (
+        carteMonde.attributes["UIPanelLayout-area"], carteMonde.movable, pa0[1], pa0[4], pa0[5],
+        ancre.userPlaced))
+    assert carteMonde.attributes["UIPanelLayout-area"] == "center", "zone center : le gestionnaire ne la replace pas"
+    assert pc[2].name == "WorldMapScreenAnchor"
+    assert (pa0[1], pa0[4], pa0[5]) == ("TOPLEFT", 16, -116), "la place d'un panneau left de camelot"
+    lua.execute("WorldMapTitleButton:GetScript('OnDragStart')(WorldMapTitleButton)")
+    assert carteMonde.moving, "tirer la barre du haut deplace la carte"
+    lua.execute("WorldMapTitleButton:GetScript('OnDragStop')(WorldMapTitleButton)")
+    pt = g.WorldMapTitleButton.points
+    print("   barre de titre : %s -> %s, %s de haut" % (list(pt[1].values())[3:5], list(pt[2].values())[3:5], g.WorldMapTitleButton.height))
+    assert g.WorldMapTitleButton.height == 20
+
+    # la bordure de WotLK : SetOpacity lui rend son alpha, mais plus d'image
+    for nom in ("WorldMapFrameMiniBorderLeft", "WorldMapFrameMiniBorderRight"):
+        r = g[nom]
+        print("   %-30s texture=%s alpha=%s" % (nom, r.texture, r.alpha))
+        assert r.texture is None, "%s : sans image, l'alpha rendu par SetOpacity ne montre rien" % nom
+
+    fermer, agrandir = g.WorldMapFrameCloseButton, g.WorldMapFrameSizeUpButton
+    pf, pa = fermer.points[1], agrandir.points[1]
+    print("   fermer %sx%s %s (%s, %s) | agrandir %sx%s %s de %s (%s)" % (
+        fermer.width, fermer.height, pf[1], pf[4], pf[5], agrandir.width, agrandir.height,
+        pa[1], pa[2].name, pa[4]))
+    assert (fermer.width, fermer.height) == (24, 24)
+    assert (pf[1], pf[2].name, pf[3], pf[4], pf[5]) == ("TOPRIGHT", "WorldMapFrame", "TOPRIGHT", -2, 1)
+    assert (pa[1], pa[2].name, pa[3], pa[4]) == ("RIGHT", "WorldMapFrameCloseButton", "LEFT", -1)
+    assert fermer._normal.texture == g.UIAtlas.data["redbutton-exit"][1]
+    assert agrandir._normal.texcoord[1] == g.UIAtlas.data["redbutton-expand"][2]
+    assert fermer.strata == "HIGH" and agrandir.strata == "HIGH", "au-dessus de la carte, comme BorderFrame"
+
+    # RIEN DE NOTRE FOND NE PASSE DEVANT LES TUILES. Un cadre fils prend un
+    # niveau au-dessus de son parent : le fond de camelot, pose dans un cadre
+    # fils, montait a 89 et masquait une partie des tuiles (niveau 88).
+    fondCarte = g.ForeverUIWorldMapBackground
+    enfants = list(fondCarte.children.values())
+    print("   fond : niveau %s, %d cadre(s) fils | tuiles : niveau %s" % (
+        fondCarte.frameLevel, len(enfants), detail.frameLevel))
+    assert len(enfants) == 0, "le fond ne doit porter que des regions, aucun cadre fils"
+    assert fondCarte.frameLevel < detail.frameLevel, "le fond passe SOUS WorldMapDetailFrame"
+    for nom in ("ForeverUIWorldMapNavBar", "ForeverUIWorldMapCoords"):
+        f = g[nom]
+        assert f.strata in (None, "MEDIUM") and f.frameLevel > g.WorldMapPOIFrame.frameLevel, nom
+
+    # LES TUILES : la derniere colonne et la derniere rangee debordent de la
+    # carte ; la bordure de WotLK les cachait, celle de camelot non.
+    lua.execute("WorldMapFrame_UpdateMap()")
+    t4, t9, t12 = g.WorldMapDetailTile4, g.WorldMapDetailTile9, g.WorldMapDetailTile12
+    print("   tuiles : 4 = %sx%s u2=%.4f | 9 = %sx%s v2=%.4f | 12 = %sx%s" % (
+        t4.width, t4.height, t4.texcoord[2], t9.width, t9.height, t9.texcoord[4], t12.width, t12.height))
+    assert (t4.width, t4.height) == (234, 256) and abs(t4.texcoord[2] - 234.0 / 256) < 1e-9
+    assert (t9.width, t9.height) == (256, 156) and abs(t9.texcoord[4] - 156.0 / 256) < 1e-9
+    assert (t12.width, t12.height) == (234, 156)
+    assert (g.WorldMapDetailTile1.width, g.WorldMapDetailTile1.height) == (256, 256)
+
+    # le titre : WotLK y ecrit la zone en petite fenetre
+    lua.execute("WorldMapFrame_UpdateMap()")
+    titre = g.WorldMapFrameTitle
+    print("   titre '%s' dans %s" % (titre.text, titre.parent and titre.parent.name))
+    assert titre.text == "Map & Quest Log", "MAP_AND_QUEST_LOG, pas le nom de la zone"
+    assert g.WorldMapTrackQuest.alpha == 0, "la case de suivi de WotLK reste etouffee"
+    assert not g.WorldMapLevelDropDown.shown, "le menu d'etages de WotLK reste cache"
+
+    # le fil d'Ariane : Monde > Eastern Kingdoms > Burning Steppes
+    barre = g.ForeverUIWorldMapNavBar
+    b1, b2 = g.ForeverUIWorldMapNavButton1, g.ForeverUIWorldMapNavButton2
+    print("   fil : %s > %s (%s) > %s (%s)" % (barre.home.text.text, b1.text.text, b1.width,
+                                              b2.text.text, b2.width))
+    assert b1.text.text == "Eastern Kingdoms" and b2.text.text == "Burning Steppes"
+    assert b1.width == len("Eastern Kingdoms") * 6 + 53, "texte + 53 quand le bouton a une liste"
+    assert b2.enabled == False and b2.selected.shown, "le dernier bouton est l'endroit ou l'on est"
+    assert b1.enabled != False and not b1.selected.shown
+    p1 = b1.points[1]
+    assert (p1[1], p1[2].name, p1[3], p1[4]) == ("LEFT", "ForeverUIWorldMapNavBarHomeButton", "RIGHT", -15)
+    lua.execute("ForeverUIWorldMapNavBarHomeButton:GetScript('OnClick')(ForeverUIWorldMapNavBarHomeButton)")
+    dernier = g.CARTE.zooms[len(list(g.CARTE.zooms.values()))]
+    assert dernier[1] == 0, "le bouton racine va a la carte du monde (WORLDMAP_WORLD_ID)"
+
+    # la liste d'un bouton : ses soeurs
+    lua.execute("MENU_ENTREES = {} ForeverUIWorldMapNavButton2.MenuArrowButton:GetScript('OnClick')(ForeverUIWorldMapNavButton2.MenuArrowButton) ForeverUIWorldMapNavMenu.initFn()")
+    noms = [e.text for e in g.MENU_ENTREES.values()]
+    print("   liste des zones : %s" % noms)
+    assert noms[-1] == "Burning Steppes" and len(noms) == 5
+
+    # les filtres : Show:, objectifs, couleur de difficulte
+    lua.execute("MENU_ENTREES = {} ForeverUIWorldMapFilterButton:GetScript('OnClick')(ForeverUIWorldMapFilterButton) ForeverUIWorldMapNavMenu.initFn()")
+    entrees = list(g.MENU_ENTREES.values())
+    print("   filtres : %s" % [(e.text, e.checked) for e in entrees])
+    assert entrees[0].text == "Show:" and entrees[0].isTitle
+    assert entrees[1].checked == True
+    entrees[1].func()
+    assert g.WorldMapQuestShowObjectives.checked == False and g.STATE.cvars.questPOI == "0", \
+        "la case de WotLK est cliquee : son OnClick ecrit la CVar"
+
+    # les etages : caches sans etage, montres avec
+    etages = g.ForeverUIWorldMapFloorButton
+    assert not etages.shown
+    lua.execute("CARTE.etages = 3 CARTE.etage = 2 WorldMapFrame_UpdateMap()")
+    print("   etages : %s, '%s', %sx%s" % (etages.shown, etages.Text.text, etages.width, etages.height))
+    assert etages.shown and etages.Text.text == "Area 2" and (etages.width, etages.height) == (160, 25)
+    lua.execute("CARTE.etages = 0 WorldMapFrame_UpdateMap()")
+
+    # les coordonnees
+    lua.execute("POSITION.x, POSITION.y = 0.4567, 0.6234 ForeverUI.WorldMap.majCoordonnees()")
+    co = g.ForeverUIWorldMapCoords
+    print("   coordonnees : '%s' (curseur visible=%s)" % (co.joueur.text, co.curseur.shown))
+    assert co.joueur.text == "Player: 46, 62"
+
+    # ------------------------------------------------------------------
+    # LE VOLET DE QUETES (etape 2)
+    # ------------------------------------------------------------------
+    print("\n--- journal de quetes ---")
+    lua.execute("ForeverUI.QuestLog.reglages().volet = true WorldMap_ToggleSizeDown() WorldMapFrame:Show()")
+    volet = g.ForeverUIQuestLogPanel
+    print("   fenetre %sx%s | volet %s, %s de large" % (carteMonde.width, carteMonde.height, volet.shown, volet.width))
+    assert carteMonde.width == 1035, "702 + 333 avec le volet ouvert"
+    assert volet.shown and volet.width == 330 and volet.strata == "HIGH"
+    pv = [list(x.values()) for x in volet.points.values()]
+    assert pv[0][0] == "TOPRIGHT" and pv[0][3:5] == [-3, -25] and pv[1][0] == "BOTTOMRIGHT" and pv[1][3:5] == [-3, 3], pv
+    bascule = g.ForeverUIWorldMapSidePanelToggle
+    assert bascule.fermer.shown and not bascule.ouvrir.shown
+    barreNav = g.ForeverUIWorldMapNavBar
+    assert list(barreNav.points[2].values())[3] == 2 + 697 - 50, "la barre s'arrete a -50 du bord droit de la carte"
+
+    lua.execute("ForeverUI.QuestLog.maj()")
+    e1 = g.ForeverUIQuestLogHeader1
+    e2 = g.ForeverUIQuestLogHeader2
+    q1, q2 = g.ForeverUIQuestLogTitle1, g.ForeverUIQuestLogTitle2
+    print("   en-tetes : '%s' (%s) '%s' (%s)" % (e1.texte.text, e1.shown, e2.texte.text, e2.shown))
+    print("   quetes : '%s' | '%s' tag '%s'" % (q1.texte.text, q2.texte.text, q2.tag.text))
+    assert e1.texte.text == "Elwynn Forest" and e2.texte.text == "Westfall", "l'en-tete replie reste montre"
+    assert q1.texte.text == "[5] A Threat Within"
+    assert q2.texte.text == "[12+] The Fargodeep Mine" and q2.tag.text == "(Elite)" and q2.tag.shown
+    assert not (g.ForeverUIQuestLogTitle3 and g.ForeverUIQuestLogTitle3.shown), "la quete sous un en-tete replie n'est pas listee"
+    pe = list(e1.points[1].values())
+    pq = list(q1.points[1].values())
+    print("   premier en-tete a (%s, %s) | premiere quete a (%s, %s)" % (pe[3], pe[4], pq[3], pq[4]))
+    assert (pe[3], pe[4]) == (9, -8), "premier en-tete : x = 9, ecart 8"
+    assert (pq[3], pq[4]) == (0, -(8 + 22 + 2)), "quete apres en-tete : ecart 2"
+    objectifsQ1 = [o.texte.text for o in q1.lignesObjectif.values()]
+    print("   objectifs de la premiere quete : %s" % objectifsQ1)
+    assert objectifsQ1 == ["Kobold Vermin slain: 3/10"], "seuls les objectifs non remplis"
+    assert abs(q1.texte.textColor[1] - 0.25) < 1e-9 and abs(q2.texte.textColor[1] - 1.0) < 1e-9, "couleurs de difficulte de camelot"
+    assert abs(e1.texte.textColor[1] - 0.502) < 1e-9, "titre d'en-tete gris au repos"
+    compteur = g.ForeverUIQuestLogCount.texte.text
+    print("   compteur : %s" % compteur)
+    assert compteur == "Quests: |cffffffff3|r|cffffffff/25|r"
+
+    # le suivi par la case
+    lua.execute("ForeverUIQuestLogTitle1.case:GetScript('OnClick')(ForeverUIQuestLogTitle1.case) ForeverUI.QuestLog.maj()")
+    assert g.SUIVIES["A Threat Within"] and q1.coche.shown
+
+    # replier un en-tete : 3.3.5 retire ses quetes
+    lua.execute("ForeverUIQuestLogHeader1:GetScript('OnClick')(ForeverUIQuestLogHeader1, 'LeftButton') ForeverUI.QuestLog.maj()")
+    assert not q1.shown, "l'en-tete replie cache ses quetes"
+    lua.execute("ExpandQuestHeader(1) ForeverUI.QuestLog.maj()")
+
+    # la recherche : deplie tout, puis rend les etats par le nom
+    lua.execute("REPLIS = {} ForeverUI.QuestLog.chercher('militia')")
+    trouvees = [q.texte.text for q in (g.ForeverUIQuestLogTitle1, g.ForeverUIQuestLogTitle2) if q.shown]
+    print("   recherche 'militia' : %s | replis %s" % (trouvees, list(g.REPLIS.values())))
+    assert trouvees == ["[14] The People's Militia"], trouvees
+    lua.execute("ForeverUI.QuestLog.chercher('')")
+    assert g.JOURNAL[4].collapsed == True, "Westfall retrouve son etat replie"
+
+    # LE CADRE A MOULURES, decoupe en neuf (marges 53 du client camelot)
+    eCadre = g.UIAtlas.data["questlog-frame"]
+    def du_cadre(f):
+        return [r for r in f.regions.values()
+                if r.texture == eCadre[1] and r.texcoord and eCadre[2] - 1e-9 <= r.texcoord[1] <= eCadre[3] + 1e-9
+                and eCadre[4] - 1e-9 <= r.texcoord[3] <= eCadre[5] + 1e-9]
+    bords = [f for f in g.ForeverUIQuestScrollFrame.children.values() if len(du_cadre(f)) > 0]
+    tranches = du_cadre(bords[0]) if bords else []
+    coins = [t for t in tranches if t.width == 53 and t.height == 53]
+    print("   cadre a moulures : %d tranche(s) de questlog-frame, %d coin(s) de 53" % (len(tranches), len(coins)))
+    assert len(tranches) == 9, "questlog-frame en neuf tranches, pas une piece etiree"
+    assert len(coins) == 4, "quatre coins de 53 x 53"
+
+    # LE CADRE SUIT LA BARRE : montree, taille de camelot ; masquee, jusqu'au
+    # bord du volet
+    liste = g.ForeverUIQuestScrollFrame
+    bordListe = g.ForeverUIQuestLogPanel.bord
+    liste.height = 40
+    lua.execute("ForeverUI.QuestLog.maj()")
+    pb = list(bordListe.points[2].values())
+    print("   barre montree=%s : cadre BOTTOMRIGHT (%s, %s), fond %s de large" % (
+        g.ForeverUIQuestScrollBar.shown, pb[3], pb[4], g.ForeverUIQuestLogPanel.fond.width))
+    assert g.ForeverUIQuestScrollBar.shown and (pb[3], pb[4]) == (3, -6)
+    assert g.ForeverUIQuestLogPanel.fond.width == 307
+    liste.height = 2000
+    lua.execute("ForeverUI.QuestLog.maj()")
+    pb = list(bordListe.points[2].values())
+    print("   barre montree=%s : cadre BOTTOMRIGHT (%s, %s), fond %s de large" % (
+        g.ForeverUIQuestScrollBar.shown, pb[3], pb[4], g.ForeverUIQuestLogPanel.fond.width))
+    assert not g.ForeverUIQuestScrollBar.shown and (pb[3], pb[4]) == (3 + 22, -6), "jusqu'au bord du volet"
+    assert g.ForeverUIQuestLogPanel.fond.width == 307 + 22
+    assert len(list(bordListe.points.values())) == 2, "deux points, pas d'accumulation"
+
+    # LE FOND EN DOUBLE DENSITE
+    fondListe = g.ForeverUIQuestLogPanel.fond
+    e2x = g.UIAtlas.data["questlog-main-background-2x"]
+    print("   fond de liste : %s" % fondListe.texture)
+    assert fondListe.texture == e2x[1], "la variante 2x, pas la 1x agrandie"
+
+    # LES REPERES : ceux de la carte affichee, aux memes numeros
+    lua.execute("WorldMapFrame_UpdateQuests() ForeverUI.QuestLog.maj()")
+    p1 = g["poiForeverUIQuestScrollContents1_1"]
+    pc = g["poiForeverUIQuestScrollContents2_1"]
+    print("   reperes : numero 1 -> quete %s (%s) | termine 1 -> quete %s (%s)" % (
+        p1 and p1.questId, p1 and p1.shown, pc and pc.questId, pc and pc.shown))
+    assert p1 and p1.questId == 783 and p1.shown, "la quete 783 porte le repere numero 1, comme sur la carte"
+    pp = list(p1.points[1].values())
+    assert (pp[0], pp[2], pp[3], pp[4]) == ("CENTER", "TOPLEFT", 16, -14), pp
+    assert not (g["poiForeverUIQuestScrollContents1_2"] and g["poiForeverUIQuestScrollContents1_2"].shown), \
+        "la quete 62 n'a pas de repere sur cette carte"
+
+    # LE SURVOL allume la zone de la quete sur la carte
+    lua.execute("ForeverUIQuestLogTitle1:GetScript('OnEnter')(ForeverUIQuestLogTitle1)")
+    assert g.ZONES[783] == True, "survoler une quete allume sa zone"
+    lua.execute("ForeverUIQuestLogTitle1:GetScript('OnLeave')(ForeverUIQuestLogTitle1)")
+    assert g.ZONES[783] == False
+
+    # LE CLIC met la carte sur la zone de la quete et la selectionne
+    # sans « Quest Objectives », WotLK ne montre ni ne choisit aucun repere :
+    # l'essai des filtres l'a decochee plus haut, on la recoche
+    if not g.WatchFrame.showObjectives:
+        lua.execute("WorldMapQuestShowObjectives:Click()")
+    assert g.WatchFrame.showObjectives
+    lua.execute("OUVERTURES = {} ForeverUIQuestLogTitle2:GetScript('OnClick')(ForeverUIQuestLogTitle2, 'LeftButton')")
+    print("   clic sur la quete 62 : carte %s, selection %s, zone %s" % (
+        list(g.OUVERTURES.values()), g.WORLDMAP_SETTINGS.selectedQuestId, g.ZONES[62]))
+    assert list(g.OUVERTURES.values()) == [39], "la carte passe sur la zone de la quete (GetQuestWorldMapAreaID)"
+    assert g.WORLDMAP_SETTINGS.selectedQuestId == 62 and g.ZONES[62] == True
+    assert g.SELECTION == 3, "la quete est aussi choisie dans le journal"
+    # le survol ne rend pas la zone de la quete choisie
+    lua.execute("ForeverUIQuestLogTitle2:GetScript('OnLeave')(ForeverUIQuestLogTitle2)")
+    assert g.ZONES[62] == True, "la quete choisie garde sa zone"
+
+    # ------------------------------------------------------------------
+    # LA PAGE D'UNE QUETE (etape 3) : le clic a remplace la liste par la page
+    # ------------------------------------------------------------------
+    det = g.ForeverUIQuestDetailsFrame
+    print("   page : montree=%s, liste montree=%s, barre de liste=%s" % (
+        det.shown, g.ForeverUIQuestScrollFrame.shown, g.ForeverUIQuestScrollBar.shown))
+    assert det.shown and not g.ForeverUIQuestScrollFrame.shown, "la page remplace la liste"
+    assert not g.ForeverUIQuestScrollBar.shown, "la barre de la liste part avec elle"
+    pd = list(det.points[1].values())
+    assert (pd[0], pd[1].name, pd[2], pd[3], pd[4]) == ("TOPRIGHT", "ForeverUIQuestLogPanel", "TOPRIGHT", -22, -1), pd
+    assert (det.width, det.height) == (308, 502)
+    assert det.titre.text == "The Fargodeep Mine"
+    assert det.texteObjectifs.text == "Explore the Fargodeep Mine."
+    assert det.description.text == "Kobolds have overrun the mine."
+    assert det.enteteDescription.text == "Description"
+    objs = [o for o in det.objectifs.values() if o.shown]
+    print("   objectifs : %s" % [o.text for o in objs])
+    assert [o.text for o in objs] == ["Explore the mine", "Kobolds slain: 5/5 (Complete)"], \
+        "tous les objectifs, les remplis marques (Complete)"
+    assert abs(objs[0].textColor[1] - 0.18) < 1e-9 and abs(objs[1].textColor[1] - 0.2) < 1e-9, \
+        "DEFAULT_MATERIAL_TEXT_COLOR, puis QUEST_OBJECTIVE_COMPLETED_FONT_COLOR"
+    print("   minuteur '%s' | groupe '%s' | argent demande montre=%s" % (
+        det.minuteur.text, det.groupe.text, det.argent.shown))
+    assert det.minuteur.text == "Time Remaining: 125 sec" and det.groupe.text == "Suggested Players [3]"
+    assert not det.argent.shown, "rien a payer : pas de ligne d'argent"
+    assert (det.titre.fontFile, det.titre.fontSize) == ("Fonts\\MORPHEUS.ttf", 18), "QuestTitleFont"
+    assert (det.description.fontFile, det.description.fontSize) == ("Fonts\\FRIZQT__.TTF", 13), "QuestFont"
+
+    # l'empilement de QUEST_TEMPLATE_MAP_DETAILS
+    p0 = list(det.titre.points[1].values())
+    assert (p0[0], p0[1].name, p0[2], p0[3], p0[4]) == ("TOPLEFT", "ForeverUIQuestDetailsContents", "TOPLEFT", 5, -10)
+    # l'identite d'une table Lua : l'enveloppe de lupa ne la garantit pas
+    meme = lua.eval("function(a, b) return rawequal(a, b) end")
+    def sur(r, precedent, dx, dy):
+        p = list(r.points[1].values())
+        assert meme(p[1], precedent) and (p[0], p[2], p[3], p[4]) == ("TOPLEFT", "BOTTOMLEFT", dx, dy), (p[0], p[2], p[3], p[4])
+    sur(det.texteObjectifs, det.titre, 0, -5)
+    sur(det.minuteur, det.texteObjectifs, 0, -10)
+    sur(objs[0], det.minuteur, 0, -10)
+    sur(objs[1], objs[0], 0, -2)
+    sur(det.groupe, objs[1], 0, -10)
+    sur(det.enteteDescription, det.groupe, 0, -20)
+    sur(det.description, det.enteteDescription, 0, -5)
+    sur(det.espace, det.description, 0, 0)
+
+    # les recompenses, deux par rangee
+    l = det.liste
+    i1, i2, i3 = g.ForeverUIQuestDetailsRewardItem1, g.ForeverUIQuestDetailsRewardItem2, g.ForeverUIQuestDetailsRewardItem3
+    print("   au choix : '%s' -> %s, %s | recu : '%s' -> xp %s, argent %s, %s x%s, honneur %s" % (
+        l.choisir.text, i1.Name.text, i2.Name.text, l.recevoir.text, l.xp.Name.text, l.argent.Name.text,
+        i3.Name.text, i3.Count.text, l.honneur.Count.text))
+    assert l.choisir.text == "You will be able to choose one of these rewards:" and l.choisir.shown
+    assert l.recevoir.text == "You will also receive:", "il y a un choix : REWARD_ITEMS"
+    assert (i1.type, i1.id, i2.type, i2.id, i3.type, i3.id) == ("choice", 1, "choice", 2, "reward", 1)
+    p2 = list(i2.points[1].values())
+    assert meme(p2[1], i1) and (p2[2], p2[3]) == ("TOPRIGHT", 8), "le second objet a droite du premier, a 8"
+    assert list(i2.Icon.vertex.values()) == [0.9, 0, 0], "inutilisable : en rouge"
+    assert abs(list(i3.IconBorder.vertex.values())[0] - 0.659) < 1e-9 and i3.IconBorder.shown, "commun : COMMON_GRAY_COLOR"
+    assert i3.Count.shown and i3.Count.text == 5
+    assert l.xp.Name.text == 850 and l.argent.Name.text == "250"
+    pa = list(l.argent.points[1].values())
+    assert meme(pa[1], l.xp) and pa[2] == "TOPRIGHT", "l'argent a droite de l'experience"
+    assert l.xp.Icon.texture == "interface\\ForeverUI\\icons\\xp_icon"
+    assert l.honneur.Icon.texture == "interface\\ForeverUI\\icons\\pvpcurrency-honor-alliance"
+    assert l.honneur.Name.text == "Honor" and l.honneur.Count.text == 12
+    assert not l.titre.shown and not l.sortBouton.shown and not l.arene.shown
+    rec = det.recompenses
+    print("   recompenses : liste %s de haut, cadre %s, conteneur %s, libelle '%s'" % (
+        l.height, rec.height, det.conteneur.height, rec.libelle.text))
+    assert l.height == 151, "1 + 4 rangees d'objets a 35 + 2 en-tetes a 5"
+    assert rec.height == 151 + 62 and det.espace.height == 151 + 62, "SetRewardsHeight : liste + 62"
+    assert rec.libelle.shown and rec.libelle.text == "Rewards"
+    pc = list(det.conteneur.points[1].values())
+    assert (pc[0], pc[2], pc[3], pc[4]) == ("BOTTOMLEFT", "BOTTOMLEFT", 0, 23)
+    assert meme(det.conteneur.scrollChild, rec), "un ScrollFrame rogne les recompenses (pas de clipChildren en 3.3.5)"
+
+    # les boutons du bas
+    print("   boutons : abandon %s, partage %s, suivi '%s'" % (
+        det.abandon.actif, det.partage.actif, det.suivre.fontString.text))
+    assert det.abandon.actif and not det.partage.actif, "partager demande un groupe"
+    assert det.suivre.fontString.text == "Track"
+    lua.execute("ForeverUIQuestDetailsTrackButton:GetScript('OnClick')(ForeverUIQuestDetailsTrackButton)")
+    assert g.SUIVIES["The Fargodeep Mine"] and det.suivre.fontString.text == "Untrack", "UNTRACK_QUEST_ABBREV"
+    lua.execute("ForeverUIQuestDetailsTrackButton:GetScript('OnClick')(ForeverUIQuestDetailsTrackButton)")
+    assert det.suivre.fontString.text == "Track"
+    assert (det.abandon.width, det.partage.width, det.suivre.width) == (105, 103, 105)
+    assert det.retour.fontString.text == "Back" and (det.retour.width, det.retour.height) == (90, 22)
+
+    # le fond : a la largeur, plafonne a 440
+    eFond = g.UIAtlas.data["questdetailsbackgrounds"]
+    voulue = eFond[7] * 308 / eFond[6]
+    tc = list(det.fond.texcoord.values())
+    assert det.fond.height == 440 and abs(tc[3] - (eFond[4] + (eFond[5] - eFond[4]) * 440 / voulue)) < 1e-9
+
+    # l'infobulle d'un objet : SetQuestLogItem, sur la quete de la page
+    lua.execute("SELECTION = 1 ForeverUIQuestDetailsRewardItem3:GetScript('OnEnter')(ForeverUIQuestDetailsRewardItem3)")
+    assert list(g.GameTooltip.objetQuete.values()) == ["reward", 1] and g.SELECTION == 3
+
+    # RETOUR : la liste revient, et la carte la ou elle etait
+    lua.execute("ForeverUIQuestDetailsBackButton:GetScript('OnClick')(ForeverUIQuestDetailsBackButton)")
+    print("   retour : page %s, liste %s, cartes ouvertes %s" % (det.shown, g.ForeverUIQuestScrollFrame.shown,
+                                                                list(g.OUVERTURES.values())))
+    assert not det.shown and g.ForeverUIQuestScrollFrame.shown
+    assert list(g.OUVERTURES.values()) == [39, 30] and g.CARTE.id == 30, "la carte d'avant le clic"
+
+    # LA HAUTEUR DU TEXTE, et les recompenses qui grandissent au defilement.
+    # Le faux client ne mesure pas les textes : on leur donne une hauteur.
+    for nom, h in (("titre", 20), ("texteObjectifs", 30), ("minuteur", 12), ("groupe", 13),
+                   ("enteteDescription", 20), ("description", 100)):
+        det[nom].height = h
+    for o in det.objectifs.values():
+        o.height = 12
+    lua.execute("ForeverUIQuestLogTitle2:GetScript('OnClick')(ForeverUIQuestLogTitle2, 'LeftButton')")
+    total = 10 + 20 + 5 + 30 + 10 + 12 + 10 + 12 + 2 + 12 + 10 + 13 + 20 + 20 + 5 + 100 + 213
+    print("   texte : %s de haut, plage %s | conteneur %s" % (
+        g.ForeverUIQuestDetailsContents.height, total - 430, det.conteneur.height))
+    assert g.ForeverUIQuestDetailsContents.height == total
+    assert det.conteneur.height == 213 - (total - 430), "AdjustRewardsFrameContainer : cache ce que le texte cache"
+    assert g.ForeverUIQuestDetailsScrollBar.shown
+    lua.execute("ForeverUIQuestDetailsScrollBar:Deplacer(100)")
+    print("   en bas : defilement %s, conteneur %s" % (g.ForeverUIQuestDetailsScrollFrame.verticalScroll, det.conteneur.height))
+    assert g.ForeverUIQuestDetailsScrollFrame.verticalScroll == total - 430, "borne a la plage"
+    assert det.conteneur.height == 213, "en bas, les recompenses en entier"
+
+    # UNE AUTRE CARTE referme la page (QuestLogMixin:Refresh), sans toucher a la carte
+    lua.execute("OUVERTURES = {} CARTE.id = 12 WorldMapFrame_UpdateQuests()")
+    assert not det.shown and g.ForeverUIQuestScrollFrame.shown and list(g.OUVERTURES.values()) == []
+
+    # UNE QUETE QUI QUITTE LE JOURNAL ramene a la liste, carte comprise
+    lua.execute("ForeverUIQuestLogTitle2:GetScript('OnClick')(ForeverUIQuestLogTitle2, 'LeftButton')")
+    assert det.shown
+    lua.execute("PARTIE = table.remove(JOURNAL, 3) ForeverUI.QuestLog.majDetails()")
+    print("   quete rendue : page %s, carte %s" % (det.shown, g.CARTE.id))
+    assert not det.shown and g.ForeverUIQuestScrollFrame.shown and g.CARTE.id == 12
+    lua.execute("table.insert(JOURNAL, 3, PARTIE) ForeverUI.QuestLog.maj()")
+
+    # la bascule du volet
+    lua.execute("ForeverUIWorldMapSidePanelToggle.fermer:GetScript('OnClick')()")
+    print("   volet ferme : fenetre %s, volet %s" % (carteMonde.width, volet.shown))
+    assert carteMonde.width == 702 and not volet.shown and bascule.ouvrir.shown
+    lua.execute("ForeverUIWorldMapSidePanelToggle.ouvrir:GetScript('OnClick')()")
+    assert carteMonde.width == 1035 and volet.shown
+
+    # L : QuestLogFrame reste invisible, la carte s'ouvre avec le volet ;
+    # L encore la ferme, meme si le gestionnaire l'a deja fermee avant nous.
+    lua.execute("WorldMapFrame:Hide() STATE.time = STATE.time + 1 ForeverUI.QuestLog.reglages().volet = false ToggleFrame(QuestLogFrame)")
+    print("   L : QuestLogFrame %s | carte %s | volet %s" % (g.QuestLogFrame.shown, carteMonde.shown, volet.shown))
+    assert not g.QuestLogFrame.shown and carteMonde.shown and volet.shown
+    lua.execute("ToggleFrame(QuestLogFrame)")
+    print("   L encore : carte %s" % carteMonde.shown)
+    assert not carteMonde.shown and not g.QuestLogFrame.shown, "L referme le journal"
+
+    # le plein ecran de WotLK : on s'efface, le titre revient a la carte
+    lua.execute("WorldMap_ToggleSizeUp()")
+    print("   plein ecran : cadre visible=%s, titre dans %s" % (
+        g.ForeverUIWorldMapBorder.shown, titre.parent.name))
+    assert not g.ForeverUIWorldMapBorder.shown and not barre.shown
+    assert titre.parent.name == "WorldMapFrame", "WotLK ancre le titre sur la carte en plein ecran"
+    assert g.WorldMapTrackQuest.alpha == 1
+    assert (g.WorldMapDetailTile12.width, g.WorldMapDetailTile12.height) == (256, 256),         "en plein ecran, l'habillage de WotLK recouvre le debord : tuiles entieres"
+
+    # et retour
+    lua.execute("WorldMap_ToggleSizeDown()")
+    attendu = 702 + (333 if g.ForeverUI.QuestLog.reglages().volet else 0)
+    assert g.ForeverUIWorldMapBorder.shown and (carteMonde.width, carteMonde.height) == (attendu, 534)
+    assert g.ForeverUIQuestLogPanel.shown == bool(g.ForeverUI.QuestLog.reglages().volet), "le volet revient avec la petite fenetre"
+
+    # ------------------------------------------------------------------
+    # LE SUIVI DE QUETES (docs/SUIVI_DES_QUETES.md)
+    # ------------------------------------------------------------------
+    print("\n--- suivi de quetes ---")
+    meme = lua.eval("function(a, b) return rawequal(a, b) end")
+    gest = list(g.WATCHFRAME_OBJECTIVEHANDLERS.values())
+    ot = g.ForeverUI.ObjectiveTracker
+    print("   gestionnaires : %d" % len(gest))
+    assert len(gest) == 2 and meme(gest[0], ot.afficherQuetes) and meme(gest[1], ot.gestionnaireHautsFaits), \
+        "les deux modules de camelot remplacent les trois gestionnaires de WotLK"
+    # l'API de WotLK reste ouverte aux addons : un gestionnaire ajoute passe apres
+    lua.execute("ADDON_APPELE = nil WatchFrame_AddObjectiveHandler(function(l, o) ADDON_APPELE = o return 0, 0, 0 end)")
+
+    lua.execute("SUIVIES = { ['A Threat Within'] = true, ['The Fargodeep Mine'] = true } HAUTS_FAITS_SUIVIS = { 1001, 1002 } STATE.time = 100 WatchFrame_Update()")
+    wf, lignes = g.WatchFrame, g.WatchFrameLines
+    ent = g.ForeverUIObjectiveTrackerHeader
+    print("   cadre %s de large | en-tete '%s' montre=%s | en-tete WotLK montre=%s alpha=%s" % (
+        wf.width, ent.texte.text, ent.shown, g.WatchFrameHeader.shown, g.WatchFrameHeader.alpha))
+    assert g.WOTLK_DESSINE == 0, "les gestionnaires de WotLK ne dessinent plus"
+    assert g.ADDON_APPELE is not None and g.ADDON_APPELE < 0, "le gestionnaire d'un addon tourne apres les modules"
+    assert wf.width == 260 and g.WATCHFRAME_EXPANDEDWIDTH == 260
+    assert ent.shown and ent.texte.text == "All Objectives" and (ent.width, ent.height) == (260, 32)
+    assert not g.WatchFrameHeader.shown and g.WatchFrameHeader.alpha == 0, "l'en-tete de WotLK reste etouffe"
+    pl = list(lignes.points[1].values())
+    assert (pl[0], pl[3], pl[4]) == ("TOPLEFT", 0, -38), "les modules commencent a 38 sous le haut (BASE_TOP_PADDING)"
+
+    mq = g.ForeverUIQuestObjectiveTracker
+    pm = list(mq.points[1].values())
+    print("   module Quests : montre=%s a (%s, %s), %s de haut" % (mq.shown, pm[3], pm[4], mq.height))
+    assert mq.shown and mq.entete.texte.text == "Quests" and (pm[3], pm[4]) == (0, 0)
+    blocs = {b.titre.text: b for b in mq.blocs.values()}
+    b1, b2 = blocs["A Threat Within"], blocs["The Fargodeep Mine"]
+    p1 = list(b1.points.values())
+    assert meme(p1[0][2], mq.entete) and (p1[0][1], p1[0][3], p1[0][5]) == ("TOP", "BOTTOM", -10), "premier bloc a 10 sous l'en-tete"
+    assert (p1[1][1], p1[1][4]) == ("LEFT", 20), "a 20 du bord"
+    p2 = list(b2.points[1].values())
+    assert meme(p2[1], b1) and (p2[0], p2[2], p2[4]) == ("TOP", "BOTTOM", -10), "10 entre deux blocs"
+    assert abs(b1.titre.textColor[1] - 0.749) < 1e-9, "OBJECTIVE_TRACKER_BLOCK_HEADER_COLOR"
+    assert (b1.titre.fontFile, b1.titre.fontSize) == ("Fonts\\FRIZQT__.TTF", 12)
+    montrees = [l for l in b1.lignesMontrees.values()]
+    print("   lignes du bloc 1 : %s" % [(l.texte.text, l.tiret.shown, l.coche.shown) for l in montrees])
+    assert [l.texte.text for l in montrees] == ["3/10 Kobold Vermin slain", "Report found"], "texte inverse comme WotLK, remplis gardes"
+    assert montrees[0].tiret.shown and not montrees[0].coche.shown
+    assert not montrees[1].tiret.shown and montrees[1].coche.shown and abs(montrees[1].texte.textColor[1] - 0.6) < 1e-9, \
+        "objectif rempli : sans tiret, gris 0,6, coche"
+    pl1 = list(montrees[1].points[1].values())
+    assert meme(pl1[1], montrees[0]) and pl1[4] == -4, "4 entre deux lignes"
+
+    # l'objet de quete et le minuteur du bloc 2
+    it = g.WatchFrameItem1
+    pi = list(it.points[1].values())
+    print("   objet : %s x%s en %s | titre %s de large | minuteur %s" % (it.icone, it.nombre, pi[0], b2.titre.width,
+                                                                        b2.minuteur and b2.minuteur.shown))
+    assert it.shown and it.icone == "icone:pioche" and meme(pi[1], b2) and pi[0] == "TOPRIGHT"
+    assert b2.titre.width == 240 - 28, "le titre s'arrete 2 avant l'objet"
+    assert b2.minuteur.shown and b2.minuteur.duree == 90, "barre de temps dans le bloc"
+    # le repere de WotLK, centre ou camelot centre le sien
+    poi = g["poiWatchFrameLines1_1"]
+    pp = list(poi.points[1].values())
+    assert poi.shown and poi.questId == 783 and meme(pp[1], b1.titre) and (pp[0], pp[3], pp[4]) == ("CENTER", -17, -5)
+    assert list(g.VISIBLE_WATCHES.values()) == [2, 3]
+
+    # le module des hauts faits, sous celui des quetes
+    ma = g.ForeverUIAchievementObjectiveTracker
+    pa = list(ma.points[1].values())
+    print("   module Achievements a %s ; decalages %s" % (pa[4], list(g.WATCHFRAME_DECALAGES.values())))
+    assert ma.shown and pa[4] == -(mq.height + 10), "10 entre deux modules"
+    hf = {b.titre.text: b for b in ma.blocs.values()}
+    crit = [l.texte.text for l in hf["Explorer"].lignesMontrees.values()]
+    print("   criteres montres : %s" % crit)
+    assert crit == ["Elwynn", "Duskwood", "Redridge", "Darkshire", "Stranglethorn", "..."], "5 criteres puis ..."
+    assert [l.texte.text for l in hf["Loremaster"].lignesMontrees.values()] == ["Complete 700 quests."]
+
+    # un objectif rempli entre deux passages : la coche s'anime
+    lua.execute("JOURNAL[2].objectifs[1][2] = true STATE.time = 101 WatchFrame_Update()")
+    l0 = b1.lignes[1]
+    print("   objectif rempli : coche %s, lueur %sx%s" % (l0.coche.shown, l0.lueur.width, l0.lueur.alpha))
+    assert l0.coche.shown and not l0.tiret.shown
+    lua.execute("JOURNAL[2].objectifs[1][2] = false WatchFrame_Update()")
+
+    # replier un module : son en-tete reste, ses blocs partent
+    lua.execute("ForeverUIQuestObjectiveTracker.entete.bouton:GetScript('OnClick')()")
+    print("   module replie : %s de haut, blocs montres %d" % (mq.height, sum(1 for b in mq.blocs.values() if b.shown)))
+    assert mq.shown and mq.height == 25 and len(list(mq.blocs.values())) == 0
+    lua.execute("ForeverUIQuestObjectiveTracker.entete.bouton:GetScript('OnClick')()")
+    assert len(list(mq.blocs.values())) == 2
+
+    # replier tout : WatchFrame_Collapse, qui garde 260 et l'en-tete
+    lua.execute("ForeverUIObjectiveTrackerHeader.reduire:GetScript('OnClick')()")
+    print("   tout replie : %s, largeur %s, lignes %s" % (wf.collapsed, wf.width, lignes.shown))
+    assert wf.collapsed and wf.width == 260 and not lignes.shown and ent.shown
+    eDeplier = g.UIAtlas.data["ui-questtrackerbutton-expand-all"]
+    assert list(ent.reduire.GetNormalTexture(ent.reduire).texcoord.values())[0] == eDeplier[2]
+    lua.execute("ForeverUIObjectiveTrackerHeader.reduire:GetScript('OnClick')()")
+    assert not wf.collapsed and lignes.shown
+
+    # le bouton filtre : le tri et les filtres de WotLK
+    lua.execute("MENU_ENTREES = {} ForeverUIObjectiveTrackerHeader.filtre:GetScript('OnClick')(ForeverUIObjectiveTrackerHeader.filtre) ForeverUIWorldMapNavMenu.initFn()")
+    entrees = list(g.MENU_ENTREES.values())
+    print("   filtre : %s" % [(e.text, e.checked) for e in entrees])
+    assert [e.text for e in entrees] == ["Sort Quests", "Proximity", "Difficulty High", "Difficulty Low", "Manual",
+                                         "Display", "Achievements", "Completed Quests", "Remote Zones"]
+    assert entrees[4].checked == True and entrees[6].checked == True
+    entrees[6].func()
+    print("   sans les hauts faits : module montre=%s" % ma.shown)
+    assert g.WATCHFRAME_FILTER_TYPE == 6 and not ma.shown
+    lua.execute("WatchFrame_SetFilter(nil, WATCHFRAME_FILTER_ACHIEVEMENTS)")
+
+    # clic droit : le menu de camelot, et le deplacement manuel de WotLK
+    lua.execute("MENU_ENTREES = {} ForeverUI.ObjectiveTracker.quetes.blocs[62].bouton:GetScript('OnClick')(nil, 'RightButton') ForeverUIWorldMapNavMenu.initFn()")
+    noms = [e.text for e in g.MENU_ENTREES.values()]
+    print("   menu de la quete : %s" % noms)
+    assert noms == ["The Fargodeep Mine", "Open Quest Details", "Open Quest Map", "Untrack", "Share in Chat", "Abandon",
+                    "Move Up", "Move to Top"]
+    list(g.MENU_ENTREES.values())[6].func()
+    assert list(g.SUIVI_APPELS.values())[-1] == "deplacer 3 -1"
+
+    # clic gauche : la carte, le volet et la page de la quete
+    lua.execute("WorldMapFrame:Hide() ForeverUI.ObjectiveTracker.quetes.blocs[62].bouton:GetScript('OnClick')(nil, 'LeftButton')")
+    det = g.ForeverUIQuestDetailsFrame
+    print("   clic gauche : carte %s, page %s (quete %s)" % (g.WorldMapFrame.shown, det.shown, det.questID))
+    assert g.WorldMapFrame.shown and det.shown and det.questID == 62
+    lua.execute("ForeverUIQuestDetailsBackButton:GetScript('OnClick')(ForeverUIQuestDetailsBackButton) WorldMapFrame:Hide()")
+
+    # une quete nouvellement suivie s'annonce (AddAnim : la lueur du titre)
+    lua.execute('SUIVIES["The People\'s Militia"] = true ExpandQuestHeader(4) WatchFrame_Update()')
+    b3 = {b.titre.text: b for b in mq.blocs.values()}.get("The People's Militia")
+    print("   nouvelle quete : %s, lueur alpha %s, rendu '%s'" % (b3 is not None, b3 and b3.lueur.alpha,
+                                                              b3 and [l.texte.text for l in b3.lignesMontrees.values()]))
+    assert b3 and b3.lueur.alpha == 1, "la lueur du titre part"
+    assert [l.texte.text for l in b3.lignesMontrees.values()] == ["Return to Gryan Stoutmantle."], "quete terminee : son texte de rendu, sans tiret"
+    lua.execute("SUIVIES = {} HAUTS_FAITS_SUIVIS = {} CollapseQuestHeader(4) WatchFrame_Update()")
+    assert not ent.shown, "plus rien a suivre : l'en-tete s'efface avec celui de WotLK"
+
+    # LA PLACE DU SUIVI : un porteur deplacable par /fui, a la place de camelot
+    porteur = g.ForeverUIObjectiveTrackerHolder
+    d = g.ForeverUI.Layout.systems.suivi.defaults
+    print("   porteur : %s x %s, defaut %s (%s, %s)" % (porteur.width, porteur.height, d.point, d.x, d.y))
+    assert (d.point, d.relativePoint, d.x, d.y) == ("TOPRIGHT", "TOPRIGHT", -110, -275), "EditModePresetLayouts de camelot"
+    assert porteur.movable
+    porteur._top = 500
+    lua.execute("UIParent_ManageFramePositions()")
+    pts = [list(x.values()) for x in wf.points.values()]
+    print("   apres le placement de WotLK : %d point(s), %s | hauteur %s" % (len(pts), pts[0][0], wf.height))
+    assert len(pts) == 1 and pts[0][0] == "TOPLEFT" and meme(pts[0][1], porteur), "WotLK ne recolle plus le suivi sous la minimap"
+    assert wf.height == 500 - 60, "du porteur au bas que WotLK lui donnait"
+    # deplace en mode edition : le suivi suit, sa hauteur aussi
+    porteur._top = 300
+    lua.execute("ForeverUIObjectiveTrackerHolder:ClearAllPoints() ForeverUIObjectiveTrackerHolder:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -200, -400) ForeverUI.Layout.Save('suivi')")
+    print("   deplace : x retenu %s, hauteur %s" % (g.ForeverUIDB.positions.suivi.x, wf.height))
+    assert g.ForeverUIDB.positions.suivi.x == -200 and wf.height == 240
+    lua.execute("ForeverUI.Layout.Reset('suivi')")
+    assert not g.ForeverUIDB.positions.suivi
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():
