@@ -30,12 +30,15 @@ nothing else is allowed to disturb.
 | Pet | The familiar in three dimensions, turned with the same arrows as the player, and beside it its level and name, its general statistics and its resistances as icons. | done |
 | Statistics | -- | the tab exists, its screen is left empty on request |
 | Dropdown lists | The list a dropdown opens, which is one and the same for every menu in the game: background, rows, font, check box and tick, and a width that follows the menu that opened it. | done |
-| Minimap | -- | not started |
+| Minimap | The map in its modern frame, the clock and the calendar, the player's coordinates, and the arrows on the edge. | done |
+| World map and quest log | The map in a window the player can move, the quest log as a pane beside it with the list and each quest's page, the maximized map, and the floor selector of dungeons. | done |
+| Quest tracker | Quests and achievements under their headers, folded and unfolded, the objectives ticked as they are met, the sort and filter menu, a left click opening the quest on the map. | done |
 | Chat | -- | not started |
 | Tooltips | -- | not started |
 | Buffs and debuffs | -- | not started |
 | Party and raid frames | -- | not started |
-| Spellbook and talents | -- | not started |
+| Spellbook | The book on one page or two, a category per tab, the spells in a grid under the category's name, passives round, similar spells grouped on flyouts, the settings menu, and the search with its preview. Pages, categories, flyouts, the size and the settings all work in combat. | done |
+| Talents | -- | not started |
 | Character select and creation | -- | not started |
 
 Everything ForeverUI places is a movable system: `/fui` opens the edit mode,

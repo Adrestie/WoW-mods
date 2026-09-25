@@ -87,7 +87,7 @@ local G = {
 	ongletsX = 70, ongletsY = -26, ongletL = 44, ongletH = 32, ongletEcart = 1,
 	iconeOngletL = 34, iconeOngletH = 33,
 	pagesHaut = -50, vueL = 680, vueH = 590, vue1X = 85, vueY = -45, vue2X = -50,
-	colonnes = 3, ecartX = 15, ecartY = 10, enteteH = 51, sortH = 60,
+	colonnes = 3, ecartX = 15, ecartY = 10, enteteH = 51, sortH = 60, espace = 20,
 	pagerX = -75, pagerY = 40, pagerEcart = 8, flecheCote = 32,
 	boutonCote = 40, iconeCote = 36, texteX = 50,
 	casesParVue = 24,
@@ -126,6 +126,7 @@ local TEXTE = {
 	masquerPassifs = "Hide Passives",
 	tousLesRangs = "Show all spell ranks",
 	volants = "Group Similar Spells on Flyouts",   -- SPELLBOOK_USE_FLYOUTS
+	passifsDesactives = "Hiding Passives is disabled while searching",   -- SPELLBOOK_SEARCH_HIDE_PASSIVES_DISABLED
 }
 
 -- LE MENU DES REGLAGES, en boutons securises. Il reprend la liste du client
@@ -208,6 +209,8 @@ local function categories()
 	return liste
 end
 S.categories = categories
+S.G = G
+S.police = police
 
 -- Les sorts d'une categorie. Sans "tous les rangs" (CVar ShowAllSpellRanks),
 -- un sort ne garde que son rang le plus haut -- le dernier de la ligne.
@@ -430,6 +433,7 @@ local function listeAffichee(cats, index, opts)
 	return liste
 end
 S.listeAffichee = listeAffichee
+S.optionsCourantes = optionsCourantes
 
 -- ------------------------------------------------------------ la mise en page
 -- PagedCondensedVerticalGrid : l'en-tete prend sa rangee -- et la reprend en
@@ -438,10 +442,16 @@ S.listeAffichee = listeAffichee
 -- place qui reste ; une vue pleine en ouvre une autre, et le compte des
 -- rangees repart des sorts restants. Rend la liste des vues, chacune une
 -- liste d'elements { en-tete ou sort, colonne, y }.
-local function mettreEnPage(titre, sorts)
+--
+-- PLUSIEURS SECTIONS (les resultats d'une recherche) : chacune garde ses
+-- rangees ; une section qui commence sur une vue deja remplie est precedee
+-- de l'espaceur de camelot (spacerSize 20 + yPadding 10), et passe a la vue
+-- suivante s'il n'y a plus la place de son en-tete et d'une rangee.
+local function mettreEnPageGroupes(groupes)
 	local vues = {}
 	local vue, occupe
-	local function nouvelleVue()
+	local pas = G.sortH + G.ecartY
+	local function nouvelleVue(titre)
 		vue = {}
 		table.insert(vues, vue)
 		occupe = 0
@@ -450,31 +460,49 @@ local function mettreEnPage(titre, sorts)
 			occupe = G.enteteH + G.ecartY
 		end
 	end
-	nouvelleVue()
-	local pas = G.sortH + G.ecartY
-	local i = 1
-	while i <= #sorts do
-		local dispo = math.floor((G.vueH - occupe) / pas)
-		if dispo < 1 then
-			nouvelleVue()
-			dispo = math.floor((G.vueH - occupe) / pas)
-		end
-		local restants = #sorts - i + 1
-		local rangees = math.min(math.ceil(restants / G.colonnes), dispo)
-		for colonne = 1, G.colonnes do
-			for r = 1, rangees do
-				if i <= #sorts then
-					table.insert(vue, { sort = sorts[i], colonne = colonne, y = occupe + (r - 1) * pas })
-					i = i + 1
-				end
+	for _, g in ipairs(groupes) do
+		local titre, sorts = g.titre, g.sorts
+		if not vue then
+			nouvelleVue(titre)
+		elseif occupe + G.espace + G.ecartY + G.enteteH + G.ecartY + pas > G.vueH then
+			nouvelleVue(titre)
+		else
+			occupe = occupe + G.espace + G.ecartY
+			if titre then
+				table.insert(vue, { entete = titre, colonne = 1, y = occupe })
+				occupe = occupe + G.enteteH + G.ecartY
 			end
 		end
-		occupe = occupe + rangees * pas
-		if i <= #sorts then
-			nouvelleVue()
+		local i = 1
+		while i <= #sorts do
+			local dispo = math.floor((G.vueH - occupe) / pas)
+			if dispo < 1 then
+				nouvelleVue(titre)
+				dispo = math.floor((G.vueH - occupe) / pas)
+			end
+			local restants = #sorts - i + 1
+			local rangees = math.min(math.ceil(restants / G.colonnes), dispo)
+			for colonne = 1, G.colonnes do
+				for r = 1, rangees do
+					if i <= #sorts then
+						table.insert(vue, { sort = sorts[i], colonne = colonne, y = occupe + (r - 1) * pas })
+						i = i + 1
+					end
+				end
+			end
+			occupe = occupe + rangees * pas
+			if i <= #sorts then
+				nouvelleVue(titre)
+			end
 		end
 	end
+	if not vue then nouvelleVue(nil) end
 	return vues
+end
+S.mettreEnPageGroupes = mettreEnPageGroupes
+
+local function mettreEnPage(titre, sorts)
+	return mettreEnPageGroupes({ { titre = titre, sorts = sorts } })
 end
 S.mettreEnPage = mettreEnPage
 
@@ -1046,7 +1074,8 @@ local function construire()
 			vue.cases[n] = creerCase(vue, k)
 			S.cases[k] = vue.cases[n]
 		end
-		vue.entete = creerEntete(vue)
+		vue.entetes = { creerEntete(vue) }
+		vue.entete = vue.entetes[1]
 		S.vues[v] = vue
 	end
 
@@ -1150,6 +1179,17 @@ function S.creerReglages(pages)
 		-- ouverte ; le reglage passe par le controleur, en combat aussi
 		l:SetAttribute("_onclick", [==[ self:GetFrameRef("ctrl"):SetAttribute("reglage", self:GetID()) ]==])
 		l:HookScript("OnClick", function() PlaySound("UChatScrollButton") end)
+		-- SetupHidePassivesCheckbox : desactivee en recherche, avec son
+		-- infobulle (les deux autres n'en ont pas)
+		if r.bit == 1 then
+			l:SetScript("OnEnter", function(self)
+				if not S.reglagesGrises then return end
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetText(TEXTE.passifsDesactives, 1, 1, 1, 1, 1)
+				GameTooltip:Show()
+			end)
+			l:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		end
 		liste.lignes[i] = l
 	end
 	local largeur = plusLong + MENU.largeurPlus + MENU.marge
@@ -1172,6 +1212,22 @@ function S.creerReglages(pages)
 	]==]):format(MENU.attente))
 	S.reglages, S.listeReglages = b, liste
 	return b
+end
+
+-- en combat aussi : grise pendant une recherche (le bloc securise
+-- desactive les lignes ; ici, la couleur du texte)
+function S.griserReglages(grise)
+	if not S.listeReglages then return end
+	S.reglagesGrises = grise
+	for _, l in ipairs(S.listeReglages.lignes) do
+		-- "Show all spell ranks" reste actif pendant une recherche (demande
+		-- du 2026-09-25 ; camelot le desactive)
+		if grise and l.reglage.bit ~= 4 then
+			l.texte:SetTextColor(0.5, 0.5, 0.5)
+		else
+			l.texte:SetTextColor(1, 1, 1)
+		end
+	end
 end
 
 -- en combat aussi : les coches suivent la combinaison (textures seulement)
@@ -1201,6 +1257,7 @@ function S.poserTaille(reduit)
 	local livre, pages = S.livre, S.pages
 	if not livre then return end
 	if reduit == nil then reduit = reglages().reduit end
+	if S.surTaille then S.surTaille(reduit) end
 	if reduit then
 		pages.gauche:Hide() pages.droite:Hide() pages.seule:Show()
 		atlas(livre.taille:GetNormalTexture(), "redbutton-expand", true)
@@ -1335,6 +1392,9 @@ local AFFICHER = [==[
 	for i = 1, NC do
 		if i == CAT then ONGLETS[i]:Disable() else ONGLETS[i]:Enable() end
 	end
+	for i = 1, NE do
+		if CAT == 0 and ENTREES[i]:GetID() ~= 4 then ENTREES[i]:Disable() else ENTREES[i]:Enable() end
+	end
 	if PAGE > 1 then PREC:Enable() else PREC:Disable() end
 	if PAGE < NP[REG .. ":" .. MODE .. ":" .. CAT] then SUIV:Enable() else SUIV:Disable() end
 	control:CallMethod("ForeverUIVisuels", CAT, PAGE, MODE, REG)
@@ -1343,7 +1403,7 @@ local AFFICHER = [==[
 local CHANGEMENT = [==[
 	if name == "categorie" and value then
 		self:SetAttribute("categorie", nil)
-		if value >= 1 and value <= NC then
+		if (value >= 1 and value <= NC) or (value == 0 and NP[REG .. ":" .. MODE .. ":0"]) then
 			CAT = value
 			PAGE = 1
 			control:RunAttribute("afficher")
@@ -1367,6 +1427,13 @@ local CHANGEMENT = [==[
 		if PAGE > NP[REG .. ":" .. MODE .. ":" .. CAT] then PAGE = NP[REG .. ":" .. MODE .. ":" .. CAT] end
 		control:RunAttribute("poser")
 		control:RunAttribute("afficher")
+	elseif name == "effacer" and value then
+		self:SetAttribute("effacer", nil)
+		if CAT == 0 then
+			CAT = 1
+			PAGE = 1
+			control:RunAttribute("afficher")
+		end
 	elseif name == "reglage" and value then
 		self:SetAttribute("reglage", nil)
 		if floor(REG / value) % 2 == 1 then REG = REG - value else REG = REG + value end
@@ -1439,7 +1506,10 @@ function S.creerControleur(livre)
 	ctrl:SetFrameRef("pages", S.pages)
 	ctrl:SetFrameRef("vue2", S.vues[2])
 	livre.taille:SetFrameRef("ctrl", ctrl)
-	for _, l in ipairs(S.listeReglages.lignes) do l:SetFrameRef("ctrl", ctrl) end
+	for i, l in ipairs(S.listeReglages.lignes) do
+		l:SetFrameRef("ctrl", ctrl)
+		ctrl:SetFrameRef("e" .. i, l)
+	end
 	ctrl:SetFrameRef("prec", S.pager.precedente)
 	ctrl:SetFrameRef("suiv", S.pager.suivante)
 	for _, b in ipairs({ S.pager.precedente, S.pager.suivante, S.contenu }) do
@@ -1463,6 +1533,9 @@ function S.creerControleur(livre)
 		SUIV = self:GetFrameRef("suiv")
 		ONGLETS = newtable()
 		PETITS = newtable()
+		ENTREES = newtable()
+		NE = %d
+		for i = 1, NE do ENTREES[i] = self:GetFrameRef("e" .. i) end
 		NBPETITS = 0
 		D = newtable()
 		NP = newtable()
@@ -1470,7 +1543,7 @@ function S.creerControleur(livre)
 		NC = 0
 		CAT = 1
 		PAGE = 1
-	]==]):format(#S.cases))
+	]==]):format(#S.cases, #S.listeReglages.lignes))
 	ctrl:SetAttribute("afficher", AFFICHER)
 	ctrl:SetAttribute("poser", POSER:format(G.largeurReduite, G.livreLReduit, G.largeur, G.livreL))
 	ctrl:SetAttribute("_onattributechanged", CHANGEMENT)
@@ -1512,6 +1585,29 @@ function S.maj()
 	local cats = categories()
 	local e = S.etat
 	if e.categorie > #cats then e.categorie = 1 end
+	-- LA RECHERCHE (SpellBookSearch.lua) : ses resultats forment une
+	-- categorie de plus, la 0, sans onglet. Sans resultat, on en sort
+	-- (DisplayFullSearchResults -> ClearActiveSearchState).
+	local recherche = ForeverUI.SpellBookSearch
+	if recherche then recherche.nouveauCalcul() end
+	local groupesRecherche = {}
+	if recherche and recherche.active() then
+		-- une variante par jeu de reglages : la recherche suit "Hide Passives"
+		-- et "Show all spell ranks", et ne groupe JAMAIS (demandes du
+		-- 2026-09-25 ; camelot y montre passifs et tous les rangs, et groupe)
+		local vide = true
+		for r = 0, 7 do
+			local g = recherche.groupes(cats, { passifs = r % 2 == 1, volants = true,
+				rangs = math.floor(r / 4) % 2 == 1 })
+			groupesRecherche[r] = g
+			if #g > 0 then vide = false end
+		end
+		if vide then
+			recherche.quitter()
+			groupesRecherche = {}
+		end
+	end
+	if e.categorie == 0 and not groupesRecherche[0] then e.categorie = 1 end
 	poserOnglets(cats)
 	local mode = reglages().reduit and 1 or 2
 	local courantes = optionsCourantes()
@@ -1527,8 +1623,17 @@ function S.maj()
 	for r = 0, 7 do
 		local opts = { passifs = r % 2 == 1, volants = math.floor(r / 2) % 2 == 1, rangs = math.floor(r / 4) % 2 == 1 }
 		S.pagesDonnees[r], S.np[r] = { {}, {} }, { {}, {} }
-	for ci, cat in ipairs(cats) do
-		local vues = mettreEnPage(cat.nom, listeAffichee(cats, ci, opts))
+		-- la categorie 0 : les resultats de la recherche, pour ce jeu de
+		-- reglages
+		local g = groupesRecherche[r]
+	for ci = (g and 0 or 1), #cats do
+		local cat = cats[ci]
+		local vues
+		if ci == 0 then
+			vues = mettreEnPageGroupes(g)
+		else
+			vues = mettreEnPage(cat.nom, listeAffichee(cats, ci, opts))
+		end
 		for parPage = 1, 2 do
 			local nPages = math.max(1, math.ceil(#vues / parPage))
 			S.np[r][parPage][ci] = nPages
@@ -1542,7 +1647,8 @@ function S.maj()
 					local n = 0
 					for _, el in ipairs(vues[(page - 1) * parPage + slot] or {}) do
 						if el.entete then
-							donnees.entetes[slot] = el
+							donnees.entetes[slot] = donnees.entetes[slot] or {}
+							table.insert(donnees.entetes[slot], el)
 						else
 							n = n + 1
 							local k = (slot - 1) * G.casesParVue + n
@@ -1602,17 +1708,26 @@ function S.visuels(cat, page, mode, reg)
 	e.pages = S.np and S.np[reg][mode][cat] or 1
 	allumerOnglets(cat)
 	local donnees = S.pagesDonnees and S.pagesDonnees[reg][mode][cat] and S.pagesDonnees[reg][mode][cat][page]
+	-- les en-tetes : un par section de la vue (cadres ordinaires, crees au
+	-- besoin -- permis en combat)
 	for slot, vue in ipairs(S.vues) do
-		local el = donnees and donnees.entetes[slot]
-		if el then
-			vue.entete.texte:SetText(el.entete)
-			vue.entete:ClearAllPoints()
-			vue.entete:SetPoint("TOPLEFT", vue, "TOPLEFT", 0, -el.y)
-			vue.entete:Show()
-		else
-			vue.entete:Hide()
+		local liste = donnees and donnees.entetes[slot] or {}
+		for i, el in ipairs(liste) do
+			local h = vue.entetes[i]
+			if not h then
+				h = creerEntete(vue)
+				vue.entetes[i] = h
+			end
+			h.texte:SetText(el.entete)
+			h:ClearAllPoints()
+			h:SetPoint("TOPLEFT", vue, "TOPLEFT", 0, -el.y)
+			h:Show()
 		end
+		for i = #liste + 1, #vue.entetes do vue.entetes[i]:Hide() end
 	end
+	-- les reglages sont grises pendant une recherche (camelot les desactive)
+	S.griserReglages(cat == 0)
+	if S.surVisuels then S.surVisuels(cat) end
 	for k, c in ipairs(S.cases) do
 		local sort = donnees and donnees.cases[k]
 		c.sort = sort

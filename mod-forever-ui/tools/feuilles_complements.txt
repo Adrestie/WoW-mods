@@ -148,3 +148,7 @@ interface/spellbook/spellbookelements.blp
 interface/spellbook/spellbookelementsc60.blp
 interface/spellbook/spellbooktabsc60.blp
 interface/talentframe/talents.blp
+
+# LA RECHERCHE DU GRIMOIRE (etape 3) : les lignes de l'apercu
+# (SpellSearchPreviewResultTemplate) -- _search-rowbg, search-highlight
+interface/common/search.blp

@@ -1581,6 +1581,52 @@ function CreateFrame(kind, name, parent, template)
     if type(template) == "string" and string.find(template, "SecureActionButtonTemplate", 1, true) then
         f.scripts.OnClick = clicAction
     end
+    -- UNE ZONE DE SAISIE COMME CELLE DU CLIENT : SetText declenche
+    -- OnTextChanged, SetFocus / ClearFocus leurs scripts de focus.
+    if kind == "EditBox" then
+        local ecrire = f.SetText
+        function f:SetText(t)
+            ecrire(self, t)
+            if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self, false) end
+        end
+        function f:SetFocus()
+            if self.focused then return end
+            self.focused = true
+            if self.scripts.OnEditFocusGained then self.scripts.OnEditFocusGained(self) end
+        end
+        function f:ClearFocus()
+            if not self.focused then return end
+            self.focused = false
+            if self.scripts.OnEditFocusLost then self.scripts.OnEditFocusLost(self) end
+        end
+        -- la frappe au clavier : le texte change, puis OnTextChanged(true)
+        function f:Taper(t)
+            ecrire(self, t)
+            if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self, true) end
+        end
+    end
+    -- UNE INFOBULLE : ses lignes (TextLeftN) ; SetSpell y pose le nom puis
+    -- la description (DESCRIPTIONS["livre" .. emplacement])
+    if kind == "GameTooltip" then
+        f.lignes = 0
+        function f:SetOwner(proprio, ancre) self.owner, self.anchor = proprio, ancre end
+        function f:ClearLines() self.lignes = 0 end
+        function f:NumLines() return self.lignes end
+        local function ligne(self, i, texte)
+            local nom = self.name .. "TextLeft" .. i
+            _G[nom] = _G[nom] or self:CreateFontString(nom)
+            _G[nom]:SetText(texte)
+            if i > self.lignes then self.lignes = i end
+        end
+        function f:SetSpell(slot, livre)
+            self.lignes = 0
+            local e = LIVRE[livre][slot]
+            if not e then return end
+            ligne(self, 1, e[1])
+            local d = DESCRIPTIONS and DESCRIPTIONS[livre .. slot]
+            if d then ligne(self, 2, d) end
+        end
+    end
     if type(template) == "string" and string.find(template, "SecureHandler", 1, true) then
         installerGestionnaire(f, template)
     end
@@ -1671,6 +1717,21 @@ SORTS_PAR_ID = { [3565] = "Teleport: Darnassus", [3562] = "Teleport: Ironforge",
 function GetSpellInfo(id) return SORTS_PAR_ID[id] end
 function IsCurrentSpell(slot, livre) return SORT_EN_COURS == livre .. slot end
 function IsModifierKeyDown() return MODIFICATEUR and true or false end
+-- LES BARRES D'ACTION : ACTIONS[emplacement] = { type, id, sous-type,
+-- identifiant global } (GetActionInfo de 3.3.5) ; barres multiples
+-- (bas gauche, bas droite, droite, gauche) ; posture (le familier : PET_ACTIONS,
+-- plus haut)
+ACTIONS = {}
+function GetActionInfo(slot)
+    local a = ACTIONS[slot]
+    if a then return a[1], a[2], a[3], a[4] end
+end
+BARRES = { true, true, true, true }
+function GetActionBarToggles() return BARRES[1], BARRES[2], BARRES[3], BARRES[4] end
+function GetBonusBarOffset() return STATE.posture or 0 end
+function IsAttackSpell(nom) return nom == "Attack" end
+function IsAutoRepeatSpell(nom) return nom == "Shoot" end
+function MouseIsOver(f) return f and f.souris == true end
 GameTooltip.SetSpell = function(self, slot, livre) self.sort = { slot, livre } end
 STATE.cvars.ShowAllSpellRanks = "0"
 SPELLBOOK = "Spellbook"
@@ -3065,7 +3126,7 @@ def main():
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "Bags.lua",
+             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
@@ -7930,6 +7991,169 @@ def main():
     assert livre.width == 809 and not g.ForeverUISpellBookView2.shown and g.ForeverUIDB.grimoire.reduit
     lua.execute("CLIQUER(ForeverUISpellBookFrame.taille)")
     assert livre.width == 1618 and g.ForeverUISpellBookView2.shown
+
+    # ------------------------------------------------------------------
+    # LA RECHERCHE (etape 3)
+    # ------------------------------------------------------------------
+    print("\n--- recherche du grimoire ---")
+    lua.execute("""
+        LIVRE.spell[8] = { "Arcane Missiles", "Rank 1", false, "icone:projectiles" }
+        LIVRE.spell[9] = { "Arcane Intellect", "Rank 1", false, "icone:intelligence" }
+        LIVRE.spell[10] = { "Arcane Blast", "Rank 1", false, "icone:deflagration" }
+        LIVRE.spell[11] = { "Arcane Power", "", false, "icone:puissance" }
+        LIVRE.spell[12] = { "Arcane Barrage", "Rank 1", false, "icone:barrage" }
+        LIVRE.spell[13] = { "Teleport: Stormwind", "", false, "icone:tp_hurlevent" }
+        LIVRE.spell[14] = { "Teleport: Ironforge", "", false, "icone:tp_forgefer" }
+        LIVRE.spell[15] = { "Arcane Explosion", "Rank 1", false, "icone:explosion" }
+        LIVRE.spell[16] = { "Arcane Brilliance", "Rank 1", false, "icone:illumination" }
+        ONGLETS[3] = { "Arcane", "icone:arcane", 7, 9 }
+        DESCRIPTIONS = {
+            spell3 = "Launches a bolt of frost at the enemy. Works well with Frost Armor.",
+            spell4 = "Launches a bolt of frost at the enemy. Works well with Frost Armor.",
+            spell5 = "Launches a bolt of frost at the enemy. Works well with Frost Armor.",
+            spell6 = "Increases armor.",
+            spell7 = "Increases the critical strike damage bonus of your Frost spells.",
+            spell8 = "Launches arcane missiles.",
+        }
+        ForeverUI.SpellBook.maj()
+        CLIQUER(ForeverUISpellBookTab2)
+    """)
+    boite = g.ForeverUISpellBookSearchBox
+    apercu = g.ForeverUISpellBookSearchPreview
+    pb = list(boite.points[1].values())
+    print("   champ : %s x %s, %s du %s des reglages (%s, %s) | consigne '%s'" % (boite.width, boite.height,
+        pb[0], pb[2], pb[3], pb[4], boite.consigne.text))
+    assert (boite.width, boite.height) == (300, 30) and meme(pb[1], g.ForeverUISpellBookSettingsButton)
+    assert (pb[0], pb[2], pb[3], pb[4]) == ("RIGHT", "LEFT", -5, 4) and boite.maxLetters == 40
+    assert boite.consigne.text == "Search abilities, keywords" and boite.consigne.shown
+    assert not g.ForeverUISpellBookSearchClear.shown, "sans focus ni texte, pas d'effacement"
+    # le focus, sous 3 lettres : la suggestion
+    lua.execute("ForeverUISpellBookSearchBox:SetFocus()")
+    print("   focus : apercu %s, suggestion '%s', hauteur %s" % (apercu.shown, apercu.suggestion.texte.text, apercu.height))
+    assert apercu.shown and apercu.suggestion.shown and apercu.suggestion.texte.text == "Missing from action bar"
+    assert apercu.height == 27 + 3 and g.ForeverUISpellBookSearchClear.shown
+    # trois lettres : l'apercu des noms (reglages en cours : le plus haut rang)
+    lua.execute("ForeverUISpellBookSearchBox:Taper('fro')")
+    lignes = [l for l in apercu.lignes.values() if l.shown]
+    print("   'fro' : %s" % [(l.nom.text, l.icone.texture) for l in lignes])
+    assert [l.nom.text for l in lignes] == ["Frostbolt", "Frost Armor"] and not apercu.suggestion.shown
+    assert apercu.height == 1 + 2 * 27 + 1 + 3 and not apercu.depassement.shown
+    # plus de cinq (camelot : trois ; cinq a la demande) : "And 2 more"
+    lua.execute("ForeverUISpellBookSearchBox:Taper('arcane')")
+    print("   'arcane' : %s | %s | hauteur %s" % ([l.nom.text for l in apercu.lignes.values() if l.shown],
+        apercu.depassement.texte.text, apercu.height))
+    assert len([l for l in apercu.lignes.values() if l.shown]) == 5
+    assert apercu.depassement.shown and apercu.depassement.texte.text == "And 2 more"
+    assert apercu.height == 1 + 5 * 27 + 4 + 3 + 16
+    # L'ICONE AU-DESSUS DU FOND : la texture normale d'un bouton se dessine en
+    # ARTWORK, sans sous-niveau en 3.3.5 ; l'icone va en OVERLAY, son cadre
+    # et la surbrillance dans un cadre fils
+    l1 = apercu.lignes[1]
+    assert l1.icone.layer == "OVERLAY" and l1.icone.texture == "icone:projectiles"
+    assert meme(l1.surligne.owner, l1.dessus) and l1.dessus.frameLevel == l1.GetFrameLevel(l1) + 1
+    # le clavier : bas, bas, haut ; Entree choisit
+    lua.execute("ForeverUISpellBookSearchBox.scripts.OnKeyDown(ForeverUISpellBookSearchBox, 'DOWN')")
+    lua.execute("ForeverUISpellBookSearchBox.scripts.OnKeyDown(ForeverUISpellBookSearchBox, 'DOWN')")
+    assert apercu.surligne == 2 and apercu.lignes[2].surligne.shown and not apercu.lignes[1].surligne.shown
+    lua.execute("ForeverUISpellBookSearchBox.scripts.OnKeyDown(ForeverUISpellBookSearchBox, 'UP')")
+    assert apercu.surligne == 1
+    lua.execute("ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    montrees = [c for c in vue.cases.values() if c.shown]
+    print("   Entree sur '%s' : texte '%s', categorie %s, %s" % (apercu.lignes[1].nom.text, boite.text,
+        g.ForeverUI.SpellBook.etat.categorie, [c.nom.text for c in montrees]))
+    assert boite.text == "Arcane Missiles" and g.ForeverUI.SpellBook.etat.categorie == 0
+    assert montrees[0].nom.text == "Arcane Missiles" and not apercu.shown and not boite.focused
+
+    # LA RECHERCHE ENTIERE : "frost" -- noms, puis descriptions ; les rangs
+    # suivent "Show all spell ranks" (ici non coche : le plus haut)
+    lua.execute("ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('frost') ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    montrees = [c for c in vue.cases.values() if c.shown]
+    entetes = [(h.texte.text, list(h.points[1].values())[4]) for h in vue.entetes.values() if h.shown]
+    print("   'frost' : %s | en-tetes %s" % ([(c.nom.text, c.sous.text) for c in montrees], entetes))
+    assert [(c.nom.text, c.sous.text) for c in montrees] == [("Frostbolt", "Rank 3"), ("Frost Armor", "Rank 1"), ("Ice Shards", "Passive")]
+    assert entetes == [("Name Matches", 0), ("Description Matches", -(61 + 70 + 30))], \
+        "deux sections ; la seconde apres une rangee et l'espaceur (20 + 10)"
+    assert not any(o.actif.shown for o in g.ForeverUI.SpellBook.onglets.boutons.values()), "aucun onglet choisi"
+    ent = [g["ForeverUISpellBookSettingsEntry%d" % i] for i in (1, 2, 3)]
+    assert ent[0].enabled == False and ent[1].enabled == False and ent[0].texte.textColor[1] == 0.5, "reglages desactives"
+    assert ent[2].enabled != False and ent[2].texte.textColor[1] == 1, "sauf Show all spell ranks (demande du 2026-09-25)"
+    lua.execute("ForeverUISpellBookSettingsEntry1.scripts.OnEnter(ForeverUISpellBookSettingsEntry1)")
+    assert g.GameTooltip.text == "Hiding Passives is disabled while searching"
+    lua.execute("LANCES = {} CLIQUER(ForeverUISpellBookButton1)")
+    assert list(g.LANCES.values()) == ["Frostbolt(Rank 3)"], "un resultat se lance"
+    # "Frostbolt" : exact, puis apparente (Frost Armor est dans sa description)
+    lua.execute("ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('Frostbolt') ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    montrees = [c for c in vue.cases.values() if c.shown]
+    entetes = [h.texte.text for h in vue.entetes.values() if h.shown]
+    print("   'Frostbolt' : %s | %s" % ([c.nom.text for c in montrees], entetes))
+    assert entetes == ["Exact Matches", "Related Matches"] and [c.nom.text for c in montrees] == ["Frostbolt", "Frost Armor"]
+    # un onglet sort de la recherche, sans revenir au premier
+    lua.execute("CLIQUER(ForeverUISpellBookTab3)")
+    # "Show all spell ranks" coche EN PLEINE RECHERCHE : tous les rangs, tout
+    # de suite ; et en combat aussi
+    lua.execute("ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('Frostbolt') ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry3)")
+    tous = [(c.nom.text, c.sous.text) for c in vue.cases.values() if c.shown]
+    print("   tous les rangs, en recherche : %s" % tous)
+    assert g.ForeverUI.SpellBook.etat.categorie == 0 and g.STATE.cvars.ShowAllSpellRanks == "1"
+    assert tous[:3] == [("Frostbolt", "Rank 1"), ("Frostbolt", "Rank 2"), ("Frostbolt", "Rank 3")]
+    lua.execute("STATE.verifierProtection = true STATE.inLockdown = true CLIQUER(ForeverUISpellBookSettingsEntry3)")
+    assert [c.nom.text for c in vue.cases.values() if c.shown] == ["Frostbolt", "Frost Armor"], "en combat aussi"
+    lua.execute("STATE.inLockdown = false STATE.verifierProtection = false CLIQUER(ForeverUISpellBookTab3)")
+    assert g.STATE.cvars.ShowAllSpellRanks == "0"
+    # "Hide Passives" coche : la recherche ne montre plus Ice Shards
+    lua.execute("CLIQUER(ForeverUISpellBookSettingsEntry1) ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('frost') ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    sansPassifs = [c.nom.text for c in vue.cases.values() if c.shown]
+    print("   sans passifs : %s" % sansPassifs)
+    assert sansPassifs == ["Frostbolt", "Frost Armor"]
+    lua.execute("CLIQUER(ForeverUISpellBookTab3) CLIQUER(ForeverUISpellBookSettingsEntry1)")
+    assert not g.ForeverUIDB.grimoire.masquerPassifs
+    assert g.ForeverUI.SpellBook.etat.categorie == 3 and boite.text == "" and not g.ForeverUI.SpellBookSearch.active()
+    assert ent[0].enabled != False and ent[0].texte.textColor[1] == 1
+    # l'effacement sort de la recherche et revient au premier onglet
+    lua.execute("ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('frost') ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    assert g.ForeverUI.SpellBook.etat.categorie == 0
+    lua.execute("CLIQUER(ForeverUISpellBookSearchClear)")
+    assert g.ForeverUI.SpellBook.etat.categorie == 1 and boite.text == "" and not g.ForeverUISpellBookSearchClear.shown
+    # sans resultat : on reste hors recherche ; Entree sous 3 lettres aussi
+    lua.execute("ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('zzz') ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    assert g.ForeverUI.SpellBook.etat.categorie == 1 and boite.text == "" and not g.ForeverUI.SpellBookSearch.active()
+
+    # "MISSING FROM ACTION BAR" : la suggestion. Frostbolt est sur la barre
+    # principale, Frost Armor sur la barre de droite (desactivee), Arcane
+    # Missiles sur une barre de posture inactive.
+    lua.execute("""
+        ACTIONS = { [1] = { "spell", 5, "spell" }, [30] = { "spell", 6, "spell" }, [80] = { "spell", 8, "spell" } }
+        BARRES = { true, true, false, true }
+        ForeverUISpellBookSearchBox:SetFocus()
+        CLIQUER(ForeverUISpellBookSearchResultSuggestion)
+    """)
+    montrees = [c.nom.text for c in vue.cases.values() if c.shown] + \
+        [c.nom.text for c in g.ForeverUISpellBookView2.cases.values() if c.shown]
+    entetes = [h.texte.text for h in vue.entetes.values() if h.shown]
+    print("   absents des barres : %s | %s | champ '%s'" % (montrees, entetes, boite.text))
+    assert boite.text == "Missing from action bar" and entetes == ["Matches"]
+    assert "Frostbolt" not in montrees and "Attack" not in montrees and "Shoot" not in montrees and "Ice Shards" not in montrees
+    assert montrees[-2:] == ["Arcane Missiles", "Frost Armor"], "absents, puis posture inactive, puis barre desactivee"
+    assert "Teleport: Stormwind" in montrees and "Teleport" not in montrees, "jamais de groupe dans la recherche"
+    # une recherche de sorts groupes dans leur onglet : un par un
+    lua.execute("CLIQUER(ForeverUISpellBookSearchClear) ForeverUISpellBookSearchBox:SetFocus() ForeverUISpellBookSearchBox:Taper('tele')")
+    assert [l.nom.text for l in apercu.lignes.values() if l.shown] == ["Teleport: Stormwind", "Teleport: Ironforge"]
+    lua.execute("ForeverUISpellBookSearchBox.scripts.OnEnterPressed(ForeverUISpellBookSearchBox)")
+    tele = [(c.nom.text, c.bouton.fleche.shown) for c in vue.cases.values() if c.shown]
+    print("   'tele' : %s" % tele)
+    assert tele == [("Teleport: Stormwind", False), ("Teleport: Ironforge", False)]
+
+    # EN COMBAT : le champ refuse le focus ; l'effacement sort de la recherche
+    lua.execute("STATE.verifierProtection = true STATE.inLockdown = true ForeverUISpellBookSearchBox:SetFocus()")
+    assert not boite.focused and not apercu.shown
+    lua.execute("CLIQUER(ForeverUISpellBookSearchClear)")
+    print("   combat, effacement : categorie %s, texte '%s'" % (g.ForeverUI.SpellBook.etat.categorie, boite.text))
+    assert g.ForeverUI.SpellBook.etat.categorie == 1 and boite.text == ""
+    assert g.ForeverUISpellBookSearchClear.alpha == 0, "en combat, l'effacement se fait transparent"
+    lua.execute("STATE.inLockdown = false STATE.verifierProtection = false ForeverUI.SpellBookSearch.boite:SetFocus() ForeverUI.SpellBookSearch.boite:ClearFocus()")
+    assert not g.ForeverUISpellBookSearchClear.shown
+    lua.execute("for i = 8, 16 do LIVRE.spell[i] = nil end ONGLETS[3] = nil DESCRIPTIONS = nil ACTIONS = {} BARRES = { true, true, true, true } ForeverUI.SpellBook.maj()")
 
     # ------------------------------------------------------------------
     # EN COMBAT (etape 2). Le faux client bloque toute action protegee du
