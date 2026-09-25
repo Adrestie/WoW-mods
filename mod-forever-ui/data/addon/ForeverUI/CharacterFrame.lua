@@ -260,7 +260,8 @@ local ONGLET_ECART = -2
 -- quatrieme onglet.
 --
 -- L'ONGLET DU FAMILIER, lui, n'existe pas chez camelot : aucune icone n'est
--- relevee pour lui, il garde son texte.
+-- relevee pour lui. A LA DEMANDE (2026-09-25), une icone par classe a
+-- familier, cuite au masque comme les autres (ONGLET_FAMILIER plus bas).
 --
 -- LES INDICES SONT CEUX DE 3.3.5, et non ceux de camelot : ici
 -- 1 personnage, 2 familier, 3 reputation, 4 competences, 5 monnaie.
@@ -274,6 +275,16 @@ local ONGLET_ICONES = {
 	},
 	stats = "Interface\\ForeverUI\\TabIcons\\Inv_SideTab_Stats_c60",
 }
+
+-- l'onglet du familier : selon la classe ; celle du chasseur a defaut (un
+-- mage au glyphe d'elementaire d'eau, par exemple)
+local ONGLET_FAMILIER = {
+	HUNTER = "Ability_Hunter_BeastTaming",
+	WARLOCK = "Spell_Shadow_SummonImp",
+	DEATHKNIGHT = "Spell_Shadow_AnimateDead",
+}
+ONGLET_ICONES[2] = "Interface\\ForeverUI\\TabIcons\\"
+	.. (ONGLET_FAMILIER[select(2, UnitClass("player")) or ""] or ONGLET_FAMILIER.HUNTER)
 
 -- L'ORDRE DE LA COLONNE. camelot va personnage, reputation, competences,
 -- PvP, monnaie, statistiques. 3.3.5 intercale le familier en deuxieme et
@@ -989,6 +1000,63 @@ local function poserEmplacements()
 end
 
 ForeverUI.ModeleReglage = { echelle = MODELE_ECHELLE, position = MODELE_POSITION }
+
+-- TOURNER LE MODELE A LA SOURIS (demande du 2026-09-25) : le personnage et
+-- le familier. 3.3.5 ne tourne ses modeles qu'avec les fleches
+-- (Model_OnUpdate, UIParent.lua). Camelot pose le personnage dans une scene
+-- a camera orbitale : le bouton gauche maintenu, le deplacement horizontal
+-- du curseur (en unites d'interface) tourne de 0,008 radian par unite, et la
+-- camera rattrape sa cible a 0,15 par image (OrbitCameraMixin :
+-- GetDeltaModifierForCameraMode, SetYawInterpolationAmount). Ici, c'est le
+-- modele qui tourne, par model.rotation et SetRotation -- ceux des fleches.
+local ROTATION_SOURIS, LISSAGE_ROTATION = 0.008, 0.15
+
+local function tournerALaSouris(modele)
+	if not modele or modele.foreverSouris then
+		return
+	end
+	modele.foreverSouris = true
+	modele:EnableMouse(true)
+	modele:HookScript("OnMouseDown", function(self, bouton)
+		if bouton == "LeftButton" then
+			self.foreverCurseur = GetCursorPosition()
+			self.foreverCible = self.foreverCible or self.rotation or 0
+		end
+	end)
+	modele:HookScript("OnMouseUp", function(self, bouton)
+		if bouton == "LeftButton" then
+			self.foreverCurseur = nil
+		end
+	end)
+	modele:HookScript("OnHide", function(self)
+		self.foreverCurseur, self.foreverCible = nil, nil
+	end)
+	modele:HookScript("OnUpdate", function(self, ecoule)
+		if self.foreverCurseur then
+			local x = GetCursorPosition()
+			local d = (x - self.foreverCurseur) / UIParent:GetEffectiveScale()
+			self.foreverCurseur = x
+			self.foreverCible = self.foreverCible + d * ROTATION_SOURIS
+		end
+		if not self.foreverCible then
+			return
+		end
+		local r = self.rotation or 0
+		local k = 1 - (1 - LISSAGE_ROTATION) ^ ((ecoule or 0) * 60)
+		r = r + (self.foreverCible - r) * k
+		if math.abs(self.foreverCible - r) < 0.0005 then
+			r = self.foreverCible
+			if not self.foreverCurseur then
+				self.foreverCible = nil
+			end
+		end
+		self.rotation = r
+		self:SetRotation(r)
+	end)
+end
+ForeverUI.TournerALaSouris = tournerALaSouris
+tournerALaSouris(_G["CharacterModelFrame"])
+tournerALaSouris(_G["PetModelFrame"])
 
 -- LE MODELE SE CHARGE APRES COUP, ET REPART A ZERO.
 --

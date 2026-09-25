@@ -118,6 +118,11 @@ ICONES += ["%s.blp" % n for n in (
 # WotLK n'en donnant aucune a son onglet du bas.
 ICONES += ["inv_inscription_tradeskill01.blp"]
 
+# L'onglet du familier de la feuille de personnage (camelot n'en a pas) : une
+# icone par classe, a la demande (le chasseur reprend ability_hunter_beasttaming,
+# deja cuite plus haut).
+ICONES += ["spell_shadow_summonimp.blp", "spell_shadow_animatedead.blp"]
+
 # L'onglet du personnage porte l'icone de SA classe : un fichier par
 # classe, cuit comme les autres.
 ICONES += ["classicon_%s.blp" % c for c in (

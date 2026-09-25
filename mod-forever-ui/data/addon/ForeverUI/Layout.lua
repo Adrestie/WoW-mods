@@ -233,6 +233,58 @@ watcher:SetScript("OnEvent", function(_self, event)
 	end
 end)
 
+-- /fui souris : tant qu'il est actif, chaque clic dit dans le chat quel cadre
+-- est sous la souris (GetMouseFocus), ses parents et ses images -- pour
+-- trouver d'ou vient un element de l'ecran (2026-09-25 : les portails de la
+-- carte du monde, qui ne sont pas des reperes du client)
+local espion = CreateFrame("Frame")
+espion:Hide()
+local function decrire(cadre)
+	if not cadre then return "rien" end
+	local nom = cadre.GetName and cadre:GetName() or nil
+	local type_ = cadre.GetObjectType and cadre:GetObjectType() or "?"
+	return (nom or "(sans nom)") .. " [" .. type_ .. "]"
+end
+espion:SetScript("OnUpdate", function(self)
+	local bas = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
+	if bas and not self.enfonce then
+		local f = GetMouseFocus and GetMouseFocus()
+		say("sous la souris : " .. decrire(f))
+		local p, chemin = f and f:GetParent(), {}
+		while p and #chemin < 8 do
+			table.insert(chemin, decrire(p))
+			p = p:GetParent()
+		end
+		DEFAULT_CHAT_FRAME:AddMessage("   parents : " .. table.concat(chemin, " < "))
+		if f and f.GetRegions then
+			for _, r in ipairs({ f:GetRegions() }) do
+				if r.GetTexture and r:GetTexture() then
+					DEFAULT_CHAT_FRAME:AddMessage("   image : " .. tostring(r:GetTexture()))
+				elseif r.GetText and r:GetText() then
+					DEFAULT_CHAT_FRAME:AddMessage("   texte : " .. tostring(r:GetText()))
+				end
+			end
+		end
+		for _, k in ipairs({ "name", "mapLinkID", "description", "poiID", "instanceID", "mapID" }) do
+			if f and f[k] ~= nil then
+				DEFAULT_CHAT_FRAME:AddMessage("   ." .. k .. " = " .. tostring(f[k]))
+			end
+		end
+	end
+	self.enfonce = bas and true or false
+end)
+ForeverUI.SourisEspion = espion
+ForeverUI.SourisDebug = function()
+	if espion:IsShown() then
+		espion:Hide()
+		say("espion de souris arrete.")
+	else
+		espion.enfonce = true
+		espion:Show()
+		say("espion de souris : cliquez sur l'element voulu ; /fui souris pour arreter.")
+	end
+end
+
 SLASH_FOREVERUI1 = "/fui"
 SLASH_FOREVERUI2 = "/foreverui"
 
@@ -305,6 +357,8 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say("aucun diagnostic de la minimap disponible.")
 		end
+	elseif command == "souris" then
+		ForeverUI.SourisDebug()
 	elseif command == "carte" then
 		if ForeverUI.WorldMapDebug then
 			ForeverUI.WorldMapDebug()
@@ -395,6 +449,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui minimap [echelle k], /fui carte, /fui journal, /fui suivi, /fui grimoire, /fui micro")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro")
 	end
 end

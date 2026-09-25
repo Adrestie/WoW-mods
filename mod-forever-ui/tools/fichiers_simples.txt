@@ -151,3 +151,5 @@ interface/icons/spell_shadow_rainoffire.blp
 interface/icons/spell_shadow_shadowwordpain.blp
 interface/icons/ability_dualwieldspecialization.blp
 interface/icons/inv_inscription_tradeskill01.blp
+interface/icons/spell_shadow_summonimp.blp
+interface/icons/spell_shadow_animatedead.blp
