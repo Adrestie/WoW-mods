@@ -395,8 +395,37 @@ local function ouvrirMenu(ancre, liste, minimum)
 		end
 	end, "MENU")
 	ToggleDropDownMenu(1, nil, menuNav, ancre, 0, 0)
+	-- VERS LE BAS, TOUJOURS (2026-09-25). ToggleDropDownMenu de 3.3.5 RETOURNE
+	-- la liste au-dessus du bouton des qu'elle deborderait sous l'ecran --
+	-- le cas des longues listes de zones en petite fenetre. Les menus de
+	-- camelot (Blizzard_Menu) restent sous leur bouton et se calent dans
+	-- l'ecran : la liste repart vers le bas, calee le temps qu'elle est
+	-- ouverte.
+	local liste1 = DropDownList1
+	if liste1 and liste1:IsShown() then
+		local point = liste1:GetPoint(1)
+		if point and string.find(point, "^BOTTOM") then
+			liste1:ClearAllPoints()
+			liste1:SetPoint("TOPLEFT", ancre, "BOTTOMLEFT", 0, 0)
+		end
+		if not liste1.foreverCalee then
+			liste1.foreverCalee = true
+			liste1.foreverCaleeAvant = liste1.IsClampedToScreen and liste1:IsClampedToScreen() or false
+			liste1:SetClampedToScreen(true)
+		end
+	end
 end
 W.ouvrirMenu = ouvrirMenu
+
+-- la liste refermee : elle rend son calage aux autres menus du jeu
+if DropDownList1 then
+	DropDownList1:HookScript("OnHide", function(self)
+		if self.foreverCalee then
+			self:SetClampedToScreen(self.foreverCaleeAvant and true or false)
+			self.foreverCalee, self.foreverCaleeAvant = nil, nil
+		end
+	end)
+end
 
 local function poserSurFeuille(texture, coords)
 	texture:SetTexture(NAV.feuille)
@@ -566,9 +595,39 @@ local function construireBarre(carte)
 	ombre:SetHeight(30)
 	ombre:SetPoint("LEFT", accueil, "LEFT", 0, 0)
 	accueil:SetPoint("LEFT", barre, "LEFT", 0, 0)
+	-- LE BOUTON "WORLD" montre la carte ou l'on choisit entre Azeroth et
+	-- l'Outreterre : WORLDMAP_COSMIC_ID, comme le zoom arriere de WotLK depuis
+	-- Azeroth (WorldMapZoomOutButton_OnClick). La vue cosmique se reconnait
+	-- comme WorldMapFrame_Update la reconnait : GetMapInfo() ne rend rien et
+	-- le continent vaut WORLDMAP_COSMIC_ID (la premiere version attendait
+	-- "Cosmic" de GetMapInfo, qui rend nil : elle repartait aussitot par
+	-- ZoomOut vers la carte d'ou l'on venait -- en donjon, "World" ne faisait
+	-- rien). Depuis un donjon, WotLK ne sort que par ZoomOut : on essaie
+	-- SetMapZoom, puis ZoomOut, tant que la carte change.
 	accueil.myclick = function()
 		PlaySound("igMainMenuOptionCheckBoxOn")
-		SetMapZoom(WORLDMAP_WORLD_ID)
+		local cosmique = WORLDMAP_COSMIC_ID or -1
+		local function estCosmique()
+			return GetMapInfo() == nil and GetCurrentMapContinent() == cosmique
+		end
+		local function etat()
+			return tostring(GetMapInfo()) .. ":" .. tostring(GetCurrentMapContinent()) .. ":"
+				.. tostring(GetCurrentMapZone()) .. ":" .. tostring(GetCurrentMapDungeonLevel())
+		end
+		for _ = 1, 6 do
+			if estCosmique() then break end
+			SetMapZoom(cosmique)
+			if estCosmique() then break end
+			local avant = etat()
+			ZoomOut()
+			if etat() == avant then break end
+		end
+		-- le client a refuse : ce qu'il repond, pour comprendre
+		if not estCosmique() then
+			dire(string.format("carte du monde : \"World\" refuse par le client (carte %s, continent %s, zone %s, etage %s, zoom arriere %s)",
+				tostring(GetMapInfo()), tostring(GetCurrentMapContinent()), tostring(GetCurrentMapZone()),
+				tostring(GetCurrentMapDungeonLevel()), tostring(IsZoomOutAvailable and IsZoomOutAvailable())))
+		end
 	end
 	accueil:SetScript("OnClick", function(self) self.myclick() end)
 	barre.home = accueil
@@ -674,7 +733,12 @@ local function rafraichirBarre()
 			b:Disable()
 		end
 	end
-	if dernier == 0 then
+	-- "World" n'est l'endroit ou l'on est que sur la vue cosmique (pas de nom
+	-- de carte, continent WORLDMAP_COSMIC_ID). En donjon, 3.3.5 ne donne ni
+	-- continent ni zone : le fil est vide, mais "World" doit rester cliquable
+	-- (il etait desactive, 2026-09-25) ; sur Azeroth aussi.
+	local cosmique = GetMapInfo() == nil and GetCurrentMapContinent() == (WORLDMAP_COSMIC_ID or -1)
+	if dernier == 0 and cosmique then
 		barre.home:SetButtonState("NORMAL")
 		barre.home:Disable()
 	else
@@ -1334,6 +1398,53 @@ local function retirer()
 end
 W.retirer = retirer
 
+-- LES PORTAILS DES DONJONS ET DES RAIDS (demande du 2026-09-25) : cliquer
+-- le portail d'une instance ouvre sa carte. Ces icones ne sont PAS des
+-- reperes du client (AreaPOI.dbc n'en a aucun) : elles viennent de WDM ("WoW
+-- Dungeon Maps - HD client", addon livre dans patch-enus-n.mpq), boutons
+-- WorldMapFrameAtlasPOIn (releve en jeu par /fui souris). WDM leur donne le
+-- clic des reperes de WotLK (WorldMapPOI_OnClick) avec mapLinkID = 0 : 0 est
+-- vrai en Lua, et ClickLandmark(0) ne mene nulle part. Leur nom (celui de
+-- LibBabble-Zone) donne la carte de l'instance (WorldMapInstances.lua, genere
+-- des DBC du client) et SetMapByID l'ouvre. Les reperes de WotLK
+-- (WorldMapFramePOIn) sans lien sont traites de meme. Les uns et les autres
+-- naissent a la demande, pendant WorldMapFrame_Update -- WDM y greffe les
+-- siens, peut-etre apres nous : on les branche a nouveau a l'image suivante.
+local function carteDePortail(nom)
+	local t = ForeverUI.CartesInstances
+	return nom and t and t[string.lower(nom)]
+end
+W.carteDePortail = carteDePortail
+
+local function ouvrirPortail(self, bouton)
+	-- un vrai lien de carte : WotLK s'en charge
+	if bouton ~= "LeftButton" or (self.mapLinkID and self.mapLinkID ~= 0) then return end
+	local id = carteDePortail(self.name)
+	if id and SetMapByID then SetMapByID(id) end
+end
+
+local function brancherPortails()
+	for _, famille in ipairs({ { "WorldMapFramePOI", NUM_WORLDMAP_POIS },
+		{ "WorldMapFrameAtlasPOI", NUM_WORLDMAP_ATLAS_POI } }) do
+		for i = 1, (famille[2] or 0) do
+			local b = _G[famille[1] .. i]
+			if b and not b.foreverPortail then
+				b.foreverPortail = true
+				b:HookScript("OnClick", ouvrirPortail)
+			end
+		end
+	end
+end
+W.brancherPortails = brancherPortails
+
+local portailsSuivants = CreateFrame("Frame")
+portailsSuivants:Hide()
+portailsSuivants:SetScript("OnUpdate", function(self)
+	self:Hide()
+	brancherPortails()
+end)
+W.portailsSuivants = portailsSuivants
+
 if hooksecurefunc then
 	if WorldMap_ToggleSizeDown then
 		hooksecurefunc("WorldMap_ToggleSizeDown", poserReduit)
@@ -1376,12 +1487,23 @@ if hooksecurefunc then
 	-- pendant que la carte etait fermee (L, bouton du volet)
 	if WorldMapFrame and WorldMapFrame.HookScript then
 		-- en plein ecran, l'echelle n'est connue qu'ici (SetupFullscreenScale)
+		-- LA PREMIERE OUVERTURE construit l'habillage : ouverte d'emblee en
+		-- plein ecran, la carte gardait celui de WotLK jusqu'a un aller-retour
+		-- par la petite fenetre (2026-09-25) -- seules les bascules et
+		-- WorldMapFrame_SetMiniMode le construisaient
 		WorldMapFrame:HookScript("OnShow", function()
-			if not W.construit then return end
+			local premiere = not W.construit
 			if enPetiteFenetre() then
 				poserReduit()
 			else
 				poserAgrandi()
+			end
+			-- ce que les greffes de WotLK auraient pose sur une carte deja
+			-- construite
+			if premiere and W.construit then
+				rognerTuiles(true)
+				rafraichirBarre()
+				rafraichirEtages()
 			end
 		end)
 	end
@@ -1391,6 +1513,8 @@ if hooksecurefunc then
 			if W.construit then
 				rognerTuiles(true)
 			end
+			brancherPortails()
+			portailsSuivants:Show()
 		end)
 	end
 	-- chaque changement de carte refait le fil d'Ariane
@@ -1431,6 +1555,13 @@ ForeverUI.WorldMapDebug = function()
 	end
 	local function ligne(texte)
 		DEFAULT_CHAT_FRAME:AddMessage("   " .. texte)
+	end
+	-- les reperes de la carte affichee, et la carte d'instance que leur nom
+	-- donne
+	for i = 1, (GetNumMapLandmarks and GetNumMapLandmarks() or 0) do
+		local nom, description, icone, x, y, lien = GetMapLandmarkInfo(i)
+		ligne(string.format("repere %d : %s (%s) icone %s, lien %s, carte d'instance %s", i, tostring(nom),
+			tostring(description), tostring(icone), tostring(lien), tostring(carteDePortail(nom))))
 	end
 	dire(string.format("carte du monde : %.0f x %.0f, mode %s (taille %.4f, petite fenetre %.4f)",
 		carte:GetWidth(), carte:GetHeight(),

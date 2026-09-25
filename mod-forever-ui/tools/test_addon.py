@@ -214,7 +214,8 @@ function CreateFrame(kind, name, parent, template)
     function f:IsMouseOver() return self.souris == true end
     function f:SetMovable(v) self.movable = (v ~= false) end
     function f:IsMovable() return self.movable end
-    function f:SetClampedToScreen() end
+    function f:SetClampedToScreen(v) self.clamped = (v and true or false) end
+    function f:IsClampedToScreen() return self.clamped == true end
     -- UN BOUTON N'A QUE LES ETATS QUE SON XML DECLARE. Le vrai client rend
     -- nil pour une NormalTexture jamais posee : MiniMapTrackingButton n'a
     -- qu'une HighlightTexture en 3.3.5, et le faux qui en fabriquait une a
@@ -788,17 +789,38 @@ WORLDMAP_WINDOWED_SIZE = 0.573
 WORLDMAP_QUESTLIST_SIZE = 0.691
 WORLDMAP_FULLMAP_SIZE = 1.0
 WORLDMAP_WORLD_ID = 0
+WORLDMAP_COSMIC_ID = -1
 WORLDMAP_SETTINGS = { opacity = 0, locked = true, advanced = nil, size = WORLDMAP_QUESTLIST_SIZE }
 CARTE = { continent = 2, zone = 5, etages = 0, etage = 0, zooms = {} }
 function GetCurrentMapContinent() return CARTE.continent end
 function GetCurrentMapZone() return CARTE.zone end
 function GetMapContinents() return "Kalimdor", "Eastern Kingdoms", "Outland", "Northrend" end
 function GetMapZones(c) return "Alterac Mountains", "Arathi Highlands", "Badlands", "Blasted Lands", "Burning Steppes" end
-function SetMapZoom(c, z) table.insert(CARTE.zooms, { c, z }) end
+-- CARTE.suivre : SetMapZoom et ZoomOut changent la carte montree ; en donjon
+-- (CARTE.donjon), SetMapZoom n'en sort pas, ZoomOut mene au continent
+function SetMapZoom(c, z)
+    table.insert(CARTE.zooms, { c, z })
+    if CARTE.suivre and not CARTE.donjon then
+        CARTE.continent, CARTE.zone = c, z or 0
+        -- GetMapInfo ne rend rien pour la vue cosmique ni pour Azeroth
+        if c == -1 or c == 0 then CARTE.fichier = false else CARTE.fichier = "Continent" .. c end
+    end
+end
+function ZoomOut()
+    CARTE.zoomsArriere = (CARTE.zoomsArriere or 0) + 1
+    if CARTE.suivre and CARTE.donjon then
+        CARTE.donjon = nil
+        CARTE.continent, CARTE.zone, CARTE.fichier = 4, 0, "Northrend"
+    end
+end
 function GetNumDungeonMapLevels() return CARTE.etages end
 function GetCurrentMapDungeonLevel() return CARTE.etage end
 function SetDungeonMapLevel(n) CARTE.etage = n end
-function GetMapInfo() return "Ulduar" end
+function GetMapInfo()
+    if CARTE.fichier == false then return nil end
+    return CARTE.fichier or "Ulduar"
+end
+function IsZoomOutAvailable() return true end
 function DungeonUsesTerrainMap() return false end
 function SetPortraitToTexture(t, chemin) t.portrait = chemin; t.texture = chemin end
 
@@ -2964,7 +2986,7 @@ function TogglePVPFrame() end
 -- La souris, pour la barre de defilement : le vrai rend des coordonnees
 -- d ECRAN, qu il faut ramener a l echelle du cadre.
 SOURIS_Y = 0
-function GetCursorPosition() return 0, SOURIS_Y end
+function GetCursorPosition() return SOURIS_X or 0, SOURIS_Y end
 function ShowUIPanel(cadre)
     local carte = rawget(_G, "WorldMapFrame")
     if carte and cadre ~= carte and carte:IsShown()
@@ -3273,7 +3295,7 @@ def main():
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
+             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
 
@@ -4580,8 +4602,31 @@ def main():
             i, onglet.foreverIcone.texture, g["CharacterFrameTab%dText" % i].shown))
         assert onglet.foreverIcone.texture and attendu in onglet.foreverIcone.texture,             "l icone de camelot, versee par son FileDataID : onglet %d" % i
         assert onglet.foreverIcone.shown and not g["CharacterFrameTab%dText" % i].shown,             "elle remplace le mot : onglet %d" % i
-    # Le familier n a pas d icone chez camelot : il garde son texte.
-    assert g.CharacterFrameTab2Text.shown, "aucune source pour l onglet du familier"
+    # TOURNER LE MODELE A LA SOURIS : 0,008 radian par unite d'interface,
+    # rattrapee a 0,15 par image (camelot, OrbitCameraMixin)
+    for nom in ("CharacterModelFrame", "PetModelFrame"):
+        lua.execute("""
+            local m = %s
+            m.rotation = 0.61
+            SOURIS_X = 100 * UIParent:GetEffectiveScale()
+            m.hooks.OnMouseDown(m, "LeftButton")
+            SOURIS_X = 150 * UIParent:GetEffectiveScale()
+            m.hooks.OnUpdate(m, 1 / 60)
+        """ % nom)
+        m = g[nom]
+        un = m.rotation
+        lua.execute("local m = %s for i = 1, 200 do m.hooks.OnUpdate(m, 1 / 60) end" % nom)
+        print("modele %s : apres 50 unites, %.4f puis %.4f (cible %.4f), souris=%s" % (nom, un, m.rotation, 0.61 + 50 * 0.008,
+            m.mouseEnabled))
+        assert abs(un - (0.61 + 0.15 * 0.4)) < 1e-9, "premiere image : 15 % du chemin"
+        assert abs(m.rotation - (0.61 + 0.4)) < 1e-6 and m.mouseEnabled
+        lua.execute("local m = %s m.hooks.OnMouseUp(m, 'LeftButton') m.hooks.OnUpdate(m, 1 / 60) SOURIS_X = nil" % nom)
+        assert m.foreverCible is None and m.foreverCurseur is None, "relachee : plus rien ne bouge"
+    # Le familier n a pas d icone chez camelot : une par classe, a la demande
+    # (le banc joue un chevalier de la mort)
+    ic2 = g.CharacterFrameTab2.foreverIcone
+    print("onglet du familier : icone=%s, texte visible=%s" % (ic2.texture, g.CharacterFrameTab2Text.shown))
+    assert ic2.shown and ic2.texture.endswith("Spell_Shadow_AnimateDead") and not g.CharacterFrameTab2Text.shown
 
     print("   onglet du personnage : icone=%s, texte masque=%s" % (
         o1.foreverIcone.texture.split(chr(92))[-1], not g.CharacterFrameTab1Text.shown))
@@ -7189,7 +7234,13 @@ def main():
     co.scripts["OnUpdate"](co, 0.2)
     assert co.texte.text == "", "en instance, 3.3.5 rend (0, 0) : rien n est ecrit"
     avant = g.POSITION.recentrages
+    construite = g.ForeverUI.WorldMap.construit
     lua.execute("WorldMapFrame:Show()")
+    # PREMIERE OUVERTURE, EN PLEIN ECRAN (WORLDMAP_SETTINGS.size du banc) :
+    # l'habillage de camelot se construit des cette ouverture
+    print("   carte du monde, premiere ouverture en plein ecran : construite avant=%s, apres=%s, fil=%s" % (
+        construite, g.ForeverUI.WorldMap.construit, g.ForeverUIWorldMapNavBar and g.ForeverUIWorldMapNavBar.shown))
+    assert g.ForeverUI.WorldMap.construit and g.ForeverUIWorldMapMaximized is not None
     g.ForeverUI.Minimap.recentrerCarteDuMonde()
     assert g.POSITION.recentrages == avant, "jamais pendant que la carte du monde est ouverte"
     lua.execute("WorldMapFrame:Hide()")
@@ -7326,7 +7377,100 @@ def main():
     assert (p1[1], p1[2].name, p1[3], p1[4]) == ("LEFT", "ForeverUIWorldMapNavBarHomeButton", "RIGHT", -15)
     lua.execute("ForeverUIWorldMapNavBarHomeButton:GetScript('OnClick')(ForeverUIWorldMapNavBarHomeButton)")
     dernier = g.CARTE.zooms[len(list(g.CARTE.zooms.values()))]
-    assert dernier[1] == 0, "le bouton racine va a la carte du monde (WORLDMAP_WORLD_ID)"
+    assert dernier[1] == -1, "le bouton racine va a la carte cosmique : Azeroth ou l'Outreterre"
+    # dehors : une seule etape ; en donjon : on en sort par ZoomOut, puis la
+    # vue cosmique
+    lua.execute("""
+        CARTE.suivre = true
+        CARTE.fichier = "Ulduar" CARTE.donjon = true CARTE.continent = -1 CARTE.zoomsArriere = 0
+        ForeverUIWorldMapNavBarHomeButton:GetScript('OnClick')(ForeverUIWorldMapNavBarHomeButton)
+    """)
+    print("   World en donjon : carte %s, continent %s, zooms arriere %s" % (g.CARTE.fichier, g.CARTE.continent, g.CARTE.zoomsArriere))
+    assert g.CARTE.fichier == False and g.CARTE.continent == -1 and g.CARTE.zoomsArriere == 1
+    lua.execute("""
+        CARTE.zoomsArriere = 0 CARTE.fichier = "Continent2"
+        ForeverUIWorldMapNavBarHomeButton:GetScript('OnClick')(ForeverUIWorldMapNavBarHomeButton)
+    """)
+    assert g.CARTE.fichier == False and g.CARTE.continent == -1 and g.CARTE.zoomsArriere == 0, "dehors : SetMapZoom suffit"
+    # le client refuse (ni SetMapZoom ni ZoomOut ne bougent) : rien ne boucle,
+    # un mot dans le chat
+    lua.execute("""
+        CARTE.suivre = nil CARTE.fichier = "Naxxramas" CARTE.continent = 4 CARTE.zoomsArriere = 0
+        ForeverUIWorldMapNavBarHomeButton:GetScript('OnClick')(ForeverUIWorldMapNavBarHomeButton)
+    """)
+    msgs = list(g.RECORDED.messages.values())
+    print("   refus : %s zoom(s) arriere | %s" % (g.CARTE.zoomsArriere, msgs[-1]))
+    assert g.CARTE.zoomsArriere == 1 and "refuse par le client" in msgs[-1]
+    # EN DONJON, le fil est vide (ni continent ni zone) : "World" reste
+    # cliquable ; il ne se desactive que sur la vue cosmique
+    lua.execute("CARTE.fichier = 'Naxxramas' CARTE.continent = -1 CARTE.zone = 0 WorldMapFrame_UpdateMap()")
+    home = g.ForeverUIWorldMapNavBarHomeButton
+    print("   fil en donjon : World actif=%s" % (home.enabled != False))
+    assert home.enabled != False, "en donjon, World doit repondre"
+    lua.execute("CARTE.fichier = false CARTE.continent = -1 WorldMapFrame_UpdateMap()")
+    assert home.enabled == False, "sur la vue cosmique, on y est deja"
+    lua.execute("CARTE.fichier = false CARTE.continent = 0 WorldMapFrame_UpdateMap()")
+    assert home.enabled != False, "sur Azeroth, World mene a la vue cosmique"
+    lua.execute("CARTE.suivre = nil CARTE.fichier = nil CARTE.continent = 2 CARTE.zone = 5 WorldMapFrame_UpdateMap()")
+
+    # LES PORTAILS : un repere sans lien de carte, au nom d'une instance, ouvre
+    # sa carte (SetMapByID) ; un repere ordinaire ne fait rien de plus
+    lua.execute("""
+        NUM_WORLDMAP_POIS = 2
+        CARTES_PAR_ID = {}
+        PORTAIL_AVANT = SetMapByID
+        function SetMapByID(id) table.insert(CARTES_PAR_ID, id) end
+        for i = 1, 2 do
+            local b = CreateFrame("Button", "WorldMapFramePOI" .. i, WorldMapButton)
+            b:SetScript("OnClick", function() end)
+        end
+        WorldMapFramePOI1.name = "The Deadmines"
+        WorldMapFramePOI2.name = "Sentinel Hill"
+        WorldMapFrame_Update()
+        CLIQUER(WorldMapFramePOI1)
+        CLIQUER(WorldMapFramePOI2)
+        CLIQUER(WorldMapFramePOI1, "RightButton")
+        WorldMapFramePOI1.mapLinkID = 12
+        CLIQUER(WorldMapFramePOI1)
+    """)
+    ids = list(g.CARTES_PAR_ID.values())
+    print("   portails : cartes ouvertes %s (Deadmines = %s)" % (ids, g.ForeverUI.CartesInstances["the deadmines"]))
+    assert ids == [756], "le portail des Mortemines seul, au clic gauche, sans lien de WotLK"
+    # LES PORTAILS DE WDM (WorldMapFrameAtlasPOIn, mapLinkID = 0), crees
+    # APRES notre greffe de WorldMapFrame_Update : branches a l'image suivante
+    lua.execute("""
+        CARTES_PAR_ID = {}
+        NUM_WORLDMAP_ATLAS_POI = 1
+        WorldMapFrame_Update()
+        local b = CreateFrame("Button", "WorldMapFrameAtlasPOI1", WorldMapButton)
+        b:SetScript("OnClick", function() end)
+        b.name = "Icecrown Citadel" b.mapLinkID = 0
+        ForeverUI.WorldMap.portailsSuivants:GetScript("OnUpdate")(ForeverUI.WorldMap.portailsSuivants)
+        CLIQUER(WorldMapFrameAtlasPOI1)
+        WorldMapFrameAtlasPOI1.name = "The Eye"
+        CLIQUER(WorldMapFrameAtlasPOI1)
+    """)
+    ids = list(g.CARTES_PAR_ID.values())
+    print("   portails de WDM : %s" % ids)
+    assert ids == [604, g.ForeverUI.CartesInstances["tempest keep"]], "Icecrown Citadel, puis The Eye (alias)"
+    lua.execute("SetMapByID = PORTAIL_AVANT WorldMapFramePOI1.mapLinkID = nil")
+    # /fui souris : au clic, le cadre sous la souris, ses parents, ses images
+    lua.execute("""
+        function GetMouseFocus() return WorldMapFramePOI1 end
+        SlashCmdList["FOREVERUI"]("souris")
+    """)
+    lua.execute("""
+        local espion = ForeverUI.SourisEspion
+        ESPION = espion
+        SOURIS.LeftButton = false espion.scripts.OnUpdate(espion)
+        SOURIS.LeftButton = true espion.scripts.OnUpdate(espion)
+        SOURIS.LeftButton = false espion.scripts.OnUpdate(espion)
+        SlashCmdList["FOREVERUI"]("souris")
+    """)
+    msgs = list(g.RECORDED.messages.values())
+    trace = [m for m in msgs if "sous la souris" in m]
+    print("   espion : %s" % trace[-1])
+    assert trace and "sous la souris" in trace[-1] and not g.ESPION.shown, "le banc confond GetName et .name ; le client, non"
 
     # la liste d'un bouton : ses soeurs
     lua.execute("MENU_ENTREES = {} ForeverUIWorldMapNavButton2.MenuArrowButton:GetScript('OnClick')(ForeverUIWorldMapNavButton2.MenuArrowButton) ForeverUIWorldMapNavMenu.initFn()")
@@ -7375,6 +7519,25 @@ def main():
     print("   liste des etages : %s de large" % g.DropDownList1.width)
     assert g.DropDownList1.width == 160, "au moins la largeur du selecteur (SetMinimumWidth)"
     lua.execute("ForeverUIWorldMapNavMenu.foreverMinimum = nil")
+    # 3.3.5 RETOURNE une longue liste vers le haut quand elle deborderait sous
+    # l'ecran (ToggleDropDownMenu, offscreenY) : elle repart vers le bas,
+    # calee dans l'ecran le temps d'etre ouverte
+    lua.execute("""
+        TOGGLE_AVANT = ToggleDropDownMenu
+        function ToggleDropDownMenu(niveau, valeur, menu, ancre)
+            DropDownList1:ClearAllPoints()
+            DropDownList1:SetPoint("BOTTOMLEFT", ancre, "BOTTOMLEFT", 0, 0)
+            DropDownList1:Show()
+        end
+        DropDownList1:Hide()
+        ForeverUI.WorldMap.ouvrirMenu(ForeverUIWorldMapFilterButton, { { text = "a" } })
+    """)
+    l1 = g.DropDownList1
+    p1 = list(l1.points[1].values())
+    print("carte, liste retournee : %s sur %s de %s, calee=%s" % (p1[0], p1[2], p1[1].name, l1.clamped))
+    assert (p1[0], p1[2]) == ("TOPLEFT", "BOTTOMLEFT") and meme(p1[1], g.ForeverUIWorldMapFilterButton) and l1.clamped
+    lua.execute("DropDownList1:Hide() ToggleDropDownMenu = TOGGLE_AVANT")
+    assert not l1.clamped, "refermee : les autres menus retrouvent leur calage"
     lua.execute("CARTE.etages = 0 WorldMapFrame_UpdateMap()")
 
     # les coordonnees
