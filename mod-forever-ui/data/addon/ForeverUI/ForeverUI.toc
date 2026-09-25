@@ -31,6 +31,7 @@ Minimap.lua
 WorldMap.lua
 QuestLog.lua
 ObjectiveTracker.lua
+SpellBook.lua
 Bags.lua
 CharacterFrame.lua
 EquipmentManager.lua

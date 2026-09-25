@@ -483,6 +483,63 @@ def cuire_jauge_pvp():
     return faits
 
 
+# --------------------------------------------------------------------------
+# LE PORTRAIT DU GRIMOIRE.
+#
+# camelot (PortraitFrameTemplate) : le portrait fait 62 x 62 et prend l'icone
+# entiere -- SetSpellBookPortrait pose SetPortraitTexCoord(0, 1, 0, 1). Son
+# CircleMask, TempPortraitAlphaMask, s'ancre TOPLEFT (2, 0) et BOTTOMRIGHT
+# (-2, 4) : un disque de 58 x 58, decale de 2 a droite, colle en haut. Hors du
+# masque, CLAMPTOBLACKADDITIVE : rien.
+#
+# L'image cuite couvre le carre de 62 x 62 tout entier : l'addon la pose a la
+# place du portrait, en coordonnees 0..1, et le disque tombe ou camelot le met.
+PORTRAIT = 62.0
+PORTRAIT_MASQUE = (2.0, 0.0, 60.0, 58.0)    # gauche, haut, droite, bas
+PORTRAIT_SORTIE = 128
+PORTRAIT_MASQUE_FICHIER = os.path.join(ART, "characterframe",
+                                       "tempportraitalphamask.blp")
+PORTRAITS = {"inv_misc_book_09.blp": os.path.join(ART, "spellbook",
+                                                  "portrait.blp")}
+
+
+def cuire_portrait(nom, cible):
+    source = os.path.join(ENTREE, nom)
+    if not os.path.exists(source) or not os.path.exists(PORTRAIT_MASQUE_FICHIER):
+        print("   l'icone ou le masque du portrait manque")
+        return None
+
+    sl, sh, spix = _lire(source)
+    ml, mh, mpix = _lire(PORTRAIT_MASQUE_FICHIER)
+    g, h, d, b = PORTRAIT_MASQUE
+    taille = PORTRAIT_SORTIE
+    pixels = bytearray(taille * taille * 4)
+    pas = 1.0 / (taille * SUPER)
+
+    for j in range(taille):
+        v = (j + 0.5) / taille
+        for i in range(taille):
+            u = (i + 0.5) / taille
+            base = (j * taille + i) * 4
+            r, vert, bl, a = _lire_bilineaire(u, v, sl, sh, spix)
+            pixels[base:base + 3] = bytes((r, vert, bl))
+            if a == 0:
+                continue
+            somme = 0
+            for sj in range(SUPER):
+                y = (v + (sj - (SUPER - 1) / 2.0) * pas) * PORTRAIT
+                for si in range(SUPER):
+                    x = (u + (si - (SUPER - 1) / 2.0) * pas) * PORTRAIT
+                    mx, my = (x - g) / (d - g), (y - h) / (b - h)
+                    # hors du masque : rien (et pas d'extrapolation)
+                    if 0.0 <= mx <= 1.0 and 0.0 <= my <= 1.0:
+                        somme += _alpha_du_masque(mx, my, ml, mh, mpix)
+            pixels[base + 3] = int(a * somme / (255.0 * SUPER * SUPER) + 0.5)
+
+    _ecrire(cible, taille, taille, pixels)
+    return cible
+
+
 def main():
     if not os.path.exists(MASQUE):
         raise SystemExit("le masque manque : %s   # le faire entrer avec "
@@ -510,6 +567,12 @@ def main():
     for jauge in cuire_jauge_pvp():
         print("   %-60s %8d o" % (os.path.relpath(jauge, RACINE),
                                   os.path.getsize(jauge)))
+
+    for nom in sorted(PORTRAITS):
+        cible = cuire_portrait(nom, PORTRAITS[nom])
+        if cible:
+            print("   %-60s %8d o" % (os.path.relpath(cible, RACINE),
+                                      os.path.getsize(cible)))
 
     print("%d icone(s) cuite(s) ; poser dans le client avec tools/deployer.py" % faits)
 

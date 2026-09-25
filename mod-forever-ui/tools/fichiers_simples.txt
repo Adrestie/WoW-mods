@@ -109,3 +109,10 @@ interface/questframe/ui-questlog-bookicon.blp
 interface/icons/xp_icon.blp
 interface/icons/pvpcurrency-honor-alliance.blp
 interface/icons/pvpcurrency-honor-horde.blp
+
+# LE PORTRAIT DU GRIMOIRE. camelot y pose l'icone de la ligne "General"
+# (SetSpellBookPortrait) : le livre ferme a couverture marron. Il la
+# decoupe par TempPortraitAlphaMask ; 3.3.5 n'a pas de MaskTexture, donc
+# tools/cuire_masque.py cuit le masque dans l'icone (spellbook/).
+interface/icons/inv_misc_book_09.blp
+interface/characterframe/tempportraitalphamask.blp
