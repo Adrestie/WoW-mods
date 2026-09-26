@@ -12,3 +12,6 @@ chacun est dans `NOTES.md` ; ici, la demande telle qu'elle a été faite.
 - **Trouver une icône pour l'onglet « Pet » de la feuille de personnage.**
 - **Revoir le volet droit de l'onglet « PvP » de la feuille de personnage.**
 - **Si joueur niveau max -> descendre la barre de réputation à la place de la barre d'xp**
+- **Le menu de quête à du mal à se fermer en cliquant sur le micro bouton**
+- **Le decorateur de catégorie du journal de quête est mal 9-slicer**
+- **Cocher / Décocher une quête du journal de quête n'actualise pas le visuel du toggle**
