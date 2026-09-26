@@ -176,3 +176,12 @@ interface/guildframe/guildemblems_01.blp
 # LA FENETRE DE TABARD (2026-09-26) : le bord dore de l'argent
 # (ThinGoldEdgeTemplate, uipaneltemplates.xml). Absent du client 3.3.5.
 interface/common/moneyframe.blp
+
+# LE CHERCHEUR DE GROUPE (2026-09-26, blizzard_groupfinder_vanillastyle) : le
+# fond du bandeau des roles (RolesSection) et la surbrillance / selection des
+# boutons de categorie (LFGListingCategoryTemplate). Absents du client 3.3.5.
+interface/lfgframe/ui-lfg-bluebg.blp
+interface/pvpframe/pvpmegaqueue.blp
+# l'icone de l'onglet lateral des donjons (LFGParentFrame.ListingTab :
+# Interface\ICONS\INV_Helmet_08), cuite par tools/cuire_masque.py
+interface/icons/inv_helmet_08.blp

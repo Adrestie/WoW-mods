@@ -3981,6 +3981,306 @@ end
 PartyMemberBackground = CreateFrame("Frame", "PartyMemberBackground", UIParent)
 TextStatusBarText = TextStatusBarText or "TextStatusBarText"
 NumberFontNormalSmall = NumberFontNormalSmall or "NumberFontNormalSmall"
+-- LE CHERCHEUR DE DONJON DU CLIENT 3.3.5 (LFDFrame.xml/.lua, LFGFrame.lua) :
+-- le panneau, son contenu transparent, ses boutons de role, sa liste et ses
+-- voiles ; les fonctions que GroupFinder.lua appelle, reprises du client.
+do
+    local sep = string.char(92)
+    -- UNE CHECKBUTTON a aussi son image cochee-desactivee, et son Click la
+    -- bascule des la premiere fois (le vrai GetChecked rend nil, pas false,
+    -- avant tout clic). Pour tous les cadres crees ensuite.
+    local creer = CreateFrame
+    CreateFrame = function(kind, name, parent, template)
+        local f = creer(kind, name, parent, template)
+        if kind == "CheckButton" and f.checked == nil then f.checked = false end
+        function f:SetDisabledCheckedTexture(v)
+            if not self._disabledChecked then self._disabledChecked = { } end
+            self._disabledChecked.texture = v
+        end
+        return f
+    end
+    GameTooltip.SetLFGDungeonReward = function(self, t, i) self.recompense = { t, i } end
+    LFG_MODE = nil
+    function GetLFGMode() return LFG_MODE end
+    LFD_EMPOWERED = true
+    function LFD_IsEmpowered() return LFD_EMPOWERED end
+    function GetExpansionLevel() return 2 end
+    function GetCoinTextureString(n) return "pieces:" .. tostring(n) end
+    LFD_LEVEL_FORMAT_SINGLE = "(%d)"
+    LFD_LEVEL_FORMAT_RANGE = "(%d - %d)"
+    SPECIFIC_DUNGEONS = "Specific Dungeons"
+    LFG_TITLE = "Looking For Group"
+    LOOKING_FOR_DUNGEON = "Dungeon Finder"
+    FIND_A_GROUP = "Find Group"
+    BACK = "Back"
+    LFD_REWARDS = "Rewards"
+    MONEY_COLON = "Money:"
+    EXPERIENCE_COLON = "Experience:"
+    YOU_MAY_NOT_QUEUE_FOR_THIS = "You may not queue for this."
+    YOU_MAY_NOT_QUEUE_FOR_DUNGEON = "You may not queue for this dungeon."
+    ROLE_DESCRIPTION1 = "Degats"
+    ROLE_DESCRIPTION2 = "Tank"
+    ROLE_DESCRIPTION3 = "Soins"
+    GUIDE_TOOLTIP = "Chef"
+    YES = "Yes"
+    HIDE = "Hide"
+
+    LFDParentFrame = CreateFrame("Frame", "LFDParentFrame", UIParent)
+    LFDParentFrame:SetWidth(355); LFDParentFrame:SetHeight(440)
+    LFDParentFrame:EnableMouse(true)
+    LFDParentFrame:Hide()
+    UIPanelWindows["LFDParentFrame"] = { area = "left", pushable = 0, whileDead = 1 }
+    LFDParentFramePortrait = CreateFrame("Frame", "LFDParentFramePortrait", LFDParentFrame)
+    LFD_CROIX = CreateFrame("Button", nil, LFDParentFrame)
+    LFDQueueFrame = CreateFrame("Frame", "LFDQueueFrame", LFDParentFrame)
+    LFDQueueFrame:SetAllPoints(LFDParentFrame)
+
+    -- les roles : GetLFGRoles / SetLFGRoles, et les boutons du client
+    ROLES_LFG = { false, false, false, false }
+    function GetLFGRoles() return ROLES_LFG[1], ROLES_LFG[2], ROLES_LFG[3], ROLES_LFG[4] end
+    function SetLFGRoles(a, b, c, d) ROLES_LFG = { a and true or false, b and true or false, c and true or false, d and true or false } end
+    local function role(nom, id, fond)
+        local b = CreateFrame("Button", nom, LFDQueueFrame)
+        b:SetID(id)
+        b:SetNormalTexture(sep)
+        b.cover = b:CreateTexture(nil, "OVERLAY")
+        b.cover:SetAlpha(0.5)
+        b.cover:Hide()
+        if fond then b.background = b:CreateTexture(nom .. "Background", "BACKGROUND") end
+        b.checkButton = CreateFrame("CheckButton", nil, b)
+        b.checkButton:SetScript("OnClick", function(self, bouton)
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            if self.onClick then self.onClick(self, bouton) end
+        end)
+        b.checkButton.onClick = function() LFDQueueFrame_SetRoles() end
+        return b
+    end
+    role("LFDQueueFrameRoleButtonTank", 2, true)
+    role("LFDQueueFrameRoleButtonHealer", 3, true)
+    role("LFDQueueFrameRoleButtonDPS", 1, true)
+    role("LFDQueueFrameRoleButtonLeader", 4, false)
+    function LFDQueueFrame_SetRoles()
+        SetLFGRoles(LFDQueueFrameRoleButtonLeader.checkButton:GetChecked(), LFDQueueFrameRoleButtonTank.checkButton:GetChecked(),
+            LFDQueueFrameRoleButtonHealer.checkButton:GetChecked(), LFDQueueFrameRoleButtonDPS.checkButton:GetChecked())
+    end
+    -- LFGFrame.lua, mot pour mot
+    function LFG_PermanentlyDisableRoleButton(button)
+        button.permDisabled = true
+        button:Disable()
+        button.cover:Show()
+        button.cover:SetAlpha(0.7)
+        button.checkButton:Hide()
+        button.checkButton:Disable()
+        if button.background then button.background:Hide() end
+    end
+    function LFG_DisableRoleButton(button)
+        button:Disable()
+        button.cover:Show()
+        if not button.permDisabled then button.cover:SetAlpha(0.5) end
+        button.checkButton:Disable()
+        if button.background then button.background:Hide() end
+    end
+    function LFG_EnableRoleButton(button)
+        button.permDisabled = false
+        button:Enable()
+        button.cover:Hide()
+        button.checkButton:Show()
+        button.checkButton:Enable()
+        if button.background then button.background:Show() end
+    end
+    ROLES_POSSIBLES = { true, true, true }
+    function LFG_UpdateRolesChangeable()
+        local mode = GetLFGMode()
+        if mode == "queued" or mode == "listed" or mode == "rolecheck" or mode == "proposal" then
+            for _, n in ipairs({ "Tank", "Healer", "DPS", "Leader" }) do LFG_DisableRoleButton(_G["LFDQueueFrameRoleButton" .. n]) end
+        else
+            for i, n in ipairs({ "Tank", "Healer", "DPS" }) do
+                if ROLES_POSSIBLES[i] then LFG_EnableRoleButton(_G["LFDQueueFrameRoleButton" .. n])
+                else LFG_PermanentlyDisableRoleButton(_G["LFDQueueFrameRoleButton" .. n]) end
+            end
+            LFG_EnableRoleButton(LFDQueueFrameRoleButtonLeader)
+        end
+    end
+    function LFG_UpdateRoleCheckboxes()
+        local l, t, h, d = GetLFGRoles()
+        LFDQueueFrameRoleButtonLeader.checkButton:SetChecked(l)
+        LFDQueueFrameRoleButtonTank.checkButton:SetChecked(t)
+        LFDQueueFrameRoleButtonHealer.checkButton:SetChecked(h)
+        LFDQueueFrameRoleButtonDPS.checkButton:SetChecked(d)
+    end
+
+    -- le bouton de recherche : il retient ses clics
+    LFD_RECHERCHES = 0
+    LFDQueueFrameFindGroupButton = CreateFrame("Button", "LFDQueueFrameFindGroupButton", LFDQueueFrame)
+    LFDQueueFrameFindGroupButton:SetText("Find Group")
+    LFDQueueFrameFindGroupButton:SetScript("OnClick", function() LFD_RECHERCHES = LFD_RECHERCHES + 1 end)
+    function LFDQueueFrameFindGroupButton_Update()
+        local mode = GetLFGMode()
+        if mode == "queued" or mode == "rolecheck" or mode == "proposal" then
+            LFDQueueFrameFindGroupButton:SetText("Leave Queue")
+        else
+            LFDQueueFrameFindGroupButton:SetText("Find Group")
+        end
+        if LFD_IsEmpowered() and mode ~= "proposal" and mode ~= "listed" then
+            LFDQueueFrameFindGroupButton:Enable()
+        else
+            LFDQueueFrameFindGroupButton:Disable()
+        end
+    end
+
+    -- le type : un aleatoire (numero) ou "specific"
+    LFDQueueFrameRandom = CreateFrame("Frame", "LFDQueueFrameRandom", LFDQueueFrame)
+    LFDQueueFrameSpecific = CreateFrame("Frame", "LFDQueueFrameSpecific", LFDQueueFrame)
+    LFDQueueFrameSpecific:Hide()
+    local enfant = CreateFrame("Frame", "LFDQueueFrameRandomScrollFrameChildFrame", LFDQueueFrameRandom)
+    for _, cle in ipairs({ "title", "description", "rewardsLabel", "rewardsDescription", "pugDescription" }) do
+        enfant[cle] = enfant:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    end
+    enfant.rewardsLabel:SetText("Rewards")
+    function LFDQueueFrame_SetType(value)
+        LFDQueueFrame.type = value
+        if value == "specific" then
+            LFDQueueFrameRandom:Hide(); LFDQueueFrameSpecific:Show()
+            LFDQueueFrame_Update()
+        else
+            LFDQueueFrameSpecific:Hide(); LFDQueueFrameRandom:Show()
+            LFDQueueFrameRandom_UpdateFrame()
+        end
+    end
+    -- DONJONS[id] = { nom, type, min, max, rec, minRec, maxRec, extension,
+    -- groupe, image, difficulte, joueurs, description, fete }
+    DONJONS = {}
+    ALEATOIRES = {}
+    RECOMPENSES = {}
+    function GetLFGDungeonInfo(id) local d = DONJONS[id] if d then return (table.unpack or unpack)(d, 1, 14) end end
+    function GetNumRandomDungeons() return #ALEATOIRES end
+    function GetLFGRandomDungeonInfo(i) local a = ALEATOIRES[i] return a.id, DONJONS[a.id][1] end
+    function IsLFGDungeonJoinable(id) for _, a in ipairs(ALEATOIRES) do if a.id == id then return a.dispo end end end
+    function LFDConstructDeclinedMessage(id) return "Niveau trop bas" end
+    -- RECOMPENSES[id] = { fait, argentBase, argentVar, xpBase, xpVar, { {nom, image, n}, ... } }
+    function GetLFGDungeonRewards(id)
+        local r = RECOMPENSES[id] or { false, 0, 0, 0, 0, {} }
+        return r[1], r[2], r[3], r[4], r[5], #r[6]
+    end
+    function GetLFGDungeonRewardInfo(id, i) local o = RECOMPENSES[id][6][i] return o[1], o[2], o[3] end
+    function GetLFGDungeonRewardLink(id, i) return "lien:" .. id .. ":" .. i end
+    function LFDQueueFrameRandom_UpdateFrame()
+        local id = LFDQueueFrame.type
+        if not id then return end
+        local _, _, _, _, xpVar, n = GetLFGDungeonRewards(id)
+        enfant.title:SetText("Random Dungeon")
+        enfant.description:SetText("Explication")
+        enfant.rewardsDescription:SetText("Premiere victoire")
+        if n > 0 then enfant.rewardsLabel:Show() else enfant.rewardsLabel:Hide() end
+        if xpVar and xpVar > 0 then enfant.pugDescription:SetText("Inconnus") enfant.pugDescription:Show() else enfant.pugDescription:Hide() end
+    end
+
+    -- la liste : les tables du client, et ses fonctions (LFDFrame.lua)
+    LFGDungeonInfo, LFGEnabledList, LFGLockList, LFGCollapseList, LFGQueuedForList = {}, {}, {}, {}, {}
+    LFDDungeonList, LFDHiddenByCollapseList = {}, {}
+    LFD_ORDRE = {}
+    function LFGGetDungeonInfoByID(id) return LFGDungeonInfo[id] end
+    function LFGIsIDHeader(id) return id < 0 end
+    function LFDQueueFrame_Update()
+        for k in pairs(LFDDungeonList) do LFDDungeonList[k] = nil end
+        for k in pairs(LFDHiddenByCollapseList) do LFDHiddenByCollapseList[k] = nil end
+        for _, id in ipairs(LFD_ORDRE) do
+            local info = LFGDungeonInfo[id]
+            if id > 0 and LFGCollapseList[info[9]] then
+                table.insert(LFDHiddenByCollapseList, id)
+            else
+                table.insert(LFDDungeonList, id)
+            end
+        end
+        LFDQueueFrameSpecificList_Update()
+    end
+    LFD_MAJ_LISTE = 0
+    function LFDQueueFrameSpecificList_Update() LFD_MAJ_LISTE = LFD_MAJ_LISTE + 1 end
+    function SetLFGHeaderCollapsed(h, v) end
+    function LFDList_SetHeaderCollapsed(headerID, isCollapsed)
+        SetLFGHeaderCollapsed(headerID, isCollapsed)
+        LFGCollapseList[headerID] = isCollapsed
+        LFDQueueFrame_Update()
+    end
+    function LFDQueueFrameExpandOrCollapseButton_OnClick(self, button)
+        local parent = self:GetParent()
+        LFDList_SetHeaderCollapsed(parent.id, not parent.isCollapsed)
+    end
+    function SetLFGDungeonEnabled(id, v) end
+    function LFDList_SetDungeonEnabled(dungeonID, isEnabled)
+        SetLFGDungeonEnabled(dungeonID, isEnabled)
+        LFGEnabledList[dungeonID] = not not isEnabled
+    end
+    function LFDList_SetHeaderEnabled(headerID, isEnabled)
+        for _, id in ipairs(LFD_ORDRE) do
+            if id > 0 and LFGDungeonInfo[id][9] == headerID then LFDList_SetDungeonEnabled(id, isEnabled) end
+        end
+        LFGEnabledList[headerID] = not not isEnabled
+    end
+    -- l'etat d'un en-tete : 0 aucun, 1 certains, 2 tous
+    function LFGListUpdateHeaderEnabledAndLockedStates()
+        for _, h in ipairs(LFD_ORDRE) do
+            if h < 0 then
+                local n, oui = 0, 0
+                for _, id in ipairs(LFD_ORDRE) do
+                    if id > 0 and LFGDungeonInfo[id][9] == h then
+                        n = n + 1
+                        if LFGEnabledList[id] then oui = oui + 1 end
+                    end
+                end
+                LFGEnabledList[h] = (oui == 0 and 0) or (oui == n and 2) or 1
+            end
+        end
+    end
+    function LFDQueueFrameDungeonChoiceEnableButton_OnClick(self, button)
+        local parent = self:GetParent()
+        local dungeonID = parent.id
+        local isChecked = self:GetChecked()
+        PlaySound("igMainMenuOptionCheckBoxOff")
+        if LFGIsIDHeader(dungeonID) then
+            LFDList_SetHeaderEnabled(dungeonID, isChecked)
+        else
+            LFDList_SetDungeonEnabled(dungeonID, isChecked)
+            LFGListUpdateHeaderEnabledAndLockedStates(LFDDungeonList, LFGEnabledList, LFGLockList, LFDHiddenByCollapseList)
+        end
+        LFDQueueFrameSpecificList_Update()
+    end
+    function LFDQueueFrameDungeonListButton_OnEnter(self)
+        if self.lockedIndicator:IsShown() and not LFGIsIDHeader(self.id) then
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(YOU_MAY_NOT_QUEUE_FOR_DUNGEON, 1.0, 1.0, 1.0)
+            GameTooltip:Show()
+        end
+    end
+
+    -- les voiles
+    LFDQueueFrameCooldownFrame = CreateFrame("Frame", "LFDQueueFrameCooldownFrame", LFDQueueFrameRandom)
+    LFDQueueFrameCooldownFrame.description = LFDQueueFrameCooldownFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    LFDQueueFrameCooldownFrame.time = LFDQueueFrameCooldownFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    for i = 1, 4 do
+        LFDQueueFrameCooldownFrame:CreateFontString("LFDQueueFrameCooldownFrameName" .. i, "ARTWORK", "GameFontNormal"):Hide()
+        LFDQueueFrameCooldownFrame:CreateFontString("LFDQueueFrameCooldownFrameStatus" .. i, "ARTWORK", "GameFontNormal"):Hide()
+    end
+    LFDQueueFrameCooldownFrame:Hide()
+    function LFDQueueFrameRandomCooldownFrame_Update() end
+    LFDQueueFramePartyBackfill = CreateFrame("Frame", "LFDQueueFramePartyBackfill", LFDQueueFrame)
+    LFDQueueFramePartyBackfill:CreateFontString("LFDQueueFramePartyBackfillDescription", "ARTWORK", "GameFontNormal")
+    LFD_REPRISES = 0
+    local oui = CreateFrame("Button", "LFDQueueFramePartyBackfillBackfillButton", LFDQueueFramePartyBackfill)
+    oui:SetScript("OnClick", function() LFD_REPRISES = LFD_REPRISES + 1 end)
+    local non = CreateFrame("Button", "LFDQueueFramePartyBackfillNoBackfillButton", LFDQueueFramePartyBackfill)
+    non:SetScript("OnClick", function() LFDQueueFramePartyBackfill:Hide() end)
+    LFDQueueFramePartyBackfill:Hide()
+    function LFDFrame_UpdateBackfill() end
+    LFDQueueFrameNoLFDWhileLFR = CreateFrame("Frame", "LFDQueueFrameNoLFDWhileLFR", LFDQueueFrame)
+    LFDQueueFrameNoLFDWhileLFR:CreateFontString("LFDQueueFrameNoLFDWhileLFRDescription", "ARTWORK", "GameFontNormal")
+    local quitter = CreateFrame("Button", "LFDQueueFrameNoLFDWhileLFRLeaveQueueButton", LFDQueueFrameNoLFDWhileLFR)
+    quitter:SetText("Unlist Me")
+    LFDQueueFrameNoLFDWhileLFR:Hide()
+    function LFG_UpdateLockedOutPanels()
+        if GetLFGMode() == "listed" then LFDQueueFrameNoLFDWhileLFR:Show() else LFDQueueFrameNoLFDWhileLFR:Hide() end
+    end
+end
 """
 
 
@@ -3990,14 +4290,14 @@ def main():
 
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
-             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "UIAtlas_07_decoupes.lua", "AtlasUtil.lua",
              "Panes.lua", "ScrollBar.lua", "Layout.lua", "Superposition.lua", "DropDown.lua",
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua", "PartyFrame.lua", "RaidFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -11191,6 +11491,201 @@ def main():
     print("   /fui tabard : position %s camera %s, rattrapage %s" % (list(g.TabardModel.pos.values()), g.TabardModel.camera, T.rattrapage.shown))
     assert list(g.TabardModel.pos.values()) == [0, 0.5, -0.25] and g.TabardModel.camera == 1 and T.rattrapage.shown
     lua.execute("TabardFrame:Hide()")
+
+
+    # ------------------------------------------------- LE CHERCHEUR DE DONJON
+    print("\nchercheur de donjon :")
+    F = g.ForeverUI.GroupFinder
+    fc = F.cadre
+    def image():
+        lua.execute("local a = ForeverUI.GroupFinder.attendre; if a.shown ~= false then a.scripts.OnUpdate(a, 0.01) end")
+    lua.execute("""
+    -- niveau 80 : Lich King (80) et Lich King heroique (80), le classique
+    -- (15-24) n'est pas affichable ; l'heroique n'est pas rejoignable
+    DONJONS[261] = { "Random Lich King Dungeon", 6, 80, 80, 80, 80, 80, 2, 0, "x", 0, 5, "", false }
+    DONJONS[262] = { "Random Lich King Heroic", 6, 80, 80, 80, 80, 80, 2, 0, "x", 1, 5, "", false }
+    DONJONS[258] = { "Random Classic Dungeon", 6, 15, 24, 20, 15, 24, 0, 0, "x", 0, 5, "", false }
+    ALEATOIRES = { { id = 261, dispo = true }, { id = 262, dispo = false }, { id = 258, dispo = true } }
+    RECOMPENSES[261] = { false, 100000, 5000, 0, 0, { { "Emblem of Frost", "icone-givre", 2 }, { "Satchel", "icone-sac", 1 } } }
+    -- la liste : un en-tete (-5) et deux donjons dont un verrouille
+    LFGDungeonInfo[-5] = { "Lich King Normal", 0, 0, 0, 0, 0, 0, 2, 0 }
+    LFGDungeonInfo[206] = { "Utgarde Keep", 1, 68, 80, 70, 68, 80, 2, -5 }
+    LFGDungeonInfo[210] = { "Halls of Stone", 1, 82, 85, 83, 82, 85, 2, -5 }
+    LFD_ORDRE = { -5, 206, 210 }
+    LFGLockList[210] = true
+    LFG_UpdateRolesChangeable()
+    ShowUIPanel(LFDParentFrame)
+    """)
+    image()
+    print("   ouverte %s, taille %sx%s, parent %s, titre %r ; contenu du client alpha %s ancre sur %s ; panneau souris %s, portrait %s, croix %s" % (
+        fc.shown, fc.width, fc.height, fc.parent.name, fc.titre.text, g.LFDQueueFrame.alpha,
+        derniere(g.LFDQueueFrame)[1].name, g.LFDParentFrame.mouseEnabled, g.LFDParentFramePortrait.shown, g.LFD_CROIX.shown))
+    assert fc.shown and (fc.width, fc.height) == (458, 535) and fc.parent.name == "LFDParentFrame"
+    assert fc.titre.text == "Looking For Group" and fc.portrait.texture == g.ForeverUI.AtlasEntry("groupfinder-eye-frame")[1]
+    assert g.LFDQueueFrame.alpha == 0 and derniere(g.LFDQueueFrame)[1].name == "ForeverUIGroupFinderFrame"
+    assert g.LFDParentFrame.mouseEnabled is False and not g.LFDParentFramePortrait.shown and not g.LFD_CROIX.shown
+    assert fc.GetFrameLevel(fc) >= g.LFDParentFrame.GetFrameLevel(g.LFDParentFrame) + 30
+    # les places de camelot
+    pb = derniere(F.bleu)
+    assert list(list(F.bleu.points.values())[0].values())[3:] == [2, -25] and (pb[0], pb[2], pb[3], pb[4]) == ("BOTTOMRIGHT", "TOPRIGHT", 248, -169)
+    roles = {getattr(r, "def").cle: r for r in F.roles.values()}
+    for cle, (p, x) in {"tank": ("TOPLEFT", 70), "soin": ("TOPLEFT", 174), "degats": ("TOPLEFT", 278), "chef": ("TOPRIGHT", -20)}.items():
+        pt = derniere(roles[cle])
+        assert (pt[0], pt[3], pt[4]) == (p, x, -41) and roles[cle].width == 64, cle
+    pe = list(list(F.encadre.points.values())[0].values())
+    assert pe[3:] == [4, -118] and derniere(F.encadre)[3:] == [-4, 37] and not F.encadre.fond.shown
+    o1 = F.onglets[1]
+    assert (o1.width, derniere(o1)[2], derniere(o1)[4]) == (55, "TOPRIGHT", -60) and o1.choisi.shown
+    assert "inv_helmet_08" in o1.icone.texture
+    # les categories : "specific" d'abord, puis les aleatoires affichables
+    cats = [(c.texte, c.dispo) for c in F.liste_categories.values()]
+    print("   vue %s, categories %s" % (F.vue, cats))
+    assert F.vue == "categories" and cats == [("Specific Dungeons", True), ("Random Lich King Dungeon", True), ("Random Lich King Heroic", False)]
+    lignes = F.categoriesVue.lignes
+    b2, b3 = lignes[2].bouton, lignes[3].bouton
+    assert b3.image.desaturated and b3.texte.textColor[1] == 0.5 and b2.width == 380 and b2.height == 50
+    assert not F.retour.shown, "Back cache sur les categories"
+    # un aleatoire refuse : l'infobulle du client, et le clic ne fait rien
+    b3.scripts.OnEnter(b3)
+    assert g.GameTooltip.text == "You may not queue for this." and list(g.GameTooltip.lignes.values()) == ["Niveau trop bas"]
+    b3.scripts.OnClick(b3)
+    assert g.LFDQueueFrame.type is None and F.vue == "categories"
+    # les boutons resserres et amincis (premier a -4, 40 de haut, colles), le
+    # filet 6 sous le dernier, les details 6 sous le filet
+    for i in (1, 2, 3):
+        pl = list(list(lignes[i].points.values())[0].values())
+        assert (pl[0], pl[2], pl[4]) == ("TOPLEFT", "TOPLEFT", -4 - (i - 1) * 50), (i, pl)
+    assert lignes[1].bouton.height == 50 and lignes[1].bouton.choix.height == 40
+    pr = list(list(F.regle.points.values())[0].values())
+    pd = list(list(F.details.points.values())[0].values())
+    print("   categories : filet a %s, details a %s (hauteur %s)" % (pr[4], pd[4], 535 - 50 + pd[4]))
+    assert pr[4] == -124 - 4 - 2 * 50 - 50 - 6 and pd[4] == pr[4] - 8 - 6 and F.regle.height == 16
+    # le donjon aleatoire : il reste sur la page, ses details sous le filet
+    b2.scripts.OnClick(b2)
+    image()
+    r = F.recompenses
+    objets = [(o.nom.text, o.nombre.text if o.nombre.shown else None) for o in r.objets.values() if o.shown]
+    print("   aleatoire : type %s, vue %s, texte %r, objets %s, xp %s, Back %s" % (
+        g.LFDQueueFrame.type, F.vue, r.description.text, objets, r.xp.shown, F.retour.shown))
+    assert g.LFDQueueFrame.type == 261 and F.vue == "categories" and F.details.shown and F.categoriesVue.shown
+    assert r.description.text == "Explication" and objets == [("Emblem of Frost", 2), ("Satchel", None)]
+    # l'argent : une case d'objet a la place suivante (3e : 2e rang, 1re colonne)
+    pa3 = list(list(r.argent.points.values())[0].values())
+    print("   argent : %r, icone %s, place (%s, %s)" % (r.argent.nom.text, r.argent.icone.texture, pa3[3], pa3[4]))
+    assert r.argent.shown and r.argent.nom.text == "pieces:120000" and r.argent.icone.texture.lower().endswith("inv_misc_coin_02")
+    assert pa3[3] == 0 and pa3[4] == -(list(list(r.objets[1].points.values())[0].values())[4] * -1 + 44)
+    assert not r.xp.shown and not F.retour.shown
+    assert b2.choix.shown and not lignes[1].bouton.choix.shown
+    # le filet descend sur le contenu : les details finissent en bas
+    contenu = F.details.contenu
+    pr2 = list(list(F.regle.points.values())[0].values())
+    pd2 = list(list(F.details.points.values())[0].values())
+    print("   filet sur le contenu (%s) : a %s, details a %s" % (contenu, pr2[4], pd2[4]))
+    assert contenu > 0 and pr2[4] == min(pr[4], -(535 - 50) + contenu + 6 + 6 + 8) and pd2[4] == pr2[4] - 8 - 6
+    # les details au meme decalage que les boutons : 39 a gauche comme a droite
+    bl = lignes[1].bouton
+    assert pd2[3] == 8 + (442 - bl.width) / 2 + 6 == 45 and derniere(F.details)[3] == -39 and F.recompenses.width == 374
+    # la zone visible (calculee) contient le contenu, avec ses 6 d'air : pas de barre
+    print("   visible %s pour un contenu de %s, barre %s" % (F.details.visible, contenu, F.details.barre.shown))
+    assert F.details.visible == contenu + 6 and not F.details.barre.shown
+    # la seconde mesure : le client rend un contenu plus haut, le filet remonte
+    lua.execute("""
+    local F = ForeverUI.GroupFinder
+    F.recompenses._top = 500
+    F.dernierePiece.GetBottom = function() return 500 - F.details.contenu - 30 end
+    F.remesure.scripts.OnUpdate(F.remesure, 0.01)
+    """)
+    pr4 = list(list(F.regle.points.values())[0].values())
+    print("   seconde mesure : contenu %s, filet a %s" % (F.details.contenu, pr4[4]))
+    assert F.details.contenu == contenu + 30 and pr4[4] == pr2[4] + 30 and not F.details.barre.shown
+    lua.execute("ForeverUI.GroupFinder.dernierePiece.GetBottom = nil; ForeverUI.GroupFinder.recompenses._top = nil")
+    # un contenu trop haut : le filet reste sous les boutons
+    lua.execute("ForeverUI.GroupFinder.recompenses.description.height = 400")
+    F.maj()
+    pr3 = list(list(F.regle.points.values())[0].values())
+    assert pr3[4] == pr[4], pr3
+    lua.execute("ForeverUI.GroupFinder.recompenses.description.height = nil")
+    F.maj()
+    o = r.objets[1]
+    o.scripts.OnClick(o)
+    assert g.LIEN_CLIQUE == "lien:261:1"
+    # la liste des donjons specifiques
+    b1 = F.categoriesVue.lignes[1].bouton
+    b1.scripts.OnClick(b1)
+    image()
+    L = F.listeVue.lignes
+    def etat(l):
+        return (l.nom.text, l.plus.shown, l.case.shown, l.lockedIndicator.shown, l.case.checked, l.niveau.text if l.niveau.shown else None)
+    print("   liste : vue %s, lignes %s" % (F.vue, [etat(L[i]) for i in (1, 2, 3)]))
+    assert F.vue == "liste" and F.listeVue.shown and not F.details.shown and not F.categoriesVue.shown and F.retour.shown and F.retour.actif
+    assert etat(L[1]) == ("Lich King Normal", True, True, False, False, None)
+    assert etat(L[2]) == ("Utgarde Keep", False, True, False, False, "(68 - 80)")
+    assert etat(L[3]) == ("Halls of Stone", False, False, True, False, "(82 - 85)")
+    assert list(L[2].nom.textColor.values())[:3] == [1.0, 0.82, 0]
+    # la case d'un donjon : le client coche, l'en-tete passe a "certains"
+    L[2].case.Click(L[2].case)
+    image()
+    print("   case cochee : active %s, en-tete %s (%s)" % (g.LFGEnabledList[206], g.LFGEnabledList[-5], L[1].case._checked.texture))
+    assert g.LFGEnabledList[206] is True and g.LFGEnabledList[-5] == 1 and L[1].case.checked and "UI-MultiCheck-Up" in L[1].case._checked.texture
+    # le verrou : l'infobulle du client
+    L[3].scripts.OnEnter(L[3])
+    assert lua.eval("rawequal")(g.GameTooltip.owner, L[3]) and list(g.GameTooltip.lignes.values()) == ["You may not queue for this dungeon."]
+    # le +/- de l'en-tete : le client replie, la liste n'a plus que l'en-tete
+    L[1].plus.scripts.OnClick(L[1].plus)
+    image()
+    print("   replie : %d ligne(s), +/- %s" % (sum(1 for l in L.values() if l.shown), L[1].plus._normal.texture))
+    assert g.LFGCollapseList[-5] is True and sum(1 for l in L.values() if l.shown) == 1 and "UI-PlusButton-UP" in L[1].plus._normal.texture
+    # les roles : notre case fait cliquer celle du client
+    t = roles["tank"]
+    t.case.scripts.OnClick(t.case)
+    print("   role tank : client %s, notre case %s" % (g.ROLES_LFG[2], t.case.checked))
+    assert g.ROLES_LFG[2] is True and t.case.checked
+    # une classe sans soin : le voile, sans case
+    lua.execute("ROLES_POSSIBLES = { true, false, true }; LFG_UpdateRolesChangeable()")
+    image()
+    s = roles["soin"]
+    assert s.voile.shown and s.voile.alpha == 0.7 and not s.case.shown and s.icone.desaturated and not s.fond.shown
+    # le bouton de recherche : celui du client
+    F.chercher.scripts.OnClick(F.chercher)
+    assert g.LFD_RECHERCHES == 1
+    lua.execute("LFG_MODE = 'queued'; LFG_UpdateRolesChangeable(); LFDQueueFrameFindGroupButton_Update()")
+    image()
+    print("   en file : bouton %r, cases de role %s, liste figee %s" % (F.chercher.GetText(F.chercher), [r.case.IsEnabled(r.case) for r in F.roles.values()], L[1].case.enabled))
+    assert F.chercher.GetText(F.chercher) == "Leave Queue" and all(r.case.enabled is False for r in F.roles.values())
+    assert L[1].case.enabled is False
+    # inscrit dans le raid : le voile de WotLK, son bouton est celui du client
+    lua.execute("LFG_MODE = 'listed'; LFG_UpdateLockedOutPanels(); LFDQueueFrameFindGroupButton_Update()")
+    image()
+    print("   liste de raid : voile %s, bouton %r, recherche %s" % (F.raid.shown, F.raid.quitter.GetText(F.raid.quitter), F.chercher.actif))
+    assert F.raid.shown and F.raid.quitter.GetText(F.raid.quitter) == "Unlist Me" and not F.chercher.actif
+    lua.execute("LFG_MODE = nil; LFG_UpdateLockedOutPanels(); LFG_UpdateRolesChangeable(); LFDQueueFrameFindGroupButton_Update()")
+    image()
+    assert not F.raid.shown and F.chercher.actif
+    # l'attente : visible seulement quand le client l'affiche, avec son parent
+    lua.execute("LFDQueueFrameCooldownFrame.description:SetText('Deserteur'); LFDQueueFrameCooldownFrame:Show(); LFDQueueFrame_SetType('specific')")
+    image()
+    assert not F.attente.shown, "son parent (l'aleatoire) est cache"
+    lua.execute("LFDQueueFrameCooldownFrame:SetParent(LFDQueueFrame)")
+    F.demander()
+    image()
+    assert F.attente.shown and F.attente.description.text == "Deserteur"
+    # dans la liste, le voile couvre tout l'encadre
+    assert lua.eval("rawequal")(F.attente.allPoints, F.encadre) and len(list(F.attente.points.values())) == 0
+    # Back : les categories ; aux details, le voile part du filet
+    F.retour.scripts.OnClick(F.retour)
+    image()
+    pa = list(list(F.attente.points.values())[0].values())
+    assert F.vue == "categories" and F.attente.shown and pa[4] == pr[4] - 8 - (-118), pa
+    lua.execute("LFDQueueFrameCooldownFrame:Hide()")
+    # le deplacement et la superposition
+    assert fc.movable and g.ForeverUI.Superposition.fenetres.chercheur
+    # la croix ferme le panneau du client, et notre fenetre avec
+    fc.croix.scripts.OnClick(fc.croix)
+    assert not g.LFDParentFrame.shown and not fc.shown
+    # a la reouverture en file : la vue du type demande
+    lua.execute("LFG_MODE = 'queued'; ShowUIPanel(LFDParentFrame)")
+    assert F.vue == "liste"
+    lua.execute("LFG_MODE = nil; HideUIPanel(LFDParentFrame)")
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

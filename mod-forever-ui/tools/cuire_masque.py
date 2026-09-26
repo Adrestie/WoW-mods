@@ -123,6 +123,9 @@ ICONES += ["inv_inscription_tradeskill01.blp"]
 # deja cuite plus haut).
 ICONES += ["spell_shadow_summonimp.blp", "spell_shadow_animatedead.blp"]
 
+# le chercheur de groupe (2026-09-26) : l onglet des donjons
+ICONES += ["inv_helmet_08.blp"]
+
 # L'onglet du personnage porte l'icone de SA classe : un fichier par
 # classe, cuit comme les autres.
 ICONES += ["classicon_%s.blp" % c for c in (

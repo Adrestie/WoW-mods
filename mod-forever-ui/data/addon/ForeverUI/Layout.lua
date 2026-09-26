@@ -413,6 +413,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		if ForeverUI.TabardModelTune then
 			ForeverUI.TabardModelTune(argument)
 		end
+	elseif command == "chercheur" then
+		if ForeverUI.GroupFinderDebug then
+			ForeverUI.GroupFinderDebug()
+		else
+			say("aucun diagnostic du chercheur de donjon disponible.")
+		end
 	elseif command == "social" then
 		if ForeverUI.SocialDebug then
 			ForeverUI.SocialDebug()
@@ -471,6 +477,6 @@ SlashCmdList["FOREVERUI"] = function(message)
 				saved and " - deplace" or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro")
+		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui chercheur, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro")
 	end
 end
