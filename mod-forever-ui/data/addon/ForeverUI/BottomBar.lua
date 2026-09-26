@@ -27,8 +27,11 @@
 -- d'images c60 :
 --   Succes -> jeu "Achievements", present dans l'atlas mais sans variante c60
 --             (camelot a retire ce bouton) : on prend la variante de base.
---   JcJ    -> aucun equivalent : le fond de camelot, et l'embleme de faction
---             de 3.3.5 (PVPMicroButtonTexture) pour image.
+--   JcJ    -> RETIRE le 2026-09-26, a la demande : le PvP s'ouvre par
+--             l'onglet de la feuille de personnage. Le bouton du client est
+--             neutralise (ForeverUI.Suppress) et sa place (un pas de 27) va
+--             a la rallonge : le bandeau garde sa longueur, la barre d'action
+--             et les sacs ne bougent pas.
 --   Aide   -> camelot lui donne le meme jeu qu'au menu du jeu, mais cache le
 --             bouton ; ici il reste visible, donc deux points d'interrogation
 --             voisins. On lui donne "AdventureGuide", le seul jeu c60
@@ -77,7 +80,7 @@ local KEYRING_W = 33
 
 -- Place rendue par le sac a composants absent, reversee au micro-menu pour
 -- que la rangee garde sa longueur.
-local MICRO_RALLONGE = 45 + 2
+local MICRO_RALLONGE = 45 + 2 + MICRO_PITCH   -- + la place du bouton JcJ retire
 
 local MICRO_X, MICRO_Y = 116.5, 6
 local BAR_OFFSET_X, BAR_OFFSET_Y = -4.5, -4
@@ -96,7 +99,6 @@ local MICRO = {
 	{ nom = "AchievementMicroButton", jeu = "achievements" },
 	{ nom = "QuestLogMicroButton", jeu = "questlog" },
 	{ nom = "SocialsMicroButton", jeu = "guildcommunities" },
-	{ nom = "PVPMicroButton", embleme = true },
 	{ nom = "LFDMicroButton", jeu = "groupfinder" },
 	{ nom = "HelpMicroButton", jeu = "adventureguide" },
 	{ nom = "MainMenuMicroButton", jeu = "gamemenu" },
@@ -152,21 +154,6 @@ fondBloc:SetPoint("BOTTOMRIGHT", cadreBloc, "BOTTOMRIGHT", 14, 4)
 
 local boutonsMicro = {}
 
--- PVPFrame.lua repose l'embleme avec SetPoint("TOP", ...) sans effacer les
--- ancrages : il faut donc le recentrer apres chaque appel du client, pas une
--- seule fois au chargement. Le client le decale de (-1, -1) et le passe a 50 %
--- quand le bouton est enfonce : on garde ce comportement.
-local function ancrerEmbleme(entree, enfonce)
-	local embleme = entree.embleme
-	if not embleme then
-		return
-	end
-
-	embleme:ClearAllPoints()
-	embleme:SetPoint("CENTER", entree.bouton, "CENTER", enfonce and -1 or 0, enfonce and -1 or 0)
-	embleme:SetAlpha(enfonce and 0.5 or 1)
-end
-
 local function etatMicro(entree)
 	local bouton = entree.bouton
 	local enfonce = bouton:GetButtonState() == "PUSHED"
@@ -187,7 +174,14 @@ local function etatMicro(entree)
 		end
 	end
 
-	ancrerEmbleme(entree, enfonce)
+
+	-- l'embleme du tabard : CENTER (0, 2), enfonce (1, 1)
+	if entree.embleme then
+		for _, t in ipairs({ entree.embleme, entree.emblemeSurvol }) do
+			t:ClearAllPoints()
+			t:SetPoint("CENTER", bouton, "CENTER", enfonce and 1 or 0, enfonce and 1 or 2)
+		end
+	end
 
 	-- CharacterMicroButton_SetPushed change le rognage du portrait ; camelot
 	-- garde le meme dans les deux etats.
@@ -293,27 +287,6 @@ local function habillerMicro(definition, index)
 		entree.ombreEnfoncee = ombreEnfoncee
 	end
 
-	if definition.embleme then
-		-- L'embleme de faction de 3.3.5, pose au centre du fond de camelot.
-		local embleme = _G[definition.nom .. "Texture"]
-		if embleme then
-			embleme:SetDrawLayer("ARTWORK")
-			embleme:SetWidth(24)
-			embleme:SetHeight(24)
-			entree.embleme = embleme
-			ancrerEmbleme(entree, false)
-
-			-- L'appui ne passe pas par UpdateMicroButtons : on s'accroche aussi
-			-- aux deux scripts du bouton.
-			bouton:HookScript("OnMouseDown", function()
-				ancrerEmbleme(entree, true)
-			end)
-			bouton:HookScript("OnMouseUp", function()
-				ancrerEmbleme(entree, false)
-			end)
-		end
-	end
-
 	if definition.nom == "MainMenuMicroButton" and MainMenuBarPerformanceBar then
 		MainMenuBarPerformanceBar:SetWidth(19)
 		MainMenuBarPerformanceBar:SetHeight(39)
@@ -336,7 +309,95 @@ for index, definition in ipairs(MICRO) do
 	end
 end
 local LARGEUR_BOUTONS = nombreMicro * MICRO_W + (nombreMicro - 1) * MICRO_PADDING
+
+-- LE TABARD DE GUILDE SUR LE BOUTON SOCIAL (2026-09-26, demande de
+-- l'utilisateur ; camelot : GuildMicroButtonMixin:UpdateTabard). Avec une
+-- guilde qui a un tabard, le bouton prend le jeu GuildCommunities-GuildColor
+-- teint de la couleur de fond du tabard (LoadMicroButtonTextures : les quatre
+-- etats), et son embleme de 12 x 14 au centre (0, 2), (1, 1) enfonce -- en
+-- OVERLAY, et en HIGHLIGHT pour le survol --, pris sur la planche
+-- GuildEmblems_01 (SetSmallGuildTabardTextures : cases de 18/256, 14 par
+-- ligne, rentrees de 1/256) et teint de la couleur de l'embleme. Sans tabard :
+-- le jeu GuildCommunities, sans embleme.
+-- 3.3.5 n'a pas C_GuildInfo.GetGuildTabardInfo : GetGuildTabardFileNames ne
+-- rend que les noms des textures (Background_<fond>_TU_U,
+-- Emblem_<motif>_<couleur>_TU_U). Le motif est le numero de case de la
+-- planche (verifie sur les motifs 0 a 150) ; les couleurs, lues dans ces
+-- textures, sont dans TabardColors.lua (tools/couleurs_tabard.py).
+local PLANCHE_EMBLEMES = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildemblems_01"
+local CASE_EMBLEME, COLONNES_EMBLEMES, BORD_EMBLEME = 18 / 256, 14, 1 / 256
+
+local function tabardDeGuilde()
+	if not (GetGuildTabardFileNames and IsInGuild and IsInGuild()) then return nil end
+	local fond, _, embleme = GetGuildTabardFileNames()
+	if not fond or not embleme then return nil end
+	local f = tonumber(string.match(string.lower(fond), "background_(%d+)"))
+	local motif, couleur = string.match(string.lower(embleme), "emblem_(%d+)_(%d+)")
+	local couleurs = ForeverUI.TabardCouleurs
+	if not (f and motif and couleurs) then return nil end
+	local cf, ce = couleurs.fond[f], couleurs.embleme[tonumber(couleur)]
+	if not (cf and ce) then return nil end
+	return cf, tonumber(motif), ce
+end
+
+local social
+for _, entree in ipairs(boutonsMicro) do
+	if entree.bouton:GetName() == "SocialsMicroButton" then social = entree end
+end
+
+if social then
+	social.jeuBase = social.jeu
+	social.embleme = social.bouton:CreateTexture(nil, "OVERLAY")
+	social.emblemeSurvol = social.bouton:CreateTexture(nil, "HIGHLIGHT")
+	for _, t in ipairs({ social.embleme, social.emblemeSurvol }) do
+		t:SetTexture(PLANCHE_EMBLEMES)
+		t:SetWidth(12)
+		t:SetHeight(14)
+		t:SetPoint("CENTER", social.bouton, "CENTER", 0, 2)
+		t:Hide()
+	end
+end
+
+-- GuildMicroButtonMixin:UpdateTabard
+function ForeverUI.MajTabardSocial()
+	if not social then return end
+	local fond, motif, couleur = tabardDeGuilde()
+	social.jeu = fond and (social.jeuBase .. "-guildcolor") or social.jeuBase
+	for etat, methode in pairs(ETATS_MICRO) do
+		local texture = social.bouton[methode] and social.bouton[methode](social.bouton)
+		if texture and ForeverUI.SetAtlas(texture, microAtlas(social.jeu, etat), true) then
+			if fond then
+				texture:SetVertexColor(fond[1], fond[2], fond[3])
+			else
+				texture:SetVertexColor(1, 1, 1)
+			end
+		end
+	end
+	if fond then
+		local x = (motif % COLONNES_EMBLEMES) * CASE_EMBLEME
+		local y = math.floor(motif / COLONNES_EMBLEMES) * CASE_EMBLEME
+		for _, t in ipairs({ social.embleme, social.emblemeSurvol }) do
+			t:SetTexCoord(x + BORD_EMBLEME, x + CASE_EMBLEME - BORD_EMBLEME, y + BORD_EMBLEME, y + CASE_EMBLEME - BORD_EMBLEME)
+			t:SetVertexColor(couleur[1], couleur[2], couleur[3])
+			t:Show()
+		end
+	else
+		social.embleme:Hide()
+		social.emblemeSurvol:Hide()
+	end
+	etatMicro(social)
+end
+
+local veilleTabard = CreateFrame("Frame")
+for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_GUILD_UPDATE", "GUILDTABARD_UPDATE" }) do
+	veilleTabard:RegisterEvent(ev)
+end
+veilleTabard:SetScript("OnEvent", function() ForeverUI.MajTabardSocial() end)
 micro:SetWidth(LARGEUR_BOUTONS + MICRO_RALLONGE)
+
+-- LE BOUTON JcJ DU CLIENT S'EN VA (2026-09-26). Masquer ne suffit pas :
+-- UpdateMicroButtons et VehicleMenuBar_MoveMicroButtons le reprennent.
+ForeverUI.Suppress(_G["PVPMicroButton"])
 
 -- Les boutons restent serres contre le bord GAUCHE du bandeau : la rallonge
 -- reste libre a droite, du cote ou le micro-menu s'allonge

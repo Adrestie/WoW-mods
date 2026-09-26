@@ -53,7 +53,8 @@ local function newRegion(kind)
     function r:GetHeight() return self.height or 0 end
     function r:SetHeight(h) self.height = h end
     function r:SetPoint(...) table.insert(self.points, {...}) end
-    function r:SetAllPoints(...) self.allPoints = true end
+    -- la cible est retenue (vraie si aucune : le parent)
+    function r:SetAllPoints(cible) self.allPoints = cible or true end
     function r:ClearAllPoints() self.points = {} end
     -- Le vrai declenche le OnShow en se montrant, comme le OnHide en se
     -- cachant ; le banc ne le faisait pas.
@@ -102,7 +103,8 @@ local function newRegion(kind)
     function r:GetJustifyH() return self.justify end
     -- 3.3.5 l'a, mais il REND FAUX quand la carte graphique ne sait
     -- pas desaturer. Le faux rend vrai : c'est le cas courant.
-    function r:SetDesaturated(v) self.desaturated = (v ~= false) return true end
+    -- nil ou false : pas desaturee (le client lit un booleen Lua)
+    function r:SetDesaturated(v) self.desaturated = v and true or false return true end
     function r:SetJustifyV(j) self.justifyV = j end
     function r:SetTextColor(rr, vv, bb, aa) self.textColor = {rr, vv, bb, aa} end
     function r:GetTextColor()
@@ -115,6 +117,8 @@ local function newRegion(kind)
     -- FontStyles.xml du client. Le faux ne touchait pas a justify : un
     -- SetJustifyH pose a la creation paraissait donc survivre, alors qu en
     -- jeu le nom se retrouvait centre et se deplacait au fil du defilement.
+    function r:GetFont() return self.policeChemin or "Fonts" .. string.char(92) .. "FRIZQT__.TTF", self.policeTaille or 12, self.policeDrapeaux or "" end
+    function r:SetFont(chemin, taille, drapeaux) self.policeChemin, self.policeTaille, self.policeDrapeaux = chemin, taille, drapeaux return true end
     function r:SetFontObject(o)
         self.font = o
         local nom = tostring(o)
@@ -229,7 +233,12 @@ function CreateFrame(kind, name, parent, template)
     function f:SetHighlightFontObject(o) self.highlightFont = o end
     function f:SetDisabledFontObject(o) self.disabledFont = o end
     function f:SetButtonState(state) self.buttonState = state end
+    -- LockHighlight garde la surbrillance d'un bouton affichee (selection).
+    function f:LockHighlight() self.locked = true end
+    function f:SetMultiLine(v) self.multiLine = v end
+    function f:UnlockHighlight() self.locked = false end
     function f:GetButtonState() return self.buttonState or "NORMAL" end
+    function f:SetReverse(v) self.reverse = v and true or false end
     function f:SetChecked(v) self.checked = v and true or false end
     function f:GetChecked() return self.checked end
     -- Le vrai Click d'un CheckButton bascule la coche PUIS joue OnClick.
@@ -331,7 +340,12 @@ function CreateFrame(kind, name, parent, template)
     function f:SetJustifyH(j) self.justify = j end
     function f:SetFontString(fs) self.fontString = fs end
     function f:GetFontString() return self.fontString end
-    function f:SetAttribute(k, v) self.attributes[k] = v end
+    -- le vrai declenche OnAttributeChanged : le script, puis les greffons
+    function f:SetAttribute(k, v)
+        self.attributes[k] = v
+        if self.scripts.OnAttributeChanged then self.scripts.OnAttributeChanged(self, k, v) end
+        if self.hooks and self.hooks.OnAttributeChanged then self.hooks.OnAttributeChanged(self, k, v) end
+    end
     function f:GetAttribute(k) return self.attributes[k] end
     -- Un cadre deplace par StartMoving devient "place par l'utilisateur" : le
     -- client retient alors sa position.
@@ -446,8 +460,17 @@ end
 -- frame:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2).
 -- Le vrai n'ouvre rien : il retient la fonction qui remplira la liste. Le
 -- banc la garde pour pouvoir la jouer.
-function UIDropDownMenu_Initialize(cadre, fonction, mode)
+function UIDropDownMenu_Initialize(cadre, fonction, mode, niveau, menuListe)
     if cadre then cadre.initFn, cadre.menuMode = fonction, mode end
+    -- LE VRAI APPELLE LA FONCTION TOUT DE SUITE (UIDropDownMenu.lua:67-70) :
+    -- frame.initialize = initFunction ; initFunction(frame, level,
+    -- menuList). Le banc ne le faisait pas, et un menu construit d'avance
+    -- plantait a la connexion (UnitPopup_ShowMenu sans menu ouvert, page
+    -- Raid, 2026-09-26).
+    if cadre and fonction then
+        cadre.initialize = fonction
+        fonction(cadre, niveau, menuListe)
+    end
     -- le vrai ecrit frame.displayMode = "MENU" (UIDropDownMenu.lua:85) ; le
     -- banc ne le faisait pas, et un menu contextuel passait pour un menu
     -- deroulant
@@ -577,17 +600,24 @@ function ToggleDropDownMenu() end
 GameTooltip = {
     ClearAllPoints = function() end,
     SetPoint = function() end,
+    -- le vrai SetOwner vide aussi l'infobulle
     SetOwner = function(self, cadre, ancre)
         self.owner, self.anchor = cadre, ancre
+        self.text, self.lignes = nil, {}
     end,
     GetOwner = function(self) return self.owner end,
-    SetText = function(self, texte) self.text = texte end,
+    -- le vrai SetText recommence l'infobulle : les lignes d'avant s'en vont
+    SetText = function(self, texte) self.text = texte; self.lignes = {} end,
     AddLine = function(self, texte)
         self.lignes = self.lignes or {}
         table.insert(self.lignes, texte)
     end,
     Show = function(self) self.shown = true end,
     Hide = function(self) self.shown = false end,
+    -- l'infobulle d'une unite, d'un affaiblissement ; FadeOut la fait partir
+    SetUnit = function(self, unite) self.unite = unite; self.text = UnitName(unite); self.lignes = {} end,
+    SetUnitDebuff = function(self, unite, i, filtre) self.debuff = { unite, i, filtre } end,
+    FadeOut = function(self) self.shown = false end,
 }
 RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
                       DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 } }
@@ -2968,11 +2998,115 @@ end
 function GetPVPSessionStats() return 12, 340 end
 function GetPVPYesterdayStats() return 30, 900 end
 function GetHonorCurrency() return 4567 end
-function GetCurrentArenaSeason() return 8 end
-HONOR_POINTS = "Points d'honneur"
-LIFETIME_HONORABLE_KILLS = "Victoires honorables"
-TODAY = "Aujourd hui"
-YESTERDAY = "Hier"
+SAISON_ARENE = 8
+function GetCurrentArenaSeason() return SAISON_ARENE end
+function GetPreviousArenaSeason() return 7 end
+-- LES EQUIPES D ARENE. GetArenaTeam rend ses valeurs dans l ordre que lit
+-- PVPTeam_Update (PVPFrame.lua du client) : nom, taille, cote, joues et
+-- gagnes de la semaine, de la saison, mes joues (semaine, saison), rang,
+-- ma cote, fond rgb, embleme, embleme rgb, bord, bord rgb. L emplacement 1
+-- porte le 3v3 et le 2 le 2v2 : les cartes doivent les TRIER par taille.
+EQUIPES_ARENE = {
+    [1] = { "Les Trois", 3, 1650, 10, 7, 40, 25, 10, 38, 120, 1600,
+            0.2, 0.3, 0.4, 12, 1, 0.8, 0, 3, 0.9, 0.9, 0.9 },
+    [2] = { "Duo Fou", 2, 1500, 20, 11, 60, 30, 1, 50, 300, 1480,
+            0.5, 0, 0, -1, 1, 1, 1, -1, 1, 1, 1 },
+}
+function GetArenaTeam(i)
+    local e = EQUIPES_ARENE[i]
+    if not e then return nil end
+    return (table.unpack or unpack)(e)
+end
+POINTS_ARENE = 321
+function GetArenaCurrency() return POINTS_ARENE end
+-- nom, rang (0 = capitaine), niveau, classe, en ligne, joues, gagnes,
+-- joues et gagnes de la saison, cote : GetArenaTeamRosterInfo
+MEMBRES_ARENE = {
+    [1] = { { "Moi", 0, 80, "Warrior", 1, 10, 7, 40, 25, 1700 },
+            { "Ami", 1, 80, "Priest", 1, 1, 1, 30, 20, 1600 },
+            { "Absent", 1, 80, "Mage", nil, 0, 0, 5, 2, 1500 } },
+}
+function GetNumArenaTeamMembers(id) local m = MEMBRES_ARENE[id]; return m and #m or 0 end
+function GetArenaTeamRosterInfo(id, n) return (table.unpack or unpack)(MEMBRES_ARENE[id][n]) end
+ROSTER = { demandes = {}, fermetures = 0, selection = {}, tris = {} }
+function ArenaTeamRoster(id) table.insert(ROSTER.demandes, id) end
+function CloseArenaTeamRoster() ROSTER.fermetures = ROSTER.fermetures + 1 end
+function SetArenaTeamRosterSelection(id, n) ROSTER.selection[id] = n end
+function GetArenaTeamRosterSelection(id) return ROSTER.selection[id] or 0 end
+function SortArenaTeamRoster(t) table.insert(ROSTER.tris, t) end
+-- Le detail du client vit sous PVPFrame, fils de PVPParentFrame : l onglet
+-- eteint PVPFrame, le drapeau de PVPTeamDetails reste le sien.
+PVPFrame = CreateFrame("Frame", "PVPFrame", PVPParentFrame)
+PVPTeamDetails = CreateFrame("Frame", "PVPTeamDetails", PVPFrame)
+PVPTeamDetails:Hide()
+MENUS_EQUIPE = {}
+function PVPFrame_ShowDropdown(nom, enLigne) table.insert(MENUS_EQUIPE, { nom = nom, enLigne = enLigne }) end
+function GameTooltip_AddNewbieTip(cadre, titre, r, v, b, texte)
+    GameTooltip:SetOwner(cadre); GameTooltip:SetText(titre); GameTooltip.lignes = {}
+    GameTooltip:AddLine(texte); GameTooltip:Show()
+end
+function GameTooltip_SetDefaultAnchor(tt, cadre) tt:SetOwner(cadre) end
+GameFontNormalSmall = GameFontNormalSmall or "GameFontNormalSmall"
+ARENA_THIS_WEEK, ARENA_THIS_SEASON = "This Week", "This Season"
+ARENA_THIS_WEEK_TOGGLE = "View this Week's Stats"
+ARENA_THIS_SEASON_TOGGLE = "View this Season's Stats"
+PVP_TEAMSIZE = "(%dv%d)"
+ARENA_TEAM = "Arena Team"
+CLICK_FOR_DETAILS = "Click for details"
+ARENA_TEAM_LEAD_IN = "Visit an Arena Master to form a new Arena Team."
+ARENA_OFF_SEASON_TEXT = "Arena Season %d has come to an end!|n|nBe sure to check for the start of Season %d!"
+ARENA_POINTS = "Arena Points"
+TOOLTIP_ARENA_POINTS = "Arena Points are gained by being victorious in arena combat."
+PVP_LABEL_ARENA = "ARENA:"
+ARENA_TEAM_RATING, GAMES, WIN_LOSS, PLAYED = "Team Rating", "Games", "Win - Loss", "Played"
+RANK, RATING, NAME, CLASS = "Rank", "Rating", "Name", "Class"
+ADDMEMBER_TEAM, ADDMEMBER = "Add Member", "Add Member"
+-- LES CHAMPS DE BATAILLE : GetBattlegroundInfo rend nom, canEnter,
+-- isHoliday, isRandom, BattleGroundID (PVPBattlegroundFrame.lua du client).
+-- Alterac est ferme : il ne doit pas paraitre.
+CHAMPS = {
+    { "Warsong Gulch", true, false, false, 2 },
+    { "Arathi Basin", true, false, false, 3 },
+    { "Alterac Valley", false, false, false, 1 },
+    { "Eye of the Storm", true, true, false, 7 },
+    { "Random Battleground", true, false, true, 32 },
+}
+function GetNumBattlegroundTypes() return #CHAMPS end
+function GetBattlegroundInfo(i)
+    local c = CHAMPS[i]
+    if not c then return nil end
+    return (table.unpack or unpack)(c)
+end
+BG = { demandes = {}, fermetures = 0, rejoint = {}, tri = 0, groupeMax = 10 }
+function RequestBattlegroundInstanceInfo(i) table.insert(BG.demandes, i) end
+function CloseBattlefield() BG.fermetures = BG.fermetures + 1 end
+function SortBGList() BG.tri = BG.tri + 1 end
+function GetBattlefieldInfo() return "Carte", "Description", BG.groupeMax end
+function JoinBattlefield(i, groupe) table.insert(BG.rejoint, { i = i, groupe = groupe and true or false }) end
+MAX_BATTLEFIELD_QUEUES = 3
+FILES_BG = { { "queued", "Arathi Basin" }, { "none" }, { "none" } }
+function GetBattlefieldStatus(i) local f = FILES_BG[i]; return f[1], f[2] end
+function GetRandomBGHonorCurrencyBonuses() return true, 30, 25, 15, 0 end
+function GetHolidayBGHonorCurrencyBonuses() return true, 45, 0, 20, 5 end
+BATTLEGROUND_HOLIDAY = "Call to Arms"
+BATTLEFIELD_QUEUE_STATUS, BATTLEFIELD_CONFIRM_STATUS = "In Queue", "Ready to Enter"
+BATTLEFIELD_GROUP_JOIN, BATTLEFIELD_JOIN = "Join as Group", "Join Battle"
+JOIN_AS_PARTY, JOIN_AS_GROUP = "Join as Party", "Join as Group"
+WIN, LOSS = "Win", "Loss"
+NumberFontNormalLarge = NumberFontNormalLarge or "NumberFontNormalLarge"
+function ARENE_EVENEMENT(ev, ...)
+    for _, f in ipairs(FRAMES) do
+        if f.events and f.events[ev] and f.scripts and f.scripts.OnEvent then
+            f.scripts.OnEvent(f, ev, ...)
+        end
+    end
+end
+-- LES CHAINES DU CLIENT, et seulement elles : LIFETIME_HONORABLE_KILLS,
+-- TODAY et YESTERDAY N'EXISTENT PAS en 3.3.5, et le faux les fournissait --
+-- le francais de secours passait ainsi inapercu (2026-09-26).
+HONORABLE_KILLS = "Honorable Kills"
+HONOR_TODAY = "Today"
+HONOR_YESTERDAY = "Yesterday"
 -- Le client reancre deux micro-boutons a chaque entree ou sortie de
 -- vehicule : le faux client doit le faire aussi, sinon l essai ne prouve
 -- rien.
@@ -3226,6 +3360,393 @@ function hooksecurefunc(nom, fn, greffon)
         end
     end
 end
+-- LA FENETRE SOCIAL de 3.3.5 -- FriendsFrame.lua et .xml du client, lus en
+-- entier. Le faux reprend ce que l'addon lit ou declenche : les onglets du
+-- bas (leur OnClick = PanelTemplates_Tab_OnClick puis FriendsFrame_OnShow),
+-- FriendsTabHeader et son onglet choisi, les sept sous-cadres que
+-- FriendsFrame_ShowSubFrame alterne, les regions de l'ecran (quatre quartiers,
+-- l'icone, le titre), et les fonctions du client que l'addon emprunte.
+FRIENDSFRAME_SUBFRAMES = { "FriendsListFrame", "IgnoreListFrame", "PendingListFrame", "WhoFrame",
+                           "GuildFrame", "ChannelFrame", "RaidFrame" }
+FriendsFrame = CreateFrame("Frame", "FriendsFrame", UIParent)
+FriendsFrame:SetWidth(384)
+FriendsFrame:SetHeight(512)
+FriendsFrame:EnableMouse(true)
+FriendsFrame:Hide()
+FriendsFrameTopLeft = FriendsFrame:CreateTexture("FriendsFrameTopLeft", "BORDER")
+FriendsFrameTopRight = FriendsFrame:CreateTexture("FriendsFrameTopRight", "BORDER")
+FriendsFrameBottomLeft = FriendsFrame:CreateTexture("FriendsFrameBottomLeft", "BORDER")
+FriendsFrameBottomRight = FriendsFrame:CreateTexture("FriendsFrameBottomRight", "BORDER")
+FriendsFrameIcon = FriendsFrame:CreateTexture("FriendsFrameIcon", "BACKGROUND")
+FriendsFrameTitleText = FriendsFrame:CreateFontString("FriendsFrameTitleText", "ARTWORK", "GameFontNormal")
+FriendsTabHeader = CreateFrame("Frame", "FriendsTabHeader", FriendsFrame)
+FriendsTabHeader.numTabs = 3
+FriendsTabHeader.selectedTab = 1
+for _, n in ipairs(FRIENDSFRAME_SUBFRAMES) do
+    _G[n] = CreateFrame("Frame", n, FriendsFrame)
+    _G[n]:Hide()
+end
+function PanelTemplates_Tab_OnClick(self, cadre) PanelTemplates_SetTab(cadre, self:GetID()) end
+function PanelTemplates_GetSelectedTab(cadre) return cadre.selectedTab end
+for i = 1, 5 do
+    local t = CreateFrame("Button", "FriendsFrameTab" .. i, FriendsFrame)
+    t:SetID(i)
+    t:SetScript("OnClick", function(self)
+        PanelTemplates_Tab_OnClick(self, FriendsFrame)
+        FriendsFrame_OnShow()
+    end)
+end
+FriendsFrameCloseButton = CreateFrame("Button", "FriendsFrameCloseButton", FriendsFrame)
+FriendsDropDown = CreateFrame("Frame", "FriendsDropDown", FriendsFrame)
+FriendsTooltip = CreateFrame("Frame", "FriendsTooltip", FriendsFrame)
+FriendsTooltip:Hide()
+PanelTemplates_SetNumTabs(FriendsFrame, 5)
+FriendsFrame.selectedTab = 1
+function FriendsFrame_ShowSubFrame(nom)
+    for _, n in ipairs(FRIENDSFRAME_SUBFRAMES) do
+        if n == nom then _G[n]:Show() else _G[n]:Hide() end
+    end
+end
+-- FriendsFrame_Update, reduit a ce qui compte : l'en-tete des sous-onglets
+-- sur l'onglet 1 seulement, ShowFriends pour la liste, le bon sous-cadre.
+function FriendsFrame_Update()
+    if FriendsFrame.selectedTab == 1 then
+        FriendsTabHeader:Show()
+        if FriendsTabHeader.selectedTab == 2 then
+            FriendsFrame_ShowSubFrame("IgnoreListFrame")
+        else
+            ShowFriends()
+            FriendsFrame_ShowSubFrame("FriendsListFrame")
+        end
+    else
+        FriendsTabHeader:Hide()
+        FriendsFrame_ShowSubFrame(({ "FriendsListFrame", "WhoFrame", "GuildFrame", "ChannelFrame",
+                                     "RaidFrame" })[FriendsFrame.selectedTab])
+    end
+end
+function FriendsFrame_OnShow() FriendsFrame_Update() end
+FriendsFrame:SetScript("OnShow", function() FriendsFrame_OnShow() end)
+-- LES DONNEES : GetFriendInfo rend nom, niveau, classe, zone, connecte,
+-- statut, note -- les amis en ligne d'abord, comme le client les range.
+AMIS = { { "Alice", 80, "Mage", "Dalaran", 1, "" },
+         { "Bob", 70, "Priest", "Orgrimmar", 1, "<Away>" },
+         { "Carl", 60, "Rogue", "", nil, "" } }
+function GetNumFriends()
+    local on = 0
+    for _, a in ipairs(AMIS) do if a[5] then on = on + 1 end end
+    return #AMIS, on
+end
+function GetFriendInfo(i)
+    local a = AMIS[i]
+    if not a then return nil end
+    return a[1], a[2], a[3], a[4], a[5], a[6], a[7]
+end
+-- le parrainage : Bob est lie, la recharge court
+PARRAINS = {}
+RAF_POSSIBLE = {}
+RAF_RECHARGE = { 0, 0 }
+function IsReferAFriendLinked(n) return PARRAINS[n] end
+function CanSummonFriend(n) return RAF_POSSIBLE[n] end
+function GetSummonFriendCooldown() return RAF_RECHARGE[1], RAF_RECHARGE[2] end
+AMI_CHOISI = 0
+function GetSelectedFriend() return AMI_CHOISI end
+function SetSelectedFriend(i) AMI_CHOISI = i end
+DEMANDES_AMIS = 0
+function ShowFriends() DEMANDES_AMIS = DEMANDES_AMIS + 1 end
+IGNORES = { "Troll1", "Troll2" }
+IGNORE_CHOISI = 0
+function GetNumIgnores() return #IGNORES end
+function GetIgnoreName(i) return IGNORES[i] end
+function SetSelectedIgnore(i) IGNORE_CHOISI = i end
+function GetSelectedIgnore() return IGNORE_CHOISI end
+function AddIgnore(n) table.insert(IGNORES, n) end
+function DelIgnore(n)
+    for i, x in ipairs(IGNORES) do if x == n then table.remove(IGNORES, i) break end end
+end
+VOIX = false
+function IsVoiceChatEnabled() return VOIX end
+MUETS = { "Bavard" }
+MUET_CHOISI = 0
+function GetNumMutes() return #MUETS end
+function GetMuteName(i) return MUETS[i] end
+function SetSelectedMute(i) MUET_CHOISI = i end
+function GetSelectedMute() return MUET_CHOISI end
+function AddMute(n) table.insert(MUETS, n) end
+function DelMute(n) end
+-- Les fonctions du client que l'addon emprunte, recopiees.
+FRIENDS_BUTTON_TYPE_WOW = 3
+SQUELCH_TYPE_IGNORE, SQUELCH_TYPE_MUTE = 1, 3
+FRIENDS_WOW_NAME_COLOR = { r = 0.996, g = 0.882, b = 0.361 }
+FRIENDS_WOW_BACKGROUND_COLOR = { r = 1.0, g = 0.824, b = 0.0, a = 0.05 }
+FRIENDS_GRAY_COLOR = { r = 0.486, g = 0.518, b = 0.541 }
+FRIENDS_OFFLINE_BACKGROUND_COLOR = { r = 0.588, g = 0.588, b = 0.588, a = 0.05 }
+function FriendsFrame_SelectFriend(friendType, id)
+    if friendType == FRIENDS_BUTTON_TYPE_WOW then SetSelectedFriend(id) end
+    FriendsFrame.selectedFriendType = friendType
+end
+function FriendsFrame_SelectSquelched(ignoreType, index)
+    if ignoreType == SQUELCH_TYPE_IGNORE then SetSelectedIgnore(index)
+    elseif ignoreType == SQUELCH_TYPE_MUTE then SetSelectedMute(index) end
+    FriendsFrame.selectedSquelchType = ignoreType
+end
+function FriendsFrameUnsquelchButton_OnClick()
+    if FriendsFrame.selectedSquelchType == SQUELCH_TYPE_IGNORE then
+        DelIgnore(GetIgnoreName(GetSelectedIgnore()))
+    elseif FriendsFrame.selectedSquelchType == SQUELCH_TYPE_MUTE then
+        DelMute(GetMuteName(GetSelectedMute()))
+    end
+end
+DITS = {}
+function ChatFrame_SendTell(n) table.insert(DITS, n) end
+function FriendsFrameSendMessageButton_OnClick()
+    local name
+    if FriendsFrame.selectedFriendType == FRIENDS_BUTTON_TYPE_WOW then
+        name = GetFriendInfo(FriendsFrame.selectedFriend)
+    end
+    if name then ChatFrame_SendTell(name) end
+end
+function FriendsFrameAddFriendButton_OnClick() StaticPopup_Show("ADD_FRIEND") end
+MENUS_AMIS = {}
+function FriendsFrame_ShowDropdown(name, connected, lineID, chatType, chatFrame, friendsList)
+    table.insert(MENUS_AMIS, { nom = name, connecte = connected, liste = friendsList })
+end
+INFOBULLES_AMIS = {}
+function FriendsFrameTooltip_Show(self)
+    table.insert(INFOBULLES_AMIS, { type = self.buttonType, id = self.id })
+    FriendsTooltip:Show()
+end
+CIBLE_COOPERANTE = false
+function UnitCanCooperate() return CIBLE_COOPERANTE end
+CHAT_FLAG_AFK, CHAT_FLAG_DND = "<Away>", "<Busy>"
+FRIENDS, WHO, GUILD, CHAT, RAID, IGNORE = "Friends", "Who", "Guild", "Chat", "Raid", "Ignore"
+FRIENDS_LIST, IGNORE_LIST = "Friends List", "Ignore List"
+ADD_FRIEND, SEND_MESSAGE = "Add Friend", "Send Message"
+IGNORE_PLAYER, REMOVE_PLAYER, MUTE_PLAYER = "Ignore Player", "Remove Player", "Mute Player"
+IGNORED, MUTED = "Ignored", "Muted"
+FRIENDS_LEVEL_TEMPLATE = "Level %d %s"
+UNKNOWN = UNKNOWN or "Unknown"
+FriendsFont_Normal = { police = "FriendsFont_Normal" }
+FriendsFont_Small = { police = "FriendsFont_Small" }
+GameFontDisableSmall = GameFontDisableSmall or "GameFontDisableSmall"
+GameFontNormal = GameFontNormal or "GameFontNormal"
+-- LES AUTRES PAGES DE LA FENETRE SOCIAL : Qui, Guilde, Canaux, Raid. Les
+-- signatures sont celles que lisent FriendsFrame.lua, ChannelFrame.lua,
+-- RaidFrame.lua et Blizzard_RaidUI.lua du client ; les appels sont retenus
+-- pour que l'essai voie ce que l'addon demande au serveur.
+APPELS = {}
+local function retenir(nom) return function(...) table.insert(APPELS, { nom = nom, args = { ... } }) end end
+-- Qui : name, guild, level, race, class, zone, classFileName
+QUI = { { "Zed", "Les Braves", 80, "Human", "Warrior", "Stormwind", "WARRIOR" },
+        { "Ann", "", 70, "Dwarf", "Priest", "Ironforge", "PRIEST" } }
+QUI_TOTAL = 2
+function GetNumWhoResults() return #QUI, QUI_TOTAL end
+function GetWhoInfo(i) local w = QUI[i]; if not w then return nil end; return w[1], w[2], w[3], w[4], w[5], w[6], w[7] end
+SortWho, SendWho, SetWhoToUI = retenir("SortWho"), retenir("SendWho"), retenir("SetWhoToUI")
+InviteUnit, AddFriend = retenir("InviteUnit"), retenir("AddFriend")
+MAX_WHOS_FROM_SERVER = 50
+WHO_FRAME_TOTAL_TEMPLATE, WHO_FRAME_SHOWN_TEMPLATE = "%d |4player:players; total", "(showing %d)"
+WHO_LIST, REFRESH, GROUP_INVITE = "Who List", "Refresh", "Group Invite"
+NAME, ZONE, RACE, LEVEL_ABBR, CLASS = "Name", "Zone", "Race", "Lvl", "Class"
+LEVEL, SHOW_OFFLINE_MEMBERS = "Level", "Show Offline Members"
+FRIENDS_TEXTURE_AFK = "Interface" .. string.char(92) .. "FriendsFrame" .. string.char(92) .. "StatusIcon-Away"
+FRIENDS_TEXTURE_DND = "Interface" .. string.char(92) .. "FriendsFrame" .. string.char(92) .. "StatusIcon-DnD"
+-- CreateFont : un objet police nomme, global, qui retient ce qu'on lui pose
+function CreateFont(nom)
+    local f = { nom = nom }
+    function f:SetFontObject(o) self.parent = o end
+    function f:SetShadowOffset(x, y) self.ombre = { x, y } end
+    function f:SetShadowColor(r, v, b) self.ombreCouleur = { r, v, b } end
+    function f:SetTextColor(r, v, b) self.couleur = { r, v, b } end
+    _G[nom] = f
+    return f
+end
+SystemFont_Med2 = SystemFont_Med2 or "SystemFont_Med2"
+ChatFontNormal = ChatFontNormal or "ChatFontNormal"
+GameFontNormalSmallLeft = GameFontNormalSmallLeft or "GameFontNormalSmallLeft"
+-- Guilde : name, rank, rankIndex, level, class, zone, note, officernote,
+-- online, status, classFileName
+GUILDE = { { "Moi", "Officer", 1, 80, "Mage", "Dalaran", "note moi", "off moi", 1, "", "MAGE" },
+           { "Bea", "Member", 3, 75, "Rogue", "Orgrimmar", "", "", 1, "<Away>", "ROGUE" },
+           { "Cid", "Member", 3, 60, "Hunter", "", "", "", nil, "", "HUNTER" } }
+GUILDE_CHOIX = 0
+function GetGuildInfo(unit) return "Les Braves", "Officer", 1 end
+function IsInGuild() return 1 end
+-- SANS LES HORS LIGNE (la case decochee), le client ne rend que les membres
+-- en ligne : GetNumGuildMembers() les compte, GetNumGuildMembers(true) tous
+GUILDE_HORS = true
+local function montres()
+    if GUILDE_HORS then return GUILDE end
+    local l = {}
+    for _, m in ipairs(GUILDE) do if m[9] then table.insert(l, m) end end
+    return l
+end
+function GetNumGuildMembers(tous) if tous then return #GUILDE end return #montres() end
+function GetGuildRosterInfo(i) local m = montres()[i]; if not m then return nil end
+    return m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11] end
+function GetGuildRosterShowOffline() return GUILDE_HORS end
+function SetGuildRosterShowOffline(v) GUILDE_HORS = v and true or false end
+function GetGuildRosterSelection() return GUILDE_CHOIX end
+function SetGuildRosterSelection(i) GUILDE_CHOIX = i end
+function GetGuildRosterLastOnline(i) return 0, 0, 3, 0 end
+SortGuildRoster, GuildRoster = retenir("SortGuildRoster"), retenir("GuildRoster")
+GuildPromote, GuildDemote = retenir("GuildPromote"), retenir("GuildDemote")
+SetGuildInfoText, QueryGuildEventLog = retenir("SetGuildInfoText"), retenir("QueryGuildEventLog")
+CHEF_DE_GUILDE = false
+function IsGuildLeader() return CHEF_DE_GUILDE end
+function CanEditMOTD() return true end
+function CanEditPublicNote() return true end
+function CanViewOfficerNote() return true end
+function CanEditOfficerNote() return false end
+function CanGuildPromote() return true end
+function CanGuildDemote() return true end
+function CanGuildRemove() return true end
+function CanGuildInvite() return true end
+function GuildControlGetNumRanks() return 5 end
+function GetGuildInfoText() return "Bienvenue" end
+function CanEditGuildInfo() return true end
+JOURNAL_GUILDE = { { "join", "Bea", nil, nil, 0, 0, 2, 0 }, { "promote", "Moi", "Bea", "Member", 0, 0, 1, 0 } }
+function GetNumGuildEvents() return #JOURNAL_GUILDE end
+function GetGuildEventInfo(i) local e = JOURNAL_GUILDE[i]; return e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] end
+CURRENT_GUILD_MOTD = "Raid ce soir"
+GuildControlPopupFrame = CreateFrame("Frame", "GuildControlPopupFrame", UIParent)
+GuildControlPopupFrame:Hide()
+GuildInfoFrame = CreateFrame("Frame", "GuildInfoFrame", FriendsFrame)
+GuildMemberDetailFrame = CreateFrame("Frame", "GuildMemberDetailFrame", FriendsFrame)
+GuildMemberDetailFrame:Hide()
+GuildInfoFrame:Hide()
+GUILD_TITLE_TEMPLATE, GUILD_TOTAL, GUILD_TOTALONLINE = "%s of %s", "%d Guild Members", "(%d Online)"
+PLAYER_STATUS, GUILD_STATUS, RANK, LABEL_NOTE, LASTONLINE = "Player Status", "Guild Status", "Rank", "Note", "Last Online"
+GUILD_ONLINE_LABEL, GUILD_MOTD_LABEL = "Online", "Guild Message Of The Day:"
+GUILDCONTROL, ADDMEMBER, GUILD_INFORMATION = "Guild Control", "Add Member", "Guild Information"
+ZONE_COLON, RANK_COLON, LAST_ONLINE_COLON, NOTE_COLON, OFFICER_NOTE_COLON = "Zone:", "Rank:", "Last Online:", "Note:", "Officer's Note"
+GUILD_NOTE_EDITLABEL, GUILD_OFFICERNOTE_EDITLABEL = "Click here to set a Public Note.", "Click here to set an Officer's Note."
+REMOVE, ACCEPT, CLOSE, GUILD_EVENT_LOG, GUILD_INFO_EDITLABEL = "Remove", "Accept", "Close", "Log", "Click here to set message"
+GUILDEVENT_TYPE_JOIN, GUILDEVENT_TYPE_PROMOTE = "%s joins the guild", "%s promotes %s to %s"
+GUILD_BANK_LOG_TIME, LASTONLINE_DAYS = "( %s ago )", "%d |4day:days;"
+function RecentTimeDate(a, m, j, h) if j and j > 0 then return string.format(LASTONLINE_DAYS, j) end return "< an hour" end
+-- Canaux : name, header, collapsed, channelNumber, count, active, category
+CANAUX = { { "World", true, false, nil, 1 },
+           { "General", false, false, 1, nil, true, "CHANNEL_CATEGORY_WORLD" },
+           { "Custom", true, false, nil, 1 },
+           { "Guilde", false, false, 5, 3, true, "CHANNEL_CATEGORY_GROUP" } }
+CANAL_CHOISI = nil
+function GetNumDisplayChannels() return #CANAUX end
+function GetChannelDisplayInfo(i) local c = CANAUX[i]; if not c then return nil end
+    return c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9] end
+function GetSelectedDisplayChannel() return CANAL_CHOISI end
+function SetSelectedDisplayChannel(i) CANAL_CHOISI = i end
+function GetActiveVoiceChannel() return nil end
+MEMBRES_CANAL = { { "Moi", true, false }, { "Bea", false, true }, { "Cid", false, false } }
+function GetChannelRosterInfo(id, i) local m = MEMBRES_CANAL[i]; if not m then return nil end; return m[1], m[2], m[3], m[4], m[5], m[6] end
+SetActiveVoiceChannel = retenir("SetActiveVoiceChannel")
+SummonFriend = retenir("SummonFriend")
+RAF_SUMMON_LINKED, COOLDOWN_REMAINING = "Summon Linked Friend", "Cooldown remaining:"
+DISPLAY_CHANNEL_PULLOUT = "Display Chat Roster Pullout"
+NEWBIE_TOOLTIP_DISPLAY_CHANNEL_PULLOUT = "Click and drag to display a roster window that lists players with voice chat enabled in this channel."
+ChannelListButton_OnDragStart = retenir("ChannelListButton_OnDragStart")
+ChannelListButton_OnDragStop = retenir("ChannelListButton_OnDragStop")
+MUETS_RAID = {}
+function GetMuteStatus(unite, canal) return MUETS_RAID[unite] end
+GetNumChannelMembers, ExpandChannelHeader, CollapseChannelHeader = retenir("GetNumChannelMembers"), retenir("ExpandChannelHeader"), retenir("CollapseChannelHeader")
+ChannelRosterFrame_ShowDropdown = retenir("ChannelRosterFrame_ShowDropdown")
+ChannelListDropDown = CreateFrame("Frame", "ChannelListDropDown", UIParent)
+function ChannelListDropDown_Initialize() end
+function JoinPermanentChannel(nom, mdp, id, x) table.insert(APPELS, { nom = "JoinPermanentChannel", args = { nom, mdp } }); return 1, nom end
+DEFAULT_CHAT_FRAME.GetID = function() return 1 end
+DEFAULT_CHAT_FRAME.channelList, DEFAULT_CHAT_FRAME.zoneChannelList = {}, {}
+CHAT_CHANNELS, ADD, CHANNEL_NEW_CHANNEL, CHANNEL_CHANNEL_NAME = "Chat Channels", "Add", "New Channel", "Channel Name"
+PASSWORD, OPTIONAL_PARENS, OKAY = "Password", "(optional)", "Okay"
+VOICE_CHAT, VOICE_CHAT_PARTY_RAID, VOICE_CHAT_BATTLEGROUND = "Voice Chat", "Party/Raid", "Battleground"
+NORMAL_FONT_COLOR_CODE, HIGHLIGHT_FONT_COLOR_CODE, GRAY_FONT_COLOR_CODE = "|cffffd200", "|cffffffff", "|cff808080"
+-- Raid : name, rank, subgroup, level, class, fileName, zone, online, isDead
+RAID_MEMBRES = {}
+function GetNumRaidMembers() return #RAID_MEMBRES end
+function GetRaidRosterInfo(i) local m = RAID_MEMBRES[i]; if not m then return nil end
+    return m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11] end
+function IsRaidLeader() return #RAID_MEMBRES > 0 end
+function IsRaidOfficer() return false end
+function GetPartyMember(i) return nil end
+function HasLFGRestrictions() return false end
+SAUVEGARDES = { { "Naxxramas", 12345, 3600 * 30, 1, true, false, 0, true, 25, "25 Player" } }
+function GetNumSavedInstances() return #SAUVEGARDES end
+function GetSavedInstanceInfo(i) local x = SAUVEGARDES[i]; return x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10] end
+SetSavedInstanceExtend, RequestRaidInfo, ConvertToRaid, DoReadyCheck = retenir("SetSavedInstanceExtend"), retenir("RequestRaidInfo"), retenir("ConvertToRaid"), retenir("DoReadyCheck")
+SwapRaidSubgroup, SetRaidSubgroup = retenir("SwapRaidSubgroup"), retenir("SetRaidSubgroup")
+-- le vrai indexe son premier argument aussitot (UnitPopup.lua:193) ; il
+-- pose le titre, les lignes permises, puis Cancel en dernier
+function UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData)
+    if not dropdownMenu then error("attempt to index local 'dropdownMenu' (a nil value)") end
+    table.insert(APPELS, { nom = "UnitPopup_ShowMenu", args = { which, unit, name, userData } })
+    DropDownList1.numButtons = 0
+    UIDropDownMenu_AddButton({ text = name, isTitle = 1 })
+    if which == "RAID" then
+        UIDropDownMenu_AddButton({ text = "Promote to Assistant", value = "RAID_PROMOTE" })
+        UIDropDownMenu_AddButton({ text = "Demote", value = "RAID_DEMOTE" })
+    end
+    UIDropDownMenu_AddButton({ text = "Cancel", value = "CANCEL" })
+end
+function UnitIsRaidOfficer(u) return false end
+DemoteAssistant = retenir("DemoteAssistant")
+HideDropDownMenu = HideDropDownMenu or function() end
+RAID_DESCRIPTION, RAID_BROWSER_DESCRIPTION, OPEN_RAID_BROWSER = "Raids are groups...", "Find a Raid Group", "Open Raid Browser"
+CONVERT_TO_RAID, RAID_INFO, READY_CHECK, LOOKING_FOR_RAID = "Convert To Raid", "Raid Info", "Ready Check", "Raid Browser"
+GROUP, EMPTY, RAID_INFORMATION, INSTANCE, LOCK_EXPIRE = "Group", "Empty", "Raid Information", "Instance", "Lock Expire"
+EXTEND_RAID_LOCK, UNEXTEND_RAID_LOCK, REACTIVATE_RAID_LOCK = "Extend Raid Lock", "Remove Raid Lock Extension", "Reactivate Raid Lock"
+EXTENDED, RAID_INSTANCE_EXPIRES_EXPIRED, INSTANCE_ID = "|cff00ff00Extended|r", "Expired", "Instance ID: %d"
+-- La fenetre de controle de guilde du client (FriendsFrame.xml) : son fond
+-- MacroPopup en regions sans nom, ses cases (GuildControlPopupFrameCheckbox
+-- Template), ses champs InputBoxTemplate a trois morceaux, et le cadre des
+-- droits de banque a fond d'infobulle.
+GuildControlPopupFrame:SetWidth(320)
+GuildControlPopupFrame:SetHeight(457)
+for _, f in ipairs({ "MacroPopup-TopLeft", "MacroPopup-TopRight", "MacroPopup-BotLeft", "MacroPopup-BotRight" }) do
+    local t = GuildControlPopupFrame:CreateTexture(nil, "BACKGROUND")
+    t:SetTexture("Interface" .. string.char(92) .. "MacroFrame" .. string.char(92) .. f)
+end
+GUILDCONTROL_TEXTE = GuildControlPopupFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+GUILDCONTROL_TEXTE:SetText("Select guild rank to modify:")
+for _, i in ipairs({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17 }) do
+    local c = CreateFrame("CheckButton", "GuildControlPopupFrameCheckbox" .. i, GuildControlPopupFrame)
+    c:SetNormalTexture("UI-CheckBox-Up")
+    c:SetCheckedTexture("UI-CheckBox-Check")
+end
+for _, n in ipairs({ "GuildControlPopupFrameEditBox", "GuildControlWithdrawGoldEditBox", "GuildControlWithdrawItemsEditBox" }) do
+    local b = CreateFrame("EditBox", n, GuildControlPopupFrame)
+    for _, cote in ipairs({ "Left", "Middle", "Right" }) do
+        _G[n .. cote] = b:CreateTexture(n .. cote, "BACKGROUND")
+    end
+end
+GuildControlPopupFrameTabPermissions = CreateFrame("Frame", "GuildControlPopupFrameTabPermissions", GuildControlPopupFrame)
+GuildControlPopupFrameTabPermissions:SetBackdrop({ bgFile = "UI-Tooltip-Background" })
+-- le raid : classes du client, etat de l'appel, fenetres detachees
+CLASS_SORT_ORDER = { "WARRIOR", "DEATHKNIGHT", "PALADIN", "PRIEST", "SHAMAN", "DRUID", "ROGUE", "MAGE", "WARLOCK", "HUNTER" }
+CLASS_ICON_TCOORDS = {}
+for i, c in ipairs(CLASS_SORT_ORDER) do CLASS_ICON_TCOORDS[c] = { 0, 0.25, 0, 0.25 } end
+LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage", ROGUE = "Rogue", HUNTER = "Hunter" }
+PETS, MAINTANK, MAINASSIST = "Pets", "Main Tank", "Main Assist"
+APPEL_ETAT = {}
+function GetReadyCheckStatus(unit) return APPEL_ETAT[unit] end
+READY_CHECK_READY_TEXTURE = "ReadyCheck-Ready"
+READY_CHECK_NOT_READY_TEXTURE = "ReadyCheck-NotReady"
+READY_CHECK_WAITING_TEXTURE = "ReadyCheck-Waiting"
+READY_CHECK_AFK_TEXTURE = "ReadyCheck-NotReady"
+DETACHEES = {}
+-- une fenetre detachee est un cadre fils d'UIParent ; le client la pose par
+-- GetScreenWidthScale (largeur / 1024), faux hors du 4:3 -- le faux aussi
+function RaidPullout_GeneratePulloutFrame(filtre, classe)
+    local f = CreateFrame("Frame", nil, UIParent)
+    f.filtre, f.classe = filtre, classe
+    table.insert(DETACHEES, f)
+    return f
+end
+function RaidPulloutButton_OnDragStart(f)
+    local x, y = GetCursorPosition()
+    f.bouge = true
+    f:ClearAllPoints()
+    f:SetPoint("TOP", nil, "BOTTOMLEFT", x * 1.33, y * 1.33)
+end
+MAIN_TANK, MAIN_ASSIST, SET_MAIN_TANK, SET_MAIN_ASSIST = "Main Tank", "Main Assist", "Promote to Main Tank", "Promote to Main Assist"
+RaidPulloutStopMoving = retenir("RaidPulloutStopMoving")
 -- LES LISTES DES MENUS DEROULANTS. Le client n'en a que deux, globales,
 -- partagees par tous les menus du jeu. UIDropDownMenu_AddButton y pose une
 -- ligne, remet sa police et retient si elle porte une case a cocher.
@@ -3272,6 +3793,9 @@ function UIDropDownMenu_AddButton(info, level)
         _G[bouton:GetName() .. "NormalText"] = bouton:GetFontString()
     end
     bouton.notCheckable = info.notCheckable
+    -- le vrai retient ces champs sur la ligne (UIDropDownMenu.lua:316-342)
+    bouton.func, bouton.owner, bouton.arg1 = info.func, info.owner, info.arg1
+    bouton.value = info.value or info.text
     if info.text then bouton:SetText(info.text) end
     bouton:SetNormalFontObject(GameFontHighlightSmallLeft)
     bouton:SetHighlightFontObject(GameFontHighlightSmallLeft)
@@ -3281,6 +3805,182 @@ function ActionButton_Update() end
 function ActionButton_ShowGrid() end
 function ActionButton_HideGrid() end
 SlashCmdList = {}
+-- LA FENETRE DE TABARD DU CLIENT 3.3.5 (TabardFrame.xml) : 384 x 512, son
+-- cadre de WotLK en quatre textures sans nom, son grand fond, ses pieces aux
+-- places de WotLK.
+do
+    local sep = string.char(92)
+    TabardFrame = CreateFrame("Frame", "TabardFrame", UIParent)
+    TabardFrame:SetWidth(384); TabardFrame:SetHeight(512)
+    TabardFrame:SetHitRectInsets(0, 30, 0, 45)
+    TabardFrame:Hide()
+    for _, f in ipairs({ "PaperDollInfoFrame" .. sep .. "UI-Character-General-TopLeft", "PaperDollInfoFrame" .. sep .. "UI-Character-General-TopRight",
+        "ClassTrainerFrame" .. sep .. "UI-ClassTrainer-BotLeft", "ClassTrainerFrame" .. sep .. "UI-ClassTrainer-BotRight" }) do
+        local t = TabardFrame:CreateTexture(nil, "ARTWORK")
+        t:SetTexture("Interface" .. sep .. f)
+    end
+    TabardFramePortrait = TabardFrame:CreateTexture("TabardFramePortrait", "BACKGROUND")
+    TabardFrameBackground = TabardFrame:CreateTexture("TabardFrameBackground", "BACKGROUND")
+    TabardFrameBackground:SetTexture("Interface" .. sep .. "TabardFrame" .. sep .. "TabardFrameBackground")
+    TabardFrameOuterFrameTopLeft = TabardFrame:CreateTexture("TabardFrameOuterFrameTopLeft", "OVERLAY")
+    TabardFrameOuterFrameTopLeft:SetPoint("TOPLEFT", TabardFrame, "TOPLEFT", 19, -73)
+    TabardFrameNameText = TabardFrame:CreateFontString("TabardFrameNameText", "OVERLAY", "GameFontNormal")
+    TabardFrameNameText:SetPoint("CENTER", TabardFrame, "CENTER", 6, 232)
+    TabardFrameGreetingText = TabardFrame:CreateFontString("TabardFrameGreetingText", "OVERLAY", "GameFontHighlight")
+    TabardFrameGreetingText:SetPoint("TOP", TabardFrame, "TOP", 10, -39)
+    TabardModel = CreateFrame("Frame", "TabardModel", TabardFrame)
+    TabardModel:SetPoint("BOTTOM", TabardFrame, "BOTTOM", -14, 114)
+    TabardCharacterModelRotateLeftButton = CreateFrame("Button", "TabardCharacterModelRotateLeftButton", TabardModel)
+    TabardCharacterModelRotateLeftButton:SetPoint("BOTTOMLEFT", TabardFrame, "BOTTOMLEFT", 26, 110)
+    TabardFrameCustomizationFrame = CreateFrame("Frame", "TabardFrameCustomizationFrame", TabardFrame)
+    TabardFrameCustomizationBorder = TabardFrameCustomizationFrame:CreateTexture("TabardFrameCustomizationBorder", "BACKGROUND")
+    TabardFrameCustomizationBorder:SetPoint("BOTTOMRIGHT", TabardFrame, "BOTTOMRIGHT", -9, 50)
+    TabardFrameMoneyFrame = CreateFrame("Frame", "TabardFrameMoneyFrame", TabardFrame)
+    TabardFrameMoneyFrame:SetPoint("BOTTOMRIGHT", TabardFrame, "BOTTOMLEFT", 183, 86)
+    TabardFrameAcceptButton = CreateFrame("Button", "TabardFrameAcceptButton", TabardFrame)
+    TabardFrameAcceptButton:SetPoint("CENTER", TabardFrame, "TOPLEFT", 224, -420)
+    TabardFrameCancelButton = CreateFrame("Button", "TabardFrameCancelButton", TabardFrame)
+    TabardFrameCancelButton:SetPoint("CENTER", TabardFrame, "TOPLEFT", 305, -420)
+    TabardFrameCloseButton = CreateFrame("Button", "TabardFrameCloseButton", TabardFrame)
+    TabardFrameCloseButton:SetPoint("CENTER", TabardFrame, "TOPRIGHT", -45, -24)
+end
+-- LE GROUPE (cadres de groupe, PartyFrame.lua) : party1..4 et partypet1..4
+-- ont leurs propres donnees, dans GROUPE ; les autres unites gardent les faux
+-- ci-dessus. Une unite de groupe absente n'existe pas.
+GROUPE = {}
+CHEF_GROUPE = 0
+local DE = {}
+for _, n in ipairs({ "UnitExists", "UnitHealth", "UnitHealthMax", "UnitPower", "UnitPowerMax", "UnitPowerType",
+    "UnitName", "UnitIsDeadOrGhost", "UnitThreatSituation", "UnitHasVehicleUI", "UnitIsPVP",
+    "UnitIsPVPFreeForAll", "UnitFactionGroup", "GetReadyCheckStatus", "UnitClass", "UnitIsUnit" }) do
+    DE[n] = _G[n]
+end
+local function du(u)
+    -- une unite de raid n'y passe que si l'essai l'a declaree : les essais
+    -- de la fenetre Social gardent leurs faux (APPEL_ETAT, RAID_MEMBRES)
+    if type(u) == "string" and (u:match("^party%d$") or u:match("^partypet%d$")
+        or ((u:match("^raid%d+$") or u:match("^raidpet%d+$")) and GROUPE[u])) then
+        return true, GROUPE[u]
+    end
+end
+local function surcharge(n, f)
+    _G[n] = function(u, ...)
+        local g, m = du(u)
+        if g then return f(m, u, ...) end
+        return DE[n](u, ...)
+    end
+end
+surcharge("UnitExists", function(m) return m ~= nil end)
+surcharge("UnitHealth", function(m) return m and m.vie or 0 end)
+surcharge("UnitHealthMax", function(m) return m and m.max or 0 end)
+surcharge("UnitPower", function(m) return m and m.res or 0 end)
+surcharge("UnitPowerMax", function(m) return m and m.resMax or 0 end)
+surcharge("UnitPowerType", function(m) return 0, m and m.jeton or "MANA" end)
+surcharge("UnitName", function(m) return m and m.nom end)
+surcharge("UnitIsDeadOrGhost", function(m) return m and (m.mort or m.fantome) or false end)
+surcharge("UnitThreatSituation", function(m) return m and m.menace end)
+surcharge("UnitHasVehicleUI", function(m) return m and m.vehicule or false end)
+surcharge("UnitIsPVP", function(m) return m and m.pvp end)
+surcharge("UnitIsPVPFreeForAll", function(m) return m and m.ffa end)
+surcharge("UnitFactionGroup", function(m) return m and m.faction end)
+surcharge("GetReadyCheckStatus", function(m) return m and m.appel end)
+surcharge("UnitClass", function(m) return m and m.classe, m and m.classe end)
+-- la cible : un membre marque "cible" l'est
+_G.UnitIsUnit = function(a, b)
+    local g, m = du(a)
+    if g and b == "target" then return m and m.cible or false end
+    if g and b == "player" then return m and m.moi or false end
+    return DE.UnitIsUnit(a, b)
+end
+-- UnitInRange ne vaut que pour le groupe et le raid ; "loin" marque le hors-portee
+function UnitInRange(u) local g, m = du(u); if g then return m and not m.loin end return nil end
+function UnitTargetsVehicleInRaidUI(u) local g, m = du(u); return g and m and m.vehicule or false end
+-- AMELIORATIONS[unite] = { { icone, pile, duree, fin, lanceur }, ... } ; le
+-- filtre PLAYER ne garde que celles du joueur, l'indice court sur la liste filtree
+AMELIORATIONS = {}
+function UnitBuff(u, i, filtre)
+    local vus = 0
+    for _, b in ipairs(AMELIORATIONS[u] or {}) do
+        if filtre ~= "PLAYER" or b[5] == "player" then
+            vus = vus + 1
+            if vus == i then return "Buff" .. i, "", b[1], b[2], nil, b[3], b[4], b[5] end
+        end
+    end
+    return nil
+end
+-- PowerBarColor du client 3.3.5 (UnitFrame.lua)
+PowerBarColor = PowerBarColor or {}
+PowerBarColor["MANA"] = { r = 0.00, g = 0.00, b = 1.00 }
+PowerBarColor["RAGE"] = { r = 1.00, g = 0.00, b = 0.00 }
+PowerBarColor["FOCUS"] = { r = 1.00, g = 0.50, b = 0.25 }
+PowerBarColor["ENERGY"] = { r = 1.00, g = 1.00, b = 0.00 }
+PowerBarColor["RUNIC_POWER"] = { r = 0.00, g = 0.82, b = 1.00 }
+PowerBarColor[0], PowerBarColor[1], PowerBarColor[2] = PowerBarColor["MANA"], PowerBarColor["RAGE"], PowerBarColor["FOCUS"]
+PowerBarColor[3], PowerBarColor[6] = PowerBarColor["ENERGY"], PowerBarColor["RUNIC_POWER"]
+-- les addons : l'addon HD "CompactRaidFrame" est-il charge ?
+ADDONS_CHARGES = {}
+ADDONS_DESACTIVES = {}
+function IsAddOnLoaded(nom) return ADDONS_CHARGES[nom] end
+function DisableAddOn(nom) ADDONS_DESACTIVES[nom] = true end
+PLAYER_OFFLINE = PLAYER_OFFLINE or "Offline"
+-- le tabard de guilde : 3.3.5 ne rend que les NOMS de ses textures
+TABARD = nil
+function GetGuildTabardFileNames()
+    if not TABARD then return nil end
+    local sep = string.char(92)
+    local d = "Textures" .. sep .. "GuildEmblems" .. sep
+    return d .. "Background_" .. TABARD.fond .. "_TU_U", d .. "Background_" .. TABARD.fond .. "_TL_U",
+        d .. "Emblem_" .. TABARD.motif .. "_" .. TABARD.couleur .. "_TU_U", d .. "Emblem_" .. TABARD.motif .. "_" .. TABARD.couleur .. "_TL_U",
+        d .. "Border_00_" .. "TU_U", d .. "Border_00_TL_U"
+end
+NumberFontNormal = NumberFontNormal or "NumberFontNormal"
+function UnitIsDead(u) local g, m = du(u); if g then return m and m.mort end return STATE.dead end
+function UnitIsGhost(u) local g, m = du(u); if g then return m and m.fantome end return false end
+function UnitIsConnected(u) local g, m = du(u); if g then return m ~= nil and not m.deconnecte end return true end
+-- 3.3.5 : trois booleens, pas une chaine
+function UnitGroupRolesAssigned(u)
+    local g, m = du(u)
+    local r = g and m and m.role
+    return r == "TANK", r == "HEALER", r == "DAMAGER"
+end
+function GetPartyLeaderIndex() return CHEF_GROUPE end
+function UnitCanAssist(a, b) return true end
+function GetUnitName(u, complet) return UnitName(u) end
+DebuffTypeColor = DebuffTypeColor or {
+    none = { r = 0.80, g = 0, b = 0 }, Magic = { r = 0.20, g = 0.60, b = 1.00 },
+    Curse = { r = 0.60, g = 0.00, b = 1.00 }, Disease = { r = 0.60, g = 0.40, b = 0 },
+    Poison = { r = 0.00, g = 0.60, b = 0 },
+}
+DEAD = DEAD or "Dead"
+-- AFFAIBLISSEMENTS[unite] = { { icone, pile, type, duree, fin }, ... } ; le
+-- filtre "RAID" ne garde que ceux qui ont un type (dissipables), et l'indice
+-- court sur la liste filtree, comme le client
+AFFAIBLISSEMENTS = {}
+function UnitDebuff(u, i, filtre)
+    local l = AFFAIBLISSEMENTS[u] or {}
+    local vus = 0
+    for _, d in ipairs(l) do
+        if filtre ~= "RAID" or d[3] then
+            vus = vus + 1
+            if vus == i then return "Aff" .. i, "", d[1], d[2], d[3], d[4], d[5], "boss" end
+        end
+    end
+    return nil
+end
+-- les pilotes d'etat et le surveillant d'unite
+function RegisterStateDriver(f, etat, valeurs)
+    f.etats = f.etats or {}
+    f.etats[etat] = valeurs
+end
+function UnregisterUnitWatch(f) f.unitWatch = false end
+-- les cadres de groupe du client et leurs menus
+for i = 1, 4 do
+    CreateFrame("Button", "PartyMemberFrame" .. i, UIParent)
+    CreateFrame("Frame", "PartyMemberFrame" .. i .. "DropDown", UIParent)
+end
+PartyMemberBackground = CreateFrame("Frame", "PartyMemberBackground", UIParent)
+TextStatusBarText = TextStatusBarText or "TextStatusBarText"
+NumberFontNormalSmall = NumberFontNormalSmall or "NumberFontNormalSmall"
 """
 
 
@@ -3293,11 +3993,11 @@ def main():
              "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "AtlasUtil.lua",
              "Panes.lua", "ScrollBar.lua", "Layout.lua", "Superposition.lua", "DropDown.lua",
              "PlayerFrame.lua",
-             "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua",
+             "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua", "PartyFrame.lua", "RaidFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
-             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua"]
+             "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
+             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -5486,7 +6186,38 @@ def main():
     pm = principal.points[1]
     print("   pvp : bloc (%s, %s), rang=\"%s\", badge=%s" % (
         pm[4], pm[5], principal.rang.text, principal.badge.texture))
-    assert (pm[4], pm[5]) == (0, -60), "MainInfoFrame : TOPLEFT (0, -60)"
+    # REMONTE (2026-09-25) : le bloc part du haut du volet, "Arena N" s en va
+    assert (pm[4], pm[5]) == (0, 0), "le bloc part du haut du volet"
+    pr = list(principal.rang.points[1].values())
+    pc = list(principal.cadran.points[1].values())
+    print("   pvp remonte : titre TOP sur TOP du bloc (%s, %s), cadran (%s, %s)" % (pr[3], pr[4], pc[3], pc[4]))
+    assert (pr[0], pr[2], pr[3], pr[4]) == ("TOP", "TOP", 0, -12) and pr[1].name == "ForeverUIPvPMain"
+    # L HONNEUR entre le trait du titre et la jauge, sur deux colonnes, puis
+    # un separateur ; le cadran se pose sous lui (demande du 2026-09-26)
+    hon = principal.honneur
+    ph = list(hon.points[1].values())
+    sh = principal.separateurHonneur
+    psh = list(sh.points[1].values())
+    cases = [(hon.cases[n].intitule.text, hon.cases[n].valeur.text) for n in range(1, 5)]
+    pcase = [list(hon.cases[n].intitule.points[1].values()) for n in range(1, 5)]
+    print("   honneur : %s sur %s du trait (%s) ; cases %s ; positions %s ; separateur %sx%s ; cadran sur %s (%s)" % (
+        ph[0], ph[2], ph[4], cases, [(q[3], q[4]) for q in pcase], sh.width, sh.height, pc[1].name if hasattr(pc[1], "name") else pc[1], pc[4]))
+    meme0 = lua.eval("function(a, b) return rawequal(a, b) end")
+    assert meme0(ph[1], principal.ligne) and (ph[0], ph[2], ph[4]) == ("TOP", "BOTTOM", -2)
+    assert [(q[3], q[4]) for q in pcase] == [(0, 0), (193, 0), (0, -17), (193, -17)], "deux colonnes, deux rangees"
+    # les intitules du client, dans sa langue
+    assert cases[0] == ("Honor Points", "4567") and cases[1] == ("Honorable Kills", "1234")
+    assert cases[2] == ("Today", "12 (340)") and cases[3] == ("Yesterday", "30 (900)")
+    assert g.TODAY is None and g.YESTERDAY is None and g.LIFETIME_HONORABLE_KILLS is None
+    assert (sh.width, sh.height) == (384, 8) and meme0(psh[1], hon) and (psh[0], psh[2], psh[4]) == ("TOP", "BOTTOM", -4)
+    assert meme0(pc[1], sh) and (pc[0], pc[2], pc[4]) == ("TOP", "BOTTOM", 0), "le cadran sous le separateur"
+    assert hon.frameLevel > principal.cadran.frameLevel, "au-dessus de la lueur du cadran"
+    # LE COMPTEUR, 5 px sous le bas visible de la jauge : accroche au cadran
+    pg = list(principal.progres.points[1].values())
+    print("   compteur : %s sur %s de %s (%s, %s), hauteur %s" % (
+        pg[0], pg[2], pg[1].name, pg[3], pg[4], principal.progres.height))
+    assert (pg[0], pg[2], pg[3], pg[4]) == ("TOP", "BOTTOM", 0, -1) and pg[1].name == "ForeverUIPvPDial"
+    assert principal.progres.height == 12, "hauteur fixe : vide, il ne fait pas remonter la suite"
     # A LA DEMANDE : le titre seul en haut, le numero seul dans l anneau.
     pn = principal.numero.points[1]
     # SANS RANG -- ce que le serveur rend ici -- rien a ecrire, et pas
@@ -5499,7 +6230,7 @@ def main():
     # PVP_RANK_4, "Dishonored", qui est le rang des tueurs de civils.
     assert principal.rang.text == "Civilian",         "sans rang, ni titre de rang negatif ni vide : civil"
     assert not principal.recompense.shown,         "un cercle dore vide se lirait comme un defaut"
-    assert principal.saison.text == "Arena 8",         "la saison porte son intitule : un chiffre nu se lisait comme un rang"
+    assert principal.saison.text == "" and not principal.saison.shown, "Arena N retire : la place va aux equipes d arene"
 
     # AVEC UN RANG : le nom vient des chaines du client, le numero de
     # l indice decale de quatre.
@@ -5672,14 +6403,118 @@ def main():
     g.ForeverUI.PvPUpdate()
 
     # LE VOLET DROIT porte ce que WotLK sait vraiment donner : l honneur.
+    # LE VOLET DROIT : LES CHAMPS DE BATAILLE (demande du 2026-09-26). La
+    # liste en haut, les recompenses en bas, "Join as Party/Group" et "Join
+    # Battle" -- pas de "Cancel".
     pd = g.ForeverUIPvPDetail
-    print("   detail : titre=\"%s\", description=\"%s\"" % (
-        pd.titre.text, (pd.description.text or "").replace(chr(10), " | ")))
-    # LE VOLET DROIT PORTE LE MEME TITRE QUE L ECRAN : sans rang, "Civilian".
-    # Ce volet est a reprendre -- voir docs/AMELIORATIONS.md.
-    assert pd.titre.text == "Civilian", "le volet droit suit le nom du rang"
-    assert "4567" in pd.description.text, "les points d honneur courants"
-    assert "1234" in pd.description.text, "les victoires honorables de toute une vie"
+    B = g.ForeverUI.PvPBattlegrounds
+    lignesBG = [g["ForeverUIBattlegroundRow%d" % n] for n in range(1, 9)]
+    noms = [l.nom.text for l in lignesBG if l.shown]
+    print("   champs de bataille : %s" % noms)
+    assert noms == ["Warsong Gulch", "Arathi Basin", "Eye of the Storm (Call to Arms)",
+                    "Random Battleground"], "seuls ceux ou l on peut entrer ; l appel aux armes marque"
+    # L ENCADRE DE LA LISTE (InsetFrameTemplate de camelot), en haut du volet
+    liste = g.ForeverUIBattlegroundList
+    pli = list(liste.points[1].values())
+    pl1 = list(lignesBG[0].points[1].values())
+    fondListe = liste.fond
+    lis = [t.width for t in liste.lisere.values()]
+    print("   encadre de la liste : %s (%s, %s), %s de haut, fond %s, lisere %s" % (
+        pli[0], pli[3], pli[4], liste.height, fondListe.texture, lis))
+    assert pli[1].name == "ForeverUIPvPDetail" and (pli[0], pli[3], pli[4]) == ("TOPLEFT", 12, -12)
+    assert liste.height == 8 * 20 + 8 and fondListe.texture.endswith("ui-background-marble")
+    assert lis[:4] == [6, 6, 6, 6], "les quatre coins du lisere a leur taille (6 x 6)"
+    assert pl1[1].name == "ForeverUIBattlegroundList" and (pl1[0], pl1[3], pl1[4]) == ("TOPLEFT", 4, -4), "dans l encadre"
+    assert abs(lignesBG[0].survol.alpha - 0.20) < 1e-6, "le premier est choisi d office"
+    # l etat de la file : Arathi Basin est en file
+    e2 = lignesBG[1].etat
+    print("   file : Arathi %s %s \"%s\" ; Warsong %s" % (e2.shown, e2.texture.texture, e2.tooltip, lignesBG[0].etat.shown))
+    assert e2.shown and e2.texture.texture.endswith("PVP-Currency-" + g.UnitFactionGroup("player"))
+    assert e2.tooltip == "In Queue" and not lignesBG[0].etat.shown
+    # la demande part a l image suivante, pour le champ choisi
+    B.differe.Show(B.differe)
+    B.differe.scripts.OnUpdate(B.differe, 0)
+    print("   demande differee : %s, tri %s" % (list(g.BG.demandes.values()), g.BG.tri))
+    assert list(g.BG.demandes.values())[-1] == 1 and not B.differe.shown
+    # un champ ordinaire : pas de recompenses (WotLK y met la description)
+    rv, rd = B.recompenses.victoire, B.recompenses.defaite
+    rc = g.ForeverUIBattlegroundRewards
+    assert not rc.shown, "Warsong Gulch n a pas de recompenses a montrer : l encadre s en va"
+    # l aleatoire : victoire 30 honneur + 25 arene, defaite 15 honneur, 0 arene
+    lignesBG[3].scripts.OnClick(lignesBG[3])
+    print("   aleatoire : demande %s ; victoire %s/%s (%s) ; defaite %s/%s (%s)" % (
+        list(g.BG.demandes.values())[-1], rv.honneur.text, rv.arene.text, rv.areneSymbole.shown,
+        rd.honneur.text, rd.arene.text, rd.areneSymbole.shown))
+    assert list(g.BG.demandes.values())[-1] == 5 and rc.shown
+    # des plaques de camelot, plus des bandes de couleur ; la couleur au mot
+    assert len(list(rv.plaque.values())) == 9 and rv.fond is None
+    print("   recompenses : plaques %d tranches, Win %s, Loss %s" % (
+        len(list(rv.plaque.values())), list(rv.etiquette.textColor.values())[:3], list(rd.etiquette.textColor.values())[:3]))
+    assert list(rv.etiquette.textColor.values())[:3] == [0.1, 1.0, 0.1]
+    assert list(rd.etiquette.textColor.values())[:3] == [1.0, 0.1, 0.1]
+    prc = list(rc.points[1].values())
+    assert prc[1] == B.rejoindreGroupe or prc[0] == "BOTTOMLEFT"
+    assert rv.honneur.text == 30 and rv.arene.text == 25 and rv.areneSymbole.shown
+    assert rd.honneur.text == 15 and not rd.areneSymbole.shown and not rd.arene.shown, "un montant nul s efface"
+    assert rv.honneurSymbole.texture.endswith("PVP-Currency-" + g.UnitFactionGroup("player"))
+    assert rv.etiquette.text == "Win" and rd.etiquette.text == "Loss"
+    assert abs(lignesBG[3].survol.alpha - 0.20) < 1e-6 and lignesBG[0].survol.alpha == 0
+    # l appel aux armes
+    lignesBG[2].scripts.OnClick(lignesBG[2])
+    assert rv.honneur.text == 45 and not rv.areneSymbole.shown and rd.honneur.text == 20 and rd.arene.text == 5
+    # RIEN NE SE TRONQUE : pas de largeur fixe, colonnes communes aux deux
+    # plaques, calculees sur ce que les textes mesurent
+    xs = [list(r.honneurSymbole.points[1].values())[3] for r in (rv, rd)]
+    xa = [list(r.areneSymbole.points[1].values())[3] for r in (rv, rd)]
+    print("   colonnes : honneur a %s, arene a %s, largeur %s sur 201, police %s ; montants sans largeur fixe %s" % (
+        xs, xa, B.largeurRecompenses, B.police, (rv.honneur.width, rv.arene.width)))
+    assert xs[0] == xs[1] and xa[0] == xa[1], "les deux plaques alignees"
+    assert rv.honneur.width is None and rv.arene.width is None and rv.etiquette.width is None
+    assert B.largeurRecompenses <= 201 and B.police == 1
+    # de gros montants : la police suivante, plus petite
+    lua.execute("function GetHolidayBGHonorCurrencyBonuses() return true, 123456789, 987654321, 20, 5 end")
+    lignesBG[0].scripts.OnClick(lignesBG[0])
+    lignesBG[2].scripts.OnClick(lignesBG[2])
+    print("   gros montants : largeur %s, police %s (%s)" % (B.largeurRecompenses, B.police, rv.honneur.font))
+    assert B.police == 2 and rv.honneur.font == "NumberFontNormalSmall"
+    lua.execute("function GetHolidayBGHonorCurrencyBonuses() return true, 45, 0, 20, 5 end")
+    lignesBG[0].scripts.OnClick(lignesBG[0])
+    lignesBG[2].scripts.OnClick(lignesBG[2])
+    assert B.police == 1 and rv.honneur.font == "NumberFontNormal"
+    # en bas : les recompenses, puis les deux boutons -- pas de Cancel
+    pg_, pr_ = list(B.rejoindreGroupe.points[1].values()), list(B.rejoindre.points[1].values())
+    pdf = list(rd.points[1].values())
+    print("   boutons : \"%s\" %s (%s, %s) %s ; \"%s\" %s (%s, %s) ; defaite sous %s (%s)" % (
+        B.rejoindreGroupe.GetText(B.rejoindreGroupe), pg_[0], pg_[3], pg_[4], B.rejoindreGroupe.width,
+        B.rejoindre.GetText(B.rejoindre), pr_[0], pr_[3], pr_[4], pdf[2], pdf[4]))
+    assert (pg_[0], pg_[3], pg_[4]) == ("BOTTOMLEFT", 12, 14) and (pr_[0], pr_[3], pr_[4]) == ("BOTTOMRIGHT", -12, 14)
+    assert B.rejoindreGroupe.width == 102
+    assert B.rejoindre.GetText(B.rejoindre) == "Join Battle"
+    assert B.rejoindreGroupe.GetText(B.rejoindreGroupe) == "Join as Group", "groupe max 10"
+    textes = [c.GetText(c) for c in pd.children.values() if c.GetText and c.kind == "Button"]
+    assert "Cancel" not in textes, "pas de bouton Cancel"
+    # seul : le bouton de groupe est eteint ; il suit le groupe et son chef
+    assert B.rejoindreGroupe.enabled is False
+    lua.execute("BG.groupeMax = 5; ARENE_EVENEMENT('PVPQUEUE_ANYWHERE_SHOW')")
+    assert B.rejoindreGroupe.GetText(B.rejoindreGroupe) == "Join as Party", "groupe max 5 : Join as Party"
+    lua.execute("function GetNumPartyMembers() return 2 end; STATE.leader = true;"
+                " ARENE_EVENEMENT('PARTY_MEMBERS_CHANGED')")
+    assert B.rejoindreGroupe.enabled is True, "en groupe et chef"
+    B.rejoindre.scripts.OnClick(B.rejoindre)
+    B.rejoindreGroupe.scripts.OnClick(B.rejoindreGroupe)
+    rj = [(r.i, r.groupe) for r in g.BG.rejoint.values()]
+    print("   rejoindre : %s ; bouton de groupe actif %s" % (rj, B.rejoindreGroupe.enabled))
+    assert rj == [(0, False), (0, True)], "JoinBattlefield(0) puis JoinBattlefield(0, true)"
+    lua.execute("function GetNumPartyMembers() return 0 end; STATE.leader = false;"
+                " ARENE_EVENEMENT('PARTY_MEMBERS_CHANGED')")
+    # la session se ferme quand le volet se cache
+    fermes = g.BG.fermetures
+    pd.hooks.OnHide(pd)
+    assert g.BG.fermetures == fermes + 1, "CloseBattlefield"
+    # la file change : l etat suit UPDATE_BATTLEFIELD_STATUS
+    lua.execute("FILES_BG[1] = { 'confirm', 'Warsong Gulch' }; ARENE_EVENEMENT('UPDATE_BATTLEFIELD_STATUS')")
+    assert lignesBG[0].etat.shown and lignesBG[0].etat.tooltip == "Ready to Enter" and not lignesBG[1].etat.shown
+    lua.execute("FILES_BG[1] = { 'queued', 'Arathi Basin' }; ARENE_EVENEMENT('UPDATE_BATTLEFIELD_STATUS')")
 
     # TOUT L ECRAN DU CLIENT SE TAIT, a chaque passage.
     g.PVPFrame_Update()
@@ -5687,6 +6522,166 @@ def main():
     print("   ecran du client : %d morceau(x) encore visible(s)" % len(restants))
     assert restants == [], "il en reste : %s" % restants
     assert principal.shown, "mais notre bloc demeure"
+
+    # LES EQUIPES D ARENE (demande du 2026-09-25) : trois cartes, TRIEES
+    # PAR TAILLE comme PVPTeam_Update -- l emplacement 2 du client porte le
+    # 2v2, il vient en premier ; le 5v5 manque, sa carte est grisee.
+    g.ForeverUI.PvPUpdate()
+    c1, c2, c3 = g.ForeverUIArenaTeam1, g.ForeverUIArenaTeam2, g.ForeverUIArenaTeam3
+    print("   arene : cartes -> emplacements %s %s %s ; noms \"%s\" \"%s\" ; vide \"%s\"" % (
+        c1.equipe, c2.equipe, c3.equipe, c1.donnees.nom.text, c2.donnees.nom.text, c3.vide.text))
+    assert (c1.equipe, c2.equipe, c3.equipe) == (2, 1, None), "2v2, 3v3 puis 5v5, quel que soit l emplacement"
+    assert c1.donnees.nom.text == "Duo Fou" and c2.donnees.nom.text == "Les Trois"
+    # L ORDRE DU VOLET : compteur, separateur, points d arene, equipes
+    sep = g.ForeverUI.PvPArena.separateur
+    ps = list(sep.points[1].values())
+    pts = g.ForeverUIArenaPoints
+    pp = list(pts.points[1].values())
+    p1, p3 = list(c1.points[1].values()), list(c3.points[1].values())
+    p3n = p3
+    print("   ordre : separateur %s sur %s de compteur (%s) %s ; points %s sur %s du separateur (%s) ;"
+          " carte 3 %s sur %s de %s (%s) ; carte 1 %s sur %s de %s (%s)" % (
+        ps[0], ps[2], ps[4], sep.texture and "pose", pp[0], pp[2], pp[4],
+        p3[0], p3[2], p3[1].name, p3[4], p1[0], p1[2], p1[1].name, p1[4]))
+    meme = lua.eval("function(a, b) return rawequal(a, b) end")
+    assert meme(ps[1], principal.progres) and (ps[0], ps[2], ps[3], ps[4]) == ("TOP", "BOTTOM", 0, -4)
+    print("   separateur : %s x %s" % (sep.width, sep.height))
+    assert (sep.width, sep.height) == (384, 8), "a la taille de son element, pas a celle de la feuille"
+    # les points, centres entre le separateur et la premiere carte
+    zone = g.ForeverUIArenaPointsZone
+    pz = [list(zone.points[k].values()) for k in (1, 2)]
+    print("   points centres : %s sur %s de %s ; zone %s-%s de separateur, %s-%s de %s" % (
+        pp[0], pp[2], pp[1].name, pz[0][0], pz[0][2], pz[1][0], pz[1][2], pz[1][1].name))
+    assert pp[1].name == "ForeverUIArenaPointsZone" and (pp[0], pp[2], pp[3], pp[4]) == ("CENTER", "CENTER", 0, 0)
+    assert meme(pz[0][1], sep) and (pz[0][0], pz[0][2], pz[0][4]) == ("TOP", "BOTTOM", 0)
+    assert pz[1][1].name == "ForeverUIArenaTeam1" and (pz[1][0], pz[1][2], pz[1][4]) == ("BOTTOM", "TOP", 0)
+    assert not zone.mouseEnabled, "la zone ne prend pas la souris"
+    # serrees contre le bas du volet (demande du 2026-09-26)
+    assert p3[1].name == "ForeverUICharacterLeftPane" and (p3[0], p3[2], p3[3], p3[4]) == ("BOTTOM", "BOTTOM", 0, 4)
+    assert p1[1].name == "ForeverUIArenaTeam2" and (p1[0], p1[2], p1[4]) == ("BOTTOM", "TOP", 0)
+    print("   cartes : %dx%d, niveau %d > cadran %d" % (c1.width, c1.height, c1.frameLevel, principal.cadran.frameLevel or 1))
+    assert c1.width == 366 and c1.height == 52
+    assert c1.frameLevel > (principal.cadran.frameLevel or 1), "la lueur du cadran passe dessous"
+    # PLAYED : "joues (pct%)", ROUGE sous 10 %
+    print("   joues : 2v2 \"%s\" teinte %s ; 3v3 \"%s\" teinte %s" % (
+        c1.donnees.joues.text, list(c1.donnees.joues.vertex.values()),
+        c2.donnees.joues.text, list(c2.donnees.joues.vertex.values())))
+    assert c1.donnees.joues.text == "1 (5%)" and list(c1.donnees.joues.vertex.values()) == [1, 0, 0]
+    assert c2.donnees.joues.text == "10 (100%)" and list(c2.donnees.joues.vertex.values()) == [1, 1, 1]
+    assert c2.donnees.bilan.text == "7 - 3" and c2.donnees.cote.text == 1650
+    assert c2.donnees.type.text == "This Week", "les cartes montrent la semaine, comme WotLK"
+    # L ETENDARD : banniere teintee, bord et embleme ; -1 = ni bord ni embleme
+    print("   etendard 3v3 : %s | %s | %s" % (c2.banniere.texture, c2.bord.texture, c2.embleme.texture))
+    assert c2.banniere.texture.endswith("PVP-Banner-3") and list(c2.banniere.vertex.values()) == [0.2, 0.3, 0.4]
+    assert c2.bord.texture.endswith("PVP-Banner-3-Border-3")
+    assert c2.embleme.texture.endswith("Icons" + chr(92) + "PVP-Banner-Emblem-12")
+    assert c1.bord.texture is None and c1.embleme.texture is None, "-1 : rien a poser"
+    # L EMPLACEMENT VIDE : 0,4 ; etendard a 0,1 sans bord ni embleme ; "(5v5)"
+    assert c3.alpha == 0.4 and c3.etendard.alpha == 0.1 and not c3.bord.shown
+    assert not c3.donnees.shown and c3.vide.shown and c3.vide.text == "(5v5)"
+    assert c3.banniere.texture.endswith("PVP-Banner-5")
+    # LES POINTS D ARENE, sous les cartes, centres
+    print("   points d arene : \"%s\" %s, icone %s" % (
+        pts.etiquette.text, pts.valeur.text, pts.icone.texture))
+    assert str(pts.valeur.text) == "321" and pts.icone.texture.endswith("PVP-ArenaPoints-Icon")
+    pts.scripts.OnEnter(pts)
+    assert g.GameTooltip.text == "Arena Points" and "victorious" in g.GameTooltip.lignes[1]
+    # l infobulle d une carte : CLICK_FOR_DETAILS, ou l invitation sans equipe
+    c3.scripts.OnEnter(c3)
+    assert g.GameTooltip.lignes[1].startswith("Visit an Arena Master")
+    c1.scripts.OnEnter(c1)
+    assert g.GameTooltip.lignes[1] == "Click for details" and abs(c1.survol.alpha - 0.10) < 1e-6
+    c1.scripts.OnLeave(c1)
+    assert c1.survol.alpha == 0
+
+    # LE CLIC OUVRE LE DETAIL, fenetre a part a cote de la feuille.
+    f = g.ForeverUIArenaTeamDetails
+    assert not f.shown, "fermee au depart"
+    c2.scripts.OnClick(c2)
+    pf = f.points[1]
+    print("   detail : ouvert=%s equipe=%s, titre \"%s\", ancre %s de %s (%s, %s), demandes %s" % (
+        f.shown, f.equipe, f.titre.text, pf[1], pf[2].name, pf[4], pf[5], list(g.ROSTER.demandes.values())))
+    assert f.shown and f.equipe == 1 and list(g.ROSTER.demandes.values())[-1] == 1, "ArenaTeamRoster(id)"
+    assert pf[2].name == "CharacterFrame" and (pf[1], pf[3], pf[4], pf[5]) == ("TOPLEFT", "TOPRIGHT", 76, 0)
+    assert "Les Trois" in f.titre.text and "(3v3)" in f.titre.text
+    assert g.PVPTeamDetails.team == 1 and g.PVPTeamDetails.shown, "le cadre du client est tenu a jour pour UnitPopup"
+    assert abs(c2.survol.alpha - 0.20) < 1e-6, "la carte ouverte est marquee"
+    assert g.ForeverUI.Superposition.fenetres["feuille"].zones()[3].name == "ForeverUIArenaTeamDetails", "un clic sur le detail est un clic sur la feuille"
+    assert f.type.text == "THIS WEEK" and f.jeux.text == 10 and f.bilan.text == "7 - 3"
+    assert f.rang.text == 120 and f.cote.text == 1650
+    r1, r2, r3, r4 = (g["ForeverUIArenaTeamDetailsRow%d" % n] for n in range(1, 5))
+    print("   membres : %s/%s/%s, 4e %s ; couleurs %s %s %s ; joues %s %s" % (
+        r1.nom.text, r2.nom.text, r3.nom.text, r4.shown,
+        list(r1.nom.textColor.values())[:3], list(r2.nom.textColor.values())[:3],
+        list(r3.nom.textColor.values())[:3], r2.pct, r3.pct))
+    assert r1.shown and r3.shown and not r4.shown, "autant de lignes que de membres"
+    assert list(r1.nom.textColor.values())[:3] == [1.0, 0.82, 0.0], "le capitaine en or"
+    assert list(r2.nom.textColor.values())[:3] == [1.0, 1.0, 1.0], "en ligne en blanc"
+    assert list(r3.nom.textColor.values())[:3] == [0.5, 0.5, 0.5], "hors ligne en gris"
+    assert r2.pct == "10%" and list(r2.joues.vertex.values()) == [1, 1, 1]
+    assert r3.pct == "0%" and list(r3.joues.vertex.values()) == [1, 0, 0], "sous 10 %% : rouge"
+    assert r1.victoires.text == 7 and r1.defaites.text == 3 and r1.cote.text == 1700
+    # la bascule : la saison
+    assert f.bascule.texte.text == "View this Season's Stats"
+    f.bascule.scripts.OnClick(f.bascule)
+    print("   saison : \"%s\" jeux %s bilan \"%s\" ; Moi %s joues" % (f.type.text, f.jeux.text, f.bilan.text, r1.joues.text))
+    assert f.type.text == "THIS SEASON" and f.jeux.text == 40 and f.bilan.text == "25 - 15"
+    assert r1.joues.text == 40 and f.bascule.texte.text == "View this Week's Stats"
+    g.ForeverUIArenaTeamDetailsHeader3.scripts.OnClick(g.ForeverUIArenaTeamDetailsHeader3)
+    g.ForeverUIArenaTeamDetailsHeader1.scripts.OnClick(g.ForeverUIArenaTeamDetailsHeader1)
+    print("   tris : %s" % list(g.ROSTER.tris.values()))
+    assert list(g.ROSTER.tris.values()) == ["seasonplayed", "name"]
+    f.bascule.scripts.OnClick(f.bascule)
+    # clic gauche = selection ; clic droit = le menu du client
+    r2.scripts.OnClick(r2, "LeftButton")
+    assert g.ROSTER.selection[1] == 2 and abs(r2.survol.alpha - 0.20) < 1e-6
+    r2.scripts.OnClick(r2, "RightButton")
+    m = g.MENUS_EQUIPE[1]
+    assert m.nom == "Ami" and m.enLigne == 1, "PVPFrame_ShowDropdown(nom, en ligne)"
+    f.ajouter.scripts.OnClick(f.ajouter)
+    assert list(g.POPUPS.values())[-1].quoi == "ADD_TEAMMEMBER"
+    # le meme clic referme ; CloseArenaTeamRoster
+    fermetures = g.ROSTER.fermetures
+    c2.scripts.OnClick(c2)
+    print("   re-clic : ouvert=%s, fermetures %d -> %d, client %s, marque %s" % (
+        f.shown, fermetures, g.ROSTER.fermetures, g.PVPTeamDetails.shown, c2.survol.alpha))
+    assert not f.shown and g.ROSTER.fermetures > fermetures and not g.PVPTeamDetails.shown
+    assert c2.survol.alpha == 0, "la marque s en va"
+    # l equipe disparait : ARENA_TEAM_UPDATE ferme le detail
+    c1.scripts.OnClick(c1)
+    assert f.shown and f.equipe == 2
+    lua.execute("EQUIPES_ARENE[2] = nil; ARENE_EVENEMENT('ARENA_TEAM_UPDATE')")
+    print("   equipe dissoute : detail %s, premiere carte %s \"%s\"" % (f.shown, c1.equipe, c1.vide.text))
+    assert not f.shown and c1.equipe is None and c1.vide.text == "(2v2)"
+    lua.execute("EQUIPES_ARENE[2] = { 'Duo Fou', 2, 1500, 20, 11, 60, 30, 1, 50, 300, 1480,"
+                " 0.5, 0, 0, -1, 1, 1, 1, -1, 1, 1, 1 }; ARENE_EVENEMENT('ARENA_TEAM_UPDATE')")
+    assert c1.equipe == 2
+    # les points suivent HONOR_CURRENCY_UPDATE
+    lua.execute("POINTS_ARENE = 555; ARENE_EVENEMENT('HONOR_CURRENCY_UPDATE')")
+    assert str(pts.valeur.text) == "555"
+    # hors saison : les cartes s en vont, le texte du client les remplace
+    lua.execute("SAISON_ARENE = 0")
+    g.ForeverUI.PvPUpdate()
+    hs = [r for r in principal.regions.values() if r.text and "has come to an end" in str(r.text)]
+    print("   hors saison : cartes %s %s %s, texte \"%s\"" % (c1.shown, c2.shown, c3.shown, hs and hs[0].text[:24]))
+    assert not c1.shown and not c2.shown and not c3.shown and hs and hs[0].shown
+    assert "Season 7" in hs[0].text and "Season 8" in hs[0].text
+    lua.execute("SAISON_ARENE = 8")
+    g.ForeverUI.PvPUpdate()
+    assert c1.shown and not hs[0].shown
+    # QUITTER L ONGLET REFERME LE DETAIL (PVPFrame_OnHide), et il ne revient
+    # pas tout seul
+    c2.scripts.OnClick(c2)
+    assert f.shown
+    g.CharacterFrame_ShowSubFrame("SkillFrame")
+    g.ForeverUI.Panes.ShowGroup("SkillFrame")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    fermeApres = f.shown
+    g.CharacterFrame_ShowSubFrame("")
+    g.ForeverUI.Panes.ShowGroup("ForeverUIPvPPane")
+    g.ForeverUI.CharacterApplyPanes(perso)
+    print("   changement d onglet : detail apres %s, au retour %s, client %s" % (fermeApres, f.shown, g.PVPTeamDetails.shown))
+    assert not fermeApres and not f.shown and not g.PVPTeamDetails.shown
 
     # Les quatre ecrans se remplacent l un l autre, jamais deux a la fois.
     for nom in ("SkillFrame", "TokenFrame", "PetPaperDollFrame"):
@@ -6020,7 +7015,15 @@ def main():
     micro = g.ForeverUIMicroMenu
     print("micro-menu : %d x %d pour %d boutons" % (
         micro.width, micro.height, len(list(g.ForeverUI.MicroButtons.values()))))
-    assert micro.width == 322, "le micro-menu ne fait pas 275 + 47 de rallonge"
+    assert micro.width == 322, "le bandeau garde sa longueur : 248 de boutons + 47 + 27 de rallonge"
+    # LE BOUTON JcJ EST RETIRE (2026-09-26) : neuf boutons, et celui du client
+    # reste cache meme quand le client le reprend
+    noms = [e.bouton.name for e in g.ForeverUI.MicroButtons.values()]
+    g.VehicleMenuBar_MoveMicroButtons()
+    g.PVPMicroButton.Show(g.PVPMicroButton)
+    print("   micro-menu sans JcJ : %d boutons, JcJ visible=%s" % (len(noms), g.PVPMicroButton.shown))
+    assert "PVPMicroButton" not in noms and len(noms) == 9
+    assert not g.PVPMicroButton.shown, "le bouton du client ne revient pas"
     assert micro.height == 40
 
     b1, b2 = g.CharacterMicroButton, g.SpellbookMicroButton
@@ -7473,13 +8476,13 @@ def main():
     assert trace and "sous la souris" in trace[-1] and not g.ESPION.shown, "le banc confond GetName et .name ; le client, non"
 
     # la liste d'un bouton : ses soeurs
-    lua.execute("MENU_ENTREES = {} ForeverUIWorldMapNavButton2.MenuArrowButton:GetScript('OnClick')(ForeverUIWorldMapNavButton2.MenuArrowButton) ForeverUIWorldMapNavMenu.initFn()")
+    lua.execute("MENU_ENTREES = {} ForeverUIWorldMapNavButton2.MenuArrowButton:GetScript('OnClick')(ForeverUIWorldMapNavButton2.MenuArrowButton)")
     noms = [e.text for e in g.MENU_ENTREES.values()]
     print("   liste des zones : %s" % noms)
     assert noms[-1] == "Burning Steppes" and len(noms) == 5
 
     # les filtres : Show:, objectifs, couleur de difficulte
-    lua.execute("MENU_ENTREES = {} ForeverUIWorldMapFilterButton:GetScript('OnClick')(ForeverUIWorldMapFilterButton) ForeverUIWorldMapNavMenu.initFn()")
+    lua.execute("MENU_ENTREES = {} ForeverUIWorldMapFilterButton:GetScript('OnClick')(ForeverUIWorldMapFilterButton)")
     entrees = list(g.MENU_ENTREES.values())
     print("   filtres : %s" % [(e.text, e.checked) for e in entrees])
     assert entrees[0].text == "Show:" and entrees[0].isTitle
@@ -7512,7 +8515,7 @@ def main():
     assert etages.Text.text.startswith("The Antechamber")
     lua.execute("DUNGEON_FLOOR_ULDUAR2 = nil")
     # la liste ouverte ne descend pas sous la largeur du selecteur
-    lua.execute("UIDROPDOWNMENU_OPEN_MENU = ForeverUIWorldMapNavMenu ForeverUIWorldMapFloorButton:GetScript('OnClick')(ForeverUIWorldMapFloorButton) ForeverUIWorldMapNavMenu.initFn()")
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = ForeverUIWorldMapNavMenu ForeverUIWorldMapFloorButton:GetScript('OnClick')(ForeverUIWorldMapFloorButton)")
     assert g.ForeverUIWorldMapNavMenu.foreverMinimum == 160
     lua.execute("DropDownList1:SetWidth(40)")
     g.DropDownList1.hooks.OnShow(g.DropDownList1)
@@ -7992,7 +8995,7 @@ def main():
     assert not wf.collapsed and lignes.shown
 
     # le bouton filtre : le tri et les filtres de WotLK
-    lua.execute("MENU_ENTREES = {} ForeverUIObjectiveTrackerHeader.filtre:GetScript('OnClick')(ForeverUIObjectiveTrackerHeader.filtre) ForeverUIWorldMapNavMenu.initFn()")
+    lua.execute("MENU_ENTREES = {} ForeverUIObjectiveTrackerHeader.filtre:GetScript('OnClick')(ForeverUIObjectiveTrackerHeader.filtre)")
     entrees = list(g.MENU_ENTREES.values())
     print("   filtre : %s" % [(e.text, e.checked) for e in entrees])
     assert [e.text for e in entrees] == ["Sort Quests", "Proximity", "Difficulty High", "Difficulty Low", "Manual",
@@ -8004,7 +9007,7 @@ def main():
     lua.execute("WatchFrame_SetFilter(nil, WATCHFRAME_FILTER_ACHIEVEMENTS)")
 
     # clic droit : le menu de camelot, et le deplacement manuel de WotLK
-    lua.execute("MENU_ENTREES = {} ForeverUI.ObjectiveTracker.quetes.blocs[62].bouton:GetScript('OnClick')(nil, 'RightButton') ForeverUIWorldMapNavMenu.initFn()")
+    lua.execute("MENU_ENTREES = {} ForeverUI.ObjectiveTracker.quetes.blocs[62].bouton:GetScript('OnClick')(nil, 'RightButton')")
     noms = [e.text for e in g.MENU_ENTREES.values()]
     print("   menu de la quete : %s" % noms)
     assert noms == ["The Fargodeep Mine", "Open Quest Details", "Open Quest Map", "Untrack", "Share in Chat", "Abandon",
@@ -9349,6 +10352,845 @@ def main():
     # la croix de WotLK ferme le panneau
     lua.execute("PlayerTalentFrameCloseButton:GetScript('OnClick')(PlayerTalentFrameCloseButton)")
     assert not g.PlayerTalentFrame.shown
+
+
+    # LA FENETRE SOCIAL (etape 1, 2026-09-26) : notre fenetre camelot sur
+    # l'onglet Friends, l'ecran de WotLK sur les autres.
+    print("\nfenetre Social :")
+    lua.execute("ShowUIPanel(FriendsFrame)")
+    so = g.ForeverUISocialFrame
+    ff = g.FriendsFrame
+    regs = [r.shown for r in ff.regions.values()]
+    onglets_client = [g["FriendsFrameTab%d" % i].shown for i in range(1, 6)]
+    print("   ouverte : notre fenetre %s %dx%d, regions du client %s, onglets du client %s, souris du panneau %s" % (
+        so.shown, so.width, so.height, regs, onglets_client, ff.mouseEnabled))
+    assert so.shown and (so.width, so.height) == (385, 424)
+    assert not any(regs), "les quatre quartiers, l'icone et le titre de WotLK se taisent"
+    assert not any(onglets_client) and not g.FriendsListFrame.shown and not g.FriendsTabHeader.shown
+    assert ff.mouseEnabled is False, "le panneau vide n'attrape plus la souris"
+    assert g.DEMANDES_AMIS >= 1, "ShowFriends demande la liste au serveur"
+    assert so.titre.text == "Friends List"
+    # le cadre de camelot
+    assert so.portrait.texture.endswith("battlenet-portrait-hd") and so.portrait.width == 60
+    pp = list(so.portrait.points[1].values())
+    assert (pp[3], pp[4]) == (-5, 7)
+    pc = list(so.croix.points[1].values())
+    assert (pc[0], pc[3], pc[4]) == ("TOPRIGHT", -2, 1)
+    ins = g.ForeverUISocialInset
+    pi1, pi2 = list(ins.points[1].values()), list(ins.points[2].values())
+    assert (pi1[3], pi1[4], pi2[3], pi2[4]) == (4, -83, -6, 26) and ins.fond.texture.endswith("ui-background-marble")
+    # les onglets du bas : Friends choisi, puis Who, Guild, Chat, Raid
+    ob = [g["ForeverUISocialTab%d" % i] for i in range(1, 6)]
+    pob = list(ob[0].points[1].values()), list(ob[1].points[1].values())
+    print("   onglets du bas : %s, largeurs %s, premier %s (%s, %s), suivant a %s" % (
+        [o.texte.text for o in ob], [o.width for o in ob], pob[0][0], pob[0][3], pob[0][4], pob[1][3]))
+    assert [o.texte.text for o in ob] == ["Friends", "Who", "Guild", "Chat", "Raid"]
+    assert (pob[0][0], pob[0][2], pob[0][3], pob[0][4]) == ("TOPLEFT", "BOTTOMLEFT", 5, 2) and pob[1][3] == 3
+    assert ob[0].art.actifG.shown and not ob[0].art.g.shown and ob[0].enabled is False, "Friends choisi : art actif, desactive"
+    assert ob[1].art.g.shown and not ob[1].art.actifG.shown and ob[1].enabled is not False
+    assert ob[0].art.g.texture and ob[1].art.g.texcoord is not None
+    assert ob[0].width == 72, "texte + 20, au moins gauche + droite (35 + 37)"
+    # les sous-onglets : Friends et Ignore, l'art retourne
+    so1, so2 = g.ForeverUISocialSubTab1, g.ForeverUISocialSubTab2
+    ps1 = list(so1.points[1].values())
+    e = g.ForeverUI.AtlasEntry("uiframe-tab-left-c60")
+    tc = list(so2.art.g.texcoord.values())
+    print("   sous-onglets : %s %s, %s (%s, %s), largeur %s, hauteur %s, art retourne %s" % (
+        so1.texte.text, so2.texte.text, ps1[0], ps1[3], ps1[4], so1.width, so1.height, tc))
+    assert (so1.texte.text, so2.texte.text) == ("Friends", "Ignore")
+    assert (ps1[0], ps1[3], ps1[4]) == ("TOPLEFT", 18, -60) and so1.width == 100 and so1.height == 24
+    assert tc == [e[3], e[2], e[5], e[4]], "un demi-tour : les deux bords echanges"
+    assert so1.enabled is False and so2.enabled is not False
+
+    # LA LISTE DES AMIS : en ligne, un separateur, hors ligne
+    lignes = [g["ForeverUISocialRow%d" % i] for i in range(1, 5)]
+    vues = [(l.sorte, l.nom.text if l.nom.shown else None) for l in lignes if l.shown]
+    print("   liste : %s" % vues)
+    assert vues == [("ami", "Alice, Level 80 Mage"), ("ami", "Bob, Level 70 Priest"), ("trait", None), ("ami", "Carl")]
+    a, b_, t, c = lignes
+    assert a.etat.texture.endswith("StatusIcon-Online") and b_.etat.texture.endswith("StatusIcon-Away")
+    assert c.etat.texture.endswith("StatusIcon-Offline") and a.info.text == "Dalaran"
+    assert list(a.nom.textColor.values())[:3] == [0.996, 0.882, 0.361] and list(c.nom.textColor.values())[:3] == [0.486, 0.518, 0.541]
+    assert a.height == 34 and t.height == 16 and t.trait.texture.endswith("UI-FriendsFrame-OnlineDivider")
+    pa = list(a.points[1].values())
+    assert pa[1].name == "ForeverUISocialList" and (pa[3], pa[4]) == (0, 0)
+    pl = list(g.ForeverUISocialList.points[1].values())
+    assert (pl[3], pl[4]) == (8, -87)
+    # la premiere selection, et Send Message vers un ami en ligne
+    S = g.ForeverUI.Social
+    print("   selection %s, Send Message actif %s, verrou %s" % (g.AMI_CHOISI, S.boutons.message.actif, a.locked))
+    assert g.AMI_CHOISI == 1 and S.boutons.message.actif and S.boutons.message.shown
+    assert S.boutons.ajouter.shown and not S.boutons.ignorer.shown
+    assert (S.boutons.ajouter.width, S.boutons.ajouter.height) == (134, 21)
+    # clic sur l'ami hors ligne : plus de message possible
+    c.scripts.OnClick(c, "LeftButton")
+    assert g.AMI_CHOISI == 3 and not S.boutons.message.actif
+    # clic droit : le menu du client, pour la liste d'amis
+    a.scripts.OnClick(a, "RightButton")
+    m = g.MENUS_AMIS[1]
+    assert m.nom == "Alice" and m.connecte == 1 and m.liste == 1
+    # infobulle : celle du client, sur l'ami du jeu
+    a.scripts.OnEnter(a)
+    ib = g.INFOBULLES_AMIS[1]
+    assert ib.type == 3 and ib.id == 1 and g.FriendsTooltip.shown
+    a.scripts.OnLeave(a)
+    assert not g.FriendsTooltip.shown
+    # Send Message sur Alice
+    a.scripts.OnClick(a, "LeftButton")
+    S.boutons.message.scripts.OnClick(S.boutons.message)
+    assert list(g.DITS.values())[-1] == "Alice"
+    S.boutons.ajouter.scripts.OnClick(S.boutons.ajouter)
+    assert list(g.POPUPS.values())[-1].quoi == "ADD_FRIEND"
+    # plus de parrainage (retire le 2026-09-26) : aucun bouton d'invocation
+    assert all(l.invocation is None for l in lignes)
+
+    # LE SOUS-ONGLET IGNORE : l'en-tete, les ignores, Ignore / Remove Player
+    so2.scripts.OnClick(so2)
+    vues = [(l.sorte, l.nom.text if l.nom.shown else l.titre.text) for l in lignes if l.shown]
+    print("   ignores : titre \"%s\", %s, choisi %s, Remove actif %s" % (so.titre.text, vues, g.IGNORE_CHOISI, S.boutons.retirer.actif))
+    assert g.FriendsTabHeader.selectedTab == 2 and so.titre.text == "Ignore List"
+    assert vues == [("entete", "Ignored"), ("ignore", "Troll1"), ("ignore", "Troll2")]
+    assert g.IGNORE_CHOISI == 1 and S.boutons.retirer.actif and S.boutons.ignorer.shown and not S.boutons.ajouter.shown
+    assert S.boutons.muet is None, "plus de Mute Player (chat vocal retire)"
+    assert so2.enabled is False and so1.enabled is not False
+    S.boutons.retirer.scripts.OnClick(S.boutons.retirer)
+    lua.execute("ARENE_EVENEMENT('IGNORELIST_UPDATE')")
+    vues = [(l.sorte, l.nom.text if l.nom.shown else l.titre.text) for l in lignes if l.shown]
+    assert vues == [("entete", "Ignored"), ("ignore", "Troll2")], "Troll1 retire"
+    S.boutons.ignorer.scripts.OnClick(S.boutons.ignorer)
+    assert list(g.POPUPS.values())[-1].quoi == "ADD_IGNORE", "sans cible, la fenetre de saisie du client"
+    # le chat vocal retire : meme voix activee, ni en-tete Muted ni Mute Player
+    lua.execute("VOIX = true; ForeverUI.Social.maj()")
+    vues = [(l.sorte, l.nom.text if l.nom.shown else l.titre.text) for l in lignes if l.shown]
+    assert ("entete", "Muted") not in vues and S.boutons.ignorer.width == 134
+    lua.execute("VOIX = false")
+    so1.scripts.OnClick(so1)
+    assert g.FriendsTabHeader.selectedTab == 1 and so.titre.text == "Friends List"
+
+    # LE DEFILEMENT : vingt amis ne tiennent pas
+    lua.execute("for i = 1, 17 do table.insert(AMIS, 3, { 'Ami' .. i, 80, 'Warrior', 'Zone', 1, '' }) end; ForeverUI.Social.maj()")
+    barre = g.ForeverUISocialScrollBar
+    print("   defilement : %d entrees, %d visibles, barre %s" % (len(list(S.contenu.values())), S.visibles, barre.shown))
+    assert S.visibles < len(list(S.contenu.values())) and barre.shown
+    g.ForeverUISocialList.scripts.OnMouseWheel(g.ForeverUISocialList, -1)
+    assert S.decalage == 1 and lignes[0].nom.text.startswith("Bob")
+    lua.execute("for i = 1, 17 do table.remove(AMIS, 3) end; ForeverUI.Social.decalage = 0; ForeverUI.Social.maj()")
+
+    # LES AUTRES ONGLETS : notre fenetre reste, sa page change ; WotLK se tait
+    def appels(nom):
+        return [list(a.args.values()) for a in g.APPELS.values() if a.nom == nom]
+    ob[1].scripts.OnClick(ob[1])
+    regs = [r.shown for r in ff.regions.values()]
+    p2 = g.ForeverUISocialPage2
+    print("   onglet Who : notre fenetre %s, page %s, regions %s, WhoFrame %s, titre \"%s\", SetWhoToUI %s" % (
+        so.shown, p2.shown, regs, g.WhoFrame.shown, so.titre.text, appels("SetWhoToUI")[-1]))
+    assert so.shown and p2.shown and not g.ForeverUISocialPage1.shown and not any(regs) and not g.WhoFrame.shown
+    assert ob[1].enabled is False and ob[1].art.actifG.shown and ob[0].enabled is not False
+    assert so.titre.text == "Who List" and appels("SetWhoToUI")[-1] == [1], "les resultats du /who dans la fenetre"
+    W = g.ForeverUI.Social.Who
+    wr = [g["ForeverUIWhoListRow%d" % i] for i in range(1, 4)]
+    c0 = wr[0]
+    print("   qui : %s, totaux \"%s\"" % ([(l.nom.text, l.niveau.text, l.race.text, l.classe.text, l.variable.text, l.guilde.text)
+        for l in wr if l.shown], W.totaux.text))
+    assert [l.nom.text for l in wr if l.shown] == ["Zed", "Ann"]
+    assert (c0.niveau.text, c0.race.text, c0.classe.text, c0.variable.text, c0.guilde.text) == ("Level 80", "Human", "Warrior", "Stormwind", "Les Braves")
+    assert list(c0.classe.textColor.values())[:3] == [0.78, 0.61, 0.43], "la classe teintee"
+    assert list(c0.variable.textColor.values())[:3] == [0.486, 0.518, 0.541] and list(c0.niveau.textColor.values())[:3] == [1, 1, 1]
+    e = g.ForeverUI.AtlasEntry("common-button-list-large")
+    fond, choisie, survol = [list(t.values()) for t in (c0.fond, c0.choisie, c0.survol)]
+    coins = [(t.width, t.height) for t in fond[:4]]
+    print("   carte en neuf tranches : %d / %d / %d, coins %s, survol %s %s" % (
+        len(fond), len(choisie), len(survol), coins, survol[0].layer, survol[0].blend))
+    assert len(fond) == len(choisie) == len(survol) == 9 and coins == [(9, 9)] * 4 and fond[0].texture == e[1]
+    assert survol[0].layer == "HIGHLIGHT" and all(t.blend == "ADD" for t in survol)
+    assert c0.height == 69 and not any(t.shown for t in choisie)
+    assert c0.nom.font.nom == "ForeverUIFontNormalMed1" and g.ForeverUIFontNormalMed1.parent == "SystemFont_Med2"
+    assert list(g.ForeverUIFontNormalMed1.couleur.values()) == [1, 0.82, 0]
+    pn = list(c0.nom.points[1].values())
+    pc = list(c0.classe.points[2].values())
+    pg = list(c0.guilde.points[2].values())
+    print("   carte : nom %s (%s, %s), classe bornee %s %s, guilde bornee %s %s" % (pn[0], pn[3], pn[4], pc[2], pc[4], pg[2], pg[4]))
+    assert (pn[0], pn[3], pn[4]) == ("TOPLEFT", 10, -6) and (pc[2], pc[4]) == ("TOPRIGHT", -31.5) and (pg[2], pg[4]) == ("TOPRIGHT", -50.5)
+    assert W.totaux.text.startswith("2 ") and g.ForeverUIWhoColumn1 is None, "plus d'en-tetes de colonnes"
+    assert not W.ajouter.actif and not W.inviter.actif, "sans selection, eteints"
+    c0.scripts.OnClick(c0, "LeftButton")
+    assert W.choisi == 1 and W.ajouter.actif and all(t.shown for t in c0.choisie.values())
+    W.ajouter.scripts.OnClick(W.ajouter)
+    W.inviter.scripts.OnClick(W.inviter)
+    assert appels("AddFriend")[-1] == ["Zed"] and appels("InviteUnit")[-1] == ["Zed"]
+    c0.scripts.OnClick(c0, "LeftButton")
+    assert W.choisi is None and not any(t.shown for t in c0.choisie.values()) and not W.ajouter.actif, "un second clic retire la selection"
+    # LA BARRE : sans elle, la liste va au bord ; avec elle, lui laisse sa place
+    def bordDroit(liste):
+        return [list(p.values())[3] for p in liste.points.values() if list(p.values())[0] == "BOTTOMRIGHT"][-1]
+    sans = bordDroit(W.liste)
+    lua.execute("ForeverUIWhoList.hauteurDefaut = 69; ForeverUI.Social.Who.maj()")
+    avec = bordDroit(W.liste)
+    print("   Qui : bord droit sans barre %s, avec barre %s (barre %s)" % (sans, avec, g.ForeverUIWhoListScrollBar.shown))
+    assert sans == -4 and avec == -22 and g.ForeverUIWhoListScrollBar.shown and len(W.liste.points) == 2
+    lua.execute("ForeverUIWhoList.hauteurDefaut = nil; ForeverUI.Social.Who.maj()")
+    assert bordDroit(W.liste) == -4 and not g.ForeverUIWhoListScrollBar.shown
+    wr[1].scripts.OnClick(wr[1], "RightButton")
+    assert list(g.MENUS_AMIS.values())[-1].nom == "Ann"
+    # l'infobulle : seulement pour un texte coupe
+    c0.scripts.OnEnter(c0)
+    lua.execute("GameTooltip.text = nil")
+    lua.execute("ForeverUIWhoListRow1.nom:SetWidth(10); ForeverUI.Social.Who.maj()")
+    c0.scripts.OnEnter(c0)
+    print("   infobulle du nom coupe : %s %s" % (g.GameTooltip.text, list(g.GameTooltip.lignes.values())))
+    assert g.GameTooltip.text == "Zed" and list(g.GameTooltip.lignes.values()) == ["Level 80", "Stormwind"]
+    W.saisie.SetText(W.saisie, "80")
+    W.saisie.scripts.OnEnterPressed(W.saisie)
+    assert appels("SendWho")[-1] == ["80"]
+
+    # LA GUILDE
+    ob[2].scripts.OnClick(ob[2])
+    Gu = g.ForeverUI.Social.Guild
+    gf = g.GuildFrame
+    pgf = list(gf.points[1].values())
+    print("   guilde : titre \"%s\", totaux \"%s\", GuildFrame montre %s alpha %s a (%s, %s), SetWhoToUI %s" % (
+        so.titre.text, Gu.totaux.text, gf.shown, gf.alpha, pgf[3], pgf[4], appels("SetWhoToUI")[-1]))
+    assert so.titre.text == "Officer of Les Braves" and Gu.totaux.text == "3 Guild Members (2 Online)"
+    assert gf.shown and gf.alpha == 0 and pgf[3] == -5000, "le cadre du client, montre mais hors de l'ecran"
+    assert appels("SetWhoToUI")[-1] == [0], "quitter Qui rend les resultats au chat"
+    gr = [g["ForeverUIGuildListRow%d" % i] for i in range(1, 4)]
+    print("   membres : %s" % [(l.niveau.text, l.nom.text, l.zone.text, l.rang.text) for l in gr])
+    assert [l.nom.text for l in gr] == ["Moi", "Bea", "Cid"] and (gr[0].niveau.text, gr[0].zone.text, gr[0].rang.text) == (80, "Dalaran", "Officer")
+    assert gr[0].note is None, "plus de colonne Note"
+    pv = list(gr[0].niveau.points[1].values())
+    pc = list(gr[0].classe.points[1].values())
+    assert (pv[0], pv[3], gr[0].niveau.width, gr[0].niveau.justify) == ("LEFT", -1, 40, "CENTER"), "le niveau centre sur sa colonne"
+    assert (pc[0], pc[1].name, pc[3]) == ("LEFT", "ForeverUIGuildListRow1", 52), "l'icone de classe ne bouge pas"
+    # la fenetre garde sa largeur, le panneau du client aussi
+    assert so.width == 385 and g.FriendsFrame.width == 384
+    pr = [list(p.values()) for p in gr[0].rang.points.values()]
+    assert (pr[1][0], pr[1][2], pr[1][3]) == ("RIGHT", "RIGHT", -4), "le rang va au bord de la ligne"
+    # la ligne de camelot : bande GuildFrame, barre de surbrillance, icone de classe
+    n0 = gr[0].GetNormalTexture(gr[0])
+    assert gr[0].height == 20 and n0.texture.lower().endswith("guildframe") and list(n0.texcoord.values())[0] == 0.36230469
+    assert gr[0].GetHighlightTexture(gr[0]).texture.endswith("UI-FriendsFrame-HighlightBar")
+    assert gr[0].classe.shown and gr[0].classe.texture.endswith("UI-CharacterCreate-Classes")
+    # en ligne : nom teinte de la classe, absent : l'icone ; hors ligne : gris, dernier passage
+    nc = g.NORMAL_FONT_COLOR
+    assert list(gr[0].nom.textColor.values())[:3] == [nc.r, nc.g, nc.b], "classe sans couleur connue : NORMAL, comme camelot"
+    assert not gr[0].presence.shown and gr[1].presence.shown and gr[1].presence.texture.endswith("StatusIcon-Away")
+    assert list(gr[2].nom.textColor.values())[:3] == [0.5, 0.5, 0.5] and list(gr[2].rang.textColor.values())[:3] == [0.5, 0.5, 0.5]
+    assert gr[2].zone.text == "3 |4day:days;", "hors ligne, la zone dit le dernier passage"
+    assert list(gr[1].nom.points[1].values())[1] is not None and list(gr[1].nom.points[1].values())[2] == "RIGHT", "le nom apres la presence"
+    # le chef de guilde : l'icone de rang
+    lua.execute("GUILDE[1][3] = 0; ForeverUI.Social.Guild.maj()")
+    assert gr[0].rangIcone.shown and gr[0].rangIcone.texture.endswith("UI-Group-LeaderIcon") and not gr[1].rangIcone.shown
+    lua.execute("GUILDE[1][3] = 1; ForeverUI.Social.Guild.maj()")
+    # les en-tetes : GUILD_COLUMN_INFO, la note au bord de la liste
+    ent = [g["ForeverUIGuildColumn%d" % i] for i in range(1, 6)]
+    print("   en-tetes : %s, largeurs %s" % ([h.texte.text for h in ent], [h.width for h in ent]))
+    assert [h.texte.text for h in ent] == ["Level", "Class", "Name", "Zone", "Rank"] and g.ForeverUIGuildColumn6 is None
+    assert [h.width for h in ent[:4]] == [40, 45, 100, 100]
+    pn6 = list(ent[4].points[2].values())
+    assert (pn6[0], pn6[1].name, pn6[2], pn6[3]) == ("BOTTOMRIGHT", "ForeverUIGuildList", "TOPRIGHT", -6)
+    # la colonne Note suit la liste, et la liste suit la barre
+    bdg = [list(p.values())[3] for p in Gu.liste.points.values() if list(p.values())[0] == "BOTTOMRIGHT"]
+    lua.execute("ForeverUIGuildList.hauteurDefaut = 40; ForeverUI.Social.Guild.maj()")
+    bdg2 = [list(p.values())[3] for p in Gu.liste.points.values() if list(p.values())[0] == "BOTTOMRIGHT"]
+    print("   Guilde : bord droit sans barre %s, avec barre %s" % (bdg, bdg2))
+    assert bdg == [-4] and bdg2 == [-22]
+    lua.execute("ForeverUIGuildList.hauteurDefaut = nil; ForeverUI.Social.Guild.maj()")
+    ent[4].scripts.OnClick(ent[4])
+    ent[1].scripts.OnClick(ent[1])
+    assert appels("SortGuildRoster")[-2:] == [["rank"], ["class"]]
+    assert g.ForeverUIGuildViewToggle is None, "plus de bascule des vues"
+    assert Gu.motd.text == "Raid ce soir" and Gu.motdZone.mouseEnabled
+    assert not Gu.controle.actif and Gu.ajouter.actif, "Guild Control : chef de guilde seulement"
+    # l'infobulle : pour un texte coupe, ou pour un membre qui a une note
+    lua.execute("GameTooltip.text = nil; GameTooltip.lignes = {}")
+    gr[1].scripts.OnEnter(gr[1])
+    assert not list(g.GameTooltip.lignes.values()), "rien de coupe, pas de note : pas d'infobulle"
+    lua.execute("ForeverUIGuildListRow2.zone:SetWidth(10)")
+    gr[1].scripts.OnEnter(gr[1])
+    assert list(g.GameTooltip.lignes.values()) == ["Bea", "Member", "Level 75 Rogue", "Orgrimmar"], "zone coupee"
+    lua.execute("ForeverUIGuildListRow2.zone:SetWidth(90)")
+    gr[0].scripts.OnEnter(gr[0])
+    print("   infobulle : %s" % list(g.GameTooltip.lignes.values()))
+    assert list(g.GameTooltip.lignes.values()) == ["Moi", "Officer", "Level 80 Mage", "Dalaran", "Note: note moi"]
+    # la case des hors ligne
+    ho = g.ForeverUIGuildShowOffline
+    assert ho.checked and ho.texte.text == "Show Offline Members"
+    # enfoncee, la case garde son contour : l'image enfoncee EST le contour
+    hn, hp = ho.GetNormalTexture(ho), ho.GetPushedTexture(ho)
+    assert hp is not None and hp.texture == hn.texture and list(hp.texcoord.values()) == list(hn.texcoord.values())
+    assert hn.texture == g.ForeverUI.AtlasEntry("checkbox-minimal")[1]
+    # un membre choisi, son detail ouvert ; puis la case, SANS autre mise a
+    # jour : la liste change tout de suite, la selection et le detail s'en vont
+    gr[2].scripts.OnClick(gr[2], "LeftButton")
+    assert g.GUILDE_CHOIX == 3 and g.ForeverUIGuildMemberDetail.shown
+    ho.SetChecked(ho, False)
+    ho.scripts.OnClick(ho)
+    print("   sans hors ligne : %s, totaux \"%s\", selection %s, detail %s, case %s" % (
+        [l.nom.text for l in gr if l.shown], Gu.totaux.text, g.GUILDE_CHOIX, g.ForeverUIGuildMemberDetail.shown, ho.checked))
+    assert [l.nom.text for l in gr if l.shown] == ["Moi", "Bea"] and Gu.totaux.text == "3 Guild Members (2 Online)"
+    assert g.GUILDE_CHOIX == 0 and not g.ForeverUIGuildMemberDetail.shown and ho.checked is False
+    ho.SetChecked(ho, True)
+    ho.scripts.OnClick(ho)
+    assert [l.nom.text for l in gr if l.shown] == ["Moi", "Bea", "Cid"] and ho.checked is True
+    # le detail d'un membre
+    gr[1].scripts.OnClick(gr[1], "LeftButton")
+    det = g.ForeverUIGuildMemberDetail
+    D_rang = det.titre.text
+    print("   detail : %s, selection %s, GuildFrame.selectedName %s" % (D_rang, g.GUILDE_CHOIX, gf.selectedName))
+    assert det.shown and D_rang == "Bea" and g.GUILDE_CHOIX == 2 and gf.selectedName == "Bea"
+    gr[1].scripts.OnClick(gr[1], "LeftButton")
+    assert not det.shown and g.GUILDE_CHOIX == 0, "le meme clic referme le detail"
+    gr[1].scripts.OnClick(gr[1], "RightButton")
+    assert list(g.MENUS_AMIS.values())[-1].nom == "Bea"
+    # l'information et le journal
+    Gu.info.scripts.OnClick(Gu.info)
+    inf = g.ForeverUIGuildInfoFrame
+    assert inf.shown and g.ForeverUIGuildInfoEditBox.text == "Bienvenue"
+    # Log a gauche, Accept et Close contre le bord droit : plus de chevauchement
+    ib = g.ForeverUI.Social.Guild.infoBoutons
+    pj, pac, pf = [list(ib[k].points[1].values()) for k in ("journal", "accepter", "fermer")]
+    print("   info : Log %s (%s), Accept %s de %s (%s), Close %s (%s)" % (pj[0], pj[3], pac[0], pac[2], pac[3], pf[0], pf[3]))
+    assert (pj[0], pj[3]) == ("BOTTOMLEFT", 12) and (pf[0], pf[3]) == ("BOTTOMRIGHT", -12)
+    assert pac[0] == "RIGHT" and pac[2] == "LEFT" and pac[3] == -4
+    # 12 + 70 (Log) < 300 - 12 - 90 - 4 - 90 (debut d'Accept)
+    assert 12 + ib["journal"].width < 300 - 12 - ib["fermer"].width - 4 - ib["accepter"].width
+    ev = g.ForeverUIGuildEventLog
+    lua.execute("ForeverUI.Social.Guild.basculerJournal()")
+    lj = [g["ForeverUIGuildEventListRow%d" % i] for i in range(1, 3)]
+    print("   journal : %s, info fermee %s" % ([l.texte.text for l in lj], not inf.shown))
+    assert ev.shown and not inf.shown, "une annexe a la fois"
+    assert lj[0].texte.text.startswith("Moi promotes Bea to Member") and lj[1].texte.text.startswith("Bea joins the guild")
+    assert appels("QueryGuildEventLog")
+
+
+    # LA FENETRE DE CONTROLE DE GUILDE, habillee : plus de MacroPopup, le
+    # metal de camelot sur un habit qui depasse de 24, cases et champs
+    gc = g.GuildControlPopupFrame
+    macros = [r for r in gc.regions.values() if r.texture and "MacroPopup" in str(r.texture)]
+    habit = gc.foreverHabit
+    ph = list(habit.points[1].values())
+    c1 = g.GuildControlPopupFrameCheckbox1
+    eb = g.GuildControlPopupFrameEditBox
+    print("   controle : MacroPopup visibles %d, habit %sx%s a (%s, %s) niveau %s < %s, titre \"%s\", case %s, champ gauche %s" % (
+        sum(1 for r in macros if r.shown), habit.width, habit.height, ph[3], ph[4], habit.frameLevel, gc.frameLevel,
+        gc.foreverTitre.text, c1._normal.texture, g.GuildControlPopupFrameEditBoxLeft.shown))
+    assert macros and not any(r.shown for r in macros), "le fond MacroPopup se tait"
+    assert (habit.width, habit.height, ph[4]) == (320, 481, 24) and gc.foreverTitre.text == "Guild Control"
+    assert (habit.frameLevel or 0) < (gc.frameLevel or 1) or gc.frameLevel in (None, 1)
+    e = g.ForeverUI.AtlasEntry("checkbox-minimal")
+    assert c1._normal.texture == e[1] and not g.GuildControlPopupFrameEditBoxLeft.shown and eb.bordCamelot
+    assert g.GuildControlPopupFrameTabPermissions.backdrop is None
+    lua.execute("ForeverUI.Social.Guild.maj(); GuildControlPopupFrame:Show()")
+    pg = list(gc.points[1].values())
+    assert pg[1].name == "ForeverUISocialFrame" and (pg[3], pg[4]) == (12, -24), "recollee a droite, abaissee de 24"
+    gc.foreverCroix.scripts.OnClick(gc.foreverCroix)
+    assert not gc.shown
+    # LES CANAUX
+    ob[3].scripts.OnClick(ob[3])
+    assert not ev.shown, "changer d'onglet referme les annexes"
+    assert so.width == 385 and g.FriendsFrame.width == 384, "hors de la guilde, la largeur de camelot"
+    C = g.ForeverUI.Social.Chat
+    cr = [g["ForeverUIChannelListRow%d" % i] for i in range(1, 5)]
+    print("   canaux : %s" % [l.texte.text for l in cr])
+    assert so.titre.text == "Chat Channels"
+    assert cr[0].texte.text == "|cffffd200World|r" and cr[1].texte.text == "|cffffffff1. General|r"
+    assert cr[3].texte.text == "|cffffffff5. Guilde (3)|r", "le compte pour la categorie GROUP"
+    cr[3].scripts.OnClick(cr[3], "LeftButton")
+    mr = [g["ForeverUIChannelRosterRow%d" % i] for i in range(1, 4)]
+    print("   membres du canal : titre \"%s\", %s, rang %s" % (C.titre.text, [l.nom.text for l in mr], mr[0].rang.texture))
+    assert g.CANAL_CHOISI == 4 and C.titre.text == "Guilde (3)" and [l.nom.text for l in mr] == ["Moi", "Bea", "Cid"]
+    assert mr[0].rang.texture.endswith("UI-Group-LeaderIcon") and mr[1].rang.texture.endswith("UI-Group-AssistantIcon") and not mr[2].rang.shown
+    cr[0].scripts.OnClick(cr[0], "LeftButton")
+    assert appels("CollapseChannelHeader")[-1] == [1]
+    mr[1].scripts.OnClick(mr[1], "RightButton")
+    assert appels("ChannelRosterFrame_ShowDropdown")[-1] == [2]
+    # le chat vocal retire : ni cases d'adhesion, ni haut-parleurs, ni glisser
+    lua.execute("VOIX = true; CANAUX[4][8] = true; CANAUX[4][9] = true; ForeverUI.Social.maj()")
+    assert C.voix is None and cr[3].parleur is None and mr[0].parleur is None
+    assert list(cr[3].texte.points[2].values())[3] == -4 and cr[3].scripts.OnDragStart is None
+    cr[3].scripts.OnClick(cr[3], "RightButton")
+    assert g.ChannelListDropDown.voice is None and g.ChannelListDropDown.voiceActive is None, "le menu du client sans ses lignes de voix"
+    lua.execute("VOIX = false; CANAUX[4][8] = nil; CANAUX[4][9] = nil; ForeverUI.Social.maj()")
+    C.ajouter.scripts.OnClick(C.ajouter)
+    nv = g.ForeverUIChannelNewFrame
+    assert nv.shown
+    nv.nom.SetText(nv.nom, "MonCanal")
+    nv.nom.scripts.OnEnterPressed(nv.nom)
+    assert appels("JoinPermanentChannel")[-1] == ["MonCanal", ""] and not nv.shown
+
+    # LE RAID -- a la connexion, aucun menu n'est ouvert : la page ne doit
+    # rien demander a UnitPopup en se batissant
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = nil")
+    ob[4].scripts.OnClick(ob[4])
+    R = g.ForeverUI.Social.Raid
+    print("   raid (seul) : hors raid %s, groupes %s, Convert actif %s, RequestRaidInfo %s" % (
+        R.hors.shown, R.groupes.shown, R.convertir.actif, bool(appels("RequestRaidInfo"))))
+    assert so.titre.text == "Raid" and R.hors.shown and not R.groupes.shown and not R.convertir.actif
+    assert appels("RequestRaidInfo") and R.info.actif
+    lua.execute("RAID_MEMBRES = { { 'Moi', 2, 1, 80, 'Mage', 'MAGE', 'Naxx', 1, nil }, { 'Bea', 0, 1, 75, 'Rogue', 'ROGUE', 'Naxx', 1, 1 }, { 'Cid', 1, 3, 60, 'Hunter', 'HUNTER', '', nil, nil } }; ForeverUI.Social.maj()")
+    pl = R.places
+    print("   raid : groupe 1 %s, groupe 3 %s, groupe 2 %s" % ([pl[1][n].nom.text for n in (1, 2, 3)], pl[3][1].nom.text, pl[2][1].nom.text))
+    assert R.groupes.shown and not R.hors.shown and R.appel.shown
+    assert [pl[1][n].nom.text for n in (1, 2, 3)] == ["Moi", "Bea", "Empty"] and pl[3][1].nom.text == "Cid"
+    assert list(pl[1][2].nom.textColor.values())[:3] == [1, 0, 0] and list(pl[3][1].nom.textColor.values())[:3] == [0.5, 0.5, 0.5]
+    assert pl[1][1].rang.texture.endswith("UI-Group-LeaderIcon") and pl[3][1].rang.texture.endswith("UI-Group-AssistantIcon")
+    # glisser Bea sur Cid, puis sur une place vide du groupe 2
+    lua.execute("ForeverUIRaidSlot3_1.souris = true")
+    pl[1][2].scripts.OnDragStart(pl[1][2])
+    pl[1][2].scripts.OnDragStop(pl[1][2])
+    lua.execute("ForeverUIRaidSlot3_1.souris = false; ForeverUIRaidSlot2_4.souris = true")
+    pl[1][2].scripts.OnDragStart(pl[1][2])
+    pl[1][2].scripts.OnDragStop(pl[1][2])
+    lua.execute("ForeverUIRaidSlot2_4.souris = false")
+    print("   glisser : %s / %s" % (appels("SwapRaidSubgroup")[-1], appels("SetRaidSubgroup")[-1]))
+    assert appels("SwapRaidSubgroup")[-1] == [2, 3] and appels("SetRaidSubgroup")[-1] == [2, 2]
+    pl[1][1].scripts.OnClick(pl[1][1], "RightButton")
+    assert g.ForeverUIRaidDropDown.name == "Moi" and g.ForeverUIRaidDropDown.unit == "raid1"
+    # les icones de rang, de role et de butin ; l'etat de l'appel
+    lua.execute("RAID_MEMBRES[1][10] = 'MAINTANK'; RAID_MEMBRES[1][11] = 1; APPEL_ETAT = { raid1 = 'ready', raid2 = 'waiting' }; ForeverUI.Social.maj()")
+    ic = [t.texture.split(chr(92))[-1] for t in pl[1][1].icones.values() if t.shown]
+    pn = list(pl[1][1].nom.points[1].values())
+    print("   icones de Moi : %s, nom a %s ; appel %s / %s" % (ic, pn[3], pl[1][1].appel.texture, pl[1][2].appel.texture))
+    assert ic == ["UI-Group-LeaderIcon", "UI-Group-MainTankIcon", "UI-Group-MasterLooter"] and pn[3] == 36
+    assert pl[1][1].appel.texture.endswith("ReadyCheck-Ready") and pl[1][2].appel.texture.endswith("ReadyCheck-Waiting")
+    assert not pl[3][1].appel.shown
+    lua.execute("ARENE_EVENEMENT('READY_CHECK_FINISHED')")
+    assert pl[1][2].appel.texture.endswith("ReadyCheck-NotReady"), "a la fin, l'attente devient absent"
+    lua.execute("ForeverUI.Social.Raid.minuterie:GetScript('OnUpdate')(ForeverUI.Social.Raid.minuterie, 11)")
+    assert not pl[1][1].appel.shown and not pl[1][2].appel.shown, "puis les icones s'effacent"
+    # la rangee des classes
+    cb = [g["ForeverUIRaidClassButton%d" % k] for k in range(1, 14)]
+    guerrier, mage = cb[0], cb[7]
+    print("   classes : %d boutons, Mage %s (%s), Guerrier %s, tank %s" % (
+        len(cb), mage.nombre, mage.compte.text, guerrier.nombre, cb[11].nombre))
+    assert mage.nombre == 1 and mage.compte.text == 1 and guerrier.nombre == 0 and guerrier.icone.desaturated
+    assert cb[11].nombre == 1 and cb[11].compte.text == "", "le tank principal, sans compte"
+    mage.scripts.OnEnter(mage)
+    assert g.GameTooltip.text.startswith("Mage") and "Moi" in g.GameTooltip.lignes[1]
+    # detacher : une classe, un groupe, un joueur (Maj + glisser pour le chef)
+    mage.scripts.OnDragStart(mage)
+    mage.scripts.OnDragStop(mage)
+    lab = g.ForeverUIRaidGroupLabel3
+    lab.scripts.OnDragStart(lab)
+    lab.scripts.OnDragStop(lab)
+    lua.execute("IsShiftKeyDown = function() return true end")
+    pl[1][2].scripts.OnDragStart(pl[1][2])
+    pl[1][2].scripts.OnDragStop(pl[1][2])
+    lua.execute("IsShiftKeyDown = function() return false end")
+    det = [(d.filtre, d.classe) for d in g.DETACHEES.values()]
+    lua.execute("SOURIS_X, SOURIS_Y = 500, 300")
+    mage.scripts.OnDragStart(mage)
+    mage.scripts.OnDragStop(mage)
+    lua.execute("SOURIS_X, SOURIS_Y = 0, 0")
+    dern = list(g.DETACHEES.values())[-1]
+    pd = list(dern.points[1].values())
+    print("   fenetre detachee : %s de %s (%s, %s)" % (pd[0], pd[1].name if pd[1] else None, pd[3], pd[4]))
+    assert pd[0] == "TOP" and pd[1].name == "UIParent" and (pd[3], pd[4]) == (500, 300), "sous la souris, par l'echelle de la fenetre"
+    print("   detachees : %s, lachees %d" % (det, len(appels("RaidPulloutStopMoving"))))
+    assert det == [("MAGE", "Mage"), (3, None), ("Bea", None)] and len(appels("RaidPulloutStopMoving")) >= 3
+    # MAIN TANK / MAIN ASSIST : dans le clic droit, sous des boutons securises
+    def lignes_menu():
+        n = g.DropDownList1.numButtons
+        return [g["DropDownList1Button%d" % i] for i in range(1, n + 1)]
+    lua.execute("DropDownList1:Show()")
+    g.ForeverUIRaidDropDown.id, g.ForeverUIRaidDropDown.name, g.ForeverUIRaidDropDown.unit = 2, "Bea", "raid2"
+    lua.execute("ForeverUIRaidDropDown.initialize(ForeverUIRaidDropDown)")
+    lm = lignes_menu()
+    print("   menu de Bea : %s" % [b.value for b in lm])
+    assert [b.value for b in lm][-3:] == ["Promote to Main Tank", "Promote to Main Assist", "CANCEL"], "nos lignes, puis Cancel en dernier"
+    o1, o2 = g.ForeverUIRaidMenuSecure1, g.ForeverUIRaidMenuSecure2
+    print("   surcouche 1 : %s %s %s sur %s, parent %s, montree %s" % (o1.attributes.type, o1.attributes.action,
+        o1.attributes.unit, o1.allPoints.name, o1.parent.name, o1.shown))
+    assert o1.template == "SecureActionButtonTemplate" and o1.parent.name == "UIParent"
+    assert (o1.attributes.type, o1.attributes.action, o1.attributes.unit) == ("maintank", "set", "raid2")
+    assert o2.attributes.type == "mainassist" and o1.shown and o2.shown
+    assert o1.strata == "TOOLTIP", "au-dessus de DropDownList1, qui remonte en s'affichant"
+    assert o1.allPoints.name == lm[-3].name, "posee sur sa ligne"
+    # un tank principal : pas de ligne Main Tank ; Demote passe par le securise
+    g.ForeverUIRaidDropDown.id, g.ForeverUIRaidDropDown.name, g.ForeverUIRaidDropDown.unit = 1, "Moi", "raid1"
+    lua.execute("ForeverUIRaidDropDown.initialize(ForeverUIRaidDropDown)")
+    lm = lignes_menu()
+    vals = [b.value for b in lm]
+    print("   menu de Moi (tank) : %s ; surcouche 1 %s/%s sur %s" % (vals, o1.attributes.type, o1.attributes.action, o1.allPoints.value))
+    assert "Promote to Main Tank" not in vals and vals[-2:] == ["Promote to Main Assist", "CANCEL"]
+    assert (o1.attributes.type, o1.attributes.action) == ("maintank", "clear") and o1.allPoints.value == "RAID_DEMOTE"
+    # la liste se ferme, ou le combat commence : les surcouches s'en vont
+    lua.execute("DropDownList1:Hide()")
+    assert not o1.shown and not o2.shown
+    lua.execute("DropDownList1:Show(); ForeverUIRaidDropDown.initialize(ForeverUIRaidDropDown); ARENE_EVENEMENT('PLAYER_REGEN_DISABLED')")
+    assert not o1.shown
+    lua.execute("STATE.inLockdown = true; ForeverUIRaidDropDown.initialize(ForeverUIRaidDropDown); STATE.inLockdown = false")
+    vals = [b.value for b in lignes_menu()]
+    assert "Promote to Main Assist" not in vals and not o1.shown, "en combat, pas de lignes securisees"
+    lua.execute("DropDownList1:Hide()")
+
+    # les instances sauvegardees
+    R.info.scripts.OnClick(R.info)
+    ir = g.ForeverUIRaidInfoListRow1
+    print("   instances : %s, %s, %s ; prolonger %s" % (ir.nom.text, ir.reset.text, ir.difficulte.text, g.ForeverUIRaidInfoFrame.shown))
+    assert ir.nom.text == "Naxxramas" and ir.difficulte.text == "25 Player" and not R.convertir.shown
+    ir.scripts.OnClick(ir)
+    N = g.ForeverUIRaidInfoFrame
+    assert R.info.actif
+    lua.execute("RAID_MEMBRES = {}")
+    g.FriendsFrameTab1.scripts.OnClick(g.FriendsFrameTab1)
+    assert not N.shown and g.ForeverUISocialPage1.shown
+    # la guilde : onglet eteint hors guilde, comme celui du client
+    lua.execute("FriendsFrameTab3:Disable(); ForeverUI.Social.maj()")
+    assert ob[2].enabled is False and not ob[2].art.actifG.shown
+    lua.execute("FriendsFrameTab3:Enable(); ForeverUI.Social.maj()")
+    # la croix ferme le panneau du client
+    so.croix.scripts.OnClick(so.croix)
+    assert not ff.shown
+    assert g.ForeverUI.Superposition.fenetres["social"] is not None and so.bandeau.dragButtons[1] == "LeftButton"
+
+
+    # ------------------------------------------------- LES CADRES DE GROUPE
+    print("\ncadres de groupe :")
+    lua.execute("local v = ForeverUI.PartyFrame.veilleur; v.scripts.OnEvent(v, 'PLAYER_ENTERING_WORLD')")
+    ct = g.ForeverUIPartyFrame
+    m1, m2 = g.ForeverUIPartyMemberFrame1, g.ForeverUIPartyMemberFrame2
+    def pts(f, k=-1):
+        return list(list(f.points.values())[k].values())
+    def entree(nom):
+        return g.ForeverUI.AtlasEntry(nom)
+    pc = pts(ct)
+    print("   conteneur : %s (%s, %s), pilote %s" % (pc[0], pc[3], pc[4], ct.etats.visibility))
+    assert (pc[0], pc[3], pc[4]) == ("TOPLEFT", 22, -147), "sur le TOPRIGHT du gestionnaire plie (0, -7)"
+    assert ct.etats.visibility == "[group:raid] hide; [group] show; hide", "en groupe, pas en raid"
+    assert g.PartyMemberFrame1.etats.visibility == "hide" and not g.PartyMemberFrame1.shown, "le cadre du client, tenu cache"
+    assert (m1.width, m1.height, m1.unitWatch) == (120, 53, True)
+    assert m1.GetAttribute(m1, "unit") == "party1" and m1.GetAttribute(m1, "toggleForVehicle") and m1.GetAttribute(m1, "*type2") == "menu"
+    p2 = pts(m2)
+    assert (p2[0], p2[1].name, p2[3], p2[4]) == ("TOPLEFT", "ForeverUIPartyFrame", 0, -63), "pas de 63 sans familiers"
+    lua.execute("""
+    GROUPE = { party1 = { nom = 'Ann', vie = 8000, max = 10000, res = 3000, resMax = 5000, jeton = 'MANA',
+                          role = 'HEALER', pvp = true, faction = 'Horde', menace = 2 },
+               party2 = { nom = 'Bob', vie = 1500, max = 10000, res = 50, resMax = 100, jeton = 'RAGE',
+                          role = 'TANK', deconnecte = true },
+               partypet1 = { nom = 'Wolf', vie = 300, max = 600 } }
+    CHEF_GROUPE = 1
+    AFFAIBLISSEMENTS = { party1 = { { 'icoA', 1, nil, 10, 20 }, { 'icoB', 3, 'Magic', 8, 30 }, { 'icoC', 1, 'Poison', 0, 0 } } }
+    STATE.threatWarning = true
+    ARENE_EVENEMENT('PARTY_MEMBERS_CHANGED')
+    """)
+    e_art = entree("ui-hud-unitframe-party-portraiton")
+    pa = pts(m1.art)
+    print("   Ann : art %s (%s, %s), nom \"%s\" a (%s, %s) sur %s, vie %s, ressource %s" % (
+        m1.art.width, pa[3], pa[4], m1.nom.text, pts(m1.nom)[3], pts(m1.nom)[4], m1.nom.width, m1.vie.width, m1.ressource.width))
+    assert m1.art.texture == e_art[1] and (pa[3], pa[4]) == (1, -2) and (m1.art.width, m1.art.height) == (120, 49)
+    assert m1.nom.text == "Ann" and (pts(m1.nom)[3], pts(m1.nom)[4], m1.nom.width) == (46, -6, 57)
+    assert m1.vie.texture == entree("ui-hud-unitframe-party-portraiton-bar-health")[1] and abs(m1.vie.width - 56) < 1e-6
+    assert (pts(m1.vie)[3], pts(m1.vie)[4]) == (45, -19) and not m1.vie.desaturated
+    assert m1.ressource.texture == entree("ui-hud-unitframe-party-portraiton-bar-mana")[1] and abs(m1.ressource.width - 43.8) < 1e-6
+    assert (pts(m1.ressource)[3], pts(m1.ressource)[4]) == (42, -30), "un pixel plus loin : le masque de camelot"
+    assert list(m1.ressource.texcoord.values())[0] == entree("ui-hud-unitframe-party-portraiton-bar-mana")[2]
+    # chef, role, PvP a l'echelle 0,6, menace
+    print("   Ann : chef %s, role %s, PvP %sx%s (%s, %s), menace %s" % (m1.chef.shown, m1.role.texture, m1.pvp.width, m1.pvp.height,
+        pts(m1.pvp)[3], pts(m1.pvp)[4], list(m1.lueur.vertex.values())))
+    assert m1.chef.shown and m1.chef.texture == entree("ui-hud-unitframe-player-group-leadericon")[1] and not m2.chef.shown
+    pch = pts(m1.chef)
+    assert (pch[0], pch[2], pch[3], pch[4]) == ("BOTTOM", "TOP", -10, -6)
+    assert m1.role.texture == entree("roleicon-tiny-healer")[1] and (m1.role.width, m1.role.height) == (12, 12)
+    eth = entree("roleicon-tiny-healer")
+    assert list(m1.role.texcoord.values()) == [eth[k] for k in (2, 3, 4, 5)]
+    assert m2.role.texture == entree("roleicon-tiny-tank")[1]
+    eh = entree("ui-hud-unitframe-player-pvp-hordeicon")
+    assert abs(m1.pvp.width - eh[6] * 0.6) < 1e-6 and abs(pts(m1.pvp)[3] - 14.4) < 1e-6 and abs(pts(m1.pvp)[4] + 40.8) < 1e-6
+    assert m1.lueur.shown and list(m1.lueur.vertex.values()) == [1.0, 0.6, 0.0] and not m2.pvp.shown
+    # affaiblissements : 3 sur 4 ; bordure de leur type ; la lueur d'etat prend
+    # le premier type ; le filtre RAID (dissipables) si l'option est active
+    au = [g["ForeverUIPartyMemberFrame1Debuff%d" % k] for k in range(1, 5)]
+    print("   affaiblissements : %s, piles %s, lueur %s" % ([a.shown for a in au], [a.pile.text for a in au[:3]], list(m1.statut.vertex.values())))
+    assert [a.shown for a in au] == [True, True, True, False] and au[1].pile.text == 3 and au[0].pile.text == ""
+    assert list(au[0].bordure.vertex.values()) == [0.8, 0, 0] and list(au[1].bordure.vertex.values()) == [0.2, 0.6, 1.0]
+    assert (pts(au[0])[3], pts(au[0])[4], pts(au[1])[3]) == (48, -43, 65) and au[0].width == 15
+    assert m1.statut.shown and list(m1.statut.vertex.values()) == [0.2, 0.6, 1.0]
+    assert list(au[1].recharge.timer.values()) == [22, 8, 1]
+    lua.execute("STATE.cvars.showDispelDebuffs = '1'; ARENE_EVENEMENT('UNIT_AURA', 'party1')")
+    assert [a.shown for a in au] == [True, True, False, False] and au[0].icone.texture == "icoB", "le filtre RAID"
+    lua.execute("STATE.cvars.showDispelDebuffs = nil; ARENE_EVENEMENT('UNIT_AURA', 'party1')")
+    # deconnecte : vie pleine desaturee, portrait desature, icone
+    print("   Bob deconnecte : vie %s desat %s, portrait desat %s, icone %s" % (m2.vie.width, m2.vie.desaturated, m2.portrait.desaturated, m2.deconnexion.shown))
+    assert m2.vie.width == 70 and m2.vie.desaturated and m2.portrait.desaturated and m2.deconnexion.shown
+    assert m2.ressource.texture == entree("ui-hud-unitframe-party-portraiton-bar-rage")[1]
+    # 15 % de vie : le portrait rouge qui bat
+    lua.execute("GROUPE.party2.deconnecte = nil; ARENE_EVENEMENT('UNIT_HEALTH', 'party2')")
+    print("   Bob a 15 %% : portrait %s, bat %s" % (list(m2.portrait.vertex.values()), m2.bat))
+    assert list(m2.portrait.vertex.values())[:3] == [1, 0, 0] and m2.bat and not m2.deconnexion.shown
+    lua.execute("GROUPE.party2.mort = true; ARENE_EVENEMENT('UNIT_HEALTH', 'party2')")
+    assert list(m2.portrait.vertex.values())[:3] == [0.35, 0.35, 0.35] and not m2.bat and m2.texteVie.text == "Dead"
+    lua.execute("GROUPE.party2.mort = nil")
+    # l'appel : pret, en attente -> pas pret a la fin, puis s'efface
+    lua.execute("GROUPE.party1.appel = 'ready'; GROUPE.party2.appel = 'waiting'; ARENE_EVENEMENT('READY_CHECK')")
+    assert m1.appel.shown and m1.appel.icone.texture.endswith("ui-lfg-readymark") and m2.appel.icone.texture.endswith("ui-lfg-pendingmark")
+    assert (m1.appel.width, pts(m1.appel)[0], pts(m1.appel)[4]) == (36, "CENTER", -2)
+    lua.execute("ARENE_EVENEMENT('READY_CHECK_FINISHED')")
+    assert m2.appel.icone.texture.endswith("ui-lfg-declinemark"), "a la fin, l'attente devient pas pret"
+    # le familier : 64 x 23 a (23, -43), vie a l'echelle 0,5, teinte verte
+    f1 = m1.familier
+    print("   familier : %sx%s (%s, %s), vie %s x %s teinte %s, surveille %s" % (f1.width, f1.height, pts(f1)[3], pts(f1)[4],
+        f1.vie.width, f1.vie.height, list(f1.vie.vertex.values()), f1.unitWatch))
+    assert (f1.width, f1.height, pts(f1)[3], pts(f1)[4]) == (64, 23, 23, -43)
+    assert abs(f1.vie.width - 17.75) < 1e-6 and f1.vie.height == 5 and list(f1.vie.vertex.values()) == [0, 1, 0]
+    assert f1.GetAttribute(f1, "unit") == "partypet1" and f1.GetAttribute(f1, "*type2") is None and not f1.unitWatch
+    # l'option des familiers : le pas passe a 79, le familier est surveille
+    lua.execute("STATE.cvars.showPartyPets = '1'; ARENE_EVENEMENT('CVAR_UPDATE')")
+    print("   avec familiers : pas %s, hauteur %s, surveille %s" % (-pts(m2)[4], ct.height, f1.unitWatch))
+    assert pts(m2)[4] == -79 and ct.height == 4 * 53 + 3 * 26 + 2 and f1.unitWatch
+    lua.execute("STATE.cvars.showPartyPets = nil; ARENE_EVENEMENT('CVAR_UPDATE')")
+    # le vehicule : le cadre suit partypet1, art et barres du vehicule
+    lua.execute("GROUPE.party1.vehicule = true; ARENE_EVENEMENT('UNIT_ENTERED_VEHICLE', 'party1')")
+    print("   vehicule : unite %s, art %s (%s, %s), nom %s, familier suit %s" % (m1.unit, m1.art.width, pts(m1.art)[3], pts(m1.art)[4],
+        m1.nom.width, f1.affiche))
+    assert m1.unit == "partypet1" and f1.affiche == "party1" and m1.nom.text == "Wolf"
+    assert m1.art.texture == entree("ui-hud-unitframe-party-portraiton-vehicle")[1] and (pts(m1.art)[3], pts(m1.art)[4]) == (0, 0)
+    assert m1.nom.width == 56 and (pts(m1.vie)[3], pts(m1.vie)[4]) == (48, -18)
+    lua.execute("GROUPE.party1.vehicule = nil; ARENE_EVENEMENT('UNIT_EXITED_VEHICLE', 'party1')")
+    assert m1.unit == "party1" and m1.nom.width == 57
+    # le survol : l'infobulle de l'unite, celle des buffs a (47, -25), les textes
+    lua.execute("STATE.cvars.statusTextPercentage = '0'")
+    m1.scripts.OnEnter(m1)
+    pb = pts(g.PartyMemberBuffTooltip)
+    print("   survol : infobulle de %s, buffs de %s a (%s, %s), texte de vie \"%s\"" % (g.GameTooltip.owner.name,
+        g.PartyMemberBuffTooltip.unitOf, pb[3], pb[4], m1.texteVie.text))
+    assert g.GameTooltip.owner.name == "ForeverUIPartyMemberFrame1" and g.PartyMemberBuffTooltip.unitOf == "party1"
+    assert (pb[0], pb[1].name, pb[3], pb[4]) == ("TOPLEFT", "ForeverUIPartyMemberFrame1", 47, -25)
+    assert m1.texteVie.shown and m1.texteVie.text == "8000 / 10000"
+    m1.scripts.OnLeave(m1)
+    assert not m1.texteVie.shown and not g.PartyMemberBuffTooltip.shown
+
+
+    # ------------------------------------------------- LE RAID COMPACT
+    print("\nraid compact :")
+    R = g.ForeverUI.RaidFrame
+    rc = g.ForeverUICompactRaidFrameContainer
+    h1 = g.ForeverUICompactRaidGroup1
+    pr = pts(rc)
+    print("   conteneur : %s (%s, %s), pilote %s ; en-tete 1 %s" % (pr[0], pr[3], pr[4], rc.etats.visibility, [h1.GetAttribute(h1, k) for k in ("groupFilter", "point", "unitsPerColumn")]))
+    assert (pr[0], pr[3], pr[4]) == ("TOPLEFT", 22, -145) and rc.etats.visibility == "[group:raid] show; hide"
+    assert (h1.GetAttribute(h1, "groupFilter"), h1.GetAttribute(h1, "point"), h1.GetAttribute(h1, "unitsPerColumn")) == ("1", "TOP", 5)
+    assert h1.GetAttribute(h1, "template") == "SecureUnitButtonTemplate" and h1.GetAttribute(h1, "startingIndex") == 1
+    assert h1.initialConfigFunction is not None
+    # l'en-tete cree ses boutons : on fait comme lui (initialConfigFunction)
+    lua.execute("""
+    for k = 1, 3 do
+        local b = CreateFrame("Button", "ForeverUICompactRaidGroup1UnitButton" .. k, ForeverUICompactRaidGroup1, "SecureUnitButtonTemplate")
+        ForeverUICompactRaidGroup1.initialConfigFunction(b)
+        b:SetWidth(98); b:SetHeight(44)
+    end
+    GROUPE = { raid1 = { nom = 'Ann', classe = 'WARRIOR', vie = 5000, max = 10000, res = 40, resMax = 100, jeton = 'RAGE',
+                         role = 'TANK', menace = 3 },
+               raid2 = { nom = 'Bob', classe = 'DEATHKNIGHT', vie = 0, max = 10000, res = 0, resMax = 100, jeton = 'RUNIC_POWER',
+                         mort = true },
+               raid3 = { nom = 'Cid', classe = 'WARRIOR', vie = 9000, max = 10000, res = 10, resMax = 100, jeton = 'RAGE',
+                         deconnecte = true } }
+    RAID_MEMBRES = { { 'Ann', 2, 1, 80, 'Warrior', 'WARRIOR', 'Naxx', 1, nil }, { 'Bob', 0, 1, 80, 'Death Knight', 'DEATHKNIGHT', 'Naxx', 1, 1 },
+                     { 'Cid', 0, 3, 80, 'Warrior', 'WARRIOR', 'Naxx', nil, nil } }
+    AFFAIBLISSEMENTS.raid1 = { { 'icoM', 2, 'Magic', 10, 20 } }
+    AMELIORATIONS.raid1 = { { 'icoB1', 1, 0, 0, 'player' }, { 'icoB2', 1, 0, 0, 'party2' } }
+    ForeverUICompactRaidGroup1UnitButton1:SetAttribute("unit", "raid1")
+    ForeverUICompactRaidGroup1UnitButton2:SetAttribute("unit", "raid2")
+    ForeverUICompactRaidGroup1UnitButton3:SetAttribute("unit", "raid3")
+    """)
+    b1, b2, b3 = g.ForeverUICompactRaidGroup1UnitButton1, g.ForeverUICompactRaidGroup1UnitButton2, g.ForeverUICompactRaidGroup1UnitButton3
+    assert (b1.GetAttribute(b1, "initial-width"), b1.GetAttribute(b1, "initial-height")) == (98, 44)
+    assert b1.GetAttribute(b1, "*type1") == "target" and b1.GetAttribute(b1, "*type2") == "menu" and b1.GetAttribute(b1, "toggleForVehicle")
+    wc = g.RAID_CLASS_COLORS.WARRIOR
+    print("   Ann : vie %s x %s %s, ressource %s %s, nom \"%s\", role %s, menace %s" % (b1.vie.width, b1.vie.height,
+        list(b1.vie.vertex.values()), b1.ressource.width, list(b1.ressource.vertex.values()), b1.nom.text,
+        b1.role.texture, list(b1.menace[1].vertex.values())))
+    assert b1.affiche == "raid1" and abs(b1.vie.width - 48) < 1e-6 and b1.vie.height == 34
+    assert list(b1.vie.vertex.values()) == [wc.r, wc.g, wc.b] and list(b1.ressource.vertex.values()) == [1.0, 0.0, 0.0]
+    assert abs(b1.ressource.width - 38.4) < 1e-6 and b1.ressource.height == 8
+    pv = pts(b1.vie)
+    assert (pv[0], pv[3], pv[4]) == ("TOPLEFT", 1, -1)
+    assert b1.nom.text == "Ann" and b1.role.shown and b1.role.texture.endswith("ui-lfg-roleicon-tank-micro-groupfinder") and b1.role.width == 17
+    assert all(t.shown for t in b1.menace.values()) and list(b1.menace[1].vertex.values()) == [1.0, 0.0, 0.0] and not b1.statut.shown
+    pn = list(b1.nom.points[1].values())
+    assert (pn[0], pn[2], pn[3], pn[4]) == ("TOPLEFT", "TOPRIGHT", 0, -1) and lua.eval("rawequal")(pn[1], b1.role)
+    # mort, deconnecte ; sans role, l'icone garde 1 de large
+    print("   Bob : statut \"%s\", role %s/%s ; Cid : statut \"%s\", vie %s %s" % (b2.statut.text, b2.role.shown, b2.role.width,
+        b3.statut.text, b3.vie.width, list(b3.vie.vertex.values())))
+    assert b2.statut.shown and b2.statut.text == "Dead" and not b2.role.shown and b2.role.width == 1
+    assert b3.statut.text == "Offline" and b3.vie.width == 96 and list(b3.vie.vertex.values()) == [0.5, 0.5, 0.5]
+    ps = pts(b1.statut, 0)
+    assert (ps[0], ps[3], abs(ps[4] - (44 / 3 - 2)) < 1e-6) == ("BOTTOMLEFT", 3, True)
+    # tank principal (10e valeur de GetRaidRosterInfo)
+    lua.execute("RAID_MEMBRES[2][10] = 'MAINTANK'; ForeverUI.RaidFrame.majBouton(ForeverUICompactRaidGroup1UnitButton2)")
+    assert b2.role.shown and b2.role.texture == g.ForeverUI.AtlasEntry("raidframe-icon-maintank")[1] and b2.role.width == 17
+    # l'affaiblissement magique : calque de dissipation, icone, auras ecartees de 2
+    ad = g.ForeverUI.AtlasEntry("ui-debuff-border-magic-noicon")
+    a1 = b1.affaiblissements[1]
+    pa = pts(a1)
+    print("   dissipation : calque %s %s, icone %s, affaiblissement a (%s, %s) bordure %s, buffs %s" % (b1.calque.shown,
+        list(b1.calque.fond.vertex.values()), b1.dissipations[1].shown, pa[3], pa[4], a1.bordure.width,
+        [x.shown for x in b1.buffs.values()][:3]))
+    assert b1.calque.shown and list(b1.calque.fond.vertex.values()) == [0.2, 0.6, 1.0] and b1.calque.fond.alpha == 0.2
+    assert b1.dissipations[1].shown and b1.dissipations[1].texture == g.ForeverUI.AtlasEntry("raidframe-icon-debuffmagic")[1]
+    assert (pa[0], pa[3], pa[4]) == ("BOTTOMLEFT", 5, 12) and a1.shown and a1.bordure.texture == ad[1] and a1.bordure.width == 16
+    assert a1.pile.text == 2 and a1.width == 11
+    assert [x.shown for x in b1.buffs.values()][:2] == [True, False], "le filtre PLAYER : seul le buff du joueur"
+    pb = pts(b1.buffs[1])
+    assert (pb[0], pb[3], pb[4]) == ("BOTTOMRIGHT", -5, 12)
+    assert not b2.calque.shown
+    # la cible, l'appel, la portee
+    lua.execute("GROUPE.raid1.cible = true; local v = ForeverUI.RaidFrame.veilleur; v.scripts.OnEvent(v, 'PLAYER_TARGET_CHANGED')")
+    assert all(t.shown for t in b1.cible.values()) and not any(t.shown for t in b2.cible.values())
+    lua.execute("GROUPE.raid1.appel = 'ready'; local v = ForeverUI.RaidFrame.veilleur; v.scripts.OnEvent(v, 'READY_CHECK')")
+    pa = pts(b1.appel)
+    assert b1.appel.shown and b1.appel.texture.endswith("ui-lfg-readymark-raid") and abs(b1.appel.width - 20 * 44 / 36) < 1e-6
+    assert (pa[0], pa[3], abs(pa[4] - (44 / 3 - 4)) < 1e-6) == ("BOTTOM", 0, True)
+    lua.execute("GROUPE.raid1.loin = true; ForeverUI.RaidFrame.minuterie.scripts.OnUpdate(ForeverUI.RaidFrame.minuterie, 0.6)")
+    print("   hors de portee : vie %s, nom %s, cible %s, appel %s" % (b1.vie.alpha, b1.nom.alpha, b1.cible[1].alpha, b1.appel.alpha))
+    assert b1.vie.alpha == 0.5 and b1.nom.alpha == 0.5 and b1.cible[1].alpha in (None, 1) and b1.appel.alpha in (None, 1)
+    # le menu : RAID_PLAYER, l'unite et son numero
+    lua.execute("ForeverUI.RaidFrame.ouvrirMenu(ForeverUICompactRaidGroup1UnitButton2)")
+    dd = g.ForeverUICompactRaidFrameDropDown
+    assert (dd.which, dd.unit, dd.name, dd.id) == ("RAID_PLAYER", "raid2", "Bob", 2)
+    # les groupes tasses : 1 et 3 cote a cote, les titres des groupes utilises
+    lua.execute("ForeverUI.RaidFrame.disposer()")
+    t1, t3, t2 = g.ForeverUI.RaidFrame.titres[1], g.ForeverUI.RaidFrame.titres[3], g.ForeverUI.RaidFrame.titres[2]
+    h3 = g.ForeverUICompactRaidGroup3
+    print("   groupes : titre 1 a %s \"%s\", titre 3 a %s, en-tete 3 a (%s, %s), groupe 2 %s, largeur %s" % (pts(t1)[3],
+        t1.texte.text, pts(t3)[3], pts(h3)[3], pts(h3)[4], t2.shown, rc.width))
+    assert pts(t1)[3] == 0 and pts(t3)[3] == 98 and (pts(h3)[3], pts(h3)[4]) == (98, -14) and pts(g.ForeverUICompactRaidGroup2)[3] == 196
+    assert t1.shown and t3.shown and not t2.shown and t1.texte.text == "Group 1" and rc.width == 196
+    # en combat, rien ne bouge : c'est pour la sortie du combat
+    lua.execute("STATE.inLockdown = true; RAID_MEMBRES[4] = { 'Dan', 0, 2, 80, 'Mage', 'MAGE', 'Naxx', 1, nil }; ForeverUI.RaidFrame.disposer()")
+    assert pts(g.ForeverUICompactRaidGroup2)[3] == 196 and R.aDisposer
+    lua.execute("STATE.inLockdown = false; local v = ForeverUI.RaidFrame.veilleur; v.scripts.OnEvent(v, 'PLAYER_REGEN_ENABLED')")
+    assert pts(g.ForeverUICompactRaidGroup2)[3] == 98 and pts(h3)[3] == 196 and not R.aDisposer
+    # l'addon HD : desactive, ses cadres caches
+    lua.execute("""
+    ADDONS_CHARGES.CompactRaidFrame = true
+    CompactRaidFrameManager = CreateFrame("Frame", "CompactRaidFrameManager", UIParent)
+    CompactRaidFrameContainer = CreateFrame("Frame", "CompactRaidFrameContainer", UIParent)
+    local v = ForeverUI.RaidFrame.veilleur; v.scripts.OnEvent(v, 'PLAYER_ENTERING_WORLD')
+    """)
+    assert g.ADDONS_DESACTIVES.CompactRaidFrame and g.CompactRaidFrameManager.etats.visibility == "hide"
+    assert g.CompactRaidFrameContainer.etats.visibility == "hide"
+    lua.execute("RAID_MEMBRES = {}; GROUPE = {}")
+
+
+    # ------------------------------------------------- LE BOUTON SOCIAL AU TABARD
+    print("\nbouton Social :")
+    sb = g.SocialsMicroButton
+    def atlasDe(t):
+        return [k for k in (t.texture,)] + list(t.texcoord.values())
+    base = g.ForeverUI.AtlasEntry("ui-hud-micromenu-guildcommunities-up-c60-2x")
+    lua.execute("TABARD = nil; ForeverUI.MajTabardSocial()")
+    n0 = sb.GetNormalTexture(sb)
+    print("   sans tabard : %s, embleme %s" % (list(n0.texcoord.values()), sb.GetNormalTexture(sb).vertex))
+    assert list(n0.texcoord.values()) == [base[k] for k in (2, 3, 4, 5)] and not g.ForeverUI.TabardCouleurs is None
+    lua.execute("TABARD = { fond = '05', motif = '29', couleur = '15' }; ForeverUI.MajTabardSocial()")
+    tc = g.ForeverUI.TabardCouleurs
+    gc = g.ForeverUI.AtlasEntry("ui-hud-micromenu-guildcommunities-guildcolor-up-c60-2x")
+    n1 = sb.GetNormalTexture(sb)
+    h1 = sb.GetHighlightTexture(sb)
+    emb = [r for r in sb.regions.values() if r.texture and "guildemblems_01" in str(r.texture)]
+    e0 = emb[0]
+    pe = list(list(e0.points.values())[-1].values())
+    print("   avec tabard : jeu %s, teinte %s, embleme %sx%s a (%s, %s) teinte %s, rognage %s" % (
+        list(n1.texcoord.values()) == [gc[k] for k in (2, 3, 4, 5)], list(n1.vertex.values()), e0.width, e0.height,
+        pe[3], pe[4], list(e0.vertex.values()), [round(x * 256, 2) for x in e0.texcoord.values()]))
+    f5, c15 = list(tc.fond[5].values()), list(tc.embleme[15].values())
+    assert list(n1.texcoord.values()) == [gc[k] for k in (2, 3, 4, 5)] and list(n1.vertex.values()) == f5
+    assert list(h1.vertex.values()) == f5, "les quatre etats teints (LoadMicroButtonTextures)"
+    assert len(emb) == 2 and all(r.shown for r in emb) and sorted(r.layer for r in emb) == ["HIGHLIGHT", "OVERLAY"]
+    assert (e0.width, e0.height, pe[0], pe[3], pe[4]) == (12, 14, "CENTER", 0, 2) and list(e0.vertex.values()) == c15
+    # le motif 29 : case (29 mod 14, 29 div 14) = (1, 2), rentree de 1/256
+    assert [round(x * 256, 3) for x in e0.texcoord.values()] == [19, 35, 37, 53]
+    # enfonce : (1, 1)
+    lua.execute("SocialsMicroButton:SetButtonState('PUSHED'); UpdateMicroButtons()")
+    pe = list(list(e0.points.values())[-1].values())
+    assert (pe[3], pe[4]) == (1, 1)
+    lua.execute("SocialsMicroButton:SetButtonState('NORMAL'); UpdateMicroButtons()")
+    # la guilde quittee : le jeu de base, sans teinte ni embleme
+    lua.execute("TABARD = nil; ForeverUI.MajTabardSocial()")
+    assert list(n1.texcoord.values()) == [base[k] for k in (2, 3, 4, 5)] and list(n1.vertex.values()) == [1, 1, 1]
+    assert not any(r.shown for r in emb)
+
+
+    # ------------------------------------------------- LA FENETRE DE TABARD
+    print("\nfenetre de tabard :")
+    tf = g.TabardFrame
+    def derniere(f):
+        return list(list(f.points.values())[-1].values())
+    wotlk = [r for r in tf.regions.values() if r.texture and ("UI-Character-General" in str(r.texture) or "UI-ClassTrainer-Bot" in str(r.texture))]
+    print("   taille %sx%s, cadre WotLK visible %d, grand fond %s, croix %s (%s, %s) %s" % (tf.width, tf.height,
+        sum(1 for r in wotlk if r.shown), g.TabardFrameBackground.shown, g.TabardFrameCloseButton.width,
+        derniere(g.TabardFrameCloseButton)[3], derniere(g.TabardFrameCloseButton)[4], g.TabardFrameCloseButton._normal.texture))
+    assert (tf.width, tf.height) == (338, 424) and list(tf.hitRect.values()) == [0, 0, 0, 0]
+    assert len(wotlk) == 4 and not any(r.shown for r in wotlk) and not g.TabardFrameBackground.shown
+    pc = derniere(g.TabardFrameCloseButton)
+    assert (pc[0], pc[2], pc[3], pc[4]) == ("TOPRIGHT", "TOPRIGHT", -2, 1) and g.TabardFrameCloseButton.width == 24
+    assert g.TabardFrameCloseButton._normal.texture == g.ForeverUI.AtlasEntry("redbutton-exit")[1]
+    # les places de camelot
+    places = {
+        "TabardFrameOuterFrameTopLeft": ("TOPLEFT", "TOPLEFT", 8, -63),
+        "TabardFrameGreetingText": ("TOP", "TOP", 15, -28),
+        "TabardModel": ("BOTTOM", "BOTTOM", 0, 38),
+        "TabardCharacterModelRotateLeftButton": ("BOTTOMLEFT", "BOTTOMLEFT", 14, 33),
+        "TabardFrameCustomizationBorder": ("BOTTOMRIGHT", "BOTTOMRIGHT", 26, -28),
+        "TabardFrameMoneyFrame": ("BOTTOMRIGHT", "BOTTOMLEFT", 175, 8),
+        "TabardFrameAcceptButton": ("CENTER", "TOPLEFT", 213, -409),
+        "TabardFrameCancelButton": ("CENTER", "TOPLEFT", 294, -409),
+    }
+    for nom, (p1, p2, x, y) in places.items():
+        pt = derniere(g[nom])
+        assert (pt[0], pt[1].name, pt[2], pt[3], pt[4]) == (p1, "TabardFrame", p2, x, y), nom
+        assert len(g[nom].points) == 1, "une seule ancre : " + nom
+    # l'encadre, l'argent, le bord dore
+    T = g.ForeverUI.TabardFrame
+    pe = [list(p.values()) for p in T.encadre.points.values()]
+    pa = [list(p.values()) for p in T.encadreArgent.points.values()]
+    pb = [list(p.values()) for p in T.bordArgent.points.values()]
+    print("   encadre %s ; argent %s ; bord dore %s" % ([(p[0], p[3], p[4]) for p in pe], [(p[0], p[2], p[3], p[4]) for p in pa],
+        [(p[0], p[2], p[3], p[4]) for p in pb]))
+    assert [(p[0], p[3], p[4]) for p in pe] == [("TOPLEFT", 4, -60), ("BOTTOMRIGHT", -6, 26)]
+    assert [(p[0], p[2], p[3], p[4]) for p in pa] == [("BOTTOMLEFT", "BOTTOMLEFT", 4, 4), ("TOPRIGHT", "BOTTOMLEFT", 170, 25)]
+    assert [(p[0], p[2], p[3], p[4]) for p in pb] == [("TOPRIGHT", "BOTTOMLEFT", 166, 24), ("BOTTOMLEFT", "BOTTOMLEFT", 7, 6)]
+    morceaux = [r for r in T.bordArgent.morceaux.values()]
+    assert len(morceaux) == 3 and all(str(r.texture).endswith("moneyframe") for r in morceaux)
+    # LES COUCHES : encadre et bord dore sont des regions de la fenetre, sous
+    # le cadre du tabard (OVERLAY) ; les reperes n'ont rien a dessiner
+    assert all(lua.eval("rawequal")(r.owner, tf) and r.layer == "ARTWORK" for r in morceaux)
+    assert lua.eval("rawequal")(T.encadre.fond.owner, tf) and T.encadre.fond.layer == "BORDER"
+    assert len(list(T.encadre.regions.values())) == 0 and len(list(T.bordArgent.regions.values())) == 0
+    # a l'ouverture : le portrait dans l'anneau, le nom au-dessus du metal
+    lua.execute("TabardFrameNameText:SetText('Marchand de tabards'); TabardFrame:Show()")
+    pp = derniere(T.portrait)
+    print("   ouverture : portrait %s a (%s, %s), nom \"%s\" a (%s, %s), nom du client %s" % (T.portrait.width, pp[3], pp[4],
+        T.nom.text, derniere(T.nom)[3], derniere(T.nom)[4], g.TabardFrameNameText.shown))
+    assert (T.portrait.width, pp[3], pp[4]) == (60, -5, 7) and T.nom.text == "Marchand de tabards"
+    assert (derniere(T.nom)[0], derniere(T.nom)[3], derniere(T.nom)[4]) == ("CENTER", 6, 202) and not g.TabardFrameNameText.shown
+    # le modele recadre a l'image suivante : SetUnit, puis le tabard en cours
+    assert T.recadrage.shown
+    lua.execute("""
+    APPELS_TABARD = {}
+    TabardModel.SetUnit = function(self, u) table.insert(APPELS_TABARD, "SetUnit " .. u) end
+    TabardModel.InitializeTabardColors = function() table.insert(APPELS_TABARD, "InitializeTabardColors") end
+    TabardFrame_UpdateTextures = function() table.insert(APPELS_TABARD, "UpdateTextures") end
+    TabardFrame_UpdateButtons = function() table.insert(APPELS_TABARD, "UpdateButtons") end
+    local r = ForeverUI.TabardFrame.recadrage; r.scripts.OnUpdate(r, 0.01)
+    """)
+    print("   recadrage : %s" % list(g.APPELS_TABARD.values()))
+    assert list(g.APPELS_TABARD.values()) == ["SetUnit player", "InitializeTabardColors", "UpdateTextures", "UpdateButtons"]
+    assert not T.recadrage.shown, "une seule fois"
+    # /fui tabard : le reglage du cadrage, repose par le rattrapage apres SetUnit
+    lua.execute("""
+    TabardModel.SetPosition = function(self, x, y, z) self.pos = { x, y, z } end
+    TabardModel.GetPosition = function(self) return table.unpack(self.pos or { 0, 0, 0 }) end
+    TabardModel.SetCamera = function(self, n) self.camera = n end
+    ForeverUI.TabardModelTune("position 0 0.5 -0.25")
+    ForeverUI.TabardModelTune("camera 1")
+    TabardModel.pos = { 9, 9, 9 }
+    local r = ForeverUI.TabardFrame.rattrapage; r.scripts.OnUpdate(r, 0.1)
+    """)
+    print("   /fui tabard : position %s camera %s, rattrapage %s" % (list(g.TabardModel.pos.values()), g.TabardModel.camera, T.rattrapage.shown))
+    assert list(g.TabardModel.pos.values()) == [0, 0.5, -0.25] and g.TabardModel.camera == 1 and T.rattrapage.shown
+    lua.execute("TabardFrame:Hide()")
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

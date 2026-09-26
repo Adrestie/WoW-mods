@@ -153,3 +153,26 @@ interface/icons/ability_dualwieldspecialization.blp
 interface/icons/inv_inscription_tradeskill01.blp
 interface/icons/spell_shadow_summonimp.blp
 interface/icons/spell_shadow_animatedead.blp
+
+# LE FOND DES ENCADRES (InsetFrameTemplate de shareduipaneltemplates.xml :
+# UI-Background-Marble, en mosaique) : la liste des champs de bataille et
+# les recompenses du volet droit de l onglet PvP (2026-09-26).
+interface/framegeneral/ui-background-marble.blp
+
+# LE PORTRAIT DE LA FENETRE SOCIAL (camelot/friendsframe.xml : FriendsFrameIcon,
+# 60 x 60 a (-5, 7)). Absent du client 3.3.5.
+interface/friendsframe/battlenet-portrait.blp
+
+# LA LIGNE DE MEMBRE DE GUILDE (communitiesmemberlist.xml :
+# CommunitiesMemberListEntryTemplate, NormalTexture de GuildFrame, TexCoords
+# 0.36230469-0.38183594 / 0.95898438-0.99804688). Absent du client 3.3.5.
+interface/guildframe/guildframe.blp
+
+# LE BOUTON SOCIAL AU TABARD DE GUILDE (2026-09-26) : la planche des petits
+# emblemes de camelot (SetSmallGuildTabardTextures : 256 x 256, cases de 18,
+# 14 par ligne, icone de 16 decalee de 1), teintee de la couleur de l'embleme.
+interface/guildframe/guildemblems_01.blp
+
+# LA FENETRE DE TABARD (2026-09-26) : le bord dore de l'argent
+# (ThinGoldEdgeTemplate, uipaneltemplates.xml). Absent du client 3.3.5.
+interface/common/moneyframe.blp
