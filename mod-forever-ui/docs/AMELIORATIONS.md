@@ -15,3 +15,6 @@ chacun est dans `NOTES.md` ; ici, la demande telle qu'elle a été faite.
 - **Le menu de quête à du mal à se fermer en cliquant sur le micro bouton**
 - **Le decorateur de catégorie du journal de quête est mal 9-slicer**
 - **Cocher / Décocher une quête du journal de quête n'actualise pas le visuel du toggle**
+- **pouvoir zoomer dans la map avec la molette (juste scale de la map)**
+- **si la map est zoomée, pouvoir pan avec un drag & drop**
+- **utiliser la molette sur la minimap doit avoir le même effet qu'utiliser les boutons "+" et "-"**
