@@ -330,6 +330,9 @@ local function largeurOnglet(b)
 	return math.max(cotes, texte + G.ongletMarge)
 end
 
+-- les onglets du bas, pour les autres fenetres (le navigateur de raid)
+S.creerOnglet, S.choisirOnglet, S.largeurOnglet = creerOnglet, choisirOnglet, largeurOnglet
+
 -- ------------------------------------------------------------------ la liste
 
 local LIGNE = {}                        -- les lignes creees, reutilisees

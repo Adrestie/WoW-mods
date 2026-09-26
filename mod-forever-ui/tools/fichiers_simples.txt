@@ -185,3 +185,9 @@ interface/pvpframe/pvpmegaqueue.blp
 # l'icone de l'onglet lateral des donjons (LFGParentFrame.ListingTab :
 # Interface\ICONS\INV_Helmet_08), cuite par tools/cuire_masque.py
 interface/icons/inv_helmet_08.blp
+# le navigateur de raid (etape 2) : l'icone de son onglet lateral
+# (BrowsingTab de camelot : Achievement_General_StayClassy), cuite par
+# tools/cuire_masque.py, et l'icone du bouton de rafraichissement
+# (RefreshButton de blizzard_lfgvanilla_browse.xml)
+interface/icons/achievement_general_stayclassy.blp
+interface/buttons/ui-refreshbutton.blp
