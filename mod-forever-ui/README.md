@@ -36,9 +36,12 @@ nothing else is allowed to disturb.
 | Chat | -- | not started |
 | Tooltips | -- | not started |
 | Buffs and debuffs | -- | not started |
-| Party and raid frames | -- | not started |
+| Party and raid frames | The party frames beside the screen edge, and the compact raid frames in groups. | party frames done, raid frames waiting to be accepted |
 | Spellbook | The book on one page or two, a category per tab, the spells in a grid under the category's name, passives round, similar spells grouped on flyouts, the settings menu, and the search with its preview. Pages, categories, flyouts, the size and the settings all work in combat. | done |
-| Talents | -- | not started |
+| Talents | The talent trees, the specializations, the pet's talents, the glyphs and the search. | done |
+| Social | Contacts (friends and ignored), who, guild, chat channels and raid, in one window with its bottom tabs; the micro button wears the guild tabard. | done |
+| Guild tabard | The window where a guild designs its tabard, the character standing in it. | done |
+| Group finder | The dungeon finder and the raid browser in one movable window with side tabs. Dungeons: roles, the dungeon types as buttons with the chosen one's description and rewards below, the specific dungeons list. Raids: a bottom tab to list the group -- the raids under folding categories like the character sheet's, and a comment -- and one to join, a raid's players and groups with their tooltip. | done |
 | Character select and creation | -- | not started |
 
 Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
@@ -58,6 +61,8 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
                               regenerates the atlas table
     tools/cuire_masque.py     bakes a mask into an icon's alpha, for the cuts
                               3.3.5 cannot make on screen
+    tools/decouper_elements.py  cuts elements out of sheets too wide for 3.3.5,
+                              each at its own size
 
 ## Working on it
 

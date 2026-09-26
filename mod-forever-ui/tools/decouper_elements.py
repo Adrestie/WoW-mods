@@ -60,7 +60,14 @@ ELEMENTS = {
         "groupfinder-background", "groupfinder-button-cover",
         "groupfinder-button-dungeons", "groupfinder-button-custom-pve",
         "groupfinder-button-questing", "groupfinder-button-raids-warlords",
-    ],
+        # le navigateur de raid (etape 2) : selection et survol des lignes,
+        # roles, attente, classes de WotLK
+        "groupfinder-highlightbar-blue", "groupfinder-highlightbar-yellow",
+        "groupfinder-icon-role-micro-tank", "groupfinder-icon-role-micro-heal",
+        "groupfinder-icon-role-micro-dps", "groupfinder-waitdot",
+    ] + ["groupfinder-icon-class-" + c for c in (
+        "deathknight", "druid", "hunter", "mage", "paladin",
+        "priest", "rogue", "shaman", "warlock", "warrior")],
     "interface/hud/uigroupfinderflipbook.blp": ["groupfinder-eye-frame"],
     "interface/shop/catalogshop.blp": ["shop-list-rule"],
 }

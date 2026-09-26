@@ -3994,9 +3994,11 @@ do
         local f = creer(kind, name, parent, template)
         if kind == "CheckButton" and f.checked == nil then f.checked = false end
         function f:SetDisabledCheckedTexture(v)
-            if not self._disabledChecked then self._disabledChecked = { } end
+            if not self._disabledChecked then self._disabledChecked = self:CreateTexture() end
             self._disabledChecked.texture = v
+            return self._disabledChecked
         end
+        function f:GetDisabledCheckedTexture() return self._disabledChecked end
         return f
     end
     GameTooltip.SetLFGDungeonReward = function(self, t, i) self.recompense = { t, i } end
@@ -4281,6 +4283,203 @@ do
         if GetLFGMode() == "listed" then LFDQueueFrameNoLFDWhileLFR:Show() else LFDQueueFrameNoLFDWhileLFR:Hide() end
     end
 end
+-- LE NAVIGATEUR DE RAID DU CLIENT 3.3.5 (LFRFrame.xml/.lua) : le panneau,
+-- ses deux contenus, ses roles, sa liste, son commentaire, son parcours ; les
+-- fonctions que GroupFinderRaid.lua appelle, reprises du client.
+do
+    LOOKING_FOR_RAID = "Raid Browser"
+    CHOOSE_RAID = "Choose Raid"
+    BROWSE = "Browse"
+    ACCEPT_COMMENT = "Set Comment"
+    LIST_ME = "List My Name"
+    LIST_MY_GROUP = "List My Group"
+    JOIN = "Join"
+    UNLIST_ME = "Unlist Me"
+    LEAVE_QUEUE = "Leave Queue"
+    SEND_MESSAGE = SEND_MESSAGE or "Send Message"
+    INVITE = "Invite"
+    REFRESH = "Refresh"
+    NONE = NONE or "None"
+    TYPE_LFR_COMMENT_HERE = "Type a comment here"
+    NO_RAIDS_AVAILABLE = "No raids available"
+    LFG_TOOLTIP_ROLES = "Roles:"
+    LEVEL_ABBR = "Lvl"
+    SHOW_LFD_LEVEL = 15
+    GRAY_FONT_COLOR = GRAY_FONT_COLOR or { r = 0.5, g = 0.5, b = 0.5 }
+    NORMAL_FONT_COLOR = NORMAL_FONT_COLOR or { r = 1, g = 0.82, b = 0 }
+    LFR_EMPOWERED = true
+    function LFR_IsEmpowered() return LFR_EMPOWERED end
+    function LFR_CanQueueForMultiple() return GetNumPartyMembers() == 0 and GetNumRaidMembers() == 0 end
+    function LFR_CanQueueForLockedInstances() return GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 end
+    COMMENTAIRE_LFG = nil
+    function SetLFGComment(t) COMMENTAIRE_LFG = t end
+
+    LFRParentFrame = CreateFrame("Frame", "LFRParentFrame", UIParent)
+    LFRParentFrame:SetWidth(355); LFRParentFrame:SetHeight(440)
+    LFRParentFrame:EnableMouse(true)
+    LFRParentFrame:Hide()
+    UIPanelWindows["LFRParentFrame"] = { area = "left", pushable = 1, whileDead = 1 }
+    LFRParentFrameIcon = LFRParentFrame:CreateTexture("LFRParentFrameIcon", "BACKGROUND")
+    LFR_CROIX = CreateFrame("Button", nil, LFRParentFrame)
+    CreateFrame("Button", "LFRParentFrameTab1", LFRParentFrame)
+    CreateFrame("Button", "LFRParentFrameTab2", LFRParentFrame)
+    LFRQueueFrame = CreateFrame("Frame", "LFRQueueFrame", LFRParentFrame)
+    LFRQueueFrame:SetAllPoints(LFRParentFrame)
+    LFRBrowseFrame = CreateFrame("Frame", "LFRBrowseFrame", LFRParentFrame)
+    LFRBrowseFrame:SetAllPoints(LFRParentFrame)
+    LFRBrowseFrame:Hide()
+    function LFRFrame_SetActiveTab(tab)
+        LFRParentFrame.activeTab = tab
+        if tab == 1 then LFRQueueFrame:Show(); LFRBrowseFrame:Hide() else LFRBrowseFrame:Show(); LFRQueueFrame:Hide() end
+    end
+    LFRParentFrame.activeTab = 1
+
+    -- les roles, comme ceux des donjons (sans chef)
+    for _, n in ipairs({ { "Tank", 2 }, { "Healer", 3 }, { "DPS", 1 } }) do
+        local b = CreateFrame("Button", "LFRQueueFrameRoleButton" .. n[1], LFRQueueFrame)
+        b:SetID(n[2])
+        b.cover = b:CreateTexture(nil, "OVERLAY")
+        b.cover:Hide()
+        b.background = b:CreateTexture(nil, "BACKGROUND")
+        b.checkButton = CreateFrame("CheckButton", nil, b)
+        b.checkButton:SetScript("OnClick", function(self)
+            local l = GetLFGRoles()
+            SetLFGRoles(l, LFRQueueFrameRoleButtonTank.checkButton:GetChecked(),
+                LFRQueueFrameRoleButtonHealer.checkButton:GetChecked(), LFRQueueFrameRoleButtonDPS.checkButton:GetChecked())
+        end)
+    end
+
+    -- la liste des raids
+    LFRRaidList, LFRHiddenByCollapseList = {}, {}
+    LFR_ORDRE = {}
+    LFR_MAJ = 0
+    function LFRQueueFrameSpecificList_Update()
+        LFR_MAJ = LFR_MAJ + 1
+        if LFRRaidList[1] then LFRQueueFrameSpecificNoRaidsAvailable:Hide() else LFRQueueFrameSpecificNoRaidsAvailable:Show() end
+    end
+    function LFRQueueFrame_Update()
+        for k in pairs(LFRRaidList) do LFRRaidList[k] = nil end
+        for _, id in ipairs(LFR_ORDRE) do
+            local info = LFGDungeonInfo[id]
+            if id < 0 or not (info and LFGCollapseList[info[9]]) then table.insert(LFRRaidList, id) end
+        end
+        LFRQueueFrameSpecificList_Update()
+    end
+    function LFRList_SetRaidEnabled(id, v) LFGEnabledList[id] = not not v end
+    function LFRQueueFrameDungeonChoiceEnableButton_OnClick(self, button)
+        local dungeonID = self:GetParent().id
+        local isChecked = self:GetChecked()
+        if LFGIsIDHeader(dungeonID) then
+            LFGEnabledList[dungeonID] = not not isChecked
+        elseif LFR_CanQueueForMultiple() then
+            LFRList_SetRaidEnabled(dungeonID, isChecked)
+        else
+            LFRQueueFrame.selectedLFM = dungeonID
+        end
+        LFRQueueFrameSpecificList_Update()
+    end
+    function LFRList_SetHeaderCollapsed(h, v)
+        LFGCollapseList[h] = v
+        LFRQueueFrame_Update()
+    end
+    function LFRQueueFrameExpandOrCollapseButton_OnClick(self)
+        LFGCollapseList[self:GetParent().id] = not self:GetParent().isCollapsed
+        LFRQueueFrame_Update()
+    end
+    LFRQueueFrameSpecificNoRaidsAvailable = LFRQueueFrame:CreateFontString("LFRQueueFrameSpecificNoRaidsAvailable", "ARTWORK", "GameFontNormal")
+    LFRQueueFrameComment = CreateFrame("EditBox", "LFRQueueFrameComment", LFRQueueFrame)
+    LFRQueueFrameCommentExplanation = LFRQueueFrame:CreateFontString("LFRQueueFrameCommentExplanation", "ARTWORK", "GameFontNormal")
+    LFR_INSCRIPTIONS = 0
+    LFRQueueFrameFindGroupButton = CreateFrame("Button", "LFRQueueFrameFindGroupButton", LFRQueueFrame)
+    LFRQueueFrameFindGroupButton:SetText("List My Name")
+    LFRQueueFrameFindGroupButton:SetScript("OnClick", function()
+        LFR_INSCRIPTIONS = LFR_INSCRIPTIONS + 1
+        LFR_COMMENTAIRE_JOIN = LFRQueueFrameComment:GetText()
+    end)
+    LFRQueueFrameAcceptCommentButton = CreateFrame("Button", "LFRQueueFrameAcceptCommentButton", LFRQueueFrame)
+    LFRQueueFrameAcceptCommentButton:SetText("Set Comment")
+    function LFRQueueFrameFindGroupButton_Update()
+        if GetLFGMode() == "listed" then LFRQueueFrameFindGroupButton:SetText("Unlist Me") else LFRQueueFrameFindGroupButton:SetText("List My Name") end
+    end
+    LFRQueueFrameNoLFRWhileLFD = CreateFrame("Frame", "LFRQueueFrameNoLFRWhileLFD", LFRQueueFrame)
+    LFRQueueFrameNoLFRWhileLFD:CreateFontString("LFRQueueFrameNoLFRWhileLFDDescription", "ARTWORK", "GameFontNormal")
+    CreateFrame("Button", "LFRQueueFrameNoLFRWhileLFDLeaveQueueButton", LFRQueueFrameNoLFRWhileLFD)
+    LFRQueueFrameNoLFRWhileLFD:Hide()
+
+    -- le parcours : RESULTATS[i] = { nom, niveau, zone, classe, commentaire,
+    -- membres, statut, jeton, boss, tues, chef, tank, soin, degats }
+    RESULTATS = {}
+    function SearchLFGGetNumResults() return #RESULTATS, #RESULTATS end
+    function SearchLFGGetResults(i) return (table.unpack or unpack)(RESULTATS[i], 1, 14) end
+    LFRBrowseFrameRaidDropDown = CreateFrame("Frame", "LFRBrowseFrameRaidDropDown", LFRBrowseFrame)
+    LFRBrowseFrameRaidDropDownText = LFRBrowseFrameRaidDropDown:CreateFontString("LFRBrowseFrameRaidDropDownText", "ARTWORK", "GameFontNormal")
+    LFRBrowseFrameRaidDropDownText:SetText("None")
+    LFR_RAFRAICHIS = 0
+    LFRBrowseFrameRefreshButton = CreateFrame("Button", "LFRBrowseFrameRefreshButton", LFRBrowseFrame)
+    LFRBrowseFrameRefreshButton:SetScript("OnClick", function() LFR_RAFRAICHIS = LFR_RAFRAICHIS + 1 end)
+    LFRBrowseFrameSendMessageButton = CreateFrame("Button", "LFRBrowseFrameSendMessageButton", LFRBrowseFrame)
+    LFRBrowseFrameSendMessageButton:SetText("Send Message")
+    LFRBrowseFrameInviteButton = CreateFrame("Button", "LFRBrowseFrameInviteButton", LFRBrowseFrame)
+    LFRBrowseFrameInviteButton:SetText("Invite")
+    function LFRBrowseFrameList_Update() end
+    -- LFRFrame.lua, mot pour mot (sans les boutons de liste du client)
+    function LFRBrowseButton_OnClick(self)
+        if LFRBrowseFrame.selectedName == self.unitName then
+            LFRBrowseFrame.selectedName = nil
+            LFRBrowseFrame.selectedType = nil
+            self:UnlockHighlight()
+        else
+            LFRBrowseFrame.selectedName = self.unitName
+            LFRBrowseFrame.selectedType = self.type
+            self:LockHighlight()
+        end
+        LFRBrowse_UpdateButtonStates()
+    end
+    function LFRBrowse_UpdateButtonStates()
+        local playerName = UnitName("player")
+        local selectedName = LFRBrowseFrame.selectedName
+        if selectedName and selectedName ~= playerName then LFRBrowseFrameSendMessageButton:Enable() else LFRBrowseFrameSendMessageButton:Disable() end
+        if selectedName and selectedName ~= playerName and LFRBrowseFrame.selectedType ~= "party" then
+            LFRBrowseFrameInviteButton:Enable()
+        else
+            LFRBrowseFrameInviteButton:Disable()
+        end
+    end
+    function LFRBrowseButton_OnEnter(self)
+        local name = SearchLFGGetResults(self.index)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 27, -37)
+        GameTooltip:AddLine(name)
+        GameTooltip:Show()
+    end
+    MENUS_OUVERTS = {}
+    ToggleDropDownMenu = function(niveau, valeur, menu, ancre) table.insert(MENUS_OUVERTS, { niveau, menu, ancre }) end
+    -- LE SERVEUR : une recherche par joueur ; SearchLFGJoin met ses inscrits a
+    -- disposition (l'evenement UPDATE_LFG_LIST, lui, est tire par l'essai)
+    SERVEUR_RAIDS = {}
+    RECHERCHES = {}
+    function SearchLFGJoin(t, id) FAUX_RECHERCHE = id; table.insert(RECHERCHES, id); RESULTATS = SERVEUR_RAIDS[id] or {} end
+    function SearchLFGLeave() FAUX_RECHERCHE = nil; RESULTATS = {} end
+    function SearchLFGGetJoinedID() return FAUX_RECHERCHE end
+    -- MEMBRES[nom] = { { nom, niveau, lien }, ... } ; BOSS[nom] = { { nom, tue }, ... }
+    MEMBRES, BOSS = {}, {}
+    function SearchLFGGetPartyResults(i, j) local m = MEMBRES[RESULTATS[i][1]][j] return m[1], m[2], m[3] end
+    function SearchLFGGetEncounterResults(i, j) local b = BOSS[RESULTATS[i][1]][j] return b[1], "", b[2] end
+    function CanGroupInvite() return true end
+    RAIDS_COMPLETS = { { -10 }, { [-10] = { 30, 31 } } }
+    function GetFullRaidList() return RAIDS_COMPLETS[1], RAIDS_COMPLETS[2] end
+    GameTooltip.AddTexture = function(self, t) self.textures = self.textures or {}; table.insert(self.textures, t) end
+    GameTooltip.AddDoubleLine = function(self, a, b) self.lignes = self.lignes or {}; table.insert(self.lignes, a .. " | " .. b) end
+    LFM_NUM_RAID_MEMBER_TEMPLATE = "%d members in raid group"
+    FRIENDS_LEVEL_TEMPLATE = "Level %d %s"
+    BOSSES = "Bosses:"
+    BOSS_DEAD = "Defeated"
+    BOSS_ALIVE = "Alive"
+    ALL_BOSSES_ALIVE = "All bosses alive"
+    FRIEND = "Friend"
+    IGNORED = IGNORED or "Ignored"
+    IMPORTANT_PEOPLE_IN_GROUP = "Players in Group:"
+    TANK, HEALER, DAMAGER = TANK or "Tank", HEALER or "Healer", DAMAGER or "Damage"
+end
 """
 
 
@@ -4297,7 +4496,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -11686,6 +11885,251 @@ def main():
     lua.execute("LFG_MODE = 'queued'; ShowUIPanel(LFDParentFrame)")
     assert F.vue == "liste"
     lua.execute("LFG_MODE = nil; HideUIPanel(LFDParentFrame)")
+
+
+    # ------------------------------------------------- LE NAVIGATEUR DE RAID
+    print("\nnavigateur de raid :")
+    R = g.ForeverUI.GroupFinderRaid
+    ongl = F.onglets
+    o2 = ongl[2]
+    print("   onglets : %s" % [(o.cle, o.icone.texture.split(chr(92))[-1]) for o in ongl.values()])
+    assert [o.cle for o in ongl.values()] == ["donjons", "raid"]
+    assert o2.icone.texture.endswith("achievement_general_stayclassy")
+    o2.scripts.OnEnter(o2)
+    assert g.GameTooltip.text == "Raid Browser"
+    # l'onglet ouvre le panneau du client, notre fenetre le suit ; les deux
+    # contenus du client restent affiches ensemble
+    o2.scripts.OnClick(o2)
+    image()
+    print("   page : parent %s, page %s, contenus %s/%s alpha %s/%s, icone %s, onglets du client %s, souris %s" % (
+        fc.parent.name, R.page.shown, g.LFRQueueFrame.shown, g.LFRBrowseFrame.shown,
+        g.LFRQueueFrame.alpha, g.LFRBrowseFrame.alpha, g.LFRParentFrameIcon.shown, g.LFRParentFrameTab1.shown,
+        g.LFRParentFrame.mouseEnabled))
+    assert g.LFRParentFrame.shown and fc.shown and fc.parent.name == "LFRParentFrame"
+    assert R.page.shown and not F.pageDonjons.shown and o2.choisi.shown and not ongl[1].choisi.shown
+    assert g.LFRQueueFrame.shown is not False and g.LFRBrowseFrame.shown is not False
+    assert g.LFRQueueFrame.alpha == 0 and g.LFRBrowseFrame.alpha == 0
+    assert not g.LFRParentFrameIcon.shown and not g.LFRParentFrameTab1.shown and not g.LFR_CROIX.shown
+    assert g.LFRParentFrame.mouseEnabled is False
+    # les deux onglets du bas : ceux de Social, sous la fenetre
+    b1, b2 = R.onglets[1], R.onglets[2]
+    print("   onglets du bas : %r %r, panneau %s" % (b1.GetText(b1), b2.GetText(b2), R.panneau))
+    assert b1.GetText(b1) == "List My Group" and b2.GetText(b2) == "Join"
+    p1 = list(list(b1.points.values())[0].values())
+    assert (p1[0], p1[2], p1[3], p1[4]) == ("TOPLEFT", "BOTTOMLEFT", 5, 2) and derniere(b2)[2] == "TOPRIGHT"
+    assert R.panneau == 1 and R.inscription.shown and not R.parcours.shown and b1.art.actifM.shown and not b2.art.actifM.shown
+    # "Join" : l'onglet du client, puis notre panneau ; le client remontre
+    # l'autre contenu
+    b2.scripts.OnClick(b2)
+    assert g.LFRParentFrame.activeTab == 2 and R.panneau == 2 and R.parcours.shown and not R.inscription.shown
+    assert g.LFRQueueFrame.shown is not False and b2.art.actifM.shown
+    b1.scripts.OnClick(b1)
+    assert R.panneau == 1 and R.inscription.shown
+    # la liste des raids, a categories : l'en-tete de la feuille de personnage
+    lua.execute("""
+    LFGDungeonInfo[-10] = { "Lich King Raid", 0, 0, 0, 0, 0, 0, 2, 0 }
+    LFGDungeonInfo[30] = { "Naxxramas", 2, 80, 80, 80, 80, 80, 2, -10, "", 0, 10 }
+    LFGDungeonInfo[31] = { "Ulduar", 2, 80, 80, 80, 80, 80, 2, -10, "", 0, 25 }
+    LFR_ORDRE = { -10, 30, 31 }
+    LFRQueueFrame_Update()
+    """)
+    image()
+    Z = R.liste
+    E, N = Z.entetes, Z.entrees
+    e1 = E[1]
+    pe = list(list(e1.points.values())[0].values())
+    pn1 = list(list(N[1].points.values())[0].values())
+    pn2 = list(list(N[2].points.values())[0].values())
+    print("   categorie : %r a %s (%s de haut), fleche %s ; raids %r a %s, %r a %s" % (
+        e1.nom.text, pe[4], e1.height, e1.fleche.texture, N[1].nom.text, pn1[3:], N[2].nom.text, pn2[3:]))
+    assert e1.nom.text == "Lich King Raid" and e1.height == 26 and pe[4] == -4
+    def coords(t):
+        return [round(v, 5) for v in list(t.texcoord.values())[:4]]
+    def atlas(n):
+        e = g.ForeverUI.AtlasEntry(n)
+        return [round(e[k], 5) for k in (2, 3, 4, 5)]
+    assert e1.fleche.texture == g.ForeverUI.AtlasEntry("common-button-list-minus")[1]
+    assert coords(e1.fleche) == atlas("common-button-list-minus")
+    assert (N[1].nom.text, pn1[3], pn1[4]) == ("Naxxramas", 2, -(4 + 26 + 3))
+    assert (N[2].nom.text, pn2[4]) == ("Ulduar", -(4 + 26 + 3 + 22 + 3))
+    # la case de camelot : checkbox-minimal, 20 x 20
+    assert N[1].case._normal.texture == g.ForeverUI.AtlasEntry("checkbox-minimal")[1] and N[1].case.width == 20
+    assert N[1].case._checked.texture == g.ForeverUI.AtlasEntry("checkmark-minimal")[1]
+    assert not R.aucun.shown and not Z.barre.shown
+    # le rectangle de la feuille : 0 au repos, 0,10 au survol, 0,20 coche
+    lua.execute("local Z = ForeverUI.GroupFinderRaid.liste; Z.scripts.OnUpdate(Z, 0.01)")
+    assert N[1].survol.alpha == 0 and N[1].survol.GetAlpha(N[1].survol) == 0
+    N[2].souris = True
+    lua.execute("local Z = ForeverUI.GroupFinderRaid.liste; Z.scripts.OnUpdate(Z, 0.01)")
+    assert N[2].survol.alpha == 0.10
+    N[2].souris = False
+    N[1].case.Click(N[1].case)
+    image()
+    assert g.LFGEnabledList[30] is True and N[1].case.checked
+    lua.execute("local Z = ForeverUI.GroupFinderRaid.liste; Z.scripts.OnUpdate(Z, 0.01)")
+    print("   rectangle : coche %s, survole puis quitte %s" % (N[1].survol.alpha, N[2].survol.alpha))
+    assert N[1].survol.alpha == 0.20 and N[2].survol.alpha == 0
+    e = g.ForeverUI.AtlasEntry("charactercreate-customize-dropdown-linemouseover-middle")
+    assert e is not None
+    # replier la categorie : le client, puis la liste n'a plus que l'en-tete
+    e1.scripts.OnClick(e1)
+    image()
+    print("   repliee : fleche %s, raids affiches %d" % (e1.fleche.texture, sum(1 for l in N.values() if l.shown)))
+    assert g.LFGCollapseList[-10] is True and coords(e1.fleche) == atlas("common-button-list-plus")
+    assert sum(1 for l in N.values() if l.shown) == 0
+    e1.scripts.OnClick(e1)
+    image()
+    assert sum(1 for l in N.values() if l.shown) == 2
+    # en groupe : un bouton rond, un seul raid
+    lua.execute("RAID_SAUVE = RAID_MEMBRES; RAID_MEMBRES = { { nom = 'Autre' } }")
+    F.maj()
+    # en groupe, le rond de camelot : common-radiobutton-circle / -dot, 16
+    assert N[2].case._normal.texture == g.ForeverUI.AtlasEntry("common-radiobutton-circle")[1] and N[2].case._normal.width == 16
+    assert N[2].case._checked.texture == g.ForeverUI.AtlasEntry("common-radiobutton-dot")[1]
+    N[2].case.Click(N[2].case)
+    image()
+    assert g.LFRQueueFrame.selectedLFM == 31 and N[2].case.checked and not N[1].case.checked
+    lua.execute("RAID_MEMBRES = RAID_SAUVE")
+    F.maj()
+    assert N[2].case._normal.texture == g.ForeverUI.AtlasEntry("checkbox-minimal")[1]
+    # une longue liste : la barre, et la molette qui avance d'une ligne
+    lua.execute("""
+    LFR_ORDRE = { -10 }
+    for i = 1, 20 do LFGDungeonInfo[100 + i] = { "Raid " .. i, 2, 80, 80, 80, 80, 80, 2, -10 }; table.insert(LFR_ORDRE, 100 + i) end
+    LFRQueueFrame_Update()
+    """)
+    image()
+    print("   longue liste : barre %s, decalage max %s" % (Z.barre.shown, Z.maxi))
+    assert Z.barre.shown and Z.maxi > 0 and Z.avecBarre
+    Z.scripts.OnMouseWheel(Z, -1)
+    assert Z.decalage == 1 and N[1].nom.text == "Raid 1"
+    lua.execute("LFR_ORDRE = { -10, 30, 31 }; LFRQueueFrame_Update()")
+    image()
+    assert not Z.barre.shown and Z.decalage == 0
+    # les roles : ceux du panneau de raid
+    rr = {getattr(r, "def").cle: r for r in R.roles.values()}
+    assert sorted(rr) == ["degats", "soin", "tank"]
+    rr["soin"].case.scripts.OnClick(rr["soin"].case)
+    assert g.LFRQueueFrameRoleButtonHealer.checkButton.checked and g.ROLES_LFG[3] is True
+    # le commentaire et les boutons de camelot, en bas de la fenetre
+    assert derniere(R.commentaire)[4] == 59 and R.inscrire.height == 28 and derniere(R.inscrire)[3:] == [-4, 6]
+    e = R.saisie
+    e.scripts.OnEditFocusGained(e)
+    assert not e.consigne.shown
+    lua.execute("local e = ForeverUI.GroupFinderRaid.saisie; e:SetText('Cherche soigneur'); e.scripts.OnTextChanged(e)")
+    assert g.LFRQueueFrameComment.GetText(g.LFRQueueFrameComment) == "Cherche soigneur"
+    e.scripts.OnEditFocusLost(e)
+    assert g.COMMENTAIRE_LFG == "Cherche soigneur"
+    R.inscrire.scripts.OnClick(R.inscrire)
+    print("   commentaire : envoye %r, lu a l'inscription %r" % (g.COMMENTAIRE_LFG, g.LFR_COMMENTAIRE_JOIN))
+    assert g.LFR_INSCRIPTIONS == 1 and g.LFR_COMMENTAIRE_JOIN == "Cherche soigneur"
+    # sans raid : "aucun raid", et le champ refuse le focus
+    lua.execute("LFR_ORDRE = {}; LFRQueueFrame_Update()")
+    image()
+    lua.execute("local e = ForeverUI.GroupFinderRaid.saisie; e.focused = true; e.scripts.OnEditFocusGained(e)")
+    assert R.aucun.shown and not e.focused
+    # le voile de WotLK
+    lua.execute("LFRQueueFrameNoLFRWhileLFD:Show()")
+    F.demander()
+    image()
+    assert R.voile.shown
+    lua.execute("LFRQueueFrameNoLFRWhileLFD:Hide()")
+    # "Join" : le parcours
+    b2.scripts.OnClick(b2)
+    lua.execute("""
+    SERVEUR_RAIDS[30] = {
+        { "Arthas", 80, "Dalaran", "Death Knight", "", 0, nil, "DEATHKNIGHT", 0, 0, false, true, false, true },
+        { "Papota", 80, "Orgrimmar", "Warrior", "", 0, nil, "WARRIOR", 0, 0, false, false, false, true },
+        { "Jaina", 80, "Dalaran", "Mage", "Groupe ICC", 2, nil, "MAGE", 2, 1, true, false, false, false },
+    }
+    MEMBRES["Jaina"] = { { "Thrall", 80, "friend" }, { "Garrosh", 80, nil } }
+    BOSS["Jaina"] = { { "Flame Leviathan", true }, { "Ignis", false } }
+    """)
+    def evenement():
+        for fr in g.FRAMES.values():
+            if fr.events and fr.events["UPDATE_LFG_LIST"] and fr.scripts.OnEvent:
+                fr.scripts.OnEvent(fr, "UPDATE_LFG_LIST")
+    # notre menu, celui de WotLK : "None", les categories en sous-menus (pas
+    # de choix), leurs raids au second niveau
+    R.menu.scripts.OnClick(R.menu)
+    dm = list(list(g.MENUS_OUVERTS.values())[-1].values())
+    assert dm[0] == 1 and dm[1].name == "ForeverUIGroupFinderRaidMenu" and lua.eval("rawequal")(dm[2], R.menu)
+    assert R.menuListe.displayMode == "MENU" and R.menuListe.foreverMinimum == 300
+    lua.execute("MENU_ENTREES = {}; local m = ForeverUI.GroupFinderRaid.menuListe; m.initialize(m, 1)")
+    n1 = [(e.text, e.hasArrow, e.func is not None) for e in g.MENU_ENTREES.values()]
+    lua.execute("MENU_ENTREES = {}; UIDROPDOWNMENU_MENU_VALUE = -10; local m = ForeverUI.GroupFinderRaid.menuListe; m.initialize(m, 2)")
+    n2 = [e.text for e in g.MENU_ENTREES.values()]
+    print("   menu : niveau 1 %s ; niveau 2 %s" % (n1, n2))
+    assert n1 == [("None", None, True), ("Lich King Raid", True, False)] and n2 == ["(10) Naxxramas", "(25) Ulduar"]
+    lua.execute("MENU_ENTREES = {}; local m = ForeverUI.GroupFinderRaid.menuListe; m.initialize(m, 1)")
+    assert all(e.notCheckable for e in g.MENU_ENTREES.values()), "le premier niveau n'a pas de cases"
+    lua.execute("MENU_ENTREES = {}; UIDROPDOWNMENU_MENU_VALUE = -10; local m = ForeverUI.GroupFinderRaid.menuListe; m.initialize(m, 2)")
+    assert not any(e.notCheckable for e in g.MENU_ENTREES.values()), "les raids gardent la leur"
+    # un raid : sa recherche, la reponse du serveur relevee
+    lua.execute("MENU_ENTREES[1].func()")
+    assert list(g.RECHERCHES.values())[-1] == 30
+    evenement()
+    image()
+    RS = R.resultats.lignes
+    def res(l):
+        return (l.nom.text, l.niveau.text if l.niveau.shown else None, l.classe.shown, l.chef.shown,
+                sum(1 for t in l.iconesRole.values() if t.shown), l.nombre.text if l.nombre.shown else None, l.bas.text)
+    print("   un raid : menu %r, inscrits %s" % (R.menu.texte.text, [res(RS[i]) for i in (1, 2, 3)]))
+    assert R.menu.texte.text == "(10) Naxxramas"
+    assert res(RS[1]) == ("Arthas", "Lvl 80", True, False, 2, None, "Dalaran")
+    assert res(RS[3]) == ("Jaina", None, False, True, 0, 2, "Groupe ICC")
+    assert RS[1].classe.texture == g.ForeverUI.AtlasEntry("groupfinder-icon-class-deathknight")[1]
+    assert list(RS[2].nom.textColor.values())[:3] == [0.3, 0.3, 0.3] and RS[2].moi
+    assert derniere(RS[3].nom)[3:] == [32, -9] and derniere(RS[1].nom)[3:] == [9, -9]
+    # l'infobulle, sur les donnees relevees
+    RS[3].scripts.OnEnter(RS[3])
+    ib = list(g.GameTooltip.lignes.values())
+    print("   infobulle : %s" % ib)
+    assert lua.eval("rawequal")(g.GameTooltip.owner, RS[3]) and RS[3].survol.shown
+    assert ib[:3] == ["Raid Browser", "Jaina", "2 members in raid group"]
+    assert "Thrall | Friend" in ib and "Flame Leviathan | Defeated" in ib and "Ignis | Alive" in ib
+    RS[1].scripts.OnEnter(RS[1])
+    assert list(g.GameTooltip.lignes.values())[:2] == ["Arthas", "Level 80 Death Knight"]
+    # la selection, et les boutons du client
+    RS[1].scripts.OnClick(RS[1])
+    image()
+    assert R.choix.nom == "Arthas" and RS[1].choisi.shown and R.message.actif and R.inviter.actif
+    evenement()
+    image()
+    assert R.choix.nom == "Arthas" and RS[1].choisi.shown, "une mise a jour du serveur garde le choix"
+    R.message.scripts.OnClick(R.message)
+    R.inviter.scripts.OnClick(R.inviter)
+    assert list(g.DITS.values())[-1] == "Arthas"
+    RS[3].scripts.OnClick(RS[3])
+    image()
+    assert R.choix.nom == "Jaina" and R.message.actif and not R.inviter.actif, "un groupe ne s'invite pas"
+    RS[2].scripts.OnClick(RS[2])
+    assert R.choix.nom == "Jaina", "sa propre ligne ne se choisit pas"
+    # rafraichir : le bouton du client
+    R.rafraichir.scripts.OnClick(R.rafraichir)
+    assert g.LFR_RAFRAICHIS == 1
+    # "None" : la recherche s'arrete, la liste se vide
+    lua.execute("MENU_ENTREES = {}; local m = ForeverUI.GroupFinderRaid.menuListe; m.initialize(m, 1); MENU_ENTREES[1].func()")
+    image()
+    assert g.FAUX_RECHERCHE is None and R.menu.texte.text == "None" and not RS[1].shown
+    # une recherche d'avant nous (le serveur cherche deja) : le menu la dit
+    lua.execute("SearchLFGJoin(2, 31)")
+    evenement()
+    image()
+    assert R.menu.texte.text == "(25) Ulduar"
+    lua.execute("SearchLFGLeave()")
+    F.maj()
+    # rouvrir : le dernier panneau vu (celui du client)
+    fc.croix.scripts.OnClick(fc.croix)
+    lua.execute("ShowUIPanel(LFRParentFrame)")
+    assert R.panneau == 2 and R.parcours.shown
+    # retour aux donjons : le panneau de raid se ferme, celui des donjons s'ouvre
+    o1.scripts.OnClick(o1)
+    image()
+    print("   donjons : parent %s, raid ouvert %s, donjons ouvert %s" % (fc.parent.name, g.LFRParentFrame.shown, g.LFDParentFrame.shown))
+    assert not g.LFRParentFrame.shown and g.LFDParentFrame.shown and fc.parent.name == "LFDParentFrame"
+    assert F.pageDonjons.shown and not R.page.shown and o1.choisi.shown
+    lua.execute("HideUIPanel(LFDParentFrame)")
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

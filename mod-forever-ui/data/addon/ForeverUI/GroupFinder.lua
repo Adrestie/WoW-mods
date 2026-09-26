@@ -116,6 +116,15 @@
 -- PUIS : filet et details remontes de 5 -- le bas des details passe de 45
 -- a 50 au-dessus du bas de la fenetre.
 -- PUIS : boutons epaissis de 2, a 48 (pas de 48, selection 38 = 48 x 48 / 60).
+--
+-- ETAPE 2 (2026-09-26) : le navigateur de raid, dans GroupFinderRaid.lua. Deux
+-- onglets lateraux (demande de l'utilisateur, apres un premier essai a trois) :
+-- donjons (INV_Helmet_08) et "Raid Browser" (Achievement_General_StayClassy),
+-- une seule page a deux sections retractables. Les deux
+-- panneaux du client restent les portes d'entree : LFDParentFrame pour le
+-- premier onglet, LFRParentFrame pour le second. Notre fenetre -- la notre, pas un cadre du client -- passe de
+-- l'un a l'autre (F.attacher) ; un seul des deux est ouvert a la fois. Les
+-- lignes de liste, le bandeau des roles et l'encadre sont communs aux pages.
 -- PUIS ("encore") : 2 de plus, a 50 (pas de 50, selection 40).
 --
 -- ECARTS SIGNALES : pas de bouton d'options (camelot en a un, rien a y
@@ -296,14 +305,15 @@ local function construireCadre(f)
 	f.titre:SetText(txt("LFG_TITLE"))
 	f.bandeau = bandeau
 
-	-- LA CROIX : elle ferme le panneau du client, comme la sienne
+	-- LA CROIX : elle ferme le panneau du client qui porte la fenetre, comme
+	-- la sienne
 	local croix = CreateFrame("Button", "ForeverUIGroupFinderCloseButton", f)
 	croix:SetWidth(G.croix)
 	croix:SetHeight(G.croix)
 	croix:SetFrameLevel(f:GetFrameLevel() + 22)
 	croix:SetPoint("TOPRIGHT", f, "TOPRIGHT", G.croixX, G.croixY)
 	croixRouge(croix)
-	croix:SetScript("OnClick", function() HideUIPanel(LFDParentFrame) end)
+	croix:SetScript("OnClick", function() HideUIPanel(F.cadre:GetParent()) end)
 	f.croix = croix
 end
 
@@ -312,9 +322,13 @@ end
 -- fond common-sidetab, icone cuite par tools/cuire_masque.py a 50 x 50 en
 -- (-3, 0) rognee de 0,03125, marqueur common-sidetab-selected, survol
 -- common-sidetab-hover.
+local ICONES = "Interface" .. SEP .. "ForeverUI" .. SEP .. "tabicons" .. SEP
 local ONGLETS = {
-	{ cle = "donjons", texte = "LOOKING_FOR_DUNGEON",
-		icone = "Interface" .. SEP .. "ForeverUI" .. SEP .. "tabicons" .. SEP .. "inv_helmet_08" },
+	{ cle = "donjons", texte = "LOOKING_FOR_DUNGEON", icone = ICONES .. "inv_helmet_08" },
+	-- un seul onglet pour le navigateur de raid (demande du 2026-09-26), a
+	-- l'icone de l'ancien onglet de parcours
+	{ cle = "raid", texte = "LOOKING_FOR_RAID", raid = true,
+		icone = ICONES .. "achievement_general_stayclassy" },
 }
 
 local function creerOnglet(f, def, n)
@@ -342,12 +356,13 @@ local function creerOnglet(f, def, n)
 	o:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -4, -4)
 		GameTooltip:SetText(txt(def.texte))
+		if def.detail then GameTooltip:AddLine(txt(def.detail), 1, 1, 1) end
 		GameTooltip:Show()
 	end)
 	o:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	o:SetScript("OnClick", function()
 		PlaySound("igCharacterInfoTab")
-		F.choisirOnglet(def.cle)
+		F.allerA(def.cle)
 	end)
 	o.cle = def.cle
 	return o
@@ -363,7 +378,7 @@ end
 -- ------------------------------------------------------------ les roles
 
 local function creerRole(parent, r)
-	local b = CreateFrame("Button", "ForeverUIGroupFinderRole" .. r.cle, parent)
+	local b = CreateFrame("Button", "ForeverUIGroupFinderRole" .. (r.page or "") .. r.cle, parent)
 	b:SetWidth(G.role)
 	b:SetHeight(G.role)
 	if r.droite then
@@ -394,7 +409,7 @@ local function creerRole(parent, r)
 	voile:Hide()
 	b.voile = voile
 
-	local c = CreateFrame("CheckButton", "ForeverUIGroupFinderRole" .. r.cle .. "Check", b)
+	local c = CreateFrame("CheckButton", "ForeverUIGroupFinderRole" .. (r.page or "") .. r.cle .. "Check", b)
 	c:SetWidth(G.caseRole)
 	c:SetHeight(G.caseRole)
 	c:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", G.caseRoleX, G.caseRoleY)
@@ -443,9 +458,12 @@ local function creerRole(parent, r)
 	return b
 end
 
--- l'etat de chaque bouton de role du client, recopie
+F.creerRole = creerRole
+
+-- l'etat de chaque bouton de role du client, recopie (ceux de toutes les
+-- pages)
 function F.majRoles()
-	for _, b in ipairs(F.roles or {}) do
+	for _, b in ipairs(F.tousRoles or {}) do
 		local client = _G[b.def.client]
 		if client and client.checkButton then
 			b.case:SetChecked(client.checkButton:GetChecked())
@@ -563,8 +581,94 @@ local function remplirCategorie(ligne, index)
 end
 
 -- ------------------------------------------------------------ la liste
+-- Les lignes des donjons et celles des raids sont les memes ; ce qui
+-- differe -- la liste, les fonctions du client, les cases rondes d'un
+-- groupe pour les raids -- vient de la SOURCE de la liste (zone.src).
+
+-- LFGSpecificChoiceEnableButton_SetIsRadio (LFGFrame.lua) : en groupe, un
+-- raid se choisit par un bouton rond, UI-RadioButton en quatre quarts, 17 x
+-- 17 ; seul, par une case.
+-- LA CASE DE CAMELOT (source de style "camelot" : la liste des raids,
+-- demande du 2026-09-26) : checkbox-minimal / checkmark-minimal, comme les
+-- cases de la feuille et de Social (S.habillerCase) ; en groupe,
+-- common-radiobutton-circle / -dot. 20 x 20 dans une ligne de 22 (camelot
+-- pose sa case a l'echelle 0,7 sur 30 x 29), le rond a 16.
+local CASE_CAMELOT, ROND_CAMELOT = 20, 16
+
+local function caseCamelot(c, radio)
+	if not radio then
+		ForeverUI.Social.habillerCase(c)
+		return
+	end
+	local function poser(set, get, atlas, grise)
+		local e = ForeverUI.AtlasEntry(atlas)
+		c[set](c, e and e[1] or "")
+		local t = c[get](c)
+		if t then
+			ForeverUI.SetAtlas(t, atlas, true)
+			t:ClearAllPoints()
+			t:SetWidth(ROND_CAMELOT)
+			t:SetHeight(ROND_CAMELOT)
+			t:SetPoint("CENTER", c, "CENTER", 0, 0)
+			if grise then t:SetDesaturated(true) end
+		end
+	end
+	poser("SetNormalTexture", "GetNormalTexture", "common-radiobutton-circle")
+	poser("SetPushedTexture", "GetPushedTexture", "common-radiobutton-circle")
+	poser("SetCheckedTexture", "GetCheckedTexture", "common-radiobutton-dot")
+	poser("SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "common-radiobutton-dot", true)
+	c:SetHighlightTexture("")
+end
+
+local function caseRadio(c, radio)
+	if c.radio == radio then return end
+	c.radio = radio
+	if c.style == "camelot" then
+		caseCamelot(c, radio)
+		return
+	end
+	local etats = {
+		{ "SetNormalTexture", "GetNormalTexture", "UI-CheckBox-Up", 0, 0.25 },
+		{ "SetPushedTexture", "GetPushedTexture", "UI-CheckBox-Down", 0, 0.25 },
+		{ "SetHighlightTexture", "GetHighlightTexture", "UI-CheckBox-Highlight", 0.5, 0.75 },
+		{ "SetCheckedTexture", "GetCheckedTexture", "UI-CheckBox-Check", 0.25, 0.5 },
+	}
+	for _, e in ipairs(etats) do
+		c[e[1]](c, BOUTONS .. (radio and "UI-RadioButton" or e[3]))
+		local t = c[e[2]](c)
+		if t then
+			t:ClearAllPoints()
+			if radio then
+				t:SetTexCoord(e[4], e[5], 0, 1)
+				t:SetWidth(17)
+				t:SetHeight(17)
+				t:SetPoint("CENTER", c, "CENTER", 0, 0)
+			else
+				t:SetTexCoord(0, 1, 0, 1)
+				t:SetAllPoints(c)
+			end
+			if e[1] == "SetHighlightTexture" then t:SetBlendMode("ADD") end
+		end
+	end
+end
+
+-- la source des donjons (LFDFrame.lua)
+local SOURCE_LFD = {
+	liste = function() return LFDDungeonList end,
+	habilite = function() return LFD_IsEmpowered() end,
+	plus = function(b) LFDQueueFrameExpandOrCollapseButton_OnClick(b) end,
+	case = function(c) LFDQueueFrameDungeonChoiceEnableButton_OnClick(c) end,
+	plusieurs = function() return true end,
+	verrou = function(id) return LFGLockList[id] end,
+	etat = function(id, mode)
+		if mode == "queued" or mode == "listed" then return LFGQueuedForList[id] end
+		return LFGEnabledList[id]
+	end,
+}
+F.SOURCE_LFD = SOURCE_LFD
 
 local function creerLigne(ligne)
+	ligne.src = ligne:GetParent().src
 	local plus = CreateFrame("Button", nil, ligne)
 	plus:SetWidth(G.plus)
 	plus:SetHeight(G.plus)
@@ -591,13 +695,15 @@ local function creerLigne(ligne)
 	-- self:GetParent().id et .isCollapsed
 	plus:SetScript("OnClick", function(self)
 		PlaySound("igMainMenuOptionCheckBoxOn")
-		LFDQueueFrameExpandOrCollapseButton_OnClick(self)
+		ligne.src.plus(self)
 	end)
 	ligne.plus = plus
 
 	local c = CreateFrame("CheckButton", nil, ligne)
-	c:SetWidth(G.case)
-	c:SetHeight(G.case)
+	c.style = ligne.src.style
+	local cote = (c.style == "camelot") and CASE_CAMELOT or G.case
+	c:SetWidth(cote)
+	c:SetHeight(cote)
 	c:SetPoint("LEFT", plus, "RIGHT", 4, 0)
 	c:SetNormalTexture(BOUTONS .. "UI-CheckBox-Up")
 	c:SetPushedTexture(BOUTONS .. "UI-CheckBox-Down")
@@ -609,7 +715,7 @@ local function creerLigne(ligne)
 	-- la case du client : LFDQueueFrameDungeonChoiceEnableButton_OnClick lit
 	-- self:GetParent().id et self:GetChecked()
 	c:SetScript("OnClick", function(self)
-		LFDQueueFrameDungeonChoiceEnableButton_OnClick(self)
+		ligne.src.case(self)
 	end)
 	ligne.case = c
 
@@ -657,12 +763,14 @@ local function couleur(fs, c)
 	fs:SetTextColor(c[1], c[2], c[3])
 end
 
--- LFDQueueFrameSpecificListButton_SetDungeon, a la maniere de camelot
+-- LFDQueueFrameSpecificListButton_SetDungeon (et celle des raids), a la
+-- maniere de camelot
 local function remplirLigne(ligne, index)
-	local id = LFDDungeonList[index]
+	local src = ligne.src
+	local id = src.liste()[index]
 	local info = LFGDungeonInfo and LFGDungeonInfo[id] or {}
 	local mode = GetLFGMode()
-	local fige = mode == "rolecheck" or mode == "queued" or mode == "listed" or not LFD_IsEmpowered()
+	local fige = mode == "rolecheck" or mode == "queued" or mode == "listed" or not src.habilite()
 	ligne.id = id
 	ligne.nom:SetText(info[1] or "")
 	if id < 0 then
@@ -699,29 +807,35 @@ local function remplirLigne(ligne, index)
 		couleur(ligne.nom, fige and COULEURS.entete or c)
 	end
 
-	if LFGLockList[id] then
+	local plusieurs = src.plusieurs()
+	if src.verrou(id) then
 		ligne.case:Hide()
 		ligne.lockedIndicator:Show()
 	else
-		ligne.case:Show()
+		-- en groupe, un en-tete de raid n'a pas de bouton
+		if plusieurs or id >= 0 then ligne.case:Show() else ligne.case:Hide() end
 		ligne.lockedIndicator:Hide()
 	end
-	local etat
-	if mode == "queued" or mode == "listed" then
-		etat = LFGQueuedForList[id]
+	caseRadio(ligne.case, not plusieurs)
+	local etat = src.etat(id, mode)
+	if plusieurs and ligne.case.style == "camelot" then
+		ligne.case:SetChecked(etat and etat ~= 0)
+	elseif plusieurs then
+		if etat == 1 then
+			ligne.case:SetCheckedTexture(BOUTONS .. "UI-MultiCheck-Up")
+			ligne.case:SetDisabledCheckedTexture(BOUTONS .. "UI-MultiCheck-Disabled")
+		else
+			ligne.case:SetCheckedTexture(BOUTONS .. "UI-CheckBox-Check")
+			ligne.case:SetDisabledCheckedTexture(BOUTONS .. "UI-CheckBox-Check-Disabled")
+		end
+		ligne.case:SetChecked(etat and etat ~= 0)
 	else
-		etat = LFGEnabledList[id]
+		ligne.case:SetChecked(etat)
 	end
-	if etat == 1 then
-		ligne.case:SetCheckedTexture(BOUTONS .. "UI-MultiCheck-Up")
-		ligne.case:SetDisabledCheckedTexture(BOUTONS .. "UI-MultiCheck-Disabled")
-	else
-		ligne.case:SetCheckedTexture(BOUTONS .. "UI-CheckBox-Check")
-		ligne.case:SetDisabledCheckedTexture(BOUTONS .. "UI-CheckBox-Check-Disabled")
-	end
-	ligne.case:SetChecked(etat and etat ~= 0)
 	if fige then ligne.case:Disable() else ligne.case:Enable() end
 end
+F.creerLigne = creerLigne
+F.remplirLigne = remplirLigne
 
 -- ------------------------------------------------------------ les recompenses
 
@@ -963,9 +1077,9 @@ end
 -- meme ordre : l'attente (11), la reprise d'un groupe (14), "pas de donjon
 -- pendant le raid" (16).
 
-local function creerVoile(nom, niveau)
-	local v = CreateFrame("Frame", nom, F.pageDonjons)
-	v:SetFrameLevel(F.encadre:GetFrameLevel() + niveau)
+local function creerVoile(nom, niveau, page, encadre)
+	local v = CreateFrame("Frame", nom, page or F.pageDonjons)
+	v:SetFrameLevel((encadre or F.encadre):GetFrameLevel() + niveau)
 	v:EnableMouse(true)
 	local noir = v:CreateTexture(nil, "BACKGROUND")
 	noir:SetTexture(0, 0, 0, 0.93)
@@ -976,6 +1090,7 @@ local function creerVoile(nom, niveau)
 	v:Hide()
 	return v
 end
+F.creerVoile = creerVoile
 
 local function construireVoiles()
 	local attente = creerVoile("ForeverUIGroupFinderCooldown", 11)
@@ -1096,41 +1211,56 @@ end
 
 -- ------------------------------------------------------------ la page
 
+-- LE BANDEAU DES ROLES d'une page : un cadre fils, au-dessus des stries
+-- (camelot le pose en cadre fils, RolesSection), le bleu et les boutons
+function F.construireBandeau(p, roles)
+	local f = F.cadre
+	local bandeau = CreateFrame("Frame", nil, p)
+	bandeau:SetAllPoints(f)
+	bandeau:SetFrameLevel(f:GetFrameLevel() + 1)
+	local bleu = bandeau:CreateTexture(nil, "BACKGROUND")
+	bleu:SetTexture(G.bleu)
+	bleu:SetPoint("TOPLEFT", f, "TOPLEFT", G.bleuX1, G.bleuY1)
+	bleu:SetPoint("BOTTOMRIGHT", f, "TOPRIGHT", G.bleuX2, G.bleuY2)
+	local l = {}
+	F.tousRoles = F.tousRoles or {}
+	for _, r in ipairs(roles) do
+		local b = creerRole(bandeau, r)
+		table.insert(l, b)
+		table.insert(F.tousRoles, b)
+	end
+	return bleu, l
+end
+
+-- L'ENCADRE d'une page, au-dessus du bandeau : sans marbre, le fond de
+-- camelot a 3 du bord ; rogne en haut (0,093) sous un bandeau de roles, entier
+-- sans (le parcours)
+function F.construireEncadre(p, nom, haut, rogne, bas)
+	local f = F.cadre
+	local encadre = ForeverUI.CreateInset(p, nom)
+	encadre:SetFrameLevel(f:GetFrameLevel() + 2)
+	encadre:SetPoint("TOPLEFT", f, "TOPLEFT", G.encadreX1, haut)
+	encadre:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.encadreX2, bas or G.encadreY2)
+	encadre.fond:Hide()
+	local fond = encadre:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(fond, "groupfinder-background", true)
+	local e = ForeverUI.AtlasEntry("groupfinder-background")
+	if e and rogne then
+		fond:SetTexCoord(e[2], e[3], e[4] + (e[5] - e[4]) * G.fondHaut, e[5])
+	end
+	fond:SetPoint("TOPLEFT", encadre, "TOPLEFT", 3, -3)
+	fond:SetPoint("BOTTOMRIGHT", encadre, "BOTTOMRIGHT", -3, 3)
+	return encadre
+end
+
 local function construirePage(f)
 	local p = CreateFrame("Frame", "ForeverUIGroupFinderDungeons", f)
 	p:SetAllPoints(f)
 	F.pageDonjons = p
 
-	-- le bandeau des roles : un cadre fils, au-dessus des stries (camelot le
-	-- pose en cadre fils, RolesSection)
-	local roles = CreateFrame("Frame", nil, p)
-	roles:SetAllPoints(f)
-	roles:SetFrameLevel(f:GetFrameLevel() + 1)
-	local bleu = roles:CreateTexture(nil, "BACKGROUND")
-	bleu:SetTexture(G.bleu)
-	bleu:SetPoint("TOPLEFT", f, "TOPLEFT", G.bleuX1, G.bleuY1)
-	bleu:SetPoint("BOTTOMRIGHT", f, "TOPRIGHT", G.bleuX2, G.bleuY2)
-	F.bleu = bleu
-	F.roles = {}
-	for _, r in ipairs(ROLES) do
-		table.insert(F.roles, creerRole(roles, r))
-	end
-
-	-- l'encadre, au-dessus du bandeau : son fond de camelot couvre le bas du
-	-- bleu comme dans la source
-	local encadre = ForeverUI.CreateInset(p, "ForeverUIGroupFinderInset")
-	encadre:SetFrameLevel(f:GetFrameLevel() + 2)
-	encadre:SetPoint("TOPLEFT", f, "TOPLEFT", G.encadreX1, G.encadreY1)
-	encadre:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.encadreX2, G.encadreY2)
-	encadre.fond:Hide()
-	local fond = encadre:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, "groupfinder-background", true)
-	local e = ForeverUI.AtlasEntry("groupfinder-background")
-	if e then
-		fond:SetTexCoord(e[2], e[3], e[4] + (e[5] - e[4]) * G.fondHaut, e[5])
-	end
-	fond:SetPoint("TOPLEFT", encadre, "TOPLEFT", 3, -3)
-	fond:SetPoint("BOTTOMRIGHT", encadre, "BOTTOMRIGHT", -3, 3)
+	F.bleu, F.roles = F.construireBandeau(p, ROLES)
+	-- son fond de camelot couvre le bas du bleu comme dans la source
+	local encadre = F.construireEncadre(p, "ForeverUIGroupFinderInset", G.encadreY1, true)
 	F.encadre = encadre
 
 	local S = ForeverUI.Social
@@ -1149,6 +1279,7 @@ local function construirePage(f)
 
 	-- la liste des donjons specifiques
 	local liste = S.creerListe(p, "ForeverUIGroupFinderList", G.ligne, creerLigne, remplirLigne)
+	liste.src = SOURCE_LFD
 	liste:SetFrameLevel(encadre:GetFrameLevel() + 1)
 	liste.barre:SetFrameLevel(encadre:GetFrameLevel() + 2)
 	liste:SuivreBarre({ "TOPLEFT", f, "TOPLEFT", G.listeX1 + G.marge, G.listeY1 - G.marge },
@@ -1218,9 +1349,7 @@ local function poserCategories()
 	placerFilet(nil)
 end
 
-function F.maj()
-	if not F.cadre then return end
-	F.majRoles()
+local function majDonjons()
 	local vue = F.vue or "categories"
 	if vue == "liste" and LFDQueueFrame.type ~= "specific" then vue = "categories" end
 	F.vue = vue
@@ -1254,6 +1383,29 @@ function F.maj()
 	end
 end
 
+-- LES PAGES : une par onglet ; celle des donjons ici, celles du raid dans
+-- GroupFinderRaid.lua (F.inscrirePage)
+F.pages = {}
+function F.inscrirePage(cle, cadre, maj)
+	F.pages[cle] = { cadre = cadre, maj = maj }
+end
+
+function F.maj()
+	if not F.cadre then return end
+	F.majRoles()
+	local pg = F.pages[F.onglet or "donjons"]
+	if pg then pg.maj() end
+end
+
+-- montrer une page : son onglet choisi, les autres pages cachees
+function F.afficher(cle)
+	F.choisirOnglet(cle)
+	for k, pg in pairs(F.pages) do
+		if k == cle then pg.cadre:Show() else pg.cadre:Hide() end
+	end
+	F.maj()
+end
+
 -- plusieurs mises a jour du client dans la meme image n'en font qu'une chez
 -- nous
 local attendre = CreateFrame("Frame")
@@ -1263,6 +1415,7 @@ attendre:SetScript("OnUpdate", function(self)
 	F.maj()
 end)
 F.attendre = attendre
+F.G, F.txt, F.actif, F.couleur, F.COULEURS, F.ROLES = G, txt, actif, couleur, COULEURS, ROLES
 
 function F.demander()
 	if F.cadre and F.cadre:IsShown() then attendre:Show() end
@@ -1288,7 +1441,37 @@ local function etoufferClient()
 	LFDQueueFrame:SetHeight(p:GetHeight())
 end
 
+-- NOTRE FENETRE PASSE D'UN PANNEAU A L'AUTRE : fille de celui qui est
+-- ouvert, au-dessus de son contenu ; a sa place retenue si on l'a deplacee,
+-- sinon a celle du panneau.
+function F.attacher(panneau)
+	local f = F.cadre
+	if f:GetParent() ~= panneau then f:SetParent(panneau) end
+	f:SetFrameLevel(panneau:GetFrameLevel() + 30)
+	local pos = ForeverUIDB and ForeverUIDB.positions and ForeverUIDB.positions.chercheur
+	if not pos then
+		f:ClearAllPoints()
+		f:SetPoint("TOPLEFT", panneau, "TOPLEFT", 0, 0)
+	end
+end
+
+-- UN ONGLET : son panneau du client s'ouvre, l'autre se ferme. Les donjons
+-- restent fermes sous le niveau du client (SHOW_LFD_LEVEL, comme le
+-- micro-bouton).
+function F.allerA(cle)
+	if cle == "donjons" then
+		if UnitLevel("player") < (SHOW_LFD_LEVEL or 15) then return end
+		if LFRParentFrame and LFRParentFrame:IsShown() then HideUIPanel(LFRParentFrame) end
+		if not LFDParentFrame:IsShown() then ShowUIPanel(LFDParentFrame) end
+	elseif LFRParentFrame then
+		if LFDParentFrame:IsShown() then HideUIPanel(LFDParentFrame) end
+		if LFRParentFrame:IsShown() then F.afficher(cle) else ShowUIPanel(LFRParentFrame) end
+	end
+end
+
 local function ouvrir()
+	if LFRParentFrame and LFRParentFrame:IsShown() then HideUIPanel(LFRParentFrame) end
+	F.attacher(LFDParentFrame)
 	etoufferClient()
 	-- a l'ouverture, les categories ; en file pour des donjons choisis, leur
 	-- liste
@@ -1297,9 +1480,8 @@ local function ouvrir()
 	else
 		F.vue = "categories"
 	end
-	F.choisirOnglet("donjons")
 	F.cadre:Show()
-	F.maj()
+	F.afficher("donjons")
 end
 
 local function construire()
@@ -1315,9 +1497,11 @@ local function construire()
 	construireCadre(f)
 	construirePage(f)
 
+	F.inscrirePage("donjons", F.pageDonjons, majDonjons)
 	F.onglets = {}
 	local precedent
 	for n, def in ipairs(ONGLETS) do
+		if def.raid and not LFRParentFrame then break end
 		local o = creerOnglet(f, def, n)
 		if precedent then
 			o:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, G.ongletEcart)
@@ -1334,7 +1518,9 @@ construire()
 
 if F.cadre then
 	LFDParentFrame:HookScript("OnShow", ouvrir)
-	LFDParentFrame:HookScript("OnHide", function() F.cadre:Hide() end)
+	LFDParentFrame:HookScript("OnHide", function()
+		if F.cadre:GetParent() == LFDParentFrame then F.cadre:Hide() end
+	end)
 	-- chaque mise a jour du client, et le changement de type (le PNJ d'une
 	-- conversation l'appelle aussi) : la vue suit le type choisi
 	for _, nom in ipairs({ "LFDQueueFrameSpecificList_Update", "LFDQueueFrameRandom_UpdateFrame",
@@ -1374,4 +1560,17 @@ function ForeverUI.GroupFinderDebug()
 		tostring(F.vue), tostring(LFDQueueFrame.type), tostring(GetLFGMode()),
 		LFDDungeonList and #LFDDungeonList or 0, F.cadre:IsShown() and "affichee" or "cachee",
 		F.cadre:GetFrameLevel(), tostring(LFDQueueFrame:GetAlpha()), LFDQueueFrame:GetFrameLevel()))
+	-- le navigateur de raid : la recherche, et ce qui a ete releve pour
+	-- chacun de ses raids
+	local R = ForeverUI.GroupFinderRaid
+	if R and R.cache then
+		local r = R.recherche
+		dire(string.format("raid : recherche %s | serveur cherche %s",
+			r and r.nom or "aucune", tostring(SearchLFGGetJoinedID and SearchLFGGetJoinedID())))
+		for _, id in ipairs(r and r.ids or {}) do
+			local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
+			dire(string.format("   %s (%d) : %s inscrit(s) releve(s)", info and info[1] or "?", id,
+				R.cache[id] and #R.cache[id] or "rien"))
+		end
+	end
 end

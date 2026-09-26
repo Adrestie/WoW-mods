@@ -62,3 +62,4 @@ SocialChat.lua
 SocialRaid.lua
 TabardFrame.lua
 GroupFinder.lua
+GroupFinderRaid.lua
