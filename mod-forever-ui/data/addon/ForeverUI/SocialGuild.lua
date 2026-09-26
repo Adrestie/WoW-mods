@@ -459,7 +459,7 @@ function Gu.cliquer(l, bouton)
 	local i = l.index
 	if bouton == "RightButton" then
 		local nom, _, _, _, _, _, _, _, enLigne = GetGuildRosterInfo(i)
-		FriendsFrame_ShowDropdown(nom, enLigne)
+		ForeverUI.MenuUnite.ouvrir(FriendsFrame_ShowDropdown, nom, enLigne)
 		return
 	end
 	PlaySound("igMainMenuOptionCheckBoxOn")

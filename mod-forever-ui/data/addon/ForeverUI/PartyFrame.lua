@@ -257,7 +257,7 @@ local function creerMembre(i)
 	m:RegisterForClicks("AnyUp")
 	-- le menu du client : celui de son cadre de groupe, UnitPopup "PARTY"
 	m.menu = function(self)
-		ToggleDropDownMenu(1, nil, _G["PartyMemberFrame" .. i .. "DropDown"], self:GetName(), 47, 15)
+		ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, _G["PartyMemberFrame" .. i .. "DropDown"], self:GetName(), 47, 15)
 	end
 
 	m.portrait = m:CreateTexture(nil, "BACKGROUND")

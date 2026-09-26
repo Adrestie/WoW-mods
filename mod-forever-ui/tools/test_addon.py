@@ -98,6 +98,7 @@ local function newRegion(kind)
     end
     function r:IsShown() return self.shown end
     function r:SetText(t) self.text = t end
+    function r:SetFormattedText(fmt, ...) self.text = string.format(fmt, ...) end
     function r:GetText() return self.text end
     function r:SetJustifyH(j) self.justify = j end
     function r:GetJustifyH() return self.justify end
@@ -140,6 +141,17 @@ local function newRegion(kind)
     function r:GetAlpha() return self.alpha or 1 end
     -- 3.3.5 ne prend PAS de sous-calque : un seul argument.
     function r:SetDrawLayer(calque) self.layer = calque end
+    function r:GetDrawLayer() return self.layer end
+    function r:GetTexCoord()
+        local t = self.texcoord8
+        if t then return t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8] end
+        local c = self.texcoord or { 0, 1, 0, 1 }
+        return c[1], c[3], c[1], c[4], c[2], c[3], c[2], c[4]
+    end
+    function r:GetVertexColor()
+        local v = self.vertex or { 1, 1, 1 }
+        return v[1], v[2], v[3], self.vertexAlpha or 1
+    end
     function r:SetBlendMode(m) self.blend = m end
     function r:SetFont(chemin, taille, drapeaux) self.fontFile, self.fontSize, self.fontFlags = chemin, taille, drapeaux end
     -- 6 pixels par caractere : assez pour verifier une largeur calculee.
@@ -205,6 +217,7 @@ function CreateFrame(kind, name, parent, template)
     function f:GetScript(event) return self.scripts[event] end
     function f:GetName() return self.name end
     function f:RegisterEvent(e) self.events[e] = true end
+    function f:UnregisterEvent(e) self.events[e] = nil end
     function f:UnregisterAllEvents() self.events = {} end
     function f:RegisterForDrag(...) self.dragButtons = { ... } end
     function f:RegisterForClicks() end
@@ -228,6 +241,8 @@ function CreateFrame(kind, name, parent, template)
     function f:GetPushedTexture() return self._pushed end
     function f:GetDisabledTexture() return self._disabled end
     function f:SetBackdrop(b) self.backdrop = b end
+    function f:SetBackdropColor(...) self.backdropColor = { ... } end
+    function f:SetBackdropBorderColor(...) self.backdropBorderColor = { ... } end
     function f:GetBackdrop() return self.backdrop end
     function f:SetNormalFontObject(o) self.normalFont = o end
     function f:SetHighlightFontObject(o) self.highlightFont = o end
@@ -269,7 +284,14 @@ function CreateFrame(kind, name, parent, template)
     -- pour un cadre que le vrai client n'a pas encore place. Le code doit
     -- donc y survivre, et c'est ce que ce bouchon verifie.
     function f:GetTop() return self._top end
-    function f:GetEffectiveScale() return self.scale or 1 end
+    -- le vrai multiplie l'echelle de chaque ancetre (celle de l'ecran pour
+    -- un cadre sans parent)
+    function f:GetEffectiveScale()
+        local e = self.scale or 1
+        local p = self.parent
+        if p and p.GetEffectiveScale and p ~= self then e = e * p:GetEffectiveScale() end
+        return e
+    end
     function f:GetBottom() return self._bottom end
     function f:GetLeft() return self._left end
     function f:GetRight() return self._right end
@@ -356,8 +378,11 @@ function CreateFrame(kind, name, parent, template)
     function f:GetCenter() return self._cx, self._cy end
     -- protege : pose par le banc (un cadre qui porte des boutons securises)
     function f:IsProtected() return self.protege == true end
+    -- UNE REGION NOMMEE EST UNE GLOBALE, comme dans le vrai client (le fond
+    -- ChatFrame1Background se retrouve par _G). Le faux ne l'inscrivait pas.
     function f:CreateTexture(n, layer)
         local t = newRegion("texture"); t.layer = layer; t.owner = self
+        if n then t.name = t.name or n; _G[n] = t end
         table.insert(self.regions, t)
         return t
     end
@@ -371,6 +396,7 @@ function CreateFrame(kind, name, parent, template)
     function f:GetNumRegions() return #self.regions end
     function f:CreateFontString(n, layer, font)
         local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self
+        if n then t.name = t.name or n; _G[n] = t end
         -- GetRegions REND AUSSI LES FontString, pas seulement les textures.
         -- Le faux ne les y mettait pas : un balayage qui les oublie passait
         -- donc pour complet au banc, et laissait en jeu l intitule du
@@ -480,6 +506,11 @@ function UIDropDownMenu_Initialize(cadre, fonction, mode, niveau, menuListe)
         local liste = _G["DropDownList" .. niveau]
         if liste then liste.numButtons = 0 end
     end
+    UIDropDownMenu_InitializeHelper(cadre)
+end
+-- le vrai UIDropDownMenu_InitializeHelper (UIDropDownMenu.lua:34-59) finit
+-- par la hauteur du menu, prise sur la globale
+function UIDropDownMenu_InitializeHelper(cadre)
     if cadre and cadre.SetHeight then
         cadre:SetHeight(UIDROPDOWNMENU_BUTTON_HEIGHT * 2)
     end
@@ -821,6 +852,10 @@ WORLDMAP_FULLMAP_SIZE = 1.0
 WORLDMAP_WORLD_ID = 0
 WORLDMAP_COSMIC_ID = -1
 WORLDMAP_SETTINGS = { opacity = 0, locked = true, advanced = nil, size = WORLDMAP_QUESTLIST_SIZE }
+-- WorldMapFrame.lua : les traductions de clic des nappes de quete, a refaire
+-- quand la carte change d'echelle ou de place
+HITS_NAPPES = 0
+function WorldMapBlobFrame_CalculateHitTranslations() HITS_NAPPES = HITS_NAPPES + 1 end
 CARTE = { continent = 2, zone = 5, etages = 0, etage = 0, zooms = {} }
 function GetCurrentMapContinent() return CARTE.continent end
 function GetCurrentMapZone() return CARTE.zone end
@@ -2523,8 +2558,12 @@ GearManagerDialogPopup.buttons = {}
 for i = 1, NUM_GEARSET_ICONS_SHOWN do
     local b = CreateFrame("CheckButton", "GearManagerDialogPopupButton" .. i,
         GearManagerDialogPopup)
+    b:SetID(i)  -- GearManagerDialogPopup_OnLoad : button:SetID(i)
     b:SetWidth(36); b:SetHeight(36)
-    b.icon = b:GetNormalTexture()
+    -- GearSetPopupButtonTemplate : son icone $parentIcon (self.icon) et son
+    -- clic GearSetPopupButton_OnClick
+    b.icon = b:CreateTexture("GearManagerDialogPopupButton" .. i .. "Icon", "ARTWORK")
+    b:SetScript("OnClick", function(self) GearSetPopupButton_OnClick(self) end)
     table.insert(GearManagerDialogPopup.buttons, b)
 end
 GearManagerDialogPopup:CreateFontString("popupNom", "OVERLAY"):SetText(GEARSETS_POPUP_TEXT)
@@ -2542,10 +2581,98 @@ for _, sens in ipairs({ "Up", "Down" }) do
     CreateFrame("Button", "GearManagerDialogPopupScrollFrameScrollBarScroll" .. sens
         .. "Button", GearManagerDialogPopupScrollFrameScrollBar)
 end
-function GetEquipmentSetIconInfo(i) return "icone-" .. tostring(i), i end
-function RecalculateGearManagerDialogPopup() RECALCULE = (RECALCULE or 0) + 1 end
+-- LE REMPLISSAGE DU CLIENT (PaperDollFrame.lua:2353-2560), tel quel : les
+-- objets portes, puis les icones de macro, puis l'icone speciale ; sa grille
+-- de NUM_GEARSET_ICONS_PER_ROW, son defilement au pas GEARSET_ICON_ROW_HEIGHT,
+-- son clic qui retient offset x NUM_GEARSET_ICONS_PER_ROW + GetID().
+INVSLOT_FIRST_EQUIPPED, INVSLOT_LAST_EQUIPPED = INVSLOT_FIRST_EQUIPPED or 1, INVSLOT_LAST_EQUIPPED or 19
+NB_MACROS = 120
+ICONE_SPECIALE = nil
+function GetNumMacroIcons() return NB_MACROS end
+local function portes()
+    local l = {}
+    for i = INVSLOT_FIRST_EQUIPPED, INVSLOT_LAST_EQUIPPED do
+        local t = GetInventoryItemTexture("player", i)
+        if t then table.insert(l, t) end
+    end
+    return l
+end
+function GetEquipmentSetIconInfo(index)
+    local l = portes()
+    if index <= #l then return l[index], -index end
+    index = index - #l
+    if index > NB_MACROS then return ICONE_SPECIALE, index end
+    return "icone-" .. tostring(index), index
+end
+local function totalClient() return #portes() + NB_MACROS + (ICONE_SPECIALE and 1 or 0) end
+GearManagerDialogPopup.SetSelection = function(self, fTexture, valeur)
+    if fTexture then self.selectedTexture, self.selectedIcon = valeur, nil
+    else self.selectedTexture, self.selectedIcon = nil, valeur end
+end
+function GearManagerDialogPopup_Update()
+    local popup = GearManagerDialogPopup
+    local offset = FauxScrollFrame_GetOffset(GearManagerDialogPopupScrollFrame) or 0
+    local total = totalClient()
+    for i = 1, NUM_GEARSET_ICONS_SHOWN do
+        local b = popup.buttons[i]
+        local index = offset * NUM_GEARSET_ICONS_PER_ROW + i
+        if index <= total then
+            local t = GetEquipmentSetIconInfo(index)
+            b.icon:SetTexture(t)
+            b:Show()
+            if index == popup.selectedIcon then b:SetChecked(1)
+            elseif t == popup.selectedTexture then b:SetChecked(1); popup:SetSelection(false, index)
+            else b:SetChecked(nil) end
+        else
+            b.icon:SetTexture("")
+            b:Hide()
+        end
+    end
+    FauxScrollFrame_Update(GearManagerDialogPopupScrollFrame, math.ceil(total / NUM_GEARSET_ICONS_PER_ROW), NUM_GEARSET_ICON_ROWS, GEARSET_ICON_ROW_HEIGHT)
+end
+function RecalculateGearManagerDialogPopup()
+    RECALCULE = (RECALCULE or 0) + 1
+    local popup = GearManagerDialogPopup
+    ICONE_SPECIALE = nil
+    if popup.selectedTexture then
+        local trouve
+        for index = 1, totalClient() do
+            if GetEquipmentSetIconInfo(index) == popup.selectedTexture then trouve = index break end
+        end
+        if not trouve then ICONE_SPECIALE = popup.selectedTexture; trouve = totalClient() end
+        local derniere = math.floor((totalClient() - 1) / NUM_GEARSET_ICONS_PER_ROW)
+        local offset = math.floor((trouve - 1) / NUM_GEARSET_ICONS_PER_ROW)
+        offset = offset + math.min(NUM_GEARSET_ICON_ROWS - 1, derniere - offset) - (NUM_GEARSET_ICON_ROWS - 1)
+        if trouve <= NUM_GEARSET_ICONS_SHOWN then offset = 0 end
+        FauxScrollFrame_OnVerticalScroll(GearManagerDialogPopupScrollFrame, offset * GEARSET_ICON_ROW_HEIGHT, GEARSET_ICON_ROW_HEIGHT, nil)
+    end
+    GearManagerDialogPopup_Update()
+end
+function GearSetPopupButton_OnClick(self)
+    local popup = GearManagerDialogPopup
+    local offset = FauxScrollFrame_GetOffset(GearManagerDialogPopupScrollFrame) or 0
+    popup.selectedIcon = offset * NUM_GEARSET_ICONS_PER_ROW + self:GetID()
+    popup.selectedTexture = nil
+    GearManagerDialogPopup_Update()
+end
+-- UIPanelTemplates.lua:236-247
+function FauxScrollFrame_OnVerticalScroll(self, value, hauteur, maj)
+    self.offset = math.floor((value / hauteur) + 0.5)
+    if maj then maj(self) end
+end
+function FauxScrollFrame_Update(f, n, montres, hauteur) f.fauxRangees, f.fauxMontrees, f.fauxPas = n, montres, hauteur end
 function GearManagerDialogPopup_OnShow() end
-function GearManagerDialogPopup_Update() end
+do
+    local creer = CreateFrame
+    CreateFrame = function(kind, name, parent, template)
+        local f = creer(kind, name, parent, template)
+        if template == "GearSetPopupButtonTemplate" then
+            f.icon = f:CreateTexture(name and (name .. "Icon"), "ARTWORK")
+            f:SetScript("OnClick", function(self) GearSetPopupButton_OnClick(self) end)
+        end
+        return f
+    end
+end
 -- Ce que fait le vrai OnHide : il oublie le nom saisi.
 publierEnsembles()
 function GearManagerDialogPopup_OnHide()
@@ -2798,7 +2925,7 @@ ReputationListScrollFrame = CreateFrame("Frame", "ReputationListScrollFrame",
                                         ReputationFrame)
 ReputationFrameCollapseAll = CreateFrame("Button", "ReputationFrameCollapseAll",
                                          ReputationFrame)
-function FauxScrollFrame_GetOffset() return 0 end
+function FauxScrollFrame_GetOffset(f) return f and f.offset end
 for i = 1, 15 do
     local n = "ReputationBar" .. i
     local r = CreateFrame("Button", n, ReputationFrame)
@@ -3654,6 +3781,52 @@ function ChannelListDropDown_Initialize() end
 function JoinPermanentChannel(nom, mdp, id, x) table.insert(APPELS, { nom = "JoinPermanentChannel", args = { nom, mdp } }); return 1, nom end
 DEFAULT_CHAT_FRAME.GetID = function() return 1 end
 DEFAULT_CHAT_FRAME.channelList, DEFAULT_CHAT_FRAME.zoneChannelList = {}, {}
+-- LA BOITE « NOUVEAU CANAL » DU CLIENT (ChannelFrame.xml:802-997) : fille
+-- de ChannelFrame, un fond Backdrop, un titre, deux champs InputBoxTemplate
+-- (trois morceaux, une etiquette), la case de chat vocal, une croix, OK et
+-- Annuler. Son OK (ChannelFrameDaughterFrame_Okay) rejoint le canal ET
+-- l'inscrit dans la liste du cadre de discussion ; Echap et Annuler la
+-- ferment ; en se fermant, elle vide ses champs.
+do
+    local f = CreateFrame("Frame", "ChannelFrameDaughterFrame", ChannelFrame or UIParent)
+    f:SetBackdrop({ bgFile = "UI-DialogBox-Background" })
+    f:EnableMouse(true)
+    f:CreateFontString("ChannelFrameDaughterFrameName", "BORDER")
+    f:CreateTexture("ChannelFrameDaughterFrameTitlebar", "BORDER")
+    f:CreateTexture("ChannelFrameDaughterFrameCorner", "BORDER")
+    for _, n in ipairs({ "ChannelName", "ChannelPassword" }) do
+        local e = CreateFrame("EditBox", "ChannelFrameDaughterFrame" .. n, f)
+        for _, c in ipairs({ "Left", "Middle", "Right" }) do e:CreateTexture(e:GetName() .. c, "BACKGROUND") end
+        e:CreateFontString(e:GetName() .. "Label", "BACKGROUND")
+    end
+    ChannelFrameDaughterFrameChannelPassword:CreateFontString("ChannelFrameDaughterFrameChannelPasswordOptional", "BACKGROUND")
+    CreateFrame("CheckButton", "ChannelFrameDaughterFrameVoiceChat", f)
+    CreateFrame("Button", "ChannelFrameDaughterFrameDetailCloseButton", f)
+    CreateFrame("Button", "ChannelFrameDaughterFrameOkayButton", f)
+    CreateFrame("Button", "ChannelFrameDaughterFrameCancelButton", f)
+    function ChannelFrameDaughterFrame_Okay()
+        local nom = ChannelFrameDaughterFrameChannelName:GetText()
+        local zone, canal = JoinPermanentChannel(nom, ChannelFrameDaughterFrameChannelPassword:GetText(), 1, 1)
+        if zone then
+            table.insert(DEFAULT_CHAT_FRAME.channelList, canal or nom)
+            table.insert(DEFAULT_CHAT_FRAME.zoneChannelList, zone)
+        end
+        ChannelFrameDaughterFrame:Hide()
+    end
+    function ChannelFrameDaughterFrame_Cancel(self) self:GetParent():Hide() end
+    ChannelFrameDaughterFrameOkayButton:SetScript("OnClick", ChannelFrameDaughterFrame_Okay)
+    ChannelFrameDaughterFrameCancelButton:SetScript("OnClick", ChannelFrameDaughterFrame_Cancel)
+    ChannelFrameDaughterFrameChannelName:SetScript("OnEnterPressed", function(self) ChannelFrameDaughterFrame_Okay(self) end)
+    ChannelFrameDaughterFrameChannelPassword:SetScript("OnEnterPressed", ChannelFrameDaughterFrame_Okay)
+    for _, n in ipairs({ "ChannelName", "ChannelPassword" }) do
+        _G["ChannelFrameDaughterFrame" .. n]:SetScript("OnEscapePressed", ChannelFrameDaughterFrame_Cancel)
+    end
+    f:SetScript("OnHide", function()
+        ChannelFrameDaughterFrameChannelName:SetText("")
+        ChannelFrameDaughterFrameChannelPassword:SetText("")
+    end)
+    f:Hide()
+end
 CHAT_CHANNELS, ADD, CHANNEL_NEW_CHANNEL, CHANNEL_CHANNEL_NAME = "Chat Channels", "Add", "New Channel", "Channel Name"
 PASSWORD, OPTIONAL_PARENS, OKAY = "Password", "(optional)", "Okay"
 VOICE_CHAT, VOICE_CHAT_PARTY_RAID, VOICE_CHAT_BATTLEGROUND = "Voice Chat", "Party/Raid", "Battleground"
@@ -3677,8 +3850,25 @@ SwapRaidSubgroup, SetRaidSubgroup = retenir("SwapRaidSubgroup"), retenir("SetRai
 function UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData)
     if not dropdownMenu then error("attempt to index local 'dropdownMenu' (a nil value)") end
     table.insert(APPELS, { nom = "UnitPopup_ShowMenu", args = { which, unit, name, userData } })
+    -- le vrai retient l'unite, le nom et le royaume sur le menu
+    -- (UnitPopup.lua:193-210) ; un nom « Nom-Royaume » se coupe en deux
+    local serveur
+    if name then
+        local n, r = string.match(name, "^([^-]+)-(.*)")
+        if n then name, serveur = n, r end
+    end
+    dropdownMenu.which, dropdownMenu.unit, dropdownMenu.name, dropdownMenu.server = which, unit, name, serveur
     DropDownList1.numButtons = 0
     UIDropDownMenu_AddButton({ text = name, isTitle = 1 })
+    -- les lignes protegees, a leur place dans UnitPopupMenus (lignes 138-154) :
+    -- Set Focus en tete des menus d'unite, Dismiss Pet dans PET, Target dans
+    -- FRIEND, Clear Focus dans FOCUS
+    local SET_FOCUS = { SELF = 1, PET = 1, PARTY = 1, PLAYER = 1, RAID_PLAYER = 1, RAID = 1, TARGET = 1, VEHICLE = 1 }
+    if SET_FOCUS[which] then UIDropDownMenu_AddButton({ text = "Set Focus", value = "SET_FOCUS" }) end
+    if which == "FOCUS" then UIDropDownMenu_AddButton({ text = "Clear Focus", value = "CLEAR_FOCUS" }) end
+    if which == "PARTY" or which == "FRIEND" then UIDropDownMenu_AddButton({ text = "Whisper", value = "WHISPER" }) end
+    if which == "FRIEND" then UIDropDownMenu_AddButton({ text = "Target", value = "TARGET" }) end
+    if which == "PET" then UIDropDownMenu_AddButton({ text = "Dismiss Pet", value = "PET_DISMISS" }) end
     if which == "RAID" then
         UIDropDownMenu_AddButton({ text = "Promote to Assistant", value = "RAID_PROMOTE" })
         UIDropDownMenu_AddButton({ text = "Demote", value = "RAID_DEMOTE" })
@@ -3765,6 +3955,7 @@ for niveau = 1, 2 do
     end
     for i = 1, 8 do
         local bouton = CreateFrame("Button", nom .. "Button" .. i, liste)
+        bouton:SetID(i)  -- le XML du client : id="1" a "8"
         bouton:SetWidth(100)
         bouton:SetHeight(16)
         bouton:SetFontString(bouton:CreateFontString(nom .. "Button" .. i .. "NormalText", "ARTWORK"))
@@ -3787,6 +3978,7 @@ function UIDropDownMenu_AddButton(info, level)
     -- (UIDropDownMenu_CreateFrames : UIDROPDOWNMENU_MAXBUTTONS grandit).
     if not bouton then
         bouton = CreateFrame("Button", liste:GetName() .. "Button" .. liste.numButtons, liste)
+        bouton:SetID(liste.numButtons)
         bouton:SetWidth(100)
         bouton:SetHeight(16)
         bouton:SetFontString(bouton:CreateFontString(bouton:GetName() .. "NormalText", "ARTWORK"))
@@ -3799,6 +3991,12 @@ function UIDropDownMenu_AddButton(info, level)
     if info.text then bouton:SetText(info.text) end
     bouton:SetNormalFontObject(GameFontHighlightSmallLeft)
     bouton:SetHighlightFontObject(GameFontHighlightSmallLeft)
+    -- la place et la hauteur de la liste, prises sur la globale
+    -- (UIDropDownMenu.lua:355, 381, 429)
+    bouton:ClearAllPoints()
+    bouton:SetPoint("TOPLEFT", liste, "TOPLEFT", 5,
+        -((bouton:GetID() - 1) * UIDROPDOWNMENU_BUTTON_HEIGHT) - UIDROPDOWNMENU_BORDER_HEIGHT)
+    liste:SetHeight((liste.numButtons * UIDROPDOWNMENU_BUTTON_HEIGHT) + (UIDROPDOWNMENU_BORDER_HEIGHT * 2))
     return bouton
 end
 function ActionButton_Update() end
@@ -4480,7 +4678,258 @@ do
     IMPORTANT_PEOPLE_IN_GROUP = "Players in Group:"
     TANK, HEALER, DAMAGER = TANK or "Tank", HEALER or "Healer", DAMAGER or "Damage"
 end
+-- LE CHAT DU CLIENT 3.3.5 (FloatingChatFrame.xml/.lua, ChatFrame.xml) :
+-- les fenetres, leur fond (FloatingBorderedFrame), leur colonne et ses
+-- boutons (que l'OnShow remontre), la poignee ; le bouton de menu, le bouton
+-- d'amis ; les fonctions que Chat.lua accroche. Le defilement se compte en
+-- messages depuis le bas (GetCurrentScroll).
+do
+    CHAT_FRAMES = {}
+    NUM_CHAT_WINDOWS = 10
+    CHAT_FRAME_TEXTURES = { "Background", "TopLeftTexture", "ButtonFrameBackground" }
+    DEFAULT_CHATFRAME_ALPHA = 0.25
+    CHAT_TAB_SHOW_DELAY = 0.2
+    CHAT_TAB_HIDE_DELAY = 1
+    local function fenetre(i)
+        local nom = "ChatFrame" .. i
+        local f = CreateFrame("ScrollingMessageFrame", nom, UIParent)
+        f:SetID(i)
+        f:SetWidth(430); f:SetHeight(120)
+        f:SetFont("Fonts" .. string.char(92) .. "ARIALN.TTF", 14)
+        f.messages, f.defile = 0, 0
+        -- ChatFrame_OnLoad : les listes des canaux de la fenetre
+        f.channelList, f.zoneChannelList = {}, {}
+        function f:AddMessage(m) self.messages = self.messages + 1; if m then table.insert(RECORDED.messages, m) end end
+        function f:GetNumMessages() return self.messages end
+        function f:GetCurrentScroll() return self.defile end
+        function f:AtBottom() return self.defile == 0 end
+        function f:ScrollToBottom() self.defile = 0 end
+        function f:ScrollUp() self.defile = math.min(self.messages, self.defile + 1) end
+        function f:ScrollDown() self.defile = math.max(0, self.defile - 1) end
+        local fond = f:CreateTexture(nom .. "Background", "BACKGROUND")
+        fond:SetPoint("TOPLEFT", f, "TOPLEFT", -2, 3)
+        fond:SetPoint("TOPRIGHT", f, "TOPRIGHT", 2, 3)
+        fond:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", -2, -6)
+        fond:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 3, -6)
+        f.resizeButton = CreateFrame("Button", nom .. "ResizeButton", f)
+        f.resizeButton:SetPoint("BOTTOMRIGHT", fond, "BOTTOMRIGHT", 0, 0)
+        local coin = f:CreateTexture(nom .. "TopLeftTexture", "BORDER")
+        coin:SetTexture("Interface" .. string.char(92) .. "ChatFrame" .. string.char(92) .. "UI-ChatFrame-BorderCorner")
+        coin:SetTexCoord(0, 1, 1, 0)
+        fond:SetVertexColor(0, 0, 0)
+        fond:SetAlpha(40 / 255); coin:SetAlpha(40 / 255)
+        f.oldAlpha = 40 / 255
+        local bf = CreateFrame("Frame", nom .. "ButtonFrame", f)
+        bf:SetAlpha(0.2)
+        bf:CreateTexture(nom .. "ButtonFrameBackground", "BACKGROUND")
+        f.buttonFrame = bf
+        for _, s in ipairs({ "BottomButton", "DownButton", "UpButton", "MinimizeButton" }) do
+            CreateFrame("Button", nom .. "ButtonFrame" .. s, bf)
+        end
+        bf.minimizeButton = _G[nom .. "ButtonFrameMinimizeButton"]
+        bf.minimizeButton:SetPoint("BOTTOM", _G[nom .. "ButtonFrameUpButton"], "TOP", 0, 0)
+        -- l'OnShow du gabarit : les trois boutons remontres
+        f:SetScript("OnShow", function(self)
+            _G[nom .. "ButtonFrameBottomButton"]:Show(); _G[nom .. "ButtonFrameDownButton"]:Show(); _G[nom .. "ButtonFrameUpButton"]:Show()
+        end)
+        local onglet = CreateFrame("Button", nom .. "Tab", UIParent)
+        onglet:SetAlpha(0.4)
+        onglet.leftTexture = onglet:CreateTexture(nom .. "TabLeft", "BACKGROUND")
+        onglet:CreateFontString(nom .. "TabText", "ARTWORK")
+        onglet.glow = onglet:CreateTexture(nom .. "TabGlow", "BACKGROUND")
+        onglet.glow:SetAlpha(0.7)
+        CreateFrame("Frame", nom .. "TabFlash", onglet)
+        local saisie = CreateFrame("EditBox", nom .. "EditBox", f)
+        saisie:CreateTexture(nom .. "EditBoxLeft", "BACKGROUND")
+        saisie:CreateTexture(nom .. "EditBoxMid", "BACKGROUND")
+        saisie:CreateFontString(nom .. "EditBoxHeader", "OVERLAY")
+        saisie:SetAlpha(0.35)
+        f.editBox = saisie
+        table.insert(CHAT_FRAMES, nom)
+        return f
+    end
+    fenetre(1); fenetre(2)
+    ChatFrame2.SetScrollOffset = nil
+    ChatFrame1.SetScrollOffset = function(self, n) self.defile = n end
+    DEFAULT_CHAT_FRAME = ChatFrame1
+    SELECTED_CHAT_FRAME = ChatFrame1
+    -- FCF_SetButtonSide de 3.3.5 : la colonne sur la fenetre, a -4
+    function FCF_SetButtonSide(f, cote, force)
+        if not force and f.buttonSide == cote then return end
+        f.buttonFrame:ClearAllPoints()
+        if cote == "left" then
+            f.buttonFrame:SetPoint("TOPRIGHT", f, "TOPLEFT", -4, 0)
+            f.buttonFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", -4, 0)
+        else
+            f.buttonFrame:SetPoint("TOPLEFT", f, "TOPRIGHT", 4, 0)
+            f.buttonFrame:SetPoint("BOTTOMLEFT", f, "BOTTOMRIGHT", 4, 0)
+        end
+        f.buttonSide = cote
+    end
+    FONDUS = {}
+    function FCF_FadeInChatFrame(f) f.hasBeenFaded = true; table.insert(FONDUS, "in " .. f:GetName()) end
+    function FCF_FadeOutChatFrame(f) f.hasBeenFaded = nil; table.insert(FONDUS, "out " .. f:GetName()) end
+    function FCF_OpenTemporaryWindow() return nil end
+    ChatFrameMenuButton = CreateFrame("Button", "ChatFrameMenuButton", UIParent)
+    ChatFrameMenuButton:SetPoint("BOTTOM", ChatFrame1ButtonFrameUpButton, "TOP", 0, 0)
+    FriendsMicroButton = CreateFrame("Button", "FriendsMicroButton", UIParent)
+    FriendsMicroButton:SetNormalTexture("Interface" .. string.char(92) .. "ChatFrame" .. string.char(92) .. "UI-ChatIcon-BattleBro-Up")
+    FriendsMicroButton:SetPushedTexture("Interface" .. string.char(92) .. "ChatFrame" .. string.char(92) .. "UI-ChatIcon-BattleBro-Down")
+    FriendsMicroButton:SetPoint("BOTTOM", ChatFrame1ButtonFrame, "TOP", 0, 4)
+    GENERAL_CHAT_DOCK = CreateFrame("Frame", "GeneralDockManager", UIParent)
+    GENERAL_CHAT_DOCK.overflowButton = CreateFrame("Button", "GeneralDockManagerOverflowButton", GENERAL_CHAT_DOCK)
+    GENERAL_CHAT_DOCK.overflowButton:CreateTexture(nil, "ARTWORK")
+    GENERAL_CHAT_DOCK.overflowButton:SetHighlightTexture("Interface" .. string.char(92) .. "ChatFrame" .. string.char(92) .. "UI-ChatIcon-BlinkHilight")
+    -- l'opacite retenue de chaque fenetre (chat-cache.txt : 40 / 255)
+    OPACITES = {}
+    for i = 1, NUM_CHAT_WINDOWS do OPACITES[i] = 40 / 255 end
+    function SetChatWindowAlpha(i, a) OPACITES[i] = a end
+    function GetChatWindowInfo(i) return "Chat", 14, 0, 0, 0, OPACITES[i], true, false, true, false end
+    SOURIS_SUR = {}
+    local ancien = MouseIsOver
+    function MouseIsOver(f, ...) if SOURIS_SUR[f] then return true end if ancien then return ancien(f, ...) end return false end
+end
+-- LES AURAS DU JOUEUR (3.3.5, BuffFrame.lua) : UnitAura rend nom, rang,
+-- icone, piles, type, duree, expiration, lanceur, volable, a regrouper, sort ;
+-- GetWeaponEnchantInfo rend les deux mains (temps restant en millisecondes) ;
+-- le BuffFrame du client, ses enchantements, son regroupement, et les deux
+-- fonctions que les options de l'interface appellent.
+do
+    AURAS = { HELPFUL = {}, HARMFUL = {} }
+    function UnitAura(unite, i, filtre)
+        local a = AURAS[filtre or "HELPFUL"][i]
+        if not a or (unite ~= "player" and unite ~= "vehicle") then return nil end
+        return a[1], "", a[2], a[3], a[4], a[5], a[6], "player", nil, a[7], a[8]
+    end
+    ENCHANTS = {}
+    function GetWeaponEnchantInfo()
+        local e = ENCHANTS
+        return e.main, e.mainReste, e.mainCharges, e.gauche, e.gaucheReste, e.gaucheCharges
+    end
+    local texture = GetInventoryItemTexture
+    function GetInventoryItemTexture(u, e)
+        if e == 16 then return ENCHANTS.mainIcone end
+        if e == 17 then return ENCHANTS.gaucheIcone end
+        return texture(u, e)
+    end
+    ANNULES = {}
+    function CancelUnitBuff(u, i, f) table.insert(ANNULES, u .. ":" .. i .. ":" .. tostring(f)) end
+    function CancelItemTempEnchantment(s) table.insert(ANNULES, "enchant:" .. s) end
+    DAY_ONELETTER_ABBR = "%d d"; HOUR_ONELETTER_ABBR = "%d h"
+    MINUTE_ONELETTER_ABBR = "%d m"; SECOND_ONELETTER_ABBR = "%d s"
+    function SecondsToTimeAbbrev(s)
+        if s >= 86400 then return DAY_ONELETTER_ABBR, math.ceil(s / 86400) end
+        if s >= 3600 then return HOUR_ONELETTER_ABBR, math.ceil(s / 3600) end
+        if s >= 60 then return MINUTE_ONELETTER_ABBR, math.ceil(s / 60) end
+        return SECOND_ONELETTER_ABBR, s
+    end
+    SHOW_BUFF_DURATIONS = "1"; CONSOLIDATE_BUFFS = "0"; ENABLE_COLORBLIND_MODE = "0"
+    DEBUFF_SYMBOL_MAGIC = "Ma"; DEBUFF_SYMBOL_CURSE = "Cu"; DEBUFF_SYMBOL_DISEASE = "Di"; DEBUFF_SYMBOL_POISON = "Po"
+    TOOLTIP_DEFAULT_COLOR = { r = 1, g = 1, b = 1 }
+    TOOLTIP_DEFAULT_BACKGROUND_COLOR = { r = 0.09, g = 0.09, b = 0.19 }
+    GameTooltip.SetUnitAura = function(self, u, i, f) self.aura = { u, i, f } end
+    GameTooltip.SetInventoryItem = function(self, u, s) self.objet = { u, s } end
+    GameTooltip.IsOwned = function(self, f) return self.owner == f end
+    GameTooltip.SetFrameLevel = function(self, l) self.frameLevel = l end
+    BuffFrame = CreateFrame("Frame", "BuffFrame", UIParent)
+    BuffFrame:RegisterEvent("UNIT_AURA")
+    TemporaryEnchantFrame = CreateFrame("Frame", "TemporaryEnchantFrame", UIParent)
+    -- ses deux boutons : leur clic droit annule (protege : il faut LEUR clic)
+    for i = 1, 2 do
+        local b = CreateFrame("Button", "TempEnchant" .. i, TemporaryEnchantFrame)
+        b:EnableMouse(true)
+        b:SetScript("OnClick", function(self)
+            if self:GetID() == 16 then CancelItemTempEnchantment(1) elseif self:GetID() == 17 then CancelItemTempEnchantment(2) end
+        end)
+    end
+    ConsolidatedBuffs = CreateFrame("Button", "ConsolidatedBuffs", UIParent)
+    ConsolidatedBuffsTooltip = CreateFrame("Frame", "ConsolidatedBuffsTooltip", UIParent)
+    MISES_A_JOUR_CLIENT = 0
+    function BuffFrame_Update() MISES_A_JOUR_CLIENT = MISES_A_JOUR_CLIENT + 1 end
+    function BuffFrame_UpdatePositions() BuffFrame_Update() end
+end
+-- StaticPopup.lua du client declare la table des popups : l'addon n'y
+-- ajoute que ses cles, il ne la remplace jamais.
+StaticPopupDialogs = StaticPopupDialogs or {}
+STATICPOPUP_ORIGINE = StaticPopupDialogs
+-- UnitPopup_OnUpdate du client (UnitPopup.lua:989) : a chaque image, il
+-- reactive les lignes que rien n'interdit -- Set Focus (dist 0) comprise.
+function UnitPopup_OnUpdate()
+    if not DropDownList1:IsShown() then return end
+    for i = 1, DropDownList1.numButtons do
+        local b = _G["DropDownList1Button" .. i]
+        if b then b:Enable() end
+    end
+end
+COMPTES = {}
+function UIDropDownMenu_StartCounting(f) table.insert(COMPTES, "start") end
+function UIDropDownMenu_StopCounting(f) table.insert(COMPTES, "stop") end
+function UnitIsSameServer() return true end
+-- WorldMapTrackQuest_Toggle du client (WorldMapFrame.lua:2154-2170) : suivre
+-- une quete depuis la carte l'ajoute a LOCAL_MAP_QUESTS si la table est celle
+-- de la zone affichee, l'en retire sinon, puis rafraichit le suivi.
+function WorldMapTrackQuest_Toggle(coche)
+    local id = WORLDMAP_SETTINGS.selectedQuestId
+    if coche then
+        if LOCAL_MAP_QUESTS["zone"] == GetCurrentMapZone() then LOCAL_MAP_QUESTS[id] = true end
+    else
+        LOCAL_MAP_QUESTS[id] = nil
+    end
+    WatchFrame_Update()
+end
 """
+
+
+# LES GLOBALES ECRITES, lues dans le bytecode Lua 5.1 (SETGLOBAL, opcode 7),
+# sans rien executer : chaque ecriture d'une globale y figure, fonctions
+# globales comprises. Ecrire une globale DU CLIENT depuis l'addon la fait
+# passer a l'addon, et avec elle tout code du client qui la lit
+# (StaticPopupDialogs -> BindEnchant bloque, 2026-09-26).
+def globales_ecrites(dump):
+    import struct
+    p = 12  # en-tete : signature(4) version format endian int size_t instr number integral
+    taille = dump[8]  # size_t : 8 octets sur une machine 64 bits
+    ecrites = []
+
+    def entier():
+        nonlocal p
+        v = struct.unpack_from("<i", dump, p)[0]; p += 4; return v
+
+    def chaine():
+        nonlocal p
+        n = struct.unpack_from("<Q" if taille == 8 else "<I", dump, p)[0]; p += taille
+        s = dump[p:p + n - 1] if n else None; p += n
+        return s.decode("latin-1") if s is not None else None
+
+    def fonction():
+        nonlocal p
+        chaine(); entier(); entier()   # source, ligne, derniere ligne
+        p += 4                          # nups, numparams, is_vararg, maxstack
+        n = entier()
+        code = struct.unpack_from("<%dI" % n, dump, p); p += 4 * n
+        n = entier()
+        k = []
+        for _ in range(n):
+            t = dump[p]; p += 1
+            if t == 0: k.append(None)
+            elif t == 1: k.append(bool(dump[p])); p += 1
+            elif t == 3: k.append(struct.unpack_from("<d", dump, p)[0]); p += 8
+            elif t == 4: k.append(chaine())
+        for ins in code:
+            if ins & 0x3F == 7:
+                ecrites.append(k[ins >> 14])
+        n = entier()
+        for _ in range(n):
+            fonction()
+        n = entier(); p += 4 * n        # lignes
+        n = entier()
+        for _ in range(n):
+            chaine(); entier(); entier()  # locales
+        n = entier()
+        for _ in range(n):
+            chaine()                     # upvalues
+    fonction()
+    return ecrites
 
 
 def main():
@@ -4496,7 +4945,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -4521,6 +4970,29 @@ def main():
             print("  REFUS LUA 5.1 %s" % erreur)
         sys.exit("le client 3.3.5 ne chargerait pas ces fichiers")
     print("compilation Lua 5.1 : %d fichiers acceptes" % len(ordre))
+
+    # Les globales que l'addon a le droit d'ecrire : les siennes. Les autres
+    # sont celles du client ; celles de la liste EN_ATTENTE attendent une
+    # reprise (2026-09-26 : la carte du monde, etape suivante) --
+    # toute NOUVELLE ecriture d'une globale du client fait echouer le banc.
+    import struct
+    A_NOUS = {"ForeverUI", "ForeverUIDB", "UIAtlas", "SLASH_FOREVERUI1", "SLASH_FOREVERUI2"}
+    # MAP_QUEST_DIFFICULTY : l'option du menu des filtres de la carte, gardee
+    # telle quelle sur decision de l'utilisateur (2026-09-26) -- la seule.
+    EN_ATTENTE = {"MAP_QUEST_DIFFICULTY"}
+    octets = importlib.import_module("lupa.lua51").LuaRuntime(unpack_returned_tuples=True, encoding=None)
+    vider = octets.eval("function(code, nom) local f = assert(loadstring(code, nom)) return string.dump(f) end")
+    ecrites = {}
+    for fn in ordre:
+        for nom in globales_ecrites(vider(io.open(os.path.join(ADDON, fn), "rb").read(), fn.encode())):
+            ecrites.setdefault(nom, set()).add(fn)
+    interdites = {n: f for n, f in ecrites.items() if n not in A_NOUS and n not in EN_ATTENTE}
+    for nom, fichiers in sorted(interdites.items()):
+        print("  GLOBALE DU CLIENT ECRITE %-32s %s" % (nom, ", ".join(sorted(fichiers))))
+    assert not interdites, "l'addon ecrit des globales du client"
+    print("globales ecrites : %d a l'addon, %d acceptee(s) par l'utilisateur (%s)" % (
+        len([n for n in ecrites if n in A_NOUS]), len([n for n in ecrites if n in EN_ATTENTE]),
+        ", ".join(sorted(n for n in ecrites if n in EN_ATTENTE))))
 
     echecs = []
     for fn in ordre:
@@ -8117,10 +8589,19 @@ def main():
     assert (phg[1], phg[4], phg[5]) == ("TOPLEFT", -9, 6),         "l ombre mesuree sur l image : 9 a gauche, 6 en haut"
     assert (pbd[1], pbd[4], pbd[5]) == ("BOTTOMRIGHT", 9, -12),         "9 a droite, 12 en bas -- le filet tombe sur le bord du cadre"
 
-    print("   ligne : %d de haut (20), police %s, pas %d" % (
-        b1.height, b1.normalFont.police, g.UIDROPDOWNMENU_BUTTON_HEIGHT))
+    pl2 = list(b2.points[1].values())
+    print("   ligne : %d de haut (20), police %s, seconde ligne a %s, liste %d" % (
+        b1.height, b1.normalFont.police, pl2[4], liste.height))
     assert b1.height == 20, "DarkMenuElementTemplate fait 20 de haut"
-    assert g.UIDROPDOWNMENU_BUTTON_HEIGHT == 20, "le pas suit la hauteur de ligne"
+    # le pas suit la hauteur de ligne, SANS toucher la globale du client :
+    # l'ecrire souillerait tous ses menus (taint, 2026-09-26)
+    assert g.UIDROPDOWNMENU_BUTTON_HEIGHT == 16, "la globale du client reste la sienne"
+    assert (pl2[0], pl2[3], pl2[4]) == ("TOPLEFT", 5, -35), "seconde ligne : -(1 x 20) - 15"
+    assert liste.height == 2 * 20 + 30, "deux lignes de 20 et deux bordures de 15"
+    menu = lua.eval("CreateFrame('Frame', nil, UIParent)")
+    lua.eval("function(m) UIDropDownMenu_Initialize(m, function() end) end")(menu)
+    assert menu.height == 40, "le menu deroulant garde la hauteur de deux lignes de 20"
+    lua.execute("DropDownList1.numButtons = 2")  # Initialize vide la liste, comme le vrai
     assert b1.normalFont.police == "GameFontHighlightLeft",         "le compositeur de camelot pose GameFontHighlight justifie a gauche"
 
     coche = g.DropDownList1Button1Check
@@ -8495,10 +8976,8 @@ def main():
         g.NUM_GEARSET_ICONS_PER_ROW))
     assert popup.width == 525, "IconSelectorPopupFrameTemplate"
     assert popup.height == g.CharacterFrame.height,         "a la demande : la hauteur de la feuille de personnage"
-    assert g.NUM_GEARSET_ICONS_PER_ROW == 10, "ScrollBoxSelectorMixin:GetStride rend 10"
-    assert g.NUM_GEARSET_ICON_ROWS == 7
-    assert g.NUM_GEARSET_ICONS_SHOWN == 70, "dix par rangee, sept rangees"
-    assert g.GEARSET_ICON_ROW_HEIGHT == 46, "36 d icone plus 10 d ecart"
+    # les globales du client restent les siennes (taint, 2026-09-26)
+    assert (g.NUM_GEARSET_ICONS_PER_ROW, g.NUM_GEARSET_ICON_ROWS, g.NUM_GEARSET_ICONS_SHOWN, g.GEARSET_ICON_ROW_HEIGHT) == (5, 3, 15, 36)
     assert len(list(popup.buttons.values())) == 70, "le client n en cree que quinze"
 
     b1 = g.GearManagerDialogPopupButton1
@@ -8566,6 +9045,31 @@ def main():
     choix.scripts.OnClick(choix)
     print("   clic sur le choix : %d saut(s) vers la liste" % ((g.RECALCULE or 0) - avant))
     assert (g.RECALCULE or 0) > avant,         "cliquer ramene la liste sur l icone retenue"
+
+    # LE REMPLISSAGE : dix par rangee, sept rangees, sans les globales du client
+    defil = g.GearManagerDialogPopupScrollFrame
+    bouton = lambda i: g["GearManagerDialogPopupButton%d" % i]
+    lua.execute("GearManagerDialogPopup.selectedTexture = nil GearManagerDialogPopup.selectedIcon = nil GearManagerDialogPopupScrollFrame.offset = 0 GearManagerDialogPopup_Update()")
+    print("   remplissage : 1er %s, 70e %s, %s rangees de 10, %s montrees, pas %s" % (
+        bouton(1).icon.texture, bouton(70).icon.texture, defil.fauxRangees, defil.fauxMontrees, defil.fauxPas))
+    assert bouton(1).icon.texture == "icone-1" and bouton(70).icon.texture == "icone-70" and bouton(70).shown
+    assert (defil.fauxRangees, defil.fauxMontrees, defil.fauxPas) == (12, 7, 36)
+    # defiler de deux rangees : la vue part de la 21e icone
+    lua.execute("FauxScrollFrame_OnVerticalScroll(GearManagerDialogPopupScrollFrame, 72, 36, GearManagerDialogPopup_Update)")
+    assert bouton(1).icon.texture == "icone-21" and bouton(70).icon.texture == "icone-90" and bouton(70).shown
+    # le clic du client retient la bonne icone : offset x 5 + GetID = 2 x 10 + 3
+    b3 = bouton(3)
+    lua.eval("function(b) GearSetPopupButton_OnClick(b) end")(b3)
+    print("   clic sur la 3e case : icone %s retenue" % popup.selectedIcon)
+    assert popup.selectedIcon == 23 and b3.checked and not bouton(4).checked
+    # retrouver l'icone retenue : la 95e, six rangees plus bas au plus
+    lua.execute("GearManagerDialogPopup.selectedIcon = nil GearManagerDialogPopup.selectedTexture = 'icone-95' RecalculateGearManagerDialogPopup()")
+    print("   icone 95 retenue : vue a la rangee %s, case %s cochee" % (defil.offset, [i for i in range(1, 71) if bouton(i).checked]))
+    assert defil.offset == 5 and bouton(45).checked and popup.selectedIcon == 95
+    # une icone qui n'est plus dans la liste : l'icone speciale, en 121e
+    lua.execute("GearManagerDialogPopup.selectedIcon = nil GearManagerDialogPopup.selectedTexture = 'perso' RecalculateGearManagerDialogPopup()")
+    assert defil.offset == 6 and bouton(61).icon.texture == "perso" and bouton(61).checked and defil.fauxRangees == 13
+    lua.execute("ICONE_SPECIALE = nil GearManagerDialogPopup.selectedTexture = nil GearManagerDialogPopup.selectedIcon = nil GearManagerDialogPopupScrollFrame.offset = 0")
 
 
     # ------------------------------------------------------------------
@@ -8776,13 +9280,16 @@ def main():
     # ------------------------------------------------------------------
     print("\n--- carte du monde ---")
     ech = 697.0 / 1002.0
-    print("   WORLDMAP_WINDOWED_SIZE = %.6f (attendu %.6f)" % (g.WORLDMAP_WINDOWED_SIZE, ech))
-    assert abs(g.WORLDMAP_WINDOWED_SIZE - ech) < 1e-9, "la constante de la petite fenetre suit camelot"
+    # les constantes de WotLK restent les siennes : c'est WorldMapFrame qui
+    # prend l'echelle (taint, 2026-09-26)
+    print("   WORLDMAP_WINDOWED_SIZE = %.6f (celle du client)" % g.WORLDMAP_WINDOWED_SIZE)
+    assert g.WORLDMAP_WINDOWED_SIZE == 0.573 and g.WORLDMAP_QUESTLIST_SIZE == 0.691
+    kR = ech / 0.573
 
     # LE DEPLACEMENT : le mode avance de WotLK, deverrouille.
     print("   advancedWorldMap = %s | verrou = %s" % (g.STATE.cvars.advancedWorldMap, g.WORLDMAP_SETTINGS.locked))
     assert g.STATE.cvars.advancedWorldMap == "1", "la CVar est posee avant VARIABLES_LOADED"
-    assert g.WORLDMAP_SETTINGS.locked == False, "la barre de titre fait glisser sans passer par le menu"
+    assert g.WORLDMAP_SETTINGS.locked == True, "le verrou reste celui du client"
 
     # VARIABLES_LOADED : le vrai lit la CVar, puis appelle ToggleSizeDown
     # quand miniWorldMap vaut 1.
@@ -8791,10 +9298,12 @@ def main():
     lua.execute("WORLDMAP_SETTINGS.advanced = GetCVar('advancedWorldMap') == '1' WorldMap_ToggleSizeDown()")
     carteMonde = g.WorldMapFrame
     detail = g.WorldMapDetailFrame
-    print("   fenetre %sx%s | carte echelle %.6f | points de la carte : %d" % (
-        carteMonde.width, carteMonde.height, detail.scale, len(list(detail.points.values()))))
-    assert (carteMonde.width, carteMonde.height) == (702, 534), "702 x 534, pas les 623 x 437 de SetMiniMode"
-    assert abs(detail.scale - ech) < 1e-9
+    print("   fenetre %.1fx%.1f a l'ecran (echelle %.6f) | carte %.6f x %.3f | points de la carte : %d" % (
+        carteMonde.width * carteMonde.scale, carteMonde.height * carteMonde.scale, carteMonde.scale,
+        detail.scale, carteMonde.scale, len(list(detail.points.values()))))
+    assert abs(carteMonde.scale - kR) < 1e-9
+    assert abs(carteMonde.width * kR - 702) < 1e-6 and abs(carteMonde.height * kR - 534) < 1e-6, "702 x 534 a l'ecran, pas les 623 x 437 de SetMiniMode"
+    assert detail.scale == 0.573 and abs(detail.GetEffectiveScale(detail) - ech) < 1e-9, "la carte a 0,6956 de l'interface"
     pd = list(detail.points.values())
     assert len(pd) == 1, "SetMiniMode AJOUTE un point sans ClearAllPoints : il faut le retirer"
     pd = pd[0]
@@ -8809,12 +9318,15 @@ def main():
     assert carteMonde.attributes["UIPanelLayout-area"] == "center", "zone center : le gestionnaire ne la replace pas"
     assert pc[2].name == "WorldMapScreenAnchor"
     assert (pa0[1], pa0[4], pa0[5]) == ("TOPLEFT", 16, -116), "la place d'un panneau left de camelot"
-    lua.execute("WorldMapTitleButton:GetScript('OnDragStart')(WorldMapTitleButton)")
+    # tirer la barre : le client refuse (verrouillee), on fait ses gestes
+    lua.execute("local b = WorldMapTitleButton b:GetScript('OnDragStart')(b) b.hooks.OnDragStart(b)")
     assert carteMonde.moving, "tirer la barre du haut deplace la carte"
-    lua.execute("WorldMapTitleButton:GetScript('OnDragStop')(WorldMapTitleButton)")
+    lua.execute("local b = WorldMapTitleButton b:GetScript('OnDragStop')(b) b.hooks.OnDragStop(b)")
+    assert not carteMonde.moving
     pt = g.WorldMapTitleButton.points
-    print("   barre de titre : %s -> %s, %s de haut" % (list(pt[1].values())[3:5], list(pt[2].values())[3:5], g.WorldMapTitleButton.height))
-    assert g.WorldMapTitleButton.height == 20
+    print("   barre de titre : %s -> %s, %.2f de haut (%.1f a l'ecran)" % (list(pt[1].values())[3:5], list(pt[2].values())[3:5],
+        g.WorldMapTitleButton.height, g.WorldMapTitleButton.height * kR))
+    assert abs(g.WorldMapTitleButton.height * kR - 20) < 1e-9 and abs(list(pt[1].values())[3] * kR - 58) < 1e-9
 
     # la bordure de WotLK : SetOpacity lui rend son alpha, mais plus d'image
     for nom in ("WorldMapFrameMiniBorderLeft", "WorldMapFrameMiniBorderRight"):
@@ -9054,9 +9566,10 @@ def main():
     print("\n--- journal de quetes ---")
     lua.execute("ForeverUI.QuestLog.reglages().volet = true WorldMap_ToggleSizeDown() WorldMapFrame:Show()")
     volet = g.ForeverUIQuestLogPanel
-    print("   fenetre %sx%s | volet %s, %s de large" % (carteMonde.width, carteMonde.height, volet.shown, volet.width))
-    assert carteMonde.width == 1035, "702 + 333 avec le volet ouvert"
+    print("   fenetre %.1f a l'ecran | volet %s, %s de large a l'echelle %.4f" % (carteMonde.width * kR, volet.shown, volet.width, volet.scale))
+    assert abs(carteMonde.width * kR - 1035) < 1e-6, "702 + 333 avec le volet ouvert"
     assert volet.shown and volet.width == 330 and volet.strata == "HIGH"
+    assert abs(volet.scale * kR - 1) < 1e-9, "le volet revient a l'unite de l'interface"
     pv = [list(x.values()) for x in volet.points.values()]
     assert pv[0][0] == "TOPRIGHT" and pv[0][3:5] == [-3, -25] and pv[1][0] == "BOTTOMRIGHT" and pv[1][3:5] == [-3, 3], pv
     bascule = g.ForeverUIWorldMapSidePanelToggle
@@ -9317,9 +9830,9 @@ def main():
     # la bascule du volet
     lua.execute("ForeverUIWorldMapSidePanelToggle.fermer:GetScript('OnClick')()")
     print("   volet ferme : fenetre %s, volet %s" % (carteMonde.width, volet.shown))
-    assert carteMonde.width == 702 and not volet.shown and bascule.ouvrir.shown
+    assert abs(carteMonde.width * kR - 702) < 1e-6 and not volet.shown and bascule.ouvrir.shown
     lua.execute("ForeverUIWorldMapSidePanelToggle.ouvrir:GetScript('OnClick')()")
-    assert carteMonde.width == 1035 and volet.shown
+    assert abs(carteMonde.width * kR - 1035) < 1e-6 and volet.shown
 
     # L : QuestLogFrame reste invisible, la carte s'ouvre avec le volet ;
     # L encore la ferme, meme si le gestionnaire l'a deja fermee avant nous.
@@ -9341,16 +9854,18 @@ def main():
     print("   agrandi : support %s x %s a l'echelle %s, %s de la carte | canevas %s x %s" % (
         sup.width, sup.height, sup.scale, ps[0], can.width, can.height))
     assert (sup.width, sup.height) == (1703, 1200), "UpdateMaximizedSize : hauteur de l'ecran, largeur au prorata"
-    assert abs(sup.scale - 0.64) < 1e-9, "le support revient a l'unite de l'interface"
+    assert abs(sup.GetEffectiveScale(sup) - 0.64) < 1e-9, "le support revient a l'unite de l'interface"
     assert ps[0] == "TOP" and ps[1].name == "WorldMapFrame" and (ps[3], ps[4]) == (0, 0), "maximizePoint TOP"
     assert (can.width, can.height) == (1703 - 5, 1200 - 69)
     attendu = min(1698 / 1002, 1131 / 668) * 0.64
-    print("   echelle de la carte %.5f (attendu %.5f), vue %.5f" % (g.WorldMapDetailFrame.scale, attendu, g.WORLDMAP_SETTINGS.size))
-    for f in (g.WorldMapDetailFrame, g.WorldMapButton, g.WorldMapFrameAreaFrame, g.WorldMapBlobFrame):
-        assert abs(f.scale - attendu) < 1e-9, f.name
-    assert abs(g.WORLDMAP_QUESTLIST_SIZE - attendu) < 1e-9 and abs(g.WORLDMAP_FULLMAP_SIZE - attendu) < 1e-9, \
-        "les constantes que WotLK lit pour placer fleche et reperes"
-    assert abs(g.WORLDMAP_SETTINGS.size - attendu) < 1e-9
+    det = g.WorldMapDetailFrame
+    print("   carte a %.5f de l'ecran (attendu %.5f) : sa vue %.3f x WorldMapFrame %.5f" % (
+        det.GetEffectiveScale(det), attendu, det.scale, carteMonde.scale))
+    assert abs(det.GetEffectiveScale(det) - attendu) < 1e-9, "la carte tient dans le canevas"
+    for f in (g.WorldMapDetailFrame, g.WorldMapButton, g.WorldMapFrameAreaFrame):
+        assert f.scale == 0.691, f.name
+    assert g.WORLDMAP_QUESTLIST_SIZE == 0.691 and g.WORLDMAP_FULLMAP_SIZE == 1.0 and g.WORLDMAP_SETTINGS.size == 0.691, \
+        "les constantes de WotLK restent les siennes"
     pd = [list(x.values()) for x in g.WorldMapDetailFrame.points.values()]
     assert len(pd) == 1 and pd[0][0] == "CENTER" and pd[0][1].name == "ForeverUIWorldMapCanvas", pd
     # le cadre de camelot, sans portrait
@@ -9359,7 +9874,7 @@ def main():
     php = list(hg.points[1].values())
     print("   cadre : montre=%s echelle %s | portrait %s | coin haut-gauche %s (%s, %s)" % (
         cadre.shown, cadre.scale, cadre.portraitCadre.shown, hg.texture, php[3], php[4]))
-    assert cadre.shown and abs(cadre.scale - 0.64) < 1e-9 and not cadre.portraitCadre.shown
+    assert cadre.shown and abs(cadre.GetEffectiveScale(cadre) - 0.64) < 1e-9 and not cadre.portraitCadre.shown
     assert hg.texture == g.UIAtlas.data["ui-frame-metal-cornertopleft"][1] and (php[3], php[4]) == (-12, 16)
     print("   titre '%s'" % titre.text)
     assert titre.text == "World Map" and meme(titre.parent, cadre.bandeau), "WORLD_MAP, dans le bandeau"
@@ -9373,8 +9888,8 @@ def main():
     # les boutons rouges : fermer, et reduire a sa gauche
     fermer, reduire = g.WorldMapFrameCloseButton, g.WorldMapFrameSizeDownButton
     pr = list(reduire.points[1].values())
-    assert list(fermer.points[1].values())[1].name == "ForeverUIWorldMapMaximized" and abs(fermer.scale - 0.64) < 1e-9
-    assert pr[0] == "RIGHT" and pr[1].name == "WorldMapFrameCloseButton" and abs(reduire.scale - 0.64) < 1e-9
+    assert list(fermer.points[1].values())[1].name == "ForeverUIWorldMapMaximized" and abs(fermer.GetEffectiveScale(fermer) - 0.64) < 1e-9
+    assert pr[0] == "RIGHT" and pr[1].name == "WorldMapFrameCloseButton" and abs(reduire.GetEffectiveScale(reduire) - 0.64) < 1e-9
     assert reduire.GetNormalTexture(reduire).texcoord[1] == g.UIAtlas.data["redbutton-condense"][2], "RedButton-Condense"
     assert (g.WorldMapDetailTile12.width, g.WorldMapDetailTile12.height) == (234, 156), "les tuiles rognees a la carte"
     # une vue de WotLK repose la carte et la liste : on repasse derriere
@@ -9382,19 +9897,24 @@ def main():
     pd = [list(x.values()) for x in g.WorldMapDetailFrame.points.values()]
     assert len(pd) == 1 and pd[0][0] == "CENTER" and not g.WorldMapQuestScrollFrame.shown
     lua.execute("WorldMapFrame_SetFullMapView()")
-    assert not g.WorldMapFrameTexture14.shown and abs(g.WorldMapDetailFrame.scale - attendu) < 1e-9
+    print("   vue FULLMAP : carte a %.5f de l'ecran, WorldMapFrame %.5f" % (det.GetEffectiveScale(det), carteMonde.scale))
+    assert not g.WorldMapFrameTexture14.shown and det.scale == 1.0 and abs(det.GetEffectiveScale(det) - attendu) < 1e-9, \
+        "la vue change l'echelle de WotLK : WorldMapFrame la compense"
+    assert abs(sup.GetEffectiveScale(sup) - 0.64) < 1e-9
     lua.execute("UIParent:SetScale(1) WorldMapFrame:SetScale(1)")
 
     # et retour
     lua.execute("WorldMap_ToggleSizeDown()")
     attendu = 702 + (333 if g.ForeverUI.QuestLog.reglages().volet else 0)
-    assert g.ForeverUIWorldMapBorder.shown and (carteMonde.width, carteMonde.height) == (attendu, 534)
+    assert g.ForeverUIWorldMapBorder.shown and abs(carteMonde.width * kR - attendu) < 1e-6 and abs(carteMonde.height * kR - 534) < 1e-6
     print("   retour : cadre echelle %s, portrait %s, titre '%s', coin %s" % (
         g.ForeverUIWorldMapBorder.scale, g.ForeverUIWorldMapBorder.portraitCadre.shown, titre.text,
         list(g.ForeverUIWorldMapBorder.coins.hg.points[1].values())[3]))
-    assert g.ForeverUIWorldMapBorder.scale == 1 and g.ForeverUIWorldMapBorder.portraitCadre.shown
+    bord = g.ForeverUIWorldMapBorder
+    assert abs(bord.GetEffectiveScale(bord) - 1) < 1e-9 and bord.portraitCadre.shown
     assert titre.text == "Map & Quest Log" and list(g.ForeverUIWorldMapBorder.coins.hg.points[1].values())[3] == -13
-    assert g.WorldMapFrameCloseButton.scale == 1 and list(barre.points[1].values())[3] == 66
+    fermer = g.WorldMapFrameCloseButton
+    assert abs(fermer.GetEffectiveScale(fermer) - 1) < 1e-9 and list(barre.points[1].values())[3] == 66
     assert g.ForeverUIQuestLogPanel.shown == bool(g.ForeverUI.QuestLog.reglages().volet), "le volet revient avec la petite fenetre"
 
     # ------------------------------------------------------------------
@@ -9417,7 +9937,8 @@ def main():
         wf.width, ent.texte.text, ent.shown, g.WatchFrameHeader.shown, g.WatchFrameHeader.alpha))
     assert g.WOTLK_DESSINE == 0, "les gestionnaires de WotLK ne dessinent plus"
     assert g.ADDON_APPELE is not None and g.ADDON_APPELE < 0, "le gestionnaire d'un addon tourne apres les modules"
-    assert wf.width == 260 and g.WATCHFRAME_EXPANDEDWIDTH == 260
+    # 260 de large, SANS ecrire les globales du client (taint, 2026-09-26)
+    assert wf.width == 260 and g.WATCHFRAME_EXPANDEDWIDTH == 204 and g.WATCHFRAME_MAXLINEWIDTH == 192
     assert ent.shown and ent.texte.text == "All Objectives" and (ent.width, ent.height) == (260, 32)
     assert not g.WatchFrameHeader.shown and g.WatchFrameHeader.alpha == 0, "l'en-tete de WotLK reste etouffe"
     pl = list(lignes.points[1].values())
@@ -11212,10 +11733,30 @@ def main():
     lua.execute("VOIX = false; CANAUX[4][8] = nil; CANAUX[4][9] = nil; ForeverUI.Social.maj()")
     C.ajouter.scripts.OnClick(C.ajouter)
     nv = g.ForeverUIChannelNewFrame
-    assert nv.shown
+    fille = g.ChannelFrameDaughterFrame
+    assert nv.shown and fille.shown, "l'annexe et la boite du client s'ouvrent ensemble"
+    # la boite du client : sous UIParent, sur l'annexe, sans son art ni sa
+    # case de chat vocal ; ses champs et ses boutons a la place des notres
+    req = lua.eval("rawequal")
+    assert req(fille.parent, g.UIParent) and req(fille.allPoints, nv) and fille.backdrop is None
+    assert all(r.alpha == 0 for r in lua.eval("function(f) return { f:GetRegions() } end")(fille).values())
+    assert not g.ChannelFrameDaughterFrameVoiceChat.shown and not g.ChannelFrameDaughterFrameDetailCloseButton.shown
+    assert req(nv.nom, g.ChannelFrameDaughterFrameChannelName) and req(nv.ok, g.ChannelFrameDaughterFrameOkayButton)
+    assert (nv.nom.width, nv.nom.height) == (180, 20) and nv.nom.bordCamelot is not None
+    po = list(nv.ok.points[1].values())
+    assert (po[0], po[2], po[3], po[4]) == ("BOTTOMLEFT", "BOTTOMLEFT", 12, 12) and nv.ok.width == 96
+    # Entree : le code du client rejoint le canal ET l'inscrit dans la liste
+    # du chat -- l'addon n'ecrit rien
+    avant = len(list(g.DEFAULT_CHAT_FRAME.channelList.values()))
     nv.nom.SetText(nv.nom, "MonCanal")
     nv.nom.scripts.OnEnterPressed(nv.nom)
-    assert appels("JoinPermanentChannel")[-1] == ["MonCanal", ""] and not nv.shown
+    assert appels("JoinPermanentChannel")[-1] == ["MonCanal", ""] and not nv.shown and not fille.shown
+    assert list(g.DEFAULT_CHAT_FRAME.channelList.values())[avant:] == ["MonCanal"]
+    # la croix de l'annexe ferme aussi la boite du client
+    C.ajouter.scripts.OnClick(C.ajouter)
+    assert nv.shown and fille.shown
+    nv.croix.scripts.OnClick(nv.croix)
+    assert not nv.shown and not fille.shown
 
     # LE RAID -- a la connexion, aucun menu n'est ouvert : la page ne doit
     # rien demander a UnitPopup en se batissant
@@ -12130,6 +12671,435 @@ def main():
     assert not g.LFRParentFrame.shown and g.LFDParentFrame.shown and fc.parent.name == "LFDParentFrame"
     assert F.pageDonjons.shown and not R.page.shown and o1.choisi.shown
     lua.execute("HideUIPanel(LFDParentFrame)")
+
+
+    # ------------------------------------------------- LA FENETRE DE CHAT
+    print("\nfenetre de chat :")
+    C = g.ForeverUI.Chat
+    c1, c2 = g.ChatFrame1, g.ChatFrame2
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    # le fond deborde de 15 a droite pour loger la barre
+    fond = pts(g.ChatFrame1Background)
+    print("   fond : %s" % [(p[0], p[3], p[4]) for p in fond])
+    assert [(p[0], p[3], p[4]) for p in fond] == [("TOPLEFT", -2, 3), ("TOPRIGHT", 15, 3), ("BOTTOMLEFT", -2, -6), ("BOTTOMRIGHT", 15, -6)]
+    # les fleches de WotLK : cachees, et recachees apres l'OnShow du gabarit
+    fl = [g.ChatFrame1ButtonFrameUpButton, g.ChatFrame1ButtonFrameDownButton, g.ChatFrame1ButtonFrameBottomButton]
+    assert all(not b.shown and b.alpha == 0 for b in fl)
+    lua.execute("ChatFrame1:Hide(); ChatFrame1:Show()")
+    assert all(not b.shown for b in fl), "l'OnShow les remontre, on les recache"
+    # la reduction en haut de la colonne
+    pm = pts(g.ChatFrame1ButtonFrameMinimizeButton)[-1]
+    assert (pm[0], pm[2], pm[3], pm[4]) == ("TOP", "TOP", 0, 4)
+    # la colonne sur le fond (FCF_SetButtonSide de camelot)
+    lua.execute("FCF_SetButtonSide(ChatFrame1, 'left')")
+    pc = pts(c1.buttonFrame)
+    print("   colonne a gauche : %s" % [(p[0], p[1].name, p[2], p[3], p[4]) for p in pc])
+    assert [(p[0], p[1].name, p[2], p[3], p[4]) for p in pc] == [
+        ("TOPRIGHT", "ChatFrame1Background", "TOPLEFT", -3, -3), ("BOTTOMRIGHT", "ChatFrame1Background", "BOTTOMLEFT", -3, 6)]
+    # le bouton de menu en bas de la colonne ; le bouton d'amis de camelot
+    pmenu = pts(g.ChatFrameMenuButton)[-1]
+    assert (pmenu[0], pmenu[1].name, pmenu[2], pmenu[3], pmenu[4]) == ("BOTTOM", "ChatFrame1ButtonFrame", "BOTTOM", 0, 0)
+    fa = g.FriendsMicroButton
+    pa = pts(fa)[-1]
+    print("   amis : %s, %s" % (fa._normal.texture, (pa[0], pa[1].name, pa[2], pa[3], pa[4])))
+    assert fa._normal.texture == g.ForeverUI.AtlasEntry("quickjoin-button-friendslist-up")[1]
+    assert fa._pushed.texture == g.ForeverUI.AtlasEntry("quickjoin-button-friendslist-down")[1]
+    assert (pa[0], pa[1].name, pa[2], pa[3], pa[4]) == ("BOTTOMLEFT", "ChatFrame1ButtonFrame", "TOPLEFT", 0, 27)
+    lua.execute("FCF_SetButtonSide(ChatFrame1, 'right')")
+    pc = pts(c1.buttonFrame)
+    pa = pts(fa)[-1]
+    assert (pc[0][0], pc[0][2], pc[0][3]) == ("TOPLEFT", "TOPRIGHT", 3) and (pa[0], pa[2]) == ("BOTTOMRIGHT", "TOPRIGHT")
+    lua.execute("FCF_SetButtonSide(ChatFrame1, 'left')")
+    # la barre et le retour, poses comme camelot
+    d1 = C.fenetres[c1]
+    pb = pts(d1.barre)
+    pr = pts(d1.retour)[-1]
+    assert (pb[0][0], pb[0][2], pb[0][3], pb[0][4]) == ("TOPLEFT", "TOPRIGHT", 0, 0)
+    assert (pb[1][0], pb[1][2], pb[1][4]) == ("BOTTOMLEFT", "TOPLEFT", 2) and lua.eval("rawequal")(pb[1][1], d1.retour)
+    assert (pr[0], pr[1].name, pr[2], pr[3], pr[4]) == ("BOTTOMRIGHT", "ChatFrame1ResizeButton", "TOPRIGHT", -2, -2)
+    assert d1.retour.width == 17 and d1.retour.height == 15
+    assert d1.retour._normal.texture == g.ForeverUI.AtlasEntry("minimal-scrollbar-arrow-returntobottom-c60")[1]
+    # le defilement : 30 messages, 7 qui tiennent (120 / (14 + 2)) ; en bas,
+    # la barre est au bout
+    lua.execute("ChatFrame1.messages = 30; ChatFrame2.messages = 30")
+    def moteur(t):
+        lua.execute("local m = ForeverUI.Chat.moteur; m.scripts.OnUpdate(m, %s)" % t)
+    moteur(0.01)
+    print("   defilement : barre %s, total %s, visibles %s, rang %s" % (d1.barre.shown, d1.barre.total, d1.barre.visibles, d1.barre.decalage))
+    taille = lua.execute("local _, t = ChatFrame1:GetFont(); return t or 14")
+    vis = int(120 // (taille + 2))
+    assert d1.barre.shown and (d1.barre.total, d1.barre.visibles, d1.barre.decalage) == (30, vis, 30 - vis)
+    # tirer la barre : SetScrollOffset quand le client l'a...
+    lua.execute("local d = ForeverUI.Chat.fenetres[ChatFrame1]; d.barre.surDefilement(10)")
+    assert c1.defile == 30 - vis - 10 and d1.barre.decalage == 10
+    # ... sinon des ScrollUp / ScrollDown
+    d2 = C.fenetres[c2]
+    lua.execute("local d = ForeverUI.Chat.fenetres[ChatFrame2]; d.barre.surDefilement(20)")
+    assert c2.defile == 30 - vis - 20, c2.defile
+    # pas en bas : le retour clignote et la barre s'allume
+    moteur(0.05)
+    moteur(0.05)
+    moteur(0.3)
+    print("   pas en bas : eclat %.2f, retour %.2f, barre %.2f" % (d1.retour.flash.alpha, d1.retour.alpha, d1.barre.alpha))
+    assert d1.retour.flash.alpha == 1 and d1.barre.alpha > 0.5 and d1.retour.alpha > 0.9
+    # le retour : en bas, l'eclat s'eteint
+    d1.retour.scripts.OnClick(d1.retour)
+    moteur(0.01)
+    assert c1.defile == 0 and d1.retour.flash.alpha == 0
+    # le fondu : le chat s'eteint, la barre et le retour avec lui (2 s) ;
+    # il s'allume, ils reviennent (0,6 et 0,65)
+    lua.execute("FCF_FadeOutChatFrame(ChatFrame1)")
+    moteur(1.0); moteur(1.1)
+    assert d1.barre.alpha == 0 and d1.retour.alpha == 0
+    lua.execute("FCF_FadeInChatFrame(ChatFrame1)")
+    moteur(0.2)
+    print("   allume : barre %.2f, retour %.2f" % (d1.barre.alpha, d1.retour.alpha))
+    assert abs(d1.barre.alpha - 0.6) < 1e-9 and abs(d1.retour.alpha - 0.65) < 1e-9
+    # la souris sur la barre : le chat ne s'eteint pas
+    # (sans rien demander au client : FCF_FadeInChatFrame n'est pas appele)
+    lua.execute("FONDUS = {}; SOURIS_SUR[ForeverUI.Chat.fenetres[ChatFrame1].barre] = true")
+    moteur(0.25)
+    lua.execute("FCF_FadeOutChatFrame(ChatFrame1)")
+    moteur(0.01)
+    print("   souris sur la barre : %s, allume %s" % (list(g.FONDUS.values()), d1.allume))
+    assert list(g.FONDUS.values()) == ["out ChatFrame1"] and d1.allume
+    lua.execute("SOURIS_SUR = {}")
+    moteur(1.1)
+    assert not d1.allume
+    lua.execute("FCF_FadeInChatFrame(ChatFrame1)")
+
+
+    # AU REPOS : onglets, boutons de la colonne et saisie s'effacent avec le
+    # chat (leurs regions ; l'alpha des cadres reste au client), la lueur
+    # d'alerte n'est pas touchee, la saisie active reste entiere
+    onglet1 = [g.ChatFrame1TabLeft, g.ChatFrame1TabText]
+    saisie1 = [g.ChatFrame1EditBoxLeft, g.ChatFrame1EditBoxMid, g.ChatFrame1EditBoxHeader]
+    boutons1 = [g.ChatFrame1ButtonFrameMinimizeButton, g.ChatFrameMenuButton, g.FriendsMicroButton]
+    debord = [r for r in lua.eval("{ GENERAL_CHAT_DOCK.overflowButton:GetRegions() }").values()
+              if not lua.eval("rawequal")(r, g.GENERAL_CHAT_DOCK.overflowButton._highlight)]
+    moteur(0.2)
+    assert all(abs(o.alpha - 1) < 1e-9 for o in onglet1 + saisie1 + boutons1 + debord)
+    lua.execute("FCF_FadeOutChatFrame(ChatFrame1)")
+    moteur(1.0)
+    print("   au repos, a 1 s : onglet %.2f, saisie %.2f, amis %.2f" % (onglet1[0].alpha, saisie1[0].alpha, g.FriendsMicroButton.alpha))
+    assert abs(onglet1[0].alpha - 0.5) < 1e-9
+    moteur(1.1)
+    print("   au repos, a 2,1 s : onglet %s, saisie %s, colonne %s, debordement %s" % (
+        [o.alpha for o in onglet1], [o.alpha for o in saisie1], [o.alpha for o in boutons1], [o.alpha for o in debord]))
+    assert all(o.alpha == 0 for o in onglet1 + saisie1 + boutons1 + debord) and debord
+    assert g.ChatFrame1TabGlow.alpha == 0.7 and g.ChatFrame1Tab.alpha == 0.4 and g.ChatFrame1EditBox.alpha == 0.35
+    assert all(not b.shown and b.alpha == 0 for b in fl), "les fleches restent cachees"
+    # la saisie active reste entiere, meme au repos
+    lua.execute("ACTIVE_CHAT_EDIT_BOX = ChatFrame1EditBox")
+    moteur(0.01)
+    assert all(o.alpha == 1 for o in saisie1) and all(o.alpha == 0 for o in onglet1)
+    lua.execute("ACTIVE_CHAT_EDIT_BOX = nil")
+    moteur(0.01)
+    assert all(o.alpha == 0 for o in saisie1)
+    # une fenetre du dock non choisie est cachee, son onglet suit quand meme
+    lua.execute("ChatFrame2:Hide(); FCF_FadeInChatFrame(ChatFrame2)")
+    moteur(0.2)
+    assert g.ChatFrame2TabLeft.alpha == 1 and g.ChatFrame1TabLeft.alpha == 0
+    lua.execute("FCF_FadeOutChatFrame(ChatFrame2); ChatFrame2:Show()")
+    moteur(2.1)
+    assert g.ChatFrame2TabLeft.alpha == 0
+    # le fond : l'opacite retenue passe a 0 une fois, a ADDON_LOADED de
+    # ForeverUI ; ce que l'utilisateur regle ensuite est respecte
+    veille = C.veille
+    lua.execute("ForeverUIDB = ForeverUIDB or {}; ForeverUIDB.chatFondRepos = nil")
+    veille.scripts.OnEvent(veille, "ADDON_LOADED", "Blizzard_TimeManager")
+    assert abs(g.OPACITES[1] - 40 / 255) < 1e-9 and veille.events["ADDON_LOADED"]
+    veille.scripts.OnEvent(veille, "ADDON_LOADED", "ForeverUI")
+    print("   fond retenu : %s, fait %s" % ([round(v, 3) for v in g.OPACITES.values()], g.ForeverUIDB.chatFondRepos))
+    assert all(v == 0 for v in g.OPACITES.values()) and g.ForeverUIDB.chatFondRepos
+    assert not veille.events["ADDON_LOADED"]
+    lua.execute("OPACITES[1] = 0.5")
+    veille.scripts.OnEvent(veille, "ADDON_LOADED", "ForeverUI")
+    assert g.OPACITES[1] == 0.5
+
+
+    # LE SURVOL : la souris sur le chat l'allume en 0,2 s, meme en bougeant,
+    # sans passer par le client ; tout le dock s'allume ; dehors 1 s, il
+    # s'eteint
+    lua.execute("ChatFrame1.isDocked = true; ChatFrame2.isDocked = true; FCF_FadeOutChatFrame(ChatFrame1); FCF_FadeOutChatFrame(ChatFrame2)")
+    moteur(2.5)
+    fond1, coin1 = g.ChatFrame1Background, g.ChatFrame1TopLeftTexture
+    lua.execute("ChatFrame1.oldAlpha = 0; ChatFrame1Background:SetAlpha(0); ChatFrame1TopLeftTexture:SetAlpha(0)")
+    dbl = [pr[2] for pr in d1.doublures.values()]
+    assert len(dbl) == 3 and not any(t.shown for t in dbl)
+    assert dbl[0].texture == fond1.texture and dbl[0].layer == "BACKGROUND" and lua.eval("rawequal")(dbl[0].allPoints, fond1)
+    assert list(dbl[1].texcoord8.values()) == [0, 1, 0, 0, 1, 1, 1, 0], list(dbl[1].texcoord8.values())
+    lua.execute("FONDUS = {}")
+    c1.souris = True
+    moteur(0.1)
+    assert not d1.allume
+    moteur(0.15)
+    moteur(0.2)
+    print("   survol : allume %s, dock %s, onglets %s / %s, doublure du fond %.2f" % (
+        d1.allume, d2.allume, g.ChatFrame1TabLeft.alpha, g.ChatFrame2TabLeft.alpha, dbl[0].alpha))
+    assert d1.allume and d2.allume and g.ChatFrame1TabLeft.alpha == 1 and g.ChatFrame2TabLeft.alpha == 1
+    assert list(g.FONDUS.values()) == [], "on ne demande rien au client"
+    assert dbl[0].shown and abs(dbl[0].alpha - 0.25) < 1e-9 and dbl[0].vertex[1] == 0
+    # le client s'allume a son tour : la doublure s'efface ; a mi-chemin,
+    # elle complete (1 - 0,75 / 0,9)
+    lua.execute("ChatFrame1Background:SetAlpha(0.25)")
+    moteur(0.01)
+    assert not dbl[0].shown
+    lua.execute("ChatFrame1Background:SetAlpha(0.1)")
+    moteur(0.01)
+    assert abs(dbl[0].alpha - (1 - 0.75 / 0.9)) < 1e-9
+    lua.execute("ChatFrame1Background:SetAlpha(0)")
+    # dehors : allume encore a 0,9 s, eteint a 1 s, efface en 2 s
+    c1.souris = False
+    moteur(0.9)
+    assert d1.allume
+    moteur(0.15)
+    assert not d1.allume and not d2.allume
+    moteur(2.0)
+    assert not any(t.shown for t in dbl) and g.ChatFrame1TabLeft.alpha == 0
+    # le client remet l'alpha du texte d'un onglet : l'image suivante le reprend
+    lua.execute("ChatFrame1TabText:SetAlpha(1)")
+    moteur(0.01)
+    assert g.ChatFrame1TabText.alpha == 0
+    lua.execute("ChatFrame1.isDocked = nil; ChatFrame2.isDocked = nil")
+
+
+    # ------------------------------------------------- LES BARRES D'AURAS
+    print("\nbarres d'auras :")
+    B = g.ForeverUI.Buffs
+    fb, fd = B.buffs, B.debuffs
+    req = lua.eval("rawequal")
+    # le BuffFrame du client est etouffe
+    assert not g.BuffFrame.shown and not g.BuffFrame.events["UNIT_AURA"]
+    assert not g.TemporaryEnchantFrame.shown and not g.ConsolidatedBuffs.shown
+    # les places et les tailles de camelot
+    def point(r, i=1):
+        return list(r.points[i].values())
+    pb, pd = point(fb), point(fd)
+    print("   ameliorations %s %sx%s | affaiblissements %s %sx%s" % (
+        (pb[0], pb[2], pb[3], pb[4]), fb.width, fb.height, (pd[0], pd[2], pd[3], pd[4]), fd.width, fd.height))
+    assert (pb[0], pb[2], pb[3], pb[4]) == ("TOPRIGHT", "TOPRIGHT", -255, -10)
+    assert (pd[2], pd[3], pd[4]) == ("TOPRIGHT", -270, -155)
+    assert (fb.width, fb.height) == (35 * 11 + 15, 45 * 3) and (fd.width, fd.height) == (35 * 8, 45 * 2)
+    # des auras : sans duree, 500 s, 10 s (3 piles) ; deux affaiblissements ;
+    # un enchantement de 120 s sur la main droite
+    t0 = g.STATE.time
+    lua.execute("""
+        AURAS.HELPFUL = { { "Sans fin", "icone_a", 0, nil, 0, 0 },
+                          { "Longue", "icone_b", 0, nil, 600, STATE.time + 500 },
+                          { "Courte", "icone_c", 3, nil, 20, STATE.time + 10 } }
+        AURAS.HARMFUL = { { "Sort", "icone_d", 0, "Magic", 30, STATE.time + 20 },
+                          { "Coup", "icone_e", 2, nil, 10, STATE.time + 5 } }
+        ENCHANTS = { main = 1, mainReste = 120000, mainCharges = 0, mainIcone = "icone_arme" }""")
+    v = B.veille
+    v.scripts.OnEvent(v, "UNIT_AURA", "player")
+    bb, bd = fb.boutons, fd.boutons
+    montres = [bb[i].Icon.texture for i in range(1, 33) if bb[i].shown]
+    print("   deplie : %s, repli %s" % (montres, fb.repli.shown))
+    assert montres == ["icone_arme", "icone_a", "icone_b", "icone_c"]
+    assert bb[1].TempEnchantBorder.shown and not bb[1].DebuffBorder.shown and not bb[2].TempEnchantBorder.shown
+    assert bb[4].Count.shown and bb[4].Count.text == 3 and not bb[2].Count.shown
+    # la grille : de droite a gauche, 11 par rangee, 35 et 45
+    def ofs(b):
+        p = point(b)
+        return (p[0], p[2], p[3], p[4])
+    assert ofs(bb[1]) == ("TOPRIGHT", "TOPRIGHT", 0, 0) and ofs(bb[2]) == ("TOPRIGHT", "TOPRIGHT", -35, 0)
+    assert ofs(bb[12]) == ("TOPRIGHT", "TOPRIGHT", 0, -45)
+    assert req(point(fb.conteneur)[1], fb.repli) and point(fb.conteneur)[2] == "TOPLEFT"
+    # le repli : visible (3 a cacher), deplie, fleche retournee
+    e = g.ForeverUI.AtlasEntry("bag-arrow")
+    tc = list(fb.repli._normal.texcoord8.values())
+    assert fb.repli.shown and fb.repli.checked and tc == [e[3], e[5], e[3], e[4], e[2], e[5], e[2], e[4]], tc
+    assert (fb.repli.width, fb.repli.height) == (15, 30) and (fb.repli._normal.width, fb.repli._normal.height) == (10, 16)
+    # les affaiblissements : bordure par type, avec son icone
+    atl = g.ForeverUI.AtlasEntry
+    print("   affaiblissements : %s / %s" % (bd[1].DebuffBorder.texture, bd[2].DebuffBorder.texture))
+    assert bd[1].DebuffBorder.texture == atl("ui-debuff-border-magic-icon")[1]
+    for b, nom in ((bd[1], "ui-debuff-border-magic-icon"), (bd[2], "ui-debuff-border-default-noicon")):
+        assert list(b.DebuffBorder.texcoord.values()) == [atl(nom)[i] for i in (2, 3, 4, 5)], nom
+    assert bd[1].DebuffBorder.shown and bd[2].DebuffBorder.shown and not bd[3].shown
+    assert ofs(bd[2]) == ("TOPRIGHT", "TOPRIGHT", -35, 0)
+    # replier : seules les courtes restent ; la fleche se remet
+    fb.repli.Click(fb.repli)
+    montres = [bb[i].Icon.texture for i in range(1, 33) if bb[i].shown]
+    print("   replie : %s" % montres)
+    assert montres == ["icone_c"] and not fb.repli.checked
+    assert list(fb.repli._normal.texcoord8.values()) == [e[2], e[4], e[2], e[5], e[3], e[4], e[3], e[5]]
+    # 411 s plus tard, la longue passe sous 90 s : elle retombe dans la barre
+    lua.execute("STATE.time = STATE.time + 411")
+    v.scripts.OnUpdate(v, 0.25)
+    montres = [bb[i].Icon.texture for i in range(1, 33) if bb[i].shown]
+    print("   retombee : %s" % montres)
+    assert montres == ["icone_b", "icone_c"]
+    # la duree : 89 s -> « 2 m », blanche sous 90 s
+    bb[1].scripts.OnUpdate(bb[1], 0.01)
+    print("   duree : %r, couleur %s" % (bb[1].Duration.text, list(bb[1].Duration.vertex.values())))
+    assert bb[1].Duration.text == "2 m" and list(bb[1].Duration.vertex.values())[:3] == [1, 1, 1] and bb[1].Duration.shown
+    # le clignotement sous 31 s : 0,3 a 1 en 1,5 s
+    lua.execute("STATE.time = 3.0")
+    assert abs(B.alphaAlerte(10) - 0.3) < 1e-9 and B.alphaAlerte(40) == 1
+    lua.execute("STATE.time = 3.375")
+    assert abs(B.alphaAlerte(10) - 0.65) < 1e-9
+    lua.execute("STATE.time = 3.75")
+    assert abs(B.alphaAlerte(10) - 1) < 1e-9
+    lua.execute("STATE.time = %r" % (t0 + 411))
+    # l'infobulle et le clic droit
+    fb.repli.Click(fb.repli)
+    bb[3].scripts.OnEnter(bb[3])
+    print("   infobulle : %s, ancre %s" % (list(g.GameTooltip.aura.values()), g.GameTooltip.anchor))
+    assert list(g.GameTooltip.aura.values()) == ["player", 2, "HELPFUL"] and g.GameTooltip.anchor == "ANCHOR_BOTTOMLEFT"
+    bb[1].scripts.OnEnter(bb[1])
+    assert list(g.GameTooltip.objet.values()) == ["player", 16]
+    lua.execute("ANNULES = {}")
+    for b in (bb[3], bb[1], bd[1]):
+        b.scripts.OnClick(b, "RightButton")
+    print("   annulations : %s" % list(g.ANNULES.values()))
+    assert list(g.ANNULES.values()) == ["player:2:HELPFUL", "enchant:1"]
+    # le regroupement : l'option du client le passe par BuffFrame_UpdatePositions
+    lua.execute("CONSOLIDATE_BUFFS = '1'; BuffFrame_UpdatePositions()")
+    r = fb.regroupement
+    montres = [bb[i].Icon.texture for i in range(1, 33) if bb[i].shown]
+    print("   regroupement : %s (%s), barre %s, repli %s" % (r.shown, r.Count.text, montres, fb.repli.shown))
+    assert r.shown and r.Count.text == 2 and montres == ["icone_b", "icone_c"] and not fb.repli.shown
+    assert ofs(r) == ("TOPRIGHT", "TOPRIGHT", 0, 0) and ofs(bb[1]) == ("TOPRIGHT", "TOPRIGHT", -35, 0)
+    assert list(r.Icon.texcoord.values()) == [0.109375, 0.390625, 0.21875, 0.78125]
+    r.scripts.OnEnter(r)
+    bulle = r.bulle
+    dans = [bulle.boutons[i].Icon.texture for i in range(1, 33) if bulle.boutons[i].shown]
+    print("   bulle : %s, %sx%s" % (dans, bulle.width, bulle.height))
+    assert bulle.shown and dans == ["icone_arme", "icone_a"]
+    p2 = point(bulle.boutons[2])
+    assert (p2[0], p2[2], p2[3], p2[4]) == ("TOPLEFT", "TOPLEFT", 35, 0)
+    assert abs(bulle.width - ((16 + 70) * 0.8 + 9)) < 1e-9 and abs(bulle.height - ((16 + 45) * 0.8 + 2)) < 1e-9
+    lua.execute("CONSOLIDATE_BUFFS = '0'; BuffFrame_UpdatePositions()")
+    assert not r.shown and fb.repli.shown
+    # l'option des durees
+    lua.execute("SHOW_BUFF_DURATIONS = '0'")
+    bb[1].scripts.OnUpdate(bb[1], 0.01)
+    assert not bb[1].Duration.shown
+    lua.execute("SHOW_BUFF_DURATIONS = '1'")
+    # en vehicule : les auras du vehicule, pas d'enchantement
+    lua.execute("STATE.vehicle = true")
+    v.scripts.OnEvent(v, "UNIT_ENTERED_VEHICLE", "player")
+    montres = [bb[i].Icon.texture for i in range(1, 33) if bb[i].shown]
+    assert B.unite() == "vehicle" and "icone_arme" not in montres
+    lua.execute("STATE.vehicle = false; AURAS.HELPFUL = {}; AURAS.HARMFUL = {}; ENCHANTS = {}")
+    v.scripts.OnEvent(v, "UNIT_EXITED_VEHICLE", "player")
+    assert not any(bb[i].shown for i in range(1, 33)) and not fb.repli.shown
+
+
+    # AUCUNE GLOBALE DU CLIENT REAFFECTEE : « StaticPopupDialogs =
+    # StaticPopupDialogs or {} » dans Talents.lua gardait la meme table mais
+    # faisait passer la globale a l'addon -- toutes les popups du client
+    # s'en trouvaient souillees (BindEnchant bloque, taint.log du 26/09).
+    # L'identite de la table ne le voit pas : on lit le source.
+    import re
+    for fn in ordre:
+        texte = io.open(os.path.join(ADDON, fn), encoding="utf-8").read()
+        for n, ligne in enumerate(texte.splitlines(), 1):
+            assert not re.match(r"\s*StaticPopupDialogs\s*=[^=]", ligne), "%s:%d reaffecte StaticPopupDialogs" % (fn, n)
+    assert g.StaticPopupDialogs["FOREVERUI_TALENTS_CONFIRM_CLOSE"] is not None
+
+
+    # ------------------------------------------------- LE SUIVI SANS GLOBALES DU CLIENT
+    print("\nsuivi sans globales du client :")
+    ot = g.ForeverUI.ObjectiveTracker
+    mq = g.ForeverUIQuestObjectiveTracker
+    def montres():
+        return sorted(b.titre.text for b in mq.blocs.values() if b.shown)
+    lua.execute("SUIVIES = { ['A Threat Within'] = true, ['The Fargodeep Mine'] = true } WATCHFRAME_FILTER_TYPE = 7 WorldMapFrame.shown = false WatchFrame_Update()")
+    print("   toutes zones : %s, objets %d, WatchFrameItem1 montre %s" % (montres(), ot.nbObjets, g.WatchFrameItem1.shown))
+    assert montres() == ["A Threat Within", "The Fargodeep Mine"] and ot.nbObjets >= 1 and g.WatchFrameItem1.shown
+    # sans les zones eloignees : seule la quete de la zone (CURRENT_MAP_QUESTS)
+    lua.execute("WATCHFRAME_FILTER_TYPE = 3 WatchFrame_Update()")
+    print("   zone seule : %s, WatchFrameItem1 montre %s" % (montres(), g.WatchFrameItem1.shown))
+    assert montres() == ["A Threat Within"] and not g.WatchFrameItem1.shown
+    assert ot.locales["zone"] == lua.eval("GetCurrentMapZone()") and ot.locales[783]
+    # la table du client n'est jamais ecrite
+    assert len(list(g.LOCAL_MAP_QUESTS.keys())) == 0 and g.WATCHFRAME_NUM_ITEMS == 0
+    # suivre depuis la carte ouverte : la quete s'ajoute, puis se retire
+    lua.execute("WorldMapFrame.shown = true WORLDMAP_SETTINGS.selectedQuestId = 62 WorldMapTrackQuest_Toggle(true)")
+    print("   suivie depuis la carte : %s" % montres())
+    assert montres() == ["A Threat Within", "The Fargodeep Mine"] and ot.locales[62]
+    lua.execute("WorldMapTrackQuest_Toggle(false)")
+    assert montres() == ["A Threat Within"] and not ot.locales[62]
+    lua.execute("WorldMapFrame.shown = false WATCHFRAME_FILTER_TYPE = 7 WORLDMAP_SETTINGS.selectedQuestId = nil WatchFrame_Update()")
+
+
+    # ------------------------------------------------- LES MENUS D'UNITE
+    print("\nmenus d'unite :")
+    M = g.ForeverUI.MenuUnite
+    req = lua.eval("rawequal")
+    ouvrir = lua.eval("""function(which, unit, name)
+        local m = CreateFrame("Frame", nil, UIParent)
+        ForeverUI.MenuUnite.ouvrir(function() UnitPopup_ShowMenu(m, which, unit, name) end)
+        DropDownList1:Show()
+        return m
+    end""")
+    def surcouches():
+        return [o for o in M.surcouches.values() if o.shown]
+    def ligne(valeur):
+        for i in range(1, g.DropDownList1.numButtons + 1):
+            b = g["DropDownList1Button%d" % i]
+            if b.value == valeur:
+                return b
+    lua.execute("STATE.inLockdown = false")
+    # nos cadres ouvrent leur menu par MenuUnite.ouvrir
+    vu = lua.eval("""function(f)
+        local vu, ancien = nil, ToggleDropDownMenu
+        ToggleDropDownMenu = function() vu = ForeverUI.MenuUnite.nous end
+        f.menu(f)
+        ToggleDropDownMenu = ancien
+        return vu
+    end""")
+    assert vu(g.ForeverUIPlayerFrame) and vu(g.ForeverUITargetFrame) and vu(g.ForeverUIPetFrame)
+    assert not M.nous
+    # hors combat : un bouton securise sur Set Focus, regle sur l'unite
+    ouvrir("PARTY", "party1", None)
+    o = surcouches()
+    focus = ligne("SET_FOCUS")
+    print("   groupe : %d surcouche, type %s, unite %s, strate %s" % (
+        len(o), o[0].attributes["type"], o[0].attributes["unit"], o[0].strata))
+    assert len(o) == 1 and req(o[0].allPoints, focus)
+    assert (o[0].attributes["type"], o[0].attributes["unit"], o[0].strata) == ("focus", "party1", "TOOLTIP")
+    # le familier : Set Focus et Dismiss Pet (macro)
+    lua.execute("DropDownList1:Hide()")
+    ouvrir("PET", "pet", None)
+    o = surcouches()
+    assert len(o) == 2 and o[1].attributes["type"] == "macro" and o[1].attributes["macrotext"] == "/script PetDismiss()"
+    assert req(o[1].allPoints, ligne("PET_DISMISS"))
+    # un ami d'un autre royaume : Target par son nom complet
+    lua.execute("DropDownList1:Hide()")
+    ouvrir("FRIEND", None, "Bob-Realm")
+    o = surcouches()
+    print("   ami : %s" % o[0].attributes["macrotext"])
+    assert len(o) == 1 and o[0].attributes["macrotext"] == "/targetexact Bob-Realm"
+    # un menu que le client ouvre lui-meme : rien ne change
+    lua.execute("DropDownList1:Hide()")
+    lua.execute("UnitPopup_ShowMenu(CreateFrame('Frame', nil, UIParent), 'PARTY', 'party1') DropDownList1:Show()")
+    assert surcouches() == [] and ligne("SET_FOCUS").enabled is not False
+    # la souris sur la surcouche retient la liste
+    lua.execute("DropDownList1:Hide()")
+    ouvrir("PARTY", "party1", None)
+    o = surcouches()[0]
+    lua.execute("COMPTES = {}")
+    o.scripts.OnEnter(o)
+    o.scripts.OnLeave(o)
+    assert list(g.COMPTES.values()) == ["stop", "start"]
+    # a l'entree en combat : les boutons s'en vont, Set Focus se grise
+    M.veille.scripts.OnEvent(M.veille, "PLAYER_REGEN_DISABLED")
+    assert surcouches() == [] and ligne("SET_FOCUS").enabled is False
+    # en combat : pas de bouton, la ligne grisee, et elle le reste
+    lua.execute("DropDownList1:Hide() STATE.inLockdown = true")
+    ouvrir("PARTY", "party1", None)
+    assert surcouches() == [] and ligne("SET_FOCUS").enabled is False
+    lua.execute("UnitPopup_OnUpdate()")
+    print("   en combat : Set Focus active %s apres UnitPopup_OnUpdate" % ligne("SET_FOCUS").enabled)
+    assert ligne("SET_FOCUS").enabled is False, "UnitPopup_OnUpdate la reactive : on la regrise"
+    assert ligne("WHISPER").enabled is not False, "les autres lignes restent actives"
+    lua.execute("DropDownList1:Hide() STATE.inLockdown = false")
+    assert len(list(M.grises.values())) == 0
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

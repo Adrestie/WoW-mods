@@ -181,7 +181,7 @@ local function creerMembre(l)
 	l:SetScript("OnClick", function(self, bouton)
 		-- ChannelRoster_OnClick : le clic droit seulement
 		if bouton == "RightButton" and ChannelRosterFrame_ShowDropdown then
-			ChannelRosterFrame_ShowDropdown(self.index)
+			ForeverUI.MenuUnite.ouvrir(ChannelRosterFrame_ShowDropdown, self.index)
 		end
 	end)
 end
@@ -218,63 +218,94 @@ function C.maj()
 	end
 end
 
--- LA FENETRE "NOUVEAU CANAL" : ChannelFrameDaughterFrame, en fenetre annexe.
+-- LA FENETRE "NOUVEAU CANAL" : notre annexe, et DEDANS les champs et les
+-- boutons de la boite du client (ChannelFrameDaughterFrame). Rejoindre un
+-- canal l'inscrit dans la liste du cadre de discussion
+-- (DEFAULT_CHAT_FRAME.channelList) : ecrite par l'addon, cette liste
+-- passerait a l'addon, et avec elle chaque message de canal que le client
+-- traite (2026-09-26, le code doit etre propre). Le clic sur OK et la touche
+-- Entree sont donc ceux du client -- ChannelFrameDaughterFrame_Okay, son code
+-- a lui. Ses champs et ses boutons restent les enfants de sa boite ; ils
+-- sont seulement poses dans notre annexe et habilles comme les notres. Sa
+-- boite ne montre plus rien d'elle-meme : ni son fond, ni son titre, ni sa
+-- croix, ni sa case de chat vocal.
 local function creerNouveau()
 	local a = S.creerAnnexe("ForeverUIChannelNewFrame", 230, 170)
 	a.titre:SetText(txt("CHANNEL_NEW_CHANNEL"))
 	local l1 = a:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	l1:SetPoint("TOPLEFT", a, "TOPLEFT", 22, -36)
 	l1:SetText(txt("CHANNEL_CHANNEL_NAME"))
-	a.nom = S.creerSaisie(a, "ForeverUIChannelNewName", 31)
-	a.nom:SetPoint("TOPLEFT", l1, "BOTTOMLEFT", 2, -4)
-	a.nom:SetWidth(180)
-	local l2 = a:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	l2:SetPoint("TOPLEFT", a.nom, "BOTTOMLEFT", -2, -10)
-	l2:SetText(txt("PASSWORD") .. " |cffffffff" .. txt("OPTIONAL_PARENS") .. "|r")
-	a.mdp = S.creerSaisie(a, "ForeverUIChannelNewPassword", 31)
-	a.mdp:SetPoint("TOPLEFT", l2, "BOTTOMLEFT", 2, -4)
-	a.mdp:SetWidth(180)
-	local function valider()
-		local nom, mdp = a.nom:GetText(), a.mdp:GetText()
-		local zone, nomCanal = JoinPermanentChannel(nom, mdp, DEFAULT_CHAT_FRAME:GetID(), 1)
-		if not zone then
-			local info = ChatTypeInfo and ChatTypeInfo["CHANNEL"] or { r = 1, g = 0.75, b = 0.75 }
-			DEFAULT_CHAT_FRAME:AddMessage(txt("CHAT_INVALID_NAME_NOTICE"), info.r, info.g, info.b, info.id)
-			a:Hide()
-			return
-		end
-		if nomCanal then nom = nomCanal end
-		local i = 1
-		while DEFAULT_CHAT_FRAME.channelList and DEFAULT_CHAT_FRAME.channelList[i] do i = i + 1 end
-		if DEFAULT_CHAT_FRAME.channelList then
-			DEFAULT_CHAT_FRAME.channelList[i] = nom
-			DEFAULT_CHAT_FRAME.zoneChannelList[i] = zone
-		end
-		a:Hide()
+
+	local fille = ChannelFrameDaughterFrame
+	local nom = ChannelFrameDaughterFrameChannelName
+	local mdp = ChannelFrameDaughterFrameChannelPassword
+	local ok = ChannelFrameDaughterFrameOkayButton
+	local annuler = ChannelFrameDaughterFrameCancelButton
+	if not (fille and nom and mdp and ok and annuler) then
+		return a
 	end
-	a.nom:SetScript("OnEnterPressed", valider)
-	a.mdp:SetScript("OnEnterPressed", valider)
-	a.nom:SetScript("OnEscapePressed", function() a:Hide() end)
-	a.mdp:SetScript("OnEscapePressed", function() a:Hide() end)
-	a.nom:SetScript("OnTabPressed", function() a.mdp:SetFocus() end)
-	a.mdp:SetScript("OnTabPressed", function() a.nom:SetFocus() end)
-	local ok = S.bouton(a, txt("OKAY"), 96)
+
+	-- la boite du client : sous UIParent (ChannelFrame, l'onglet du client,
+	-- n'est pas montre), sur notre annexe, au-dessus d'elle, sans son art
+	fille:SetParent(UIParent)
+	fille:ClearAllPoints()
+	fille:SetAllPoints(a)
+	fille:SetFrameStrata(a:GetFrameStrata())
+	fille:SetFrameLevel(a:GetFrameLevel() + 10)
+	fille:EnableMouse(false)
+	if fille.SetBackdrop then fille:SetBackdrop(nil) end
+	for _, r in ipairs({ fille:GetRegions() }) do
+		r:SetAlpha(0)
+	end
+	for _, suffixe in ipairs({ "VoiceChat", "DetailCloseButton" }) do
+		ForeverUI.Suppress(_G["ChannelFrameDaughterFrame" .. suffixe])
+	end
+
+	-- ses deux champs, a la place et a la taille des notres
+	local function champ(b)
+		b:SetWidth(180)
+		b:SetHeight(20)
+		b:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+		b:SetTextInsets(6, 6, 0, 0)
+		S.habillerSaisie(b)
+		local etiquette = _G[b:GetName() .. "Label"]
+		if etiquette then etiquette:SetAlpha(0) end
+		local facultatif = _G[b:GetName() .. "Optional"]
+		if facultatif then facultatif:SetAlpha(0) end
+	end
+	champ(nom)
+	nom:ClearAllPoints()
+	nom:SetPoint("TOPLEFT", l1, "BOTTOMLEFT", 2, -4)
+	local l2 = a:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	l2:SetPoint("TOPLEFT", nom, "BOTTOMLEFT", -2, -10)
+	l2:SetText(txt("PASSWORD") .. " |cffffffff" .. txt("OPTIONAL_PARENS") .. "|r")
+	champ(mdp)
+	mdp:ClearAllPoints()
+	mdp:SetPoint("TOPLEFT", l2, "BOTTOMLEFT", 2, -4)
+
+	-- ses deux boutons, a la place et a la taille des notres
+	for _, b in ipairs({ ok, annuler }) do
+		b:SetWidth(96)
+		b:SetHeight(S.G.boutonH)
+		b:SetNormalFontObject(GameFontNormal)
+		b:SetHighlightFontObject(GameFontHighlight)
+		if b.SetDisabledFontObject then b:SetDisabledFontObject(GameFontDisable) end
+		b:ClearAllPoints()
+	end
 	ok:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 12, 12)
-	ok:SetScript("OnClick", valider)
-	local annuler = S.bouton(a, txt("CANCEL"), 96)
 	annuler:SetPoint("LEFT", ok, "RIGHT", 4, 0)
-	annuler:SetScript("OnClick", function() a:Hide() end)
+
+	-- l'annexe et la boite s'ouvrent et se ferment ensemble : OK, Entree,
+	-- Echap et Annuler ferment la boite du client, notre croix l'annexe
 	a:HookScript("OnShow", function()
-		a.nom:SetText("")
-		a.mdp:SetText("")
-		a.nom:SetFocus()
+		fille:Show()
+		nom:SetText("")
+		mdp:SetText("")
+		nom:SetFocus()
 	end)
-	a:HookScript("OnHide", function()
-		a.nom:SetText("")
-		a.mdp:SetText("")
-		a.nom:ClearFocus()
-		a.mdp:ClearFocus()
-	end)
+	a:HookScript("OnHide", function() fille:Hide() end)
+	fille:HookScript("OnHide", function() a:Hide() end)
+	a.nom, a.mdp, a.ok, a.annuler = nom, mdp, ok, annuler
 	return a
 end
 

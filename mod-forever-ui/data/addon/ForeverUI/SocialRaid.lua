@@ -173,7 +173,7 @@ local function creerPlace(parent, g, n)
 			d.name = GetRaidRosterInfo(self.membre)
 			d.id = self.membre
 			d.unit = "raid" .. self.membre
-			ToggleDropDownMenu(1, nil, d, "cursor")
+			ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, d, "cursor")
 		end
 	end)
 	b:SetScript("OnDragStart", function(self)
