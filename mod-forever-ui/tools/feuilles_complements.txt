@@ -175,3 +175,22 @@ interface/talentframe/talentsclassbackgrounddeathknight2.blp
 # LES TALENTS, etape 2 : la lueur jaune du bouton Apply quand des changements
 # attendent (newplayertutorial-yellowGlow-redbutton-left / -middle / -right)
 interface/helpframe/newplayerexperienceparts.blp
+
+# fenetre Social (2026-09-26) : les onglets de camelot -- PanelTabButtonTemplate
+# et TabSystemButtonArtTemplate. Actifs dans la feuille de base, inactifs dans
+# la c60.
+interface/framegeneral/uiframetabs.blp
+interface/framegeneral/uiframetabsc60.blp
+
+# cadres de groupe (2026-09-26) : PartyMemberFrame de camelot
+# (mainline/partyframetemplates.xml) -- art, lueurs, barres par ressource,
+# vehicule ; et les petites icones de role (roleicon-tiny-*)
+interface/hud/uipartyframe.blp
+interface/lfgframe/roleicons.blp
+
+# raid compact (2026-09-26) : le fond du calque de dissipation
+# (CompactUnitFrameDispelOverlayTemplate, RaidFrame-Dispel-Fill)
+interface/raidframe/raidframedispelfill.blp
+# et la bordure des affaiblissements (AuraButtonArtTemplate :
+# ui-debuff-border-<type>-noicon)
+interface/hud/uidebuffframes.blp

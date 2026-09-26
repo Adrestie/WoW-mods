@@ -588,3 +588,129 @@ function ForeverUI.SkinTertiaryButton(bouton, auto)
 
 	return bouton
 end
+
+-- L'ENCADRE DE CAMELOT -- InsetFrameTemplate (shareduipaneltemplates.xml et
+-- nineslicelayouts.lua) : fond UI-Background-Marble en mosaique ; lisere
+-- UI-Frame-InnerTopLeft / TopRight / BotLeftCorner / BotRight (6 x 6, les
+-- deux du bas a y = -1) et _UI-Frame-InnerTopTile / BotTile,
+-- !UI-Frame-InnerLeftTile / RightTile (3 d'epaisseur) entre eux.
+-- Mis en commun le 2026-09-26 (volet des champs de bataille, fenetre Social).
+local MARBRE = "interface" .. string.char(92) .. "ForeverUI" .. string.char(92)
+	.. "framegeneral" .. string.char(92) .. "ui-background-marble"
+
+function ForeverUI.CreateInset(parent, nom)
+	return ForeverUI.DecorateInset(CreateFrame("Frame", nom, parent))
+end
+
+-- Le meme habillage, pose sur un cadre qui existe deja (le cadre des droits
+-- de banque de la fenetre de controle de guilde, par exemple) : ses regions
+-- a lui, sous ses cadres fils.
+function ForeverUI.DecorateInset(e)
+	local fond = e:CreateTexture(nil, "BACKGROUND")
+	fond:SetTexture(MARBRE, true)
+	if fond.SetHorizTile then
+		fond:SetHorizTile(true)
+		fond:SetVertTile(true)
+	end
+	fond:SetAllPoints(e)
+	e.fond = fond
+
+	local function coin(atlas, point, y)
+		local t = e:CreateTexture(nil, "BORDER")
+		ForeverUI.SetAtlas(t, atlas)
+		t:SetPoint(point, e, point, 0, y or 0)
+		return t
+	end
+	local hg = coin("ui-frame-innertopleft", "TOPLEFT")
+	local hd = coin("ui-frame-innertopright", "TOPRIGHT")
+	local bg = coin("ui-frame-innerbotleftcorner", "BOTTOMLEFT", -1)
+	local bd = coin("ui-frame-innerbotright", "BOTTOMRIGHT", -1)
+	-- l'epaisseur vient de l'element (3), la longueur des coins
+	local function bord(atlas, a1, c1, r1, a2, c2, r2)
+		local t = e:CreateTexture(nil, "BORDER")
+		ForeverUI.SetAtlas(t, atlas, true)
+		t:SetPoint(a1, c1, r1)
+		t:SetPoint(a2, c2, r2)
+		return t
+	end
+	local haut = bord("_ui-frame-innertoptile", "TOPLEFT", hg, "TOPRIGHT", "TOPRIGHT", hd, "TOPLEFT")
+	haut:SetHeight(3)
+	local bas = bord("_ui-frame-innerbottile", "BOTTOMLEFT", bg, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "BOTTOMLEFT")
+	bas:SetHeight(3)
+	local gauche = bord("!ui-frame-innerlefttile", "TOPLEFT", hg, "BOTTOMLEFT", "BOTTOMLEFT", bg, "TOPLEFT")
+	gauche:SetWidth(3)
+	local droite = bord("!ui-frame-innerrighttile", "TOPRIGHT", hd, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "TOPRIGHT")
+	droite:SetWidth(3)
+	e.lisere = { hg, hd, bg, bd, haut, bas, gauche, droite }
+	return e
+end
+
+-- LE BOUTON DE PANNEAU DE CAMELOT -- UIPanelButtonTemplate : trois morceaux
+-- de UI-Panel-Button-Up / -Down / -Disabled (gauche 12, milieu etire,
+-- droite 12 ; 0,6875 de haut), surbrillance -Highlight en ADD.
+-- Mis en commun le 2026-09-26 (equipes d'arene, champs de bataille, Social).
+-- Activer(oui) : UIPanelButton_OnEnable / _OnDisable, l'image -Disabled et
+-- la police grisee.
+local BOUTON_PANNEAU = "Interface" .. string.char(92) .. "Buttons" .. string.char(92) .. "UI-Panel-Button-"
+
+function ForeverUI.CreatePanelButton(parent, texteBouton, largeur, hauteur, nom, police, gabarit)
+	local b = CreateFrame("Button", nom, parent, gabarit)
+	b:SetWidth(largeur)
+	b:SetHeight(hauteur)
+	local function morceau(u1, u2)
+		local t = b:CreateTexture(nil, "BACKGROUND")
+		t:SetTexCoord(u1, u2, 0, 0.6875)
+		return t
+	end
+	local g = morceau(0, 0.09375)
+	g:SetWidth(12)
+	g:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+	g:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
+	local d = morceau(0.53125, 0.625)
+	d:SetWidth(12)
+	d:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
+	d:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
+	local m = morceau(0.09375, 0.53125)
+	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
+	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
+	local morceaux = { g, m, d }
+	local function etat(suffixe)
+		for _, t in ipairs(morceaux) do
+			t:SetTexture(BOUTON_PANNEAU .. suffixe)
+		end
+	end
+	etat("Up")
+	local normale = police and _G[police .. ""] or GameFontNormalSmall
+	local survol = police and _G[(police == "GameFontNormal") and "GameFontHighlight" or "GameFontHighlightSmall"]
+		or GameFontHighlightSmall
+	local fs = b:CreateFontString(nil, "ARTWORK")
+	fs:SetFontObject(normale)
+	fs:SetPoint("CENTER", b, "CENTER", 0, 0)
+	b:SetFontString(fs)
+	b:SetNormalFontObject(normale)
+	b:SetHighlightFontObject(survol)
+	if b.SetDisabledFontObject then
+		b:SetDisabledFontObject((police == "GameFontNormal") and GameFontDisable or GameFontDisableSmall)
+	end
+	b:SetText(texteBouton)
+	b:SetHighlightTexture(BOUTON_PANNEAU .. "Highlight")
+	local s = b:GetHighlightTexture()
+	if s then
+		s:SetTexCoord(0, 0.625, 0, 0.6875)
+		s:SetBlendMode("ADD")
+	end
+	b.actif = true
+	b:SetScript("OnMouseDown", function(self) if self.actif then etat("Down") end end)
+	b:SetScript("OnMouseUp", function(self) if self.actif then etat("Up") end end)
+	function b:Activer(oui)
+		self.actif = oui and true or false
+		if oui then
+			self:Enable()
+			etat("Up")
+		else
+			self:Disable()
+			etat("Disabled")
+		end
+	end
+	return b
+end

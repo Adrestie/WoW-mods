@@ -2310,7 +2310,9 @@ local function habiller()
 		cadre.foreverSkinned = true
 		-- devant quand elle s'ouvre ou qu'on la clique (Superposition.lua)
 		ForeverUI.Superposition.inscrire("feuille", cadre, function()
-			return { cadre, barreOnglets }
+			-- le detail d'une equipe d'arene s'ouvre a cote de la feuille
+			-- (PvPArena.lua) : un clic sur lui est un clic sur elle
+			return { cadre, barreOnglets, _G["ForeverUIArenaTeamDetails"] }
 		end)
 	end
 

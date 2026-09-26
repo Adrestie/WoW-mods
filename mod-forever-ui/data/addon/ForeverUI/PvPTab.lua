@@ -46,10 +46,11 @@
 -- exactement les quatorze rangs de l'epoque. Son art c60 EST celui des rangs
 -- classiques.
 --
--- Quand il n'y a pas de rang, l'ecran montre l'embleme de la faction, et le
--- volet droit porte ce que WotLK sait vraiment donner : les statistiques
--- d'honneur -- GetPVPLifetimeStats, GetPVPSessionStats, GetPVPYesterdayStats
--- et GetHonorCurrency.
+-- Quand il n'y a pas de rang, l'ecran montre l'embleme de la faction. Ce que
+-- WotLK sait vraiment donner -- les statistiques d'honneur, par
+-- GetPVPLifetimeStats, GetPVPSessionStats, GetPVPYesterdayStats et
+-- GetHonorCurrency -- s'ecrit dans le volet gauche, sous le titre ; le volet
+-- droit est vide (2026-09-26).
 --
 -- LA JAUGE CIRCULAIRE, REFAITE PAR QUADRANTS.
 --
@@ -83,15 +84,59 @@ local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
 local SAISON_X, SAISON_Y = -46, -18
-local BLOC_Y = -60
+-- LE HAUT DU VOLET (demande du 2026-09-25 : y faire entrer les equipes
+-- d'arene et les points d'arene). "Arena N" s'en va, et le rang, la jauge et
+-- les victoires honorables remontent le plus haut possible : le bloc part
+-- du haut du volet, le titre du rang a RANG_HAUT sous lui, le cadran garde
+-- son ecart d'avant au titre (49 : -95 sous le bloc, le titre etant a -46
+-- -- saison a -20, sa ligne de 16, puis -10).
+--
+-- REMONTES ENCORE DE 10, a la demande (2026-09-25) : le cadran et le
+-- compteur de victoires, le titre restant ou il est. Mesure sur l'art
+-- (ui-character-info-honor-bar-bg, 230 x 201 pose en 235 x 209) : son
+-- anneau commence a 10 px sous le bord de l'image ; a -51, le haut visible
+-- de l'anneau tombe vers -35, a quelques pixels sous le titre. Plus haut,
+-- il le toucherait.
+--
+-- L'HONNEUR ENTRE LE TITRE ET LA JAUGE (demande du 2026-09-26). Les quatre
+-- donnees du volet droit -- points d'honneur, victoires honorables,
+-- aujourd'hui, hier -- descendent dans le volet gauche, sur DEUX COLONNES,
+-- entre le trait du titre et la jauge, puis un separateur. Le cadran ne se
+-- pose donc plus au titre mais sous ce separateur.
+--
+-- Mesures sur l'alpha des images (seuil 128, l'ombre ne compte pas) :
+--   le trait du titre   ui-character-info-honor-levelbg, 350 x 62, plein
+--                       des lignes 53 a 58 : il finit 4 au-dessus du bas de
+--                       son image
+--   l'anneau            plein a partir de la ligne 31 de 201 (pose en 209) :
+--                       son haut visible tombe 6 sous le haut du cadran
+local BLOC_Y = 0
+local RANG_HAUT = -12
+local HONNEUR_SOUS_LIGNE = -2           -- 6 sous le trait plein
+local HONNEUR_L = 366
+local HONNEUR_COLONNE = 173             -- (366 - 20) / 2
+local HONNEUR_RANGEE_H, HONNEUR_ECART = 14, 3
+local SEPARATEUR_HONNEUR_Y = -4
+local CADRAN_SOUS_SEPARATEUR = 0        -- l'anneau parait 6 plus bas
 local BLOC_Y2 = -195
 local SAISON_TITRE_Y = -20
-local RANG_Y = -10
-local PROGRES_Y = -210
+-- LE COMPTEUR, 5 PX SOUS LA JAUGE (demande du 2026-09-25). Il s'accroche
+-- au cadran et non plus au titre.
+--
+-- LE BAS VISIBLE DE LA JAUGE, mesure sur l'alpha des images (2026-09-26,
+-- remonte a la demande). L'anneau (230 x 201, pose en 235 x 209) est PLEIN
+-- jusqu'a la ligne 169 ; les vingt suivantes ne sont qu'une ombre qui
+-- s'eteint (alpha 133 a 2) -- les compter, comme la premiere fois, placait
+-- le compteur 22 px trop bas. Son bas plein tombe ainsi a 5 AU-DESSUS du bas
+-- du cadran ; celui de l'anneau numerote (54, plein jusqu'a la ligne 49,
+-- pose a -1) a 4 au-dessus. Cinq sous le plus bas des deux : -1.
+-- Sa hauteur est fixe : sans rang il est vide, et ce qui le suit (le
+-- separateur, les points d'arene, les equipes) ne doit pas remonter.
+local PROGRES_SOUS_CADRAN = -1
+local PROGRES_H = 12
 local LIGNE_Y = -10
 
 local CADRAN = 154
-local CADRAN_Y = -95
 local LUEUR_L, LUEUR_H = 275, 295
 local FOND_L, FOND_H = 115, 115
 local ANNEAU_L, ANNEAU_H = 235, 209
@@ -106,7 +151,7 @@ local ATLAS_FOND = "ui-character-info-honor-bar-bg-%s"
 local ATLAS_BADGE_FACTION = "ui-character-info-honor-icon-%s"
 local ATLAS_BADGE_RANG = "ui-character-info-honor-icon-%d"
 local ATLAS_ANNEAU_RECOMPENSE = "ui-character-info-honor-rewardring"
-local ATLAS_SEPARATEUR = "ui-character-info-scrollline"
+local ATLAS_SEPARATEUR_LONG = "ui-character-info-scrollline-long"
 
 -- LA JAUGE. Les deux morceaux cuits, l'angle de depart et le sens.
 local JAUGE_ENTIER = "Interface\\ForeverUI\\PvP\\honorfill"
@@ -114,14 +159,6 @@ local JAUGE_MOITIE = "Interface\\ForeverUI\\PvP\\honorfillhalf"
 local JAUGE_DEPART = 180        -- <Cooldown rotation="180"> : six heures
 local JAUGE_SENS = 1            -- 1 : sens des aiguilles ; -1 : l'inverse
 
-local VOLET_DROIT_X, VOLET_DROIT_Y = 16, -14
-local VOLET_DROIT_X2, VOLET_DROIT_Y2 = -12, 14
-local TITRE_L = 195
-local SOUS_TITRE_Y = -3
-local SEPARATEUR_Y = -4
-local DESCRIPTION_Y = -8
-local DESCRIPTION_X2 = -14
-local DESCRIPTION_Y2 = 6
 
 local VOLET_L, VOLET_H = 398, 464
 
@@ -486,14 +523,10 @@ local function majBloc()
 	-- se lisait comme un rang. camelot ecrit EXPANSION_SEASON_NAME, que ce
 	-- client n'a pas ; ARENA -- "Arena" -- est ce qu'il porte de plus
 	-- proche.
-	local saison = GetCurrentArenaSeason and GetCurrentArenaSeason() or 0
-	if saison and saison > 0 then
-		bloc.saison:SetText(string.format("%s %d", ARENA or "Arena", saison))
-		bloc.saison:Show()
-	else
-		bloc.saison:SetText("")
-		bloc.saison:Hide()
-	end
+	--
+	-- RETIREE le 2026-09-25, a la demande : la place va aux equipes d'arene.
+	bloc.saison:SetText("")
+	bloc.saison:Hide()
 
 	-- LE TITRE EN HAUT, LE NUMERO DANS L'ANNEAU.
 	--
@@ -503,6 +536,28 @@ local function majBloc()
 	-- par LevelLabel. Ici le titre reste seul en haut, et le numero n'est
 	-- qu'a un endroit : dans le cercle dore.
 	bloc.rang:SetText(rang.nom or "")
+
+	-- L'HONNEUR, AUX INTITULES DU CLIENT, DANS SA LANGUE.
+	--
+	-- Ils se lisaient dans LIFETIME_HONORABLE_KILLS, TODAY et YESTERDAY,
+	-- qu'aucun GlobalStrings de 3.3.5 ne porte : le texte de secours, en
+	-- francais, s'affichait sur un client anglais (releve du 2026-09-26).
+	-- Ceux du client, releves dans son GlobalStrings.lua -- les memes que
+	-- PVPHonor de WotLK : HONOR_POINTS "Honor Points", HONORABLE_KILLS
+	-- "Honorable Kills", HONOR_TODAY "Today", HONOR_YESTERDAY "Yesterday".
+	local honneur = lireHonneur()
+	local cases = {
+		{ HONOR_POINTS or "", honneur.courant },
+		{ HONORABLE_KILLS or "", honneur.vie },
+		{ HONOR_TODAY or "",
+		  tostring(honneur.jour) .. " (" .. tostring(honneur.pointsJour) .. ")" },
+		{ HONOR_YESTERDAY or "",
+		  tostring(honneur.hier) .. " (" .. tostring(honneur.pointsHier) .. ")" },
+	}
+	for n, c in ipairs(cases) do
+		bloc.honneur.cases[n].intitule:SetText(c[1])
+		bloc.honneur.cases[n].valeur:SetText(tostring(c[2]))
+	end
 
 	poserBadge(rang)
 
@@ -540,47 +595,12 @@ local function majBloc()
 		bloc.numero:Hide()
 	end
 
-	if ForeverUI.PvPDetail then
-		ForeverUI.PvPDetail()
+	-- LES EQUIPES D'ARENE, sous le rang (PvPArena.lua).
+	if ForeverUI.PvPArena then
+		ForeverUI.PvPArena.maj()
 	end
 end
 ForeverUI.PvPUpdate = majBloc
-
-local function majDetail()
-	if not detail then
-		return
-	end
-
-	local rang = lireRang()
-	local honneur = lireHonneur()
-
-	detail.titre:SetText(rang.nom or (PVP or "JcJ"))
-	if rang.numero and rang.numero > 0 then
-		detail.sousTitre:SetText(tostring(rang.numero))
-	else
-		detail.sousTitre:SetText("")
-	end
-
-	-- Ce que WotLK sait vraiment donner. Les intitules du client quand il en
-	-- a un, le nom brut sinon.
-	local lignes = {}
-	local function ajouter(intitule, valeur)
-		lignes[#lignes + 1] = tostring(intitule) .. " : " .. tostring(valeur)
-	end
-
-	ajouter(HONOR_POINTS or "Points d'honneur", honneur.courant)
-	ajouter(LIFETIME_HONORABLE_KILLS or "Victoires honorables", honneur.vie)
-	if honneur.meilleurRang and honneur.meilleurRang > 0 then
-		ajouter(HIGHEST_RANK or "Meilleur rang", honneur.meilleurRang)
-	end
-	ajouter(TODAY or "Aujourd'hui",
-		tostring(honneur.jour) .. " (" .. tostring(honneur.pointsJour) .. ")")
-	ajouter(YESTERDAY or "Hier",
-		tostring(honneur.hier) .. " (" .. tostring(honneur.pointsHier) .. ")")
-
-	detail.description:SetText(table.concat(lignes, "\n"))
-end
-ForeverUI.PvPDetail = majDetail
 
 -- ---------------------------------------------------------- la construction
 
@@ -697,7 +717,7 @@ local function monter(hote)
 
 	bloc.rang = bloc:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
 	bloc.rang:SetJustifyH("CENTER")
-	bloc.rang:SetPoint("TOP", bloc.saison, "BOTTOM", 0, RANG_Y)
+	bloc.rang:SetPoint("TOP", bloc, "TOP", 0, RANG_HAUT)
 
 	bloc.ligne = bloc:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(bloc.ligne, ATLAS_LIGNE)
@@ -705,15 +725,45 @@ local function monter(hote)
 
 	bloc.progres = bloc:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 	bloc.progres:SetJustifyH("CENTER")
-	bloc.progres:SetPoint("TOP", bloc.rang, "BOTTOM", 0, PROGRES_Y)
+	bloc.progres:SetHeight(PROGRES_H)
 
 	-- LE CADRAN : sa lueur, son fond de faction, son anneau, la jauge et le
 	-- badge, dans cet ordre -- c'est lui qui decide ce qui passe devant.
 	local cadran = CreateFrame("Frame", "ForeverUIPvPDial", bloc)
 	cadran:SetWidth(CADRAN)
 	cadran:SetHeight(CADRAN)
-	cadran:SetPoint("TOP", bloc, "TOP", 0, CADRAN_Y)
+	cadran:SetFrameLevel(bloc:GetFrameLevel() + 1)
 	bloc.cadran = cadran
+
+	-- L'HONNEUR, sur deux colonnes, dans un cadre AU-DESSUS du cadran : la
+	-- lueur de celui-ci deborde vers le haut et voilerait le texte.
+	local honneur = CreateFrame("Frame", "ForeverUIPvPHonor", bloc)
+	honneur:SetWidth(HONNEUR_L)
+	honneur:SetHeight(2 * HONNEUR_RANGEE_H + HONNEUR_ECART)
+	honneur:SetPoint("TOP", bloc.ligne, "BOTTOM", 0, HONNEUR_SOUS_LIGNE)
+	honneur:SetFrameLevel(bloc:GetFrameLevel() + 2)
+	bloc.honneur = honneur
+	honneur.cases = {}
+	for n = 1, 4 do
+		local colonne, rangee = (n - 1) % 2, math.floor((n - 1) / 2)
+		local x = colonne * (HONNEUR_L - HONNEUR_COLONNE)
+		local y = -rangee * (HONNEUR_RANGEE_H + HONNEUR_ECART)
+		local intitule = honneur:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		intitule:SetJustifyH("LEFT")
+		intitule:SetPoint("TOPLEFT", honneur, "TOPLEFT", x, y)
+		local valeur = honneur:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		valeur:SetJustifyH("RIGHT")
+		valeur:SetPoint("TOPRIGHT", honneur, "TOPLEFT", x + HONNEUR_COLONNE, y)
+		honneur.cases[n] = { intitule = intitule, valeur = valeur }
+	end
+
+	local separateur = honneur:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(separateur, ATLAS_SEPARATEUR_LONG)
+	separateur:SetPoint("TOP", honneur, "BOTTOM", 0, SEPARATEUR_HONNEUR_Y)
+	bloc.separateurHonneur = separateur
+
+	cadran:SetPoint("TOP", separateur, "BOTTOM", 0, CADRAN_SOUS_SEPARATEUR)
+	bloc.progres:SetPoint("TOP", cadran, "BOTTOM", 0, PROGRES_SOUS_CADRAN)
 
 	local lueur = cadran:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(lueur, ATLAS_LUEUR, true)
@@ -751,49 +801,30 @@ local function monter(hote)
 	bloc.numero:SetPoint("CENTER", recompense, "CENTER", 0, 0)
 	bloc.numero:SetJustifyH("CENTER")
 
+	-- LES EQUIPES D'ARENE ET LES POINTS D'ARENE, dans le bas du volet
+	-- (PvPArena.lua, demande du 2026-09-25).
+	if ForeverUI.PvPArena then
+		ForeverUI.PvPArena.monter(bloc, hote)
+	end
+
 	etoufferEcranDuClient()
 	majBloc()
 	return nil, { cadre }
 end
 
+-- LE VOLET DROIT (demandes du 2026-09-26). Il portait le titre du rang, son
+-- numero et l'honneur ; l'honneur est passe au volet gauche, le reste a ete
+-- retire. Il porte desormais les champs de bataille (PvPBattlegrounds.lua).
 local function monterDetail(hote)
 	if detail then
 		return detail, {}
 	end
-
-	local cadre = CreateFrame("Frame", "ForeverUIPvPDetail", hote)
-	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", VOLET_DROIT_X, VOLET_DROIT_Y)
-	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", VOLET_DROIT_X2, VOLET_DROIT_Y2)
-	detail = cadre
-
-	detail.titre = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-	detail.titre:SetWidth(TITRE_L)
-	detail.titre:SetJustifyH("CENTER")
-	detail.titre:SetPoint("TOP", cadre, "TOP", 0, 0)
-
-	detail.sousTitre = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	detail.sousTitre:SetWidth(TITRE_L)
-	detail.sousTitre:SetJustifyH("CENTER")
-	detail.sousTitre:SetPoint("TOP", detail.titre, "BOTTOM", 0, SOUS_TITRE_Y)
-
-	detail.separateur = cadre:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(detail.separateur, ATLAS_SEPARATEUR)
-	detail.separateur:SetPoint("TOP", detail.sousTitre, "BOTTOM", 0, SEPARATEUR_Y)
-
-	detail.description = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	detail.description:SetPoint("TOPLEFT", detail.separateur, "BOTTOMLEFT", 0, DESCRIPTION_Y)
-	detail.description:SetPoint("TOPRIGHT", detail.separateur, "BOTTOMRIGHT", 0, DESCRIPTION_Y)
-	detail.description:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", 0, DESCRIPTION_Y2)
-	detail.description:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
-		DESCRIPTION_X2, DESCRIPTION_Y2)
-	detail.description:SetJustifyH("LEFT")
-	detail.description:SetJustifyV("TOP")
-	if detail.description.SetWordWrap then
-		detail.description:SetWordWrap(true)
+	detail = CreateFrame("Frame", "ForeverUIPvPDetail", hote)
+	detail:SetAllPoints(hote)
+	if ForeverUI.PvPBattlegrounds then
+		ForeverUI.PvPBattlegrounds.monter(detail)
 	end
-
-	majDetail()
-	return cadre, {}
+	return detail, {}
 end
 
 ForeverUI.PvPTab = { Build = monter, BuildRight = monterDetail }
