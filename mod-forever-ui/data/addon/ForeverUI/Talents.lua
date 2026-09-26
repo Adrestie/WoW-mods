@@ -1665,7 +1665,10 @@ function T.fermerSansAttente()
 	T.confirme = nil
 end
 
-StaticPopupDialogs = StaticPopupDialogs or {}
+-- StaticPopupDialogs existe toujours (StaticPopup.lua) : ne JAMAIS la
+-- reaffecter -- la globale entiere passerait a l'addon, et chaque popup du
+-- client avec elle (BindEnchant bloque, taint.log du 2026-09-26). On n'ecrit
+-- que notre cle.
 StaticPopupDialogs["FOREVERUI_TALENTS_CONFIRM_CLOSE"] = {
 	text = TEXTE.confirmerFermeture,
 	button1 = CONTINUE or "Continue",

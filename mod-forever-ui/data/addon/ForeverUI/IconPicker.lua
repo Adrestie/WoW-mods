@@ -24,10 +24,20 @@
 --
 -- TOUT SON REMPLISSAGE PASSE PAR QUATRE GLOBALES --
 -- NUM_GEARSET_ICONS_PER_ROW, NUM_GEARSET_ICON_ROWS, NUM_GEARSET_ICONS_SHOWN
--- et GEARSET_ICON_ROW_HEIGHT : GearManagerDialogPopup_Update et
--- RecalculateGearManagerDialogPopup ne lisent qu'elles. Les porter aux
--- valeurs de camelot suffit donc a obtenir sa grille, sans rien recrire du
--- parcours des icones ni du defilement.
+-- et GEARSET_ICON_ROW_HEIGHT -- qu'on N'ECRIT PAS : ecrites par l'addon,
+-- elles passeraient a l'addon, et avec elles tout le code du client qui les
+-- lit (2026-09-26, le code doit etre propre). Le client remplit donc sa
+-- grille de cinq, et on repasse derriere lui :
+--   remplir   apres GearManagerDialogPopup_Update : nos dix par rangee, la
+--             meme numerotation que lui (les objets portes, puis les icones
+--             de macro, puis l'icone speciale) -- GetEquipmentSetIconInfo --
+--             et le defilement compte en rangees de dix, au pas du client
+--             (GEARSET_ICON_ROW_HEIGHT, qu'on lit seulement)
+--   choisir   GearSetPopupButton_OnClick retient offset x 5 + GetID() :
+--             chaque bouton porte donc l'identifiant qui, par ce calcul,
+--             tombe sur l'icone qu'il montre -- offset x (10 - 5) + i
+--   recaler   apres RecalculateGearManagerDialogPopup : le defilement
+--             jusqu'a l'icone retenue, par sa regle, en rangees de dix
 --
 -- CE QUI DIFFERE, ET POURQUOI.
 --   Le client ne cree que quinze boutons, au chargement. Il en faut quatre-
@@ -81,18 +91,12 @@ local CURSEUR_H = 36                    -- minimal-scrollbar-thumb-bottom
 
 local monte = false
 
--- Les quatre globales que tout le remplissage du client lit.
-local function poserLesGlobales()
-	NUM_GEARSET_ICONS_PER_ROW = PAR_RANGEE
-	NUM_GEARSET_ICON_ROWS = RANGEES
-	NUM_GEARSET_ICONS_SHOWN = PAR_RANGEE * RANGEES
-	GEARSET_ICON_ROW_HEIGHT = PAS
-end
+local AFFICHES = PAR_RANGEE * RANGEES
 
 -- Les boutons manquants, sur le gabarit du client, puis toute la grille
 -- reposee en rangees de dix.
 local function poserGrille(popup)
-	for index = #popup.buttons + 1, NUM_GEARSET_ICONS_SHOWN do
+	for index = #popup.buttons + 1, AFFICHES do
 		local bouton = CreateFrame("CheckButton",
 			"GearManagerDialogPopupButton" .. index, popup,
 			"GearSetPopupButtonTemplate")
@@ -248,6 +252,96 @@ local function poserFenetre(popup)
 	end
 end
 
+-- ------------------------------------------------------------ le remplissage
+
+-- les objets portes a icone, comme RefreshEquipmentSetIconInfo
+local function objetsPortes()
+	local n = 0
+	for i = INVSLOT_FIRST_EQUIPPED, INVSLOT_LAST_EQUIPPED do
+		if GetInventoryItemTexture("player", i) then n = n + 1 end
+	end
+	return n
+end
+
+-- le compte du client (_TotalItems) : objets, icones de macro, et l'icone
+-- speciale quand RecalculateGearManagerDialogPopup en a pose une
+local function compter()
+	local base = objetsPortes() + GetNumMacroIcons()
+	if GetEquipmentSetIconInfo(base + 1) then
+		base = base + 1
+	end
+	return base
+end
+
+local enCours = false
+
+-- apres GearManagerDialogPopup_Update : la grille de dix
+local function remplir()
+	local popup = _G["GearManagerDialogPopup"]
+	local defilement = _G["GearManagerDialogPopupScrollFrame"]
+	if enCours or not (monte and popup and defilement and popup.buttons) then
+		return
+	end
+	enCours = true
+	local offset = FauxScrollFrame_GetOffset(defilement) or 0
+	local total = compter()
+	local cinq = NUM_GEARSET_ICONS_PER_ROW or 5
+	for i, bouton in ipairs(popup.buttons) do
+		local index = offset * PAR_RANGEE + i
+		bouton:SetID(offset * (PAR_RANGEE - cinq) + i)
+		if i <= AFFICHES and index <= total then
+			local texture = GetEquipmentSetIconInfo(index)
+			bouton.icon:SetTexture(texture)
+			bouton:Show()
+			if index == popup.selectedIcon then
+				bouton:SetChecked(1)
+			elseif texture and texture == popup.selectedTexture then
+				bouton:SetChecked(1)
+				popup:SetSelection(false, index)
+			else
+				bouton:SetChecked(nil)
+			end
+		else
+			bouton.icon:SetTexture("")
+			bouton:Hide()
+		end
+	end
+	FauxScrollFrame_Update(defilement, math.ceil(total / PAR_RANGEE), RANGEES, GEARSET_ICON_ROW_HEIGHT)
+	enCours = false
+end
+
+-- apres RecalculateGearManagerDialogPopup : l'icone retenue dans la vue,
+-- par la regle du client (au moins RANGEES rangees montrees, et rien a
+-- deplacer si elle est dans la premiere page)
+local function recaler()
+	local popup = _G["GearManagerDialogPopup"]
+	local defilement = _G["GearManagerDialogPopupScrollFrame"]
+	if not (monte and popup and defilement) then
+		return
+	end
+	local total = compter()
+	local trouve = popup.selectedIcon
+	if not trouve and popup.selectedTexture then
+		for index = 1, total do
+			if GetEquipmentSetIconInfo(index) == popup.selectedTexture then
+				trouve = index
+				break
+			end
+		end
+	end
+	if trouve then
+		local derniere = math.floor((total - 1) / PAR_RANGEE)
+		local rangee = math.floor((trouve - 1) / PAR_RANGEE)
+		rangee = rangee + math.min(RANGEES - 1, derniere - rangee) - (RANGEES - 1)
+		if trouve <= AFFICHES then
+			rangee = 0
+		end
+		FauxScrollFrame_OnVerticalScroll(defilement, rangee * GEARSET_ICON_ROW_HEIGHT, GEARSET_ICON_ROW_HEIGHT, nil)
+	end
+	remplir()
+end
+ForeverUI.IconPickerFill = remplir
+
 local function habiller()
 	local popup = _G["GearManagerDialogPopup"]
 	if not popup or not popup.buttons or InCombatLockdown() then
@@ -255,7 +349,6 @@ local function habiller()
 	end
 
 	if not monte then
-		poserLesGlobales()
 		poserGrille(popup)
 		poserChoixCourant(popup)
 		poserFenetre(popup)
@@ -467,5 +560,11 @@ if hooksecurefunc then
 		if type(_G[nom]) == "function" then
 			hooksecurefunc(nom, function() habiller() end)
 		end
+	end
+	if type(GearManagerDialogPopup_Update) == "function" then
+		hooksecurefunc("GearManagerDialogPopup_Update", remplir)
+	end
+	if type(RecalculateGearManagerDialogPopup) == "function" then
+		hooksecurefunc("RecalculateGearManagerDialogPopup", recaler)
 	end
 end

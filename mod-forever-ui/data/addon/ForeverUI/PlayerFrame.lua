@@ -53,7 +53,7 @@ frame:SetAttribute("*type1", "target")
 frame:SetAttribute("*type2", "menu")
 frame:RegisterForClicks("AnyUp")
 frame.menu = function(self)
-	ToggleDropDownMenu(1, nil, PlayerFrameDropDown, self, 106, 27)
+	ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, PlayerFrameDropDown, self, 106, 27)
 end
 
 local portrait = frame:CreateTexture(nil, "BACKGROUND")

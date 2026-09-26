@@ -716,6 +716,14 @@ local Q = { etats = {}, vus = nil, durees = {} }
 
 -- WatchFrame_DisplayTrackedQuests pour les donnees, QuestObjectiveTracker
 -- pour l'affichage
+-- LES QUETES DE LA ZONE : la table de WotLK (LOCAL_MAP_QUESTS) tenue ici,
+-- dans la notre. Le client ne la remplit que dans son gestionnaire de
+-- quetes, qu'on a retire ; l'ecrire depuis l'addon la ferait passer a
+-- l'addon, et avec elle la carte du monde qui la lit (taint, 2026-09-26).
+local locales = {}
+T.locales = locales
+T.nbObjets = 0
+
 local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
 	local m = T.quetes
 	debuter(m, placeRestante(maxHeight, initialOffset))
@@ -742,10 +750,10 @@ local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
 	if WorldMapFrame and WorldMapFrame:IsShown() then
 		selection = WORLDMAP_SETTINGS.selectedQuestId
 	else
-		table.wipe(LOCAL_MAP_QUESTS)
-		LOCAL_MAP_QUESTS["zone"] = GetCurrentMapZone()
+		table.wipe(locales)
+		locales["zone"] = GetCurrentMapZone()
 		for id in pairs(CURRENT_MAP_QUESTS) do
-			LOCAL_MAP_QUESTS[id] = true
+			locales[id] = true
 		end
 	end
 	table.wipe(VISIBLE_WATCHES)
@@ -770,7 +778,7 @@ local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
 			local garder = true
 			if complet and bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_COMPLETED_QUESTS) ~= WATCHFRAME_FILTER_COMPLETED_QUESTS then
 				garder = false
-			elseif bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_REMOTE_ZONES) ~= WATCHFRAME_FILTER_REMOTE_ZONES and not LOCAL_MAP_QUESTS[questID] then
+			elseif bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_REMOTE_ZONES) ~= WATCHFRAME_FILTER_REMOTE_ZONES and not locales[questID] then
 				garder = false
 			end
 			if garder then
@@ -893,7 +901,7 @@ local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
 		end
 	end
 
-	for i = objets + 1, WATCHFRAME_NUM_ITEMS do
+	for i = objets + 1, T.nbObjets do
 		local it = _G["WatchFrameItem" .. i]
 		if it then it:Hide() end
 	end
@@ -924,9 +932,11 @@ end
 function T.objet(n, lineFrame, index, icone, charges)
 	local b = _G["WatchFrameItem" .. n]
 	if not b then
-		WATCHFRAME_NUM_ITEMS = n
 		b = CreateFrame("Button", "WatchFrameItem" .. n, lineFrame, "WatchFrameItemButtonTemplate")
 	end
+	-- le compte des boutons : WATCHFRAME_NUM_ITEMS chez WotLK, que seul son
+	-- gestionnaire de quetes (retire) lit ; tenu ici pour ne pas l'ecrire
+	if n > T.nbObjets then T.nbObjets = n end
 	if not b.foreverHabille then
 		b.foreverHabille = true
 		b:SetWidth(G.objetCote)
@@ -1149,10 +1159,11 @@ local function apresMiseAJour(depuisMaj)
 end
 T.apresMiseAJour = apresMiseAJour
 
--- WatchFrame_SetWidth et WatchFrame_Collapse / _Expand : 260, replie ou non
+-- WatchFrame_SetWidth et WatchFrame_Collapse / _Expand : 260, replie ou non.
+-- WATCHFRAME_EXPANDEDWIDTH et WATCHFRAME_MAXLINEWIDTH restent ceux du
+-- client : on repasse derriere lui (les accroches ci-dessous), et nos
+-- gestionnaires ne lisent pas la largeur qu'il leur passe.
 local function largeur()
-	WATCHFRAME_EXPANDEDWIDTH = G.largeur
-	WATCHFRAME_MAXLINEWIDTH = G.largeur - G.blocX
 	WatchFrame:SetWidth(G.largeur)
 end
 
@@ -1222,9 +1233,23 @@ local function construire()
 	hooksecurefunc("WatchFrame_Update", function() apresMiseAJour(true) end)
 	hooksecurefunc("WatchFrame_SetWidth", function()
 		if not WatchFrame.collapsed then largeur() end
-		WATCHFRAME_EXPANDEDWIDTH = G.largeur
-		WATCHFRAME_MAXLINEWIDTH = G.largeur - G.blocX
 	end)
+	-- suivre une quete depuis la carte : WotLK l'ajoutait a LOCAL_MAP_QUESTS
+	-- si la table etait celle de la zone affichee, et l'en retirait sinon
+	-- (WorldMapFrame.lua:2162-2167) ; la table est la notre, on refait son
+	-- geste puis le rafraichissement que le client a deja joue sans elle
+	if WorldMapTrackQuest_Toggle then
+		hooksecurefunc("WorldMapTrackQuest_Toggle", function(coche)
+			local id = WORLDMAP_SETTINGS and WORLDMAP_SETTINGS.selectedQuestId
+			if not id then return end
+			if coche then
+				if locales["zone"] == GetCurrentMapZone() then locales[id] = true end
+			else
+				locales[id] = nil
+			end
+			WatchFrame_Update()
+		end)
+	end
 	hooksecurefunc("WatchFrame_Collapse", function(self)
 		self:SetWidth(G.largeur)
 		apresMiseAJour()

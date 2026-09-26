@@ -522,7 +522,7 @@ function R.ouvrirMenu(f)
 	menu.unit = f.vehicule and f.affiche or f.unite
 	menu.name = UnitName(f.unite)
 	menu.id = id
-	ToggleDropDownMenu(1, nil, menu, "cursor")
+	ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, menu, "cursor")
 end
 
 -- ------------------------------------------------------ le conteneur et les groupes

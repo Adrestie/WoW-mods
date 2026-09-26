@@ -987,7 +987,12 @@ local function reprendreOkay()
             -- l'edition, d'ou le drapeau qui dit que la fermeture vient de
             -- nous.
             local nom = popup.name
-            local _, indiceIcone = GetEquipmentSetIconInfo(popup.selectedIcon)
+            -- sans icone choisie, pas d'indice : GetEquipmentSetIconInfo(nil)
+            -- du client compare nil a un nombre et s'arrete sur une erreur
+            local indiceIcone
+            if popup.selectedIcon then
+                indiceIcone = select(2, GetEquipmentSetIconInfo(popup.selectedIcon))
+            end
             local enCours = edition
 
             fermetureVoulue = true

@@ -67,16 +67,18 @@
 -- CE QUE L'ON GARDE DE WOTLK : sa bascule (CVar miniWorldMap, meme bouton), son
 -- plein ecran detache de l'interface, son fond noir. Le cadre de camelot se
 -- pose sur un SUPPORT aux dimensions de camelot, dans l'unite de l'interface
--- (le plein ecran de WotLK a sa propre echelle : le support la compense). La
--- carte de WotLK prend l'echelle qui la fait tenir dans le canevas, par les
--- CONSTANTES que WotLK lit pour placer fleche et reperes (QUESTLIST et
--- FULLMAP), comme la petite fenetre le fait deja avec WINDOWED.
-
+-- (le plein ecran de WotLK a sa propre echelle : le support la compense).
+--
 -- L'ECHELLE. camelot pose sa carte dans 697 x 465, soit 697 / 1002 = 0,6956
--- pour une carte de WotLK de 1002 x 668. On change la CONSTANTE de la petite
--- fenetre avant que VARIABLES_LOADED n'appelle WorldMap_ToggleSizeDown :
--- tout le code de WotLK -- echelle, fleche, reperes, bornes des POI -- suit
--- alors de lui-meme.
+-- pour une carte de WotLK de 1002 x 668 -- en plein ecran, ce qui la fait
+-- tenir dans le canevas. WotLK a ses propres echelles (WORLDMAP_WINDOWED_SIZE
+-- 0,573, WORLDMAP_QUESTLIST_SIZE 0,691, WORLDMAP_FULLMAP_SIZE 1) et place
+-- fleche, reperes et bornes des POI avec elles, EN UNITES DE WorldMapFrame :
+-- son plein ecran met deja WorldMapFrame a l'echelle (SetupFullscreenScale)
+-- sans rien deranger. On n'ecrit donc pas ses constantes (ecrites par
+-- l'addon, elles passeraient a l'addon, 2026-09-26) : c'est WorldMapFrame
+-- qu'on met a l'echelle -- notre echelle divisee par la sienne --, et nos
+-- cadres, le volet et les boutons rouges prennent l'echelle inverse.
 
 ForeverUI = ForeverUI or {}
 
@@ -211,10 +213,12 @@ local function enPetiteFenetre()
 end
 
 -- ---------------------------------------------------------------- l'echelle
--- Avant VARIABLES_LOADED : c'est lui qui appelle WorldMap_ToggleSizeDown.
-if WORLDMAP_WINDOWED_SIZE then
-	WORLDMAP_WINDOWED_SIZE = G.echelle
+-- L'echelle de WorldMapFrame en petite fenetre : la carte y prend 0,573
+-- (WORLDMAP_WINDOWED_SIZE, qu'on lit seulement) ; il faut 0,6956.
+local function echelleReduite()
+	return G.echelle / (WORLDMAP_WINDOWED_SIZE or G.echelle)
 end
+W.inverse = 1
 
 -- -------------------------------------------------------------- le deplacement
 -- Demande de l'utilisateur (2026-09-25) : la carte reduite se deplace en la
@@ -229,8 +233,37 @@ end
 if GetCVar and SetCVar and GetCVar("advancedWorldMap") ~= "1" then
 	SetCVar("advancedWorldMap", "1")
 end
-if WORLDMAP_SETTINGS then
-	WORLDMAP_SETTINGS.locked = false
+
+-- LE VERROU RESTE CELUI DU CLIENT (WORLDMAP_SETTINGS.locked, qu'on n'ecrit
+-- pas). Quand il refuse de faire glisser -- carte verrouillee --, on fait ses
+-- gestes a sa place, apres lui : WorldMapTitleButton_OnDragStart / _OnDragStop
+-- (WorldMapFrame.lua:2063-2087). Deverrouillee par son menu, il les fait lui-
+-- meme et on se tait.
+local function glisserDebut()
+	if not (WORLDMAP_SETTINGS.advanced and WORLDMAP_SETTINGS.locked) then return end
+	if WORLDMAP_SETTINGS.selectedQuest then
+		WorldMapBlobFrame:DrawQuestBlob(WORLDMAP_SETTINGS.selectedQuestId, false)
+	end
+	WorldMapScreenAnchor:ClearAllPoints()
+	WorldMapFrame:ClearAllPoints()
+	WorldMapFrame:StartMoving()
+end
+
+local function glisserFin()
+	if not (WORLDMAP_SETTINGS.advanced and WORLDMAP_SETTINGS.locked) then return end
+	WorldMapFrame:StopMovingOrSizing()
+	WorldMapBlobFrame_CalculateHitTranslations()
+	if WORLDMAP_SETTINGS.selectedQuest and not WORLDMAP_SETTINGS.selectedQuest.completed then
+		WorldMapBlobFrame:DrawQuestBlob(WORLDMAP_SETTINGS.selectedQuestId, true)
+	end
+	WorldMapScreenAnchor:StartMoving()
+	WorldMapScreenAnchor:SetPoint("TOPLEFT", WorldMapFrame)
+	WorldMapScreenAnchor:StopMovingOrSizing()
+end
+
+if WorldMapTitleButton and WorldMapTitleButton.HookScript then
+	WorldMapTitleButton:HookScript("OnDragStart", glisserDebut)
+	WorldMapTitleButton:HookScript("OnDragStop", glisserFin)
 end
 
 -- La premiere fois, l'ancre est au coin haut-gauche de l'ecran (XML). On la
@@ -1247,24 +1280,31 @@ local function poserReduit()
 	if WORLDMAP_SETTINGS.advanced then
 		placerAncre()
 	end
+	-- WorldMapFrame a notre echelle ; ses dimensions et tout ce qui lui est
+	-- pose sans echelle propre se comptent alors en unites de WorldMapFrame
+	local k = echelleReduite()
+	carte:SetScale(k)
+	W.inverse = 1 / k
 	local volet = voletOuvert()
-	carte:SetWidth(G.largeur + (volet and G.largeurVolet or 0))
-	carte:SetHeight(G.hauteur)
+	carte:SetWidth((G.largeur + (volet and G.largeurVolet or 0)) / k)
+	carte:SetHeight(G.hauteur / k)
 
+	-- la carte : ses decalages sont dans SON unite, deja a notre echelle
 	WorldMapDetailFrame:ClearAllPoints()
 	WorldMapDetailFrame:SetPoint("TOPLEFT", carte, "TOPLEFT", G.carteX / G.echelle, G.carteY / G.echelle)
+	WorldMapBlobFrame_CalculateHitTranslations()
 
 	-- ce que la petite fenetre de WotLK montre, et que camelot n'a pas
 	etouffer(WorldMapFrameMiniBorderLeft)
 	etouffer(WorldMapFrameMiniBorderRight)
-	ancrer(carte, 1, G.carteL, G.carteH, false)
+	ancrer(carte, W.inverse, G.carteL, G.carteH, false)
 
 	-- la barre de titre de WotLK (glisser, menu d'opacite) couvre le bandeau
 	if WorldMapTitleButton then
 		WorldMapTitleButton:ClearAllPoints()
-		WorldMapTitleButton:SetPoint("TOPLEFT", carte, "TOPLEFT", G.titreX1, G.titreY)
-		WorldMapTitleButton:SetPoint("TOPRIGHT", carte, "TOPRIGHT", G.titreX2 - 2 * G.boutonCote, G.titreY)
-		WorldMapTitleButton:SetHeight(G.titreH)
+		WorldMapTitleButton:SetPoint("TOPLEFT", carte, "TOPLEFT", G.titreX1 / k, G.titreY / k)
+		WorldMapTitleButton:SetPoint("TOPRIGHT", carte, "TOPRIGHT", (G.titreX2 - 2 * G.boutonCote) / k, G.titreY / k)
+		WorldMapTitleButton:SetHeight(G.titreH / k)
 	end
 
 	if volet then
@@ -1301,26 +1341,12 @@ local function etoufferPleinEcran()
 	end
 end
 
--- La carte dans le canevas. Les deux vues de WotLK la reposent (et rechargent
--- leur echelle) a chaque passage : on repasse derriere elles.
+-- La carte dans le canevas, a l'echelle de la vue de WotLK (QUESTLIST ou
+-- FULLMAP) : c'est WorldMapFrame qui porte le reste (poserAgrandi).
 local function poserCarteAgrandie()
-	local s = W.echelleAgrandie
-	if not s then return end
-	WORLDMAP_QUESTLIST_SIZE = s
-	WORLDMAP_FULLMAP_SIZE = s
-	if WORLDMAP_SETTINGS.size ~= WORLDMAP_WINDOWED_SIZE then
-		WORLDMAP_SETTINGS.size = s
-	end
-	WorldMapDetailFrame:SetScale(s)
-	WorldMapButton:SetScale(s)
-	WorldMapFrameAreaFrame:SetScale(s)
-	WorldMapBlobFrame:SetScale(s)
-	WorldMapBlobFrame.xRatio = nil
 	WorldMapDetailFrame:ClearAllPoints()
 	WorldMapDetailFrame:SetPoint("CENTER", W.canevas, "CENTER", 0, 0)
-	if WorldMapFrame_SetPOIMaxBounds then
-		WorldMapFrame_SetPOIMaxBounds()
-	end
+	WorldMapBlobFrame_CalculateHitTranslations()
 	etoufferPleinEcran()
 end
 W.poserCarteAgrandie = poserCarteAgrandie
@@ -1330,8 +1356,6 @@ local function poserAgrandi()
 		return
 	end
 	local carte = WorldMapFrame
-	-- l'unite de l'interface dans le plein ecran de WotLK
-	local k = UIParent:GetEffectiveScale() / carte:GetEffectiveScale()
 	-- UpdateMaximizedSize, en unites de l'interface
 	local ecranL, ecranH = UIParent:GetWidth(), UIParent:GetHeight()
 	local dispo = ecranL - G.bordEcran
@@ -1340,6 +1364,18 @@ local function poserAgrandi()
 	local hauteur = ((ecranH - G.bandeauH) * (largeur / sansBorne)) + G.bandeauH
 	largeur, hauteur = math.floor(largeur), math.floor(hauteur)
 
+	local canL = largeur - G.carteX - G.carteDroite
+	local canH = hauteur + G.carteY - G.carteBas
+	-- la carte tient dans le canevas, au centre (le canevas de camelot) : a
+	-- l'echelle de la vue de WotLK (WORLDMAP_SETTINGS.size), WorldMapFrame --
+	-- sans parent en plein ecran -- porte ce qui manque
+	local tenir = math.min(canL / G.carteUtileL, canH / G.carteUtileH)
+	carte:SetScale(UIParent:GetEffectiveScale() * tenir / WORLDMAP_SETTINGS.size)
+	-- l'unite de l'interface dans le plein ecran ainsi mis a l'echelle
+	local k = UIParent:GetEffectiveScale() / carte:GetEffectiveScale()
+	W.inverse = k
+	W.dimensionsAgrandies = { largeur, hauteur, canL, canH, k }
+
 	local support = W.agrandi
 	support:SetScale(k)
 	support:ClearAllPoints()
@@ -1347,13 +1383,6 @@ local function poserAgrandi()
 	support:SetWidth(largeur)
 	support:SetHeight(hauteur)
 	support:SetFrameLevel(carte:GetFrameLevel())
-
-	local canL = largeur - G.carteX - G.carteDroite
-	local canH = hauteur + G.carteY - G.carteBas
-	W.dimensionsAgrandies = { largeur, hauteur, canL, canH, k }
-	-- la carte tient dans le canevas, au centre (le canevas de camelot)
-	local tenir = math.min(canL / G.carteUtileL, canH / G.carteUtileH)
-	W.echelleAgrandie = tenir * k
 
 	ancrer(support, k, canL, canH, true)
 	poserCarteAgrandie()
@@ -1460,7 +1489,7 @@ if hooksecurefunc then
 		if _G[nom] then
 			hooksecurefunc(nom, function()
 				if W.construit and not enPetiteFenetre() then
-					poserCarteAgrandie()
+					poserAgrandi()
 				end
 			end)
 		end
@@ -1563,15 +1592,14 @@ ForeverUI.WorldMapDebug = function()
 		ligne(string.format("repere %d : %s (%s) icone %s, lien %s, carte d'instance %s", i, tostring(nom),
 			tostring(description), tostring(icone), tostring(lien), tostring(carteDePortail(nom))))
 	end
-	dire(string.format("carte du monde : %.0f x %.0f, mode %s (taille %.4f, petite fenetre %.4f)",
-		carte:GetWidth(), carte:GetHeight(),
+	dire(string.format("carte du monde : %.0f x %.0f a l'echelle %.4f, mode %s (taille du client %.4f, petite fenetre %.4f)",
+		carte:GetWidth(), carte:GetHeight(), carte:GetScale(),
 		enPetiteFenetre() and "reduit" or "plein ecran",
 		WORLDMAP_SETTINGS.size, WORLDMAP_WINDOWED_SIZE))
-	ligne(string.format("carte %.0f x %.0f a l'echelle %.4f -> %.1f x %.1f a l'ecran",
-		WorldMapDetailFrame:GetWidth(), WorldMapDetailFrame:GetHeight(),
-		WorldMapDetailFrame:GetScale(),
-		WorldMapDetailFrame:GetWidth() * WorldMapDetailFrame:GetScale(),
-		WorldMapDetailFrame:GetHeight() * WorldMapDetailFrame:GetScale()))
+	local ech = WorldMapDetailFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	ligne(string.format("carte %.0f x %.0f a l'echelle %.4f de l'interface -> %.1f x %.1f",
+		WorldMapDetailFrame:GetWidth(), WorldMapDetailFrame:GetHeight(), ech,
+		WorldMapDetailFrame:GetWidth() * ech, WorldMapDetailFrame:GetHeight() * ech))
 	local noms = {}
 	for _, d in ipairs(hierarchie()) do
 		table.insert(noms, d.name or "?")

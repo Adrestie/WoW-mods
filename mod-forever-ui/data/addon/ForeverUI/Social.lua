@@ -627,7 +627,7 @@ function S.cliquer(l, bouton)
 	if l.sorte == "ami" then
 		if bouton == "RightButton" then
 			local nom, _, _, _, connecte = GetFriendInfo(l.id)
-			FriendsFrame_ShowDropdown(nom, connecte, nil, nil, nil, 1)
+			ForeverUI.MenuUnite.ouvrir(FriendsFrame_ShowDropdown, nom, connecte, nil, nil, nil, 1)
 		else
 			PlaySound("igMainMenuOptionCheckBoxOn")
 			FriendsFrame_SelectFriend(FRIENDS_BUTTON_TYPE_WOW, l.id)

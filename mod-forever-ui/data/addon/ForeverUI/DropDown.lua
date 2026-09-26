@@ -253,9 +253,33 @@ local function reglerBouton(bouton)
 	end
 end
 
--- Le pas des lignes suit leur hauteur : le client le lit a chaque ligne
--- posee et a chaque calcul de hauteur de liste.
-UIDROPDOWNMENU_BUTTON_HEIGHT = LIGNE_HAUTEUR
+-- Le pas des lignes suit leur hauteur. Le client le lit dans
+-- UIDROPDOWNMENU_BUTTON_HEIGHT -- a chaque ligne posee, a chaque calcul de
+-- hauteur de liste, et pour la hauteur du menu deroulant lui-meme
+-- (UIDropDownMenu_InitializeHelper) -- mais on N'ECRIT PAS cette globale :
+-- ecrite par l'addon, elle souillerait chaque menu du client, jusqu'au menu
+-- d'un clic droit sur un joueur et ses actions protegees (taint.log du
+-- 2026-09-26, meme cas que StaticPopupDialogs). Le client pose donc ses
+-- lignes a 16, et on les repose a 20 juste apres lui, aux memes endroits.
+local BORDURE = UIDROPDOWNMENU_BORDER_HEIGHT or 15
+
+local function reposerLigne(liste, bouton)
+	local point, relatif, pointRelatif, x = bouton:GetPoint(1)
+	if point then
+		bouton:ClearAllPoints()
+		bouton:SetPoint(point, relatif, pointRelatif, x,
+			-((bouton:GetID() - 1) * LIGNE_HAUTEUR) - BORDURE)
+	end
+	liste:SetHeight(((liste.numButtons or 1) * LIGNE_HAUTEUR) + (BORDURE * 2))
+end
+
+if hooksecurefunc and type(UIDropDownMenu_InitializeHelper) == "function" then
+	hooksecurefunc("UIDropDownMenu_InitializeHelper", function(cadre)
+		if cadre and cadre.SetHeight then
+			cadre:SetHeight(LIGNE_HAUTEUR * 2)
+		end
+	end)
+end
 
 if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 	hooksecurefunc("UIDropDownMenu_AddButton", function(info, level)
@@ -270,6 +294,7 @@ if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 
 		local bouton = _G[liste:GetName() .. "Button" .. (liste.numButtons or 1)]
 		if bouton then
+			reposerLigne(liste, bouton)
 			habillerBouton(bouton)
 			reglerBouton(bouton)
 			mesurerBouton(liste, bouton, info)
@@ -294,3 +319,176 @@ ForeverUI.DropDown = {
 	Refresh = reglerBouton,
 	Fit = ajusterLargeur,
 }
+
+-- ------------------------------------------------------------ LES MENUS D'UNITE
+--
+-- LE PROBLEME (taint.log du 2026-09-26). Nos cadres d'unite ouvrent le menu
+-- du clic droit par une fonction a nous (le « menu » de leur action
+-- securisee) : le client construit alors tout le menu comme venant de
+-- l'addon, et les lignes qui appellent une fonction protegee sont bloquees
+-- -- SET_FOCUS (FocusUnit), CLEAR_FOCUS (ClearFocus), TARGET
+-- (TargetUnit) et PET_DISMISS (PetDismiss), UnitPopup.lua:1201-1384. Les
+-- autres lignes marchent.
+--
+-- LA REPONSE (decision de l'utilisateur, 2026-09-26). Hors combat, un bouton
+-- securise de ForeverUI se pose sur chacune de ces lignes : c'est vous qui
+-- cliquez, et il fait l'action comme une macro -- focus sur l'unite,
+-- /clearfocus, /targetexact <nom>, /script PetDismiss(). En combat, le
+-- client interdit a tout addon de poser, montrer ou regler un bouton
+-- securise : ces lignes sont grisees (et le restent, UnitPopup_OnUpdate les
+-- reactivant a chaque image). A l'entree en combat, les boutons poses s'en
+-- vont avant le verrou et leurs lignes se grisent.
+--
+-- Seuls les menus ouverts PAR NOS CADRES sont touches (MenuUnite.ouvrir) :
+-- ceux que le client ouvre lui-meme marchent deja.
+
+local M = {}
+ForeverUI.MenuUnite = M
+M.surcouches = {}
+M.grises = {}
+
+local SURBRILLANCE = "Interface" .. string.char(92) .. "QuestFrame" .. string.char(92) .. "UI-QuestTitleHighlight"
+
+-- le nom complet, comme UnitPopup_OnClick (UnitPopup.lua:1169-1174)
+local function nomComplet(menu)
+	local nom, serveur = menu.name, menu.server
+	if nom and serveur and (not menu.unit or not UnitIsSameServer("player", menu.unit)) then
+		return nom .. "-" .. serveur
+	end
+	return nom
+end
+
+-- ce que fait chaque ligne protegee, en action securisee
+local PROTEGEES = {
+	SET_FOCUS = function(o, menu)
+		if not menu.unit then return false end
+		o:SetAttribute("type", "focus")
+		o:SetAttribute("unit", menu.unit)
+	end,
+	CLEAR_FOCUS = function(o)
+		o:SetAttribute("type", "macro")
+		o:SetAttribute("macrotext", "/clearfocus")
+	end,
+	TARGET = function(o, menu)
+		local nom = nomComplet(menu)
+		if not nom then return false end
+		o:SetAttribute("type", "macro")
+		o:SetAttribute("macrotext", "/targetexact " .. nom)
+	end,
+	PET_DISMISS = function(o)
+		o:SetAttribute("type", "macro")
+		o:SetAttribute("macrotext", "/script PetDismiss()")
+	end,
+}
+M.PROTEGEES = PROTEGEES
+
+local function surcouche(k)
+	local o = M.surcouches[k]
+	if o then return o end
+	o = CreateFrame("Button", "ForeverUIUnitMenuSecure" .. k, UIParent, "SecureActionButtonTemplate")
+	o:RegisterForClicks("LeftButtonUp")
+	o:SetHighlightTexture(SURBRILLANCE)
+	local h = o:GetHighlightTexture()
+	if h then h:SetBlendMode("ADD") end
+	-- la liste se ferme d'elle-meme quand la souris quitte ses lignes : sur
+	-- la surcouche, on la retient comme sur une ligne
+	o:SetScript("OnEnter", function() UIDropDownMenu_StopCounting(DropDownList1) end)
+	o:SetScript("OnLeave", function() UIDropDownMenu_StartCounting(DropDownList1) end)
+	o:SetScript("PostClick", function() CloseDropDownMenus() end)
+	o:Hide()
+	M.surcouches[k] = o
+	return o
+end
+
+-- hors combat seulement : un bouton securise ne se touche pas sous le verrou
+function M.cacher()
+	if InCombatLockdown() then return end
+	for _, o in ipairs(M.surcouches) do
+		o:Hide()
+		o:ClearAllPoints()
+	end
+end
+
+local function griser(ligne)
+	ligne:Disable()
+	table.insert(M.grises, ligne)
+end
+
+-- apres UnitPopup_ShowMenu, sur la premiere liste : les lignes protegees
+function M.poser(menu)
+	M.cacher()
+	table.wipe(M.grises)
+	local liste = DropDownList1
+	local combat = InCombatLockdown()
+	local k = 0
+	for i = 1, (liste.numButtons or 0) do
+		local ligne = _G["DropDownList1Button" .. i]
+		local regler = ligne and PROTEGEES[ligne.value]
+		if regler then
+			if combat then
+				griser(ligne)
+			else
+				local o = surcouche(k + 1)
+				if regler(o, menu) ~= false then
+					k = k + 1
+					o:ClearAllPoints()
+					o:SetAllPoints(ligne)
+					-- DropDownList1, toplevel, remonte au premier plan de sa
+					-- strate en s'affichant : la strate des infobulles est
+					-- au-dessus (meme reponse que SocialRaid.lua)
+					o:SetFrameStrata("TOOLTIP")
+					o:Show()
+				end
+			end
+		end
+	end
+end
+
+-- ouvrir un menu depuis un de nos cadres
+function M.ouvrir(fn, ...)
+	M.nous = true
+	local ok, err = pcall(fn, ...)
+	M.nous = false
+	if not ok then error(err, 0) end
+end
+
+if hooksecurefunc and type(UnitPopup_ShowMenu) == "function" then
+	hooksecurefunc("UnitPopup_ShowMenu", function(menu)
+		if not M.nous or not menu or (UIDROPDOWNMENU_MENU_LEVEL or 1) ~= 1 then return end
+		M.poser(menu)
+	end)
+end
+if hooksecurefunc and type(UnitPopup_OnUpdate) == "function" then
+	hooksecurefunc("UnitPopup_OnUpdate", function()
+		if #M.grises == 0 or not DropDownList1:IsShown() then return end
+		for _, ligne in ipairs(M.grises) do
+			if ligne:IsEnabled() == 1 then ligne:Disable() end
+		end
+	end)
+end
+if DropDownList1 then
+	DropDownList1:HookScript("OnHide", function()
+		M.cacher()
+		table.wipe(M.grises)
+	end)
+end
+
+-- a l'entree en combat, avant le verrou : les boutons s'en vont, leurs
+-- lignes se grisent
+local veille = CreateFrame("Frame")
+veille:RegisterEvent("PLAYER_REGEN_DISABLED")
+veille:SetScript("OnEvent", function()
+	local posees = false
+	for _, o in ipairs(M.surcouches) do
+		if o:IsShown() then posees = true end
+		o:Hide()
+		o:ClearAllPoints()
+	end
+	if posees and DropDownList1:IsShown() then
+		for i = 1, (DropDownList1.numButtons or 0) do
+			local ligne = _G["DropDownList1Button" .. i]
+			if ligne and PROTEGEES[ligne.value] then griser(ligne) end
+		end
+	end
+end)
+M.veille = veille

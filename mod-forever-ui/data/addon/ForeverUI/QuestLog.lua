@@ -435,7 +435,10 @@ local function infobulle(ligne)
 	GameTooltip:SetOwner(ligne, "ANCHOR_PRESERVE")
 	GameTooltip:SetText(info.title)
 	local largeur = 20 + math.max(231, GameTooltipTextLeft1:GetStringWidth())
-	if largeur > UIParent:GetRight() - WorldMapFrame:GetRight() then
+	-- le bord droit de la carte, en unites de l'interface : WorldMapFrame est
+	-- a sa propre echelle (WorldMap.lua)
+	local droite = WorldMapFrame:GetRight() * WorldMapFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	if largeur > UIParent:GetRight() - droite then
 		GameTooltip:ClearAllPoints()
 		GameTooltip:SetPoint("TOPRIGHT", ligne, "TOPLEFT", -5, 0)
 		GameTooltip:SetOwner(ligne, "ANCHOR_PRESERVE")
@@ -2003,6 +2006,9 @@ end
 function J.poser()
 	local v = J.volet
 	if not v then return end
+	-- fils de WorldMapFrame, qui est a l'echelle de la carte : l'inverse le
+	-- ramene a l'unite de l'interface
+	v:SetScale(ForeverUI.WorldMap and ForeverUI.WorldMap.inverse or 1)
 	if reglages().volet then v:Show() else v:Hide() end
 	J.maj()
 end

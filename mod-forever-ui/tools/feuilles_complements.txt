@@ -194,3 +194,7 @@ interface/raidframe/raidframedispelfill.blp
 # et la bordure des affaiblissements (AuraButtonArtTemplate :
 # ui-debuff-border-<type>-noicon)
 interface/hud/uidebuffframes.blp
+
+# la fenetre de chat (2026-09-26) : le bouton d'amis de camelot
+# (QuickJoinToastButton : quickjoin-button-friendslist-up / -down)
+interface/friendsframe/socialqueuingtoast.blp
