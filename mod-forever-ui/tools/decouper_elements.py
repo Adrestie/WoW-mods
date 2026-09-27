@@ -81,10 +81,13 @@ ELEMENTS = {
         # la fleche de repli de la liste des personnages (ListToggle)
         "128-redbutton-arrowdown-c60", "128-redbutton-arrowdown-pressed-c60", "128-redbutton-arrowdown-disabled-c60",
         "128-redbutton-arrowupglow-c60", "128-redbutton-arrowupglow-pressed-c60", "128-redbutton-arrowupglow-disabled-c60",
+        # la croix de la liste des royaumes (BigRedExitButtonTemplate)
+        "128-redbutton-exit-c60", "128-redbutton-exit-pressed-c60", "128-redbutton-exit-disabled-c60",
     ],
     "interface/buttons/128redbutton.blp": [
         "128-redbutton-highlight",
         "128-redbutton-arrowdown-highlight", "128-redbutton-arrowupglow-highlight",
+        "128-redbutton-exit-highlight",
     ],
     # les credits des ecrans d'accueil (blizzard_gluexml/mainline/
     # creditsframe.xml) : degrade du haut et du bas, icones de vitesse

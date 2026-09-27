@@ -166,4 +166,14 @@ ForeverUIGlue.atlas = {
 	["charactercreate-customize-palette"] = { "interface\\ForeverUI\\glues\\charactercreate-customize-palette", 0.000000, 0.656250, 0.000000, 0.625000, 42, 10, false, false, nil }, -- charactercreate-customize-palette
 	["charactercreate-customize-palette-glow"] = { "interface\\ForeverUI\\glues\\charactercreate-customize-palette-glow", 0.000000, 0.656250, 0.000000, 0.625000, 42, 10, false, false, nil }, -- charactercreate-customize-palette-glow
 	["charactercreate-customize-palette-selected"] = { "interface\\ForeverUI\\glues\\charactercreate-customize-palette-selected", 0.000000, 0.796875, 0.000000, 0.625000, 51, 20, false, false, nil }, -- charactercreate-customize-palette-selected
+	["128-redbutton-exit"] = { "interface\\ForeverUI\\buttons\\128-redbutton-exit-c60", 0.007812, 0.507812, 0.000000, 1.000000, 128, 128, false, false, nil }, -- 128-redbutton-exit-c60
+	["128-redbutton-exit-pressed"] = { "interface\\ForeverUI\\buttons\\128-redbutton-exit-pressed-c60", 0.007812, 0.507812, 0.000000, 1.000000, 128, 128, false, false, nil }, -- 128-redbutton-exit-pressed-c60
+	["128-redbutton-exit-disabled"] = { "interface\\ForeverUI\\buttons\\128-redbutton-exit-disabled-c60", 0.007812, 0.507812, 0.000000, 1.000000, 128, 128, false, false, nil }, -- 128-redbutton-exit-disabled-c60
+	["128-redbutton-exit-highlight"] = { "interface\\ForeverUI\\buttons\\128-redbutton-exit-highlight", 0.007812, 0.507812, 0.000000, 1.000000, 128, 128, false, false, nil }, -- 128-redbutton-exit-highlight
+	["uiframe-tab-left"] = { "interface\\ForeverUI\\framegeneral\\uiframetabsc60", 0.015625, 0.562500, 0.601562, 0.882812, 35, 36, false, false, nil }, -- uiframe-tab-left-c60
+	["uiframe-tab-right"] = { "interface\\ForeverUI\\framegeneral\\uiframetabsc60", 0.015625, 0.593750, 0.304688, 0.585938, 37, 36, false, false, nil }, -- uiframe-tab-right-c60
+	["_uiframe-tab-center"] = { "interface\\ForeverUI\\framegeneral\\uiframetabsc60", 0.000000, 0.015625, 0.007812, 0.289062, 1, 36, true, false, nil }, -- _uiframe-tab-center-c60
+	["uiframe-activetab-left"] = { "interface\\ForeverUI\\framegeneral\\uiframetabs", 0.015625, 0.562500, 0.496094, 0.660156, 35, 42, false, false, nil }, -- uiframe-activetab-left
+	["uiframe-activetab-right"] = { "interface\\ForeverUI\\framegeneral\\uiframetabs", 0.015625, 0.593750, 0.324219, 0.488281, 37, 42, false, false, nil }, -- uiframe-activetab-right
+	["_uiframe-activetab-center"] = { "interface\\ForeverUI\\framegeneral\\uiframetabs", 0.000000, 0.015625, 0.003906, 0.167969, 1, 42, true, false, nil }, -- _uiframe-activetab-center
 }
