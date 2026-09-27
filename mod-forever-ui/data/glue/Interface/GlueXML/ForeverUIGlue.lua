@@ -75,6 +75,45 @@ function G.Cadrer()
 end
 G.Cadrer()
 
+-- LE CHANGEMENT DE RESOLUTION. L'echelle et la zone utile se calculent sur
+-- la resolution (gxResolution) et la taille de l'ecran : appliquer une
+-- autre resolution (RestartGx, fenetre des options) les rend fausses
+-- jusqu'a la relance du client (constate le 28/09). Le client n'en avertit
+-- pas les ecrans d'accueil : on relit les trois valeurs cinq fois par
+-- seconde et on refait les deux calculs quand l'une change ; puis chaque
+-- ecran qui a pose quelque chose sur la zone utile (G.surEchelle) le repose.
+G.surEchelle = {}
+
+function G.Reechelonner()
+	G.HAUTEUR_CAMELOT = math.min(math.max(hauteurEcran(), 768), 1200)
+	G.ECHELLE = 768 / G.HAUTEUR_CAMELOT
+	GlueParent:SetScale(G.ECHELLE)
+	G.Cadrer()
+	for _, f in ipairs(G.surEchelle) do
+		f()
+	end
+end
+
+local function empreinte()
+	return (cvar("gxResolution") or "") .. " " .. GetScreenWidth() .. " " .. GetScreenHeight()
+end
+
+local veilleEcran = CreateFrame("Frame")
+veilleEcran.empreinte = empreinte()
+veilleEcran.t = 0
+veilleEcran:SetScript("OnUpdate", function(self, ecoule)
+	self.t = self.t + (ecoule or 0)
+	if self.t < 0.2 then
+		return
+	end
+	self.t = 0
+	local e = empreinte()
+	if e ~= self.empreinte then
+		self.empreinte = e
+		G.Reechelonner()
+	end
+end)
+
 -- ------------------------------------------------------------ 3. les polices
 
 function G.Police(nom)
@@ -172,6 +211,28 @@ G.DISPOSITIONS = {
 		LeftEdge = { atlas = "!UI-Frame-DiamondMetal-EdgeLeft" },
 		RightEdge = { atlas = "!UI-Frame-DiamondMetal-EdgeRight" },
 	},
+	-- ButtonFrameTemplateNoPortrait, apres camelot/NineSliceLayoutOverrides.lua
+	-- (coin haut droit x - 2 ; coins du bas y = -8, bas droit x - 2)
+	ButtonFrameTemplateNoPortrait = {
+		TopLeftCorner = { layer = "OVERLAY", atlas = "UI-Frame-Metal-CornerTopLeft", x = -8, y = 16 },
+		TopRightCorner = { layer = "OVERLAY", atlas = "UI-Frame-Metal-CornerTopRight", x = 2, y = 16 },
+		BottomLeftCorner = { layer = "OVERLAY", atlas = "UI-Frame-Metal-CornerBottomLeft", x = -8, y = -8 },
+		BottomRightCorner = { layer = "OVERLAY", atlas = "UI-Frame-Metal-CornerBottomRight", x = 2, y = -8 },
+		TopEdge = { layer = "OVERLAY", atlas = "_UI-Frame-Metal-EdgeTop" },
+		BottomEdge = { layer = "OVERLAY", atlas = "_UI-Frame-Metal-EdgeBottom" },
+		LeftEdge = { layer = "OVERLAY", atlas = "!UI-Frame-Metal-EdgeLeft" },
+		RightEdge = { layer = "OVERLAY", atlas = "!UI-Frame-Metal-EdgeRight" },
+	},
+	InsetFrameTemplate = {
+		TopLeftCorner = { atlas = "UI-Frame-InnerTopLeft" },
+		TopRightCorner = { atlas = "UI-Frame-InnerTopRight" },
+		BottomLeftCorner = { atlas = "UI-Frame-InnerBotLeftCorner", x = 0, y = -1 },
+		BottomRightCorner = { atlas = "UI-Frame-InnerBotRight", x = 0, y = -1 },
+		TopEdge = { atlas = "_UI-Frame-InnerTopTile" },
+		BottomEdge = { atlas = "_UI-Frame-InnerBotTile" },
+		LeftEdge = { atlas = "!UI-Frame-InnerLeftTile" },
+		RightEdge = { atlas = "!UI-Frame-InnerRightTile" },
+	},
 }
 
 -- l'ordre et les ancrages de nineSliceSetup (nineslice.lua)
@@ -189,7 +250,9 @@ local MORCEAUX = {
 
 -- pose une disposition sur un cadre, en regions de ce cadre (en 3.3.5 un
 -- cadre fils couvrirait les textes du cadre). Rend les morceaux par nom.
-function G.NeufTranches(hote, nomDisposition)
+-- cible : le rectangle sur lequel se calent les coins, l'hote par defaut
+-- (un encart dessine en regions de sa fenetre, par exemple).
+function G.NeufTranches(hote, nomDisposition, cible)
 	local disposition = G.DISPOSITIONS[nomDisposition]
 	local p = {}
 	for _, m in ipairs(MORCEAUX) do
@@ -210,7 +273,7 @@ function G.NeufTranches(hote, nomDisposition)
 				mosaique(t, e)
 			else
 				G.PoserAtlas(t, l.atlas, true)
-				t:SetPoint(l.point or m[2], hote, l.relativePoint or l.point or m[2], l.x or 0, l.y or 0)
+				t:SetPoint(l.point or m[2], cible or hote, l.relativePoint or l.point or m[2], l.x or 0, l.y or 0)
 			end
 		end
 	end
@@ -428,4 +491,100 @@ function G.EnTeteDialogue(parent, texte, police)
 	f.Text = t
 	f:SetWidth(t:GetStringWidth() + 64)
 	return f
+end
+
+-- ------------------------------------------------------------ la fenetre
+
+local FOND_ROCHE = "Interface\\ForeverUI\\framegeneral\\ui-background-rock"
+local FOND_MARBRE = "Interface\\ForeverUI\\framegeneral\\ui-background-marble"
+
+local function fondEnMosaique(t, fichier)
+	t:SetTexture(fichier, true)
+	if t.SetHorizTile then
+		t:SetHorizTile(true)
+		t:SetVertTile(true)
+	end
+end
+
+-- ButtonFrameTemplate sans portrait (shareduipaneltemplates.xml / .lua) :
+-- fond UI-Background-Rock en mosaique de (7, -21) a (-2, 2), stries
+-- _UI-Frame-TopTileStreaks de (6, -21) a (-2, -21), cadre de metal
+-- ButtonFrameTemplateNoPortrait, titre GameFontNormal sur toute la largeur,
+-- a 5 sous le haut (TitleContainer 20 de haut a (0, -1)). Tout en regions de
+-- l'hote, le titre dans un cadre fils (TitleContainer, frameLevel 510) : il
+-- passe au-dessus du metal. Rend { titre = FontString, cadre, fond }.
+-- translucide : ECART (28/09, a la demande : « le fond doit etre fonce
+-- transparent ») -- a la place de la pierre, le fond de
+-- DialogBorderTranslucentTemplate (dialogtemplates.xml) : noir a 0,8.
+function G.Fenetre(hote, titre, translucide)
+	local fond = hote:CreateTexture(nil, "BACKGROUND")
+	if translucide then
+		fond:SetTexture(0, 0, 0, 0.8)
+	else
+		fondEnMosaique(fond, FOND_ROCHE)
+	end
+	fond:SetPoint("TOPLEFT", hote, "TOPLEFT", 7, -21)
+	fond:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", -2, 2)
+	local stries = hote:CreateTexture(nil, "BORDER")
+	G.PoserAtlas(stries, "_UI-Frame-TopTileStreaks", true)
+	stries:SetPoint("TOPLEFT", hote, "TOPLEFT", 6, -21)
+	stries:SetPoint("TOPRIGHT", hote, "TOPRIGHT", -2, -21)
+	local cadre = G.NeufTranches(hote, "ButtonFrameTemplateNoPortrait")
+	local conteneur = CreateFrame("Frame", nil, hote)
+	conteneur:SetFrameLevel(hote:GetFrameLevel() + 10)
+	conteneur:SetHeight(20)
+	conteneur:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, -1)
+	conteneur:SetPoint("TOPRIGHT", hote, "TOPRIGHT", 0, -1)
+	local t = conteneur:CreateFontString(nil, "OVERLAY")
+	t:SetFontObject(G.Police("GameFontNormal"))
+	t:SetPoint("TOP", conteneur, "TOP", 0, -5)
+	t:SetPoint("LEFT", conteneur, "LEFT")
+	t:SetPoint("RIGHT", conteneur, "RIGHT")
+	t:SetText(titre or "")
+	return { titre = t, cadre = cadre, fond = fond, stries = stries }
+end
+
+-- InsetFrameTemplate : fond UI-Background-Marble en mosaique, lisere
+-- InsetFrameTemplate (nineslicelayouts.lua). En regions de l'hote (calque
+-- BORDER, au-dessus du fond de la fenetre, sous son metal), calees sur le
+-- rectangle cible : un cadre fils passerait devant le contenu de la fenetre.
+-- translucide : pas de marbre, le fond de la fenetre se voit au travers
+-- (voir G.Fenetre).
+function G.Encart(hote, cible, translucide)
+	local fond
+	if not translucide then
+		fond = hote:CreateTexture(nil, "BORDER")
+		fondEnMosaique(fond, FOND_MARBRE)
+		fond:SetAllPoints(cible)
+	end
+	return G.NeufTranches(hote, "InsetFrameTemplate", cible), fond
+end
+
+-- UIPanelCloseButton : 24 x 24, RedButton-Exit / -exit-pressed /
+-- -Exit-Disabled, lueur RedButton-Highlight en ADD ; camelot le pose a
+-- TOPRIGHT (-2, 1) de sa fenetre (UIPanelCloseButtonDefaultAnchorsMixin)
+function G.CroixFenetre(b, fenetre)
+	b:SetWidth(24)
+	b:SetHeight(24)
+	b:ClearAllPoints()
+	b:SetPoint("TOPRIGHT", fenetre, "TOPRIGHT", -2, 1)
+	local function poser()
+		for _, v in ipairs({
+			{ "SetNormalTexture", "GetNormalTexture", "RedButton-Exit" },
+			{ "SetPushedTexture", "GetPushedTexture", "RedButton-exit-pressed" },
+			{ "SetDisabledTexture", "GetDisabledTexture", "RedButton-Exit-Disabled" },
+			{ "SetHighlightTexture", "GetHighlightTexture", "RedButton-Highlight" },
+		}) do
+			b[v[1]](b, G.atlas[string.lower(v[3])][1])
+			local t = b[v[2]](b)
+			G.PoserAtlas(t, v[3])
+			t:ClearAllPoints()
+			t:SetAllPoints(b)
+			if v[1] == "SetHighlightTexture" then
+				t:SetBlendMode("ADD")
+			end
+		end
+	end
+	poser()
+	return b
 end

@@ -180,8 +180,10 @@ end
 -- (1, -1) quand on appuie ; lueur = l'icone en ADD a 0,4, calee sur elle.
 -- couche : celle de l'icone ; OVERLAY chez camelot (IconButtonTemplate,
 -- CustomizationSmallButtonTemplate), au-dessus du fond gris dont le centre est
--- opaque a 67 %. ARTWORK par defaut : c'est ainsi que la rotation de la
--- selection des personnages a ete validee.
+-- opaque a 67 %. ARTWORK par defaut ; A EVITER : le fond (NormalTexture)
+-- est aussi en ARTWORK, et deux textures d'un meme calque se dessinent dans
+-- un ordre que le moteur peut changer -- l'icone passait tantot sous le fond,
+-- ternie (rotation de la selection, 28/09). Passer "OVERLAY".
 function G.BoutonCarreIcone(b, icone, tailleIcone, couche)
 	G.EffacerArtClient(b)
 	b:SetWidth(48)
@@ -396,4 +398,62 @@ function G.BarreMinimale(parent, nom)
 	end)
 	G.Accrocher(barre, "OnSizeChanged", function() barre:Replacer() end)
 	return barre
+end
+
+-- ------------------------------------------------------------ le bouton de panneau
+
+-- 3.3.5 rend 1 / nil, parfois 0 / 1 : zero est vrai en Lua
+local function vrai(v)
+	return v and v ~= 0 and true or false
+end
+
+-- UIPanelButtonTemplate : trois morceaux de UI-Panel-Button-Up (12 / reste /
+-- 12), -Down enfonce, -Disabled grise ; lueur UI-Panel-Button-Highlight en
+-- ADD ; texte au centre
+local PANNEAU = "Interface\\Buttons\\UI-Panel-Button-"
+function G.BoutonPanneau(b)
+	G.EffacerArtClient(b)
+	local g = b:CreateTexture(nil, "BACKGROUND")
+	g:SetWidth(12)
+	g:SetPoint("TOPLEFT", b, "TOPLEFT")
+	g:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT")
+	local d = b:CreateTexture(nil, "BACKGROUND")
+	d:SetWidth(12)
+	d:SetPoint("TOPRIGHT", b, "TOPRIGHT")
+	d:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT")
+	local m = b:CreateTexture(nil, "BACKGROUND")
+	m:SetPoint("TOPLEFT", g, "TOPRIGHT")
+	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT")
+	local morceaux = { { g, 0, 0.09375 }, { m, 0.09375, 0.53125 }, { d, 0.53125, 0.625 } }
+	local function fichier(nom)
+		for _, v in ipairs(morceaux) do
+			v[1]:SetTexture(PANNEAU .. nom)
+			v[1]:SetTexCoord(v[2], v[3], 0, 0.6875)
+		end
+	end
+	local function repos()
+		fichier(vrai(b:IsEnabled()) and "Up" or "Disabled")
+	end
+	repos()
+	G.Accrocher(b, "OnMouseDown", function()
+		if vrai(b:IsEnabled()) then fichier("Down") end
+	end)
+	G.Accrocher(b, "OnMouseUp", repos)
+	G.Accrocher(b, "OnShow", repos)
+	G.Accrocher(b, "OnDisable", repos)
+	G.Accrocher(b, "OnEnable", repos)
+	b:SetHighlightTexture(PANNEAU .. "Highlight")
+	local h = b:GetHighlightTexture()
+	h:SetTexCoord(0, 0.625, 0, 0.6875)
+	h:SetBlendMode("ADD")
+	h:ClearAllPoints()
+	h:SetAllPoints(b)
+	b:SetNormalFontObject(G.Police("GameFontNormal"))
+	b:SetHighlightFontObject(G.Police("GameFontHighlight"))
+	b:SetDisabledFontObject(G.Police("GameFontDisable"))
+	local texte = b:GetFontString()
+	if texte then
+		texte:ClearAllPoints()
+		texte:SetPoint("CENTER", b, "CENTER", 0, 0)
+	end
 end
