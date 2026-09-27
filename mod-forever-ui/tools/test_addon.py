@@ -4852,6 +4852,41 @@ end
 -- ajoute que ses cles, il ne la remplace jamais.
 StaticPopupDialogs = StaticPopupDialogs or {}
 STATICPOPUP_ORIGINE = StaticPopupDialogs
+-- LE MENU ECHAP DU CLIENT (GameMenuFrame.xml) : 195 x 240, ses boutons en
+-- colonne sur GameMenuButtonTemplate (144 x 21, UIPanelTemplates.xml:603) ;
+-- Macros sous Raccourcis. ToggleHelpFrame ouvre la demande d'aide.
+do
+    local creer = CreateFrame
+    CreateFrame = function(kind, name, parent, template)
+        local f = creer(kind, name, parent, template)
+        if template == "GameMenuButtonTemplate" then f:SetWidth(144) f:SetHeight(21) end
+        return f
+    end
+    GameMenuFrame = CreateFrame("Frame", "GameMenuFrame", UIParent)
+    GameMenuFrame:SetWidth(195) GameMenuFrame:SetHeight(240)
+    GameMenuFrame:Hide()
+    local avant
+    for _, n in ipairs({ "Options", "SoundOptions", "UIOptions", "Keybindings", "Macros", "Logout", "Quit", "Continue" }) do
+        local b = CreateFrame("Button", "GameMenuButton" .. n, GameMenuFrame, "GameMenuButtonTemplate")
+        if avant then b:SetPoint("TOP", avant, "BOTTOM", 0, -1) end
+        avant = b
+    end
+    -- ACP (patch-5.mpq, acp.xml) : son bouton AddOns sous Macros ; a chaque
+    -- ouverture il remet Log Out sous lui et ajoute 25 a la hauteur, qu'il
+    -- retire a la fermeture
+    local acp = CreateFrame("Button", "GameMenuButtonAddOns", GameMenuFrame, "GameMenuButtonTemplate")
+    acp:SetPoint("TOP", GameMenuButtonMacros, "BOTTOM", 0, -1)
+    GameMenuButtonLogout:ClearAllPoints()
+    GameMenuButtonLogout:SetPoint("TOP", acp, "BOTTOM", 0, -1)
+    acp:SetScript("OnShow", function(self)
+        GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + 25)
+        GameMenuButtonLogout:SetPoint("TOP", self:GetName(), "BOTTOM", 0, -1)
+    end)
+    acp:SetScript("OnHide", function() GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() - 25) end)
+    HELP_BUTTON = "Help Request"
+    AIDE_OUVERTE = 0
+    function ToggleHelpFrame() AIDE_OUVERTE = AIDE_OUVERTE + 1 end
+end
 -- UnitPopup_OnUpdate du client (UnitPopup.lua:989) : a chaque image, il
 -- reactive les lignes que rien n'interdit -- Set Focus (dist 0) comprise.
 function UnitPopup_OnUpdate()
@@ -7986,16 +8021,49 @@ def main():
     micro = g.ForeverUIMicroMenu
     print("micro-menu : %d x %d pour %d boutons" % (
         micro.width, micro.height, len(list(g.ForeverUI.MicroButtons.values()))))
-    assert micro.width == 322, "le bandeau garde sa longueur : 248 de boutons + 47 + 27 de rallonge"
-    # LE BOUTON JcJ EST RETIRE (2026-09-26) : neuf boutons, et celui du client
-    # reste cache meme quand le client le reprend
+    assert micro.width == 8 * 32 + 7 * (-5), "le bandeau a la largeur de ses huit boutons (221), sans rallonge"
+    # LES BOUTONS JcJ ET AIDE SONT RETIRES (2026-09-26) : huit boutons, et
+    # ceux du client restent caches meme quand le client les reprend
     noms = [e.bouton.name for e in g.ForeverUI.MicroButtons.values()]
     g.VehicleMenuBar_MoveMicroButtons()
     g.PVPMicroButton.Show(g.PVPMicroButton)
-    print("   micro-menu sans JcJ : %d boutons, JcJ visible=%s" % (len(noms), g.PVPMicroButton.shown))
-    assert "PVPMicroButton" not in noms and len(noms) == 9
-    assert not g.PVPMicroButton.shown, "le bouton du client ne revient pas"
+    g.HelpMicroButton.Show(g.HelpMicroButton)
+    print("   micro-menu sans JcJ ni Aide : %d boutons, JcJ visible=%s, Aide visible=%s" % (
+        len(noms), g.PVPMicroButton.shown, g.HelpMicroButton.shown))
+    assert "PVPMicroButton" not in noms and "HelpMicroButton" not in noms and len(noms) == 8
+    assert not g.PVPMicroButton.shown and not g.HelpMicroButton.shown, "les boutons du client ne reviennent pas"
+    # LA DEMANDE D'AIDE AU MENU ECHAP, entre AddOns (ACP) et Log Out, un espace
+    # de 16 de chaque cote ; Macros ne bouge pas
+    aide = g.ForeverUIGameMenuButtonHelp
+    def haut(b):
+        pts = [list(x.values()) for x in b.points.values()]
+        return [x for x in pts if x[0] == "TOP"][-1]
+    def verifier(quand):
+        pa, pl = haut(aide), haut(g.GameMenuButtonLogout)
+        nom = lambda r: r if isinstance(r, str) else r.name
+        print("   menu Echap (%s) : '%s' sous %s (%s), Log Out sous %s (%s), menu %s de haut" % (
+            quand, aide.text, nom(pa[1]), pa[4], nom(pl[1]), pl[4], g.GameMenuFrame.height))
+        assert (nom(pa[1]), pa[2], pa[4]) == ("GameMenuButtonAddOns", "BOTTOM", -16)
+        assert (nom(pl[1]), pl[2], pl[4]) == ("ForeverUIGameMenuButtonHelp", "BOTTOM", -16)
+    assert aide.text == "Help Request" and (aide.width, aide.height) == (144, 21)
+    verifier("chargement")
+    assert g.GameMenuFrame.height == 240 + 21 + 2 * 16 - 1
+    assert haut(g.GameMenuButtonMacros)[1].name == "GameMenuButtonKeybindings", "Macros reste sous Key Bindings"
+    # ACP remet Log Out sous AddOns a chaque ouverture : on repasse derriere
+    lua.execute("GameMenuFrame:Show()")
+    verifier("ouvert")
+    assert g.GameMenuFrame.height == 240 + 21 + 2 * 16 - 1 + 25
+    lua.execute("GameMenuFrame:Hide() GameMenuFrame:Show() AIDE_OUVERTE = 0")
+    verifier("rouvert")
+    aide.scripts.OnClick(aide)
+    assert not g.GameMenuFrame.shown and g.AIDE_OUVERTE == 1, "le menu se ferme, la demande d'aide s'ouvre"
     assert micro.height == 40
+    # l'indicateur de latence : l'image de camelot (un trait en bas), pas le
+    # pave de 3.3.5 etire en carre
+    perf = g.MainMenuBarPerformanceBar
+    print("   latence : %s, %s x %s" % (perf.texture, perf.width, perf.height))
+    assert perf.texture.lower().endswith("foreverui" + chr(92) + "mainmenubar" + chr(92) + "ui-mainmenubar-performancebar")
+    assert (perf.width, perf.height) == (19, 39)
 
     b1, b2 = g.CharacterMicroButton, g.SpellbookMicroButton
     print("bouton de micro-menu : %d x %d (32 x 46 : l'ouverture du cadre ; 28 x 58 d'origine)" % (
@@ -8078,7 +8146,9 @@ def main():
     assert len(separateurs) == 5
 
     # ------------------------------------------------- la rangee complete
-    for nom, attendu in (("micromenu", (116.5, 6)), ("actionbar", (-49, 2)), ("sacs", (284.5, 2))):
+    # le bandeau fait 221 (sans rallonge) : barre d'action et sacs s'en
+    # rapprochent -- 116,5 -/+ 110,5, puis -4,5 et +7
+    for nom, attendu in (("micromenu", (116.5, 6)), ("actionbar", (1.5, 2)), ("sacs", (234, 2))):
         d = g.ForeverUI.Layout.systems[nom].defaults
         print("%-10s : %s sur %s (%.1f, %.1f)" % (nom, d.point, d.relativePoint, d.x, d.y))
         assert abs(d.x - attendu[0]) < 1e-6 and abs(d.y - attendu[1]) < 1e-6, (

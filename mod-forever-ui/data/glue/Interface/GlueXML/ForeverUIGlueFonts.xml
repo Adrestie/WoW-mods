@@ -1,0 +1,1459 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\FrameXML\UI.xsd">
+	<!-- les polices de camelot, heritage resolu : genere par tools/polices_accueil.py -->
+	<Font name="ForeverUIGlue_CharCopyEditBoxFont" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_CharacterCreateTooltipFont" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_ChatFontNormal" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_ChatFontSmall" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_CombatLogFont" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_ConsoleFontNormal" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_ConsoleFontSmall" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_DialogButtonHighlightText" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_DialogButtonNormalText" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_EditBoxFont_25" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_EditBoxFont_Large" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_FactionName_Shadow_Huge" font="Fonts\MORPHEUS.ttf" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_FactionName_Shadow_Large" font="Fonts\MORPHEUS.ttf" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_FactionName_Shadow_Medium" font="Fonts\MORPHEUS.ttf" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_FriendsFont_11" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_FriendsFont_Large" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_FriendsFont_Normal" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_FriendsFont_Small" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_FriendsFont_UserText" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game10Font_o1" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_Game15Font_Shadow" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game16Font" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_Game17Font_Shadow" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="17"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game22Font" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game30Font" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="30"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_Game32Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="32"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game36Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="36"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game40Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="40"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game46Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="46"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game52Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="52"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game58Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="58"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game60Font" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="60"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_Game69Font_Shadow2" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="69"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_Game72Font" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="72"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_Game72Font_Shadow" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="72"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_GameFont72Highlight" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="72"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFont72HighlightShadow" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="72"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFont72Normal" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="72"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFont72NormalShadow" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="72"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontBlack" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontBlackMedium" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontBlackSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontBlackSmall2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontBlackTiny" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="9"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontBlackTiny2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="8"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDarkGraySmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.3500" g="0.3500" b="0.3500" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisable" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableHuge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableMed2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableMed3" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableOutline22" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableSmall2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableSmallLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableTiny" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="9"/></FontHeight>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontDisableTiny2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="8"/></FontHeight>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontGreen" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.0980" g="1.0000" b="0.0980" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontGreenSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.1000" g="1.0000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlight" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightCenter" font="Fonts\FRIZQT__.TTF" justifyH="CENTER" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightExtraSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightExtraSmallLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightExtraSmallLeftTop" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightHuge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightHuge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightHugeOutline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightLarge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightMed2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightMed2Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightMedium" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightOutline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightOutline22" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightRight" font="Fonts\FRIZQT__.TTF" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightShadowHuge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightShadowOutline22" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightSmall2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightSmallLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightSmallLeftTop" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightSmallOutline" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlightSmallRight" font="Fonts\FRIZQT__.TTF" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontHighlight_NoShadow" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormal" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge2Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge3" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge3Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge4" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="27"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHuge4Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="27"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalHugeOutline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLarge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLargeLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLargeLeftTop" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLargeOutline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftBottom" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="BOTTOM" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftGreen" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.0000" g="1.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftGrey" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftLightBlue" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5300" g="0.6700" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftLightGreen" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.2500" g="0.7500" b="0.2500" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftLightGrey" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.6000" g="0.6000" b="0.6000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftOrange" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.5000" b="0.2500" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftRed" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.9000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalLeftYellow" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalMed1" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="13"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalMed2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalMed2Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalMed3" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalMed3Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalOutline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalOutline22" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalShadowHuge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalShadowOutline22" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalSmall2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalSmallBattleNetBlueLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5100" g="0.7730" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalSmallLeft" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalSmallOutline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalTiny" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="9"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalTiny2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="8"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalWTF2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="36"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormalWTF2Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="36"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontNormal_NoShadow" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontRed" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontRedLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontRedSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontWhite" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontWhiteLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontWhiteSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontWhiteTiny" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="9"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameFontWhiteTiny2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="8"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameTooltipHeader" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_GameTooltipHeaderText" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameTooltipText" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GameTooltipTextSmall" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueEditBoxFont" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontBlack" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontCharacterCreate" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="1.5" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisable" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableExtraSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableHuge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableLarge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableLogin" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontDisableSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontGreen" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.1000" g="1.0000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontGreenSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.1000" g="1.0000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlight" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightExtraSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightExtraSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightExtraSmallLeftTop" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightHuge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightLarge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightLogin" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontHighlightSmallLeftTop" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontLightYellow" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.9600" b="0.6200" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontLightYellowSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.9600" b="0.6200" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormal" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalExtraSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalExtraSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalGigantor" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="32"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalHuge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalLarge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalLogin" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontNormalSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontRed" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontRedSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontWhite" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueFontYellow" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueLoginEditBoxFont" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_GlueNumberFontNormal" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_IMEHighlight" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_IMENormal" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_LFGActivityEntry" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_LFGActivityEntryDifficult" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.5000" b="0.2500" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_LFGActivityEntryTrivial" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_LFGActivityHeader" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.7000" g="0.7000" b="0.7000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_MovieSubtitleFont" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_Number14FontGray" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_Number14FontWhite" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormal" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalLarge" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalLargeRight" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalLargeRightGray" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="0.6000" g="0.6000" b="0.6000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalLargeRightGreen" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="0.0980" g="1.0000" b="0.0980" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalLargeRightRed" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="0.1255" b="0.1255" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalLargeRightYellow" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Color r="1.0000" g="0.8196" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalRight" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalRightGray" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="0.6000" g="0.6000" b="0.6000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalRightGreen" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="0.0980" g="1.0000" b="0.0980" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalRightRed" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="0.1255" b="0.1255" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalRightYellow" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="0.8196" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalSmall" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalSmallGray" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="0.6000" g="0.6000" b="0.6000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFontNormalYellow" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="0.8196" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Normal_Med" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_OutlineThick_Med1" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_OutlineThick_Med2" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Outline_Large" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Outline_Large2" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Outline_Med" font="Fonts\ARIALN.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Shadow_Large" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Shadow_Med" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Shadow_Small" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_NumberFont_Shadow_Tiny" font="Fonts\ARIALN.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_ObjectiveFont" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.8000" g="0.8000" b="0.8000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFont" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontHighlight" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontHighlightSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontHighlightSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontHighlightSmallLeftTop" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontLarge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_OptionsFontSmallLeft" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestDifficulty_Difficult" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestDifficulty_Header" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.7000" g="0.7000" b="0.7000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestDifficulty_Impossible" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1255" b="0.1255" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestDifficulty_Standard" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.2510" g="0.7529" b="0.2510" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestDifficulty_Trivial" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestDifficulty_VeryDifficult" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.5020" b="0.2510" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFont" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="13"/></FontHeight>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFontHighlightHuge" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFontNormalHuge" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFontNormalLarge" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFont_30" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="30"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFont_39" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="39"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFont_Huge" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFont_Large" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_QuestFont_Shadow_Huge" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.4900" g="0.3500" b="0.0500" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_QuestTitleFont" font="Fonts\MORPHEUS.ttf" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.4900" g="0.3500" b="0.0500" a="1.0000"/></Shadow>
+		<Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_RealmCharactersNormal" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.1000" g="1.0000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_RealmDownHighlight" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.8000" g="0.8000" b="0.8000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_RealmDownNormal" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_RealmInvalidHighlight" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_RealmInvalidNormal" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.1000" b="0.1000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_RealmNoCharactersNormal" font="Fonts\FRIZQT__.TTF" outline="NORMAL" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.7800" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_System15Font" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_System15Font_Shadow" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont16_Shadow_ThickOutline" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont18_Shadow_ThickOutline" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont22_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont22_Shadow_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="22"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont22_Shadow_ThickOutline" font="Fonts\ARIALN.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Huge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Huge4" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="27"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Large" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Large2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Med1" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Med2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="13"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Med3" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Outline_Med1" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Outline_Med2" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Outline_Slug_Huge2" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Outline_Slug_Large2" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Outline_WTF2" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="36"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge1" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge1_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="20"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge2_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="24"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge3" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge4" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="27"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Huge4_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="27"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Large" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Large2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Large2_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Large_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Med1" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Med1_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Med2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Med2_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Med3" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Med3_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Outline_Gigantor" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="32"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="2" y="-2"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Outline_Huge3" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Outline_Large" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Outline_Login" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="25"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Outline_Small" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Small" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Small2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Small2_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Shadow_Small_Outline" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Small" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Small2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="11"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Tiny" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="9"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_Tiny2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="8"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_WTF2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="36"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_World" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="64"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_SystemFont_World_ThickOutline" font="Fonts\FRIZQT__.TTF" outline="THICK" virtual="true">
+		<FontHeight><AbsValue val="64"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_System_IME" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_TOSFont" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_Tooltip_Med" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_Tooltip_Small" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledChatFontNormal" font="Fonts\ARIALN.TTF" justifyH="LEFT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontBody" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGame15Shadow" font="Fonts\FRIZQT__.ttf" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameDisable" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5000" g="0.5000" b="0.5000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameDisableSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameHighlight" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameHighlightLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameHighlightRight" font="Fonts\FRIZQT__.TTF" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameHighlightSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameNormal" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="12"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameNormalLarge" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameNormalMed2" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="1" y="-1"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8200" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGameNormalSmall" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGlueDisable" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="0.5020" g="0.5020" b="0.5020" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGlueHighlight" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGlueNormal" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGlueNormalExtraSmall" font="Fonts\FRIZQT__.TTF" outline="NORMAL" virtual="true">
+		<FontHeight><AbsValue val="10"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontGlueNormalLarge" font="Fonts\FRIZQT__.TTF" outline="NORMAL" spacing="2" virtual="true">
+		<FontHeight><AbsValue val="18"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="0.8235" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontHeader" font="Fonts\FRIZQT__.TTF" justifyH="LEFT" justifyV="TOP" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontNumberNormalRight" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="1.0000" b="1.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontNumberNormalRightGray" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="0.6000" g="0.6000" b="0.6000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontNumberNormalRightGreen" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="0.0980" g="1.0000" b="0.0980" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontNumberNormalRightRed" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="0.1255" b="0.1255" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontNumberNormalRightYellow" font="Fonts\ARIALN.TTF" outline="NORMAL" justifyH="RIGHT" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Color r="1.0000" g="0.8196" b="0.0000" a="1.0000"/>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontSystem15Shadow" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="15"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontSystem_Body" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="14"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+	<Font name="ForeverUIGlue_UserScaledFontSystem_Header" font="Fonts\FRIZQT__.TTF" virtual="true">
+		<FontHeight><AbsValue val="16"/></FontHeight>
+		<Shadow><Offset><AbsDimension x="0" y="0"/></Offset><Color r="0.0000" g="0.0000" b="0.0000" a="1.0000"/></Shadow>
+	</Font>
+</Ui>
