@@ -192,6 +192,9 @@ local function poserBords()
 		G.Montrer(t, large)
 	end
 end
+-- une autre resolution appliquee : les bandes noires et les vignettes
+-- larges suivent la nouvelle zone utile (ForeverUIGlue.lua)
+G.surEchelle[#G.surEchelle + 1] = poserBords
 
 -- ------------------------------------------------------------ le bouton rond
 

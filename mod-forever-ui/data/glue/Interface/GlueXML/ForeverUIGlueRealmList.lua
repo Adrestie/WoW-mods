@@ -3,23 +3,32 @@
 -- CHOIX (27/09) : camelot n'a pas de liste des royaumes (son .toc ne charge
 -- RealmList que pour le jeu mainline ; camelot choisit une region par
 -- cartes, SuperDistrict). On garde la liste du client 3.3.5 -- ses places,
--- ses tailles, sa logique -- et on lui donne l'art de la liste moderne
--- (blizzard_gluexml/mainline/realmlist.xml, meme ecran) :
---   * le cadre (Interface\HelpFrame\HelpFrame-*), les en-tetes de colonnes
---     (WhoFrame-ColumnTabs), la fleche de tri (UI-SortArrow) et la barre de
---     la ligne choisie (UI-QuestLogTitleHighlight) restent : la liste
---     moderne emploie les memes fichiers, identiques dans le client de
---     camelot (ecart moyen de 0,1 a 1,7 sur 255, bruit de compression) ;
---   * en-tete : DialogHeaderTemplate a TOP (-12, 11), texte SERVER_SELECTION ;
+-- ses tailles, sa logique -- dans une fenetre de camelot :
+--   * ECART (27/09, a la demande : « il faut mieux habiller la fenetre ») :
+--     la fenetre de camelot, ButtonFrameTemplate sans portrait -- celle de
+--     sa liste des AddOns (G.Fenetre) : stries, cadre de metal, titre
+--     SERVER_SELECTION dans la barre ; la liste dans un encart
+--     (InsetFrameTemplate, G.Encart) sous les en-tetes de colonnes ;
+--   * ECART (28/09, a la demande : « le fond doit etre fonce transparent ») :
+--     ni pierre ni marbre, le noir a 0,8 de DialogBorderTranslucentTemplate
+--     sur toute la fenetre, encart compris ;
+--     Annuler / OK dans la barre du bas (SharedButtonSmallTemplate, 22 de
+--     haut, a (-4, 4)) ; la petite croix de fenetre (UIPanelCloseButton,
+--     24 x 24 a (-2, 1)). Ces trois-la quittent donc leurs places de 3.3.5 ;
+--   * les en-tetes de colonnes (WhoFrame-ColumnTabs), la fleche de tri
+--     (UI-SortArrow) et la barre de la ligne choisie
+--     (UI-QuestLogTitleHighlight) restent : la liste moderne emploie les
+--     memes fichiers, identiques dans le client de camelot (ecart moyen de
+--     0,1 a 1,7 sur 255, bruit de compression) ;
 --   * onglets (RealmListTabButtonTemplate) : uiframe-tab-left / -right /
 --     _center a leur taille, LEFT a -3 et RIGHT a +7 ; l'onglet choisi
 --     uiframe-activetab-*, LEFT a -1 et RIGHT a +8 ; survol : l'art de
 --     l'onglet en ADD a 0,4 ;
---   * croix : BigRedExitButtonTemplate (artKit 128-redbutton-exit), 32 x 32 ;
---   * Annuler / OK : GlueButtonTemplate (SharedButtonTemplate, 128-RedButton,
---     GlueFontNormal / Highlight / Disable) ;
---   * barre de defilement : MinimalScrollBar, a 5 a droite de la liste, de
---     -2 en haut a +4 en bas ;
+--   * barre de defilement : MinimalScrollBar, a la place de celle de la
+--     liste des AddOns de camelot (addonlist.xml : a 4 a droite d'une liste
+--     qui finit a 34 du bord, soit son bord droit a 22 du bord de la
+--     fenetre, 16 dans l'encart) ; en haut a 3 sous l'encart, en bas a 4
+--     au-dessus du bas de la liste du client ;
 --   * polices de camelot (GlueFont*, Realm*) a la place de celles du client.
 -- Le client garde la main sur tout : ses boutons, son decalage, son tri ; on
 -- ne fait que reposer l'art et les polices apres lui (RealmListUpdate,
@@ -40,19 +49,36 @@ local function policeCamelot(objet)
 	return _G["ForeverUIGlue_" .. nom]
 end
 
--- ------------------------------------------------------------ l'en-tete
+-- ------------------------------------------------------------ la fenetre
 
-RealmListHeader:SetAlpha(0)
-RealmListHeader:Hide()
+-- l'art du client : le cadre HelpFrame-*, l'en-tete et son titre
 for _, r in ipairs({ fond:GetRegions() }) do
-	if r:GetObjectType() == "FontString" and r:GetText() == SERVER_SELECTION then
+	local texture = r:GetObjectType() == "Texture" and string.lower(r:GetTexture() or "")
+	if (texture and string.find(texture, "helpframe", 1, true))
+		or (r:GetObjectType() == "FontString" and r:GetText() == SERVER_SELECTION) then
 		r:SetAlpha(0)
 		r:Hide()
 	end
 end
-local entete = G.EnTeteDialogue(fond, SERVER_SELECTION, "GameFontNormal")
-entete:ClearAllPoints()
-entete:SetPoint("TOP", fond, "TOP", -12, 11)
+RealmListHeader:SetAlpha(0)
+RealmListHeader:Hide()
+
+-- La fenetre couvre la liste du client : sa largeur tient la barre de la
+-- ligne choisie (jusqu'a 22 + 587 du bord, GlueScrollFrame_Update) dans
+-- l'encart (6 du bord droit). Elle est au niveau du fond du client : ses
+-- boutons, sa liste, ses onglets passent devant.
+local fenetre = CreateFrame("Frame", "ForeverUIRealmListWindow", RealmList)
+fenetre:SetFrameLevel(fond:GetFrameLevel())
+fenetre:SetPoint("TOPLEFT", fond, "TOPLEFT", 0, 0)
+fenetre:SetPoint("BOTTOMRIGHT", fond, "BOTTOMRIGHT", -22, 0)
+G.Fenetre(fenetre, SERVER_SELECTION, true)
+
+-- l'encart : a 9 du bord gauche (sans portrait), 6 du droit, 26 du bas ; en
+-- haut, sous les en-tetes de colonnes (leur bas est a 50 du haut)
+local encart = CreateFrame("Frame", nil, fenetre)
+encart:SetPoint("TOPLEFT", fenetre, "TOPLEFT", 9, -52)
+encart:SetPoint("BOTTOMRIGHT", fenetre, "BOTTOMRIGHT", -6, 26)
+G.Encart(fenetre, encart, true)
 
 -- ------------------------------------------------------------ les colonnes
 
@@ -127,15 +153,21 @@ habillerOnglet(RealmListTab1)
 
 -- ------------------------------------------------------------ la croix
 
-RealmListCloseButton:SetWidth(32)
-RealmListCloseButton:SetHeight(32)
-G.BoutonArt(RealmListCloseButton, "128-RedButton-Exit")
+G.CroixFenetre(RealmListCloseButton, fenetre)
 
 -- ------------------------------------------------------------ Annuler / OK
 
+-- SharedButtonSmallTemplate dans la barre du bas : la largeur du client
+-- (125), la hauteur de camelot (22) ; Annuler a (-4, 4), OK colle a sa gauche
 for _, b in ipairs({ RealmListCancelButton, RealmListOkButton }) do
-	G.BoutonTroisTranches(b, "128-RedButton", { "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" })
+	b:SetWidth(125)
+	b:SetHeight(22)
+	G.BoutonTroisTranches(b, "128-RedButton", { "GameFontNormal", "GameFontHighlight", "GameFontDisable" })
 end
+RealmListCancelButton:ClearAllPoints()
+RealmListCancelButton:SetPoint("BOTTOMRIGHT", fenetre, "BOTTOMRIGHT", -4, 4)
+RealmListOkButton:ClearAllPoints()
+RealmListOkButton:SetPoint("TOPRIGHT", RealmListCancelButton, "TOPLEFT", 0, 0)
 
 -- ------------------------------------------------------------ les lignes
 
@@ -164,9 +196,12 @@ for _, nom in ipairs({ "ScrollBarTop", "ScrollBarMiddle", "ScrollBarBottom" }) d
 	end
 end
 
+-- bord droit a 16 dans l'encart ; haut a 3 sous l'encart (2 sous la liste
+-- du client, qui est a 1 sous l'encart) ; bas a 4 au-dessus du bas de la
+-- liste (53 au-dessus du bas de la fenetre, donc 27 au-dessus de l'encart)
 local barre = G.BarreMinimale(fond, "ForeverUIRealmListScrollBar")
-barre:SetPoint("TOPLEFT", RealmListScrollFrame, "TOPRIGHT", 5, -2)
-barre:SetPoint("BOTTOMLEFT", RealmListScrollFrame, "BOTTOMRIGHT", 5, 4)
+barre:SetPoint("TOPRIGHT", encart, "TOPRIGHT", -16, -3)
+barre:SetPoint("BOTTOMRIGHT", encart, "BOTTOMRIGHT", -16, 27)
 barre.pas = HAUTEUR_LIGNE
 barre.surDefilement = function(position)
 	barreClient:SetValue(position)

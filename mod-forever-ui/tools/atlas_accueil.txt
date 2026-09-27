@@ -210,3 +210,58 @@ _uiframe-tab-center
 uiframe-activetab-left
 uiframe-activetab-right
 _uiframe-activetab-center
+# fenetre de camelot (ButtonFrameTemplate sans portrait, nineslicelayouts.lua
+# + camelot/nineslicelayoutoverrides.lua ; InsetFrameTemplate ;
+# UIPanelCloseButton) : la liste des royaumes
+UI-Frame-Metal-CornerTopLeft
+UI-Frame-Metal-CornerTopRight
+UI-Frame-Metal-CornerBottomLeft
+UI-Frame-Metal-CornerBottomRight
+_UI-Frame-Metal-EdgeTop
+_UI-Frame-Metal-EdgeBottom
+!UI-Frame-Metal-EdgeLeft
+!UI-Frame-Metal-EdgeRight
+_UI-Frame-TopTileStreaks
+UI-Frame-InnerTopLeft
+UI-Frame-InnerTopRight
+UI-Frame-InnerBotLeftCorner
+UI-Frame-InnerBotRight
+_UI-Frame-InnerTopTile
+_UI-Frame-InnerBotTile
+!UI-Frame-InnerLeftTile
+!UI-Frame-InnerRightTile
+RedButton-Exit
+RedButton-exit-pressed
+RedButton-Exit-Disabled
+RedButton-Highlight
+# liste des AddOns (blizzard_addonlist/addonlist.xml) : menu des personnages
+# (WowStyle1DropdownTemplate, sa liste MenuStyle1 et ses choix radio),
+# cases MinimalCheckboxTemplate / MinimalCheckboxArtTemplate, champ de
+# recherche (SearchBoxTemplate < InputBoxVisualTemplate)
+common-dropdown-textholder
+common-dropdown-a-button
+common-dropdown-a-button-hover
+common-dropdown-a-button-pressed
+common-dropdown-a-button-pressedhover
+common-dropdown-a-button-open
+common-dropdown-a-button-disabled
+common-dropdown-bg
+common-dropdown-tickradial
+common-dropdown-icon-radialtick-yellow
+checkbox-minimal
+checkmark-minimal
+checkmark-minimal-disabled
+common-search-border-left
+common-search-border-middle
+common-search-border-right
+common-search-magnifyingglass
+# options (3.3.5 rhabillee, art des reglages de camelot : blizzard_settings_shared,
+# blizzard_menu, blizzard_sharedxml/shared/slider/minimalslider.xml) : liste
+# des categories, curseur MinimalSliderTemplate, menu WowStyle2 desactive
+options_list_active
+options_list_hover
+minimal_sliderbar_left
+minimal_sliderbar_right
+_minimal_sliderbar_middle
+minimal_sliderbar_button
+common-dropdown-c-button-disabled

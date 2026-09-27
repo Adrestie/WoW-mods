@@ -67,6 +67,13 @@ SORTIE = os.path.join(RACINE, "data", "glue", "Interface", "GlueXML", "ForeverUI
 BS = chr(92)
 VARIANTES = ("-c60-2x", "-c60", "-2x", "")
 COTE_MIN = 8    # celui de tools/decouper_elements.py
+# Feuilles affinees x4 par tools/affiner_champs.py (<feuille>-hd, memes
+# coordonnees) que les ecrans d'accueil prennent a la place de l'original.
+# Une par une, a la demande : le curseur des options (poignee pixelisee,
+# 28/09).
+AFFINEES = {
+    "interface" + BS + "foreverui" + BS + "buttons" + BS + "minimalsliderbarc60",
+}
 
 
 def decoupes():
@@ -175,9 +182,11 @@ def main():
                     continue
                 lw, lh = dimensions_blp(cand[1])
                 # une bande de moins de COTE_MIN texels a ete recopiee sur
-                # COTE_MIN par tools/decouper_elements.py (sinon verte)
+                # COTE_MIN par tools/decouper_elements.py (sinon verte) ; une
+                # feuille de l'atelier en densite 2 ou 4 (minimalcheckbox-hd :
+                # checkmark-minimal, 120 texels pour 30) pointe la meme region
                 lue, texels = (cand[3] - cand[2]) * lw, tailles[v][4]
-                if abs(lue - texels) <= 1 or (texels < COTE_MIN and abs(lue - COTE_MIN) <= 1):
+                if any(abs(lue - k * texels) <= k for k in (1, 2, 4)) or (texels < COTE_MIN and abs(lue - COTE_MIN) <= 1):
                     choisi, e = v, cand
                     break
             if choisi:
@@ -193,8 +202,12 @@ def main():
         decoupe = "nil"
         if marges:
             decoupe = "{ %g, %g, %g, %g, %d }" % marges
+        fichier = e[1]
+        if fichier.lower() in AFFINEES:
+            dimensions_blp(fichier + "-hd")
+            fichier = fichier + "-hd"
         lignes.append('\t["%s"] = { "%s", %.6f, %.6f, %.6f, %.6f, %g, %g, %s, %s, %s }, -- %s' % (
-            n, e[1].replace(BS, BS + BS), e[2], e[3], e[4], e[5], largeur, hauteur,
+            n, fichier.replace(BS, BS + BS), e[2], e[3], e[4], e[5], largeur, hauteur,
             "true" if mh else "false", "true" if mv else "false", decoupe, choisi))
     if erreurs:
         raise SystemExit("\n".join(erreurs))

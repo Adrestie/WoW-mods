@@ -23,7 +23,9 @@
 --   * Quit : GlueButtonTemplate (200 x 30, GlueFontNormal) a BOTTOMRIGHT
 --     (-24, 56) ; Create Account 10 au-dessus ; Menu 10 au-dessus ;
 --   * a l'ouverture, l'interface apparait en 0,75 s (FadeIn) ;
---   * Echap dans un champ lui retire la main (AccountLogin_OnEscapePressed).
+--   * ECART (28/09, a la demande) : Echap quitte le jeu, dans un champ comme
+--     sur l'ecran, comme le client 3.3.5 (camelot retire la main au champ,
+--     puis ouvre le menu).
 -- Les textes suivent la langue du client (chaines de 3.3.5) ; « Menu »
 -- (MAINMENU) n'existe pas dans 3.3.5 : texte de camelot.
 
@@ -63,10 +65,6 @@ local function champ(edit, libelle, largeurLibelle)
 	libelle:SetHeight(64)
 	libelle:ClearAllPoints()
 	libelle:SetPoint("BOTTOM", edit, "TOP", 0, -19)
-	-- Echap retire la main au champ, sans quitter le jeu
-	edit:SetScript("OnEscapePressed", function(self)
-		self:ClearFocus()
-	end)
 end
 
 local libelleMotDePasse
@@ -182,14 +180,7 @@ G.Accrocher(AccountLogin, "OnShow", function()
 	fondu:Show()
 end)
 
--- Echap sur l'ecran ne quitte plus le jeu (camelot) ; les autres touches
--- restent au client
-local avant = AccountLogin:GetScript("OnKeyDown")
-AccountLogin:SetScript("OnKeyDown", function(self, touche, ...)
-	if touche == "ESCAPE" then
-		return
-	end
-	if avant then
-		avant(self, touche, ...)
-	end
-end)
+-- ECART (28/09, a la demande : « Echap ne permet pas de fermer le jeu ») :
+-- Echap garde le sens du client 3.3.5 (AccountLogin_OnKeyDown : quitter le
+-- jeu) ; camelot ouvrirait le menu (TOGGLEGAMEMENU). Le clavier de l'ecran
+-- reste donc entierement au client.

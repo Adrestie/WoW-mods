@@ -486,10 +486,12 @@ entrer:SetHeight(66)
 entrer:ClearAllPoints()
 entrer:SetPoint("BOTTOM", ui, "BOTTOM", 0, 45)
 
-G.BoutonCarreIcone(CharacterSelectRotateLeft, "common-icon-rotateleft", 24)
+-- l'icone en OVERLAY (camelot) : en ARTWORK, comme le fond gris du bouton,
+-- elle passait tantot dessous (fleche ternie, 28/09)
+G.BoutonCarreIcone(CharacterSelectRotateLeft, "common-icon-rotateleft", 24, "OVERLAY")
 CharacterSelectRotateLeft:ClearAllPoints()
 CharacterSelectRotateLeft:SetPoint("TOP", entrer, "BOTTOM", -21, 4)
-G.BoutonCarreIcone(CharacterSelectRotateRight, "common-icon-rotateright", 24)
+G.BoutonCarreIcone(CharacterSelectRotateRight, "common-icon-rotateright", 24, "OVERLAY")
 CharacterSelectRotateRight:ClearAllPoints()
 CharacterSelectRotateRight:SetPoint("LEFT", CharacterSelectRotateLeft, "RIGHT", -11, 0)
 

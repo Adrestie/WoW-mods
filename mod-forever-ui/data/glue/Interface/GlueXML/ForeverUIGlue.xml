@@ -15,4 +15,7 @@
 	<Script file="ForeverUIGlueCharacterSelect.lua"/>
 	<Script file="ForeverUIGlueCharacterCreate.lua"/>
 	<Script file="ForeverUIGlueRealmList.lua"/>
+	<Script file="ForeverUIGlueAddonList.lua"/>
+	<Script file="ForeverUIGlueMenuDeroulant.lua"/>
+	<Script file="ForeverUIGlueOptions.lua"/>
 </Ui>
