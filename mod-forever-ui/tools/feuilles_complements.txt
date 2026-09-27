@@ -198,3 +198,47 @@ interface/hud/uidebuffframes.blp
 # la fenetre de chat (2026-09-26) : le bouton d'amis de camelot
 # (QuickJoinToastButton : quickjoin-button-friendslist-up / -down)
 interface/friendsframe/socialqueuingtoast.blp
+
+# ecrans d'accueil (2026-09-27) : les champs de saisie de la connexion
+# (AccountLoginBackdropTemplate -> TooltipMixedLayout : Tooltip-Glues-NineSlice
+# et Tooltip-NineSlice-Center) et l'en-tete du menu (DialogHeaderTemplate :
+# UI-Frame-DiamondMetal-Header). Le bouton rouge (128redbutton, 512 x 2048)
+# passe par tools/decouper_elements.py.
+interface/glues/common/uiframetooltipgluesc60.blp
+interface/glues/common/uiframetooltipgluesverticalc60.blp
+interface/tooltips/uiframetooltipbackgroundc60.blp
+interface/framegeneral/uiframediamondmetalheader2xc60.blp
+# le dialogue des ecrans d'accueil (blizzard_staticpopup_glue : GlueDialog,
+# BG.Top = GlueDialogBackgroundTop = UI-DiamondDialogBox-Border)
+interface/dialogframe/uiframediamondmetalborder2xc60.blp
+# curseur des options (MinimalSliderTemplate : Minimal_SliderBar_*)
+interface/buttons/minimalsliderbarc60.blp
+# infobulle des options (SettingsTooltip, SharedTooltipTemplate :
+# TooltipDefaultLayout, Tooltip-NineSlice-*)
+interface/tooltips/uiframetooltipc60.blp
+interface/tooltips/uiframetooltipverticalc60.blp
+# menu des cinematiques (blizzard_gluexml/mainline/cinematicsmenu.xml) : les
+# cartes StreamCinematic-*-Large, le bouton de lecture et la lueur
+interface/glues/common/cinematicbuttonslargeatlas.blp
+interface/glues/common/cinematicbuttonsatlas.blp
+# les fonds des credits, un par extension de 3.3.5 (CreditsScreen-Background-n)
+interface/credits/creditsscreenbackground0wowc60.blp
+interface/credits/creditsscreenbackground1bc.blp
+interface/credits/creditsscreenbackground2wotlk.blp
+# le fond de la liste des personnages : heavybronze-frame-background-c60
+# (1024 x 1024 ; la table des ecrans inventories prend la version de 2048,
+# que 3.3.5 n'affiche pas)
+fdid:8216846 => interface/glues/characterselect/heavybronzeframebackgroundc60.blp
+# la creation de personnage : la feuille c60 des anneaux et icones
+# (character-create-icon-*, charactercreate-gendericon-*-c60) ; deja dans
+# l'atelier, on veut ses noms -c60 dans la table
+fdid:8203433 => interface/unknown/8203433.blp
+# selection des personnages : barre de defilement minimale (curseur fin,
+# fleches enfoncees), boutons visibilite (oeil) de la feuille part2
+interface/buttons/minimalscrollbarsmallverticalc60.blp
+interface/buttons/minimalscrollbarproportional.blp
+interface/buttons/128redbuttonpart2c60.blp
+interface/buttons/128redbuttonpart2.blp
+# creation, personnalisation : le champ gris du nom (common-gray-button-
+# entrybox-left / -right / -center, feuille c60 1024 x 1024)
+fdid:8117690 => interface/common/commongraybuttonentryboxc60.blp

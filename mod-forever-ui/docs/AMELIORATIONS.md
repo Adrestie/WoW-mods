@@ -18,3 +18,4 @@ chacun est dans `NOTES.md` ; ici, la demande telle qu'elle a été faite.
 - **pouvoir zoomer dans la map avec la molette (juste scale de la map)**
 - **si la map est zoomée, pouvoir pan avec un drag & drop**
 - **utiliser la molette sur la minimap doit avoir le même effet qu'utiliser les boutons "+" et "-"**
+- **L'indicateur de performance (latence) du micro-bouton du menu n'est pas visible avec l'image de camelot**

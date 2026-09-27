@@ -20,7 +20,9 @@
 --                 (Portrait-Shadow), le portrait du joueur rogne a
 --                 (0.2, 0.8, 0.0666, 0.9) et rentre de 7 px, et une seconde
 --                 ombre (Portrait-Down) quand le bouton est enfonce
---   latence       MainMenuBarPerformanceBar, 19 x 39, BOTTOM (0, -2)
+--   latence       MainMenuBarPerformanceBar, 19 x 39, BOTTOM (0, -2) -- (0, 0) ici, voir
+--                 plus bas --, sur l'image
+--                 de camelot (UI-MainMenuBar-PerformanceBar, 32 x 64)
 --
 -- camelot/MicroMenuContainerOverrides.lua donne l'ordre. Trois des dix boutons
 -- de 3.3.5 n'existent plus chez camelot, et l'atlas ne leur offre pas de jeu
@@ -29,21 +31,22 @@
 --             (camelot a retire ce bouton) : on prend la variante de base.
 --   JcJ    -> RETIRE le 2026-09-26, a la demande : le PvP s'ouvre par
 --             l'onglet de la feuille de personnage. Le bouton du client est
---             neutralise (ForeverUI.Suppress) et sa place (un pas de 27) va
---             a la rallonge : le bandeau garde sa longueur, la barre d'action
---             et les sacs ne bougent pas.
---   Aide   -> camelot lui donne le meme jeu qu'au menu du jeu, mais cache le
---             bouton ; ici il reste visible, donc deux points d'interrogation
---             voisins. On lui donne "AdventureGuide", le seul jeu c60
---             inutilise qui evoque un manuel. CHOIX A CONFIRMER.
+--             neutralise (ForeverUI.Suppress).
+--   Aide   -> RETIRE le 2026-09-26, a la demande -- camelot cache ce bouton
+--             lui aussi. La demande d'aide passe au menu Echap, la ou camelot
+--             met GAMEMENU_SUPPORT (voir plus bas) ; le bouton du client est
+--             neutralise, comme celui du JcJ.
+-- LE BANDEAU A LA LARGEUR DE SES BOUTONS (demande du 2026-09-26) : plus de
+-- rallonge -- ni la place des boutons retires, ni celle du sac a composants --
+-- et la barre d'action et les sacs, poses de part et d'autre, s'en
+-- rapprochent.
 --
 -- camelot/MainMenuBarBagButtons.xml + shared/BagsBar.lua
 --   sac              45 x 45, bagPadding = 2, ranges vers la GAUCHE depuis le
 --                    sac a dos
 --   ordre            sac a dos, sacs 1 a 4, trousseau (le sac a composants
 --                    de camelot n'existe pas sur 3.3.5 et sa place n'est plus
---                    tenue : les 47 px rendus vont au bandeau du micro-menu,
---                    la rangee garde donc sa longueur)
+--                    tenue)
 --   trousseau        33 x 45
 --   cadre d'un sac   ui-hud-actionbar-iconframe-bags, 46 x 46, ancre TOPLEFT
 --                    (BaseBagSlotButtonMixin:UpdateTextures)
@@ -78,9 +81,6 @@ local BAG_PADDING = 2
 local BAG_FRAME_W, BAG_FRAME_H = 46, 46
 local KEYRING_W = 33
 
--- Place rendue par le sac a composants absent, reversee au micro-menu pour
--- que la rangee garde sa longueur.
-local MICRO_RALLONGE = 45 + 2 + MICRO_PITCH   -- + la place du bouton JcJ retire
 
 local MICRO_X, MICRO_Y = 116.5, 6
 local BAR_OFFSET_X, BAR_OFFSET_Y = -4.5, -4
@@ -90,6 +90,7 @@ local BAGS_OFFSET_X, BAGS_OFFSET_Y = 7, -4
 -- separateur de chemin en clair plutot que de le doubler.
 local SEP = string.char(92)
 local ICONE_SAC = "Interface" .. SEP .. "ForeverUI" .. SEP .. "icons" .. SEP .. "ui-hud-actionbar-bag"
+local PERFORMANCE_IMAGE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "mainmenubar" .. SEP .. "ui-mainmenubar-performancebar"
 
 -- L'ordre de camelot, reduit aux boutons que ce client possede.
 local MICRO = {
@@ -100,7 +101,6 @@ local MICRO = {
 	{ nom = "QuestLogMicroButton", jeu = "questlog" },
 	{ nom = "SocialsMicroButton", jeu = "guildcommunities" },
 	{ nom = "LFDMicroButton", jeu = "groupfinder" },
-	{ nom = "HelpMicroButton", jeu = "adventureguide" },
 	{ nom = "MainMenuMicroButton", jeu = "gamemenu" },
 }
 
@@ -288,10 +288,17 @@ local function habillerMicro(definition, index)
 	end
 
 	if definition.nom == "MainMenuMicroButton" and MainMenuBarPerformanceBar then
+		-- l'image de camelot (32 x 64, un trait en bas) : celle de 3.3.5 est
+		-- un pave de 16 x 8, qui s'etirait en gros carre vert
+		MainMenuBarPerformanceBar:SetTexture(PERFORMANCE_IMAGE)
 		MainMenuBarPerformanceBar:SetWidth(19)
 		MainMenuBarPerformanceBar:SetHeight(39)
 		MainMenuBarPerformanceBar:ClearAllPoints()
-		MainMenuBarPerformanceBar:SetPoint("BOTTOM", bouton, "BOTTOM", 0, -2)
+		-- camelot l'ancre a (0, -2) : son trait (le bas de l'image) deborde
+		-- alors d'un pixel sous le bouton, ou il n'y a rien. Ici le bord
+		-- interieur de l'encadrement du bandeau tombe au bas du bouton et le
+		-- couvrait : ancre a (0, 0), le trait passe juste au-dessus.
+		MainMenuBarPerformanceBar:SetPoint("BOTTOM", bouton, "BOTTOM", 0, 0)
 	end
 
 	bouton:ClearAllPoints()
@@ -393,15 +400,63 @@ for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_GUILD_UPDATE", "GUILDTABA
 	veilleTabard:RegisterEvent(ev)
 end
 veilleTabard:SetScript("OnEvent", function() ForeverUI.MajTabardSocial() end)
-micro:SetWidth(LARGEUR_BOUTONS + MICRO_RALLONGE)
+micro:SetWidth(LARGEUR_BOUTONS)
 
 -- LE BOUTON JcJ DU CLIENT S'EN VA (2026-09-26). Masquer ne suffit pas :
 -- UpdateMicroButtons et VehicleMenuBar_MoveMicroButtons le reprennent.
 ForeverUI.Suppress(_G["PVPMicroButton"])
 
--- Les boutons restent serres contre le bord GAUCHE du bandeau : la rallonge
--- reste libre a droite, du cote ou le micro-menu s'allonge
--- (layoutFramesGoingRight chez camelot).
+-- LE BOUTON D'AIDE DU CLIENT S'EN VA AUSSI (2026-09-26, demande de
+-- l'utilisateur) et la demande d'aide passe au menu Echap, entre AddOns et
+-- Log Out, un espace de chaque cote (demande du 2026-09-26). AddOns n'est pas
+-- du client : c'est ACP (patch-5.mpq), sous Macros, qui a chaque ouverture
+-- remet Log Out sous lui (et ajoute 25 a la hauteur, qu'il retire a la
+-- fermeture) -- on repasse donc derriere son OnShow. Sans ACP, la demande
+-- d'aide vient sous Macros. L'espace est celui que le menu du client laisse
+-- deja avant Return to Game (16, GameMenuFrame.xml ; camelot en met 20 entre
+-- deux sections). Le texte est celui du bouton du client (HELP_BUTTON),
+-- l'action aussi (ToggleHelpFrame), apres la fermeture du menu comme ses
+-- voisins. Un bouton simple : un bouton securise rendrait tout le menu Echap
+-- protege, et Show/HideUIPanel passent deja par le delegue du client.
+local ECART_MENU = 16
+ForeverUI.Suppress(_G["HelpMicroButton"])
+if GameMenuFrame and GameMenuButtonMacros and GameMenuButtonLogout then
+	local aide = CreateFrame("Button", "ForeverUIGameMenuButtonHelp", GameMenuFrame, "GameMenuButtonTemplate")
+	aide:SetText(HELP_BUTTON)
+	aide:SetScript("OnClick", function()
+		PlaySound("igMainMenuOption")
+		HideUIPanel(GameMenuFrame)
+		ToggleHelpFrame()
+	end)
+	local function poser()
+		aide:ClearAllPoints()
+		aide:SetPoint("TOP", _G["GameMenuButtonAddOns"] or GameMenuButtonMacros, "BOTTOM", 0, -ECART_MENU)
+		GameMenuButtonLogout:SetPoint("TOP", aide, "BOTTOM", 0, -ECART_MENU)
+	end
+	-- ACP charge avant nous (ordre alphabetique) ; s'il venait apres, on
+	-- s'accroche des qu'il arrive, avant la premiere ouverture du menu
+	local branche = false
+	local function brancherACP()
+		local acp = _G["GameMenuButtonAddOns"]
+		if acp and not branche and acp.HookScript then
+			branche = true
+			acp:HookScript("OnShow", poser)
+		end
+		poser()
+	end
+	brancherACP()
+	local veilleACP = CreateFrame("Frame")
+	veilleACP:RegisterEvent("ADDON_LOADED")
+	veilleACP:SetScript("OnEvent", function(self)
+		brancherACP()
+		if branche then self:UnregisterEvent("ADDON_LOADED") end
+	end)
+	-- Log Out etait a 1 sous son voisin ; il y a maintenant l'aide et deux espaces
+	GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + aide:GetHeight() + 2 * ECART_MENU - 1)
+end
+
+-- Les boutons partent du bord GAUCHE du bandeau (layoutFramesGoingRight chez
+-- camelot) ; le bandeau a leur largeur.
 --
 -- ET ON LES REPOSE, PARCE QUE LE CLIENT LES REPREND.
 --

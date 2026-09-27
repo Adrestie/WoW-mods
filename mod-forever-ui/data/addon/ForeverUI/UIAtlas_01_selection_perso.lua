@@ -7,7 +7,7 @@ UIAtlas = UIAtlas or { sheets = {}, data = {} }
 local S = {
 	[1] = "interface\\ForeverUI\\collections\\uicampcollection", -- 1024 x 512
 	[2] = "interface\\ForeverUI\\common\\minimalcheckboxc60", -- 32 x 32
-	[3] = "interface\\ForeverUI\\common\\minimalcheckbox", -- 64 x 64
+	[3] = "interface\\ForeverUI\\common\\minimalcheckbox-hd", -- 64 x 64, affinee x4 (tools/affiner_champs.py)
 	[4] = "interface\\ForeverUI\\glues\\characterselect\\uicharacterselectgluesc60", -- 1024 x 512
 	[5] = "interface\\ForeverUI\\glues\\characterselect\\uicharacterselectglues", -- 1024 x 1024
 	[6] = "interface\\ForeverUI\\glues\\characterselect\\uicharacterselectglues2xc60", -- 2048 x 1024

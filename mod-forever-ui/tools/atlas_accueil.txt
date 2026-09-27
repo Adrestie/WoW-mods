@@ -1,0 +1,199 @@
+# Les elements d'atlas que posent les ecrans d'accueil (GlueXML), sous le nom
+# que leur donne le code de camelot. tools/atlas_accueil.py en tire
+# ForeverUIGlueAtlas.lua, en prenant la variante -c60 quand elle existe.
+
+# champs de saisie : TooltipBackdropTemplate, disposition TooltipMixedLayout
+tooltip-glues-nineslice-cornertopleft
+tooltip-glues-nineslice-cornertopright
+tooltip-glues-nineslice-cornerbottomleft
+tooltip-glues-nineslice-cornerbottomright
+_tooltip-glues-nineslice-edgetop
+_tooltip-glues-nineslice-edgebottom
+!tooltip-glues-nineslice-edgeleft
+!tooltip-glues-nineslice-edgeright
+tooltip-nineslice-center
+
+# boutons rouges : ThreeSliceButtonTemplate, atlasName 128-RedButton
+128-redbutton-left
+128-redbutton-left-pressed
+128-redbutton-left-disabled
+_128-redbutton-center
+_128-redbutton-center-pressed
+_128-redbutton-center-disabled
+128-redbutton-right
+128-redbutton-right-pressed
+128-redbutton-right-disabled
+128-redbutton-highlight
+
+# menu : DialogBorderTemplate (disposition Dialog) et DialogHeaderTemplate
+ui-frame-diamondmetal-cornertopleft
+ui-frame-diamondmetal-cornertopright
+ui-frame-diamondmetal-cornerbottomleft
+ui-frame-diamondmetal-cornerbottomright
+_ui-frame-diamondmetal-edgetop
+_ui-frame-diamondmetal-edgebottom
+!ui-frame-diamondmetal-edgeleft
+!ui-frame-diamondmetal-edgeright
+ui-frame-diamondmetal-header-cornerleft
+ui-frame-diamondmetal-header-cornerright
+_ui-frame-diamondmetal-header-tile
+
+# selection des personnages (blizzard_gluexml/mainline/characterselect,
+# camelot/characterselect, blizzard_characterselectnavbar/camelot)
+# barre du haut
+glues-characterselect-tophud-middle-bg
+glues-characterselect-tophud-middle-dis-bg
+glues-characterselect-tophud-left-bg
+glues-characterselect-tophud-left-dis-bg
+glues-characterselect-tophud-right-bg
+glues-characterselect-tophud-right-dis-bg
+glues-characterselect-tophud-selected-middle
+glues-characterselect-tophud-selected-left
+glues-characterselect-tophud-selected-right
+glues-characterselect-tophud-bg-divider
+glues-characterselect-tophud-bg-divider-dis
+# liste : fond et cadre
+heavybronze-frame-background
+heavybronze-frame-basic
+heavybronze-vert-cornerbracket-tr
+heavybronze-vert-cornerbracket-br
+# recherche
+glues-characterselect-searchbar
+glues-characterselect-icon-search
+common-search-clearbutton
+# cartes
+glues-characterselect-card-singles
+glues-characterselect-card-singles-hover
+glues-characterselect-card-selected
+glues-characterselect-card-selected-hover
+glues-characterselect-icon-faction-alliance
+glues-characterselect-icon-faction-alliance-hover
+glues-characterselect-icon-faction-alliance-selected
+glues-characterselect-icon-faction-horde
+glues-characterselect-icon-faction-horde-hover
+glues-characterselect-icon-faction-horde-selected
+glues-characterselect-icon-factionchange
+glues-characterselect-icon-factionchange-hover
+glues-characterselect-icon-racechange
+glues-characterselect-icon-racechange-hover
+glues-characterselect-icon-appearancechange
+glues-characterselect-icon-appearancechange-hover
+# barre de defilement minimale
+minimal-scrollbar-track-top
+minimal-scrollbar-track-bottom
+!minimal-scrollbar-track-middle
+minimal-scrollbar-small-thumb-top
+minimal-scrollbar-small-thumb-middle
+minimal-scrollbar-small-thumb-bottom
+minimal-scrollbar-small-thumb-top-over
+minimal-scrollbar-small-thumb-middle-over
+minimal-scrollbar-small-thumb-bottom-over
+minimal-scrollbar-small-thumb-top-down
+minimal-scrollbar-small-thumb-middle-down
+minimal-scrollbar-small-thumb-bottom-down
+minimal-scrollbar-arrow-top
+minimal-scrollbar-arrow-top-over
+minimal-scrollbar-arrow-top-down
+minimal-scrollbar-arrow-bottom
+minimal-scrollbar-arrow-bottom-over
+minimal-scrollbar-arrow-bottom-down
+# sous la liste
+128-redbutton-delete
+128-redbutton-delete-pressed
+128-redbutton-delete-disabled
+128-redbutton-delete-highlight
+glues-characterselect-listlauncher-bg
+128-redbutton-arrowdown
+128-redbutton-arrowdown-pressed
+128-redbutton-arrowdown-disabled
+128-redbutton-arrowdown-highlight
+128-redbutton-arrowupglow
+128-redbutton-arrowupglow-pressed
+128-redbutton-arrowupglow-disabled
+128-redbutton-arrowupglow-highlight
+# bas de l'ecran
+common-button-square-gray-up
+common-button-square-gray-down
+common-icon-rotateleft
+common-icon-rotateright
+common-icon-backarrow
+128-redbutton-visibilityon
+128-redbutton-visibilityon-pressed
+128-redbutton-visibilityon-disabled
+128-redbutton-visibilityon-highlight
+128-redbutton-visibilityoff
+128-redbutton-visibilityoff-pressed
+128-redbutton-visibilityoff-disabled
+128-redbutton-visibilityoff-highlight
+
+# dialogues : GlueDialog (BG.Top UI-DiamondDialogBox-Border decoupe en neuf,
+# BG.Bottom UI-Frame-DialogBox-BackgroundTile) ; infobulle et champ du
+# renommage : disposition TooltipDefaultLayout
+ui-diamonddialogbox-border
+ui-frame-dialogbox-backgroundtile
+tooltip-nineslice-cornertopleft
+tooltip-nineslice-cornertopright
+tooltip-nineslice-cornerbottomleft
+tooltip-nineslice-cornerbottomright
+_tooltip-nineslice-edgetop
+_tooltip-nineslice-edgebottom
+!tooltip-nineslice-edgeleft
+!tooltip-nineslice-edgeright
+
+# creation, etape race et classe (blizzard_charactercreate/camelot) :
+# vignettes, colonnes de faction, boutons ronds (RingedMaskedButtonTemplate),
+# cadres heavybronze, portraits des encadres, fleches des boutons de navigation
+charactercreate-vignette-top
+charactercreate-vignette-sides
+charactercreate-vignette-bottom
+charactercreate-vignette-sides-widescreen
+charactercreate-factionflag-alliance
+charactercreate-factionflag-horde
+charactercreate-icon-alliance
+charactercreate-icon-horde
+character-create-icon-frame
+# character-create-icon-frame-disabled : absent du client moderne
+character-create-icon-selectedglow
+character-create-icon-mask
+charactercreate-gendericon-male
+charactercreate-gendericon-male-selected
+charactercreate-gendericon-female
+charactercreate-gendericon-female-selected
+heavybronze-horz-cornerbracket-tr
+heavybronze-horz-cornerbracket-tl
+heavybronze-horz-cornerbracket-br
+heavybronze-horz-cornerbracket-bl
+character-create-icon-circle-frame
+common-icon-forwardarrow
+common-icon-forwardarrow-disable
+common-icon-backarrow-disable
+
+# creation, seconde etape (personnalisation) : case et fleches des reglages
+# (WowStyle2Dropdown, WowStyle2IconButton), champ du nom (SharedEditBox), de
+# au hasard (CustomizationRandomizeAppearanceButton)
+charactercreate-icon-dice
+common-dropdown-c-button
+common-dropdown-c-button-hover-2
+common-dropdown-c-button-pressed-2
+common-dropdown-c-button-pressedhover-2
+common-dropdown-icon-back
+common-dropdown-icon-next
+common-gray-button-entrybox-left
+common-gray-button-entrybox-right
+common-gray-button-entrybox-center
+# petits boutons de la personnalisation : reinitialiser la camera
+common-icon-undo
+# mode 2 (client patche) : la case ouvrante (etats de WowStyle2Dropdown), la
+# liste (MenuStyle2 : common-dropdown-c-bg) et le survol de ses lignes
+common-dropdown-c-button-hover-1
+common-dropdown-c-button-pressed-1
+common-dropdown-c-button-pressedhover-1
+common-dropdown-c-button-open
+common-dropdown-c-button-hover-arrow
+common-dropdown-c-bg
+common-dropdown-customize-mouseover
+# les echantillons de couleur des choix (CustomizationElementDetailsTemplate :
+# ColorSwatch1 / 2, leur lueur, ColorSelected)
+charactercreate-customize-palette
+charactercreate-customize-palette-glow
+charactercreate-customize-palette-selected

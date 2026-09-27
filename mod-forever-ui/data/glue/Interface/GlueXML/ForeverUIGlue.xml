@@ -1,0 +1,17 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\FrameXML\UI.xsd">
+	<!-- ForeverUI : les ecrans d'accueil copies de camelot. Charge apres tout
+	     le GlueXML d'origine (GlueXML.toc). -->
+	<Include file="ForeverUIGlueFonts.xml"/>
+	<Script file="ForeverUIGlueAtlas.lua"/>
+	<Script file="ForeverUIGlueDonnees.lua"/>
+	<Script file="ForeverUIGlueCouleurs.lua"/>
+	<Script file="ForeverUIGlueChoix.lua"/>
+	<Script file="ForeverUIGlue.lua"/>
+	<Script file="ForeverUIGlueGabarits.lua"/>
+	<Script file="ForeverUIGlueMenu.lua"/>
+	<Script file="ForeverUIGlueDialogues.lua"/>
+	<Script file="ForeverUIAccountLogin.lua"/>
+	<Script file="ForeverUIGlueCharacterSelect.lua"/>
+	<Script file="ForeverUIGlueCharacterCreate.lua"/>
+</Ui>
