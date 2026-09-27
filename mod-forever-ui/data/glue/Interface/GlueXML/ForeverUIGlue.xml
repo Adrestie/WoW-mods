@@ -18,4 +18,7 @@
 	<Script file="ForeverUIGlueAddonList.lua"/>
 	<Script file="ForeverUIGlueMenuDeroulant.lua"/>
 	<Script file="ForeverUIGlueOptions.lua"/>
+	<Script file="ForeverUIGlueIllustrations.lua"/>
+	<Script file="ForeverUIGlueCinematics.lua"/>
+	<Script file="ForeverUIGlueCredits.lua"/>
 </Ui>

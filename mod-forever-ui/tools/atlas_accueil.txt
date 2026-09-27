@@ -265,3 +265,25 @@ minimal_sliderbar_right
 _minimal_sliderbar_middle
 minimal_sliderbar_button
 common-dropdown-c-button-disabled
+# cinematiques (blizzard_gluexml/mainline/cinematicsmenu.xml) : vignettes
+# des trois films de 3.3.5, bouton de lecture, surbrillance
+streamcinematic-classic-large-up
+streamcinematic-classic-large-down
+streamcinematic-bc-large-up
+streamcinematic-bc-large-down
+streamcinematic-lk-large-up
+streamcinematic-lk-large-down
+streamcinematic-playbutton
+streamcinematic-highlight
+# credits (blizzard_gluexml/mainline/creditsframe.xml) : fonds des trois
+# extensions, degrade, icones de vitesse, liste des extensions
+creditsscreen-background-0
+creditsscreen-background-1
+creditsscreen-background-2
+_creditsscreen-gradient-tile
+creditsscreen-assets-buttons-rewind
+creditsscreen-assets-buttons-pause
+creditsscreen-assets-buttons-play
+creditsscreen-assets-buttons-fastforward
+creditsscreen-selected
+creditsscreen-highlight
