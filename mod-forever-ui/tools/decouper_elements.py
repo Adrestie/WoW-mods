@@ -96,6 +96,8 @@ ELEMENTS = {
         "_creditsscreen-gradient-tile",
         "creditsscreen-assets-buttons-rewind", "creditsscreen-assets-buttons-pause",
         "creditsscreen-assets-buttons-play", "creditsscreen-assets-buttons-fastforward",
+        # la liste des extensions (CreditsFrameExpansionsButtonTemplate)
+        "creditsscreen-selected", "creditsscreen-highlight",
     ],
     "interface/common/commonbuttonsc60.blp": [
         "common-button-square-gray-up-c60", "common-button-square-gray-down-c60",

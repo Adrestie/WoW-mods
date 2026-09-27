@@ -175,9 +175,25 @@ end)
 -- remontre certains de ses boutons
 G.Accrocher(AccountLogin, "OnShow", function()
 	poser()
+end)
+
+-- a chaque apparition de l'interface, apres le client : son propre fondu
+-- (GlueFrameFadeIn de LOGIN_FADE_IN, 1,5 s, dans l'OnShow d'AccountLoginUI)
+-- ecrivait l'alpha en meme temps que celui de camelot -- 0, puis 90 %, puis
+-- 70 %, puis 100 % au retour sur l'ecran (constate le 28/09). Il est retire
+-- de la liste des fondus du client ; seul reste celui de camelot.
+G.Accrocher(ui, "OnShow", function()
+	GlueFrameFadeRemoveFrame(ui)
 	fondu.t = 0
 	ui:SetAlpha(0)
 	fondu:Show()
+end)
+-- le fondu de sortie du client (vers la selection) reste le sien : le notre
+-- s'arrete s'il tournait encore
+G.AccrocherFonction("GlueFrameFadeOut", function(cadre)
+	if cadre == ui then
+		fondu:Hide()
+	end
 end)
 
 -- ECART (28/09, a la demande : « Echap ne permet pas de fermer le jeu ») :
