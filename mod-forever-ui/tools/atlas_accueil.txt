@@ -197,3 +197,16 @@ common-dropdown-customize-mouseover
 charactercreate-customize-palette
 charactercreate-customize-palette-glow
 charactercreate-customize-palette-selected
+# liste des royaumes (3.3.5 rhabillee, art de la liste moderne mainline/
+# realmlist.xml) : croix BigRedExitButtonTemplate (artKit 128-redbutton-exit),
+# onglets RealmListTabButtonTemplate
+128-redbutton-exit
+128-redbutton-exit-pressed
+128-redbutton-exit-disabled
+128-redbutton-exit-highlight
+uiframe-tab-left
+uiframe-tab-right
+_uiframe-tab-center
+uiframe-activetab-left
+uiframe-activetab-right
+_uiframe-activetab-center
