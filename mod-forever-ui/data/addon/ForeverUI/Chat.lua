@@ -495,9 +495,19 @@ end
 -- ------------------------------------------------------------ la selection
 
 -- Alt maintenu, on glisse sur le chat : le texte se surligne comme dans un
--- editeur ; au relacher, il part, surligne, dans une saisie invisible qui
--- prend le clavier -- Ctrl+C le copie (le seul chemin vers le presse-papiers
--- en 3.3.5), Echap, Entree ou un clic ailleurs rendent la main.
+-- editeur. Le seul chemin vers le presse-papiers en 3.3.5 est Ctrl+C dans
+-- une saisie : une saisie invisible, en lecture seule, porte le texte ; elle
+-- ne prend le clavier que PENDANT QUE Ctrl EST ENFONCE (le C qui suit copie),
+-- et le rend au relachement de Ctrl. Le reste du temps, le clavier est au
+-- jeu : 3.3.5 ne sait pas voir une touche sans la lui prendre (ni IsKeyDown
+-- ni transmission des touches).
+-- TOUT AUTRE GESTE EFFACE LA SELECTION (demande du 2026-09-28, « le jeu garde
+-- le clavier ») : Ctrl relache (Ctrl+C fait ou non), un clic, se deplacer,
+-- tourner, sauter (hors taxi), lancer un sort, une autre saisie qui prend le
+-- clavier (celle du chat), une fenetre qui s'ouvre (ShowUIPanel), Echap
+-- (ToggleGameMenu), le chat qui defile ou dont un message selectionne
+-- change, le chat cache. Une touche sans effet visible de l'addon laisse la
+-- selection.
 -- (demande de l'utilisateur, 2026-09-28 ; ni 3.3.5 ni camelot ne le font)
 --
 -- RELEVE EN JEU (/fui chatlignes, 2026-09-28) : le moteur fait UN objet
@@ -792,6 +802,7 @@ S.boite = boite
 function C.effacer()
 	local d = S.fenetre and C.fenetres[S.fenetre]
 	S.fenetre, S.messages, S.ancre, S.bout, S.glisse, S.texte = nil, nil, nil, nil, false, nil
+	S.ctrl, S.base = false, nil
 	if d then
 		for _, t in ipairs(d.surlignes) do t:Hide() end
 	end
@@ -809,13 +820,6 @@ boite:SetScript("OnTextChanged", function(self, saisi)
 		self:HighlightText()
 	end
 end)
--- Ctrl+C fait : la main revient au jeu (si la saisie connait OnKeyUp ;
--- sinon Echap, Entree ou un clic ailleurs)
-if boite.HasScript and boite:HasScript("OnKeyUp") then
-	boite:SetScript("OnKeyUp", function(self, touche)
-		if touche == "C" and IsControlKeyDown() then self:ClearFocus() end
-	end)
-end
 
 function C.commencer(fenetre)
 	C.effacer()
@@ -846,8 +850,56 @@ function C.terminer()
 	end
 	S.texte = texte
 	boite:SetText(texte)
-	boite:SetFocus()
-	boite:HighlightText()
+	-- ce qu'on surveille pour effacer : le personnage, le defilement du
+	-- chat, le texte des messages selectionnes
+	local vitesse = GetUnitSpeed and GetUnitSpeed("player") or 0
+	S.base = {
+		taxi = UnitOnTaxi and UnitOnTaxi("player") and true or false,
+		vitesse = vitesse,
+		face = GetPlayerFacing and GetPlayerFacing() or 0,
+		chute = IsFalling and IsFalling() and true or false,
+		defilement = S.fenetre.GetCurrentScroll and S.fenetre:GetCurrentScroll() or 0,
+		textes = {},
+	}
+	for rang, r in ipairs(S.messages) do S.base.textes[rang] = r:GetText() end
+end
+
+-- un geste autre que Ctrl+C, une fois la selection faite ?
+function C.autreGeste()
+	local b = S.base
+	if IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton") or IsMouseButtonDown("MiddleButton") then
+		return true
+	end
+	if not S.fenetre:IsVisible() then return true end
+	local focus = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+	if focus and focus ~= boite then return true end
+	if not b.taxi then
+		if (GetUnitSpeed and GetUnitSpeed("player") or 0) ~= b.vitesse then return true end
+		if math.abs((GetPlayerFacing and GetPlayerFacing() or 0) - b.face) > 0.001 then return true end
+		if (IsFalling and IsFalling() and true or false) ~= b.chute then return true end
+	end
+	if (S.fenetre.GetCurrentScroll and S.fenetre:GetCurrentScroll() or 0) ~= b.defilement then return true end
+	for rang, r in ipairs(S.messages) do
+		if r:GetText() ~= b.textes[rang] then return true end
+	end
+	return false
+end
+
+-- une fois la selection faite : Ctrl enfonce, la saisie prend le clavier ;
+-- Ctrl relache, ou tout autre geste, et la selection s'efface
+function C.veillerCopie()
+	if IsControlKeyDown() then
+		if not S.ctrl then
+			S.ctrl = true
+			boite:SetText(S.texte)
+			boite:SetFocus()
+			boite:HighlightText()
+		end
+	elseif S.ctrl then
+		C.effacer()
+		return
+	end
+	if C.autreGeste() then C.effacer() end
 end
 
 -- la surface qui prend la souris sur le chat, Alt maintenu seulement : sans
@@ -876,9 +928,24 @@ veilleSelection:SetScript("OnUpdate", function()
 			d.capteur:EnableMouse(prise)
 		end
 	end
-	if S.glisse then C.suivre() end
+	if S.glisse then
+		C.suivre()
+	elseif S.texte then
+		C.veillerCopie()
+	end
 end)
 C.veilleSelection = veilleSelection
+
+-- un sort lance, une fenetre ouverte, Echap : la selection s'efface
+local function horsCopie()
+	if S.texte and not S.glisse then C.effacer() end
+end
+veilleSelection:RegisterEvent("UNIT_SPELLCAST_SENT")
+veilleSelection:SetScript("OnEvent", function(_, _, unite)
+	if unite == "player" then horsCopie() end
+end)
+if ShowUIPanel then hooksecurefunc("ShowUIPanel", horsCopie) end
+if ToggleGameMenu then hooksecurefunc("ToggleGameMenu", horsCopie) end
 
 -- ------------------------------------------------------------ une fenetre
 

@@ -2013,6 +2013,15 @@ function IsShiftKeyDown() return false end
 TOUCHES = {}
 function IsAltKeyDown() return TOUCHES.alt end
 function IsControlKeyDown() return TOUCHES.ctrl end
+-- le personnage (vitesse, orientation, chute, taxi), la saisie qui a le
+-- clavier, le menu du jeu
+PERSO = { vitesse = 0, face = 0, chute = false, taxi = false }
+function GetUnitSpeed(u) if u == "player" then return PERSO.vitesse end return 0 end
+function GetPlayerFacing() return PERSO.face end
+function IsFalling() return PERSO.chute end
+function UnitOnTaxi(u) return u == "player" and PERSO.taxi end
+function GetCurrentKeyBoardFocus() return FOCUS_CLAVIER end
+function ToggleGameMenu() end
 function GetDailyQuestsCompleted() return 2 end
 function GetMaxDailyQuests() return 25 end
 MAX_WATCHABLE_QUESTS = 25
@@ -13241,28 +13250,76 @@ def main():
     cap.scripts.OnMouseUp(cap, "LeftButton")
     bx = Sel.boite
     print("   copie : %r, saisie %s" % (bx.text, bx.focused))
-    assert bx.text == "Guild] Papota: bonjour a tous\nDeuxieme message" and bx.focused and bx.surligne
+    # au relacher, le clavier reste au jeu : la saisie porte le texte sans
+    # le prendre
+    assert bx.text == "Guild] Papota: bonjour a tous\nDeuxieme message" and not bx.focused
     veiller()
-    assert not cap.mouseEnabled
-    # la saisie est en lecture seule ; Echap rend la main et efface
+    assert not cap.mouseEnabled and Sel.texte and any(t.shown for t in d1.surlignes.values())
+    # Ctrl enfonce : la saisie prend le clavier, texte surligne ; elle est en
+    # lecture seule ; Ctrl relache : elle le rend, la selection s'efface
+    lua.execute("TOUCHES.ctrl = true")
+    veiller()
+    assert bx.focused and bx.surligne
     lua.execute("ForeverUI.Chat.selection.boite:SetText('abc')")
     bx.scripts.OnTextChanged(bx, True)
     assert bx.text == "Guild] Papota: bonjour a tous\nDeuxieme message"
-    bx.scripts.OnEscapePressed(bx)
+    veiller()
+    assert bx.focused and Sel.texte
+    lua.execute("TOUCHES.ctrl = false")
+    veiller()
     assert not bx.focused and not any(t.shown for t in d1.surlignes.values()) and Sel.texte is None
-    # Ctrl+C rend aussi la main
+    # tout autre geste efface la selection, le clavier restant au jeu
+    def selectionner():
+        lua.execute("TOUCHES.alt = true")
+        veiller()
+        lua.execute("SOURIS_X, SOURIS_Y = 40 + 72, 194")
+        cap.scripts.OnMouseDown(cap, "LeftButton")
+        lua.execute("SOURIS_X, SOURIS_Y = 40 + 42, 182")
+        cap.scripts.OnMouseUp(cap, "LeftButton")
+        lua.execute("TOUCHES.alt = false")
+        veiller()
+        assert Sel.texte == "Guild] Papota:" and not bx.focused
+    gestes = [
+        ("clic", "SOURIS.LeftButton = true", "SOURIS.LeftButton = nil"),
+        ("clic droit", "SOURIS.RightButton = true", "SOURIS.RightButton = nil"),
+        ("deplacement", "PERSO.vitesse = 7", "PERSO.vitesse = 0"),
+        ("rotation", "PERSO.face = 1.5", "PERSO.face = 0"),
+        ("saut", "PERSO.chute = true", "PERSO.chute = false"),
+        ("saisie du chat", "FOCUS_CLAVIER = ChatFrame1EditBox", "FOCUS_CLAVIER = nil"),
+        ("defilement", "ChatFrame1.defile = ChatFrame1.defile + 1", "ChatFrame1.defile = ChatFrame1.defile - 1"),
+        ("message change", "MESSAGE2:SetText('Autre message')", "MESSAGE2:SetText('Deuxieme message')"),
+        ("chat cache", "ChatFrame1:Hide()", "ChatFrame1:Show()"),
+    ]
+    for nom, faire, defaire in gestes:
+        selectionner()
+        lua.execute(faire)
+        veiller()
+        assert Sel.texte is None and not any(t.shown for t in d1.surlignes.values()), nom
+        lua.execute(defaire)
+    for nom, faire in [("sort", "local v = ForeverUI.Chat.veilleSelection; v.scripts.OnEvent(v, 'UNIT_SPELLCAST_SENT', 'player')"),
+                       ("fenetre", "ShowUIPanel(CreateFrame('Frame', nil, UIParent))"),
+                       ("Echap", "ToggleGameMenu()")]:
+        selectionner()
+        lua.execute(faire)
+        assert Sel.texte is None, nom
+    # le sort d'un autre n'efface pas ; rien ne bouge, la selection reste
+    selectionner()
+    lua.execute("local v = ForeverUI.Chat.veilleSelection; v.scripts.OnEvent(v, 'UNIT_SPELLCAST_SENT', 'target')")
+    veiller()
+    veiller()
+    assert Sel.texte == "Guild] Papota:"
+    lua.execute("ForeverUI.Chat.effacer()")
+    # en taxi, le personnage bouge et tourne sans effacer
+    lua.execute("PERSO.taxi = true")
+    selectionner()
+    lua.execute("PERSO.vitesse = 20; PERSO.face = 2")
+    veiller()
+    assert Sel.texte == "Guild] Papota:"
+    lua.execute("PERSO.taxi = false; PERSO.vitesse = 0; PERSO.face = 0; ForeverUI.Chat.effacer()")
+    print("   gestes qui effacent : %s + sort, fenetre, Echap ; taxi epargne" % ", ".join(n for n, _, _ in gestes))
+    # un clic Alt sans glisser ne copie rien
     lua.execute("TOUCHES.alt = true")
     veiller()
-    lua.execute("SOURIS_X, SOURIS_Y = 40 + 72, 194")
-    cap.scripts.OnMouseDown(cap, "LeftButton")
-    lua.execute("SOURIS_X, SOURIS_Y = 40 + 42, 182")
-    cap.scripts.OnMouseUp(cap, "LeftButton")
-    assert bx.focused and bx.text == "Guild] Papota:"
-    lua.execute("TOUCHES.ctrl = true")
-    bx.scripts.OnKeyUp(bx, "C")
-    lua.execute("TOUCHES.ctrl = false")
-    assert not bx.focused and Sel.texte is None
-    # un clic Alt sans glisser ne copie rien
     lua.execute("SOURIS_X, SOURIS_Y = 40 + 72, 194")
     cap.scripts.OnMouseDown(cap, "LeftButton")
     cap.scripts.OnMouseUp(cap, "LeftButton")
