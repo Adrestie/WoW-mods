@@ -403,10 +403,19 @@ if social then
 	end
 end
 
--- GuildMicroButtonMixin:UpdateTabard
-function ForeverUI.MajTabardSocial()
-	if not social then return end
-	local fond, motif, couleur = tabardDeGuilde()
+-- APRES UN CHANGEMENT D'EMBLEME (constate le 28/09) : a GUILDTABARD_UPDATE,
+-- GetGuildTabardFileNames ne rend rien tant que les nouvelles donnees de la
+-- guilde ne sont pas arrivees, et aucun evenement ne suit leur arrivee -- le
+-- bouton retombait sur son jeu de base et y restait. Dans une guilde, un
+-- tabard illisible laisse donc le visuel en place, et le tabard est relu
+-- toutes les RELECTURE s, RELECTURES fois apres chaque evenement ; la
+-- derniere lecture tranche (une guilde sans tabard : le jeu de base).
+local RELECTURE, RELECTURES = 0.5, 20
+local relecture = CreateFrame("Frame")
+relecture:Hide()
+ForeverUI.RelectureTabard = relecture
+
+local function appliquerTabard(fond, motif, couleur)
 	social.jeu = fond and (social.jeuBase .. "-guildcolor") or social.jeuBase
 	for etat, methode in pairs(ETATS_MICRO) do
 		local texture = social.bouton[methode] and social.bouton[methode](social.bouton)
@@ -433,11 +442,35 @@ function ForeverUI.MajTabardSocial()
 	etatMicro(social)
 end
 
+-- GuildMicroButtonMixin:UpdateTabard ; definitif : la derniere relecture
+function ForeverUI.MajTabardSocial(definitif)
+	if not social then return end
+	local fond, motif, couleur = tabardDeGuilde()
+	local enGuilde = IsInGuild and IsInGuild()
+	if fond or definitif or not enGuilde then
+		appliquerTabard(fond, motif, couleur)
+	end
+end
+
+relecture:SetScript("OnUpdate", function(self, ecoule)
+	self.attente = (self.attente or 0) + ecoule
+	if self.attente < RELECTURE then return end
+	self.attente = 0
+	self.restantes = (self.restantes or 0) - 1
+	local fin = self.restantes <= 0
+	ForeverUI.MajTabardSocial(fin)
+	if fin then self:Hide() end
+end)
+
 local veilleTabard = CreateFrame("Frame")
 for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_GUILD_UPDATE", "GUILDTABARD_UPDATE" }) do
 	veilleTabard:RegisterEvent(ev)
 end
-veilleTabard:SetScript("OnEvent", function() ForeverUI.MajTabardSocial() end)
+veilleTabard:SetScript("OnEvent", function()
+	ForeverUI.MajTabardSocial()
+	relecture.restantes, relecture.attente = RELECTURES, 0
+	relecture:Show()
+end)
 micro:SetWidth(LARGEUR_BOUTONS)
 
 -- LE BOUTON JcJ DU CLIENT S'EN VA (2026-09-26). Masquer ne suffit pas :

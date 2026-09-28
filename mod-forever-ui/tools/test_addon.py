@@ -15178,8 +15178,25 @@ def main():
     pe = list(list(e0.points.values())[-1].values())
     assert (pe[3], pe[4]) == (1, 1)
     lua.execute("SocialsMicroButton:SetButtonState('NORMAL'); UpdateMicroButtons()")
-    # la guilde quittee : le jeu de base, sans teinte ni embleme
+    # L'EMBLEME CHANGE (28/09) : le client ne rend rien le temps que les
+    # donnees de la guilde arrivent, et aucun evenement ne suit. Le bouton
+    # garde son visuel ; la relecture prend le nouveau tabard des qu'il est la
     lua.execute("TABARD = nil; ForeverUI.MajTabardSocial()")
+    assert list(n1.vertex.values()) == f5 and all(r.shown for r in emb), "dans une guilde, un tabard illisible ne remet pas le jeu de base"
+    rt = g.ForeverUI.RelectureTabard
+    lua.execute("ForeverUI.RelectureTabard.restantes = 20 ForeverUI.RelectureTabard.attente = 0 ForeverUI.RelectureTabard:Show()")
+    lua.execute("ForeverUI.RelectureTabard.scripts.OnUpdate(ForeverUI.RelectureTabard, 0.2)")
+    assert list(n1.vertex.values()) == f5, "rien avant la premiere relecture"
+    lua.execute("TABARD = { fond = '12', motif = '03', couleur = '02' } ForeverUI.RelectureTabard.scripts.OnUpdate(ForeverUI.RelectureTabard, 0.5)")
+    assert list(n1.vertex.values()) == list(tc.fond[12].values()) and list(e0.vertex.values()) == list(tc.embleme[2].values())
+    assert [round(x * 256, 3) for x in e0.texcoord.values()] == [55, 71, 1, 17], "le motif 3 : case (3, 0)"
+    # une guilde sans tabard : la derniere relecture remet le jeu de base
+    lua.execute("TABARD = nil for i = 1, 25 do ForeverUI.RelectureTabard.scripts.OnUpdate(ForeverUI.RelectureTabard, 0.5) end")
+    assert not rt.shown and list(n1.texcoord.values()) == [base[k] for k in (2, 3, 4, 5)] and not any(r.shown for r in emb)
+    # la guilde quittee : le jeu de base tout de suite, sans teinte ni embleme
+    lua.execute("TABARD = { fond = '05', motif = '29', couleur = '15' }; ForeverUI.MajTabardSocial()")
+    assert all(r.shown for r in emb)
+    lua.execute("local avant = IsInGuild; IsInGuild = function() return nil end; TABARD = nil; ForeverUI.MajTabardSocial(); IsInGuild = avant")
     assert list(n1.texcoord.values()) == [base[k] for k in (2, 3, 4, 5)] and list(n1.vertex.values()) == [1, 1, 1]
     assert not any(r.shown for r in emb)
 
@@ -17732,6 +17749,10 @@ def main():
     assert req(pts(inte.hg)[0][1], ext.hg) and pts(inte.hg)[0][2:] == ["TOPLEFT", 14, -35]
     assert req(pts(inte.bd)[0][1], ext.bd) and pts(inte.bd)[0][2:] == ["BOTTOMRIGHT", -9, 32]
     assert list(gh.noir.color.values()) == [0, 0, 0, 1] and pts(gh.noir)[0][2:] == ["TOPLEFT", 4, -4]
+    # l'ordre de camelot par les calques (3.3.5 n'a pas de sous-calque) :
+    # marbre, puis noir, puis les cadres du coffre
+    assert gh.marbre.layer == "BACKGROUND" and gh.noir.layer == "BORDER"
+    assert all(t.layer == "ARTWORK" for t in (ext.hg, ext.bd, inte.hg, gh.exterieur.gauche, gh.interieur.haut))
     assert gh.exterieur.gauche.texture.endswith("verttile") and pts(gh.exterieur.gauche)[0][2:] == ["BOTTOMLEFT", -3, 0]
     assert gh.croix and (gh.croix.width, gh.croix.height) == (24, 24)
     # les places

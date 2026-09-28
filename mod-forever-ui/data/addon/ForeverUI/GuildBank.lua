@@ -166,11 +166,15 @@ local function cadreSimple(f)
 end
 
 -- un cadre de Corners / VertTile / HorizTile : ses quatre coins places
--- depuis `relatif` (la fenetre, ou les coins du cadre exterieur)
+-- depuis `relatif` (la fenetre, ou les coins du cadre exterieur). EN
+-- ARTWORK : au-dessus du fond noir (BORDER), lui-meme au-dessus du marbre
+-- (BACKGROUND). Camelot range marbre et noir dans le meme calque, le noir un
+-- sous-calque plus haut ; 3.3.5 n'a pas de sous-calque, et le marbre passait
+-- devant le noir en jeu (journal, informations : 28/09).
 local function cadreCoffre(f, places, relatifs)
 	local coins = {}
 	for cle, point in pairs({ bg = "BOTTOMLEFT", bd = "BOTTOMRIGHT", hd = "TOPRIGHT", hg = "TOPLEFT" }) do
-		local t = f:CreateTexture(nil, "BORDER")
+		local t = f:CreateTexture(nil, "ARTWORK")
 		t:SetTexture(ART.coinsGB)
 		local c = COINS[cle]
 		t:SetTexCoord(c[1], c[2], c[3], c[4])
@@ -180,7 +184,7 @@ local function cadreCoffre(f, places, relatifs)
 		coins[cle] = t
 	end
 	local function bord(fichier, h, a1, c1, r1, x1, y1, a2, c2, r2, x2, y2)
-		local t = f:CreateTexture(nil, "BORDER")
+		local t = f:CreateTexture(nil, "ARTWORK")
 		mosaique(t, fichier, h, not h)
 		t:SetPoint(a1, c1, r1, x1, y1)
 		t:SetPoint(a2, c2, r2, x2, y2)
@@ -292,7 +296,9 @@ function G.Habiller()
 	habit.marbre = marbre
 	habit.exterieur = cadreCoffre(f, N.exterieur)
 	habit.interieur = cadreCoffre(f, N.interieur, habit.exterieur.coins)
-	local noir = f:CreateTexture(nil, "BACKGROUND")
+	-- le noir en BORDER : au-dessus du marbre et de la pierre, sous les
+	-- cadres du coffre (voir cadreCoffre)
+	local noir = f:CreateTexture(nil, "BORDER")
 	noir:SetTexture(0, 0, 0, 1)
 	noir:SetPoint("TOPLEFT", habit.interieur.coins.hg, "TOPLEFT", N.noir[1], N.noir[2])
 	noir:SetPoint("BOTTOMRIGHT", habit.interieur.coins.bd, "BOTTOMRIGHT", N.noir[3], N.noir[4])
