@@ -232,6 +232,7 @@ ForeverUI.AjouterTextes("enUS", {
 	-- PvPTab.lua
 	PVPTAB_CIVILIAN = "Civilian",
 	PVPTAB_DISHONORED_LEFT = "Dishonored: %s left",
+	PVPTAB_TOOLTIP_CIVILIAN = "Civilian",
 	PVPTAB_DEBUG_GAUGE = "gauge: start %s direction %s | %s",
 	PVPTAB_DEBUG_GAUGE_NOT_BUILT = "gauge: the screen is not built yet",
 	PVPTAB_DEBUG_HONOR = "honor: current=%d lifetime=%d bestRank=%d today=%d (%d) yesterday=%d (%d)",

@@ -232,6 +232,7 @@ ForeverUI.AjouterTextes("frFR", {
 	-- PvPTab.lua
 	PVPTAB_CIVILIAN = "Civil",
 	PVPTAB_DISHONORED_LEFT = "Déshonoré : encore %s",
+	PVPTAB_TOOLTIP_CIVILIAN = "Civil",
 	PVPTAB_DEBUG_GAUGE = "jauge : départ %s sens %s | %s",
 	PVPTAB_DEBUG_GAUGE_NOT_BUILT = "jauge : l'écran n'est pas encore monté",
 	PVPTAB_DEBUG_HONOR = "honneur : courant=%d vie=%d meilleurRang=%d aujourd'hui=%d (%d) hier=%d (%d)",

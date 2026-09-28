@@ -1015,6 +1015,59 @@ end)
 -- peut arriver avant l'interface, et un /reload l'efface. Seul le joueur
 -- lui-meme est ecoute : personne d'autre ne peut chuchoter en son nom.
 local PREFIXE_SERVEUR = "PVPTITLES"
+
+-- LES CIVILS DANS LES INFOBULLES (demande du 2026-09-28 : « il faut que les
+-- PNJ qui ont le flag de civil aient marque Civil dans leurs tooltips »).
+-- Le drapeau (CREATURE_FLAG_EXTRA_CIVILIAN) est une donnee du SERVEUR : la
+-- reponse a la requete de creature de 3.3.5 ne le porte pas (releve dans
+-- Creature.cpp, CreatureTemplate::InitializeQueryData). Le module le dit a
+-- la demande, sur ce canal :
+--   CIV:<entree>          chuchote a soi-meme
+--   CIV:<entree>:<0|1>    la reponse
+-- Le drapeau est celui du modele de creature : une reponse vaut pour toute
+-- la session, et une entree ne se demande qu'une fois. On ne demande rien
+-- a un serveur qui n'a pas dit ses seuils : il n'a pas le module.
+local CIVILS = {} -- entree -> true, false, ou "attente"
+
+-- l'entree se lit dans le GUID : 0xF130 (creature) ou 0xF150 (vehicule),
+-- l'entree sur six chiffres, puis le compteur (ObjectGuid : compteur |
+-- entree << 24 | haut << 48) ; un joueur ou un familier n'en a pas
+local function entreeCreature(unite)
+	local x = unite and string.match(UnitGUID(unite) or "", "^0x[Ff]1[35]0(%x%x%x%x%x%x)")
+	return x and tonumber(x, 16)
+end
+
+local function marquerCivil(bulle)
+	bulle:AddLine(L.PVPTAB_TOOLTIP_CIVILIAN, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
+	bulle:Show()
+end
+
+GameTooltip:HookScript("OnTooltipSetUnit", function(self)
+	local _, unite = self:GetUnit()
+	local entree = entreeCreature(unite)
+	if not entree then
+		return
+	end
+	if CIVILS[entree] == true then
+		marquerCivil(self)
+	elseif CIVILS[entree] == nil and SEUILS then
+		CIVILS[entree] = "attente"
+		SendAddonMessage(PREFIXE_SERVEUR, "CIV:" .. entree, "WHISPER", UnitName("player"))
+	end
+end)
+
+-- la reponse arrive l'infobulle deja montee : on la complete si elle montre
+-- encore cette creature
+local function civilRecu(entree, civil)
+	CIVILS[entree] = civil
+	if civil and GameTooltip:IsShown() then
+		local _, unite = GameTooltip:GetUnit()
+		if entreeCreature(unite) == entree then
+			marquerCivil(GameTooltip)
+		end
+	end
+end
+
 local canal = CreateFrame("Frame")
 canal:RegisterEvent("PLAYER_ENTERING_WORLD")
 canal:RegisterEvent("CHAT_MSG_ADDON")
@@ -1024,6 +1077,11 @@ canal:SetScript("OnEvent", function(_, evenement, prefixe, message, distribution
 		return
 	end
 	if prefixe ~= PREFIXE_SERVEUR or distribution ~= "WHISPER" or auteur ~= UnitName("player") then
+		return
+	end
+	local entree, civil = string.match(message or "", "^CIV:(%d+):([01])$")
+	if entree then
+		civilRecu(tonumber(entree), civil == "1")
 		return
 	end
 	local rangs = string.match(message or "", "^RANKS:(.+)$")
