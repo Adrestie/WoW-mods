@@ -465,13 +465,19 @@ function R.Liste(liste)
 			lueur:SetTexture(nil)
 			lueur:SetAlpha(0)
 		end
+		-- le choix et le survol debordent la ligne de 6 de chaque cote (187
+		-- pour 175) et SUIVENT SA LARGEUR : le client la retrecit de la place
+		-- de la barre quand elle parait (OptionsList_DisplayScrollBar), et ils
+		-- passaient dessous (regle du 28/09)
 		b.foreverActif = b:CreateTexture(nil, "BACKGROUND")
 		ForeverUI.SetAtlas(b.foreverActif, "options_list_active")
-		b.foreverActif:SetPoint("CENTER", b, "CENTER")
+		b.foreverActif:SetPoint("LEFT", b, "LEFT", -6, 0)
+		b.foreverActif:SetPoint("RIGHT", b, "RIGHT", 6, 0)
 		b.foreverActif:Hide()
 		b.foreverSurvol = b:CreateTexture(nil, "BACKGROUND")
 		ForeverUI.SetAtlas(b.foreverSurvol, "options_list_hover")
-		b.foreverSurvol:SetPoint("CENTER", b, "CENTER")
+		b.foreverSurvol:SetPoint("LEFT", b, "LEFT", -6, 0)
+		b.foreverSurvol:SetPoint("RIGHT", b, "RIGHT", 6, 0)
 		b.foreverSurvol:Hide()
 		b:HookScript("OnEnter", function(self)
 			self.foreverDessus = true

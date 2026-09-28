@@ -83,7 +83,7 @@ local G = {
 	titreX1 = 58, titreX2 = -24, titreY = -1, titreH = 20, titreTexteY = -5,
 	croix = 24, croixX = -2, croixY = 1,
 	encadreX1 = 4, encadreY1 = -83, encadreX2 = -6, encadreY2 = 26,
-	listeX = 8, listeY = -87, listeX2 = -22, listeY2 = 2,
+	listeX = 8, listeY = -87, listeX2 = -22, listeY2 = 2, listeX2Seule = -4,
 	boutonL = 134, boutonH = 21, boutonBas = 4, boutonGauche = 4, boutonDroite = -6,
 	ongletH = 32, ongletPremierX = 5, ongletPremierY = 2, ongletEcart = 3, ongletMarge = 20,
 	sousX = 18, sousY = -60, sousH = 24, sousMin = 100, sousMax = 150, sousEcart = 1,
@@ -1076,6 +1076,12 @@ local function construire()
 	S.barre.surDefilement = function(nouveau)
 		S.decalage = nouveau
 		S.poserListe()
+	end
+	-- sans barre, la liste va jusqu'au bord de l'encadre, comme celles de Qui
+	-- et de la guilde (regle du 28/09) ; les lignes, ancrees des deux cotes,
+	-- suivent
+	S.barre.surVisibilite = function(avec)
+		liste:SetPoint("BOTTOMRIGHT", encadre, "BOTTOMRIGHT", avec and G.listeX2 or G.listeX2Seule, G.listeY2)
 	end
 
 	-- les onglets du bas, sur la fenetre

@@ -77,6 +77,9 @@ local N = {
 	barreGrille = { x = -14, haut = -7, bas = 3 },
 	barre = { 16, 11 },                 -- largeur du Slider du client, hauteur d'une fleche
 	barreTexte = { x = 6, haut = -4, bas = 5 },
+	largeurTexte = 286,                 -- MacroFrameScrollFrame / Text / TextButton de 3.3.5
+	fondTexteL = 322,                   -- MacroFrameTextBackground (3.3.5 et camelot)
+	boutonMacro = 36,                   -- PopupButtonTemplate
 	trait = { 2, -210 },
 	choisi = { 5, -218 },
 	editer = { 55, -30 },
@@ -278,6 +281,16 @@ function M.Habiller()
 	sb:SetPoint("TOPLEFT", f, "TOPLEFT", G.x + barreX - demi, G.y + N.barreGrille.haut - N.barre[2])
 	sb:SetPoint("BOTTOMLEFT", f, "TOPLEFT", G.x + barreX - demi, G.y - G.h + N.barreGrille.bas + N.barre[2])
 	Gb.Barre(sb)
+	-- la barre seulement si elle sert (regle du 28/09 ; l'onglet du
+	-- personnage tient en trois rangees). Les icones sont de taille fixe :
+	-- sans barre, la grille se centre dans l'encadre, le meme espace a gauche
+	-- et a droite (demande du 28/09) ; avec elle, sa place de camelot
+	local largeurGrille = G.parRangee * N.boutonMacro + (G.parRangee - 1) * G.ecart
+	local encadreG, encadreD = N.encadre[1], N.fenetre[1] + N.encadre[3]
+	local centrage = ((encadreG + encadreD) - (2 * (G.x + G.marge) + largeurGrille)) / 2
+	Gb.BarreSelonContenu(grille, function(avec)
+		poser(MacroButton1, "TOPLEFT", MacroButtonContainer, "TOPLEFT", G.marge + (avec and 0 or centrage), -G.marge)
+	end)
 
 	-- la macro choisie
 	poser(MacroHorizontalBarLeft, "TOPLEFT", f, "TOPLEFT", N.trait[1], N.trait[2])
@@ -286,6 +299,17 @@ function M.Habiller()
 	poser(MacroFrameEnterMacroText, "TOPLEFT", MacroFrameSelectedMacroBackground, "BOTTOMLEFT", N.saisir[1], N.saisir[2])
 	poser(MacroFrameScrollFrame, "TOPLEFT", MacroFrameSelectedMacroBackground, "BOTTOMLEFT", N.texte[1], N.texte[2])
 	barreA(MacroFrameScrollFrameScrollBar, MacroFrameScrollFrame, N.barreTexte.x, N.barreTexte.haut, N.barreTexte.bas)
+	-- le texte : la barre seulement si elle sert, et sans elle le texte (et
+	-- sa zone de clic) s'etend jusqu'a laisser a droite de son fond la marge
+	-- qu'il a a gauche (fond 6 .. 328, texte a 16 : 302)
+	local texteG = N.choisi[1] + N.texte[1]
+	local texteSans = (N.fondTexte[1] + N.fondTexteL) - (texteG - N.fondTexte[1]) - texteG
+	Gb.BarreSelonContenu(MacroFrameScrollFrame, function(avec)
+		local l = avec and N.largeurTexte or texteSans
+		MacroFrameScrollFrame:SetWidth(l)
+		MacroFrameText:SetWidth(l)
+		MacroFrameTextButton:SetWidth(l)
+	end)
 	poser(MacroFrameTextBackground, "TOPLEFT", f, "TOPLEFT", N.fondTexte[1], N.fondTexte[2])
 	ForeverUI.Tooltips.Habiller(MacroFrameTextBackground)
 	poser(MacroFrameCharLimitText, "BOTTOM", f, "BOTTOM", N.limite[1], N.limite[2])

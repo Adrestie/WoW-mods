@@ -545,6 +545,13 @@ local function encadre(nom, indice)
 	barre:SetPoint("TOP", f, "TOPRIGHT", -25.5, -14 - 16)
 	barre:SetPoint("BOTTOM", f, "BOTTOMRIGHT", -25.5, 15 + 16)
 	barre.pas = 50
+	-- la barre seulement si elle sert (regle du 28/09) ; sans elle, la zone
+	-- s'etend jusqu'au bord droit qu'elle avait (-25,5 + 4 : -21,5), le texte
+	-- avec (voir remplir)
+	barre.cacherSiInutile = true
+	barre.surVisibilite = function(avec)
+		zone:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", avec and -35 or -21.5, 15)
+	end
 	barre.surDefilement = function(position)
 		zone:SetVerticalScroll(position)
 	end
@@ -556,43 +563,58 @@ local function encadre(nom, indice)
 	return f
 end
 
+-- le texte : 310 avec la barre ; sans elle, jusqu'au bord droit qu'avait la
+-- barre (44 + 324,5 = 368,5), comme la zone
+local TEXTE_L, TEXTE_SANS, VUE = 310, 324.5, 260 - 14 - 15
+
 -- lignes : { "espace" } | { "titre", texte } | { "texte", texte }
 local function remplir(f, lignes)
 	for _, fs in ipairs(f.lignes) do
 		fs:Hide()
 	end
-	local y, n = 0, 0
-	for i, l in ipairs(lignes) do
-		if i > 1 then
-			y = y + 10
-		end
-		if l[1] == "espace" then
-			y = y + 14
-		else
-			n = n + 1
-			local fs = f.lignes[n]
-			if not fs then
-				fs = f.contenu:CreateFontString(nil, "ARTWORK")
-				fs:SetWidth(310)
-				fs:SetJustifyH("LEFT")
-				f.lignes[n] = fs
+	-- une passe a une largeur donnee : rend la hauteur du contenu
+	local function disposer(largeur)
+		local y, n = 0, 0
+		for i, l in ipairs(lignes) do
+			if i > 1 then
+				y = y + 10
 			end
-			if l[1] == "titre" then
-				fs:SetFontObject(G.Police("GameFontNormalLarge2"))
-				fs:SetTextColor(1, 1, 1)
+			if l[1] == "espace" then
+				y = y + 14
 			else
-				fs:SetFontObject(G.Police("GameFontNormalLarge"))
-				fs:SetTextColor(1, 0.82, 0)
+				n = n + 1
+				local fs = f.lignes[n]
+				if not fs then
+					fs = f.contenu:CreateFontString(nil, "ARTWORK")
+					fs:SetJustifyH("LEFT")
+					f.lignes[n] = fs
+				end
+				fs:SetWidth(largeur)
+				if l[1] == "titre" then
+					fs:SetFontObject(G.Police("GameFontNormalLarge2"))
+					fs:SetTextColor(1, 1, 1)
+				else
+					fs:SetFontObject(G.Police("GameFontNormalLarge"))
+					fs:SetTextColor(1, 0.82, 0)
+				end
+				fs:SetText(l[2] or "")
+				fs:ClearAllPoints()
+				fs:SetPoint("TOPLEFT", f.contenu, "TOPLEFT", 0, -y)
+				fs:Show()
+				y = y + fs:GetHeight()
 			end
-			fs:SetText(l[2] or "")
-			fs:ClearAllPoints()
-			fs:SetPoint("TOPLEFT", f.contenu, "TOPLEFT", 0, -y)
-			fs:Show()
-			y = y + fs:GetHeight()
 		end
+		f.contenu:SetWidth(largeur)
+		return y
+	end
+	-- sans barre d'abord ; si le texte deborde, avec (plus etroit, il deborde
+	-- encore : la barre reste)
+	local y = disposer(TEXTE_SANS)
+	if y > VUE then
+		y = disposer(TEXTE_L)
 	end
 	f.contenu:SetHeight(math.max(1, y))
-	f.barre:Regler(y, 260 - 14 - 15, 0)
+	f.barre:Regler(y, VUE, 0)
 	f.zone:SetVerticalScroll(0)
 end
 

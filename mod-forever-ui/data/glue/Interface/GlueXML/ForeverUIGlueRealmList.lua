@@ -207,6 +207,24 @@ barre.surDefilement = function(position)
 	barreClient:SetValue(position)
 end
 
+-- LA BARRE SEULEMENT SI ELLE SERT, et sans elle le contenu garde a droite de
+-- l'encart (9 .. 612) la marge qu'il a a gauche (regle du 28/09) : la barre
+-- de la ligne choisie (a 22, marge 13) 577 -- le client la met a 587, a 3
+-- du bord --, les en-tetes (a 21, marge 12) jusqu'a 600 : la derniere
+-- colonne 138 -> 176, et la charge de chaque ligne, centree sous elle,
+-- d'autant (110 -> 148). Avec la barre, les largeurs du client.
+barre.cacherSiInutile = true
+local REALM = { choix = { 557, 577 }, charge = { 138, 176 }, chargeLigne = { 110, 148 } }
+local function selonBarre()
+	local k = barre:IsShown() and 1 or 2
+	RealmListHighlight:SetWidth(REALM.choix[k])
+	RealmLoadSort:SetWidth(REALM.charge[k])
+	for i = 1, LIGNES do
+		local t = _G["RealmListRealmButton" .. i .. "Load"]
+		if t then t:SetWidth(REALM.chargeLigne[k]) end
+	end
+end
+
 -- ------------------------------------------------------------ apres le client
 
 G.AccrocherFonction("RealmListUpdate", function()
@@ -223,4 +241,6 @@ G.AccrocherFonction("RealmListUpdate", function()
 	end
 	local total = GetNumRealms(RealmList.selectedCategory or 1) or 0
 	barre:Regler(total * HAUTEUR_LIGNE, LIGNES * HAUTEUR_LIGNE, (RealmList.offset or 0) * HAUTEUR_LIGNE)
+	-- apres GlueScrollFrame_Update, qui a pose la barre de choix a 557 / 587
+	selonBarre()
 end)

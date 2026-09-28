@@ -361,6 +361,8 @@ function CreateFrame(kind, name, parent, template)
     function f:SetScrollChild(c) self.scrollChild = c end
     function f:SetVerticalScroll(v) self.verticalScroll = v end
     function f:GetVerticalScroll() return self.verticalScroll or 0 end
+    -- la plage de defilement : ce qui depasse (le banc la pose en .plage)
+    function f:GetVerticalScrollRange() return self.plage or 0 end
     function f:SetFontObject(o) self.font = o end
     function f:GetCheckedTexture() return self._checked end
     function f:GetHighlightTexture() return self._highlight end
@@ -5773,9 +5775,10 @@ do
         for i = 1, 36 do boutonMacro("MacroButton" .. i, conteneur) end
         boutonPanneau("MacroEditButton", f, "Change Name/Icon")
         local texte = CreateFrame("ScrollFrame", "MacroFrameScrollFrame", f)
+        texte:SetWidth(286) texte:SetHeight(85)
         barre(texte)
-        CreateFrame("EditBox", "MacroFrameText", texte)
-        CreateFrame("Button", "MacroFrameTextButton", f)
+        CreateFrame("EditBox", "MacroFrameText", texte):SetWidth(286)
+        CreateFrame("Button", "MacroFrameTextButton", f):SetWidth(286)
         local fondTexte = CreateFrame("Frame", "MacroFrameTextBackground", f)
         fondTexte:SetBackdrop({ bgFile = fichier("Interface", "Tooltips", "UI-Tooltip-Background"), edgeFile = fichier("Interface", "Tooltips", "UI-Tooltip-Border") })
         for i, t in ipairs({ "General Macros", "Character Macros" }) do
@@ -6833,9 +6836,15 @@ do
     sm:CreateTexture("SendMailHorizontalBarLeft2", "BACKGROUND"):SetPoint("TOPLEFT", sm, "TOPLEFT", 15, -251)
     local sf = defilement("SendMailScrollFrame", sm, 296, 257, "SendScrollBarBackgroundTop", "ARTWORK")
     sf:SetPoint("TOPLEFT", sm, "TOPLEFT", 21, -97)
-    sf:CreateTexture("SendStationeryBackgroundLeft", "BACKGROUND")
-    sf:CreateTexture("SendStationeryBackgroundRight", "BACKGROUND")
-    CreateFrame("Frame", "SendMailScrollChildFrame", sf)
+    -- la page : 252 + 64 (MailFrame.xml), la droite a la suite de la gauche
+    local pg = sf:CreateTexture("SendStationeryBackgroundLeft", "BACKGROUND")
+    pg:SetWidth(252) pg:SetHeight(256) pg:SetPoint("TOPLEFT", sf, "TOPLEFT", 0, 0)
+    local pd = sf:CreateTexture("SendStationeryBackgroundRight", "BACKGROUND")
+    pd:SetWidth(64) pd:SetHeight(256) pd:SetPoint("TOPLEFT", pg, "TOPRIGHT", 0, 0)
+    local sc = CreateFrame("Frame", "SendMailScrollChildFrame", sf)
+    sc:SetWidth(300) sc:SetHeight(255)
+    local corps = CreateFrame("EditBox", "SendMailBodyEditBox", sc)
+    corps:SetWidth(270) corps:SetHeight(200)
     local nom = CreateFrame("EditBox", "SendMailNameEditBox", sm)
     nom:SetWidth(109) nom:SetHeight(20)
     nom:SetPoint("TOPLEFT", sm, "TOPLEFT", 105, -46)
@@ -6880,7 +6889,13 @@ do
     spam:SetPoint("TOPRIGHT", o, "TOPRIGHT", -45, -45)
     local of = defilement("OpenMailScrollFrame", o, 296, 257, "OpenScrollBarBackgroundTop", "OVERLAY")
     of:SetPoint("TOPLEFT", o, "TOPLEFT", 21, -97)
-    CreateFrame("Frame", "OpenMailScrollChildFrame", of)
+    local opg = of:CreateTexture("OpenStationeryBackgroundLeft", "BACKGROUND")
+    opg:SetWidth(252) opg:SetHeight(256) opg:SetPoint("TOPLEFT", of, "TOPLEFT", 0, 0)
+    local opd = of:CreateTexture("OpenStationeryBackgroundRight", "BACKGROUND")
+    opd:SetWidth(64) opd:SetHeight(256) opd:SetPoint("TOPLEFT", opg, "TOPRIGHT", 0, 0)
+    local oc = CreateFrame("Frame", "OpenMailScrollChildFrame", of)
+    oc:SetWidth(296) oc:SetHeight(255)
+    oc:CreateFontString("OpenMailBodyText", "BACKGROUND"):SetWidth(276)
     for i = 1, 16 do
         local b = CreateFrame("Button", "OpenMailAttachmentButton" .. i, o)
         b:SetWidth(37) b:SetHeight(37)
@@ -7064,7 +7079,9 @@ do
         end
         CreateFrame("Frame", "GuildBankTab1", f):SetPoint("TOPLEFT", f, "TOPRIGHT", -1, -32)
         local log = CreateFrame("Frame", "GuildBankFrameLog", f)
-        CreateFrame("ScrollingMessageFrame", "GuildBankMessageFrame", log):SetPoint("TOPLEFT", log, "TOPLEFT", 33, -73)
+        local msg = CreateFrame("ScrollingMessageFrame", "GuildBankMessageFrame", log)
+        msg:SetPoint("TOPLEFT", log, "TOPLEFT", 33, -73)
+        msg:SetWidth(688) msg:SetHeight(304)
         local fx = CreateFrame("ScrollFrame", "GuildBankTransactionsScrollFrame", log)
         fx:SetPoint("TOPRIGHT", f, "TOPRIGHT", -50, -75)
         fx:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
@@ -7075,6 +7092,9 @@ do
                 local info = CreateFrame("Frame", "GuildBankInfo", f)
                 info:SetPoint("TOPLEFT", f, "TOPLEFT", 32, -74)
                 parent = CreateFrame("ScrollFrame", "GuildBankInfoScrollFrame", info)
+                parent:SetWidth(691) parent:SetHeight(306)
+                local champ = CreateFrame("EditBox", "GuildBankTabInfoEditBox", parent)
+                champ:SetWidth(690) champ:SetHeight(218)
                 CreateFrame("Button", "GuildBankInfoSaveButton", info):SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 25, 37)
             end
             local sb = CreateFrame("Slider", n .. "ScrollBar", parent)
@@ -7110,6 +7130,281 @@ do
         end
         return avant(nom)
     end
+end
+
+-- LE DIALOGUE ET LA QUETE DU CLIENT (GossipFrame.xml / .lua, QuestFrame.xml
+-- / .lua, QuestFrameTemplates.xml, QuestInfo.lua de 3.3.5, FrameXML : bati
+-- avant l'addon) : les cadres, noms, tailles et ancrages que l'addon touche,
+-- et les fonctions qu'il suit. OBJETS_QUETE[type][i] = { nom, texture,
+-- nombre, qualite }.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    MAX_NUM_ITEMS, MAX_REQUIRED_ITEMS, NUMGOSSIPBUTTONS = 10, 6, 32
+    GOODBYE, ACCEPT, DECLINE, CANCEL, CONTINUE, COMPLETE_QUEST = "Goodbye", "Accept", "Decline", "Cancel", "Continue", "Complete Quest"
+    OBJETS_QUETE = { choice = {}, reward = {}, required = {} }
+    NOM_PNJ = "Innkeeper Allison"
+    function GetQuestItemInfo(genre, i)
+        local o = OBJETS_QUETE[genre] and OBJETS_QUETE[genre][i]
+        if not o then return nil end
+        return o[1], o[2], o[3] or 1, o[4], true
+    end
+    local function croix(nom, parent)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(32) b:SetHeight(32)
+        b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+        return b
+    end
+    -- GossipFramePanelTemplate / QuestFramePanelTemplate
+    local function panneau(nom, parent, patch)
+        local p = CreateFrame("Frame", nom, parent)
+        p:SetWidth(384) p:SetHeight(512)
+        p:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+        for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft" }) do
+            p:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "QuestFrame", "UI-QuestGreeting-" .. n))
+        end
+        p:CreateTexture(nom .. "BotRight", "BACKGROUND"):SetTexture(fichier("Interface", "QuestFrame", "UI-QuestGreeting-BotRight"))
+        local hg = p:CreateTexture(nom .. "MaterialTopLeft", "BORDER")
+        hg:SetWidth(239) hg:SetHeight(241)
+        hg:SetPoint("TOPLEFT", p, "TOPLEFT", 21, -75)
+        for _, v in ipairs({ { "TopRight", 64, 241 }, { "BotLeft", 239, 128 }, { "BotRight", 64, 128 } }) do
+            local t = p:CreateTexture(nom .. "Material" .. v[1], "BORDER")
+            t:SetWidth(v[2]) t:SetHeight(v[3])
+        end
+        if patch then
+            p:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "QuestFrame", "UI-Quest-BotLeftPatch"))
+        end
+        return p
+    end
+    -- UIPanelScrollFrameTemplate : la barre, ses fleches
+    local function defile(nom, parent, enfant, hEnfant)
+        local fx = CreateFrame("ScrollFrame", nom, parent)
+        fx:SetWidth(300) fx:SetHeight(334)
+        local sb = CreateFrame("Slider", nom .. "ScrollBar", fx)
+        sb:SetWidth(16)
+        sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+        for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+            CreateFrame("Button", sb:GetName() .. s, sb):SetNormalTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Up"))
+        end
+        local c = CreateFrame("Frame", enfant, fx)
+        c:SetWidth(300) c:SetHeight(hEnfant or 334)
+        return fx, c
+    end
+    local function bouton(nom, parent, l)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(l) b:SetHeight(22)
+        return b
+    end
+    -- LargeItemButtonTemplate
+    local function objet(nom, parent, id)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(147) b:SetHeight(41)
+        b:SetID(id)
+        local ic = b:CreateTexture(nom .. "IconTexture", "BACKGROUND")
+        ic:SetWidth(39) ic:SetHeight(39)
+        b:CreateTexture(nom .. "NameFrame", "BACKGROUND"):SetTexture(fichier("Interface", "QuestFrame", "UI-QuestItemNameFrame"))
+        b:CreateFontString(nom .. "Name", "BACKGROUND")
+        b:Hide()
+        return b
+    end
+
+    -- le dialogue
+    local g = CreateFrame("Frame", "GossipFrame", UIParent)
+    g:SetWidth(384) g:SetHeight(512)
+    g:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    g:SetHitRectInsets(0, 30, 0, 70)
+    g:CreateTexture("GossipFramePortrait", "ARTWORK"):SetPoint("TOPLEFT", g, "TOPLEFT", 7, -6)
+    local nf = CreateFrame("Frame", "GossipNpcNameFrame", g)
+    nf:CreateFontString("GossipFrameNpcNameText", "BACKGROUND")
+    croix("GossipFrameCloseButton", g):SetPoint("CENTER", g, "TOPRIGHT", -42, -31)
+    local gp = panneau("GossipFrameGreetingPanel", g, true)
+    bouton("GossipFrameGreetingGoodbyeButton", gp, 78):SetPoint("BOTTOMRIGHT", g, "BOTTOMRIGHT", -39, 73)
+    local gfx = defile("GossipGreetingScrollFrame", gp, "GossipGreetingScrollChildFrame")
+    gfx:SetPoint("TOPLEFT", g, "TOPLEFT", 23, -81)
+    GossipGreetingScrollChildFrame:CreateFontString("GossipGreetingText", "ARTWORK"):SetWidth(270)
+    for i = 1, NUMGOSSIPBUTTONS do
+        local b = CreateFrame("Button", "GossipTitleButton" .. i, GossipGreetingScrollChildFrame)
+        b:SetWidth(300) b:SetHeight(16)
+        b:SetFontString(b:CreateFontString(nil, "ARTWORK"))
+        b:GetFontString():SetWidth(275)
+    end
+    function GossipFrameUpdate()
+        GossipFrameNpcNameText:SetText(UnitName("npc"))
+        if UnitExists("npc") then
+            SetPortraitTexture(GossipFramePortrait, "npc")
+        else
+            GossipFramePortrait:SetTexture(fichier("Interface", "QuestFrame", "UI-QuestLog-BookIcon"))
+        end
+    end
+    g:Hide()
+
+    -- la quete
+    local q = CreateFrame("Frame", "QuestFrame", UIParent)
+    q:SetWidth(384) q:SetHeight(512)
+    q:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    q:SetHitRectInsets(0, 30, 0, 70)
+    q:CreateTexture("QuestFramePortrait", "ARTWORK"):SetPoint("TOPLEFT", q, "TOPLEFT", 7, -6)
+    local qn = CreateFrame("Frame", "QuestNpcNameFrame", q)
+    qn:CreateFontString("QuestFrameNpcNameText", "BACKGROUND")
+    croix("QuestFrameCloseButton", q):SetPoint("CENTER", q, "TOPRIGHT", -42, -31)
+    local rp = panneau("QuestFrameRewardPanel", q)
+    bouton("QuestFrameCancelButton", rp, 78):SetPoint("BOTTOMRIGHT", q, "BOTTOMRIGHT", -39, 73)
+    bouton("QuestFrameCompleteQuestButton", rp, 120):SetPoint("BOTTOMLEFT", q, "BOTTOMLEFT", 22, 72)
+    defile("QuestRewardScrollFrame", rp, "QuestRewardScrollChildFrame"):SetPoint("TOPLEFT", q, "TOPLEFT", 23, -81)
+    local pp = panneau("QuestFrameProgressPanel", q)
+    bouton("QuestFrameGoodbyeButton", pp, 78):SetPoint("BOTTOMRIGHT", q, "BOTTOMRIGHT", -39, 73)
+    bouton("QuestFrameCompleteButton", pp, 120):SetPoint("BOTTOMLEFT", q, "BOTTOMLEFT", 22, 72)
+    defile("QuestProgressScrollFrame", pp, "QuestProgressScrollChildFrame"):SetPoint("TOPLEFT", q, "TOPLEFT", 23, -81)
+    QuestProgressScrollChildFrame:CreateFontString("QuestProgressTitleText", "BACKGROUND"):SetPoint("TOPLEFT", QuestProgressScrollChildFrame, "TOPLEFT", 5, -10)
+    for i = 1, 6 do objet("QuestProgressItem" .. i, QuestProgressScrollChildFrame, i) end
+    local dp = panneau("QuestFrameDetailPanel", q)
+    bouton("QuestFrameDeclineButton", dp, 78):SetPoint("BOTTOMRIGHT", q, "BOTTOMRIGHT", -39, 72)
+    bouton("QuestFrameAcceptButton", dp, 77):SetPoint("BOTTOMLEFT", q, "BOTTOMLEFT", 23, 72)
+    defile("QuestDetailScrollFrame", dp, "QuestDetailScrollChildFrame"):SetPoint("TOPLEFT", q, "TOPLEFT", 23, -81)
+    local ap = panneau("QuestFrameGreetingPanel", q, true)
+    bouton("QuestFrameGreetingGoodbyeButton", ap, 78):SetPoint("BOTTOMRIGHT", q, "BOTTOMRIGHT", -39, 73)
+    defile("QuestGreetingScrollFrame", ap, "QuestGreetingScrollChildFrame"):SetPoint("TOPLEFT", q, "TOPLEFT", 23, -81)
+    -- QuestInfo : ses objets de recompense, ses textes et cadres de largeur
+    -- fixe (QuestInfo.xml : 285, QuestInfoFrame 300)
+    local qi = CreateFrame("Frame", "QuestInfoFrame", UIParent)
+    qi:SetWidth(300) qi:SetHeight(100)
+    for i = 1, 10 do objet("QuestInfoItem" .. i, qi, i) end
+    for _, n in ipairs({ "QuestInfoTitleHeader", "QuestInfoObjectivesText", "QuestInfoRewardText", "QuestInfoDescriptionHeader",
+        "QuestInfoObjectivesHeader", "QuestInfoDescriptionText", "QuestInfoTimerText", "QuestInfoRewardsHeader",
+        "QuestInfoItemChooseText", "QuestInfoReputationText" }) do
+        qi:CreateFontString(n, "BACKGROUND"):SetWidth(285)
+    end
+    for _, n in ipairs({ "QuestInfoObjectivesFrame", "QuestInfoRewardsFrame", "QuestInfoReputationsFrame", "QuestInfoRequiredMoneyFrame" }) do
+        CreateFrame("Frame", n, qi):SetWidth(285)
+    end
+    for i = 1, 10 do QuestInfoObjectivesFrame:CreateFontString("QuestInfoObjective" .. i, "BACKGROUND"):SetWidth(285) end
+    -- la progression et l'accueil
+    QuestProgressScrollChildFrame:CreateFontString("QuestProgressText", "BACKGROUND"):SetWidth(275)
+    QuestProgressScrollChildFrame:CreateFontString("QuestProgressRequiredItemsText", "BACKGROUND"):SetWidth(295)
+    QuestProgressTitleText:SetWidth(285)
+    for _, v in ipairs({ { "GreetingText", 270 }, { "CurrentQuestsText", 300 }, { "AvailableQuestsText", 300 } }) do
+        QuestGreetingScrollChildFrame:CreateFontString(v[1], "BACKGROUND"):SetWidth(v[2])
+    end
+    for i = 1, 32 do
+        local b = CreateFrame("Button", "QuestTitleButton" .. i, QuestGreetingScrollChildFrame)
+        b:SetWidth(300) b:SetHeight(16)
+        b:SetFontString(b:CreateFontString(nil, "ARTWORK"))
+        b:GetFontString():SetWidth(275)
+    end
+    function QuestFrame_SetPortrait()
+        QuestFrameNpcNameText:SetText(UnitName("questnpc"))
+        if UnitExists("questnpc") then
+            SetPortraitTexture(QuestFramePortrait, "questnpc")
+        else
+            QuestFramePortrait:SetTexture(fichier("Interface", "QuestFrame", "UI-QuestLog-BookIcon"))
+        end
+    end
+    -- ce que QuestInfo_ShowRewards fait des objets (choix puis recompenses)
+    function QuestInfo_ShowRewards()
+        local index = 0
+        for _, genre in ipairs({ "choice", "reward" }) do
+            for i, o in ipairs(OBJETS_QUETE[genre]) do
+                index = index + 1
+                local b = _G["QuestInfoItem" .. index]
+                b.type = genre
+                b:SetID(i)
+                b:Show()
+                _G["QuestInfoItem" .. index .. "Name"]:SetText(o[1])
+            end
+        end
+        for i = index + 1, MAX_NUM_ITEMS do _G["QuestInfoItem" .. i]:Hide() end
+    end
+    function QuestFrameProgressItems_Update()
+        local n = #OBJETS_QUETE.required
+        for i = 1, n do
+            local b = _G["QuestProgressItem" .. i]
+            b.type = "required"
+            b:Show()
+        end
+        for i = n + 1, MAX_REQUIRED_ITEMS do _G["QuestProgressItem" .. i]:Hide() end
+    end
+    q:Hide()
+
+    -- livres et lettres (ItemTextFrame.xml)
+    local it = CreateFrame("Frame", "ItemTextFrame", UIParent)
+    it:SetWidth(384) it:SetHeight(512)
+    it:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    it:SetHitRectInsets(0, 30, 0, 70)
+    it:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "Spellbook", "Spellbook-Icon"))
+    for _, n in ipairs({ "ItemTextFrame" .. S .. "UI-ItemText-TopLeft", "Spellbook" .. S .. "UI-SpellbookPanel-TopRight",
+        "ItemTextFrame" .. S .. "UI-ItemText-BotLeft", "Spellbook" .. S .. "UI-SpellbookPanel-BotRight" }) do
+        it:CreateTexture(nil, "BORDER"):SetTexture("Interface" .. S .. n)
+    end
+    local mhg = it:CreateTexture("ItemTextMaterialTopLeft", "ARTWORK")
+    mhg:SetWidth(256) mhg:SetHeight(256)
+    mhg:SetPoint("TOPLEFT", it, "TOPLEFT", 21, -75)
+    for _, v in ipairs({ { "TopRight", 64, 256 }, { "BotLeft", 256, 128 }, { "BotRight", 64, 128 } }) do
+        local t = it:CreateTexture("ItemTextMaterial" .. v[1], "ARTWORK")
+        t:SetWidth(v[2]) t:SetHeight(v[3])
+    end
+    it:CreateFontString("ItemTextTitleText", "OVERLAY"):SetPoint("CENTER", it, "CENTER", 6, 230)
+    it:CreateFontString("ItemTextCurrentPage", "OVERLAY"):SetPoint("TOP", it, "TOP", 10, -50)
+    local ifx = defile("ItemTextScrollFrame", it, "ItemTextPageScrollChild")
+    ifx:SetWidth(280) ifx:SetHeight(355)
+    ifx:SetPoint("TOPRIGHT", it, "TOPRIGHT", -66, -76)
+    ifx.scrollBarHideable = 1
+    for _, s in ipairs({ "Top", "Bottom" }) do
+        ifx:CreateTexture("ItemTextScrollFrame" .. s, "ARTWORK"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+    end
+    ifx:CreateTexture("ItemTextScrollFrameMiddle", "BACKGROUND")
+    local pt = CreateFrame("SimpleHTML", "ItemTextPageText", ItemTextPageScrollChild)
+    pt:SetWidth(270) pt:SetHeight(304)
+    pt:SetPoint("TOPLEFT", ItemTextPageScrollChild, "TOPLEFT", 0, -15)
+    bouton("ItemTextPrevPageButton", it, 32):SetPoint("CENTER", it, "TOPLEFT", 90, -56)
+    bouton("ItemTextNextPageButton", it, 32):SetPoint("CENTER", it, "TOPRIGHT", -55, -56)
+    croix("ItemTextCloseButton", it):SetPoint("CENTER", it, "TOPRIGHT", -45, -26)
+    it:Hide()
+
+    -- la petition (PetitionFrame.xml)
+    local pf = CreateFrame("Frame", "PetitionFrame", UIParent)
+    pf:SetWidth(384) pf:SetHeight(512)
+    pf:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    pf:SetHitRectInsets(0, 30, 0, 70)
+    local pp2 = pf:CreateTexture("PetitionFramePortrait", "BACKGROUND")
+    pp2:SetTexture(fichier("Interface", "PetitionFrame", "GuildCharter-Icon"))
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        pf:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "QuestFrame", "UI-QuestGreeting-" .. n))
+    end
+    pf:CreateFontString("PetitionFrameCharterTitle", "ARTWORK"):SetPoint("TOPLEFT", pf, "TOPLEFT", 30, -95)
+    CreateFrame("Frame", "PetitionNpcNameFrame", pf):CreateFontString("PetitionFrameNpcNameText", "BACKGROUND")
+    bouton("PetitionFrameCancelButton", pf, 75):SetPoint("BOTTOMRIGHT", pf, "BOTTOMRIGHT", -40, 72)
+    bouton("PetitionFrameSignButton", pf, 110):SetPoint("BOTTOMLEFT", pf, "BOTTOMLEFT", 22, 72)
+    bouton("PetitionFrameRequestButton", pf, 140):SetPoint("BOTTOMLEFT", pf, "BOTTOMLEFT", 22, 72)
+    croix("PetitionFrameCloseButton", pf):SetPoint("CENTER", pf, "TOPRIGHT", -42, -30)
+    function PetitionFrame_Update()
+        PetitionFrameNpcNameText:SetFormattedText("%s Charter", "Papota")
+    end
+    pf:Hide()
+
+    -- le registre de guilde (GuildRegistrarFrame.xml)
+    local gr = CreateFrame("Frame", "GuildRegistrarFrame", UIParent)
+    gr:SetWidth(384) gr:SetHeight(512)
+    gr:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    gr:SetHitRectInsets(0, 30, 0, 70)
+    gr:CreateTexture("GuildRegistrarFramePortrait", "BACKGROUND"):SetPoint("TOPLEFT", gr, "TOPLEFT", 7, -6)
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        gr:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "QuestFrame", "UI-QuestGreeting-" .. n))
+    end
+    CreateFrame("Frame", "GuildRegistrarNpcNameFrame", gr):CreateFontString("GuildRegistrarFrameNpcNameText", "BACKGROUND")
+    croix("GuildRegistrarFrameCloseButton", gr):SetPoint("CENTER", gr, "TOPRIGHT", -42, -30)
+    local gg = CreateFrame("Frame", "GuildRegistrarGreetingFrame", gr)
+    gg:CreateFontString("AvailableServicesText", "BACKGROUND"):SetPoint("TOPLEFT", gg, "TOPLEFT", 35, -100)
+    gg:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "QuestFrame", "UI-Quest-BotLeftPatch"))
+    bouton("GuildRegistrarFrameGoodbyeButton", gg, 75):SetPoint("BOTTOMRIGHT", gr, "BOTTOMRIGHT", -40, 72)
+    local ga = CreateFrame("Frame", "GuildRegistrarPurchaseFrame", gr)
+    ga:CreateFontString("GuildRegistrarPurchaseText", "ARTWORK"):SetPoint("TOPLEFT", ga, "TOPLEFT", 35, -95)
+    bouton("GuildRegistrarFrameCancelButton", ga, 75):SetPoint("BOTTOMRIGHT", gr, "BOTTOMRIGHT", -40, 72)
+    bouton("GuildRegistrarFramePurchaseButton", ga, 85):SetPoint("BOTTOMLEFT", gr, "BOTTOMLEFT", 22, 72)
+    function GuildRegistrar_OnShow()
+        SetPortraitTexture(GuildRegistrarFramePortrait, "NPC")
+        GuildRegistrarFrameNpcNameText:SetText(UnitName("NPC"))
+    end
+    gr:Hide()
 end
 
 -- L'HOTEL DES VENTES DU CLIENT (Blizzard_AuctionUI.xml, -Templates.xml et
@@ -7537,7 +7832,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -9206,7 +9501,8 @@ def main():
     assert (pl[4], pl[5]) == (10, -40), "TOPLEFT du volet (10, -40)"
     p1 = r1.points[len(list(r1.points.values()))]
     # SetPadding : 10 de marge, et le retrait du gabarit en plus.
-    assert r1.width == 363 - 2 * 10, "la liste moins ses deux marges de 10"
+    assert r1.width == 378 - 2 * 10, "la liste moins ses deux marges de 10 (sans barre, elle prend sa place : 363 + 15)"
+    assert liste.points[len(list(liste.points.values()))][4] == -10, "sans barre, bord droit a la marge de gauche"
     assert (p1[4], p1[5]) == (10, -10), "TOPLEFT du panneau, decale de la marge"
     assert not g.ReputationBar1.shown, "les lignes du client s en vont"
 
@@ -9392,6 +9688,8 @@ def main():
     print("   40 lignes, 10 tiennent : visible=%s, curseur %s" % (
         barre.shown, barre.curseur.shown))
     assert barre.shown and barre.curseur.shown, "elle parait"
+    pl2 = liste.points[len(list(liste.points.values()))]
+    assert pl2[4] == -25 and liste.width == 363 and r1.width == 363 - 2 * 10, "avec la barre : les bornes de camelot"
     # LES DEUX BOUTS DU CURSEUR SONT LE MEME MORCEAU, le second RETOURNE :
     # celui que la source nomme "bottom" est un degrade, pas un embout, et
     # faisait fondre le curseur dans le noir de la glissiere.
@@ -9572,6 +9870,15 @@ def main():
     assert restants == [], "il en reste : %s" % restants
     assert g.ForeverUISkillList.shown, "mais notre panneau, lui, demeure"
     assert g.ForeverUISkillRow1.shown, "et nos lignes avec"
+    # tout tient : pas de barre, la liste prend sa place (bord droit a -10)
+    sl = g.ForeverUISkillList
+    assert not g.ForeverUISkillsScrollBar.shown
+    assert sl.points[len(list(sl.points.values()))][4] == -10 and sl.width == 378
+    sb_ = g.ForeverUISkillsScrollBar
+    sb_.Regler(sb_, 40, 10, 0)
+    assert sb_.shown and sl.points[len(list(sl.points.values()))][4] == -25 and sl.width == 363
+    g.ForeverUI.SkillsLayout()
+    assert not sb_.shown and sl.width == 378
 
     # REPLIER un en-tete raccourcit la liste, comme pour la reputation.
     avant = [l.nom.text for l in g.ForeverUI.SkillsTab.Rows.values() if l.shown]
@@ -9708,7 +10015,7 @@ def main():
     pl2 = liste.points[2]
     print("   monnaies : panneau (%s, %s) a (%s, %s)" % (
         pl[4], pl[5], pl2[4], pl2[5]))
-    assert (pl[4], pl[5]) == (10, -40) and (pl2[4], pl2[5]) == (-25, 15),         "les memes bornes que la reputation"
+    assert (pl[4], pl[5]) == (10, -40) and (pl2[4], pl2[5]) == (-10, 15),         "pas de barre : la liste va jusqu a la marge de droite"
 
     rangs = {}
     rang = 1
@@ -14524,9 +14831,12 @@ def main():
     barre = g.ForeverUISocialScrollBar
     print("   defilement : %d entrees, %d visibles, barre %s" % (len(list(S.contenu.values())), S.visibles, barre.shown))
     assert S.visibles < len(list(S.contenu.values())) and barre.shown
+    sl = g.ForeverUISocialList
+    assert list(sl.points[len(list(sl.points.values()))].values())[3] == -22, "avec la barre : sa place laissee"
     g.ForeverUISocialList.scripts.OnMouseWheel(g.ForeverUISocialList, -1)
     assert S.decalage == 1 and lignes[0].nom.text.startswith("Bob")
     lua.execute("for i = 1, 17 do table.remove(AMIS, 3) end; ForeverUI.Social.decalage = 0; ForeverUI.Social.maj()")
+    assert not barre.shown and list(sl.points[len(list(sl.points.values()))].values())[3] == -4, "sans barre : jusqu'au bord de l'encadre"
 
     # LES AUTRES ONGLETS : notre fenetre reste, sa page change ; WotLK se tait
     def appels(nom):
@@ -14638,14 +14948,18 @@ def main():
     print("   en-tetes : %s, largeurs %s" % ([h.texte.text for h in ent], [h.width for h in ent]))
     assert [h.texte.text for h in ent] == ["Level", "Class", "Name", "Zone", "Rank"] and g.ForeverUIGuildColumn6 is None
     assert [h.width for h in ent[:4]] == [40, 45, 100, 100]
-    pn6 = list(ent[4].points[2].values())
-    assert (pn6[0], pn6[1].name, pn6[2], pn6[3]) == ("BOTTOMRIGHT", "ForeverUIGuildList", "TOPRIGHT", -6)
+    # la derniere colonne au bord de la liste : sans barre a +1 (en-tetes a 4
+    # de l'encadre de chaque cote), avec elle a -6
+    pn6 = list(ent[4].points[len(list(ent[4].points.values()))].values())
+    assert (pn6[0], pn6[1].name, pn6[2], pn6[3]) == ("BOTTOMRIGHT", "ForeverUIGuildList", "TOPRIGHT", 1)
     # la colonne Note suit la liste, et la liste suit la barre
     bdg = [list(p.values())[3] for p in Gu.liste.points.values() if list(p.values())[0] == "BOTTOMRIGHT"]
     lua.execute("ForeverUIGuildList.hauteurDefaut = 40; ForeverUI.Social.Guild.maj()")
     bdg2 = [list(p.values())[3] for p in Gu.liste.points.values() if list(p.values())[0] == "BOTTOMRIGHT"]
     print("   Guilde : bord droit sans barre %s, avec barre %s" % (bdg, bdg2))
-    assert bdg == [-4] and bdg2 == [-22]
+    assert bdg == [-5] and bdg2 == [-22], "sans barre, a 5 de l'encadre comme a gauche"
+    pn6 = list(ent[4].points[len(list(ent[4].points.values()))].values())
+    assert pn6[3] == -6, "avec la barre, la colonne de camelot"
     lua.execute("ForeverUIGuildList.hauteurDefaut = nil; ForeverUI.Social.Guild.maj()")
     ent[4].scripts.OnClick(ent[4])
     ent[1].scripts.OnClick(ent[1])
@@ -14698,6 +15012,7 @@ def main():
     Gu.info.scripts.OnClick(Gu.info)
     inf = g.ForeverUIGuildInfoFrame
     assert inf.shown and g.ForeverUIGuildInfoEditBox.text == "Bienvenue"
+    assert g.ForeverUIGuildInfoEditBox.width == 264, "pas de barre : toute la largeur, 6 de chaque cote"
     # Log a gauche, Accept et Close contre le bord droit : plus de chevauchement
     ib = g.ForeverUI.Social.Guild.infoBoutons
     pj, pac, pf = [list(ib[k].points[1].values()) for k in ("journal", "accepter", "fermer")]
@@ -14713,6 +15028,10 @@ def main():
     assert ev.shown and not inf.shown, "une annexe a la fois"
     assert lj[0].texte.text.startswith("Moi promotes Bea to Member") and lj[1].texte.text.startswith("Bea joins the guild")
     assert appels("QueryGuildEventLog")
+    # deux evenements tiennent : pas de barre, la liste va a 4 du bord
+    el = g.ForeverUIGuildEventList
+    assert not g.ForeverUIGuildEventListScrollBar.shown
+    assert list(el.points[len(list(el.points.values()))].values())[2:] == ["BOTTOMRIGHT", -4, 4]
 
 
     # LA FENETRE DE CONTROLE DE GUILDE, habillee : plus de MacroPopup, le
@@ -15219,7 +15538,7 @@ def main():
     places = {
         "TabardFrameOuterFrameTopLeft": ("TOPLEFT", "TOPLEFT", 8, -63),
         "TabardFrameGreetingText": ("TOP", "TOP", 15, -28),
-        "TabardModel": ("BOTTOM", "BOTTOM", 0, 38),
+        "TabardModel": ("BOTTOMLEFT", "BOTTOMLEFT", 4, 38),
         "TabardCharacterModelRotateLeftButton": ("BOTTOMLEFT", "BOTTOMLEFT", 14, 33),
         "TabardFrameCustomizationBorder": ("BOTTOMRIGHT", "BOTTOMRIGHT", 26, -28),
         "TabardFrameMoneyFrame": ("BOTTOMRIGHT", "BOTTOMLEFT", 175, 8),
@@ -15279,6 +15598,11 @@ def main():
     """)
     print("   /fui tabard : position %s camera %s, rattrapage %s" % (list(g.TabardModel.pos.values()), g.TabardModel.camera, T.rattrapage.shown))
     assert list(g.TabardModel.pos.values()) == [0, 0.5, -0.25] and g.TabardModel.camera == 1 and T.rattrapage.shown
+    # le reglage retenu : la camera 1 (le personnage en pied, propre a chaque
+    # race), aucune position ; le modele dans la moitie gauche de l'encadre
+    lua.execute("ForeverUI.TabardModelTune('defaut')")
+    print("   reglage retenu : camera %s, position %s, modele %s de large" % (g.TabardModel.camera, list(g.TabardModel.pos.values()), g.TabardModel.width))
+    assert g.TabardModel.camera == 1 and list(g.TabardModel.pos.values()) == [0, 0, 0] and g.TabardModel.width == 150
     lua.execute("TabardFrame:Hide()")
 
 
@@ -15402,28 +15726,52 @@ def main():
     b1 = F.categoriesVue.lignes[1].bouton
     b1.scripts.OnClick(b1)
     image()
-    L = F.listeVue.lignes
+    # la liste a categories des raids (demande du 28/09) : en-tete de la
+    # feuille avec sa case, entrees en retrait de 2, cases de camelot
+    Z = F.listeVue
+    E, N = Z.entetes, Z.entrees
     def etat(l):
-        return (l.nom.text, l.plus.shown, l.case.shown, l.lockedIndicator.shown, l.case.checked, l.niveau.text if l.niveau.shown else None)
-    print("   liste : vue %s, lignes %s" % (F.vue, [etat(L[i]) for i in (1, 2, 3)]))
-    assert F.vue == "liste" and F.listeVue.shown and not F.details.shown and not F.categoriesVue.shown and F.retour.shown and F.retour.actif
-    assert etat(L[1]) == ("Lich King Normal", True, True, False, False, None)
-    assert etat(L[2]) == ("Utgarde Keep", False, True, False, False, "(68 - 80)")
-    assert etat(L[3]) == ("Halls of Stone", False, False, True, False, "(82 - 85)")
-    assert list(L[2].nom.textColor.values())[:3] == [1.0, 0.82, 0]
-    # la case d'un donjon : le client coche, l'en-tete passe a "certains"
-    L[2].case.Click(L[2].case)
+        return (l.nom.text, l.case.shown, l.lockedIndicator.shown, l.case.checked, l.niveau.text if l.niveau.shown else None)
+    print("   liste : vue %s, en-tete %r, lignes %s" % (F.vue, E[1].nom.text, [etat(N[i]) for i in (1, 2)]))
+    assert F.vue == "liste" and Z.shown and not F.details.shown and not F.categoriesVue.shown and F.retour.shown and F.retour.actif
+    e1 = E[1]
+    pe = list(list(e1.points.values())[0].values())
+    assert e1.nom.text == "Lich King Normal" and e1.height == 26 and pe[4] == -4
+    assert e1.fleche.texture == g.ForeverUI.AtlasEntry("common-button-list-minus")[1]
+    # la case de l'en-tete, a la place du debut du nom (10), le nom 2 apres
+    pc = list(list(e1.case.points.values())[0].values())
+    pn = list(list(e1.nom.points.values())[-1].values())
+    assert e1.case.shown and pc[0] == "LEFT" and pc[3] == 10 and e1.case.width == 20 and not e1.case.checked
+    assert e1.case._normal.texture == g.ForeverUI.AtlasEntry("checkbox-minimal")[1]
+    assert pn[0] == "LEFT" and lua.eval("rawequal")(pn[1], e1.case) and pn[3] == 2
+    pn1 = list(list(N[1].points.values())[0].values())
+    assert etat(N[1]) == ("Utgarde Keep", True, False, False, "(68 - 80)") and (pn1[3], pn1[4]) == (2, -(4 + 26 + 3))
+    assert etat(N[2]) == ("Halls of Stone", False, True, False, "(82 - 85)")
+    assert N[1].case._normal.texture == g.ForeverUI.AtlasEntry("checkbox-minimal")[1] and N[1].case.width == 20
+    assert list(N[1].nom.textColor.values())[:3] == [1.0, 0.82, 0]
+    # la case d'un donjon : le client coche, l'en-tete passe a "certains" :
+    # cochee, sa coche grisee
+    N[1].case.Click(N[1].case)
     image()
-    print("   case cochee : active %s, en-tete %s (%s)" % (g.LFGEnabledList[206], g.LFGEnabledList[-5], L[1].case._checked.texture))
-    assert g.LFGEnabledList[206] is True and g.LFGEnabledList[-5] == 1 and L[1].case.checked and "UI-MultiCheck-Up" in L[1].case._checked.texture
+    print("   case cochee : active %s, en-tete %s (grise %s)" % (g.LFGEnabledList[206], g.LFGEnabledList[-5], e1.case._checked.desaturated))
+    assert g.LFGEnabledList[206] is True and g.LFGEnabledList[-5] == 1 and e1.case.checked and e1.case._checked.desaturated
+    # la case de l'en-tete : tous ses donjons (cochee en partie, un clic la
+    # decoche, comme chez le client ; un second coche tout)
+    e1.case.Click(e1.case)
+    image()
+    assert g.LFGEnabledList[206] is False and not e1.case.checked
+    e1.case.Click(e1.case)
+    image()
+    assert g.LFGEnabledList[206] is True and g.LFGEnabledList[-5] is True and e1.case.checked and not e1.case._checked.desaturated
     # le verrou : l'infobulle du client
-    L[3].scripts.OnEnter(L[3])
-    assert lua.eval("rawequal")(g.GameTooltip.owner, L[3]) and list(g.GameTooltip.lignes.values()) == ["You may not queue for this dungeon."]
-    # le +/- de l'en-tete : le client replie, la liste n'a plus que l'en-tete
-    L[1].plus.scripts.OnClick(L[1].plus)
+    N[2].scripts.OnEnter(N[2])
+    assert lua.eval("rawequal")(g.GameTooltip.owner, N[2]) and list(g.GameTooltip.lignes.values()) == ["You may not queue for this dungeon."]
+    # l'en-tete replie : le client, puis la liste n'a plus que l'en-tete
+    e1.scripts.OnClick(e1)
     image()
-    print("   replie : %d ligne(s), +/- %s" % (sum(1 for l in L.values() if l.shown), L[1].plus._normal.texture))
-    assert g.LFGCollapseList[-5] is True and sum(1 for l in L.values() if l.shown) == 1 and "UI-PlusButton-UP" in L[1].plus._normal.texture
+    print("   replie : %d entree(s), fleche %s" % (sum(1 for l in N.values() if l.shown), e1.fleche.texture))
+    assert g.LFGCollapseList[-5] is True and sum(1 for l in N.values() if l.shown) == 0 and e1.shown
+    L = { 1: e1 }
     # les roles : notre case fait cliquer celle du client
     t = roles["tank"]
     t.case.scripts.OnClick(t.case)
@@ -15604,6 +15952,7 @@ def main():
     # le commentaire et les boutons de camelot, en bas de la fenetre
     assert derniere(R.commentaire)[4] == 59 and R.inscrire.height == 28 and derniere(R.inscrire)[3:] == [-4, 6]
     e = R.saisie
+    assert e.width == e.consigne.width, "pas de barre : toute la largeur, sans le couloir de camelot"
     e.scripts.OnEditFocusGained(e)
     assert not e.consigne.shown
     lua.execute("local e = ForeverUI.GroupFinderRaid.saisie; e:SetText('Cherche soigneur'); e.scripts.OnTextChanged(e)")
@@ -16592,6 +16941,10 @@ def main():
     assert not b3.foreverActif.shown and b3.normalFont == "GameFontNormal"
     assert b2.normalFont == "GameFontHighlight", "une sous-categorie en GameFontHighlight"
     assert atlas_jeu(b1.foreverActif, "options_list_active") and b1._highlight.alpha == 0
+    # le choix et le survol suivent la largeur de la ligne (la barre du client
+    # la retrecit) : ancres des deux cotes, 6 de debord
+    for t in (b1.foreverActif, b1.foreverSurvol):
+        assert pts(t)[0][0] == "LEFT" and pts(t)[0][2:] == ["LEFT", -6, 0] and pts(t)[1][2:] == ["RIGHT", 6, 0] and req(pts(t)[1][1], b1)
     assert atlas_jeu(b3.toggle._normal, "common-button-dropdown-closed")
     assert atlas_jeu(b3.toggle._pushed, "common-button-dropdown-closedpressed")
     b3.hooks.OnEnter(b3)
@@ -16833,8 +17186,8 @@ def main():
     a2 = g.MacroFrameTab2.foreverArt
     assert a2.g.shown and not a2.actifG.shown and pts(g.MacroFrameTab2.fontString)[-1][2:] == ["CENTER", 0, -8]
     assert t1.width == max(72, min(140, len("General Macros") * 6 + 20))
-    # la grille : 6 par rangee, marges 5, 13 entre deux
-    assert pts(g.MacroButton1)[-1][2:] == ["TOPLEFT", 5, -5]
+    # la grille : 6 par rangee, marges 5 (15,5 centree, sans barre), 13 entre deux
+    assert pts(g.MacroButton1)[-1][2:] in (["TOPLEFT", 5, -5], ["TOPLEFT", 15.5, -5])
     assert pts(g.MacroButton2)[-1][0] == "LEFT" and pts(g.MacroButton2)[-1][2:] == ["RIGHT", 13, 0]
     assert pts(g.MacroButton7)[-1][0] == "TOP" and pts(g.MacroButton7)[-1][1].name == "MacroButton1" and pts(g.MacroButton7)[-1][2:] == ["BOTTOM", 0, -13]
     assert pts(g.MacroButtonScrollFrame)[-1][2:] == ["TOPLEFT", 12, -66] and g.MacroButtonScrollFrame.width == 301
@@ -16849,6 +17202,22 @@ def main():
         assert pts(g[nom])[-1][2:] == attendu, (nom, pts(g[nom]))
     assert g.MacroFrameTextBackground.foreverNeuf and g.MacroFrameTextBackground.backdrop is None
     assert g.MacroFrameScrollFrameScrollBar.foreverBarre
+    # les barres seulement si elles servent ; sans elle, le texte prend sa place
+    assert g.MacroButtonScrollFrame.scrollBarHideable == 1 and g.MacroFrameScrollFrame.scrollBarHideable == 1
+    lua.execute("MacroFrame:Show() MacroButtonScrollFrame.plage = 0 MacroButtonScrollFrame.hooks.OnScrollRangeChanged(MacroButtonScrollFrame, 0, 0)")
+    # sans barre, la grille (6 x 36 + 5 x 13 = 281, a 17) se centre dans
+    # l'encadre (4 .. 332) : 10,5 de plus, 23,5 de chaque cote
+    assert not g.MacroButtonScrollFrameScrollBar.shown and g.MacroButtonScrollFrame.width == 301
+    assert pts(g.MacroButton1)[-1][2:] == ["TOPLEFT", 15.5, -5]
+    lua.execute("MacroButtonScrollFrame.plage = 147 MacroButtonScrollFrame.hooks.OnScrollRangeChanged(MacroButtonScrollFrame, 0, 147)")
+    assert g.MacroButtonScrollFrameScrollBar.shown and pts(g.MacroButton1)[-1][2:] == ["TOPLEFT", 5, -5]
+    lua.execute("MacroFrameScrollFrame.plage = 0 MacroFrameScrollFrame.hooks.OnScrollRangeChanged(MacroFrameScrollFrame, 0, 0)")
+    assert not g.MacroFrameScrollFrameScrollBar.shown
+    assert (g.MacroFrameScrollFrame.width, g.MacroFrameText.width, g.MacroFrameTextButton.width) == (302, 302, 302)
+    lua.execute("MacroFrameScrollFrame.plage = 30 MacroFrameScrollFrame.hooks.OnScrollRangeChanged(MacroFrameScrollFrame, 0, 30)")
+    assert g.MacroFrameScrollFrameScrollBar.shown
+    assert (g.MacroFrameScrollFrame.width, g.MacroFrameText.width, g.MacroFrameTextButton.width) == (286, 286, 286)
+    lua.execute("MacroFrame:Hide()")
     for nom, attendu in (("MacroDeleteButton", ["BOTTOMLEFT", 4, 4]), ("MacroNewButton", ["BOTTOMRIGHT", -82, 4]), ("MacroExitButton", ["BOTTOMRIGHT", -5, 4])):
         b = g[nom]
         assert pts(b)[-1][2:] == attendu and (b.width, b.height) == (80, 22) and b._normal.texture is None, nom
@@ -17131,7 +17500,7 @@ def main():
     assert (du.width, du.height) == (450, 545) and h.titre.text == "Dressing Room"
     assert all(r.alpha == 0 for r in du.regions.values() if r.kind == "texture" and not r.name and isinstance(r.texture, str) and "PaperDollInfoFrame" in r.texture)
     assert g.DressUpFramePortrait.alpha == 0 and g.DressUpFrameTitleText.alpha == 0 and g.DressUpFrameDescriptionText.alpha == 0
-    assert (h.portrait.width, h.portrait.height) == (60, 60) and pts(h.portrait)[0][2:] == ["TOPLEFT", -5, 7]
+    assert (h.portrait.width, h.portrait.height) == (48, 48) and pts(h.portrait)[0][2:] == ["TOPLEFT", 1, 1.5]
     assert h.marbre.texture.endswith("ui-background-marble")
     sc = h.scene
     assert pts(sc)[0][2:] == ["TOPLEFT", 7, -63] and pts(sc)[1][2:] == ["BOTTOMRIGHT", -9, 28]
@@ -17600,6 +17969,17 @@ def main():
     lua.execute("A_ENVOYER = { [8] = { nom = 'Robe', qualite = 4 } } SendMailFrame_Update()")
     assert pts(g.SendMailAttachment1)[-1][2:] == ["BOTTOMLEFT", 15, 171] and pts(g.SendMailAttachment8)[-1][2:] == ["BOTTOMLEFT", 15, 127]
     assert g.SendMailScrollFrame.height == 154
+    # la barre seulement si elle sert ; sans elle, le texte prend le couloir
+    sx = g.SendMailScrollFrame
+    lua.execute("SendMailScrollFrame.plage = 0 SendMailScrollFrame.hooks.OnScrollRangeChanged(SendMailScrollFrame, 0, 0)")
+    assert sx.scrollBarHideable == 1 and not sb.shown
+    assert (sx.width, g.SendMailScrollChildFrame.width, g.SendMailBodyEditBox.width) == (320, 320, 280)
+    # la page aussi : sa partie gauche s'etire de 18, le bord dechire suit
+    assert g.SendStationeryBackgroundLeft.width == 270 and g.SendStationeryBackgroundRight.width == 64
+    lua.execute("SendMailScrollFrame.plage = 60 SendMailScrollFrame.hooks.OnScrollRangeChanged(SendMailScrollFrame, 0, 60)")
+    assert sb.shown and (sx.width, g.SendMailScrollChildFrame.width, g.SendMailBodyEditBox.width) == (296, 300, 270)
+    assert g.SendStationeryBackgroundLeft.width == 252
+    lua.execute("SendMailScrollFrame.plage = 0 SendMailScrollFrame.hooks.OnScrollRangeChanged(SendMailScrollFrame, 0, 0)")
     Cr.onglets[1].scripts.OnClick(Cr.onglets[1])
     assert mlh.titre.text == "Inbox" and pts(mlh.encart)[0][2:] == ["TOPLEFT", 4, -58]
 
@@ -17627,6 +18007,14 @@ def main():
     assert g.OpenMailScrollFrame.height == 245 and pts(g.OpenMailHorizontalBarLeft)[-1][2:] == ["BOTTOMLEFT", 2, 99]
     assert pts(g.OpenMailAttachmentText)[-1][2:] == ["BOTTOMLEFT", 16, 85]
     assert g.OpenMailAttachmentButton1.foreverContour.shown and not g.OpenMailMoneyButton.foreverContour.shown
+    ox = g.OpenMailScrollFrame
+    lua.execute("OpenMailScrollFrame.plage = 0 OpenMailScrollFrame.hooks.OnScrollRangeChanged(OpenMailScrollFrame, 0, 0)")
+    assert ox.scrollBarHideable == 1 and not osb.shown
+    assert (ox.width, g.OpenMailScrollChildFrame.width, g.OpenMailBodyText.width) == (320, 320, 300)
+    assert g.OpenStationeryBackgroundLeft.width == 270, "sans barre, la page va a 4 du bord de l'encart"
+    lua.execute("OpenMailScrollFrame.plage = 80 OpenMailScrollFrame.hooks.OnScrollRangeChanged(OpenMailScrollFrame, 0, 80)")
+    assert osb.shown and (ox.width, g.OpenMailScrollChildFrame.width, g.OpenMailBodyText.width) == (296, 296, 276)
+    assert g.OpenStationeryBackgroundLeft.width == 252
     lua.execute("OpenMailReportSpamButton:Hide() OpenMail_Update = OpenMail_Update")
     lua.execute("OpenMailFrame:Hide() BOITE = {} A_ENVOYER = {} InboxFrame.openMailID = nil")
     print("   338 x 424, portrait, titre et encart selon l'onglet, onglets du bas ; reception (parchemin, places, contours, tout ouvrir) ; envoi (places, barre, argent dore, pieces jointes de camelot) ; lettre ouverte (places, portrait de papeterie, pieces jointes et barre de camelot)")
@@ -17767,6 +18155,19 @@ def main():
     assert g.GuildBankTransactionsScrollFrameScrollBar.foreverBarre and pts(g.GuildBankTransactionsScrollFrameScrollBar)[0][2:] == ["TOPRIGHT", 2, -11]
     assert all(r.alpha == 0 for r in g.GuildBankTransactionsScrollFrame.regions.values() if r.kind == "texture")
     assert pts(g.GuildBankInfoScrollFrame)[-1][2:] == ["TOPLEFT", -9, 12] and pts(g.GuildBankInfoSaveButton)[-1][2:] == ["BOTTOMLEFT", 20, 31]
+    # le journal : la liste du client cache sa barre quand tout tient, les
+    # messages prennent alors le couloir
+    lua.execute("GuildBankTransactionsScrollFrame:Hide()")
+    assert g.GuildBankMessageFrame.width == 705
+    lua.execute("GuildBankTransactionsScrollFrame:Show()")
+    assert g.GuildBankMessageFrame.width == 688
+    # l'information : la barre seulement si elle sert, le champ s'elargit
+    ix = g.GuildBankInfoScrollFrame
+    lua.execute("GuildBankInfoScrollFrame.plage = 0 GuildBankInfoScrollFrame.hooks.OnScrollRangeChanged(GuildBankInfoScrollFrame, 0, 0)")
+    assert ix.scrollBarHideable == 1 and not g.GuildBankInfoScrollFrameScrollBar.shown
+    assert (ix.width, g.GuildBankTabInfoEditBox.width) == (707, 706)
+    lua.execute("GuildBankInfoScrollFrame.plage = 50 GuildBankInfoScrollFrame.hooks.OnScrollRangeChanged(GuildBankInfoScrollFrame, 0, 50)")
+    assert g.GuildBankInfoScrollFrameScrollBar.shown and (ix.width, g.GuildBankTabInfoEditBox.width) == (691, 690)
     assert (Gq.champ.width, Gq.champ.height) == (130, 20) and pts(Gq.champ)[0][2:] == ["TOPRIGHT", -15, -36]
     # les onglets du bas
     o1, o4 = Gq.onglets[1], Gq.onglets[4]
@@ -17861,6 +18262,22 @@ def main():
     b1, b2 = g.BrowseButton1, g.BrowseButton2
     assert b1.width == 600 and g.BrowseCurrentBidSort.width == 184 and g.BidButton1.width == 769 and g.AuctionsButton1.width == 576
     assert g.BidBidSort.width == 145 and g.AuctionsBidSort.width == 193
+    # sans barre (le client la cache quand tout tient), l'encadre prend sa
+    # place (822) ; lignes et en-tetes gardent a droite leur marge de gauche
+    lua.execute("BrowseScrollFrame:Hide() AuctionFrameBrowse_Update()")
+    assert (b1.width, g.BrowseButton1Highlight.width, g.BrowseCurrentBidSort.width) == (614, 576, 202)
+    assert pts(ah["resultats"].rect)[-1][2:] == ["TOPLEFT", 822, -409]
+    assert pts(ah["offres"].rect)[-1][2:] == ["TOPLEFT", 804, -411], "les autres onglets gardent leur barre"
+    lua.execute("BrowseScrollFrame:Show() AuctionFrameBrowse_Update()")
+    assert (b1.width, g.BrowseButton1Highlight.width, g.BrowseCurrentBidSort.width) == (600, 562, 184)
+    assert pts(ah["resultats"].rect)[-1][2:] == ["TOPLEFT", 804, -409]
+    lua.execute("AuctionsScrollFrame:Hide() AuctionFrameAuctions_Update()")
+    assert (g.AuctionsButton1.width, g.AuctionsBidSort.width) == (599, 212) and pts(ah["encheres"].rect)[-1][2:] == ["TOPLEFT", 822, -411]
+    lua.execute("AuctionsScrollFrame:Show() AuctionFrameAuctions_Update()")
+    lua.execute("BidScrollFrame:Hide() AuctionFrameBid_Update()")
+    assert (g.BidButton1.width, g.BidBidSort.width) == (791, 168) and pts(ah["offres"].rect)[-1][2:] == ["TOPLEFT", 822, -411]
+    lua.execute("BidScrollFrame:Show() AuctionFrameBid_Update()")
+    assert (g.BidButton1.width, g.BidBidSort.width) == (769, 145)
     assert b2.foreverLigne.choix.shown and not b1.foreverLigne.choix.shown and atlas_jeu(b2.foreverLigne.choix, "auctionhouse-ui-row-select")
     assert not g.BidButton1.foreverLigne.choix.shown, "le choix se lit avec le decalage"
     assert not b1.foreverLigne.rayure.shown, "pas de rayures sur les resultats (hideStripes)"
@@ -17973,6 +18390,160 @@ def main():
     lua.execute("AuctionFrame:Hide() NOMBRE_HOTEL = { list = 0, bidder = 0, owner = 0 } CHOIX_HOTEL = {}")
     print("   fenetre de camelot sur l'art visible de 3.3.5, argent dore, encadres et fonds, barres minimales, categories par niveau, lignes (largeur avec barre, choix, survol, rayures, icone), fleches de tri, champs, cases, menus, mise en vente, onglets du bas et titre")
 
+    # ------------------------------------------------- LE DIALOGUE ET LA QUETE
+    print("\ndialogue et quete :")
+    for nomf, croixn, portn, nomn in (("GossipFrame", "GossipFrameCloseButton", "GossipFramePortrait", "GossipFrameNpcNameText"),
+                                      ("QuestFrame", "QuestFrameCloseButton", "QuestFramePortrait", "QuestFrameNpcNameText")):
+        fr = g[nomf]
+        hb = fr.foreverHabit
+        assert hb, nomf
+        assert (fr.width, fr.height) == (338, 496) and list(fr.hitRect.values()) == [0, 0, 0, 0], nomf
+        assert g[portn].alpha == 0 and g[nomn].alpha == 0, nomf
+        assert (hb.portrait.width, hb.portrait.height) == (48, 48) and pts(hb.portrait)[0][2:] == ["TOPLEFT", 1, 1.5], nomf
+        assert atlas_jeu(hb.parchemin, "questbg-parchment") and (hb.parchemin.width, hb.parchemin.height) == (299, 407), nomf
+        assert pts(hb.parchemin)[0][2:] == ["TOPLEFT", 7, -62] and hb.parchemin.layer == "BORDER" and hb.roche.layer == "BACKGROUND", nomf
+        cx = g[croixn]
+        assert (cx.width, cx.height) == (24, 24) and cx.frameLevel == lua.eval("%s:GetFrameLevel()" % nomf) + 22, nomf
+    # l'art de 3.3.5 des panneaux eteint
+    for p in ("GossipFrameGreetingPanel", "QuestFrameDetailPanel", "QuestFrameGreetingPanel"):
+        vieux = [r for r in g[p].regions.values() if r.kind == "texture" and ("QuestGreeting" in str(r.texture) or "BotLeftPatch" in str(r.texture))]
+        assert vieux and all(r.alpha == 0 for r in vieux), p
+    # le dialogue : defilement, barre, bouton ; titre et portrait suivent
+    gx = g.GossipGreetingScrollFrame
+    # sans barre (rien ne defile), chacun va jusqu'a laisser a droite de la
+    # page (7 .. 329) la marge qu'il a a gauche : la fenetre (8) 320, le texte
+    # (18) 300, les choix (8) 320 et leur texte 295
+    assert (gx.width, gx.height) == (320, 403) and pts(gx)[-1][2:] == ["TOPLEFT", 8, -65]
+    assert g.GossipGreetingText.width == 300 and g.GossipGreetingScrollChildFrame.width == 320
+    assert g.GossipTitleButton1.width == 320 and g.GossipTitleButton1.GetFontString(g.GossipTitleButton1).width == 295
+    gsb = g.GossipGreetingScrollFrameScrollBar
+    assert gsb.foreverBarre and pts(gsb)[0][2:] == ["TOPRIGHT", 6 - 4, -3 - 11] and pts(gsb)[1][2:] == ["BOTTOMRIGHT", 6 - 4, 3 + 11]
+    assert pts(g.GossipFrameGreetingGoodbyeButton)[-1][2:] == ["BOTTOMRIGHT", -6, 4]
+    # la barre seulement si elle sert (scrollBarHideable du client, et la
+    # plage relue a l'ouverture et a chaque changement)
+    assert gx.scrollBarHideable == 1 and not gsb.shown, "rien ne defile : pas de barre"
+    # sans barre, la page prend tout l'espace (jusqu'a -9 du bord droit)
+    pg = g.GossipFrame.foreverHabit.parchemin
+    assert pts(pg)[0][2:] == ["TOPLEFT", 7, -62] and pts(pg)[1][0] == "TOPRIGHT" and pts(pg)[1][2:] == ["TOPRIGHT", -9, -62] and pg.height == 407
+    lua.execute("GossipGreetingScrollFrame.plage = 120 GossipGreetingScrollFrame.hooks.OnScrollRangeChanged(GossipGreetingScrollFrame, 0, 120)")
+    assert gsb.shown
+    assert len(pts(pg)) == 1 and pg.width == 299, "avec la barre : la largeur de l'atlas"
+    assert gx.width == 300 and g.GossipGreetingText.width == 270 and g.GossipGreetingScrollChildFrame.width == 300, "avec la barre : les largeurs du modele"
+    lua.execute("GossipGreetingScrollFrame.plage = 0 GossipGreetingScrollFrame.hooks.OnScrollRangeChanged(GossipGreetingScrollFrame, 0, 0)")
+    assert not gsb.shown and len(pts(pg)) == 2
+    assert g.QuestInfoTitleHeader.width == 316 and g.QuestInfoFrame.width == 326, "sans barre : 10 + 316 = 326, a 3 du bord de la page comme a gauche"
+    lua.execute("QuestDetailScrollFrame.plage = 40 QuestDetailScrollFrame.hooks.OnShow(QuestDetailScrollFrame)")
+    assert g.QuestDetailScrollFrameScrollBar.shown and not g.QuestRewardScrollFrameScrollBar.shown
+    assert g.QuestDetailScrollFrame.width == 300 and g.QuestInfoTitleHeader.width == 285 and g.QuestInfoObjective3.width == 285
+    lua.execute("QuestDetailScrollFrame.plage = 0 QuestDetailScrollFrame.hooks.OnShow(QuestDetailScrollFrame)")
+    assert g.QuestDetailScrollFrame.width == 326 and g.QuestInfoTitleHeader.width == 316
+    assert g.QuestFrameDetailPanelMaterialTopLeft.width == 258 and g.QuestFrameDetailPanelMaterialBotLeft.width == 258, "la matiere jusqu'au bord de la page"
+    lua.execute("QuestProgressScrollFrame.plage = 0 QuestProgressScrollFrame.hooks.OnShow(QuestProgressScrollFrame)")
+    assert (g.QuestProgressTitleText.width, g.QuestProgressText.width, g.QuestProgressRequiredItemsText.width) == (306, 306, 306)
+    lua.execute("QuestGreetingScrollFrame.plage = 0 QuestGreetingScrollFrame.hooks.OnShow(QuestGreetingScrollFrame)")
+    assert (g.GreetingText.width, g.CurrentQuestsText.width, g.QuestTitleButton1.width) == (306, 306, 326)
+    lua.execute("QuestGreetingScrollFrame.plage = 30 QuestGreetingScrollFrame.hooks.OnShow(QuestGreetingScrollFrame)")
+    assert (g.GreetingText.width, g.CurrentQuestsText.width, g.QuestTitleButton1.width) == (270, 300, 300)
+    assert g.QuestFrameGreetingPanelMaterialTopLeft.width == 239
+    lua.execute("QuestGreetingScrollFrame.plage = 0 QuestGreetingScrollFrame.hooks.OnShow(QuestGreetingScrollFrame)")
+    lua.execute("STATE.hasTarget = true GossipFrameUpdate()")
+    assert g.GossipFrame.foreverHabit.titre.text == lua.eval("UnitName('npc')") and g.GossipFrame.foreverHabit.portrait.portraitOf == "npc"
+    lua.execute("STATE.hasTarget = false GossipFrameUpdate()")
+    assert g.GossipFrame.foreverHabit.portrait.texture.endswith("UI-QuestLog-BookIcon")
+    # la quete : matiere, defilement, barres, enfants, boutons
+    qf = g.QuestFrame
+    for p in ("QuestFrameDetailPanel", "QuestFrameRewardPanel"):
+        hg = g[p + "MaterialTopLeft"]
+        # 239 avec la barre, 258 sans (la matiere va au bord de la page)
+        assert hg.width in (239, 258) and hg.height == 300 and pts(hg)[-1][2:] == ["TOPLEFT", 7, -62] and req(pts(hg)[-1][1], qf), p
+        assert (g[p + "MaterialBotRight"].width, g[p + "MaterialBotRight"].height) == (64, 138), p
+    for n, h in (("QuestDetail", 403), ("QuestProgress", 403), ("QuestGreeting", 403), ("QuestReward", 334)):
+        fx = g[n + "ScrollFrame"]
+        assert fx.width in (300, 326) and fx.height == 403 and pts(fx)[-1][2:] == ["TOPLEFT", 5, -65] and req(pts(fx)[-1][1], qf), n
+        assert g[n + "ScrollChildFrame"].height == h, n
+        sb = g[n + "ScrollFrameScrollBar"]
+        assert sb.foreverBarre and pts(sb)[0][2:] == ["TOPRIGHT", 9 - 4, -2 - 11] and pts(sb)[1][2:] == ["BOTTOMRIGHT", 9 - 4, 5 + 11], n
+    assert pts(g.QuestProgressTitleText)[-1][2:] == ["TOPLEFT", 10, -10]
+    for n in ("QuestFrameAcceptButton", "QuestFrameCompleteButton", "QuestFrameCompleteQuestButton"):
+        assert pts(g[n])[-1][2:] == ["BOTTOMLEFT", 6, 4], n
+    for n in ("QuestFrameDeclineButton", "QuestFrameGoodbyeButton", "QuestFrameCancelButton", "QuestFrameGreetingGoodbyeButton"):
+        assert pts(g[n])[-1][2:] == ["BOTTOMRIGHT", -6, 4], n
+    lua.execute("STATE.hasTarget = true QuestFrame_SetPortrait()")
+    assert qf.foreverHabit.portrait.portraitOf == "questnpc"
+    # les objets : contour de qualite sur l'icone de 39
+    lua.execute("""
+        OBJETS_QUETE = { choice = { { 'Epee', 'i1', 1, 3 }, { 'Pain', 'i2', 5, 1 } }, reward = { { 'Cape', 'i3', 1, 4 } },
+                         required = { { 'Plume', 'i4', 3, 0 } } }
+        QuestInfo_ShowRewards() QuestFrameProgressItems_Update()
+    """)
+    c1, c2, c3 = g.QuestInfoItem1.foreverContour, g.QuestInfoItem2.foreverContour, g.QuestInfoItem3.foreverContour
+    assert c1.shown and list(c1.vertex.values()) == [0, 0.44, 0.87] and req(c1.allPoints, g.QuestInfoItem1IconTexture)
+    assert c2.shown and list(c2.vertex.values()) == [0.659, 0.659, 0.659] and c3.shown
+    assert not g.QuestProgressItem1.foreverContour.shown, "mediocre : sans contour"
+    lua.execute("OBJETS_QUETE = { choice = {}, reward = {}, required = {} } QuestInfo_ShowRewards() QuestFrameProgressItems_Update()")
+    assert not c1.shown
+    # le journal garde les siens
+    lua.execute("QuestInfoFrame.questLog = 1 OBJETS_QUETE.reward = { { 'Cape', 'i3', 1, 4 } } QuestInfo_ShowRewards()")
+    assert not g.QuestInfoItem1.foreverContour.shown
+    lua.execute("QuestInfoFrame.questLog = nil OBJETS_QUETE = { choice = {}, reward = {}, required = {} } STATE.hasTarget = false")
+    print("   338 x 496 a portrait (48), parchemin de camelot, croix ; dialogue : defilement 300 x 403 et barre minimale, Au revoir ; quete : matiere, defilement et barres, boutons a leurs places, contours de qualite des objets hors journal")
+
+    # ------------------------------------------------- LIVRES, PETITION, REGISTRE
+    print("\nlivres et lettres, petition, registre de guilde :")
+    for nomf, croixn, page in (("ItemTextFrame", "ItemTextCloseButton", 357), ("PetitionFrame", "PetitionFrameCloseButton", 334),
+                               ("GuildRegistrarFrame", "GuildRegistrarFrameCloseButton", 334)):
+        fr = g[nomf]
+        hb = fr.foreverHabit
+        assert hb, nomf
+        assert (fr.width, fr.height) == (338, 424) and list(fr.hitRect.values()) == [0, 0, 0, 0], nomf
+        assert (hb.portrait.width, hb.portrait.height) == (48, 48) and pts(hb.portrait)[0][2:] == ["TOPLEFT", 1, 1.5], nomf
+        assert atlas_jeu(hb.parchemin, "questbg-parchment") and hb.parchemin.height == page and hb.parchemin.layer == "BORDER", nomf
+        assert pts(hb.parchemin)[0][2:] == ["TOPLEFT", 7, -62], nomf
+        assert (g[croixn].width, g[croixn].height) == (24, 24), nomf
+    # le livre : l'art de 3.3.5 eteint, le livre en portrait, les places
+    it = g.ItemTextFrame
+    vieux = [r for r in it.regions.values() if r.kind == "texture" and ("ItemText-" in str(r.texture) or "Spellbook" in str(r.texture)) and r is not it.foreverHabit.portrait]
+    assert vieux and all(r.alpha == 0 for r in vieux)
+    assert it.foreverHabit.portrait.texture.endswith("Spellbook-Icon") and g.ItemTextTitleText.alpha == 0
+    lua.execute("ItemTextTitleText:SetText('Lettre de Papota')")
+    assert it.foreverHabit.titre.text == "Lettre de Papota"
+    assert pts(g.ItemTextMaterialTopLeft)[-1][2:] == ["TOPLEFT", 7, -62]
+    assert pts(g.ItemTextCurrentPage)[-1][2:] == ["TOP", 20, -35]
+    assert pts(g.ItemTextPrevPageButton)[-1][2:] == ["TOPLEFT", 75, -41] and pts(g.ItemTextNextPageButton)[-1][2:] == ["TOPRIGHT", -23, -41]
+    fxp = pts(g.ItemTextScrollFrame)
+    assert fxp[0][2:] == ["TOPRIGHT", -31, -63] and fxp[1][2:] == ["BOTTOMLEFT", 6, 6]
+    # sans barre : la fenetre s'etend sur le couloir, la page suit
+    assert fxp[-1][0] == "TOPRIGHT" and fxp[-1][2:] == ["TOPRIGHT", -11, -63] and g.ItemTextPageText.width == 288
+    assert g.ItemTextMaterialTopLeft.width == 258 and g.ItemTextMaterialBotLeft.width == 258, "la matiere jusqu'au bord de la page (329)"
+    assert all(g["ItemTextScrollFrame" + s].alpha == 0 for s in ("Top", "Bottom", "Middle"))
+    assert pts(g.ItemTextPageText)[-1][2:] == ["TOPLEFT", 18, -15]
+    isb = g.ItemTextScrollFrameScrollBar
+    assert isb.foreverBarre and pts(isb)[0][2:] == ["TOPRIGHT", 7 - 4, -5 - 11] and pts(isb)[1][2:] == ["BOTTOMRIGHT", 7 - 4, 5 + 11]
+    # les regles du dialogue : barre si besoin, page pleine sans elle
+    assert not isb.shown and pts(it.foreverHabit.parchemin)[1][2:] == ["TOPRIGHT", -9, -62] and it.foreverHabit.parchemin.height == 357
+    lua.execute("ItemTextScrollFrame.plage = 90 ItemTextScrollFrame.hooks.OnScrollRangeChanged(ItemTextScrollFrame, 0, 90)")
+    assert isb.shown and it.foreverHabit.parchemin.width == 299 and len(pts(it.foreverHabit.parchemin)) == 1
+    assert pts(g.ItemTextScrollFrame)[-1][2:] == ["TOPRIGHT", -31, -63] and g.ItemTextPageText.width == 270
+    assert g.ItemTextMaterialTopLeft.width == 256
+    lua.execute("ItemTextScrollFrame.plage = 0 ItemTextScrollFrame.hooks.OnScrollRangeChanged(ItemTextScrollFrame, 0, 0)")
+    # la petition : la charte en portrait, le titre suit SetFormattedText
+    pf = g.PetitionFrame
+    assert pf.foreverHabit.portrait.texture.endswith("GuildCharter-Icon") and g.PetitionFramePortrait.alpha == 0
+    lua.execute("PetitionFrame_Update()")
+    assert pf.foreverHabit.titre.text == "Papota Charter"
+    assert pts(g.PetitionFrameCharterTitle)[-1][2:] == ["TOPLEFT", 12, -80]
+    assert pts(g.PetitionFrameCancelButton)[-1][2:] == ["BOTTOMRIGHT", -6, 4]
+    assert pts(g.PetitionFrameSignButton)[-1][2:] == ["BOTTOMLEFT", 4, 4] and pts(g.PetitionFrameRequestButton)[-1][2:] == ["BOTTOMLEFT", 4, 4]
+    assert all(r.alpha == 0 for r in pf.regions.values() if r.kind == "texture" and "QuestGreeting" in str(r.texture))
+    # le registre : portrait du PNJ, places de camelot
+    gr = g.GuildRegistrarFrame
+    lua.execute("STATE.hasTarget = true GuildRegistrar_OnShow() STATE.hasTarget = false")
+    assert gr.foreverHabit.portrait.portraitOf == "npc" and g.GuildRegistrarFramePortrait.alpha == 0
+    assert pts(g.AvailableServicesText)[-1][2:] == ["TOPLEFT", 20, -70] and pts(g.GuildRegistrarPurchaseText)[-1][2:] == ["TOPLEFT", 20, -70]
+    assert pts(g.GuildRegistrarFrameGoodbyeButton)[-1][2:] == ["BOTTOMRIGHT", -6, 4] and pts(g.GuildRegistrarFramePurchaseButton)[-1][2:] == ["BOTTOMLEFT", 6, 4]
+    assert all(r.alpha == 0 for r in g.GuildRegistrarGreetingFrame.regions.values() if r.kind == "texture" and "BotLeftPatch" in str(r.texture))
+    print("   338 x 424 a portrait (48 : livre, charte, PNJ), parchemin de camelot (357 / 334), croix ; livre : matiere, page, fleches, defilement, barre si besoin et page pleine ; petition et registre : places et boutons de camelot")
+
     # ------------------------------------------------- LA TAILLE DES TEXTURES
     # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
     # 3.3.5 : un morceau d'atlas pose par une seule ancre, ou par deux ancres
@@ -17995,9 +18566,10 @@ def main():
         return list(tc.values()) != [0, 1, 0, 1]
     fautives = []
     vues = 0
-    # les fenetres du commerce (les fenetres deja validees ne sont pas
+    # les fenetres du commerce et des PNJ (les fenetres deja validees ne sont pas
     # reprises ici : un effet valide ne se touche pas sans accord)
-    racines = {"MerchantFrame", "TradeFrame", "MailFrame", "OpenMailFrame", "BankFrame", "GuildBankFrame", "AuctionFrame"}
+    racines = {"MerchantFrame", "TradeFrame", "MailFrame", "OpenMailFrame", "BankFrame", "GuildBankFrame", "AuctionFrame",
+               "GossipFrame", "QuestFrame", "QuestInfoFrame", "ItemTextFrame", "PetitionFrame", "GuildRegistrarFrame"}
     def du_commerce(f):
         while f is not None:
             if f.name in racines:

@@ -769,6 +769,46 @@ function Gb.BarreA(sb, cible, x, haut, bas)
 	return Gb.Barre(sb)
 end
 
+-- ------------------------------------------------------------ la barre selon le contenu
+
+-- REGLE DE L'UTILISATEUR (28/09), POUR CHAQUE BARRE : cachee si rien ne
+-- defile, et le contenu s'adapte a sa presence ou a son absence. Le couloir
+-- d'une barre de camelot (MinimalScrollBar, 8 de large, a 6 a 9 du contenu)
+-- vaut COULOIR : c'est ce que le contenu gagne quand elle part.
+Gb.COULOIR = 20
+
+-- Une fenetre a defilement du client (UIPanelScrollFrameTemplate) : 3.3.5
+-- sait cacher sa barre -- ScrollFrame_OnScrollRangeChanged la cache quand la
+-- plage est nulle si la fenetre porte scrollBarHideable. La plage est aussi
+-- relue a l'ouverture (le client ne la relit qu'a un changement).
+-- adapter(avec) : appelee a chaque lecture, la fenetre visible -- elle
+-- donne ou rend au contenu la place de la barre (idempotente). Elargir ne
+-- peut que raccourcir le texte : pas d'aller-retour.
+function Gb.BarreSelonContenu(fx, adapter)
+	fx.scrollBarHideable = 1
+	local sb = _G[fx:GetName() .. "ScrollBar"]
+	local function maj()
+		local avec = math.floor(fx:GetVerticalScrollRange() or 0) > 0
+		if sb then Gb.Montrer(sb, avec) end
+		if adapter and fx:IsVisible() then adapter(avec) end
+	end
+	fx:HookScript("OnScrollRangeChanged", maj)
+	fx:HookScript("OnShow", maj)
+	maj()
+	return maj
+end
+
+-- Une liste FauxScrollFrame : FauxScrollFrame_Update cache la fenetre (et sa
+-- barre) quand tout tient ; adapter(avec) suit son etat propre (IsShown : un
+-- parent cache ne la dit pas absente).
+function Gb.FauxSelonContenu(fx, adapter)
+	local function maj() adapter(fx:IsShown() and true or false) end
+	fx:HookScript("OnShow", maj)
+	fx:HookScript("OnHide", maj)
+	maj()
+	return maj
+end
+
 -- ------------------------------------------------------------ le bouton argente
 
 -- UIMenuButtonStretchTemplate (mainline/shareduipaneltemplates.xml / .lua),

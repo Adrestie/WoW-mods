@@ -205,17 +205,24 @@ function ForeverUI.CreateScrollBar(nom, parent, liste)
 	end
 
 	-- CE QUE L'APPELANT LUI DIT : combien de lignes, combien tiennent, ou il
-	-- en est. La barre s'efface quand tout tient.
+	-- en est. La barre s'efface quand tout tient. Quand elle parait ou
+	-- s'efface, `surVisibilite(avec)` le dit a l'appelant, dont le contenu
+	-- prend ou rend sa place (regle du 28/09).
 	function barre:Regler(total, visibles, decalage)
 		self.total = total or 0
 		self.visibles = visibles or 0
 		self.decalage = decalage or 0
-		if self.total <= self.visibles then
+		local avec = self.total > self.visibles
+		if avec then
+			self:Show()
+			self:Repositionner()
+		else
 			self:Hide()
-			return
 		end
-		self:Show()
-		self:Repositionner()
+		if avec ~= self.avecAvant then
+			self.avecAvant = avec
+			if self.surVisibilite then self.surVisibilite(avec) end
+		end
 	end
 
 	-- GLISSER LE CURSEUR. Un OnUpdate le suit tant que le bouton est tenu :

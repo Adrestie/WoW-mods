@@ -761,6 +761,15 @@ local function monter(hote)
 		decalage = nouveau
 		poserListe()
 	end
+	-- SANS BARRE, LA LISTE PREND SA PLACE (regle du 28/09) : son bord droit
+	-- passe de -25 a -10, la marge de gauche, et les lignes se reposent a la
+	-- nouvelle largeur ; la barre revenue, elle reprend les bornes de camelot.
+	panneau.barre.surVisibilite = function(avec)
+		local x2 = avec and LISTE_X2 or -LISTE_X
+		panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", x2, LISTE_Y2)
+		panneau:SetWidth(largeur + x2 - LISTE_X2)
+		disposer()
+	end
 
 	panneau:SetScript("OnUpdate", suivreSurvol)
 	panneau:EnableMouseWheel(true)

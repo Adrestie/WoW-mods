@@ -17,6 +17,8 @@
 --                nom du marchand CENTER (6, 202)           ((6, 232))
 --                accueil TOP (15, -28)                     ((10, -39))
 --                modele BOTTOM (0, 38)                     ((-14, 114))
+--                  [ici BOTTOMLEFT (4, 38), 150 de large : voir LE CADRAGE
+--                  DU MODELE]
 --                rotation BOTTOMLEFT (14, 33)              ((26, 110))
 --                personnalisation BOTTOMRIGHT (26, -28)    ((-9, 50))
 --                argent BOTTOMRIGHT sur BOTTOMLEFT (175, 8) ((183, 86))
@@ -72,13 +74,18 @@ local METAL = {
 local PLACES = {
 	{ "TabardFrameOuterFrameTopLeft", "TOPLEFT", "TabardFrame", "TOPLEFT", 8, -63 },
 	{ "TabardFrameGreetingText", "TOP", "TabardFrame", "TOP", 15, -28 },
-	{ "TabardModel", "BOTTOM", "TabardFrame", "BOTTOM", 0, 38 },
+	-- le modele : la moitie gauche de l'encadre (voir LE CADRAGE DU MODELE),
+	-- au bas et a la hauteur de camelot
+	{ "TabardModel", "BOTTOMLEFT", "TabardFrame", "BOTTOMLEFT", 4, 38 },
 	{ "TabardCharacterModelRotateLeftButton", "BOTTOMLEFT", "TabardFrame", "BOTTOMLEFT", 14, 33 },
 	{ "TabardFrameCustomizationBorder", "BOTTOMRIGHT", "TabardFrame", "BOTTOMRIGHT", 26, -28 },
 	{ "TabardFrameMoneyFrame", "BOTTOMRIGHT", "TabardFrame", "BOTTOMLEFT", 175, 8 },
 	{ "TabardFrameAcceptButton", "CENTER", "TabardFrame", "TOPLEFT", 213, -409 },
 	{ "TabardFrameCancelButton", "CENTER", "TabardFrame", "TOPLEFT", 294, -409 },
 }
+-- la largeur du modele : la moitie gauche de l'encadre, de 4 au panneau de
+-- personnalisation (154) ; sa hauteur reste celle du client (317)
+local MODELE_LARGEUR = 150
 
 local T = {}
 ForeverUI.TabardFrame = T
@@ -273,19 +280,29 @@ function T.habiller()
 			r:SetPoint(p[2], _G[p[3]], p[4], p[5], p[6])
 		end
 	end
+	if TabardModel then TabardModel:SetWidth(MODELE_LARGEUR) end
 end
 
 -- LE CADRAGE DU MODELE. Le rappel de SetUnit n'y change rien (verifie a
 -- l'ecran le 2026-09-26) : le personnage reste en bas a gauche. Ce client
 -- n'a que deux leviers sur un modele, SetPosition(profondeur, lateral,
--- hauteur) et SetModelScale, plus SetCamera (releve dans Wow.exe pour la
--- feuille de personnage). Les valeurs se jugent a l'ecran : /fui tabard les
--- pose et les rend. Le moteur les reprend apres SetUnit : on les repose a
--- chaque image pendant une seconde et demie apres l'ouverture, comme pour la
--- feuille de personnage. Valeurs relevees a l'ecran le 2026-09-26 (personnage
--- centre, en pied, dans l'encadre) ; la camera 1 ne cadre pas mieux que celle
--- par defaut. SetUnit ne remet pas la position a zero.
-local REGLAGE = { camera = nil, position = { 0.55, 0.11, 0.72 }, echelle = nil }
+-- hauteur) et SetModelScale, plus SetCamera. Le moteur les reprend apres
+-- SetUnit : on les repose a chaque image pendant une seconde et demie apres
+-- l'ouverture, comme pour la feuille de personnage. SetUnit ne remet pas la
+-- position a zero ; /fui tabard pose et rend les valeurs. (La largeur du
+-- modele, MODELE_LARGEUR, est posee avec les places, plus haut.)
+-- LA CAMERA PAR DEFAUT (0) EST CELLE DU PORTRAIT : elle vise le visage et le
+-- pose en bas a gauche. Le reglage du 26/09 la corrigeait par une position
+-- en unites du monde (0,55 / 0,11 / 0,72), jugee sur un mort-vivant : avec un
+-- gnome, dont la camera est bien plus proche, le personnage sortait par le
+-- haut et on ne voyait que ses jambes (28/09). LA CAMERA 1 est celle du
+-- personnage en pied : propre a chaque race, elle le cadre tout entier et au
+-- centre du modele, quelle que soit sa taille (verifie a l'ecran sur le
+-- gnome). Plus aucune position : pour le garder dans la moitie gauche de
+-- l'encadre (valide le 26/09), c'est le cadre du modele qui prend cette
+-- moitie -- de 4 a 154, jusqu'au panneau de personnalisation --, au bas et a
+-- la hauteur de camelot.
+local REGLAGE = { camera = 1, position = { 0, 0, 0 }, echelle = nil }
 T.reglage = { camera = REGLAGE.camera, position = REGLAGE.position, echelle = REGLAGE.echelle }
 local RATTRAPAGE = 1.5
 
