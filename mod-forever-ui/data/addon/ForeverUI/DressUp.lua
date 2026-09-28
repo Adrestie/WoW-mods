@@ -37,7 +37,9 @@
 --   ses deux fleches de rotation prennent sa place, centrees a TOP (0, -10)
 --   de la scene, a 4 l'une de l'autre, et le modele tourne aussi a la souris
 --   (bouton gauche maintenu), comme la feuille du personnage.
---   Portrait de 60 a (-5, 7), comme la fenetre du tabard.
+--   Portrait : la regle VALIDEE du portrait d'unite (Inspect.lua, demande du
+--   28/09) -- 48 de cote a (1, 1,5), centre sur le trou de l'anneau ; en 60 a
+--   (-5, 7), le disque depassait du metal.
 --   Les instructions de 3.3.5 (DressUpFrameDescriptionText) s'eteignent :
 --   camelot n'en montre pas.
 --   Pas ajoutes, faute d'equivalent en 3.3.5 : la reduction de la fenetre,
@@ -55,7 +57,7 @@ local SEP = string.char(92)
 
 local N = {
 	fenetre = { 450, 545 },
-	portrait = { cote = 60, x = -5, y = 7 },
+	portrait = { cote = 48, x = 1, y = 1.5 },
 	encart = { 4, -60, -6, 26 },
 	scene = { 7, -63, -9, 28 },
 	fond = { droite = 85, haut = 348, bas = 175 },

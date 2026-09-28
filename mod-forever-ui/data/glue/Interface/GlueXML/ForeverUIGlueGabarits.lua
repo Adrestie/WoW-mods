@@ -328,6 +328,12 @@ function G.BarreMinimale(parent, nom)
 		local maxi = maximum()
 		if self.cacherSiInutile then
 			G.Montrer(self, maxi > 0)
+			-- la barre parait ou s'efface : le contenu prend ou rend sa place
+			-- (regle du 28/09), par barre.surVisibilite(avec)
+			if (maxi > 0) ~= self.avecAvant then
+				self.avecAvant = maxi > 0
+				if self.surVisibilite then self.surVisibilite(self.avecAvant) end
+			end
 		end
 		if maxi <= 0 or course <= 0 then
 			curseur:Hide()

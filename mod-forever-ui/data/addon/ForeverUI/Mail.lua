@@ -98,6 +98,15 @@ local N = {
 		sujet = { 105, -55 }, spam = { -12, -32 }, finExpediteur = { -5, -12 },
 		defile = { 8, -84 }, barre = { 10, -3, 5 }, fermer = { -6, 4 } },
 	delaiOuverture = 0.15,
+	-- la page de la lettre : Stationery*1 pose a 252 de large, le bord dechire
+	-- de Stationery*2 opaque jusqu'a sa colonne 49 -- la page finit a 302 de
+	-- la fenetre a defilement, 310 de la fenetre. Sans barre, elle va a 4 du
+	-- bord droit de l'encart (332), comme elle est a 4 de son bord gauche :
+	-- 18 de plus, pris sur la partie gauche, etiree. Sans barre, la fenetre a
+	-- defilement et son enfant vont au bout de la page (320), et le texte
+	-- jusqu'a y laisser a droite la marge qu'il a a gauche : l'envoi (a 20 de
+	-- la page) 280, la lettre (a 10) 300
+	papeterie = { gauche = 252, sansBarre = 18, defile = 320, envoi = 280, lecture = 300 },
 }
 
 local ART = {
@@ -387,6 +396,15 @@ local function envoi(f)
 	poser(SendMailScrollFrame, "TOPLEFT", s, "TOPLEFT", E.defile[1], E.defile[2])
 	eteindreFondBarre(SendMailScrollFrame)
 	Gb.BarreA(SendMailScrollFrameScrollBar, SendMailScrollFrame, E.barre[1], E.barre[2], E.barre[3])
+	-- la barre seulement si elle sert, le texte ET LA PAGE prennent sa place
+	-- (regle du 28/09, Gb.BarreSelonContenu) : 296 / 300 / 270 du modele 3.3.5
+	local Pp = N.papeterie
+	Gb.BarreSelonContenu(SendMailScrollFrame, function(avec)
+		SendMailScrollFrame:SetWidth(avec and 296 or Pp.defile)
+		SendMailScrollChildFrame:SetWidth(avec and 300 or Pp.defile)
+		SendMailBodyEditBox:SetWidth(avec and 270 or Pp.envoi)
+		SendStationeryBackgroundLeft:SetWidth(Pp.gauche + (avec and 0 or Pp.sansBarre))
+	end)
 	local nom = SendMailNameEditBox
 	nom:SetWidth(E.nom[3])
 	nom:SetHeight(E.nom[4])
@@ -522,6 +540,15 @@ local function lecture()
 	poser(OpenMailScrollFrame, "TOPLEFT", o, "TOPLEFT", Lc.defile[1], Lc.defile[2])
 	eteindreFondBarre(OpenMailScrollFrame)
 	Gb.BarreA(OpenMailScrollFrameScrollBar, OpenMailScrollFrame, Lc.barre[1], Lc.barre[2], Lc.barre[3])
+	-- la barre seulement si elle sert, le texte ET LA PAGE prennent sa place
+	-- (296 / 276)
+	local Pp = N.papeterie
+	Gb.BarreSelonContenu(OpenMailScrollFrame, function(avec)
+		OpenMailScrollFrame:SetWidth(avec and 296 or Pp.defile)
+		OpenMailScrollChildFrame:SetWidth(avec and 296 or Pp.defile)
+		OpenMailBodyText:SetWidth(avec and 276 or Pp.lecture)
+		OpenStationeryBackgroundLeft:SetWidth(Pp.gauche + (avec and 0 or Pp.sansBarre))
+	end)
 	poser(OpenMailCancelButton, "BOTTOMRIGHT", o, "BOTTOMRIGHT", Lc.fermer[1], Lc.fermer[2])
 	Gb.Croix(OpenMailCloseButton, o)
 	OpenMailCloseButton:SetFrameLevel(o:GetFrameLevel() + 22)

@@ -62,8 +62,10 @@
 --                affichable, puis "Specific Dungeons" (meme ordre, memes
 --                refus et meme infobulle) ; le bouton du type choisi porte
 --                la selection
---   liste        la liste des donjons specifiques (en-tetes, +/-, cases a
---                trois etats, verrous)
+--   liste        la liste des donjons specifiques (en-tetes, cases a trois
+--                etats, verrous) -- depuis le 28/09, la liste a categories
+--                de celle des raids (F.creerListeCat), l'en-tete gardant sa
+--                case
 --   details      le texte et les recompenses du donjon aleatoire choisi
 --                (texte, recompenses, argent, experience) -- camelot n'en a
 --                pas : sous les categories, aux polices de camelot
@@ -653,8 +655,13 @@ local function caseRadio(c, radio)
 	end
 end
 
--- la source des donjons (LFDFrame.lua)
+-- la source des donjons (LFDFrame.lua) ; les cases de camelot et l'en-tete
+-- a case (choix de l'utilisateur, 28/09 : la liste des donjons comme celle
+-- des raids, l'en-tete gardant sa case « tout cocher »)
 local SOURCE_LFD = {
+	style = "camelot",
+	caseEntete = true,
+	replier = function(id, replie) LFDList_SetHeaderCollapsed(id, replie) end,
 	liste = function() return LFDDungeonList end,
 	habilite = function() return LFD_IsEmpowered() end,
 	plus = function(b) LFDQueueFrameExpandOrCollapseButton_OnClick(b) end,
@@ -837,6 +844,252 @@ local function remplirLigne(ligne, index)
 end
 F.creerLigne = creerLigne
 F.remplirLigne = remplirLigne
+
+-- ------------------------------------------------------------ la liste a categories
+-- LA LISTE A CATEGORIES : celle des raids (GroupFinderRaid.lua, VALIDEE le
+-- 26/09), commune depuis que la liste des donjons specifiques la reprend
+-- (demande du 28/09 : « la liste des donjons n'a pas l'en-tete de
+-- camelot »). En-tetes de la feuille de personnage (TokensTab.lua,
+-- TokenHeaderTemplate) : 26 de haut, common-button-list-collapseExpand en
+-- neuf tranches (coin 12), nom GameFontNormalLeft a LEFT (10) sur 15, fleche
+-- common-button-list-minus / -plus a RIGHT (-8, -1), survol : la plaque en
+-- ADD a 0,3 ; entrees de 22 en retrait de 2, cases de camelot, le rectangle
+-- de la feuille (charactercreate-customize-dropdown-linemouseover en trois
+-- tranches, cotes de 6, le droit retourne) a 0,10 au survol et 0,20 coche ;
+-- 3 entre deux lignes, 4 de marge en haut. Un clic sur l'en-tete replie ou
+-- deplie (src.replier, la fonction du client). Des lignes de deux hauteurs :
+-- on les empile a la main, et le decalage compte des lignes.
+-- ECART, pour les donjons (choix de l'utilisateur, 28/09) : l'en-tete garde
+-- la case « tout cocher » de WotLK (src.caseEntete), a la place du debut du
+-- nom (LEFT 10), le nom 2 a sa droite ; cochee en partie (LFGEnabledList a
+-- 1), sa coche grisee, comme la liste des AddOns ; un en-tete verrouille
+-- montre le verrou de WotLK a la place de la case, et son infobulle.
+local LC = {
+	entete = 26, entree = 22, ecart = 3, retrait = 2, marge = 4, coin = 12, nomX = 10, nomH = 15,
+	flecheX = -8, flecheY = -1, flechePlace = 16, caseEcart = 2, cote = 6, choisie = 0.20, survol = 0.10,
+	plaque = "common-button-list-collapseexpand",
+	survolCote = "charactercreate-customize-dropdown-linemouseover-side",
+	survolMilieu = "charactercreate-customize-dropdown-linemouseover-middle",
+}
+F.LC = LC
+
+local function creerEnteteCat(zone, n)
+	local b = CreateFrame("Button", zone.prefixe .. "Header" .. n, zone)
+	b:SetHeight(LC.entete)
+	ForeverUI.CreateNineSlice(b, LC.plaque, LC.coin, { 0, 0, 0, 0 }, "BACKGROUND")
+	for _, t in ipairs(ForeverUI.CreateNineSlice(b, LC.plaque, LC.coin, { 0, 0, 0, 0 }, "HIGHLIGHT") or {}) do
+		t:SetBlendMode("ADD")
+		t:SetAlpha(0.3)
+	end
+	local nom = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLeft")
+	nom:SetHeight(LC.nomH)
+	nom:SetJustifyH("LEFT")
+	nom:SetPoint("RIGHT", b, "RIGHT", -LC.flechePlace, 0)
+	b.nom = nom
+	local fleche = b:CreateTexture(nil, "OVERLAY")
+	fleche:SetPoint("RIGHT", b, "RIGHT", LC.flecheX, LC.flecheY)
+	b.fleche = fleche
+	if zone.src.caseEntete then
+		-- la case du client : LFDQueueFrameDungeonChoiceEnableButton_OnClick lit
+		-- self:GetParent().id et self:GetChecked()
+		local c = CreateFrame("CheckButton", nil, b)
+		c.style = "camelot"
+		c:SetWidth(CASE_CAMELOT)
+		c:SetHeight(CASE_CAMELOT)
+		c:SetPoint("LEFT", b, "LEFT", LC.nomX, 0)
+		caseCamelot(c, false)
+		c:SetScript("OnClick", function(self) zone.src.case(self) end)
+		b.case = c
+		local verrou = b:CreateTexture(nil, "OVERLAY")
+		verrou:SetTexture(LFG .. "UI-LFG-ICON-LOCK")
+		verrou:SetTexCoord(0, 0.71875, 0, 0.875)
+		verrou:SetWidth(12)
+		verrou:SetHeight(14)
+		verrou:SetPoint("CENTER", c, "CENTER", 0, 0)
+		verrou:Hide()
+		b.lockedIndicator = verrou
+		nom:SetPoint("LEFT", c, "RIGHT", LC.caseEcart, 0)
+		b:SetScript("OnEnter", function(self) LFDQueueFrameDungeonListButton_OnEnter(self) end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	else
+		nom:SetPoint("LEFT", b, "LEFT", LC.nomX, 0)
+	end
+	b:SetScript("OnClick", function(self)
+		PlaySound("igMainMenuOptionCheckBoxOn")
+		zone.src.replier(self.id, not LFGCollapseList[self.id])
+		F.demander()
+	end)
+	return b
+end
+
+local function remplirEnteteCat(b, id, src)
+	local info = LFGDungeonInfo and LFGDungeonInfo[id] or {}
+	b.id = id
+	b.nom:SetText(info[1] or "")
+	ForeverUI.SetAtlas(b.fleche, LFGCollapseList[id] and "common-button-list-plus" or "common-button-list-minus", false)
+	local c = b.case
+	if not c then return end
+	local mode = GetLFGMode()
+	local fige = mode == "rolecheck" or mode == "queued" or mode == "listed" or not src.habilite()
+	if src.verrou(id) then
+		c:Hide()
+		b.lockedIndicator:Show()
+	else
+		c:Show()
+		b.lockedIndicator:Hide()
+	end
+	local etat = src.etat(id, mode)
+	c:SetChecked(etat and etat ~= 0)
+	local coche = c:GetCheckedTexture()
+	if coche then coche:SetDesaturated(etat == 1) end
+	if fige then c:Disable() else c:Enable() end
+end
+
+local function creerEntreeCat(zone, n)
+	local l = CreateFrame("Button", zone.prefixe .. "Row" .. n, zone)
+	l:SetHeight(LC.entree)
+	-- le rectangle de la feuille, sous la ligne
+	local survol = CreateFrame("Frame", nil, l)
+	survol:SetAllPoints(l)
+	survol:SetAlpha(0)
+	local g = survol:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(g, LC.survolCote, true)
+	g:SetWidth(LC.cote)
+	g:SetPoint("TOPLEFT", survol, "TOPLEFT", 0, 0)
+	g:SetPoint("BOTTOMLEFT", survol, "BOTTOMLEFT", 0, 0)
+	local d = survol:CreateTexture(nil, "BACKGROUND")
+	if ForeverUI.SetAtlas(d, LC.survolCote, true) then
+		local e = ForeverUI.AtlasEntry(LC.survolCote)
+		d:SetTexCoord(e[3], e[2], e[4], e[5])
+	end
+	d:SetWidth(LC.cote)
+	d:SetPoint("TOPRIGHT", survol, "TOPRIGHT", 0, 0)
+	d:SetPoint("BOTTOMRIGHT", survol, "BOTTOMRIGHT", 0, 0)
+	local m = survol:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(m, LC.survolMilieu, true)
+	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
+	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
+	l.survol = survol
+	creerLigne(l)
+	return l
+end
+
+-- l'opacite du rectangle : cochee 0,20 ; au survol 0,10 ; au repos 0
+local function poserSurvolCat(l)
+	local coche = l.case:IsShown() and l.case:GetChecked()
+	l.survol:SetAlpha((coche and LC.choisie) or (l:IsMouseOver() and LC.survol) or 0)
+end
+
+-- combien de lignes tiennent depuis la i-eme
+local function tiennentCat(l, depuis, haut)
+	local y, n = LC.marge, 0
+	for i = depuis, #l do
+		local h = (l[i] < 0) and LC.entete or LC.entree
+		if y + h > haut then break end
+		y = y + h + LC.ecart
+		n = n + 1
+	end
+	return n
+end
+
+-- la zone : du haut de la liste (G.listeY1, marge comprise) a zone.bas au-dessus
+-- du bas de la fenetre ; sa barre lui laisse sa place (barreDroite), sinon
+-- elle va a la marge
+local function poserZoneCat(zone)
+	local f = F.cadre
+	zone:ClearAllPoints()
+	zone:SetPoint("TOPLEFT", f, "TOPLEFT", G.listeX1 + G.marge, G.listeY1 - G.marge)
+	zone:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", zone.avecBarre and (G.listeX2 + G.barreDroite - G.marge)
+		or (G.listeX2 - G.marge), zone.bas)
+end
+
+function F.majListeCat(zone)
+	local l = zone.src.liste() or {}
+	local total = #l
+	local haut = G.hauteur + (G.listeY1 - G.marge) - zone.bas
+	-- le plus grand decalage : celui d'ou la fin de la liste tient
+	local maxi = 0
+	for d = 0, total do
+		if tiennentCat(l, d + 1, haut) >= total - d then
+			maxi = d
+			break
+		end
+	end
+	zone.maxi = maxi
+	zone.decalage = math.max(0, math.min(zone.decalage or 0, maxi))
+	local avecBarre = maxi > 0
+	if avecBarre ~= zone.avecBarre then
+		zone.avecBarre = avecBarre
+		poserZoneCat(zone)
+	end
+	local y = LC.marge
+	local ne, nn = 0, 0
+	for i = zone.decalage + 1, total do
+		local id = l[i]
+		local h = (id < 0) and LC.entete or LC.entree
+		if y + h > haut then break end
+		local ligne
+		if id < 0 then
+			ne = ne + 1
+			ligne = zone.entetes[ne] or creerEnteteCat(zone, ne)
+			zone.entetes[ne] = ligne
+			remplirEnteteCat(ligne, id, zone.src)
+			ligne:ClearAllPoints()
+			ligne:SetPoint("TOPLEFT", zone, "TOPLEFT", 0, -y)
+			ligne:SetPoint("TOPRIGHT", zone, "TOPRIGHT", 0, -y)
+		else
+			nn = nn + 1
+			ligne = zone.entrees[nn] or creerEntreeCat(zone, nn)
+			zone.entrees[nn] = ligne
+			remplirLigne(ligne, i)
+			poserSurvolCat(ligne)
+			ligne:ClearAllPoints()
+			ligne:SetPoint("TOPLEFT", zone, "TOPLEFT", LC.retrait, -y)
+			ligne:SetPoint("TOPRIGHT", zone, "TOPRIGHT", 0, -y)
+		end
+		ligne:Show()
+		y = y + h + LC.ecart
+	end
+	for i = ne + 1, #zone.entetes do zone.entetes[i]:Hide() end
+	for i = nn + 1, #zone.entrees do zone.entrees[i]:Hide() end
+	zone.barre:Regler(maxi + 1, 1, zone.decalage)
+end
+
+-- une liste a categories dans la page p : nom de la zone, prefixe des
+-- lignes, source, bas de la zone (au-dessus du bas de la fenetre), encadre
+function F.creerListeCat(p, nom, prefixe, src, bas, encadre)
+	local zone = CreateFrame("Frame", nom, p)
+	zone.src = src
+	zone.prefixe = prefixe
+	zone.entetes, zone.entrees = {}, {}
+	zone.decalage = 0
+	zone.bas = bas
+	zone:SetFrameLevel(encadre:GetFrameLevel() + 1)
+	zone.avecBarre = false
+	poserZoneCat(zone)
+	local barre = ForeverUI.CreateScrollBar(nom .. "ScrollBar", p, zone)
+	barre:SetFrameLevel(encadre:GetFrameLevel() + 2)
+	barre:ClearAllPoints()
+	barre:SetPoint("TOPLEFT", zone, "TOPRIGHT", 13 + G.marge, 0)
+	barre:SetPoint("BOTTOMLEFT", zone, "BOTTOMRIGHT", 13 + G.marge, -2)
+	barre.surDefilement = function(nouveau)
+		zone.decalage = nouveau
+		F.majListeCat(zone)
+	end
+	zone.barre = barre
+	zone:EnableMouseWheel(true)
+	zone:SetScript("OnMouseWheel", function(self, sens)
+		self.decalage = math.max(0, math.min((self.decalage or 0) - sens, self.maxi or 0))
+		F.majListeCat(self)
+	end)
+	-- le survol suivi a chaque image, comme la feuille (suivreSurvol)
+	zone:SetScript("OnUpdate", function(self)
+		for _, l in ipairs(self.entrees) do
+			if l:IsShown() then poserSurvolCat(l) end
+		end
+	end)
+	return zone
+end
 
 -- ------------------------------------------------------------ les recompenses
 
@@ -1278,19 +1531,10 @@ local function construirePage(f)
 	regle:SetHeight(G.regleH)
 	F.regle = regle
 
-	-- la liste des donjons specifiques
-	local liste = S.creerListe(p, "ForeverUIGroupFinderList", G.ligne, creerLigne, remplirLigne)
-	liste.src = SOURCE_LFD
-	liste:SetFrameLevel(encadre:GetFrameLevel() + 1)
-	liste.barre:SetFrameLevel(encadre:GetFrameLevel() + 2)
-	liste:SuivreBarre({ "TOPLEFT", f, "TOPLEFT", G.listeX1 + G.marge, G.listeY1 - G.marge },
-		{ "BOTTOMRIGHT", f, "BOTTOMRIGHT", G.listeX2 + G.barreDroite - G.marge, G.listeY2 + G.marge },
-		G.listeX2 - G.marge)
-	-- la barre : TOPLEFT sur le TOPRIGHT de la liste (+13, -4) avec la marge
-	liste.barre:ClearAllPoints()
-	liste.barre:SetPoint("TOPLEFT", liste, "TOPRIGHT", 13 + G.marge, 0)
-	liste.barre:SetPoint("BOTTOMLEFT", liste, "BOTTOMRIGHT", 13 + G.marge, -2)
-	F.listeVue = liste
+	-- la liste des donjons specifiques : la liste a categories des raids
+	-- (demande du 28/09), jusqu'a la marge du bas de l'encadre
+	F.listeVue = F.creerListeCat(p, "ForeverUIGroupFinderList", "ForeverUIGroupFinder", SOURCE_LFD,
+		G.listeY2 + G.marge, encadre)
 
 	construireRecompenses(p)
 	F.details:SetFrameLevel(encadre:GetFrameLevel() + 1)
@@ -1367,7 +1611,7 @@ local function majDonjons()
 	end
 	if vue == "liste" then
 		F.listeVue:Show()
-		F.listeVue:Maj(LFDDungeonList and #LFDDungeonList or 0)
+		F.majListeCat(F.listeVue)
 	else
 		F.listeVue:Hide()
 		F.listeVue.barre:Hide()

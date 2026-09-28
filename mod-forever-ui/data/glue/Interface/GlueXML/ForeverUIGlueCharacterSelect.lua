@@ -192,6 +192,12 @@ end
 
 local CARTE_L, CARTE_H, ECART, MARGE_G = 347, 95, 2, 122
 local PAN = 95
+-- SANS BARRE, LES CARTES SE CENTRENT DANS LA LISTE (demande du 28/09 : « le
+-- meme espace a gauche et a droite de chaque cadre de personnage ») : l'art
+-- de la carte (321, centre sur InnerContent, de 20 a -10 de la carte) a son
+-- milieu a -115 + 122 + 20 + 317 / 2 = 185,5 de la liste, dont le milieu est
+-- a 193 ; avec la barre, la place de camelot
+local CENTRAGE = 386 / 2 - (-115 + MARGE_G + 20 + (CARTE_L - 30) / 2)
 -- ecarts a camelot (voir l'en-tete) : la zone monte a la place de la
 -- recherche retiree, les boutons descendent de 11, service reduit
 local HAUT_ZONE, DESCENTE, SERVICE = -25, 11, 53
@@ -210,6 +216,14 @@ barreDefil:SetPoint("BOTTOM", zone, "BOTTOM", 0, 4)
 barreDefil:SetPoint("RIGHT", liste, "RIGHT", -16, 0)
 barreDefil.pas = PAN
 barreDefil.cacherSiInutile = true
+-- sans barre, la zone (qui rogne les cartes) s'etend sur sa place, jusqu'au
+-- bord droit de la barre (-16) : la carte centree et son cadre de selection
+-- (de -13 a +13 autour de la carte) y tiennent
+barreDefil.surVisibilite = function(avec)
+	local droite = avec and -32 or -16
+	zone:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", droite, 83 - DESCENTE)
+	contenu:SetWidth(386 + 115 + droite)
+end
 barreDefil.surDefilement = function(position)
 	etat.decalage = position
 	zone:SetVerticalScroll(position)
@@ -413,7 +427,8 @@ local function marquer()
 	end
 end
 
--- la mise en page : les cartes en colonne
+-- la mise en page : les cartes en colonne, centrees quand la barre n'y est
+-- pas (la barre se regle avant qu'on les pose)
 local function ranger()
 	local n = 0
 	etat.visibles = {}
@@ -422,9 +437,6 @@ local function ranger()
 		local nom = i <= GetNumCharacters() and GetCharacterInfo(i)
 		if nom then
 			n = n + 1
-			c:ClearAllPoints()
-			c:SetPoint("TOPLEFT", contenu, "TOPLEFT", MARGE_G, -(n - 1) * (CARTE_H + ECART))
-			c:Show()
 			etat.visibles[n] = c
 		else
 			c:Hide()
@@ -438,6 +450,12 @@ local function ranger()
 	barreDefil:Regler(total, vue, etat.decalage)
 	etat.decalage = barreDefil.position
 	zone:SetVerticalScroll(etat.decalage)
+	local x = MARGE_G + (barreDefil:IsShown() and 0 or CENTRAGE)
+	for k, c in ipairs(etat.visibles) do
+		c:ClearAllPoints()
+		c:SetPoint("TOPLEFT", contenu, "TOPLEFT", x, -(k - 1) * (CARTE_H + ECART))
+		c:Show()
+	end
 	marquer()
 end
 

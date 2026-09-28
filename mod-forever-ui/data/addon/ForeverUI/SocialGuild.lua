@@ -111,8 +111,10 @@ local P = {
 	colonnes = { { "LEVEL", 40, "level" }, { "CLASS", 45, "class" }, { "NAME", 100, "name" },
 		{ "ZONE", 100, "zone" }, { "RANK", 0, "rank" } },
 	-- la derniere colonne va jusqu'au bord de la liste ; remplirL : sa
-	-- largeur avant ancrage
-	noteDroite = -6, remplirL = 60, listeX2 = -22, listeX2Seule = -4,
+	-- largeur avant ancrage. Sans barre, la liste (a 5 de l'encadre) et les
+	-- en-tetes (a 4) gardent a droite leur marge de gauche : liste a -5,
+	-- derniere colonne a +1 du bord de la liste
+	noteDroite = -6, noteDroiteSeule = 1, remplirL = 60, listeX2 = -22, listeX2Seule = -5,
 	bande = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildframe",
 	bandeCoords = { 0.36230469, 0.38183594, 0.95898438, 0.99804688 },
 	barre = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "UI-FriendsFrame-HighlightBar",
@@ -491,7 +493,10 @@ local function creerInfo()
 	b:SetMultiLine(true)
 	b:SetAutoFocus(false)
 	b:SetMaxLetters(500)
-	b:SetWidth(250)
+	-- toute la largeur de la fenetre a defilement (300 - 2 x 12 - 2 x 6) : il
+	-- n'y a pas de barre ici, le texte garde 6 de chaque cote de l'encart
+	-- (regle du 28/09 ; 250 laissait 20 a droite)
+	b:SetWidth(264)
 	b:SetHeight(200)
 	b:SetFontObject(GameFontHighlightSmall)
 	b:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -573,8 +578,9 @@ local function creerJournal()
 		-- le plus recent d'abord, comme la boucle du client
 		l.texte:SetText(ligneJournal((GetNumGuildEvents() or 0) - n + 1))
 	end)
-	J.liste:SetPoint("TOPLEFT", e, "TOPLEFT", 4, -4)
-	J.liste:SetPoint("BOTTOMRIGHT", e, "BOTTOMRIGHT", -16, 4)
+	-- sans barre, la liste va a 4 du bord de l'encadre, comme a gauche (regle
+	-- du 28/09) ; avec elle, elle lui laisse sa place
+	J.liste:SuivreBarre({ "TOPLEFT", e, "TOPLEFT", 4, -4 }, { "BOTTOMRIGHT", e, "BOTTOMRIGHT", -16, 4 }, -4)
 	local fermer = S.bouton(a, txt("CLOSE"), 140)
 	fermer:SetPoint("BOTTOM", a, "BOTTOM", 0, 14)
 	fermer:SetScript("OnClick", function() a:Hide() end)
@@ -729,9 +735,14 @@ local function construire(cadre)
 	end
 	Gu.liste = S.creerListe(encadre, "ForeverUIGuildList", P.ligneH, creerLigne, remplirLigne)
 	-- sans barre, la liste et la colonne Rank vont jusqu'au bord
+	local poserAncres = Gu.liste.PoserAncres
+	function Gu.liste:PoserAncres()
+		poserAncres(self)
+		Gu.entetes[#P.colonnes]:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT",
+			self.avecBarre and P.noteDroite or P.noteDroiteSeule, 1)
+	end
 	Gu.liste:SuivreBarre({ "TOPLEFT", Gu.entetes[1], "BOTTOMLEFT", 1, -1 },
 		{ "BOTTOMRIGHT", encadre, "BOTTOMRIGHT", P.listeX2, 4 }, P.listeX2Seule)
-	Gu.entetes[#P.colonnes]:SetPoint("BOTTOMRIGHT", Gu.liste, "TOPRIGHT", P.noteDroite, 1)
 
 	Gu.totaux = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	Gu.totaux:SetPoint("TOPLEFT", S.cadre, "TOPLEFT", P.totauxX, P.totauxY)

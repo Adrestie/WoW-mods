@@ -272,3 +272,6 @@ interface/containerframe/bagsitembankslot2xc60.blp
 # rowstripe-*, auctionhouse-ui-sortarrow, auctionhouse-itemicon-*,
 # blizzard_auctionhouseui/mainline et shared)
 interface/auctionframe/auctionhouse.blp
+# le dialogue et la quete : le fond parchemin (QuestBG-Parchment,
+# mainline/gossipframe.lua et questframetemplates.xml)
+interface/questframe/questbackgroundparchment.blp

@@ -102,16 +102,15 @@ local txt, actif = F.txt, F.actif
 
 local M = {
 	-- l'inscription
-	regleY = 40 + 80, listeHaut = -125 - 4, listeBas = 40 + 88 + 4, listeX = 7 + 4,
+	-- la liste des raids s'arrete a 88 + 4 au-dessus du bas de la vue ; ses
+	-- categories sont celles de la liste commune (GroupFinder.lua, F.LC)
+	regleY = 40 + 80, listeBas = 40 + 88 + 4,
 	commentaireL = 394, commentaireH = 47, commentaireY = 40 + 19, lettres = 64,
-	-- les categories de la liste des raids (TokensTab.lua)
-	catEntete = 26, catEntree = 22, catEcart = 3, catRetrait = 2, catMarge = 4, catCoin = 12,
-	catNomX = 10, catNomH = 15, catFlecheX = -8, catFlecheY = -1, catFlechePlace = 16,
-	catCote = 6, catChoisie = 0.20, catSurvol = 0.10,
 	-- le parcours
 	parcoursY = -80, menuX = 70, menuY = -43, menuL = 300, menuH = 25,
 	rafraichir = 32, rafraichirX = 9,
-	resultat = 48, resultatsY = -83, resultatsX2 = -22, resultatsSans = -6,
+	-- sans barre, a -7 comme a gauche (G.listeX1 : 7)
+	resultat = 48, resultatsY = -83, resultatsX2 = -22, resultatsSans = -7,
 	-- les onglets du bas (ceux de Social : premier a (5, 2) sous la fenetre,
 	-- les suivants a +3)
 	ongletX = 5, ongletY = 2, ongletEcart = 3,
@@ -127,6 +126,7 @@ local M = {
 local SOURCE_LFR = {
 	-- la case de camelot (GroupFinder.lua, caseCamelot)
 	style = "camelot",
+	replier = function(id, replie) LFRList_SetHeaderCollapsed(id, replie) end,
 	liste = function() return LFRRaidList or {} end,
 	habilite = function() return LFR_IsEmpowered() end,
 	plus = function(b) LFRQueueFrameExpandOrCollapseButton_OnClick(b) end,
@@ -209,7 +209,9 @@ local function construireCommentaire(p, niveau)
 	e:SetMultiLine(true)
 	e:SetAutoFocus(false)
 	e:SetMaxLetters(M.lettres)
-	e:SetWidth(M.commentaireL - 18)
+	-- toute la largeur : camelot en retire 18 pour sa barre, ce commentaire
+	-- ne defile pas et n'en a pas (regle du 28/09)
+	e:SetWidth(M.commentaireL)
 	e:SetHeight(M.commentaireH)
 	e:SetPoint("TOPLEFT", c, "TOPLEFT", 0, 0)
 	e:SetFontObject(GameFontHighlightSmall)
@@ -244,150 +246,11 @@ local function construireCommentaire(p, niveau)
 	R.commentaire = c
 end
 
--- LA LISTE DES RAIDS, A CATEGORIES : les en-tetes de la feuille de
--- personnage, les entrees communes avec les donjons (F.creerLigne, source
--- SOURCE_LFR). Des lignes de deux hauteurs : on les empile a la main, et le
--- decalage compte des lignes, pas des pixels.
-local function creerEnteteCat(zone, n)
-	local b = CreateFrame("Button", "ForeverUIGroupFinderRaidHeader" .. n, zone)
-	b:SetHeight(M.catEntete)
-	ForeverUI.CreateNineSlice(b, "common-button-list-collapseexpand", M.catCoin, { 0, 0, 0, 0 }, "BACKGROUND")
-	-- le survol : la meme plaque, en ADD a 0,3
-	for _, t in ipairs(ForeverUI.CreateNineSlice(b, "common-button-list-collapseexpand", M.catCoin,
-		{ 0, 0, 0, 0 }, "HIGHLIGHT") or {}) do
-		t:SetBlendMode("ADD")
-		t:SetAlpha(0.3)
-	end
-	local nom = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLeft")
-	nom:SetHeight(M.catNomH)
-	nom:SetJustifyH("LEFT")
-	nom:SetPoint("LEFT", b, "LEFT", M.catNomX, 0)
-	nom:SetPoint("RIGHT", b, "RIGHT", -M.catFlechePlace, 0)
-	b.nom = nom
-	local fleche = b:CreateTexture(nil, "OVERLAY")
-	fleche:SetPoint("RIGHT", b, "RIGHT", M.catFlecheX, M.catFlecheY)
-	b.fleche = fleche
-	b:SetScript("OnClick", function(self)
-		PlaySound("igMainMenuOptionCheckBoxOn")
-		LFRList_SetHeaderCollapsed(self.id, not LFGCollapseList[self.id])
-		F.demander()
-	end)
-	return b
-end
-
-local SURVOL_COTE = "charactercreate-customize-dropdown-linemouseover-side"
-local SURVOL_MILIEU = "charactercreate-customize-dropdown-linemouseover-middle"
-
-local function creerEntreeCat(zone, n)
-	local l = CreateFrame("Button", "ForeverUIGroupFinderRaidRow" .. n, zone)
-	l:SetHeight(M.catEntree)
-	-- le rectangle de la feuille, sous la ligne
-	local survol = CreateFrame("Frame", nil, l)
-	survol:SetAllPoints(l)
-	survol:SetAlpha(0)
-	local g = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(g, SURVOL_COTE, true)
-	g:SetWidth(M.catCote)
-	g:SetPoint("TOPLEFT", survol, "TOPLEFT", 0, 0)
-	g:SetPoint("BOTTOMLEFT", survol, "BOTTOMLEFT", 0, 0)
-	local d = survol:CreateTexture(nil, "BACKGROUND")
-	if ForeverUI.SetAtlas(d, SURVOL_COTE, true) then
-		local e = ForeverUI.AtlasEntry(SURVOL_COTE)
-		d:SetTexCoord(e[3], e[2], e[4], e[5])
-	end
-	d:SetWidth(M.catCote)
-	d:SetPoint("TOPRIGHT", survol, "TOPRIGHT", 0, 0)
-	d:SetPoint("BOTTOMRIGHT", survol, "BOTTOMRIGHT", 0, 0)
-	local m = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(m, SURVOL_MILIEU, true)
-	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
-	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
-	l.survol = survol
-	F.creerLigne(l)
-	return l
-end
-
--- l'opacite du rectangle : cochee 0,20 ; au survol 0,10 ; au repos 0
-local function poserSurvol(l)
-	local coche = l.case:IsShown() and l.case:GetChecked()
-	l.survol:SetAlpha((coche and M.catChoisie) or (l:IsMouseOver() and M.catSurvol) or 0)
-end
-
--- combien de lignes tiennent depuis la i-eme
-local function tiennent(l, depuis, haut)
-	local y, n = M.catMarge, 0
-	for i = depuis, #l do
-		local h = (l[i] < 0) and M.catEntete or M.catEntree
-		if y + h > haut then break end
-		y = y + h + M.catEcart
-		n = n + 1
-	end
-	return n
-end
-
-local function poserZone(zone)
-	local f = F.cadre
-	zone:ClearAllPoints()
-	zone:SetPoint("TOPLEFT", f, "TOPLEFT", M.listeX, M.listeHaut)
-	zone:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", zone.avecBarre and (G.listeX2 + G.barreDroite - G.marge)
-		or (G.listeX2 - G.marge), M.listeBas)
-end
-
+-- LA LISTE DES RAIDS, A CATEGORIES : la liste commune (GroupFinder.lua,
+-- F.creerListeCat : en-tetes de la feuille de personnage, entrees communes
+-- avec les donjons, source SOURCE_LFR)
 function R.majCategories()
-	local zone = R.liste
-	local l = LFRRaidList or {}
-	local total = #l
-	local haut = G.hauteur + M.listeHaut - M.listeBas
-	-- le plus grand decalage : celui d'ou la fin de la liste tient
-	local maxi = 0
-	for d = 0, total do
-		if tiennent(l, d + 1, haut) >= total - d then
-			maxi = d
-			break
-		end
-	end
-	zone.maxi = maxi
-	zone.decalage = math.max(0, math.min(zone.decalage or 0, maxi))
-	local avecBarre = maxi > 0
-	if avecBarre ~= zone.avecBarre then
-		zone.avecBarre = avecBarre
-		poserZone(zone)
-	end
-	local y = M.catMarge
-	local ne, nn = 0, 0
-	for i = zone.decalage + 1, total do
-		local id = l[i]
-		local h = (id < 0) and M.catEntete or M.catEntree
-		if y + h > haut then break end
-		local ligne
-		if id < 0 then
-			ne = ne + 1
-			ligne = zone.entetes[ne] or creerEnteteCat(zone, ne)
-			zone.entetes[ne] = ligne
-			ligne.id = id
-			local info = LFGDungeonInfo and LFGDungeonInfo[id] or {}
-			ligne.nom:SetText(info[1] or "")
-			ForeverUI.SetAtlas(ligne.fleche, LFGCollapseList[id] and "common-button-list-plus"
-				or "common-button-list-minus", false)
-			ligne:ClearAllPoints()
-			ligne:SetPoint("TOPLEFT", zone, "TOPLEFT", 0, -y)
-			ligne:SetPoint("TOPRIGHT", zone, "TOPRIGHT", 0, -y)
-		else
-			nn = nn + 1
-			ligne = zone.entrees[nn] or creerEntreeCat(zone, nn)
-			zone.entrees[nn] = ligne
-			F.remplirLigne(ligne, i)
-			poserSurvol(ligne)
-			ligne:ClearAllPoints()
-			ligne:SetPoint("TOPLEFT", zone, "TOPLEFT", M.catRetrait, -y)
-			ligne:SetPoint("TOPRIGHT", zone, "TOPRIGHT", 0, -y)
-		end
-		ligne:Show()
-		y = y + h + M.catEcart
-	end
-	for i = ne + 1, #zone.entetes do zone.entetes[i]:Hide() end
-	for i = nn + 1, #zone.entrees do zone.entrees[i]:Hide() end
-	zone.barre:Regler(maxi + 1, 1, zone.decalage)
+	F.majListeCat(R.liste)
 end
 
 -- LE PANNEAU "LIST MY GROUP" : la page d'inscription de camelot
@@ -397,34 +260,8 @@ local function construireInscription(p)
 	local encadre = F.construireEncadre(p, "ForeverUIGroupFinderRaidInset", G.encadreY1, true)
 	R.encadre = encadre
 
-	local zone = CreateFrame("Frame", "ForeverUIGroupFinderRaidList", p)
-	zone.src = SOURCE_LFR
-	zone.entetes, zone.entrees = {}, {}
-	zone.decalage = 0
-	zone:SetFrameLevel(encadre:GetFrameLevel() + 1)
-	zone.avecBarre = false
-	poserZone(zone)
-	local barre = ForeverUI.CreateScrollBar("ForeverUIGroupFinderRaidListScrollBar", p, zone)
-	barre:SetFrameLevel(encadre:GetFrameLevel() + 2)
-	barre:ClearAllPoints()
-	barre:SetPoint("TOPLEFT", zone, "TOPRIGHT", 13 + G.marge, 0)
-	barre:SetPoint("BOTTOMLEFT", zone, "BOTTOMRIGHT", 13 + G.marge, -2)
-	barre.surDefilement = function(nouveau)
-		zone.decalage = nouveau
-		R.majCategories()
-	end
-	zone.barre = barre
-	zone:EnableMouseWheel(true)
-	zone:SetScript("OnMouseWheel", function(self, sens)
-		self.decalage = math.max(0, math.min((self.decalage or 0) - sens, self.maxi or 0))
-		R.majCategories()
-	end)
-	-- le survol suivi a chaque image, comme la feuille (suivreSurvol)
-	zone:SetScript("OnUpdate", function(self)
-		for _, l in ipairs(self.entrees) do
-			if l:IsShown() then poserSurvol(l) end
-		end
-	end)
+	local zone = F.creerListeCat(p, "ForeverUIGroupFinderRaidList", "ForeverUIGroupFinderRaid", SOURCE_LFR,
+		M.listeBas, encadre)
 	R.liste = zone
 	-- "aucun raid" : LFRQueueFrameSpecificNoRaidsAvailable
 	local aucun = zone:CreateFontString(nil, "ARTWORK", "GameFontNormal")

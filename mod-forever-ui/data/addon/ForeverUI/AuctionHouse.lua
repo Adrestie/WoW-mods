@@ -77,9 +77,12 @@
 -- CE QUI DIFFERE, ET POURQUOI. La structure de WotLK reste (choix de
 -- l'utilisateur) : ses trois onglets, ses cadres, sa logique et ses places ;
 -- la fenetre de camelot se pose sur le rectangle visible de l'art de 3.3.5,
--- les encadres autour des listes. Les lignes gardent toujours la largeur « avec
--- barre » : chez camelot la barre vit hors de l'encadre, la liste ne
--- s'elargit pas sans elle. Le choix d'une ligne se lit par
+-- les encadres autour des listes. La barre vit hors de l'encadre, comme chez
+-- camelot ; quand le client la cache (tout tient), l'encadre prend sa place,
+-- jusqu'a 8 du bord de la fenetre comme a gauche, et ses lignes et ses
+-- en-tetes jusqu'a y laisser a droite la marge qu'ils ont a gauche (regle du
+-- 28/09 : « le contenu doit s'adapter a la presence ou non de la scrollbar »,
+-- « le meme espace a gauche et a droite »). Le choix d'une ligne se lit par
 -- GetSelectedAuctionItem (le client verrouille aussi la surbrillance au survol
 -- de l'icone). NE SONT PAS REPRIS : la cabine de l'hotel
 -- (AuctionDressUpFrame), la barre de mise en vente multiple
@@ -115,15 +118,27 @@ local N = {
 		BidScrollFrame = { 11, -3, 5 },
 		AuctionsScrollFrame = { 11, -4, 7 },
 	},
-	-- les lignes : largeur avec barre, surbrillance, derniere colonne
+	-- les lignes : largeur avec barre, surbrillance, derniere colonne, et
+	-- l'encadre qui les porte ; sans barre, ce que gagnent les lignes et la
+	-- derniere colonne pour laisser a droite de l'encadre (822) la marge
+	-- qu'elles ont a gauche : resultats, lignes a 195 (13 de l'encadre, 182)
+	-- -> 809, en-tetes a 186 (4) -> 818 ; offres, lignes a 27 (4 de 23) ->
+	-- 818, derniere colonne alignee dessus ; encheres, lignes a 219 (4 de
+	-- 215) -> 818, en-tetes a 219 (4) -> 818
 	lignes = {
 		Browse = { nombre = 8, largeur = 600, lueur = 562, colonne = "BrowseCurrentBidSort", colonneL = 184,
-			type = "list", defile = "BrowseScrollFrame", rayures = false },
+			type = "list", defile = "BrowseScrollFrame", rayures = false, encadre = "resultats",
+			sansBarre = 14, colonneSans = 18 },
 		Bid = { nombre = 9, largeur = 769, lueur = 735, colonne = "BidBidSort", colonneL = 145,
-			type = "bidder", defile = "BidScrollFrame", rayures = true },
+			type = "bidder", defile = "BidScrollFrame", rayures = true, encadre = "offres",
+			sansBarre = 22, colonneSans = 23 },
 		Auctions = { nombre = 9, largeur = 576, lueur = 543, colonne = "AuctionsBidSort", colonneL = 193,
-			type = "owner", defile = "AuctionsScrollFrame", rayures = true },
+			type = "owner", defile = "AuctionsScrollFrame", rayures = true, encadre = "encheres",
+			sansBarre = 23, colonneSans = 19 },
 	},
+	-- sans barre : l'encadre va de 804 a 822 (8 du bord droit de la fenetre,
+	-- 830, comme les categories a 8 de son bord gauche)
+	sansBarre = 18,
 	decalageLigne = 2.5,
 	icone = { cote = 37 },
 	-- les categories : par type, fond / choix / survol (atlas, l, h, point, x, y)
@@ -373,19 +388,27 @@ local function habillerLigne(b)
 	b.foreverLigne = l
 end
 
--- APRES AuctionFrameBrowse_Update / Bid / Auctions : largeur « avec barre »,
--- choix, rayures
+-- APRES AuctionFrameBrowse_Update / Bid / Auctions (le client a deja montre
+-- ou cache la barre) : largeurs selon la barre, encadre, choix, rayures
 function H.MajLignes(cle)
 	local L = N.lignes[cle]
-	local decalage = FauxScrollFrame_GetOffset(_G[L.defile]) or 0
+	local fx = _G[L.defile]
+	local decalage = FauxScrollFrame_GetOffset(fx) or 0
 	local choisi = GetSelectedAuctionItem(L.type)
+	local avec = fx:IsShown()
+	local habit = AuctionFrame.foreverHabit
+	local e, r = habit and habit[L.encadre], N[L.encadre]
+	if e then
+		e.rect:SetPoint("BOTTOMRIGHT", e.rect:GetParent(), "TOPLEFT", r[3] + (avec and 0 or N.sansBarre), r[4])
+	end
+	local plus = avec and 0 or L.sansBarre
 	for i = 1, L.nombre do
 		local b = _G[cle .. "Button" .. i]
 		local l = b and b.foreverLigne
 		if l then
-			b:SetWidth(L.largeur)
+			b:SetWidth(L.largeur + plus)
 			local lueur = _G[cle .. "Button" .. i .. "Highlight"]
-			if lueur then lueur:SetWidth(L.lueur) end
+			if lueur then lueur:SetWidth(L.lueur + plus) end
 			Gb.Montrer(l.choix, choisi ~= nil and choisi == decalage + i)
 			if L.rayures then
 				atlas(l.rayure, ART.rayures[(decalage + i) % 2 == 1 and 1 or 2])
@@ -394,7 +417,7 @@ function H.MajLignes(cle)
 		end
 	end
 	local colonne = _G[L.colonne]
-	if colonne then colonne:SetWidth(L.colonneL) end
+	if colonne then colonne:SetWidth(L.colonneL + (avec and 0 or L.colonneSans)) end
 end
 
 -- ------------------------------------------------------------ les en-tetes

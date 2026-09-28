@@ -59,15 +59,17 @@
 --     Interface/TargetingFrame/UI-PVP-<faction>, rogne a 0,03125 ..
 --     0,59375. Releve dans TokenFrame_Update.
 --   * UNE MONNAIE A ZERO S'ECRIT EN GRIS. GameFontDisable, comme le client.
---   * PAS DE BARRE DE DEFILEMENT, comme la reputation et les competences :
---     la molette suffit d'ici la.
+--   * PAS DE BARRE DE DEFILEMENT : la molette suffit d'ici la. La liste ne
+--     garde donc pas la place de la barre (regle du 28/09 : « le contenu
+--     doit s'adapter a la presence ou non de la scrollbar ») : son bord
+--     droit est a -10, la marge de gauche, et non a -25 comme chez camelot.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 local L = ForeverUI.L
 
 local LISTE_X, LISTE_Y = 10, -40
-local LISTE_X2, LISTE_Y2 = -25, 15
+local LISTE_X2, LISTE_Y2 = -LISTE_X, 15
 
 local ENTREE_H = 22                     -- TokenEntryTemplate
 local ENTETE_H = 26                     -- TokenHeaderTemplate

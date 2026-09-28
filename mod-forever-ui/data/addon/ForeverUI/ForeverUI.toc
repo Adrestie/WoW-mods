@@ -91,3 +91,4 @@ Mail.lua
 Bank.lua
 GuildBank.lua
 AuctionHouse.lua
+NpcDialog.lua

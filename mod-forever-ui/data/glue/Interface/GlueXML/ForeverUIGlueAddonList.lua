@@ -98,7 +98,11 @@ local SON = { oui = "igMainMenuOptionCheckBoxOn", non = "igMainMenuOptionCheckBo
 
 local M = {
 	largeur = 600, hauteur = 550, y = 24,
-	listeG = 7, listeH = 65, listeD = 34, listeB = 28,
+	-- listeDSans : sans barre, les lignes (a 7 + 5 = 12, 3 dans l'encart qui
+	-- commence a 9) gardent a droite de l'encart (594) cette marge de 3 :
+	-- elles finissent a 591, la liste (avec sa marge de 5) a 596 (regle du
+	-- 28/09)
+	listeG = 7, listeH = 65, listeD = 34, listeDSans = 4, listeB = 28,
 	marge = 5, ligneH = 16, ecart = 8, molette = 2,
 	menuL = 140, menuH = 25, ligneMenu = 20, menuMarges = { 8, 8, 8, 15 },
 	infobulleL = 200,
@@ -545,6 +549,21 @@ barre:SetPoint("TOPLEFT", vue, "TOPRIGHT", 4, -3)
 barre:SetPoint("BOTTOMLEFT", vue, "BOTTOMRIGHT", 4, 2)
 barre.pas = M.pas
 
+-- la barre seulement si elle sert ; sans elle, la liste et ses lignes
+-- s'etendent (M.listeDSans), avec elle, les bornes de camelot
+barre.cacherSiInutile = true
+local function largeurLigne()
+	return M.largeur - M.listeG - (barre:IsShown() and M.listeD or M.listeDSans) - 2 * M.marge
+end
+barre.surVisibilite = function(avec)
+	local d = avec and M.listeD or M.listeDSans
+	vue:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -d, M.listeB)
+	contenu:SetWidth(M.largeur - M.listeG - d)
+	for _, l in ipairs(etat.lignes) do
+		l:SetWidth(largeurLigne())
+	end
+end
+
 -- une ligne entierement hors de la vue se cache
 local function defiler(position)
 	etat.position = position
@@ -569,7 +588,7 @@ local function ligne(k)
 	end
 	local l = CreateFrame("Button", nil, contenu)
 	l:SetHeight(M.ligneH)
-	l:SetWidth(M.listeL - 2 * M.marge)
+	l:SetWidth(largeurLigne())
 	l:SetPoint("TOPLEFT", contenu, "TOPLEFT", M.marge, -(M.marge + (k - 1) * M.pas))
 	l:RegisterForClicks("LeftButtonDown", "RightButtonDown")
 	local s = l:CreateTexture(nil, "HIGHLIGHT")

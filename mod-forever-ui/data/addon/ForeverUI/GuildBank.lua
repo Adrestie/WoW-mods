@@ -79,8 +79,13 @@ local N = {
 	argent = { bord = { 1, 25, -4, 2 }, limite = { 8, 6 }, bourse = { -2, 6 }, depot = { -8, 30 } },
 	onglet = { x = 7, y = -30, ecart = 3 },
 	ongletCote = { -1, -17 },
-	journal = { 24, -64, barre = { 6, 0, 3 } },
-	info = { defile = { -9, 12 }, barre = { 4, -2, 3 }, sauver = { 20, 31 } },
+	-- sans barre, jusqu'a laisser a droite du fond noir (16 .. 737 : les coins
+	-- interieurs, a 14 / -9 des exterieurs, puis 4) la marge qu'ils ont a
+	-- gauche : le journal (24, marge 8) 705, l'information (23, marge 7) 707
+	-- et son champ 706
+	journal = { 24, -64, barre = { 6, 0, 3 }, largeur = 688, sansBarre = 705 },
+	info = { defile = { -9, 12 }, barre = { 4, -2, 3 }, sauver = { 20, 31 }, largeur = 691, champ = 690,
+		sansBarre = 707, champSans = 706 },
 	recherche = { -15, -36, 130, 20 },
 }
 
@@ -338,10 +343,21 @@ function G.Habiller()
 		if r:GetObjectType() == "Texture" then r:SetAlpha(0) end
 	end
 	Gb.BarreA(GuildBankTransactionsScrollFrameScrollBar, GuildBankMessageFrame, J.barre[1], J.barre[2], J.barre[3])
+	-- la barre du journal (FauxScrollFrame : cachee quand tout tient) ; le
+	-- message prend sa place sans elle (regle du 28/09) : 688 du modele
+	Gb.FauxSelonContenu(fx, function(avec)
+		GuildBankMessageFrame:SetWidth(avec and J.largeur or J.sansBarre)
+	end)
 	-- l'information de l'onglet
 	local I = N.info
 	poser(GuildBankInfoScrollFrame, "TOPLEFT", GuildBankInfo, "TOPLEFT", I.defile[1], I.defile[2])
 	Gb.BarreA(GuildBankInfoScrollFrameScrollBar, GuildBankInfoScrollFrame, I.barre[1], I.barre[2], I.barre[3])
+	-- l'information : la barre seulement si elle sert, le champ prend sa
+	-- place (691 / 690 du modele)
+	Gb.BarreSelonContenu(GuildBankInfoScrollFrame, function(avec)
+		GuildBankInfoScrollFrame:SetWidth(avec and I.largeur or I.sansBarre)
+		GuildBankTabInfoEditBox:SetWidth(avec and I.champ or I.champSans)
+	end)
 	poser(GuildBankInfoSaveButton, "BOTTOMLEFT", f, "BOTTOMLEFT", I.sauver[1], I.sauver[2])
 	-- la recherche
 	local R = N.recherche
