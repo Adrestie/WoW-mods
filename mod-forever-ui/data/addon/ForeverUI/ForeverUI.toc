@@ -71,3 +71,11 @@ GroupFinder.lua
 GroupFinderRaid.lua
 Chat.lua
 Buffs.lua
+Tooltips.lua
+Gabarits.lua
+GameMenu.lua
+Settings.lua
+Bindings.lua
+Macros.lua
+ChatConfig.lua
+ColorPicker.lua

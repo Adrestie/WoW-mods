@@ -245,3 +245,12 @@ fdid:8117690 => interface/common/commongraybuttonentryboxc60.blp
 # le trousseau : son icone en double densite (ui-hud-actionbar-keyring-small-
 # c60-2x, 54 x 80) -- la simple, 27 x 40, s agrandissait et se pixelisait
 interface/hud/uiactionbar2xc60.blp
+# les infobulles : le bandeau de l infobulle de comparaison (tooltip-compare-
+# label, CompareHeader de ShoppingTooltipTemplate)
+interface/tooltip/tooltiplabel.blp
+# les reglages : le bouton de depliage d une categorie (common-button-
+# dropdown-open / -closed, SettingsCategoryListButtonTemplate)
+interface/common/commonbuttonsdropdown.blp
+# le selecteur de couleur : le damier derriere la colonne d opacite
+# (colorpicker-checkerboard, mainline/colorpickerframe.xml)
+interface/dialogframe/colorpicker.blp

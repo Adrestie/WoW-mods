@@ -26,6 +26,9 @@ local function newRegion(kind)
     local r = { kind = kind, shown = true, points = {}, rang = REGIONS_CREEES }
     function r:SetTexture(a, b, c, d) self.texture = a; self.color = {a,b,c,d} end
     function r:GetTexture() return self.texture end
+    -- le degrade d'une texture (orientation, couleur du bas, couleur du
+    -- haut pour VERTICAL), releve dans Wow.exe
+    function r:SetGradientAlpha(...) self.gradient = { ... } end
     function r:SetHorizTile(v) self.tile = v end
     function r:SetTexCoord(a, b, c, d, e, f, g, h)
         if e then
@@ -205,8 +208,22 @@ end
 local frames = {}
 _G.FRAMES = frames
 
+-- LE VRAI TYPE D'UN CADRE (GetObjectType) : Button, CheckButton, Slider...,
+-- quelle que soit la casse donnee a CreateFrame. Le banc rendait "Frame"
+-- pour tous : une case y passait pour un cadre (reglages, 2026-09-28).
+local TYPES_CADRES = {}
+for _, t in ipairs({ "Frame", "Button", "CheckButton", "Slider", "ScrollFrame", "EditBox", "GameTooltip",
+        "StatusBar", "Model", "PlayerModel", "DressUpModel", "TabardModel", "MessageFrame",
+        "ScrollingMessageFrame", "Cooldown", "SimpleHTML", "ColorSelect", "Minimap", "MovieFrame" }) do
+    TYPES_CADRES[string.lower(t)] = t
+end
 function CreateFrame(kind, name, parent, template)
     local f = newRegion("frame")
+    f.objectType = TYPES_CADRES[string.lower(kind or "frame")] or "Frame"
+    function f:GetObjectType() return self.objectType end
+    function f:IsObjectType(t)
+        return self.objectType == t or t == "Frame" or (t == "Button" and self.objectType == "CheckButton")
+    end
     f.name = name
     f.parent = parent
     f.template = template
@@ -260,8 +277,30 @@ function CreateFrame(kind, name, parent, template)
     function f:EnableMouse(v) self.mouseEnabled = (v ~= false) end
     function f:IsMouseEnabled() return self.mouseEnabled == true end
     -- IL REND UN NOMBRE, 0 OU 1, comme IsTitleKnown : zero est VRAI en Lua.
-    function f:Enable() self.enabled = true end
-    function f:Disable() self.enabled = false end
+    -- LE VRAI DECLENCHE OnEnable / OnDisable quand l'etat change ; le banc
+    -- ne le faisait pas (menu Echap et reglages, 2026-09-28)
+    local function etat(self, script)
+        if self.scripts[script] then self.scripts[script](self) end
+        if self.hooks and self.hooks[script] then self.hooks[script](self) end
+    end
+    function f:Enable()
+        local avant = self.enabled
+        self.enabled = true
+        if avant == false then etat(self, "OnEnable") end
+    end
+    function f:Disable()
+        local avant = self.enabled
+        self.enabled = false
+        if avant ~= false then etat(self, "OnDisable") end
+    end
+    function f:SetPushedTextOffset(x, y) self.decalageEnfonce = { x, y } end
+    -- un curseur : son image de poignee, une texture qu'il cree
+    function f:SetThumbTexture(v)
+        if not self._thumb then self._thumb = self:CreateTexture() end
+        self._thumb.texture = v
+        return self._thumb
+    end
+    function f:GetThumbTexture() return self._thumb end
     function f:IsEnabled() if self.enabled == false then return 0 end return 1 end
     function f:SetDisabledFontObject(o) self.disabledFont = o end
     function f:EnableMouseWheel(v) self.wheelEnabled = (v ~= false) end
@@ -269,6 +308,7 @@ function CreateFrame(kind, name, parent, template)
     function f:SetMovable(v) self.movable = (v ~= false) end
     function f:IsMovable() return self.movable end
     function f:SetClampedToScreen(v) self.clamped = (v and true or false) end
+    function f:SetClampRectInsets(g, d, h, b) self.retraitsEcran = { g, d, h, b } end
     function f:IsClampedToScreen() return self.clamped == true end
     -- UN BOUTON N'A QUE LES ETATS QUE SON XML DECLARE. Le vrai client rend
     -- nil pour une NormalTexture jamais posee : MiniMapTrackingButton n'a
@@ -281,6 +321,19 @@ function CreateFrame(kind, name, parent, template)
     function f:SetBackdropColor(...) self.backdropColor = { ... } end
     function f:SetBackdropBorderColor(...) self.backdropBorderColor = { ... } end
     function f:GetBackdrop() return self.backdrop end
+    -- SES COULEURS : celles posees, blanc opaque par defaut ; rien sans
+    -- fond (le vrai les rend : GetBackdropColor / GetBackdropBorderColor
+    -- figurent dans la table des methodes relevee dans Wow.exe)
+    function f:GetBackdropColor()
+        if not self.backdrop then return nil end
+        local c = self.backdropColor or { 1, 1, 1, 1 }
+        return c[1], c[2], c[3], c[4] or 1
+    end
+    function f:GetBackdropBorderColor()
+        if not self.backdrop then return nil end
+        local c = self.backdropBorderColor or { 1, 1, 1, 1 }
+        return c[1], c[2], c[3], c[4] or 1
+    end
     function f:SetNormalFontObject(o) self.normalFont = o end
     function f:SetHighlightFontObject(o) self.highlightFont = o end
     function f:SetDisabledFontObject(o) self.disabledFont = o end
@@ -400,7 +453,16 @@ function CreateFrame(kind, name, parent, template)
     -- Une StatusBar porte une valeur et des bornes.
     function f:SetMinMaxValues(mini, maxi) self.mini, self.maxi = mini, maxi end
     function f:GetMinMaxValues() return self.mini or 0, self.maxi or 0 end
-    function f:SetValue(v) self.value = v end
+    -- le vrai declenche OnValueChanged quand la valeur change (un curseur, une
+    -- barre de defilement) ; le banc ne le faisait pas (reglages, 28/09)
+    function f:SetValue(v)
+        local avant = self.value
+        self.value = v
+        if avant ~= v then
+            if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, v) end
+            if self.hooks and self.hooks.OnValueChanged then self.hooks.OnValueChanged(self, v) end
+        end
+    end
     function f:GetValue() return self.value or 0 end
     function f:SetStatusBarTexture(t) self.barTexture = t end
     function f:SetStatusBarColor(r, v, b) self.barColor = { r, v, b } end
@@ -462,7 +524,14 @@ function CreateFrame(kind, name, parent, template)
     function f:GetName() return self.name end
     if name then _G[name] = f end
     table.insert(frames, f)
+    f.rangCadre = #frames
     return f
+end
+
+-- EnumerateFrames() rend le premier cadre, EnumerateFrames(f) le suivant,
+-- nil apres le dernier -- dans l'ordre de creation.
+function EnumerateFrames(f)
+    return frames[(f and f.rangCadre or 0) + 1]
 end
 
 UIParent = CreateFrame("Frame", "UIParent")
@@ -1760,6 +1829,7 @@ function CreateFrame(kind, name, parent, template)
     -- UNE INFOBULLE : ses lignes (TextLeftN) ; SetSpell y pose le nom puis
     -- la description (DESCRIPTIONS["livre" .. emplacement])
     if kind == "GameTooltip" then
+        function f:GetObjectType() return "GameTooltip" end
         f.lignes = 0
         function f:SetOwner(proprio, ancre) self.owner, self.anchor = proprio, ancre end
         function f:ClearLines() self.lignes = 0 end
@@ -5167,6 +5237,753 @@ function WorldMapTrackQuest_Toggle(coche)
     end
     WatchFrame_Update()
 end
+
+-- LES INFOBULLES DE 3.3.5 -- GameTooltipTemplate.xml, GameTooltip.xml,
+-- ItemRef.xml, WorldMapFrame.xml, lus par la chaine d'archives : des
+-- GameTooltip au <Backdrop> UI-Tooltip-Background / UI-Tooltip-Border, bord
+-- 16, retraits 5 ; les infobulles de comparaison de chacune dans
+-- self.shoppingTooltips. GameTooltip etait une table : il devient un cadre,
+-- ses methodes de banc gardees.
+do
+    local S = string.char(92)
+    FOND_INFOBULLE = { bgFile = "Interface" .. S .. "Tooltips" .. S .. "UI-Tooltip-Background",
+        edgeFile = "Interface" .. S .. "Tooltips" .. S .. "UI-Tooltip-Border", tile = true,
+        tileSize = 16, edgeSize = 16, insets = { left = 5, right = 5, top = 5, bottom = 5 } }
+    CURRENTLY_EQUIPPED = "Currently Equipped"
+    TOOLTIP_DEFAULT_COLOR = TOOLTIP_DEFAULT_COLOR or { r = 1, g = 1, b = 1 }
+    TOOLTIP_DEFAULT_BACKGROUND_COLOR = TOOLTIP_DEFAULT_BACKGROUND_COLOR or { r = 0.09, g = 0.09, b = 0.19 }
+    local table_ = GameTooltip
+    local gt = CreateFrame("Frame", "GameTooltip", UIParent)
+    function gt:GetObjectType() return "GameTooltip" end
+    for k, v in pairs(table_) do gt[k] = v end
+    gt.shown = table_.shown
+    -- le vrai vide l'infobulle a SetOwner : OnTooltipCleared
+    local function vider(self)
+        if self.scripts.OnTooltipCleared then self.scripts.OnTooltipCleared(self) end
+        if self.hooks and self.hooks.OnTooltipCleared then self.hooks.OnTooltipCleared(self) end
+    end
+    local function infobulle(nom, parent)
+        local b = CreateFrame("GameTooltip", nom, parent or UIParent)
+        b:CreateFontString(nom .. "TextLeft1", "ARTWORK")
+        b:CreateFontString(nom .. "TextLeft2", "ARTWORK")
+        b:SetBackdrop(FOND_INFOBULLE)
+        b:SetBackdropBorderColor(1, 1, 1)
+        b:SetBackdropColor(0.09, 0.09, 0.19)
+        function b:SetOwner(proprio, ancre)
+            self.owner, self.anchor = proprio, ancre
+            vider(self)
+        end
+        b:Hide()
+        return b
+    end
+    local function trois(racine, parent)
+        return { infobulle(racine .. "1", parent), infobulle(racine .. "2", parent), infobulle(racine .. "3", parent) }
+    end
+    GameTooltip:SetBackdrop(FOND_INFOBULLE)
+    GameTooltip.shoppingTooltips = trois("ShoppingTooltip")
+    ItemRefTooltip = infobulle("ItemRefTooltip")
+    ItemRefTooltip.shoppingTooltips = trois("ItemRefShoppingTooltip")
+    -- la croix : 32 x 32, TOPRIGHT (1, 0), UI-Panel-MinimizeButton-*
+    ItemRefCloseButton = CreateFrame("Button", "ItemRefCloseButton", ItemRefTooltip)
+    ItemRefCloseButton:SetWidth(32) ItemRefCloseButton:SetHeight(32)
+    ItemRefCloseButton:SetPoint("TOPRIGHT", ItemRefTooltip, "TOPRIGHT", 1, 0)
+    ItemRefCloseButton:SetNormalTexture("Interface" .. S .. "Buttons" .. S .. "UI-Panel-MinimizeButton-Up")
+    ItemRefCloseButton:SetPushedTexture("Interface" .. S .. "Buttons" .. S .. "UI-Panel-MinimizeButton-Down")
+    ItemRefCloseButton:SetHighlightTexture("Interface" .. S .. "Buttons" .. S .. "UI-Panel-MinimizeButton-Highlight")
+    WorldMapTooltip = infobulle("WorldMapTooltip", WorldMapFrame)
+    WorldMapTooltip.shoppingTooltips = trois("WorldMapCompareTooltip", WorldMapFrame)
+    -- les bulles, des Frame au meme fond
+    SmallTextTooltip = CreateFrame("Frame", "SmallTextTooltip", UIParent)
+    for _, f in ipairs({ FriendsTooltip, PartyMemberBuffTooltip, SmallTextTooltip }) do
+        f:SetBackdrop(FOND_INFOBULLE)
+    end
+    -- GameTooltip_ShowCompareItem : SetHyperlinkCompareItem ecrit
+    -- CURRENTLY_EQUIPPED en premiere ligne (PREMIERE_LIGNE pour un essai),
+    -- puis l'objet ; une infobulle par objet de COMPARES, montree.
+    COMPARES = { "Epee equipee" }
+    PREMIERE_LIGNE = nil
+    function GameTooltip_ShowCompareItem(self, shift)
+        self = self or GameTooltip
+        for i, b in ipairs(self.shoppingTooltips) do
+            if COMPARES[i] then
+                b:SetOwner(self, "ANCHOR_NONE")
+                _G[b:GetName() .. "TextLeft1"]:SetText(PREMIERE_LIGNE or CURRENTLY_EQUIPPED)
+                _G[b:GetName() .. "TextLeft2"]:SetText(COMPARES[i])
+                b:Show()
+            end
+        end
+    end
+end
+
+-- LES REGLAGES DU CLIENT (OptionsFrameTemplates.xml / .lua,
+-- OptionsPanelTemplates.xml, VideoOptionsFrame.xml, AudioOptionsFrame.xml,
+-- InterfaceOptionsFrame.xml de 3.3.5, lus par la chaine d'archives) : les
+-- trois fenetres, leurs listes (bord en huit textures, fausse barre de
+-- defilement, lignes et bouton de depliage), leurs boutons, leurs onglets,
+-- et un panneau par fenetre portant chaque gabarit de commande (case,
+-- curseur, menu deroulant, cadre de groupe et, dedans, une case).
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    local BORD_INFOBULLE = fichier("Interface", "Tooltips", "UI-Tooltip-Border")
+    CATEGORY = "Category"
+    function OptionsList_DisplayButton(button, element)
+        button:Show()
+        button.element = element
+        if element.parent then
+            button:SetNormalFontObject(GameFontHighlightSmall)
+            button:SetHighlightFontObject(GameFontHighlightSmall)
+        else
+            button:SetNormalFontObject(GameFontNormal)
+            button:SetHighlightFontObject(GameFontHighlight)
+        end
+        button.text:SetText(element.name)
+        if element.hasChildren then
+            if element.collapsed then
+                button.toggle:SetNormalTexture(fichier("Interface", "Buttons", "UI-PlusButton-UP"))
+                button.toggle:SetPushedTexture(fichier("Interface", "Buttons", "UI-PlusButton-DOWN"))
+            else
+                button.toggle:SetNormalTexture(fichier("Interface", "Buttons", "UI-MinusButton-UP"))
+                button.toggle:SetPushedTexture(fichier("Interface", "Buttons", "UI-MinusButton-DOWN"))
+            end
+            button.toggle:Show()
+        else
+            button.toggle:Hide()
+        end
+    end
+    function OptionsList_ClearSelection(listFrame, buttons)
+        for _, b in ipairs(buttons) do b:UnlockHighlight() end
+        listFrame.selection = nil
+    end
+    function OptionsList_SelectButton(listFrame, button)
+        button:LockHighlight()
+        listFrame.selection = button.element
+    end
+    -- OptionsCategoryFrame_Update : les elements non caches, la fausse barre
+    -- montree quand ils debordent (FauxScrollFrame_Update : max = (n -
+    -- montres) x pas), la selection reposee
+    function OptionsCategoryFrame_Update(self)
+        local elements = {}
+        for _, e in ipairs(self:GetParent().categoryList or {}) do
+            if not e.hidden then table.insert(elements, e) end
+        end
+        local defile, boutons = self.scrollFrame, self.buttons
+        if #elements > #boutons then defile:Show() else defile:Hide() end
+        local sb = _G[defile:GetName() .. "ScrollBar"]
+        sb:SetMinMaxValues(0, math.max(0, #elements - #boutons) * self.buttonHeight)
+        local selection = self.selection
+        if selection then OptionsList_ClearSelection(self, boutons) end
+        local decalage = FauxScrollFrame_GetOffset(defile) or 0
+        for i = 1, #boutons do
+            local e = elements[i + decalage]
+            if e then
+                OptionsList_DisplayButton(boutons[i], e)
+                if selection and selection == e and not self.selection then
+                    OptionsList_SelectButton(self, boutons[i])
+                end
+            else
+                boutons[i]:Hide()
+            end
+        end
+    end
+    -- une liste OptionsFrameListTemplate
+    local function liste(nom, parent)
+        local l = CreateFrame("Frame", nom, parent)
+        l:SetWidth(175) l:SetHeight(429)
+        for _, s in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight", "Left", "Right", "Top", "Bottom" }) do
+            l:CreateTexture(nom .. s, "BACKGROUND")
+        end
+        local defile = CreateFrame("ScrollFrame", nom .. "List", l)
+        defile:SetBackdrop({ edgeFile = BORD_INFOBULLE })
+        defile:SetWidth(24)
+        defile:Hide()
+        local sb = CreateFrame("Slider", nom .. "ListScrollBar", defile)
+        CreateFrame("Button", nom .. "ListScrollBarScrollUpButton", sb)
+        CreateFrame("Button", nom .. "ListScrollBarScrollDownButton", sb)
+        sb:SetScript("OnValueChanged", function(self, v) self:GetParent():SetVerticalScroll(v) end)
+        -- UIPanelScrollBarTemplate : son curseur UI-ScrollBar-Knob, 16 x 24
+        sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+        sb:GetThumbTexture():SetWidth(16) sb:GetThumbTexture():SetHeight(24)
+        l.scrollFrame = defile
+        l.buttons = {}
+        l.buttonHeight = 18
+        for i = 1, 23 do
+            local b = CreateFrame("Button", nom .. "Button" .. i, l)
+            b:SetWidth(175) b:SetHeight(18)
+            b:SetHighlightTexture(fichier("Interface", "QuestFrame", "UI-QuestLogTitleHighlight"))
+            b.text = b:CreateFontString(nom .. "Button" .. i .. "Text", "ARTWORK")
+            b:SetFontString(b.text)
+            b.toggle = CreateFrame("Button", nom .. "Button" .. i .. "Toggle", b)
+            b.toggle:SetWidth(14) b.toggle:SetHeight(14)
+            b.toggle:SetNormalTexture(fichier("Interface", "Buttons", "UI-MinusButton-UP"))
+            b.toggle:SetPushedTexture(fichier("Interface", "Buttons", "UI-MinusButton-DOWN"))
+            b.toggle:SetHighlightTexture(fichier("Interface", "Buttons", "UI-PlusButton-Hilight"))
+            b.toggle:Hide()
+            l.buttons[i] = b
+        end
+        l.update = OptionsCategoryFrame_Update
+        return l
+    end
+    local function boutonPanneau(nom, parent, texte)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(90) b:SetHeight(21)
+        b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Down"))
+        b:SetDisabledTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Disabled"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Highlight"))
+        b:SetFontString(b:CreateFontString(nom .. "Text", "ARTWORK"))
+        b:SetText(texte)
+        return b
+    end
+    -- OptionsFrameTemplate
+    local function fenetre(nom, titre, boutons, listes)
+        local f = CreateFrame("Frame", nom, UIParent)
+        f:SetWidth(648) f:SetHeight(520)
+        f:SetBackdrop({ bgFile = "UI-DialogBox-Background", edgeFile = "UI-DialogBox-Border" })
+        f:CreateTexture(nom .. "Header", "ARTWORK")
+        f:CreateFontString(nom .. "HeaderText", "ARTWORK"):SetText(titre)
+        local c = CreateFrame("Frame", nom .. "PanelContainer", f)
+        c:SetBackdrop({ edgeFile = BORD_INFOBULLE })
+        for _, b in ipairs(boutons) do boutonPanneau(nom .. b[1], f, b[2]) end
+        f.categoryList = {}
+        for _, l in ipairs(listes) do liste(nom .. l, f) end
+        f:Hide()
+        return f
+    end
+    fenetre("VideoOptionsFrame", "Video", { { "Apply", "Apply" }, { "Cancel", "Cancel" }, { "Okay", "Okay" }, { "Defaults", "Defaults" } }, { "CategoryFrame" })
+    fenetre("AudioOptionsFrame", "Sound & Voice", { { "Cancel", "Cancel" }, { "Okay", "Okay" }, { "Defaults", "Defaults" } }, { "CategoryFrame" })
+    fenetre("InterfaceOptionsFrame", "Interface", { { "Cancel", "Cancel" }, { "Okay", "Okay" }, { "Defaults", "Defaults" } }, { "Categories", "AddOns" })
+    VideoOptionsFrame.categoryFrame = VideoOptionsFrameCategoryFrame
+    AudioOptionsFrame.categoryFrame = AudioOptionsFrameCategoryFrame
+    function InterfaceCategoryList_Update() OptionsCategoryFrame_Update(InterfaceOptionsFrameCategories) end
+    function InterfaceAddOnsList_Update() end
+    -- les onglets (OptionsFrameTabButtonTemplate) et leurs entretoises
+    for i, texte in ipairs({ "Game", "AddOns" }) do
+        local o = CreateFrame("Button", "InterfaceOptionsFrameTab" .. i, InterfaceOptionsFrame)
+        o:SetID(i)
+        for _, s in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
+            o:CreateTexture(o:GetName() .. s, "BORDER")
+        end
+        o:SetHighlightTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-Tab-Highlight"))
+        o:SetFontString(o:CreateFontString(o:GetName() .. "Text", "ARTWORK"))
+        o:SetText(texte)
+        o:SetWidth(90) o:SetHeight(24)
+    end
+    InterfaceOptionsFrameTab2:SetPoint("TOPLEFT", InterfaceOptionsFrameTab1, "TOPRIGHT", -16, 0)
+    InterfaceOptionsFrameTab1:CreateTexture("InterfaceOptionsFrameTab1TabSpacer", "BACKGROUND")
+    InterfaceOptionsFrameTab2:CreateTexture("InterfaceOptionsFrameTab2TabSpacer1", "BACKGROUND")
+    InterfaceOptionsFrameTab2:CreateTexture("InterfaceOptionsFrameTab2TabSpacer2", "BACKGROUND")
+    -- les commandes des panneaux
+    local function case(nom, parent)
+        local c = CreateFrame("CheckButton", nom, parent)
+        c:SetWidth(26) c:SetHeight(26)
+        c:SetNormalTexture(fichier("Interface", "Buttons", "UI-CheckBox-Up"))
+        c:SetPushedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Down"))
+        c:SetHighlightTexture(fichier("Interface", "Buttons", "UI-CheckBox-Highlight"))
+        c:SetCheckedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Check"))
+        c:SetDisabledCheckedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Check-Disabled"))
+        return c
+    end
+    local function curseur(nom, parent)
+        local s = CreateFrame("Slider", nom, parent)
+        s:SetWidth(144) s:SetHeight(17)
+        s:SetBackdrop({ bgFile = fichier("Interface", "Buttons", "UI-SliderBar-Background"),
+            edgeFile = fichier("Interface", "Buttons", "UI-SliderBar-Border") })
+        s:SetThumbTexture(fichier("Interface", "Buttons", "UI-SliderBar-Button-Horizontal"))
+        return s
+    end
+    -- UIDropDownMenuTemplate : Left / Middle / Right (CharacterCreate-
+    -- LabelFrame 25 / 115 / 25 x 64), Text, et le bouton a fleche 24 x 24
+    local function menu(nom, parent)
+        local dd = CreateFrame("Frame", nom, parent)
+        local g = dd:CreateTexture(nom .. "Left", "ARTWORK")
+        g:SetWidth(25) g:SetHeight(64)
+        local m = dd:CreateTexture(nom .. "Middle", "ARTWORK")
+        m:SetWidth(115) m:SetHeight(64)
+        local d = dd:CreateTexture(nom .. "Right", "ARTWORK")
+        d:SetWidth(25) d:SetHeight(64)
+        dd:CreateFontString(nom .. "Text", "ARTWORK")
+        local b = CreateFrame("Button", nom .. "Button", dd)
+        b:SetWidth(24) b:SetHeight(24)
+        b:SetNormalTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Up"))
+        b:SetPushedTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Down"))
+        b:SetDisabledTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Disabled"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Common-MouseHilight"))
+        return dd
+    end
+    local function boite(nom, parent)
+        local f = CreateFrame("Frame", nom, parent)
+        f:SetBackdrop({ edgeFile = BORD_INFOBULLE })
+        f:CreateFontString(nom .. "Title", "BACKGROUND")
+        return f
+    end
+    PANNEAUX_REGLAGES = {
+        VideoOptionsResolutionPanel = "VideoOptionsFramePanelContainer",
+        VideoOptionsEffectsPanel = "VideoOptionsFramePanelContainer",
+        VideoOptionsStereoPanel = "VideoOptionsFramePanelContainer",
+        AudioOptionsSoundPanel = "AudioOptionsFramePanelContainer",
+        AudioOptionsVoicePanel = "AudioOptionsFramePanelContainer",
+        InterfaceOptionsControlsPanel = "InterfaceOptionsFramePanelContainer",
+        InterfaceOptionsCombatPanel = "InterfaceOptionsFramePanelContainer",
+    }
+    for nom, parent in pairs(PANNEAUX_REGLAGES) do
+        local p = CreateFrame("Frame", nom, _G[parent])
+        case(nom .. "Case", p)
+        curseur(nom .. "Curseur", p)
+        menu(nom .. "Menu", p)
+        local g = boite(nom .. "Boite", p)
+        case(nom .. "BoiteCase", g)
+    end
+    -- un panneau d'un autre addon, ajoute a la liste AddOns : il garde ses
+    -- commandes
+    AutreAddonPanneau = CreateFrame("Frame", "AutreAddonPanneau", UIParent)
+    case("AutreAddonPanneauCase", AutreAddonPanneau)
+    function UIDropDownMenu_EnableDropDown(dd)
+        _G[dd:GetName() .. "Text"]:SetVertexColor(1, 1, 1)
+        _G[dd:GetName() .. "Button"]:Enable()
+    end
+    function UIDropDownMenu_DisableDropDown(dd)
+        _G[dd:GetName() .. "Text"]:SetVertexColor(0.5, 0.5, 0.5)
+        _G[dd:GetName() .. "Button"]:Disable()
+    end
+    function UIDropDownMenu_SetText(dd, texte) _G[dd:GetName() .. "Text"]:SetText(texte) end
+    MAIN_MENU = "Options"
+    MAINMENU_BUTTON = "Game Menu"
+    SystemFont_Med2 = SystemFont_Med2 or { police = "SystemFont_Med2" }
+    GameFontHighlightLarge = GameFontHighlightLarge or { police = "GameFontHighlightLarge" }
+    GameFontDisableLarge = GameFontDisableLarge or { police = "GameFontDisableLarge" }
+    GameFontDisableSmallLeft = GameFontDisableSmallLeft or { police = "GameFontDisableSmallLeft" }
+    GameFontNormalSmallLeft = GameFontNormalSmallLeft or { police = "GameFontNormalSmallLeft" }
+    -- le titre du menu Echap : un texte SANS NOM, MAIN_MENU
+    GameMenuFrame:CreateTexture("GameMenuFrameHeader", "ARTWORK")
+    GameMenuFrame:CreateFontString(nil, "ARTWORK"):SetText(MAIN_MENU)
+    GameMenuFrame:SetBackdrop({ bgFile = "UI-DialogBox-Background", edgeFile = "UI-DialogBox-Border" })
+end
+
+-- LES RACCOURCIS ET LES MACROS DU CLIENT (Blizzard_BindingUI.xml / .lua et
+-- Blizzard_MacroUI.xml / .lua de 3.3.5, charges a la demande) : un essai les
+-- charge par CHARGER_ADDON(nom), qui batit leurs cadres puis previent les
+-- cadres qui ecoutent ADDON_LOADED, comme le client.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    local function prevenirChargement(nom)
+        for _, f in ipairs(FRAMES) do
+            if f.events and f.events["ADDON_LOADED"] and f.scripts and f.scripts.OnEvent then
+                f.scripts.OnEvent(f, "ADDON_LOADED", nom)
+            end
+        end
+    end
+    -- UIPanelButtonTemplate (et sa variante grise) : quatre etats et un texte
+    local function boutonPanneau(nom, parent, texte, gris)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(130) b:SetHeight(22)
+        local base = gris and "UI-Panel-Button-Disabled" or "UI-Panel-Button-Up"
+        b:SetNormalTexture(fichier("Interface", "Buttons", base))
+        b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Down"))
+        b:SetDisabledTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Disabled"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Highlight"))
+        b:SetFontString(b:CreateFontString(nom .. "Text", "ARTWORK"))
+        b:SetText(texte)
+        return b
+    end
+    -- UIPanelScrollFrameTemplate : le Slider $parentScrollBar, son curseur,
+    -- ses deux boutons de pas
+    local function barre(defile)
+        local sb = CreateFrame("Slider", defile:GetName() .. "ScrollBar", defile)
+        sb:SetWidth(16)
+        sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+        sb:GetThumbTexture():SetWidth(18) sb:GetThumbTexture():SetHeight(24)
+        for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+            local b = CreateFrame("Button", sb:GetName() .. s, sb)
+            b:SetWidth(16) b:SetHeight(16)
+            b:SetNormalTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Up"))
+            b:SetPushedTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Down"))
+            b:SetDisabledTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Disabled"))
+            b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Highlight"))
+        end
+        sb:SetScript("OnValueChanged", function(self, v) self:GetParent():SetVerticalScroll(v) end)
+        return sb
+    end
+    local function batirRaccourcis()
+        CHARACTER_KEY_BINDINGS = "Character Specific Key Bindings for %s"
+        KEY_BINDINGS = KEY_BINDINGS or "Key Bindings"
+        local f = CreateFrame("Button", "KeyBindingFrame", UIParent)
+        f:SetWidth(640) f:SetHeight(512)
+        for _, n in ipairs({ "TopLeft", "Top", "TopRight", "BotLeft", "Bot", "BotRight" }) do
+            f:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "KeyBindingFrame", "UI-KeyBindingFrame-" .. n))
+        end
+        f:CreateFontString("KeyBindingFrameCommandLabel", "BACKGROUND"):SetText("Command")
+        f:CreateFontString("KeyBindingFrameKey1Label", "BACKGROUND"):SetText("Key 1")
+        f:CreateFontString("KeyBindingFrameKey2Label", "BACKGROUND"):SetText("Key 2")
+        f:CreateFontString("KeyBindingFrameOutputText", "BACKGROUND"):SetText("")
+        KeyBindingFrameCommandLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 26, -35)
+        KeyBindingFrameKey1Label:SetPoint("LEFT", KeyBindingFrameCommandLabel, "RIGHT", 185, 0)
+        KeyBindingFrameKey2Label:SetPoint("LEFT", KeyBindingFrameKey1Label, "RIGHT", 145, 0)
+        KeyBindingFrameOutputText:SetPoint("BOTTOM", f, "BOTTOM", 0, 52)
+        f:CreateTexture("KeyBindingFrameHeader", "ARTWORK"):SetTexture(fichier("Interface", "DialogFrame", "UI-DialogBox-Header"))
+        f:CreateFontString("KeyBindingFrameHeaderText", "ARTWORK"):SetText(KEY_BINDINGS)
+        for i = 1, 17 do
+            local l = CreateFrame("Frame", "KeyBindingFrameBinding" .. i, f)
+            l:SetWidth(560) l:SetHeight(25)
+            if i == 1 then l:SetPoint("TOPLEFT", f, "TOPLEFT", 27, -53)
+            else l:SetPoint("TOPLEFT", _G["KeyBindingFrameBinding" .. (i - 1)], "BOTTOMLEFT", 0, 2) end
+            l:CreateFontString(l:GetName() .. "Description", "BACKGROUND")
+            l:CreateFontString(l:GetName() .. "Header", "BACKGROUND")
+            for k = 1, 2 do
+                local b = CreateFrame("Button", l:GetName() .. "Key" .. k .. "Button", l)
+                b:SetID(k)
+                b:SetWidth(180) b:SetHeight(22)
+                for _, s in ipairs({ "Left", "Middle", "Right" }) do
+                    b:CreateTexture(b:GetName() .. s, "BACKGROUND"):SetTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Up"))
+                end
+                b:SetFontString(b:CreateFontString(b:GetName() .. "Text", "ARTWORK"))
+            end
+        end
+        local defile = CreateFrame("ScrollFrame", "KeyBindingFrameScrollFrame", f)
+        defile:SetWidth(560) defile:SetHeight(390)
+        defile:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -53)
+        barre(defile)
+        local c = CreateFrame("CheckButton", "KeyBindingFrameCharacterButton", f)
+        c:SetWidth(20) c:SetHeight(20)
+        c:SetPoint("TOPLEFT", f, "TOPRIGHT", -245, -12)
+        c:SetNormalTexture(fichier("Interface", "Buttons", "UI-CheckBox-Up"))
+        c:SetPushedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Down"))
+        c:SetHighlightTexture(fichier("Interface", "Buttons", "UI-CheckBox-Highlight"))
+        c:SetCheckedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Check"))
+        c:SetDisabledCheckedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Check-Disabled"))
+        boutonPanneau("KeyBindingFrameDefaultButton", f, "Reset to Default", true)
+        boutonPanneau("KeyBindingFrameCancelButton", f, "Cancel")
+        boutonPanneau("KeyBindingFrameOkayButton", f, "Okay")
+        boutonPanneau("KeyBindingFrameUnbindButton", f, "Unbind Key")
+        KeyBindingFrameCancelButton:SetScript("OnClick", function()
+            ANNULE_RACCOURCIS = (ANNULE_RACCOURCIS or 0) + 1
+            KeyBindingFrame_SetSelected(nil)
+            HideUIPanel(KeyBindingFrame)
+        end)
+        function KeyBindingFrame_SetSelected(v) KeyBindingFrame.selected = v end
+        -- la ligne 1 porte MOVEFORWARD, les autres ACTIONBUTTONi
+        function KeyBindingFrame_Update()
+            for i = 1, 17 do
+                for k = 1, 2 do
+                    _G["KeyBindingFrameBinding" .. i .. "Key" .. k .. "Button"].commandName =
+                        (i == 1) and "MOVEFORWARD" or ("ACTIONBUTTON" .. i)
+                end
+            end
+        end
+        f:Hide()
+    end
+    -- PopupButtonTemplate : l'icone est la NormalTexture $parentIcon
+    local function boutonMacro(nom, parent)
+        local b = CreateFrame("CheckButton", nom, parent)
+        b:SetWidth(36) b:SetHeight(36)
+        b:SetNormalTexture("")
+        _G[nom .. "Icon"] = b:GetNormalTexture()
+        b:CreateFontString(nom .. "Name", "OVERLAY")
+        return b
+    end
+    local function batirMacros()
+        MAX_ACCOUNT_MACROS, MAX_CHARACTER_MACROS = 36, 18
+        NUM_MACRO_ICONS_SHOWN, NUM_ICONS_PER_ROW, NUM_ICON_ROWS, MACRO_ICON_ROW_HEIGHT = 20, 5, 4, 36
+        CREATE_MACROS = "Create Macros"
+        MACRO_POPUP_TEXT = "Enter Macro Name (Max 16 Characters):"
+        local f = CreateFrame("Frame", "MacroFrame", UIParent)
+        f:SetWidth(384) f:SetHeight(512)
+        f:SetHitRectInsets(0, 34, 0, 75)
+        f:CreateTexture("MacroFramePortrait", "BACKGROUND"):SetTexture(fichier("Interface", "MacroFrame", "MacroFrame-Icon"))
+        for _, n in ipairs({ "UI-Character-General-TopLeft", "UI-Character-General-TopRight", "MacroFrame-BotLeft", "MacroFrame-BotRight" }) do
+            f:CreateTexture(nil, "BORDER"):SetTexture(n)
+        end
+        f:CreateFontString(nil, "BORDER"):SetText(CREATE_MACROS)
+        local trait = f:CreateTexture("MacroHorizontalBarLeft", "ARTWORK")
+        trait:SetPoint("TOPLEFT", f, "TOPLEFT", 15, -220)
+        f:CreateTexture(nil, "ARTWORK"):SetPoint("LEFT", trait, "RIGHT", 0, 0)
+        local fondChoix = f:CreateTexture("MacroFrameSelectedMacroBackground", "ARTWORK")
+        fondChoix:SetWidth(64) fondChoix:SetHeight(64)
+        fondChoix:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -228)
+        f:CreateFontString("MacroFrameSelectedMacroName", "ARTWORK")
+        f:CreateFontString("MacroFrameEnterMacroText", "ARTWORK")
+        f:CreateFontString("MacroFrameCharLimitText", "ARTWORK")
+        boutonMacro("MacroFrameSelectedMacroButton", f)
+        local grille = CreateFrame("ScrollFrame", "MacroButtonScrollFrame", f)
+        grille:SetWidth(294) grille:SetHeight(146)
+        for _, s in ipairs({ "Top", "Bottom", "Middle" }) do
+            grille:CreateTexture("MacroButtonScrollFrame" .. s, "ARTWORK"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+        end
+        barre(grille)
+        local conteneur = CreateFrame("Frame", "MacroButtonContainer", grille)
+        for i = 1, 36 do boutonMacro("MacroButton" .. i, conteneur) end
+        boutonPanneau("MacroEditButton", f, "Change Name/Icon")
+        local texte = CreateFrame("ScrollFrame", "MacroFrameScrollFrame", f)
+        barre(texte)
+        CreateFrame("EditBox", "MacroFrameText", texte)
+        CreateFrame("Button", "MacroFrameTextButton", f)
+        local fondTexte = CreateFrame("Frame", "MacroFrameTextBackground", f)
+        fondTexte:SetBackdrop({ bgFile = fichier("Interface", "Tooltips", "UI-Tooltip-Background"), edgeFile = fichier("Interface", "Tooltips", "UI-Tooltip-Border") })
+        for i, t in ipairs({ "General Macros", "Character Macros" }) do
+            local o = CreateFrame("Button", "MacroFrameTab" .. i, f)
+            o:SetID(i)
+            for _, s in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
+                o:CreateTexture(o:GetName() .. s, "BACKGROUND")
+            end
+            o:SetHighlightTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-Tab-Highlight"))
+            o:SetFontString(o:CreateFontString(o:GetName() .. "Text", "ARTWORK"))
+            o:SetText(t)
+        end
+        MacroFrameTab2:SetPoint("LEFT", MacroFrameTab1, "RIGHT", 0, 0)
+        boutonPanneau("MacroDeleteButton", f, "Delete", true)
+        boutonPanneau("MacroNewButton", f, "New")
+        boutonPanneau("MacroExitButton", f, "Exit")
+        local croix = CreateFrame("Button", "MacroFrameCloseButton", f)
+        croix:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+        croix:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Down"))
+        croix:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Highlight"))
+        f.selectedTab = 1
+        f:Hide()
+        -- le choix d'icone
+        local p = CreateFrame("Frame", "MacroPopupFrame", UIParent)
+        p:SetWidth(297) p:SetHeight(298)
+        for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+            p:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "MacroFrame", "MacroPopup-" .. n))
+        end
+        p:CreateFontString(nil, "BACKGROUND"):SetText(MACRO_POPUP_TEXT)
+        p:CreateFontString(nil, "BACKGROUND"):SetText(MACRO_POPUP_CHOOSE_ICON)
+        CreateFrame("EditBox", "MacroPopupEditBox", p)
+        local d = CreateFrame("ScrollFrame", "MacroPopupScrollFrame", p)
+        d:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-ScrollBar"))
+        barre(d)
+        for i = 1, 20 do boutonMacro("MacroPopupButton" .. i, p) end
+        boutonPanneau("MacroPopupOkayButton", p, "Okay")
+        boutonPanneau("MacroPopupCancelButton", p, "Cancel")
+        p:Hide()
+        -- MacroPopupButtonTemplate : ce que CreateFrame en fait
+        local creer = CreateFrame
+        CreateFrame = function(kind, name, parent, template)
+            if template == "MacroPopupButtonTemplate" then return boutonMacro(name, parent) end
+            return creer(kind, name, parent, template)
+        end
+        function GetMacroIconInfo(i) return "icone" .. i end
+        -- MacroPopupFrame_Update du client : ses vingt boutons en 5 par rangee
+        function MacroPopupFrame_Update(self)
+            local decalage = FauxScrollFrame_GetOffset(MacroPopupScrollFrame) or 0
+            for i = 1, NUM_MACRO_ICONS_SHOWN do
+                _G["MacroPopupButton" .. i .. "Icon"]:SetTexture(GetMacroIconInfo(decalage * NUM_ICONS_PER_ROW + i))
+            end
+            FauxScrollFrame_Update(MacroPopupScrollFrame, math.ceil(GetNumMacroIcons() / NUM_ICONS_PER_ROW), NUM_ICON_ROWS, MACRO_ICON_ROW_HEIGHT)
+        end
+        function MacroPopupButton_SelectTexture(i)
+            MacroPopupFrame.selectedIcon = i
+            MacroPopupFrame.selectedIconTexture = nil
+            MacroPopupFrame_Update(MacroPopupFrame)
+        end
+        -- MacroPopupButton_OnClick : le decalage x 5 + GetID()
+        function MacroPopupButton_OnClick(self)
+            MacroPopupButton_SelectTexture(self:GetID() + (FauxScrollFrame_GetOffset(MacroPopupScrollFrame) or 0) * NUM_ICONS_PER_ROW)
+        end
+    end
+    function CHARGER_ADDON(nom)
+        if nom == "Blizzard_BindingUI" then batirRaccourcis()
+        elseif nom == "Blizzard_MacroUI" then batirMacros() end
+        prevenirChargement(nom)
+    end
+end
+
+-- LA CONFIGURATION DU CHAT ET LE SELECTEUR DE COULEUR DU CLIENT
+-- (ChatConfigFrame.xml / .lua et ColorPickerFrame.xml de 3.3.5, lus par la
+-- chaine d'archives) : la fenetre, ses boites a bord d'infobulle (fond et
+-- bord, ou bord seul), la legende grise, la liste des filtres et sa barre a
+-- lisere, les fonctions qui creent les lignes ; le ColorSelect, sa roue, sa
+-- barre de valeur, son nuancier, le curseur d'opacite et ses trois textes,
+-- ses deux boutons ; la petite fenetre d'opacite.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    local BORD = fichier("Interface", "Tooltips", "UI-Tooltip-Border")
+    local FOND = fichier("Interface", "Tooltips", "UI-Tooltip-Background")
+    local DIALOGUE = { bgFile = fichier("Interface", "DialogFrame", "UI-DialogBox-Background"),
+        edgeFile = fichier("Interface", "DialogFrame", "UI-DialogBox-Border"), tile = true }
+    TOOLTIP_DEFAULT_COLOR = TOOLTIP_DEFAULT_COLOR or { r = 1, g = 1, b = 1 }
+    TOOLTIP_DEFAULT_BACKGROUND_COLOR = TOOLTIP_DEFAULT_BACKGROUND_COLOR or { r = 0.09, g = 0.09, b = 0.19 }
+    CHATCONFIG_HEADER = "%s Settings"
+    COLOR_PICKER, OPACITY = "Color Picker", "Opacity"
+    -- ChatConfigBoxTemplate (fond et bord) ou le bord seul des lignes, et
+    -- ce que leur OnLoad pose ; la legende des classes est grise
+    local function boite(nom, parent, avecFond, gris)
+        local b = CreateFrame("Frame", nom, parent)
+        b:SetBackdrop({ bgFile = avecFond and FOND or nil, edgeFile = BORD, tile = true })
+        b:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b, 0.5)
+        if gris then
+            b:SetBackdropColor(0.27, 0.27, 0.27)
+        elseif avecFond then
+            b:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b)
+        end
+        return b
+    end
+    local function etats(b, base)
+        b:SetNormalTexture(fichier("Interface", "Buttons", base .. "-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", base .. "-Down"))
+        b:SetDisabledTexture(fichier("Interface", "Buttons", base .. "-Disabled"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", base .. "-Highlight"))
+    end
+    local function boutonMenu(nom, parent, texte)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(144) b:SetHeight(21)
+        etats(b, "UI-Panel-Button")
+        b:SetFontString(b:CreateFontString(nom .. "Text", "ARTWORK"))
+        b:SetText(texte)
+        return b
+    end
+
+    local f = CreateFrame("Frame", "ChatConfigFrame", UIParent)
+    f:SetWidth(645) f:SetHeight(595)
+    f:SetBackdrop(DIALOGUE)
+    f:CreateTexture("ChatConfigFrameHeader", "ARTWORK"):SetTexture(fichier("Interface", "DialogFrame", "UI-DialogBox-Header"))
+    f:CreateFontString("ChatConfigFrameHeaderText", "ARTWORK")
+    local categories = boite("ChatConfigCategoryFrame", f, true)
+    -- son OnShow pose le titre de la fenetre
+    categories:SetScript("OnShow", function()
+        ChatConfigFrameHeaderText:SetText(string.format(CHATCONFIG_HEADER, "General"))
+    end)
+    boite("ChatConfigBackgroundFrame", f, true)
+    local chat = CreateFrame("Frame", "ChatConfigChatSettings", f)
+    boite("ChatConfigChatSettingsLeft", chat, true)
+    boite("ChatConfigChatSettingsClassColorLegend", chat, true, true)
+    local combat = CreateFrame("Frame", "ChatConfigCombatSettings", f)
+    local filtres = boite("ChatConfigCombatSettingsFilters", combat, true)
+    local defile = CreateFrame("ScrollFrame", "ChatConfigCombatSettingsFiltersScrollFrame", filtres)
+    -- UIPanelScrollBarTemplateLightBorder : son lisere $parentBorder
+    local sb = CreateFrame("Slider", "ChatConfigCombatSettingsFiltersScrollFrameScrollBar", defile)
+    sb:SetWidth(16)
+    sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+    sb:GetThumbTexture():SetWidth(16) sb:GetThumbTexture():SetHeight(24)
+    for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+        local b = CreateFrame("Button", sb:GetName() .. s, sb)
+        b:SetWidth(16) b:SetHeight(16)
+        etats(b, "UI-ScrollBar-" .. s)
+    end
+    local lisere = CreateFrame("Frame", sb:GetName() .. "Border", sb)
+    lisere:SetBackdrop({ edgeFile = BORD, tile = true })
+    lisere:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b, 0.5)
+    local couleurs = CreateFrame("Frame", "CombatConfigColors", f)
+    boite("CombatConfigColorsUnitColors", couleurs, true)
+    boite("CombatConfigColorsHighlighting", couleurs)
+    boutonMenu("ChatConfigFrameOkayButton", f, "Okay")
+    -- ChatConfig_CreateCheckboxes : une ligne a bord seul par entree, sa case
+    -- (et son nuancier)
+    function ChatConfig_CreateCheckboxes(cadre, liste, gabarit, titre)
+        for i = 1, #liste do
+            local nom = cadre:GetName() .. "CheckBox" .. i
+            if not _G[nom] then
+                local l = boite(nom, cadre)
+                local c = CreateFrame("CheckButton", nom .. "Check", l)
+                etats(c, "UI-CheckBox")
+                if string.find(gabarit, "Swatch", 1, true) then
+                    local n = CreateFrame("Button", nom .. "ColorSwatch", l)
+                    n:SetNormalTexture(fichier("Interface", "ChatFrame", "ChatFrameColorSwatch"))
+                end
+            end
+        end
+    end
+    -- ChatConfig_CreateTieredCheckboxes : des cases seules
+    function ChatConfig_CreateTieredCheckboxes(cadre, liste)
+        for i = 1, #liste do
+            local nom = cadre:GetName() .. "CheckBox" .. i
+            if not _G[nom] then
+                etats(CreateFrame("CheckButton", nom, cadre), "UI-CheckBox")
+            end
+        end
+    end
+    -- ChatConfig_CreateColorSwatches : une ligne a bord seul par entree
+    function ChatConfig_CreateColorSwatches(cadre, liste)
+        for i = 1, #liste do
+            local nom = cadre:GetName() .. "Swatch" .. i
+            if not _G[nom] then boite(nom, cadre) end
+        end
+    end
+    f:Hide()
+
+    -- le selecteur de couleur : un ColorSelect
+    local cp = CreateFrame("ColorSelect", "ColorPickerFrame", UIParent)
+    cp:SetWidth(365) cp:SetHeight(200)
+    cp:SetBackdrop(DIALOGUE)
+    local nuancier = cp:CreateTexture("ColorSwatch", "ARTWORK")
+    nuancier:SetWidth(32) nuancier:SetHeight(32)
+    nuancier:SetPoint("TOPLEFT", cp, "TOPLEFT", 225, -32)
+    nuancier:SetTexture(1, 1, 1, 1)
+    local tete = cp:CreateTexture("ColorPickerFrameHeader", "ARTWORK")
+    tete:SetTexture(fichier("Interface", "DialogFrame", "UI-DialogBox-Header"))
+    local titre = cp:CreateFontString(nil, "ARTWORK")
+    titre:SetText(COLOR_PICKER)
+    titre:SetPoint("TOP", tete, "TOP", 0, -14)
+    -- ColorWheelTexture et ColorValueTexture : des textures du ColorSelect
+    local roue = cp:CreateTexture("ColorPickerWheel", "ARTWORK")
+    roue:SetWidth(128) roue:SetHeight(128)
+    roue:SetPoint("TOPLEFT", cp, "TOPLEFT", 16, -32)
+    local valeur = cp:CreateTexture(nil, "ARTWORK")
+    valeur:SetWidth(32) valeur:SetHeight(128)
+    valeur:SetPoint("LEFT", roue, "RIGHT", 24, 0)
+    CP_VALEUR = valeur
+    boutonMenu("ColorPickerCancelButton", cp, "Cancel"):SetPoint("BOTTOMRIGHT", cp, "BOTTOMRIGHT", -10, 10)
+    boutonMenu("ColorPickerOkayButton", cp, "Okay"):SetPoint("RIGHT", ColorPickerCancelButton, "LEFT", 0, 0)
+    ColorPickerCancelButton:SetScript("OnClick", function(self)
+        HideUIPanel(self:GetParent())
+        if ColorPickerFrame.cancelFunc then ColorPickerFrame.cancelFunc(ColorPickerFrame.previousValues) end
+    end)
+    ColorPickerOkayButton:SetScript("OnClick", function(self)
+        HideUIPanel(self:GetParent())
+        ColorPickerFrame.func()
+        if ColorPickerFrame.opacityFunc then ColorPickerFrame.opacityFunc() end
+    end)
+    local s = CreateFrame("Slider", "OpacitySliderFrame", cp)
+    s:SetWidth(16) s:SetHeight(128)
+    s:SetPoint("TOPLEFT", nuancier, "TOPRIGHT", 32, 0)
+    s:SetBackdrop({ bgFile = fichier("Interface", "Buttons", "UI-SliderBar-Background"),
+        edgeFile = fichier("Interface", "Buttons", "UI-SliderBar-Border"), tile = true })
+    s:SetMinMaxValues(0, 1)
+    s:CreateFontString("OpacitySliderFrameText", "ARTWORK")
+    s:CreateFontString(nil, "ARTWORK"):SetText("-")
+    s:CreateFontString(nil, "ARTWORK"):SetText("+")
+    s:SetScript("OnValueChanged", function()
+        if ColorPickerFrame.opacityFunc then ColorPickerFrame.opacityFunc() end
+    end)
+    s:SetThumbTexture(fichier("Interface", "Buttons", "UI-SliderBar-Button-Vertical"))
+    s:GetThumbTexture():SetWidth(32) s:GetThumbTexture():SetHeight(32)
+    -- la couleur du ColorSelect, et OnColorSelect a chaque changement
+    function cp:SetColorRGB(r, g, b)
+        self.couleur = { r, g, b }
+        if self.scripts.OnColorSelect then self.scripts.OnColorSelect(self, r, g, b) end
+        if self.hooks and self.hooks.OnColorSelect then self.hooks.OnColorSelect(self, r, g, b) end
+    end
+    function cp:GetColorRGB()
+        local c = self.couleur or { 1, 1, 1 }
+        return c[1], c[2], c[3]
+    end
+    cp:SetScript("OnShow", function(self)
+        if self.hasOpacity then
+            OpacitySliderFrame:Show()
+            OpacitySliderFrame:SetValue(self.opacity)
+            self:SetWidth(365)
+        else
+            OpacitySliderFrame:Hide()
+            self:SetWidth(305)
+        end
+    end)
+    cp:SetScript("OnColorSelect", function(self, r, g, b)
+        ColorSwatch:SetTexture(r, g, b)
+        if self.func then self.func() end
+    end)
+    cp:Hide()
+
+    -- la petite fenetre d'opacite
+    local of = CreateFrame("Frame", "OpacityFrame", UIParent)
+    of:SetWidth(80) of:SetHeight(180)
+    of:SetBackdrop(DIALOGUE)
+    local curseur = CreateFrame("Slider", "OpacityFrameSlider", of)
+    curseur:SetWidth(16) curseur:SetHeight(128)
+    curseur:SetBackdrop({ bgFile = fichier("Interface", "Buttons", "UI-SliderBar-Background"),
+        edgeFile = fichier("Interface", "Buttons", "UI-SliderBar-Border"), tile = true })
+    of:Hide()
+end
 """
 
 
@@ -5236,7 +6053,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -8342,27 +9159,32 @@ def main():
         len(noms), g.PVPMicroButton.shown, g.HelpMicroButton.shown))
     assert "PVPMicroButton" not in noms and "HelpMicroButton" not in noms and len(noms) == 8
     assert not g.PVPMicroButton.shown and not g.HelpMicroButton.shown, "les boutons du client ne reviennent pas"
-    # LA DEMANDE D'AIDE AU MENU ECHAP, entre AddOns (ACP) et Log Out, un espace
-    # de 16 de chaque cote ; Macros ne bouge pas
+    # LA DEMANDE D'AIDE AU MENU ECHAP, entre AddOns (ACP) et Log Out, une
+    # section de chaque cote. Depuis le 2026-09-28 (menu et reglages, etape
+    # 1), le menu est celui de camelot (MainMenuFrameTemplate) : colonne a
+    # (28, -y), boutons rouges 200 x 36, sections de 20, marges 48 / 34, 256
+    # de large -- les boutons restent ceux du client, dans son ordre.
     aide = g.ForeverUIGameMenuButtonHelp
-    def haut(b):
-        pts = [list(x.values()) for x in b.points.values()]
-        return [x for x in pts if x[0] == "TOP"][-1]
+    COLONNE = [("GameMenuButtonOptions", 48), ("GameMenuButtonSoundOptions", 84),
+               ("GameMenuButtonUIOptions", 120), ("GameMenuButtonKeybindings", 156),
+               ("GameMenuButtonMacros", 192), ("GameMenuButtonAddOns", 228),
+               ("ForeverUIGameMenuButtonHelp", 284), ("GameMenuButtonLogout", 340),
+               ("GameMenuButtonQuit", 376), ("GameMenuButtonContinue", 432)]
     def verifier(quand):
-        pa, pl = haut(aide), haut(g.GameMenuButtonLogout)
-        nom = lambda r: r if isinstance(r, str) else r.name
-        print("   menu Echap (%s) : '%s' sous %s (%s), Log Out sous %s (%s), menu %s de haut" % (
-            quand, aide.text, nom(pa[1]), pa[4], nom(pl[1]), pl[4], g.GameMenuFrame.height))
-        assert (nom(pa[1]), pa[2], pa[4]) == ("GameMenuButtonAddOns", "BOTTOM", -16)
-        assert (nom(pl[1]), pl[2], pl[4]) == ("ForeverUIGameMenuButtonHelp", "BOTTOM", -16)
-    assert aide.text == "Help Request" and (aide.width, aide.height) == (144, 21)
+        for nom, y in COLONNE:
+            b = g[nom]
+            pts = [list(x.values()) for x in b.points.values()]
+            assert len(pts) == 1 and pts[0][0] == "TOPLEFT" and pts[0][1].name == "GameMenuFrame"                 and pts[0][2:] == ["TOPLEFT", 28, -y], (quand, nom, pts)
+            assert (b.width, b.height) == (200, 36) and b.foreverTrois, (quand, nom)
+        print("   menu Echap (%s) : %d boutons en colonne, aide a -284, Log Out a -340, menu %s x %s" % (
+            quand, len(COLONNE), g.GameMenuFrame.width, g.GameMenuFrame.height))
+        assert (g.GameMenuFrame.width, g.GameMenuFrame.height) == (256, 432 + 36 + 34)
+    assert aide.text == "Help Request"
     verifier("chargement")
-    assert g.GameMenuFrame.height == 240 + 21 + 2 * 16 - 1
-    assert haut(g.GameMenuButtonMacros)[1].name == "GameMenuButtonKeybindings", "Macros reste sous Key Bindings"
-    # ACP remet Log Out sous AddOns a chaque ouverture : on repasse derriere
+    # ACP remet Log Out sous AddOns et grandit le menu a chaque ouverture :
+    # la colonne repasse derriere
     lua.execute("GameMenuFrame:Show()")
     verifier("ouvert")
-    assert g.GameMenuFrame.height == 240 + 21 + 2 * 16 - 1 + 25
     lua.execute("GameMenuFrame:Hide() GameMenuFrame:Show() AIDE_OUVERTE = 0")
     verifier("rouvert")
     aide.scripts.OnClick(aide)
@@ -13976,6 +14798,602 @@ def main():
     assert ligne("WHISPER").enabled is not False, "les autres lignes restent actives"
     lua.execute("DropDownList1:Hide() STATE.inLockdown = false")
     assert len(list(M.grises.values())) == 0
+
+    # ------------------------------------------------- LES INFOBULLES
+    print("\ninfobulles :")
+    TT = g.ForeverUI.Tooltips
+    req = lua.eval("rawequal")
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def couleur(t):
+        return tuple(round(x, 3) for x in list(t.vertex.values())) + (t.vertexAlpha,)
+    ATTENDUS = {
+        "TopLeftCorner": "tooltip-nineslice-cornertopleft",
+        "TopRightCorner": "tooltip-nineslice-cornertopright",
+        "BottomLeftCorner": "tooltip-nineslice-cornerbottomleft",
+        "BottomRightCorner": "tooltip-nineslice-cornerbottomright",
+        "TopEdge": "_tooltip-nineslice-edgetop",
+        "BottomEdge": "_tooltip-nineslice-edgebottom",
+        "LeftEdge": "!tooltip-nineslice-edgeleft",
+        "RightEdge": "!tooltip-nineslice-edgeright",
+        "Center": "tooltip-nineslice-center",
+    }
+    def verifierNeuf(f):
+        p = f.foreverNeuf
+        assert p is not None, "%s n'est pas habillee" % f.name
+        assert f.backdrop is None, "%s garde le fond de 3.3.5" % f.name
+        assert sorted(p.keys()) == sorted(ATTENDUS.keys())
+        for nom, atlas in ATTENDUS.items():
+            t, e = p[nom], g.ForeverUI.AtlasEntry(atlas)
+            assert t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]], (f.name, nom)
+            assert t.layer == ("BACKGROUND" if nom == "Center" else "BORDER"), (f.name, nom, t.layer)
+        for coin, point in (("TopLeftCorner", "TOPLEFT"), ("TopRightCorner", "TOPRIGHT"),
+                            ("BottomLeftCorner", "BOTTOMLEFT"), ("BottomRightCorner", "BOTTOMRIGHT")):
+            c = p[coin]
+            a = pts(c)
+            assert (c.width, c.height) == (7, 7) and len(a) == 1
+            assert a[0][0] == point and req(a[0][1], f) and a[0][2:] == [point, 0, 0]
+        a = pts(p.TopEdge)
+        assert a[0][0] == "TOPLEFT" and req(a[0][1], p.TopLeftCorner) and a[0][2] == "TOPRIGHT"
+        assert a[1][0] == "TOPRIGHT" and req(a[1][1], p.TopRightCorner) and a[1][2] == "TOPLEFT"
+        assert p.TopEdge.height == 7 and p.LeftEdge.width == 7
+        a = pts(p.LeftEdge)
+        assert a[0][0] == "TOPLEFT" and req(a[0][1], p.TopLeftCorner) and a[0][2] == "BOTTOMLEFT"
+        assert a[1][0] == "BOTTOMLEFT" and req(a[1][1], p.BottomLeftCorner) and a[1][2] == "TOPLEFT"
+        a = pts(p.Center)
+        assert a[0][0] == "TOPLEFT" and req(a[0][1], p.TopLeftCorner) and a[0][2:] == ["BOTTOMRIGHT", -4, 4]
+        assert a[1][0] == "BOTTOMRIGHT" and req(a[1][1], p.BottomRightCorner) and a[1][2:] == ["TOPLEFT", 4, -4]
+        assert couleur(p.Center) == (0.09, 0.09, 0.19, 1), couleur(p.Center)
+        assert couleur(p.TopEdge) == (1, 1, 1, 1) and couleur(p.BottomRightCorner) == (1, 1, 1, 1)
+    INFOBULLES = ["GameTooltip", "ItemRefTooltip", "WorldMapTooltip"] + [
+        "%s%d" % (r, i) for r in ("ShoppingTooltip", "ItemRefShoppingTooltip", "WorldMapCompareTooltip") for i in (1, 2, 3)]
+    for nom in INFOBULLES:
+        verifierNeuf(g[nom])
+        assert list(g[nom].retraitsEcran.values()) == [0, 0, 25, 0], nom
+    for nom in ("FriendsTooltip", "PartyMemberBuffTooltip", "SmallTextTooltip"):
+        verifierNeuf(g[nom])
+        assert g[nom].retraitsEcran is None, "les bulles n'ont pas les retraits de SharedTooltip_OnLoad"
+    print("   %d infobulles et 3 bulles en neuf morceaux, fond de 3.3.5 retire" % len(INFOBULLES))
+
+    # les couleurs du client passent aux morceaux (GameTooltip_OnHide...)
+    gt = g.GameTooltip
+    lua.execute("GameTooltip:SetBackdropColor(0.5, 0.25, 0) GameTooltip:SetBackdropBorderColor(0, 1, 0, 0.5)")
+    assert couleur(gt.foreverNeuf.Center) == (0.5, 0.25, 0, 1)
+    assert couleur(gt.foreverNeuf.TopEdge) == (0, 1, 0, 0.5)
+    lua.execute("GameTooltip:SetBackdropColor(0.09, 0.09, 0.19) GameTooltip:SetBackdropBorderColor(1, 1, 1)")
+    assert couleur(gt.foreverNeuf.Center) == (0.09, 0.09, 0.19, 1) and couleur(gt.foreverNeuf.LeftEdge) == (1, 1, 1, 1)
+
+    # la croix de l'infobulle de lien
+    x = g.ItemRefCloseButton
+    assert (x.width, x.height) == (24, 24)
+    a = pts(x)
+    assert len(a) == 1 and a[0][0] == "TOPRIGHT" and req(a[0][1], g.ItemRefTooltip) and a[0][2:] == ["TOPRIGHT", 2, 2]
+    for t, atlas in ((x._normal, "redbutton-exit"), (x._pushed, "redbutton-exit-pressed"), (x._highlight, "redbutton-highlight")):
+        e = g.ForeverUI.AtlasEntry(atlas)
+        assert t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]] and req(t.allPoints, x), atlas
+    assert x._highlight.blend == "ADD"
+    print("   croix d'ItemRefTooltip : 24 x 24 a TOPRIGHT (2, 2), RedButton-Exit")
+
+    # la comparaison : la premiere ligne monte dans le bandeau
+    lua.execute("COMPARES = { 'Epee equipee', 'Bague equipee' } GameTooltip:Show() GameTooltip_ShowCompareItem(GameTooltip, 1)")
+    s1, s2, s3 = g.ShoppingTooltip1, g.ShoppingTooltip2, g.ShoppingTooltip3
+    h = s1.foreverEntete
+    print("   comparaison : bandeau %r, %d de large, ligne 1 %r, ligne 2 %r" % (
+        h.Label.text, h.width, g.ShoppingTooltip1TextLeft1.text, g.ShoppingTooltip1TextLeft2.text))
+    assert h.shown and h.Label.text == "Currently Equipped" and h.height == 22
+    assert h.width == len("Currently Equipped") * 6 + 30
+    a = pts(h)
+    assert a[0][0] == "BOTTOMLEFT" and req(a[0][1], s1) and a[0][2:] == ["TOPLEFT", 0, -1]
+    fond = [r for r in h.regions.values() if r.kind == "texture"][0]
+    e = g.ForeverUI.AtlasEntry("tooltip-compare-label")
+    assert fond.texture == e[1] and fond.layer == "BACKGROUND" and req(fond.allPoints, h)
+    assert list(h.Label.textColor.values())[:3] == [1, 0.82, 0] and h.Label.font == "GameTooltipText"
+    assert h.frameLevel == 0, "sous l'infobulle"
+    assert g.ShoppingTooltip1TextLeft1.text == "" and g.ShoppingTooltip1TextLeft2.text == "Epee equipee"
+    assert s2.foreverEntete.shown and g.ShoppingTooltip2TextLeft1.text == ""
+    assert s3.foreverEntete is None and not s3.shown, "la troisieme ne compare rien"
+    # l'infobulle videe (SetOwner) perd son bandeau ; une autre premiere
+    # ligne n'est pas touchee
+    lua.execute("ShoppingTooltip1:SetOwner(GameTooltip, 'ANCHOR_NONE')")
+    assert not h.shown
+    lua.execute("PREMIERE_LIGNE = 'Autre chose' GameTooltip_ShowCompareItem(GameTooltip, 1)")
+    assert not h.shown and g.ShoppingTooltip1TextLeft1.text == "Autre chose"
+    lua.execute("PREMIERE_LIGNE = nil ItemRefTooltip:Show() GameTooltip_ShowCompareItem(ItemRefTooltip)")
+    assert g.ItemRefShoppingTooltip1.foreverEntete.shown and g.ItemRefShoppingTooltip1TextLeft1.text == ""
+    lua.execute("GameTooltip_ShowCompareItem(nil, 1)")
+    assert h.shown, "sans infobulle, celle du client : GameTooltip"
+    lua.execute("COMPARES = { 'Epee equipee' }")
+
+    # les infobulles des addons charges ensuite, sur les gabarits du client
+    lua.execute("""
+        AutreBulle = CreateFrame("GameTooltip", "AutreBulle", UIParent)
+        AutreBulle:SetBackdrop(FOND_INFOBULLE)
+        BulleAPart = CreateFrame("GameTooltip", "BulleAPart", UIParent)
+        BulleAPart:SetBackdrop({ bgFile = "fond", edgeFile = "bord" })
+        ItemSocketingDescription = CreateFrame("GameTooltip", "ItemSocketingDescription", UIParent)
+        ItemSocketingDescription:SetBackdrop(FOND_INFOBULLE)
+        CadreSimple = CreateFrame("Frame", "CadreSimple", UIParent)
+        CadreSimple:SetBackdrop(FOND_INFOBULLE)
+        ForeverUI.Tooltips.veille.scripts.OnEvent(ForeverUI.Tooltips.veille, "ADDON_LOADED", "Autre")
+    """)
+    verifierNeuf(g.AutreBulle)
+    assert g.BulleAPart.foreverNeuf is None and g.BulleAPart.backdrop is not None, "un autre fond : pas le notre"
+    assert g.ItemSocketingDescription.foreverNeuf is None, "enchassee dans la fenetre de sertissage"
+    assert g.CadreSimple.foreverNeuf is None, "un Frame n'est pas une infobulle"
+    # un addon qui repose son fond reprend la main
+    lua.execute("AutreBulle:SetBackdrop({ bgFile = 'a', edgeFile = 'b' })")
+    assert not any(t.shown for t in g.AutreBulle.foreverNeuf.values())
+    lua.execute("AutreBulle:SetBackdrop(nil)")
+    assert all(t.shown for t in g.AutreBulle.foreverNeuf.values())
+    # habiller deux fois ne double rien
+    avant = len(list(g.GameTooltip.regions.values()))
+    TT.Habiller(g.GameTooltip)
+    TT.Balayer()
+    assert len(list(g.GameTooltip.regions.values())) == avant
+    print("   addons : gabarit du client habille, autre fond, sertissage et Frame laisses")
+
+    # ------------------------------------------------- LE MENU ECHAP ET LES REGLAGES
+    print("\nmenu Echap et reglages :")
+    Gb = g.ForeverUI.Gabarits
+    req = lua.eval("rawequal")
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def art(t, nom):
+        e = Gb.Art(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    def atlas_jeu(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    # le menu Echap : fond et titre du client eteints, DialogBorder et
+    # DialogHeader de camelot, MAINMENU_BUTTON
+    gm = g.GameMenuFrame
+    assert gm.backdrop is None and g.GameMenuFrameHeader.alpha == 0
+    sans_nom = [r for r in gm.regions.values() if r.kind == "fontstring" and r.text == "Options"]
+    assert sans_nom and all(r.alpha == 0 for r in sans_nom), "le titre sans nom du client s'eteint"
+    ent = g.ForeverUI.GameMenu.entete
+    assert ent.Text.text == "Game Menu" and pts(ent)[0][0] == "TOP" and pts(ent)[0][2:] == ["TOP", 0, 11]
+    # un bouton rouge : ses trois tranches suivent l'etat
+    lo = g.GameMenuButtonLogout
+    r3 = lo.foreverTrois
+    assert art(r3.gauche, "128-redbutton-left") and art(r3.centre, "_128-redbutton-center")
+    assert req(lo.normalFont, g.GameFontHighlightLarge) and req(lo.disabledFont, g.GameFontDisableLarge)
+    lua.execute("GameMenuButtonLogout:Disable()")
+    assert art(r3.gauche, "128-redbutton-left-disabled") and art(r3.droite, "128-redbutton-right-disabled")
+    lua.execute("GameMenuButtonLogout:Enable()")
+    assert art(r3.gauche, "128-redbutton-left")
+    # UpdateScale : les bouts a la hauteur du bouton (36 / 128)
+    assert abs(r3.gauche.width - 114 * 36 / 128) < 1e-9 and r3.gauche.height == 36
+    print("   menu Echap : DialogBorder, en-tete '%s', boutons rouges (gauche %.2f x 36)" % (ent.Text.text, r3.gauche.width))
+
+    # les trois fenetres
+    for nom, titre, droite, defaut in (("VideoOptionsFrame", "Video", ["Apply", "Cancel", "Okay"], "Defaults"),
+                                       ("AudioOptionsFrame", "Sound & Voice", ["Cancel", "Okay"], "Defaults"),
+                                       ("InterfaceOptionsFrame", "Interface", ["Cancel", "Okay"], "Defaults")):
+        f = g[nom]
+        assert f.backdrop is None and g[nom + "Header"].alpha == 0 and g[nom + "HeaderText"].alpha == 0
+        assert f.foreverHabit.titre.text == titre and f.foreverHabit.stries.shown is False
+        assert g[nom + "PanelContainer"].backdrop is None
+        x = f.foreverCroix
+        assert (x.width, x.height) == (24, 24) and pts(x)[0][2:] == ["TOPRIGHT", -2, 1]
+        precedent = None
+        for b in droite:
+            bt = g[nom + b]
+            assert (bt.width, bt.height) == (96, 22)
+            p = pts(bt)
+            if precedent is None:
+                assert p == [["BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 16]] or (p[0][0], p[0][2:]) == ("BOTTOMRIGHT", ["BOTTOMRIGHT", -16, 16]), (nom, b, p)
+            else:
+                assert p[0][0] == "RIGHT" and req(p[0][1], precedent) and p[0][2:] == ["LEFT", -2, 0], (nom, b, p)
+            precedent = bt
+        d = g[nom + defaut]
+        assert pts(d)[0][0] == "BOTTOMLEFT" and pts(d)[0][2:] == ["BOTTOMLEFT", 16, 16]
+        assert d._normal.texture is None, "l'art gris du client est efface"
+        # la croix ferme, sans jouer Cancel depuis l'addon
+        lua.execute(nom + ":Show() " + nom + "ForeverUICloseButton:GetScript('OnClick')(" + nom + "ForeverUICloseButton)")
+        assert not f.shown
+    print("   Video, Son et voix, Interface : metal, titre, croix qui ferme, boutons 96 x 22")
+
+    # la liste des categories : sans cadre, choisie / survolee, depliage,
+    # barre de camelot qui pilote la fausse barre du client
+    liste = g.VideoOptionsFrameCategoryFrame
+    assert all(g["VideoOptionsFrameCategoryFrame" + s].alpha == 0 for s in ("TopLeft", "Left", "Top", "Bottom"))
+    assert liste.scrollFrame.backdrop is None
+    lua.execute("""
+        VideoOptionsFrame.categoryList = {
+            { name = "Resolution" }, { name = "Sous", parent = "Resolution" },
+            { name = "Effets", hasChildren = true, collapsed = true },
+        }
+        OptionsCategoryFrame_Update(VideoOptionsFrameCategoryFrame)
+        OptionsList_SelectButton(VideoOptionsFrameCategoryFrame, VideoOptionsFrameCategoryFrameButton1)
+    """)
+    b1, b2, b3 = (g["VideoOptionsFrameCategoryFrameButton%d" % i] for i in (1, 2, 3))
+    assert b1.foreverActif.shown and not b1.foreverSurvol.shown and b1.normalFont == "GameFontHighlight"
+    assert not b3.foreverActif.shown and b3.normalFont == "GameFontNormal"
+    assert b2.normalFont == "GameFontHighlight", "une sous-categorie en GameFontHighlight"
+    assert atlas_jeu(b1.foreverActif, "options_list_active") and b1._highlight.alpha == 0
+    assert atlas_jeu(b3.toggle._normal, "common-button-dropdown-closed")
+    assert atlas_jeu(b3.toggle._pushed, "common-button-dropdown-closedpressed")
+    b3.hooks.OnEnter(b3)
+    assert b3.foreverSurvol.shown
+    b3.hooks.OnLeave(b3)
+    assert not b3.foreverSurvol.shown
+    lua.execute("VideoOptionsFrame.categoryList[3].collapsed = false OptionsCategoryFrame_Update(VideoOptionsFrameCategoryFrame)")
+    assert atlas_jeu(b3.toggle._normal, "common-button-dropdown-open")
+    assert b1.foreverActif.shown, "la selection survit au rafraichissement"
+    # la barre : l'art de camelot POSE SUR la fausse barre du client, qui
+    # reste a la souris (invisible) ; l'art suit son curseur
+    v = liste.foreverBarre
+    sb = g.VideoOptionsFrameCategoryFrameListScrollBar
+    assert sb.alpha == 0 and sb.mouseEnabled is not False, "la barre du client reste cliquable"
+    assert not v.mouseEnabled, "l'art ne prend pas la souris"
+    assert req(v.parent, liste.scrollFrame) and v.GetFrameLevel(v) > sb.GetFrameLevel(sb)
+    ch, cm, cb = v.curseur.values()
+    pouce = sb.GetThumbTexture(sb)
+    assert pts(ch)[0][:3] == ["TOP", pouce, "TOP"] or (pts(ch)[0][0] == "TOP" and req(pts(ch)[0][1], pouce))
+    assert pts(cb)[0][0] == "BOTTOM" and req(pts(cb)[0][1], pouce) and cb.width == 8
+    assert pts(v.haut)[0][0] == "CENTER" and pts(v.haut)[0][1].name == sb.name + "ScrollUpButton"
+    haut = g[sb.name + "ScrollUpButton"]
+    haut.hooks.OnEnter(haut)
+    assert atlas_jeu(v.haut, "minimal-scrollbar-arrow-top-over-c60")
+    haut.hooks.OnLeave(haut)
+    assert atlas_jeu(v.haut, "minimal-scrollbar-arrow-top-c60")
+    assert (v.haut.width, v.haut.height) == (17, 11) and (v.bas.width, v.bas.height) == (17, 11)
+    assert (ch.width, ch.height) == (8, 8) and (cb.width, cb.height) == (8, 8)
+    pistes = [t for t in v.regions.values() if t.layer == "BACKGROUND"]
+    assert all(t.width == 8 and t.height for t in pistes) and len(pistes) == 3
+    print("   barre : art de camelot sur la barre du client (cliquable, invisible), curseur ancre sur le sien")
+    lua.execute("VideoOptionsFrame.categoryList = {}")
+
+    # les commandes d'un panneau
+    p = "VideoOptionsResolutionPanel"
+    c = g[p + "Case"]
+    assert art(c._normal, "checkbox-minimal") and art(c._checked, "checkmark-minimal")
+    assert art(c._disabledChecked, "checkmark-minimal-disabled") and c._highlight.alpha == 0
+    assert c._checked.allPoints == True or req(c._checked.allPoints, c)
+    s = g[p + "Curseur"]
+    assert s.backdrop is None and art(s._thumb, "minimal_sliderbar_button") and (s._thumb.width, s._thumb.height) == (16, 15)
+    bo = g[p + "Boite"]
+    assert bo.backdrop is None and bo.foreverNeuf.Center.alpha == 0
+    assert tuple(round(v, 3) for v in list(bo.foreverNeuf.TopEdge.vertex.values())) == (0.4, 0.4, 0.4)
+    assert g[p + "BoiteCase"].foreverCase, "une case dans un cadre de groupe"
+    assert not g.AutreAddonPanneauCase.foreverCase, "le panneau d'un autre addon garde ses cases"
+    # le curseur grise : la poignee a 0,7, lue pendant que la fenetre est ouverte
+    lua.execute("VideoOptionsFrame:Show() VideoOptionsResolutionPanelCurseur:Disable()")
+    v = g.ForeverUI.Reglages.veille
+    v.scripts.OnUpdate(v, 0.2)
+    assert s._thumb.alpha == 0.7
+    lua.execute("VideoOptionsResolutionPanelCurseur:Enable()")
+    v.scripts.OnUpdate(v, 0.2)
+    assert s._thumb.alpha == 1
+    lua.execute("VideoOptionsFrame:Hide()")
+    # le menu deroulant, style 2
+    dd = g[p + "Menu"]
+    bb = g[p + "MenuButton"]
+    assert dd.foreverStyle == 2 and all(g[p + "Menu" + s].alpha == 0 for s in ("Left", "Middle", "Right"))
+    pb = pts(bb)
+    assert pb[0][0] == "TOPLEFT" and pb[0][1].name == p + "MenuLeft" and pb[0][2:] == ["TOPLEFT", 16, -19]
+    assert pb[1][0] == "RIGHT" and pb[1][1].name == p + "MenuRight" and pb[1][2:] == ["RIGHT", -17, 0] and bb.height == 25
+    texte = g[p + "MenuText"]
+    assert texte.font == "GameFontNormalSmall" and list(texte.textColor.values())[:3] == [1, 0.82, 0]
+    assert not dd.foreverFleche.shown
+    bb.hooks.OnEnter(bb)
+    assert dd.foreverFleche.shown
+    bb.hooks.OnLeave(bb)
+    lua.execute("UIDropDownMenu_DisableDropDown(" + p + "Menu)")
+    assert list(texte.textColor.values())[:3] == [0.5, 0.5, 0.5] and dd.foreverFleche.desaturated
+    lua.execute("UIDropDownMenu_EnableDropDown(" + p + "Menu)")
+    assert list(texte.textColor.values())[:3] == [1, 0.82, 0]
+    print("   commandes : case, curseur (poignee 16 x 15), cadre de groupe gris, menu de style 2")
+
+    # la liste de style 2 : fond c-bg, rond, marges 3 / 6 / 3 / 7, sous le
+    # bouton, au moins sa largeur ; puis un menu ordinaire reprend le style 1
+    lua.execute("""
+        bb = VideoOptionsResolutionPanelMenuButton
+        bb:SetWidth(150)
+        UIDROPDOWNMENU_INIT_MENU = VideoOptionsResolutionPanelMenu
+        UIDROPDOWNMENU_OPEN_MENU = VideoOptionsResolutionPanelMenu
+        DropDownList1.numButtons = 0
+        UIDropDownMenu_AddButton({ text = "Haut-parleurs (R" .. string.char(233) .. "altek)" })
+        UIDropDownMenu_AddButton({ text = "Casque", checked = 1 })
+        DropDownList1:Show()
+        ToggleDropDownMenu(1, nil, VideoOptionsResolutionPanelMenu)
+    """)
+    l1 = g.DropDownList1
+    ligne1, ligne2 = g.DropDownList1Button1, g.DropDownList1Button2
+    print("   liste de style 2 : %s x %s, lignes a %s et %s, '%s'" % (
+        l1.width, l1.height, pts(ligne1)[-1][2:], pts(ligne2)[-1][2:], ligne1.text))
+    assert l1.foreverFond2 and l1.foreverStyle2 and all(not t.shown for t in l1.foreverTranches.values())
+    assert pts(ligne1)[-1][2:] == ["TOPLEFT", 3, -6] and pts(ligne2)[-1][2:] == ["TOPLEFT", 3, -26]
+    assert l1.height == 6 + 2 * 20 + 7 and ligne1.foreverRond.shown and not ligne1.foreverCase.shown
+    assert ligne1.text == "Haut-parleurs (R" + chr(233) + "altek)", "Windows-1252 converti en UTF-8"
+    pl = pts(l1)
+    assert pl[-1][0] == "TOPLEFT" and req(pl[-1][1], bb) and pl[-1][2:] == ["BOTTOMLEFT", 0, 0]
+    assert l1.width == max(150, l1.foreverContenu2 + 6)
+    assert art(g.DropDownList1Button2Check, "common-dropdown-icon-radialtick-yellow")
+    lua.execute("""
+        DropDownList1:Hide()
+        UIDROPDOWNMENU_INIT_MENU = PlayerStatFrameLeftDropDown
+        UIDROPDOWNMENU_OPEN_MENU = PlayerStatFrameLeftDropDown
+        DropDownList1.numButtons = 0
+        UIDropDownMenu_AddButton({ text = "Melee" })
+        UIDROPDOWNMENU_INIT_MENU, UIDROPDOWNMENU_OPEN_MENU = nil, nil
+    """)
+    assert not l1.foreverStyle2 and all(t.shown for t in l1.foreverTranches.values()) and not l1.foreverFond2.pieces[1].shown
+    assert not ligne1.foreverRond.shown and atlas_jeu(g.DropDownList1Button1Check, "common-dropdown-icon-checkmark-yellow")
+    print("   puis un menu ordinaire : style 1 repose (tranches, case, coche jaune)")
+
+    # les onglets de l'Interface : MinimalTab, 5 entre eux
+    t1, t2 = g.InterfaceOptionsFrameTab1, g.InterfaceOptionsFrameTab2
+    assert g.InterfaceOptionsFrameTab1Left.alpha == 0 and g.InterfaceOptionsFrameTab1TabSpacer.alpha == 0
+    lua.execute("InterfaceOptionsFrameTab1:Disable() InterfaceOptionsFrameTab2:Enable()")
+    assert atlas_jeu(t1.foreverArt.left, "options_tab_active_left") and atlas_jeu(t2.foreverArt.middle, "options_tab_middle")
+    assert t1.width == len("Game") * 6 + 40 and t1.height == 37
+    # CHAQUE MORCEAU A SA TAILLE D'ELEMENT : sans taille, le vrai client lui
+    # donne celle de sa feuille (1024 x 1024) -- une texture geante montait
+    # au-dessus de l'Interface (vu en jeu le 28/09)
+    a1, a2 = t1.foreverArt, t2.foreverArt
+    assert (a1.left.width, a1.left.height) == (7, 26) and (a1.right.width, a1.right.height) == (7, 26)
+    assert a1.middle.height == 26 and (a2.left.width, a2.left.height) == (7, 23) and a2.middle.height == 23
+    assert pts(t1.fontString)[-1][2:] == ["BOTTOM", 0, 6] and pts(t2.fontString)[-1][2:] == ["BOTTOM", 0, 4]
+    p2 = pts(t2)
+    assert p2 == [["TOPLEFT", t1, "TOPRIGHT", 5, 0]] or (len(p2) == 1 and p2[0][2:] == ["TOPRIGHT", 5, 0])
+    print("   onglets : Game choisi (actif, texte a 6), AddOns a 5 du premier")
+    # L'INTERFACE A LA DISPOSITION DE CAMELOT (retour du 28/09) : listes a
+    # -76, fenetre grandie de 36, onglets poses sur le cadre interieur
+    # (Options_InnerFrame en 5 x 3), a 15 de son bord
+    iof = g.InterfaceOptionsFrame
+    assert iof.height == 520 + 36
+    for nom in ("InterfaceOptionsFrameCategories", "InterfaceOptionsFrameAddOns"):
+        assert pts(g[nom]) == [["TOPLEFT", iof, "TOPLEFT", 22, -76]] or (len(pts(g[nom])) == 1 and pts(g[nom])[0][2:] == ["TOPLEFT", 22, -76])
+    inte = iof.foreverInterieur
+    pi = pts(inte)
+    assert pi[0][0] == "TOPLEFT" and pi[0][1].name == "InterfaceOptionsFrameCategories" and pi[0][2:] == ["TOPLEFT", -1, 12]
+    assert pi[1][2:] == ["BOTTOMLEFT", -1, -4] and pi[2][0] == "RIGHT" and req(pi[2][1], iof) and pi[2][2:] == ["RIGHT", -17, 0]
+    morceaux = list(inte.pieces.values())
+    e = g.ForeverUI.AtlasEntry("options_innerframe")
+    assert len(morceaux) == 15 and all(m.texture == e[1] for m in morceaux)
+    # colonnes : bord 29, liste jusqu'au separateur (175), separateur 2, reste, bord 29
+    largeurs = sorted(set(m.width for m in morceaux if m.width))
+    assert largeurs == [2, 29, 146], largeurs
+    # rangs : degrade du haut 82, du bas 167
+    assert sorted(set(m.height for m in morceaux if m.height)) == [82, 167]
+    sep = [m for m in morceaux if m.width == 2][0]
+    assert pts(sep)[0][2:] == ["LEFT", 175, 0]
+    assert pts(t1)[-1][0] == "BOTTOMLEFT" and req(pts(t1)[-1][1], inte) and pts(t1)[-1][2:] == ["TOPLEFT", 15, 0]
+    # PROPOSITION ACCEPTEE (28/09, etape 3) : Video et Son prennent aussi le
+    # cadre interieur, cale sur leur liste de categories
+    for fen, lst in (("VideoOptionsFrame", "VideoOptionsFrameCategoryFrame"), ("AudioOptionsFrame", "AudioOptionsFrameCategoryFrame")):
+        cadre = g[fen].foreverInterieur
+        assert cadre and len(list(cadre.pieces.values())) == 15 and all(m.texture == e[1] for m in cadre.pieces.values()), fen
+        pc = pts(cadre)
+        assert pc[0][1].name == lst and pc[0][2:] == ["TOPLEFT", -1, 12] and pc[1][2:] == ["BOTTOMLEFT", -1, -4], fen
+        assert req(pc[2][1], g[fen]) and pc[2][2:] == ["RIGHT", -17, 0], fen
+    print("   Interface : fenetre 556, listes a -76, cadre interieur de camelot, onglets poses dessus a 15 ; Video et Son : cadre interieur")
+
+    # ------------------------------------------------- LES RACCOURCIS ET LES MACROS
+    print("\nraccourcis et macros :")
+    Gb = g.ForeverUI.Gabarits
+    req = lua.eval("rawequal")
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def atlas_jeu(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    lua.execute("CHARGER_ADDON('Blizzard_BindingUI')")
+    kb = g.KeyBindingFrame
+    # la fenetre grandit de 30, la partie visible de l'art de 3.3.5 porte la
+    # fenetre de camelot, l'art de 3.3.5 s'eteint
+    assert kb.height == 512 + 30 and kb.foreverHabit
+    assert all(r.alpha == 0 for r in kb.regions.values() if r.kind == "texture")
+    assert kb.foreverHabit.titre.text == "Key Bindings"
+    lua.execute("KeyBindingFrameHeaderText:SetFormattedText(CHARACTER_KEY_BINDINGS, 'Papota')")
+    assert kb.foreverHabit.titre.text == "Character Specific Key Bindings for Papota", "le titre suit celui du client"
+    # le contenu descend de 24 ; la case sous la barre de titre
+    assert pts(g.KeyBindingFrameCommandLabel)[-1][2:] == ["TOPLEFT", 26, -59]
+    assert pts(g.KeyBindingFrameBinding1)[-1][2:] == ["TOPLEFT", 27, -77]
+    assert pts(g.KeyBindingFrameScrollFrame)[-1][2:] == ["TOPLEFT", 2, -77]
+    assert pts(g.KeyBindingFrameCharacterButton)[-1][2:] == ["TOPRIGHT", -245, -36]
+    # le cadre interieur autour des lignes (sous la derniere : -470, -473)
+    rect = [r for r in kb.children.values() if r.foreverRect][0].foreverRect
+    pr = pts(rect)
+    assert pr[0][2:] == ["TOPLEFT", 15, -73] and pr[1][2:] == ["TOPRIGHT", -50, -473], pr
+    assert len(list(kb.foreverHabit.interieur.values())) == 9
+    # les textes recopies au-dessus du fond
+    copies = list(kb.foreverHabit.textes.values())
+    assert [c.text for c in copies[:3]] == ["Command", "Key 1", "Key 2"] and g.KeyBindingFrameCommandLabel.alpha == 0
+    lua.execute("KeyBindingFrameOutputText:SetText('Press a key to bind')")
+    assert copies[3].text == "Press a key to bind" and pts(copies[3])[0][1].name == "KeyBindingFrameOutputText"
+    # les boutons argentes et le liseré du choisi
+    b1 = g.KeyBindingFrameBinding1Key1Button
+    assert len(list(b1.foreverArgent.values())) == 9 and g.KeyBindingFrameBinding1Key1ButtonLeft.alpha == 0
+    assert b1._highlight.texture.endswith("UI-Silver-Button-Highlight") and b1._highlight.blend == "ADD"
+    assert (b1.foreverChoix.width, b1.foreverChoix.height) == (180, 20) and not b1.foreverChoix.shown
+    lua.execute("KeyBindingFrame.keyID = 1 KeyBindingFrame_SetSelected('MOVEFORWARD') KeyBindingFrame_Update()")
+    assert b1.foreverChoix.shown and not g.KeyBindingFrameBinding1Key2Button.foreverChoix.shown
+    lua.execute("KeyBindingFrame_SetSelected(nil)")
+    assert not b1.foreverChoix.shown
+    b1.hooks.OnMouseDown(b1)
+    assert all(t.texture.endswith("UI-Silver-Button-Down") for t in b1.foreverArgent.values())
+    b1.hooks.OnMouseUp(b1)
+    assert all(t.texture.endswith("UI-Silver-Button-Up") for t in b1.foreverArgent.values())
+    # la barre, la case, les boutons du bas
+    sb = g.KeyBindingFrameScrollFrameScrollBar
+    assert sb.foreverBarre and sb.GetThumbTexture(sb).alpha == 0 and g.KeyBindingFrameScrollFrameScrollBarScrollUpButton._normal.alpha == 0
+    assert g.KeyBindingFrameCharacterButton.foreverCase
+    fenetre = pts(g.KeyBindingFrameCancelButton)[0][1]
+    assert pts(g.KeyBindingFrameCancelButton)[0][2:] == ["BOTTOMRIGHT", -16, 16]
+    assert pts(g.KeyBindingFrameOkayButton)[0][2:] == ["LEFT", -2, 0] and req(pts(g.KeyBindingFrameOkayButton)[0][1], g.KeyBindingFrameCancelButton)
+    assert pts(g.KeyBindingFrameUnbindButton)[0][2:] == ["LEFT", -2, 0]
+    assert pts(g.KeyBindingFrameDefaultButton)[0][2:] == ["BOTTOMLEFT", 16, 16] and req(pts(g.KeyBindingFrameDefaultButton)[0][1], fenetre)
+    assert pts(fenetre)[0][2:] == ["TOPLEFT", 4, -4] and pts(fenetre)[1][2:] == ["BOTTOMRIGHT", -44, 12]
+    # la croix : Annuler, comme Echap
+    lua.execute("KeyBindingFrame:Show() ANNULE_RACCOURCIS = 0")
+    x = kb.foreverCroix
+    x.scripts.OnClick(x)
+    assert g.ANNULE_RACCOURCIS == 1 and not kb.shown
+    print("   raccourcis : fenetre 542, contenu a -77, cadre interieur, boutons argentes, croix = Annuler")
+
+    lua.execute("CHARGER_ADDON('Blizzard_MacroUI')")
+    mf = g.MacroFrame
+    assert (mf.width, mf.height) == (338, 424) and list(mf.hitRect.values()) == [0, 0, 0, 0]
+    assert g.MacroFramePortrait.alpha == 0 and g.MacroHorizontalBarLeft.alpha != 0 and g.MacroFrameSelectedMacroBackground.alpha != 0
+    habit = mf.foreverHabit
+    assert habit.titre.text == "Create Macros" and habit.portrait.texture.endswith("MacroFrame-Icon")
+    assert (habit.portrait.width, habit.portrait.height) == (58, 58) and pts(habit.portrait)[0][2:] == ["TOPLEFT", -5, 5]
+    assert pts(g.MacroFrameCloseButton)[0][2:] == ["TOPRIGHT", -2, 1] and g.MacroFrameCloseButton.width == 24 and g.MacroFrameCloseButton.GetFrameLevel(g.MacroFrameCloseButton) > habit.metal.GetFrameLevel(habit.metal)
+    # les onglets du haut : l'art retourne, a 75 %
+    t1 = g.MacroFrameTab1
+    assert pts(t1)[-1][2:] == ["TOPLEFT", 51, -28] and t1.height == 32
+    a = t1.foreverArt
+    e = g.ForeverUI.AtlasEntry("uiframe-tab-left-c60")
+    assert a.g.height == e[7] * 0.75 and list(a.g.texcoord.values()) == [e[2], e[3], e[5], e[4] + (e[5] - e[4]) * 0.25]
+    lua.execute("MacroFrame.selectedTab = 1 MacroFrameTab1:Disable() MacroFrameTab2:Enable()")
+    assert a.actifG.shown and not a.g.shown and pts(t1.fontString)[-1][2:] == ["CENTER", 0, -4]
+    a2 = g.MacroFrameTab2.foreverArt
+    assert a2.g.shown and not a2.actifG.shown and pts(g.MacroFrameTab2.fontString)[-1][2:] == ["CENTER", 0, -8]
+    assert t1.width == max(72, min(140, len("General Macros") * 6 + 20))
+    # la grille : 6 par rangee, marges 5, 13 entre deux
+    assert pts(g.MacroButton1)[-1][2:] == ["TOPLEFT", 5, -5]
+    assert pts(g.MacroButton2)[-1][0] == "LEFT" and pts(g.MacroButton2)[-1][2:] == ["RIGHT", 13, 0]
+    assert pts(g.MacroButton7)[-1][0] == "TOP" and pts(g.MacroButton7)[-1][1].name == "MacroButton1" and pts(g.MacroButton7)[-1][2:] == ["BOTTOM", 0, -13]
+    assert pts(g.MacroButtonScrollFrame)[-1][2:] == ["TOPLEFT", 12, -66] and g.MacroButtonScrollFrame.width == 301
+    sb = g.MacroButtonScrollFrameScrollBar
+    assert pts(sb)[0][2:] == ["TOPLEFT", 313, -84] and pts(sb)[1][2:] == ["TOPLEFT", 313, -198] and sb.foreverBarre
+    assert g.MacroButtonScrollFrameTop.alpha == 0
+    # la macro choisie et ses voisins, aux places de camelot
+    for nom, attendu in (("MacroHorizontalBarLeft", ["TOPLEFT", 2, -210]), ("MacroFrameSelectedMacroBackground", ["TOPLEFT", 5, -218]),
+                         ("MacroEditButton", ["TOPLEFT", 55, -30]), ("MacroFrameEnterMacroText", ["BOTTOMLEFT", 8, 3]),
+                         ("MacroFrameScrollFrame", ["BOTTOMLEFT", 11, -13]), ("MacroFrameTextBackground", ["TOPLEFT", 6, -289]),
+                         ("MacroFrameCharLimitText", ["BOTTOM", -15, 30])):
+        assert pts(g[nom])[-1][2:] == attendu, (nom, pts(g[nom]))
+    assert g.MacroFrameTextBackground.foreverNeuf and g.MacroFrameTextBackground.backdrop is None
+    assert g.MacroFrameScrollFrameScrollBar.foreverBarre
+    for nom, attendu in (("MacroDeleteButton", ["BOTTOMLEFT", 4, 4]), ("MacroNewButton", ["BOTTOMRIGHT", -82, 4]), ("MacroExitButton", ["BOTTOMRIGHT", -5, 4])):
+        b = g[nom]
+        assert pts(b)[-1][2:] == attendu and (b.width, b.height) == (80, 22) and b._normal.texture is None, nom
+    print("   macros : 338 x 424, portrait, encadre, onglets du haut, grille 6 x (5 / 13), boutons aux places de camelot")
+
+    # le choix d'icone : 525 x 495 a droite, grille de dix
+    p = g.MacroPopupFrame
+    assert (p.width, p.height) == (525, 495) and pts(p)[-1][2:] == ["TOPRIGHT", 0, 5] and req(pts(p)[-1][1], mf)
+    boutons = list(p.foreverBoutons.values())
+    assert len(boutons) == 70 and g.MacroPopupButton70
+    assert pts(boutons[0])[-1][2:] == ["TOPLEFT", 26, -102] and pts(boutons[10])[-1][2:] == ["BOTTOMLEFT", 0, -10]
+    assert pts(g.MacroPopupScrollFrameScrollBar)[0][2:] == ["TOPLEFT", 484, -113]
+    lua.execute("NB_MACROS = 150 MacroPopupScrollFrame.offset = 2 MacroPopupFrame.selectedIcon = 23 MacroPopupFrame_Update(MacroPopupFrame)")
+    assert g.MacroPopupButton1Icon.texture == "icone21" and g.MacroPopupButton1.GetID(g.MacroPopupButton1) == 2 * 5 + 1
+    assert g.MacroPopupButton3.checked and not g.MacroPopupButton4.checked
+    assert g.MacroPopupScrollFrame.fauxRangees == 15 and g.MacroPopupScrollFrame.fauxMontrees == 7
+    # un clic du client tombe sur l'icone montree
+    lua.execute("MacroPopupButton_OnClick(MacroPopupButton15)")
+    assert p.selectedIcon == 2 * 10 + 15, p.selectedIcon
+    assert p.foreverChoix.icone.texture == "icone35"
+    # la zone : l'icone retenue ramenee dans la vue
+    lua.execute("MacroPopupFrame.selectedIcon = 95 MacroPopupScrollFrame.offset = 0")
+    p.foreverChoix.scripts.OnClick(p.foreverChoix)
+    assert g.MacroPopupScrollFrame.offset == 8 and g.MacroPopupButton15Icon.texture == "icone95"
+    assert (g.MacroPopupOkayButton.width, g.MacroPopupOkayButton.height) == (78, 22)
+    assert pts(g.MacroPopupCancelButton)[-1][2:] == ["BOTTOMRIGHT", -11, 13]
+    print("   choix d'icone : 525 x 495, 70 boutons en rangees de dix, numerotation du client, zone qui ramene l'icone")
+
+    # ------------------------------------------------- LA CONFIGURATION DU CHAT ET LES COULEURS
+    print("\nconfiguration du chat et selecteur de couleur :")
+    req = lua.eval("rawequal")
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def atlas_jeu(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    def teinte(t):
+        return list(t.vertex.values()) + [t.vertexAlpha]
+    cc = g.ChatConfigFrame
+    habit = cc.foreverHabit
+    assert cc.backdrop is None and habit and habit.fond.texture.endswith("UI-DialogBox-Background")
+    assert g.ChatConfigFrameHeader.alpha == 0 and g.ChatConfigFrameHeaderText.alpha == 0
+    lua.execute("ChatConfigFrame:Show()")
+    # le titre que le client pose a l'ouverture, marge de 100
+    assert habit.entete.Text.text == "General Settings" and habit.entete.width == len("General Settings") * 6 + 100
+    # les boites : decoupe de camelot, couleurs du client relues
+    cat = g.ChatConfigCategoryFrame
+    p = cat.foreverNeuf
+    assert cat.backdrop is None and p and len(list(p.values())) == 9
+    assert teinte(p.Center) == [0.09, 0.09, 0.19, 1] and p.Center.alpha != 0
+    assert teinte(p.TopLeftCorner) == [1, 1, 1, 0.5] and teinte(p.RightEdge) == [1, 1, 1, 0.5]
+    leg = g.ChatConfigChatSettingsClassColorLegend.foreverNeuf
+    assert teinte(leg.Center) == [0.27, 0.27, 0.27, 1], "la legende garde son gris"
+    # le bord seul : pas de centre
+    hl = g.CombatConfigColorsHighlighting.foreverNeuf
+    assert hl and hl.Center.alpha == 0 and teinte(hl.BottomEdge) == [1, 1, 1, 0.5]
+    # les lignes creees ensuite par le client (PLAYER_ENTERING_WORLD)
+    lua.execute("""
+        ChatConfig_CreateCheckboxes(ChatConfigChatSettingsLeft, { 1, 2, 3 }, "ChatConfigCheckBoxWithSwatchAndClassColorTemplate", "Say")
+        ChatConfig_CreateColorSwatches(CombatConfigColorsUnitColors, { 1, 2 }, "ChatConfigSwatchTemplate", "Units")
+        ChatConfig_CreateTieredCheckboxes(ChatConfigCombatSettings, { 1 }, "ChatConfigCheckButtonTemplate", "ChatConfigSmallCheckButtonTemplate")
+    """)
+    for nom in ("ChatConfigChatSettingsLeftCheckBox1", "ChatConfigChatSettingsLeftCheckBox3", "CombatConfigColorsUnitColorsSwatch2"):
+        l = g[nom]
+        assert l.backdrop is None and l.foreverNeuf and l.foreverNeuf.Center.alpha == 0 and teinte(l.foreverNeuf.TopEdge) == [1, 1, 1, 0.5], nom
+    assert not g.ChatConfigCombatSettingsCheckBox1.foreverNeuf and g.ChatConfigChatSettingsLeftCheckBox1Check._normal.texture.endswith("UI-CheckBox-Up")
+    # une boite posee apres coup : reprise a l'ouverture suivante
+    lua.execute("""
+        local b = CreateFrame("Frame", "BoiteTardive", ChatConfigBackgroundFrame)
+        b:SetBackdrop({ edgeFile = "Interface\\\\Tooltips\\\\UI-Tooltip-Border" })
+        ChatConfigFrame:Hide() ChatConfigFrame:Show()
+    """)
+    assert g.BoiteTardive.foreverNeuf
+    # la liste des filtres : la barre de camelot, sans le lisere du client
+    sb = g.ChatConfigCombatSettingsFiltersScrollFrameScrollBar
+    assert sb.foreverBarre and sb.GetThumbTexture(sb).alpha == 0
+    assert g.ChatConfigCombatSettingsFiltersScrollFrameScrollBarBorder.backdrop is None
+    assert not g.ChatConfigCombatSettingsFiltersScrollFrameScrollBarBorder.foreverNeuf
+    assert g.ChatConfigFrameOkayButton._normal.texture.endswith("UI-Panel-Button-Up"), "boutons : l'art de 3.3.5 (camelot le garde)"
+    lua.execute("ChatConfigFrame:Hide()")
+    print("   configuration du chat : DialogBorder, en-tete '%s', boites en neuf (couleurs du client), lignes reprises, barre sans lisere" % habit.entete.Text.text)
+
+    cp = g.ColorPickerFrame
+    h = cp.foreverHabit
+    assert cp.backdrop is None and cp.height == 210 and h.fond.texture.endswith("UI-DialogBox-Background")
+    assert g.ColorPickerFrameHeader.alpha == 0 and h.entete.Text.text == "Color Picker" and h.entete.width == len("Color Picker") * 6 + 64
+    assert [r.alpha for r in cp.regions.values() if r.kind == "fontstring" and r.text == "Color Picker" and not r.name] == [0]
+    # roue, barre de valeur (qui la suit), nuancier
+    assert pts(g.ColorPickerWheel) == [["TOPLEFT", cp, "TOPLEFT", 23, -37]] or (len(pts(g.ColorPickerWheel)) == 1 and pts(g.ColorPickerWheel)[0][2:] == ["TOPLEFT", 23, -37])
+    assert pts(g.CP_VALEUR)[0][1].name == "ColorPickerWheel" and pts(g.CP_VALEUR)[0][2:] == ["RIGHT", 24, 0]
+    sw = g.ColorSwatch
+    assert (sw.width, sw.height) == (47, 25) and len(pts(sw)) == 1 and req(pts(sw)[0][1], cp) and pts(sw)[0][2:] == ["TOPRIGHT", -100, -37]
+    # la colonne d'opacite : damier, degrade, curseur en fleches, textes eteints
+    s = g.OpacitySliderFrame
+    assert s.backdrop is None and (s.width, s.height) == (32, 128)
+    assert len(pts(s)) == 1 and req(pts(s)[0][1], cp) and pts(s)[0][2:] == ["TOPRIGHT", -157, -37]
+    assert atlas_jeu(h.damier, "colorpicker-checkerboard") and h.damier.layer == "BACKGROUND"
+    assert all(r.alpha == 0 for r in s.regions.values() if r.kind == "fontstring")
+    pouce = s.GetThumbTexture(s)
+    assert pouce.texture.endswith("UI-ColorPicker-Buttons") and list(pouce.texcoord.values()) == [0.25, 1, 0, 0.875]
+    assert (pouce.width, pouce.height) == (48, 14)
+    # les boutons de camelot : 154 x 22, la paire centree a 12 du bas
+    ok, an = g.ColorPickerOkayButton, g.ColorPickerCancelButton
+    assert (ok.width, ok.height) == (154, 22) and (an.width, an.height) == (154, 22)
+    assert len(pts(ok)) == 1 and req(pts(ok)[0][1], cp) and pts(ok)[0][0] == "BOTTOMRIGHT" and pts(ok)[0][2:] == ["BOTTOM", 0, 12]
+    assert len(pts(an)) == 1 and pts(an)[0][0] == "BOTTOMLEFT" and pts(an)[0][2:] == ["BOTTOM", 0, 12]
+    assert ok._normal.texture is None and ok._highlight.texture.endswith("UI-Panel-Button-Highlight")
+    # avec opacite : 388 de large, le degrade de la couleur choisie
+    lua.execute("""
+        ColorPickerFrame.hasOpacity = true ColorPickerFrame.opacity = 0.3 ColorPickerFrame.func = function() end
+        ColorPickerFrame:SetColorRGB(1, 0.5, 0)
+        ColorPickerFrame:Show()
+    """)
+    assert cp.width == 388 and s.shown and s.value == 0.3
+    d = s.foreverDegrade
+    assert list(d.gradient.values()) == ["VERTICAL", 1, 0.5, 0, 0, 1, 0.5, 0, 1], list(d.gradient.values())
+    lua.execute("ColorPickerFrame:SetColorRGB(0, 1, 0)")
+    assert list(d.gradient.values()) == ["VERTICAL", 0, 1, 0, 0, 0, 1, 0, 1] and list(g.ColorSwatch.color.values())[:3] == [0, 1, 0]
+    # sans opacite : 331
+    lua.execute("ColorPickerOkayButton:GetScript('OnClick')(ColorPickerOkayButton) ColorPickerFrame.hasOpacity = nil ColorPickerFrame:Show()")
+    assert cp.width == 331 and not s.shown
+    lua.execute("ColorPickerFrame:Hide()")
+    # la petite fenetre d'opacite : le cadre de camelot, son curseur garde son art
+    of = g.OpacityFrame
+    assert of.backdrop is None and of.foreverHabit and g.OpacityFrameSlider.backdrop is not None
+    print("   selecteur de couleur : 388 / 331 x 210, roue a (23, -37), nuancier 47 x 25, colonne d'opacite en degrade, boutons 154 x 22 ; OpacityFrame")
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

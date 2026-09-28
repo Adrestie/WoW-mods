@@ -195,3 +195,7 @@ interface/buttons/ui-refreshbutton.blp
 # 19 x 39) : son image de 32 x 64 n'a qu'un trait en bas ; celle de 3.3.5
 # (16 x 8) est un pave plein, qui s'etirait en gros carre vert
 interface/mainmenubar/ui-mainmenubar-performancebar.blp
+
+# les raccourcis : le liseré du raccourci choisi (SelectedHighlight de
+# KeyBindingFrameBindingButtonTemplate, camelot) -- absent du 3.3.5
+interface/buttons/ui-silver-button-select.blp

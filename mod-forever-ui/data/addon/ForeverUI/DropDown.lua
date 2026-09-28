@@ -89,6 +89,41 @@ local COCHE_L, COCHE_H = 15, 14
 local COCHE_X, COCHE_Y = 2, 1
 local FONDS = { "Backdrop", "MenuBackdrop" }
 
+-- LE STYLE 2, CELUI DES REGLAGES (2026-09-28, menu et reglages « 3.3.5
+-- rhabillee »). Un menu deroulant des fenetres d'options porte
+-- foreverStyle = 2 (Settings.lua) ; sa liste prend alors ce que les options
+-- de l'accueil ont VALIDE le 28/09 (ForeverUIGlueMenuDeroulant.lua) --
+-- MenuStyle2Mixin de camelot (mainline/menutemplates.lua) : fond
+-- common-dropdown-c-bg decoupe en neuf, de (-17, 12) a (17, -22), marges
+-- 3 / 6 / 3 / 7 ; lignes de 20 ; choix unique : le rond
+-- common-dropdown-tickradial a LEFT (-3, 0), le choisi
+-- common-dropdown-icon-radialtick-yellow par-dessus, texte a 1 a sa droite ;
+-- largeur = contenu (rond + 20 de rembourrage + texte), AU MOINS le bouton
+-- (plancher de camelot, SetMinimumWidth) ; la liste sous le bouton, TOPLEFT
+-- sur BOTTOMLEFT. ECART repris de l'accueil (demande du 28/09) : les lignes
+-- en taille 10 (GameFont*SmallLeft) au lieu de 12. Les autres menus gardent
+-- le style 1 ci-dessus, tel quel.
+local STYLE2 = {
+	fond = "common-dropdown-c-bg",
+	fondA = { -17, 12 },
+	fondB = { 17, -22 },
+	marges = { 3, 6, 3, 7 },            -- gauche, haut, droite, bas
+	rond = "common-dropdown-tickradial",
+	point = "common-dropdown-icon-radialtick-yellow",
+	etendue = 16 + 20,                  -- rond (-3 .. 15) + 1, et le rembourrage
+	sansRond = 20,
+}
+
+local function style2(cadre)
+	return cadre ~= nil and type(cadre) == "table" and cadre.foreverStyle == 2
+end
+
+-- le menu que la liste sert en ce moment : celui qu'on remplit, sinon celui
+-- qui est ouvert
+local function menuEnCours()
+	return UIDROPDOWNMENU_INIT_MENU or UIDROPDOWNMENU_OPEN_MENU
+end
+
 -- L'ecart que le client garde entre la liste et ses lignes : il pose la
 -- liste a maxWidth + 25 et les lignes a maxWidth. On le garde tel quel pour
 -- que la marge de droite ne bouge pas quand la liste s'elargit.
@@ -132,9 +167,32 @@ local function fixerLargeur(liste, voulue)
 	end
 end
 
+-- style 2 : le contenu dans ses marges, au moins le bouton au premier niveau
+local function largeurStyle2(liste, ouvreur, niveau)
+	local m = STYLE2.marges
+	local voulue = (liste.foreverContenu2 or 0) + m[1] + m[3]
+	if niveau == 1 and ouvreur.foreverBouton and ouvreur.displayMode ~= "MENU" then
+		voulue = math.max(voulue, ouvreur.foreverBouton:GetWidth() or 0)
+	end
+	if not voulue or voulue <= 0 then
+		return
+	end
+	liste:SetWidth(voulue)
+	for index = 1, (liste.numButtons or 0) do
+		local bouton = _G[liste:GetName() .. "Button" .. index]
+		if bouton then
+			bouton:SetWidth(voulue - m[1] - m[3])
+		end
+	end
+end
+
 local function ajusterLargeur(liste)
 	local ouvreur = UIDROPDOWNMENU_OPEN_MENU
 	local niveau = liste.foreverNiveau or liste:GetID()
+	if liste.foreverStyle2 and style2(ouvreur) then
+		largeurStyle2(liste, ouvreur, niveau)
+		return
+	end
 	if niveau ~= 1 or not ouvreur or not ouvreur.GetWidth or ouvreur.displayMode == "MENU" then
 		local contenu = liste.foreverContenu
 		if contenu and contenu > 0 then
@@ -234,10 +292,114 @@ local function habillerBouton(bouton)
 	end
 end
 
+-- la coche du style 1, reposee quand une liste de style 2 l'a changee
+local function cocheStyle1(bouton)
+	if not bouton.foreverStyle2 then
+		return
+	end
+	bouton.foreverStyle2 = nil
+	if bouton.foreverRond then
+		bouton.foreverRond:Hide()
+	end
+	local coche = _G[bouton:GetName() .. "Check"]
+	if coche and bouton.foreverCase then
+		ForeverUI.SetAtlas(coche, COCHE_ATLAS, true)
+		coche:SetWidth(COCHE_L)
+		coche:SetHeight(COCHE_H)
+		coche:ClearAllPoints()
+		coche:SetPoint("CENTER", bouton.foreverCase, "CENTER", COCHE_X, COCHE_Y)
+	end
+end
+
+-- une ligne de style 2 : le rond sous la coche du client (qui devient le
+-- point jaune), le texte a sa droite, la case du style 1 cachee
+local function ligneStyle2(liste, bouton, info)
+	local Gb = ForeverUI.Gabarits
+	local m = STYLE2.marges
+	local i = bouton:GetID()
+	if not bouton.foreverRond then
+		bouton.foreverRond = bouton:CreateTexture(nil, "BORDER")
+		Gb.Poser(bouton.foreverRond, STYLE2.rond, true)
+		bouton.foreverRond:SetPoint("LEFT", bouton, "LEFT", -3, 0)
+	end
+	bouton.foreverStyle2 = true
+	if bouton.foreverCase then
+		bouton.foreverCase:Hide()
+	end
+	local coche = _G[bouton:GetName() .. "Check"]
+	if coche then
+		Gb.Poser(coche, STYLE2.point, true)
+		coche:ClearAllPoints()
+		coche:SetPoint("TOPLEFT", bouton.foreverRond, "TOPLEFT")
+	end
+	bouton:SetHeight(LIGNE_HAUTEUR)
+	bouton:ClearAllPoints()
+	bouton:SetPoint("TOPLEFT", liste, "TOPLEFT", m[1], -(m[2] + (i - 1) * LIGNE_HAUTEUR))
+	bouton:SetNormalFontObject(GameFontHighlightSmallLeft)
+	bouton:SetHighlightFontObject(GameFontHighlightSmallLeft)
+	if bouton.SetDisabledFontObject then
+		if info and info.isTitle then
+			bouton:SetDisabledFontObject(GameFontNormalSmallLeft)
+		elseif info and info.notClickable then
+			bouton:SetDisabledFontObject(GameFontHighlightSmallLeft)
+		else
+			bouton:SetDisabledFontObject(GameFontDisableSmallLeft)
+		end
+	end
+	local brut = bouton:GetText()
+	local propre = Gb.TexteUtf8(brut)
+	if propre ~= brut then
+		bouton:SetText(propre)
+	end
+	local texte = _G[bouton:GetName() .. "NormalText"]
+	local cochable = not (info and info.notCheckable)
+	if cochable then
+		bouton.foreverRond:Show()
+	else
+		bouton.foreverRond:Hide()
+	end
+	if texte then
+		texte:ClearAllPoints()
+		if cochable then
+			texte:SetPoint("LEFT", bouton.foreverRond, "RIGHT", 1, 0)
+		elseif info and info.justifyH == "CENTER" then
+			texte:SetPoint("CENTER", bouton, "CENTER", 0, 0)
+		else
+			texte:SetPoint("LEFT", bouton, "LEFT", 0, 0)
+		end
+		-- l'etendue de la ligne (MeasureFrameExtents + rembourrage de 20)
+		local e = (cochable and STYLE2.etendue or STYLE2.sansRond) + (texte:GetStringWidth() or 0)
+		if i == 1 or e > (liste.foreverContenu2 or 0) then
+			liste.foreverContenu2 = e
+		end
+	end
+	liste:SetHeight(m[2] + (liste.numButtons or i) * LIGNE_HAUTEUR + m[4])
+end
+
+-- les deux fonds d'une liste : celui du style 1 (tranches) ou celui du
+-- style 2, selon le menu qu'elle sert
+local function fondsListe(liste, deux)
+	liste.foreverStyle2 = deux and true or nil
+	if deux and not liste.foreverFond2 then
+		local Gb = ForeverUI.Gabarits
+		local f = Gb.AtlasEtire(liste, STYLE2.fond, "BACKGROUND")
+		f.rect:SetPoint("TOPLEFT", liste, "TOPLEFT", STYLE2.fondA[1], STYLE2.fondA[2])
+		f.rect:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", STYLE2.fondB[1], STYLE2.fondB[2])
+		liste.foreverFond2 = f
+	end
+	if liste.foreverFond2 then
+		liste.foreverFond2:Montrer(deux)
+	end
+	for _, tranche in ipairs(liste.foreverTranches or {}) do
+		if deux then tranche:Hide() else tranche:Show() end
+	end
+end
+
 -- Ce qui se refait a chaque ligne posee : UIDropDownMenu_AddButton remet la
 -- police a GameFontHighlightSmallLeft a chaque passage, et c'est elle qui
 -- sait si la ligne porte une case (info.notCheckable).
 local function reglerBouton(bouton)
+	cocheStyle1(bouton)
 	bouton:SetHeight(LIGNE_HAUTEUR)
 	if GameFontHighlightLeft then
 		bouton:SetNormalFontObject(GameFontHighlightLeft)
@@ -292,14 +454,57 @@ if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 		liste.foreverNiveau = level
 		habillerListe(liste)
 
+		local deux = style2(menuEnCours())
+		fondsListe(liste, deux)
 		local bouton = _G[liste:GetName() .. "Button" .. (liste.numButtons or 1)]
 		if bouton then
-			reposerLigne(liste, bouton)
 			habillerBouton(bouton)
-			reglerBouton(bouton)
-			mesurerBouton(liste, bouton, info)
+			if deux then
+				ligneStyle2(liste, bouton, info)
+			else
+				reposerLigne(liste, bouton)
+				reglerBouton(bouton)
+				mesurerBouton(liste, bouton, info)
+			end
 		end
 	end)
+end
+
+-- STYLE 2 : apres ToggleDropDownMenu, la liste sous le bouton de camelot
+-- (meme quand le client l'ancre ailleurs), a sa largeur ; le bouton se
+-- repeint (fleche, etat ouvert) -- foreverPeindre, pose par Settings.lua
+if hooksecurefunc and type(ToggleDropDownMenu) == "function" then
+	hooksecurefunc("ToggleDropDownMenu", function(niveau)
+		niveau = niveau or 1
+		local liste = _G["DropDownList" .. niveau]
+		local ouvreur = UIDROPDOWNMENU_OPEN_MENU
+		if not (liste and style2(ouvreur)) then
+			return
+		end
+		if liste:IsShown() then
+			ajusterLargeur(liste)
+			if niveau == 1 and ouvreur.foreverBouton and ouvreur.displayMode ~= "MENU" then
+				liste:ClearAllPoints()
+				liste:SetPoint("TOPLEFT", ouvreur.foreverBouton, "BOTTOMLEFT", 0, 0)
+			end
+		end
+		if ouvreur.foreverPeindre then
+			ouvreur.foreverPeindre()
+		end
+	end)
+end
+
+-- la fleche du bouton revient au repos quand la liste se ferme
+for niveau = 1, (UIDROPDOWNMENU_MAXLEVELS or 2) do
+	local liste = _G["DropDownList" .. niveau]
+	if liste and liste.HookScript then
+		liste:HookScript("OnHide", function()
+			local ouvreur = UIDROPDOWNMENU_OPEN_MENU
+			if style2(ouvreur) and ouvreur.foreverPeindre then
+				ouvreur.foreverPeindre()
+			end
+		end)
+	end
 end
 
 -- UIDropDownMenu_Refresh retaille la liste sur son texte (maxWidth + 25) et
