@@ -89,6 +89,15 @@ local BARRES = {
 		x = -270, y = -155, libelle = L.BUFFS_EDIT_LABEL_DEBUFFS, typeVisible = true },
 }
 
+-- LE DEBUFF « DESHONORE » (2026-09-28). Le serveur ne pose pas d'aura : un
+-- client n'affiche une aura que si son propre Spell.dbc connait le sort, et
+-- aucun sort d'origine n'a le bon nom, la bonne description et pas d'effet
+-- visuel. ForeverUI le dessine donc lui-meme, a partir de l'etat que
+-- mod-pvp-titles-ext envoie par le canal d'addon (PvPTab.lua,
+-- ForeverUI.Deshonneur) : en tete des affaiblissements, sans type, son nom
+-- (le rang « Dishonored » du client) et sa description dans l'infobulle.
+local DESHONNEUR_ICONE = "Interface" .. SEP .. "Icons" .. SEP .. "Ability_Hunter_MarkedForDeath"
+
 -- la bordure par type (DEBUFF_DISPLAY_INFO de camelot)
 local TYPES = {
 	Magic = { "ui-debuff-border-magic-noicon", "ui-debuff-border-magic-icon", "DEBUFF_SYMBOL_MAGIC" },
@@ -145,6 +154,13 @@ local function infobulle(b)
 	end
 	GameTooltip:SetOwner(b, "ANCHOR_BOTTOMLEFT")
 	GameTooltip:SetFrameLevel(b:GetFrameLevel() + 2)
+	if b.info.deshonneur then
+		local c = NORMAL_FONT_COLOR
+		GameTooltip:SetText(ForeverUI.Deshonneur.nom(), 1, 1, 1)
+		GameTooltip:AddLine(L.BUFFS_DISHONORED_DESC, c.r, c.g, c.b, true)
+		GameTooltip:Show()
+		return
+	end
 	GameTooltip:SetUnitAura(b.unite, b.info.index, filtreDe(b))
 end
 
@@ -471,6 +487,21 @@ local function auras(unite, filtre, max, liste)
 	end
 end
 
+-- le debuff « Deshonore », en tete, tant que l'etat dure (le joueur seul :
+-- pas dans un vehicule)
+local function deshonneur(liste)
+	local etat = ForeverUI.Deshonneur
+	if not etat or not etat.fin or B.unite() ~= "player" or etat.fin <= GetTime() then return end
+	table.insert(liste, 1, {
+		auraType = "Debuff",
+		texture = DESHONNEUR_ICONE,
+		count = 0,
+		duration = 0,
+		expirationTime = etat.fin,
+		deshonneur = true,
+	})
+end
+
 -- ------------------------------------------------------------ la mise a jour
 
 B.deplie = true
@@ -536,6 +567,7 @@ function B.majDebuffs()
 	local f = B.debuffs
 	local liste = {}
 	auras(B.unite(), "HARMFUL", f.c.max, liste)
+	deshonneur(liste)
 	f.auras = liste
 	local ranges = {}
 	for i, b in ipairs(f.boutons) do

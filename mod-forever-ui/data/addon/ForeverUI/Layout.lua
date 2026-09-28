@@ -352,6 +352,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_SHEET)
 		end
+	elseif command == "croix" then
+		if ForeverUI.CharacterCloseDebug then
+			ForeverUI.CharacterCloseDebug()
+		else
+			say(L.LAYOUT_NO_DIAG_SHEET)
+		end
 	elseif command == "minimap" then
 		if ForeverUI.MinimapDebug then
 			ForeverUI.MinimapDebug(argument)

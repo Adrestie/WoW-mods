@@ -44,6 +44,7 @@ ForeverUI.AjouterTextes("enUS", {
 	BUFFS_DEBUG_DEBUFFS = "debuffs: %d (%s)",
 	BUFFS_DEBUG_HIDDEN = "hidden",
 	BUFFS_DEBUG_VISIBLE = "visible",
+	BUFFS_DISHONORED_DESC = "Every faction, your own included, is hostile to you, and any player may attack you.",
 	BUFFS_EDIT_LABEL_BUFFS = "Buff Frame",
 	BUFFS_EDIT_LABEL_DEBUFFS = "Debuff Frame",
 
@@ -51,6 +52,7 @@ ForeverUI.AjouterTextes("enUS", {
 	CASTBAR_EDIT_LABEL = "Cast Bar",
 
 	-- CharacterFrame.lua
+	CHARACTERFRAME_DEBUG_CLOSE_SAVED = "close button: report saved; type /reload to write it to disk.",
 	CHARACTERFRAME_DEBUG_COVERED_BY = "      covered by: ",
 	CHARACTERFRAME_DEBUG_COVERING = "   what covers its center and takes the mouse:",
 	CHARACTERFRAME_DEBUG_COVERING_ROW = "      %-34s strata=%-16s level=%d",
@@ -117,7 +119,7 @@ ForeverUI.AjouterTextes("enUS", {
 	LAYOUT_EDIT_MODE_COMBAT = "edit mode is not available in combat.",
 	LAYOUT_EDIT_MODE_OFF = "edit mode ended, positions saved.",
 	LAYOUT_EDIT_MODE_ON = "edit mode active: drag the elements, /fui to finish.",
-	LAYOUT_HELP = "commands: /fui (edit mode), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui chercheur, /fui chat, /fui chatlignes, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro",
+	LAYOUT_HELP = "commands: /fui (edit mode), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui croix, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui chercheur, /fui chat, /fui chatlignes, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro",
 	LAYOUT_LIST_HEADER = "registered elements:",
 	LAYOUT_LIST_MOVED = " - moved",
 	LAYOUT_NO_CHAT_LINES = "no chat line report available.",
@@ -229,6 +231,7 @@ ForeverUI.AjouterTextes("enUS", {
 
 	-- PvPTab.lua
 	PVPTAB_CIVILIAN = "Civilian",
+	PVPTAB_DISHONORED_LEFT = "Dishonored: %s left",
 	PVPTAB_DEBUG_GAUGE = "gauge: start %s direction %s | %s",
 	PVPTAB_DEBUG_GAUGE_NOT_BUILT = "gauge: the screen is not built yet",
 	PVPTAB_DEBUG_HONOR = "honor: current=%d lifetime=%d bestRank=%d today=%d (%d) yesterday=%d (%d)",
@@ -351,6 +354,7 @@ ForeverUI.AjouterTextes("enUS", {
 	TALENTS_APPLY_CHANGES = "Apply Changes",
 	TALENTS_CONFIRM_CLOSE = "You will lose any pending changes if you continue.",
 	TALENTS_GATE_TOOLTIP = "Spend %d more points to unlock this row",
+	TALENTS_INSPECT_TITLE = "%s's Talents",
 	TALENTS_SPEC_ACTIVE = "Active",
 	TALENTS_SPEC_PRIMARY = "Primary",
 	TALENTS_SPEC_SECONDARY = "Secondary",

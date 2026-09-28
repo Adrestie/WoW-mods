@@ -199,3 +199,9 @@ interface/mainmenubar/ui-mainmenubar-performancebar.blp
 # les raccourcis : le liseré du raccourci choisi (SelectedHighlight de
 # KeyBindingFrameBindingButtonTemplate, camelot) -- absent du 3.3.5
 interface/buttons/ui-silver-button-select.blp
+
+# l'inspection : le cadre du modele (Char-Corner-*, Char-Inner-*,
+# camelot/characterframe.xml) -- absent du 3.3.5
+interface/characterframe/char-paperdoll-parts.blp
+interface/characterframe/char-paperdoll-horizontal.blp
+interface/characterframe/char-paperdoll-vertical.blp

@@ -44,6 +44,7 @@ ForeverUI.AjouterTextes("frFR", {
 	BUFFS_DEBUG_DEBUFFS = "affaiblissements : %d (%s)",
 	BUFFS_DEBUG_HIDDEN = "caché",
 	BUFFS_DEBUG_VISIBLE = "visible",
+	BUFFS_DISHONORED_DESC = "Toutes les factions, y compris la vôtre, vous sont hostiles, et tout joueur peut vous attaquer.",
 	BUFFS_EDIT_LABEL_BUFFS = "Améliorations",
 	BUFFS_EDIT_LABEL_DEBUFFS = "Affaiblissements",
 
@@ -51,6 +52,7 @@ ForeverUI.AjouterTextes("frFR", {
 	CASTBAR_EDIT_LABEL = "Barre d'incantation",
 
 	-- CharacterFrame.lua
+	CHARACTERFRAME_DEBUG_CLOSE_SAVED = "croix : relevé fait ; tapez /reload pour l'écrire sur le disque.",
 	CHARACTERFRAME_DEBUG_COVERED_BY = "      couvert par : ",
 	CHARACTERFRAME_DEBUG_COVERING = "   ce qui couvre son centre et prend la souris :",
 	CHARACTERFRAME_DEBUG_COVERING_ROW = "      %-34s strate=%-16s niveau=%d",
@@ -117,7 +119,7 @@ ForeverUI.AjouterTextes("frFR", {
 	LAYOUT_EDIT_MODE_COMBAT = "le mode édition n'est pas disponible en combat.",
 	LAYOUT_EDIT_MODE_OFF = "mode édition terminé, positions retenues.",
 	LAYOUT_EDIT_MODE_ON = "mode édition actif : glissez les éléments, /fui pour terminer.",
-	LAYOUT_HELP = "commandes : /fui (mode édition), /fui reset [élément], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui chercheur, /fui chat, /fui chatlignes, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro",
+	LAYOUT_HELP = "commandes : /fui (mode édition), /fui reset [élément], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui croix, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui chercheur, /fui chat, /fui chatlignes, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro",
 	LAYOUT_LIST_HEADER = "éléments enregistrés :",
 	LAYOUT_LIST_MOVED = " - déplacé",
 	LAYOUT_NO_CHAT_LINES = "aucun relevé des lignes de la discussion disponible.",
@@ -229,6 +231,7 @@ ForeverUI.AjouterTextes("frFR", {
 
 	-- PvPTab.lua
 	PVPTAB_CIVILIAN = "Civil",
+	PVPTAB_DISHONORED_LEFT = "Déshonoré : encore %s",
 	PVPTAB_DEBUG_GAUGE = "jauge : départ %s sens %s | %s",
 	PVPTAB_DEBUG_GAUGE_NOT_BUILT = "jauge : l'écran n'est pas encore monté",
 	PVPTAB_DEBUG_HONOR = "honneur : courant=%d vie=%d meilleurRang=%d aujourd'hui=%d (%d) hier=%d (%d)",
@@ -351,6 +354,7 @@ ForeverUI.AjouterTextes("frFR", {
 	TALENTS_APPLY_CHANGES = "Appliquer les modifications",
 	TALENTS_CONFIRM_CLOSE = "Vous perdrez toutes les modifications en attente si vous continuez.",
 	TALENTS_GATE_TOOLTIP = "Dépensez encore %d points pour débloquer cette rangée",
+	TALENTS_INSPECT_TITLE = "Talents de %s",
 	TALENTS_SPEC_ACTIVE = "Active",
 	TALENTS_SPEC_PRIMARY = "Principale",
 	TALENTS_SPEC_SECONDARY = "Secondaire",

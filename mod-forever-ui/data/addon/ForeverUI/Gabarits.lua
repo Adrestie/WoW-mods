@@ -987,3 +987,111 @@ function Gb.Recopier(fs, hote, police)
 	hooksecurefunc(fs, "SetFormattedText", suivre)
 	return copie
 end
+
+-- ------------------------------------------------------------ le menu deroulant, style 1
+
+-- WowStyle1DropdownTemplate (blizzard_menu/mainline/menutemplates.xml et
+-- menutemplates.lua), pose sur un UIDropDownMenuTemplate du client : 25 de
+-- haut ; fond common-dropdown-textholder-c60 de (-8, 7) a (8, -9), en trois
+-- morceaux (tranches 16 / 19, UiTextureAtlasElementSliceData ; comme le
+-- parcours des raids) ; fleche common-dropdown-a-button a RIGHT (1, -3), a
+-- sa taille, et ses etats (GetWowStyle1ArrowButtonState : pressedhover,
+-- hover, pressed, open, disabled) ; texte GameFontHighlight, 10 de haut, de
+-- (8, -8) a la fleche, a gauche. Le bouton du client couvre tout le menu
+-- (un clic n'importe ou l'ouvre, comme chez camelot) et la liste, celle du
+-- style 1 (DropDown.lua), s'ouvre sous lui. La couleur du texte reste celle
+-- que le client pose (blanc, gris desactive : celles de camelot).
+local STYLE1 = { haut = 25, fond = { -8, 7, 8, -9 }, bouts = { 16, 19 }, fleche = { 1, -3 }, texte = { 8, -8, 10 } }
+local menusStyle1 = {}
+
+local function peindreStyle1(dd)
+	local b = dd.foreverBouton
+	local etat = "common-dropdown-a-button"
+	if not vrai(b:IsEnabled()) then
+		etat = etat .. "-disabled"
+	elseif b.foreverBas and b.foreverDessus then
+		etat = etat .. "-pressedhover"
+	elseif b.foreverDessus then
+		etat = etat .. "-hover"
+	elseif b.foreverBas then
+		etat = etat .. "-pressed"
+	elseif DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == dd then
+		etat = etat .. "-open"
+	end
+	ForeverUI.SetAtlas(dd.foreverFleche, etat)
+end
+
+function Gb.MenuStyle1(dd, largeur)
+	if dd.foreverBouton then return dd end
+	local S = STYLE1
+	local nom = dd:GetName()
+	for _, suffixe in ipairs({ "Left", "Middle", "Right" }) do
+		_G[nom .. suffixe]:SetAlpha(0)
+	end
+	dd:SetWidth(largeur)
+	dd:SetHeight(S.haut)
+	local b = _G[nom .. "Button"]
+	dd.foreverBouton = b
+	b:ClearAllPoints()
+	b:SetAllPoints(dd)
+	Gb.EffacerArt(b)
+	-- le fond : regions du menu, sous son texte
+	local e = ForeverUI.AtlasEntry("common-dropdown-textholder-c60")
+	local rect = CreateFrame("Frame", nil, dd)
+	rect:SetPoint("TOPLEFT", dd, "TOPLEFT", S.fond[1], S.fond[2])
+	rect:SetPoint("BOTTOMRIGHT", dd, "BOTTOMRIGHT", S.fond[3], S.fond[4])
+	local du = (e[3] - e[2]) / e[6]
+	local u1, u2 = e[2] + S.bouts[1] * du, e[3] - S.bouts[2] * du
+	local function morceau(a, z)
+		local t = dd:CreateTexture(nil, "BACKGROUND")
+		t:SetTexture(e[1])
+		t:SetTexCoord(a, z, e[4], e[5])
+		return t
+	end
+	local g = morceau(e[2], u1)
+	g:SetWidth(S.bouts[1])
+	g:SetPoint("TOPLEFT", rect, "TOPLEFT", 0, 0)
+	g:SetPoint("BOTTOMLEFT", rect, "BOTTOMLEFT", 0, 0)
+	local d = morceau(u2, e[3])
+	d:SetWidth(S.bouts[2])
+	d:SetPoint("TOPRIGHT", rect, "TOPRIGHT", 0, 0)
+	d:SetPoint("BOTTOMRIGHT", rect, "BOTTOMRIGHT", 0, 0)
+	local m = morceau(u1, u2)
+	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
+	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
+	dd.foreverFond = { g, m, d }
+	-- la fleche, sur le bouton (cadre fils, au-dessus du fond)
+	local fleche = b:CreateTexture(nil, "OVERLAY")
+	fleche:SetPoint("RIGHT", dd, "RIGHT", S.fleche[1], S.fleche[2])
+	dd.foreverFleche = fleche
+	local texte = _G[nom .. "Text"]
+	texte:SetFontObject(GameFontHighlight)
+	texte:SetJustifyH("LEFT")
+	texte:SetHeight(S.texte[3])
+	texte:ClearAllPoints()
+	texte:SetPoint("TOPLEFT", dd, "TOPLEFT", S.texte[1], S.texte[2])
+	texte:SetPoint("TOPRIGHT", fleche, "LEFT", 0, 0)
+	UIDropDownMenu_SetAnchor(dd, 0, 0, "TOPLEFT", dd, "BOTTOMLEFT")
+	b:HookScript("OnEnter", function(self) self.foreverDessus = true peindreStyle1(dd) end)
+	b:HookScript("OnLeave", function(self) self.foreverDessus = false peindreStyle1(dd) end)
+	b:HookScript("OnMouseDown", function(self) self.foreverBas = true peindreStyle1(dd) end)
+	b:HookScript("OnMouseUp", function(self) self.foreverBas = false peindreStyle1(dd) end)
+	b:HookScript("OnEnable", function() peindreStyle1(dd) end)
+	b:HookScript("OnDisable", function() peindreStyle1(dd) end)
+	dd:HookScript("OnShow", function() peindreStyle1(dd) end)
+	menusStyle1[#menusStyle1 + 1] = dd
+	peindreStyle1(dd)
+	return dd
+end
+
+-- la fleche passe a « open » quand la liste s'ouvre, et en revient quand
+-- elle se ferme (le client vide UIDROPDOWNMENU_OPEN_MENU en la fermant :
+-- on repeint tous les menus de ce style)
+hooksecurefunc("ToggleDropDownMenu", function()
+	for _, dd in ipairs(menusStyle1) do peindreStyle1(dd) end
+end)
+if DropDownList1 and DropDownList1.HookScript then
+	DropDownList1:HookScript("OnHide", function()
+		for _, dd in ipairs(menusStyle1) do peindreStyle1(dd) end
+	end)
+end
