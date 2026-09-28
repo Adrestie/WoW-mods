@@ -97,6 +97,42 @@ local function newRegion(kind)
         if avant then prevenir(self, "OnHide") end
     end
     function r:IsShown() return self.shown end
+    -- ce que le releve des lignes du chat lit sur un objet texte (le vrai
+    -- les a toutes) ; le faux ne place rien : pas de coordonnees
+    function r:IsVisible() return self.shown ~= false end
+    function r:GetPoint(index)
+        local p = self.points[index or 1]
+        if not p then return nil end
+        return p[1], p[2], p[3], p[4], p[5]
+    end
+    function r:GetNumPoints()
+        local n = 0
+        for _ in pairs(self.points) do n = n + 1 end
+        return n
+    end
+    -- un essai pose lui-meme les coordonnees (_left, _top...) : le faux
+    -- ne calcule pas les ancres
+    function r:GetLeft() return self._left end
+    function r:GetTop() return self._top end
+    function r:GetRight() return self._right end
+    function r:GetBottom() return self._bottom end
+    -- la hauteur du texte : a une largeur donnee, il se coupe mot a mot
+    -- comme le moteur (6 par caractere, espace compris) ; sans largeur, une
+    -- ligne
+    function r:GetStringHeight()
+        local t = self.text or ""
+        if t == "" then return 0 end
+        local h, w = self.fontSize or 12, self.width or 0
+        if w <= 0 then return h end
+        local lignes, courant = 1, nil
+        for mot in string.gmatch(t, "%S+") do
+            local lm = string.len(mot) * 6
+            if not courant then courant = lm
+            elseif courant + 6 + lm <= w then courant = courant + 6 + lm
+            else lignes = lignes + 1; courant = lm end
+        end
+        return lignes * h
+    end
     function r:SetText(t) self.text = t end
     function r:SetFormattedText(fmt, ...) self.text = string.format(fmt, ...) end
     function r:GetText() return self.text end
@@ -333,9 +369,17 @@ function CreateFrame(kind, name, parent, template)
         if type(self.text) == "table" then return "" end
         return self.text or ""
     end
+    -- le vrai dit si le type de cadre connait ce script ; le faux dit oui
+    function f:HasScript(nom) return true end
     function f:HasFocus() return self.focused end
     function f:SetFocus() self.focused = true end
-    function f:ClearFocus() self.focused = false end
+    -- le vrai previent la saisie qui perd la main (OnEditFocusLost)
+    function f:ClearFocus()
+        local avait = self.focused
+        self.focused = false
+        if avait and self.scripts and self.scripts.OnEditFocusLost then self.scripts.OnEditFocusLost(self) end
+    end
+    function f:HighlightText(a, b) self.surligne = { a or 0, b or -1 } end
     -- 3.3.5 n'accepte qu'un CHEMIN : un objet texture y leve une erreur, et
     -- le faux client doit lever la meme, sinon il laisse passer un fichier
     -- qui mourra en jeu.
@@ -1965,6 +2009,10 @@ function GetNumRaidMembers() return 0 end
 function GetRealZoneText() return "Elwynn Forest" end
 function IsModifiedClick() return false end
 function IsShiftKeyDown() return false end
+-- Alt et Ctrl : un essai les enfonce (TOUCHES.alt, TOUCHES.ctrl)
+TOUCHES = {}
+function IsAltKeyDown() return TOUCHES.alt end
+function IsControlKeyDown() return TOUCHES.ctrl end
 function GetDailyQuestsCompleted() return 2 end
 function GetMaxDailyQuests() return 25 end
 MAX_WATCHABLE_QUESTS = 25
@@ -4690,6 +4738,7 @@ do
     DEFAULT_CHATFRAME_ALPHA = 0.25
     CHAT_TAB_SHOW_DELAY = 0.2
     CHAT_TAB_HIDE_DELAY = 1
+    ICON_TAG_RAID_TARGET_STAR1 = "rt1"
     local function fenetre(i)
         local nom = "ChatFrame" .. i
         local f = CreateFrame("ScrollingMessageFrame", nom, UIParent)
@@ -4732,10 +4781,30 @@ do
         f:SetScript("OnShow", function(self)
             _G[nom .. "ButtonFrameBottomButton"]:Show(); _G[nom .. "ButtonFrameDownButton"]:Show(); _G[nom .. "ButtonFrameUpButton"]:Show()
         end)
+        -- ChatTabTemplate de 3.3.5 : le gauche a TOPLEFT, le milieu (44) a
+        -- sa suite, le droit a la suite du milieu ; le choisi et la
+        -- surbrillance poses sur eux ; le texte contre le gauche (0, -5)
         local onglet = CreateFrame("Button", nom .. "Tab", UIParent)
         onglet:SetAlpha(0.4)
-        onglet.leftTexture = onglet:CreateTexture(nom .. "TabLeft", "BACKGROUND")
-        onglet:CreateFontString(nom .. "TabText", "ARTWORK")
+        onglet:SetWidth(64); onglet:SetHeight(32)
+        local gauche = onglet:CreateTexture(nom .. "TabLeft", "BACKGROUND")
+        gauche:SetWidth(16); gauche:SetHeight(32); gauche:SetPoint("TOPLEFT", onglet, "TOPLEFT", 0, 0)
+        local milieu = onglet:CreateTexture(nom .. "TabMiddle", "BACKGROUND")
+        milieu:SetWidth(44); milieu:SetHeight(32); milieu:SetPoint("LEFT", gauche, "RIGHT", 0, 0)
+        local droite = onglet:CreateTexture(nom .. "TabRight", "BACKGROUND")
+        droite:SetWidth(16); droite:SetHeight(32); droite:SetPoint("LEFT", milieu, "RIGHT", 0, 0)
+        onglet.leftTexture, onglet.middleTexture, onglet.rightTexture = gauche, milieu, droite
+        for _, etat in ipairs({ { "Selected", "BORDER" }, { "Highlight", "HIGHLIGHT" } }) do
+            for _, s in ipairs({ "Left", "Middle", "Right" }) do
+                local t = onglet:CreateTexture(nom .. "Tab" .. etat[1] .. s, etat[2])
+                t:SetPoint("TOPLEFT", _G[nom .. "Tab" .. s], "TOPLEFT", 0, 0)
+                t:SetPoint("BOTTOMRIGHT", _G[nom .. "Tab" .. s], "BOTTOMRIGHT", 0, 0)
+            end
+        end
+        local texte = onglet:CreateFontString(nom .. "TabText", "ARTWORK")
+        texte:SetWidth(50); texte:SetHeight(8)
+        texte:SetPoint("LEFT", gauche, "RIGHT", 0, -5)
+        texte:SetText(i == 1 and "General" or i == 2 and "Combat Log" or "Arthas")
         onglet.glow = onglet:CreateTexture(nom .. "TabGlow", "BACKGROUND")
         onglet.glow:SetAlpha(0.7)
         CreateFrame("Frame", nom .. "TabFlash", onglet)
@@ -4744,11 +4813,16 @@ do
         saisie:CreateTexture(nom .. "EditBoxMid", "BACKGROUND")
         saisie:CreateFontString(nom .. "EditBoxHeader", "OVERLAY")
         saisie:SetAlpha(0.35)
+        -- FloatingChatFrameTemplate de 3.3.5 : de (-5, -2) a (5, -2) sous le chat
+        saisie:SetHeight(32)
+        saisie:SetPoint("TOPLEFT", f, "BOTTOMLEFT", -5, -2)
+        saisie:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 5, -2)
         f.editBox = saisie
         table.insert(CHAT_FRAMES, nom)
         return f
     end
     fenetre(1); fenetre(2)
+    ChatFrame1.isStaticDocked = true; ChatFrame2.isStaticDocked = true
     ChatFrame2.SetScrollOffset = nil
     ChatFrame1.SetScrollOffset = function(self, n) self.defile = n end
     DEFAULT_CHAT_FRAME = ChatFrame1
@@ -4769,7 +4843,24 @@ do
     FONDUS = {}
     function FCF_FadeInChatFrame(f) f.hasBeenFaded = true; table.insert(FONDUS, "in " .. f:GetName()) end
     function FCF_FadeOutChatFrame(f) f.hasBeenFaded = nil; table.insert(FONDUS, "out " .. f:GetName()) end
-    function FCF_OpenTemporaryWindow() return nil end
+    -- FCF_OpenTemporaryWindow de 3.3.5 : une fenetre de chuchotement, son
+    -- onglet a icone, le texte a gauche (10, -6), marge 10 ; mise au dock
+    -- dans la liste defilante
+    TEMPORAIRES = 0
+    function FCF_OpenTemporaryWindow()
+        TEMPORAIRES = TEMPORAIRES + 1
+        local f = fenetre(10 + TEMPORAIRES)
+        local onglet = _G[f:GetName() .. "Tab"]
+        onglet.conversationIcon = onglet:CreateTexture(f:GetName() .. "TabConversationIcon", "ARTWORK")
+        local texte = _G[f:GetName() .. "TabText"]
+        texte:SetPoint("LEFT", onglet.leftTexture, "RIGHT", 10, -6)
+        onglet.sizePadding = 10
+        f.isTemporary = true
+        f.isDocked = 1
+        table.insert(GENERAL_CHAT_DOCK.DOCKED_CHAT_FRAMES, f)
+        FCFDock_UpdateTabs(GENERAL_CHAT_DOCK, true)
+        return f
+    end
     ChatFrameMenuButton = CreateFrame("Button", "ChatFrameMenuButton", UIParent)
     ChatFrameMenuButton:SetPoint("BOTTOM", ChatFrame1ButtonFrameUpButton, "TOP", 0, 0)
     FriendsMicroButton = CreateFrame("Button", "FriendsMicroButton", UIParent)
@@ -4780,6 +4871,82 @@ do
     GENERAL_CHAT_DOCK.overflowButton = CreateFrame("Button", "GeneralDockManagerOverflowButton", GENERAL_CHAT_DOCK)
     GENERAL_CHAT_DOCK.overflowButton:CreateTexture(nil, "ARTWORK")
     GENERAL_CHAT_DOCK.overflowButton:SetHighlightTexture("Interface" .. string.char(92) .. "ChatFrame" .. string.char(92) .. "UI-ChatIcon-BlinkHilight")
+    -- DockManagerTemplate de 3.3.5 : le debordement (16) a BOTTOMRIGHT
+    -- (0, -5), cache ; la liste defilante et son enfant
+    local dock = GENERAL_CHAT_DOCK
+    dock.overflowButton:SetWidth(16); dock.overflowButton.width = 16
+    dock.overflowButton:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -5)
+    dock.overflowButton:Hide()
+    dock.scrollFrame = CreateFrame("ScrollFrame", "GeneralDockManagerScrollFrame", dock)
+    dock.scrollFrame:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, -5)
+    dock.scrollFrame:SetScrollChild(CreateFrame("Frame", "GeneralDockManagerScrollFrameChild", dock.scrollFrame))
+    function dock.scrollFrame:GetScrollChild() return self.scrollChild end
+    dock.DOCKED_CHAT_FRAMES = {}
+    DEBORDE = false
+    -- PanelTemplates_TabResize de 3.3.5 (UIPanelTemplates.lua) : le milieu
+    -- prend le texte + la marge, l'onglet y ajoute les deux cotes
+    function PanelTemplates_TabResize(tab, padding, absoluteSize, maxWidth, absoluteTextSize)
+        local n = tab:GetName()
+        local cotes = 2 * _G[n .. "Left"]:GetWidth()
+        local texte = _G[n .. "Text"]
+        local largeurTexte = absoluteTextSize or texte:GetStringWidth()
+        local width, tabWidth
+        if absoluteSize then
+            if absoluteSize < cotes then width, tabWidth = 1, cotes else width, tabWidth = absoluteSize - cotes, absoluteSize end
+            texte:SetWidth(width)
+        else
+            width = largeurTexte + (padding or 24)
+            texte:SetWidth(0)
+            tabWidth = width + cotes
+        end
+        if _G[n .. "Middle"] then _G[n .. "Middle"]:SetWidth(width) end
+        tab:SetWidth(tabWidth)
+    end
+    -- FCFDock_SetPrimary / FCFDock_UpdateTabs de 3.3.5 : le dock a 6 au-dessus
+    -- du chat ; les onglets l'un contre l'autre (LEFT, 0), les fixes depuis
+    -- LEFT du dock, les autres depuis la liste defilante, a la taille 90
+    function FCFDock_SetPrimary(d, f)
+        d.primary = f
+        d:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 0, 6)
+        d:SetPoint("BOTTOMRIGHT", f, "TOPRIGHT", 0, 6)
+        table.insert(d.DOCKED_CHAT_FRAMES, 1, f)
+        FCFDock_UpdateTabs(d)
+    end
+    function FCFDock_UpdateTabs(d, force)
+        local enfant = d.scrollFrame:GetScrollChild()
+        local fixe, mobile
+        for _, f in ipairs(d.DOCKED_CHAT_FRAMES) do
+            local t = _G[f:GetName() .. "Tab"]
+            t:ClearAllPoints()
+            if f.isStaticDocked then
+                PanelTemplates_TabResize(t, t.sizePadding or 0)
+                if fixe then t:SetPoint("LEFT", fixe, "RIGHT", 0, 0) else t:SetPoint("LEFT", d, "LEFT", 0, 0) end
+                fixe = t
+            else
+                if mobile then t:SetPoint("LEFT", mobile, "RIGHT", 0, 0) else t:SetPoint("LEFT", enfant, "LEFT", 0, 0) end
+                mobile = t
+            end
+        end
+        for _, f in ipairs(d.DOCKED_CHAT_FRAMES) do
+            if not f.isStaticDocked then
+                local t = _G[f:GetName() .. "Tab"]
+                PanelTemplates_TabResize(t, t.sizePadding or 0, 90)
+            end
+        end
+        d.scrollFrame:SetPoint("LEFT", fixe, "RIGHT", 0, 0)
+        if DEBORDE then
+            d.overflowButton:Show()
+            d.scrollFrame:SetPoint("BOTTOMRIGHT", d.overflowButton, "BOTTOMLEFT", 0, 0)
+        else
+            d.overflowButton:Hide()
+            d.scrollFrame:SetPoint("BOTTOMRIGHT", d, "BOTTOMRIGHT", 0, -5)
+        end
+        d.scrollFrame.dynTabSize = 90
+        return true
+    end
+    FCFDock_SetPrimary(dock, ChatFrame1)
+    table.insert(dock.DOCKED_CHAT_FRAMES, ChatFrame2)
+    FCFDock_UpdateTabs(dock, true)
     -- l'opacite retenue de chaque fenetre (chat-cache.txt : 40 / 255)
     OPACITES = {}
     for i = 1, NUM_CHAT_WINDOWS do OPACITES[i] = 40 / 255 end
@@ -12933,6 +13100,188 @@ def main():
     moteur(0.01)
     assert g.ChatFrame1TabText.alpha == 0
     lua.execute("ChatFrame1.isDocked = nil; ChatFrame2.isDocked = nil")
+
+
+    # ETAPE 2 -- LES ONGLETS : l'art de camelot (cotes a -2 / +2 de l'onglet,
+    # milieu tendu entre eux), le texte au centre (0, -5), la largeur texte +
+    # 20 + marge (au moins 32) ; le dock sur le haut du fond, les onglets a 1
+    # l'un de l'autre ; la saisie jusqu'au bout de la barre, + 8
+    print("\nonglets et saisie du chat :")
+    def ancre(r, i=-1):
+        p = pts(r)[i]
+        return (p[0], p[1].name, p[2], p[3], p[4])
+    o1, o2 = g.ChatFrame1Tab, g.ChatFrame2Tab
+    assert [ancre(g.ChatFrame1TabLeft, i) for i in range(len(pts(g.ChatFrame1TabLeft)))] == [("BOTTOMLEFT", "ChatFrame1Tab", "BOTTOMLEFT", -2, 0)]
+    assert [ancre(g.ChatFrame1TabRight, i) for i in range(len(pts(g.ChatFrame1TabRight)))] == [("BOTTOMRIGHT", "ChatFrame1Tab", "BOTTOMRIGHT", 2, 0)]
+    assert [ancre(g.ChatFrame1TabMiddle, i) for i in range(len(pts(g.ChatFrame1TabMiddle)))] == [
+        ("LEFT", "ChatFrame1TabLeft", "RIGHT", 0, 0), ("RIGHT", "ChatFrame1TabRight", "LEFT", 0, 0)]
+    assert [ancre(g.ChatFrame1TabText, i) for i in range(len(pts(g.ChatFrame1TabText)))] == [("CENTER", "ChatFrame1Tab", "CENTER", 0, -5)]
+    print("   onglets : General %s (texte %s), Combat Log %s (texte %s)" % (o1.width, g.ChatFrame1TabText.width, o2.width, g.ChatFrame2TabText.width))
+    assert (o1.width, g.ChatFrame1TabText.width) == (42 + 20, 42) and (o2.width, g.ChatFrame2TabText.width) == (60 + 20, 60)
+    dk = g.GENERAL_CHAT_DOCK
+    assert [ancre(dk, i) for i in range(len(pts(dk)))] == [
+        ("BOTTOMLEFT", "ChatFrame1Background", "TOPLEFT", 0, 0), ("BOTTOMRIGHT", "ChatFrame1Background", "TOPRIGHT", 0, 0)]
+    def dock_camelot():
+        assert [ancre(o1, i) for i in range(len(pts(o1)))] == [("BOTTOMLEFT", "GeneralDockManager", "BOTTOMLEFT", 0, 0)], pts(o1)
+        assert [ancre(o2, i) for i in range(len(pts(o2)))] == [("LEFT", "ChatFrame1Tab", "RIGHT", 1, 0)]
+        assert ancre(dk.overflowButton) == ("BOTTOMRIGHT", "GeneralDockManager", "BOTTOMRIGHT", 0, 0)
+    dock_camelot()
+    assert ancre(dk.scrollFrame) == ("BOTTOMRIGHT", "GeneralDockManager", "BOTTOMRIGHT", 0, 0)
+    # le client remet le dock en ordre (3.3.5 : l'un contre l'autre, texte +
+    # 32) : on repasse derriere lui
+    lua.execute("FCFDock_UpdateTabs(GENERAL_CHAT_DOCK, true)")
+    dock_camelot()
+    assert o1.width == 62 and o2.width == 80
+    # un nom change (FCF_SetWindowName) ; un nom vide : au moins les deux cotes
+    lua.execute("ChatFrame1TabText:SetText('Trade'); PanelTemplates_TabResize(ChatFrame1Tab, 0)")
+    assert (o1.width, g.ChatFrame1TabText.width) == (30 + 20, 30)
+    lua.execute("ChatFrame1TabText:SetText(''); PanelTemplates_TabResize(ChatFrame1Tab, 0)")
+    assert (o1.width, g.ChatFrame1TabText.width) == (32, 12)
+    lua.execute("ChatFrame1TabText:SetText('General'); PanelTemplates_TabResize(ChatFrame1Tab, 0)")
+    assert o1.width == 62
+    # un autre onglet du jeu garde la taille du client
+    lua.execute("""
+        local t = CreateFrame("Button", "EssaiOngletTab", UIParent)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do t:CreateTexture("EssaiOngletTab" .. s):SetWidth(16) end
+        t:CreateFontString("EssaiOngletTabText"):SetText("Talents")
+        PanelTemplates_TabResize(t, 0)
+    """)
+    assert g.EssaiOngletTab.width == 42 + 32
+    # le debordement : la liste s'arrete 5 avant lui, 1 plus bas
+    lua.execute("DEBORDE = true; FCFDock_UpdateTabs(GENERAL_CHAT_DOCK, true)")
+    print("   debordement : liste %s" % (ancre(dk.scrollFrame),))
+    assert ancre(dk.scrollFrame) == ("BOTTOMRIGHT", "GeneralDockManagerOverflowButton", "BOTTOMLEFT", -5, -1)
+    lua.execute("DEBORDE = false; FCFDock_UpdateTabs(GENERAL_CHAT_DOCK, true)")
+    assert ancre(dk.scrollFrame) == ("BOTTOMRIGHT", "GeneralDockManager", "BOTTOMRIGHT", 0, 0)
+    # la saisie : de (-5, -2) sous le chat au bout de la barre + 8
+    se = [ancre(g.ChatFrame1EditBox, i) for i in range(len(pts(g.ChatFrame1EditBox)))]
+    print("   saisie : %s" % se)
+    assert se == [("TOPLEFT", "ChatFrame1", "BOTTOMLEFT", -5, -2), ("TOPRIGHT", "ChatFrame1", "BOTTOMRIGHT", 8 + 8, -2)]
+    assert d1.barre.width == 8
+    # deux fenetres de chuchotement, au dock : habillees, le texte reste a
+    # gauche (10, -6), la taille imposee (90, texte 90 - 20 - 10), 1 plus bas
+    # que les onglets fixes, a 1 l'une de l'autre
+    lua.execute("FCF_OpenTemporaryWindow('WHISPER', 'Arthas'); FCF_OpenTemporaryWindow('WHISPER', 'Jaina')")
+    o11, o12 = g.ChatFrame11Tab, g.ChatFrame12Tab
+    assert C.fenetres[g.ChatFrame11] and C.onglets[o11] and C.onglets[o12]
+    assert ancre(g.ChatFrame11TabLeft) == ("BOTTOMLEFT", "ChatFrame11Tab", "BOTTOMLEFT", -2, 0)
+    assert ancre(g.ChatFrame11TabText) == ("LEFT", "ChatFrame11TabLeft", "RIGHT", 10, -6)
+    assert not any(p[0] == "CENTER" for p in pts(g.ChatFrame11TabText))
+    print("   chuchotements : %s (texte %s), %s / %s" % (o11.width, g.ChatFrame11TabText.width, ancre(o11), ancre(o12)))
+    assert (o11.width, g.ChatFrame11TabText.width) == (90, 60)
+    assert ancre(o11) == ("LEFT", "GeneralDockManagerScrollFrameChild", "LEFT", 0, -1)
+    assert ancre(o12) == ("LEFT", "ChatFrame11Tab", "RIGHT", 1, 0)
+    dock_camelot()
+    # le releve des lignes (/fui chatlignes) : un message d'essai, deux images,
+    # puis le releve dans ForeverUIDB
+    lua.execute("""
+        ForeverUIDB.releveChat = nil; GENERAL_CHAT_DOCK.selected = ChatFrame1
+        local ligne = ChatFrame1:CreateFontString(nil, "ARTWORK")
+        ligne:SetFont("Fonts" .. string.char(92) .. "ARIALN.TTF", 14)
+        ligne:SetText("[Guild] Papota: bonjour")
+        ligne:SetPoint("BOTTOMLEFT", ChatFrame1, "BOTTOMLEFT", 0, 0)
+    """)
+    avant = c1.messages
+    lua.execute("SlashCmdList.FOREVERUI('chatlignes')")
+    at = C.attenteReleve
+    at.scripts.OnUpdate(at)
+    at.scripts.OnUpdate(at)
+    assert g.ForeverUIDB.releveChat is None and c1.messages == avant + 1
+    at.scripts.OnUpdate(at)
+    rel = g.ForeverUIDB.releveChat
+    print("   releve : fenetre %s, %s objets texte, %s derniers messages" % (rel.fenetre, len(list(rel.textes.values())), len(list(rel.derniers.values()))))
+    assert rel.fenetre == "ChatFrame1" and not at.shown
+    t0 = [t for t in rel.textes.values()][-1]
+    assert t0.texte == "[Guild] Papota: bonjour" and t0.mesure == len("[Guild] Papota: bonjour") * 6 and t0.police
+
+    # LA SELECTION AU GLISSER, Alt maintenu : deux messages poses comme le
+    # moteur les pose (un objet texte par message, coupe a la largeur) ; le
+    # premier porte l'heure d'EasyCopy (un lien) et se coupe en trois lignes
+    # a 120 : « [10:00:00] [Guild] » / « Papota: bonjour a » / « tous »
+    print("\nselection du chat :")
+    lua.execute("""
+        local function message(texte, haut, lignes)
+            local m = ChatFrame1:CreateFontString(nil, "ARTWORK")
+            m:SetText(texte)
+            m:SetWidth(120)
+            m._left, m._top, m._bottom, m._right = 40, haut, haut - 12 * lignes, 160
+            return m
+        end
+        MESSAGE1 = message("|Hezc:x|h[10:00:00] |h[Guild] Papota: bonjour a tous", 200, 3)
+        MESSAGE2 = message("Deuxieme message", 164, 1)
+    """)
+    Sel = C.selection
+    cap = d1.capteur
+    veille_sel = C.veilleSelection
+    def veiller():
+        veille_sel.scripts.OnUpdate(veille_sel, 0.01)
+    veiller()
+    assert not cap.mouseEnabled, "sans Alt, le chat laisse passer la souris"
+    lua.execute("TOUCHES.alt = true")
+    veiller()
+    assert cap.mouseEnabled
+    c = lua.eval("ForeverUI.Chat.disposer(MESSAGE1)")
+    print("   lignes du premier message : debuts %s, hauteur %s" % (list(c.debuts.values()), c.hauteurLigne))
+    assert list(c.debuts.values()) == [1, 20, 38] and c.hauteurLigne == 12
+    # enfonce avant le G de [Guild] (ligne 1, x 72), glisse au milieu de la
+    # ligne 2 (x 42, avant l'espace qui suit « Papota: »)
+    lua.execute("SOURIS_X, SOURIS_Y = 40 + 72, 194")
+    cap.scripts.OnMouseDown(cap, "LeftButton")
+    lua.execute("TOUCHES.alt = false; SOURIS_X, SOURIS_Y = 40 + 42, 182")
+    veiller()
+    assert cap.mouseEnabled, "le glisser garde la souris meme Alt relache"
+    assert lua.eval("ForeverUI.Chat.texteSelection()") == "Guild] Papota:"
+    surl = [t for t in d1.surlignes.values() if t.shown]
+    print("   surlignage : %s" % [(ancre(t)[3], ancre(t)[4], t.width, t.height, t.layer) for t in surl])
+    assert [(ancre(t)[3], ancre(t)[4], t.width, t.height) for t in surl] == [(72, 0, 42, 12), (0, -12, 42, 12)]
+    assert all(t.layer == "BORDER" for t in surl)
+    # jusque sous le dernier message : la fin du premier, puis le second
+    lua.execute("SOURIS_X, SOURIS_Y = 300, 100")
+    veiller()
+    cap.scripts.OnMouseUp(cap, "LeftButton")
+    bx = Sel.boite
+    print("   copie : %r, saisie %s" % (bx.text, bx.focused))
+    assert bx.text == "Guild] Papota: bonjour a tous\nDeuxieme message" and bx.focused and bx.surligne
+    veiller()
+    assert not cap.mouseEnabled
+    # la saisie est en lecture seule ; Echap rend la main et efface
+    lua.execute("ForeverUI.Chat.selection.boite:SetText('abc')")
+    bx.scripts.OnTextChanged(bx, True)
+    assert bx.text == "Guild] Papota: bonjour a tous\nDeuxieme message"
+    bx.scripts.OnEscapePressed(bx)
+    assert not bx.focused and not any(t.shown for t in d1.surlignes.values()) and Sel.texte is None
+    # Ctrl+C rend aussi la main
+    lua.execute("TOUCHES.alt = true")
+    veiller()
+    lua.execute("SOURIS_X, SOURIS_Y = 40 + 72, 194")
+    cap.scripts.OnMouseDown(cap, "LeftButton")
+    lua.execute("SOURIS_X, SOURIS_Y = 40 + 42, 182")
+    cap.scripts.OnMouseUp(cap, "LeftButton")
+    assert bx.focused and bx.text == "Guild] Papota:"
+    lua.execute("TOUCHES.ctrl = true")
+    bx.scripts.OnKeyUp(bx, "C")
+    lua.execute("TOUCHES.ctrl = false")
+    assert not bx.focused and Sel.texte is None
+    # un clic Alt sans glisser ne copie rien
+    lua.execute("SOURIS_X, SOURIS_Y = 40 + 72, 194")
+    cap.scripts.OnMouseDown(cap, "LeftButton")
+    cap.scripts.OnMouseUp(cap, "LeftButton")
+    assert not bx.focused and Sel.texte is None
+    lua.execute("TOUCHES.alt = false")
+    veiller()
+    # ce qui se copie : les barres, le texte des liens, les marques par leur
+    # etiquette, les lettres accentuees ; ni couleurs ni liens
+    lua.execute(r'''UNITES_ESSAI = ForeverUI.Chat.unites("a||b |cffff0000rouge|r |Hitem:1|h[Epee]|h |TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:0|t \195\169")''')
+    copie = "".join(x.copie for x in g.UNITES_ESSAI.values())
+    print("   unites : %r" % copie)
+    assert copie == "a|b rouge [Epee] {rt1} é"
+    lua.execute("MESSAGE1:Hide(); MESSAGE2:Hide()")
+    lua.execute("""
+        local dock = GENERAL_CHAT_DOCK
+        table.remove(dock.DOCKED_CHAT_FRAMES); table.remove(dock.DOCKED_CHAT_FRAMES)
+        ForeverUI.Chat.fenetres[ChatFrame11] = nil; ForeverUI.Chat.fenetres[ChatFrame12] = nil
+        FCFDock_UpdateTabs(dock, true)
+    """)
 
 
     # ------------------------------------------------- LES BARRES D'AURAS
