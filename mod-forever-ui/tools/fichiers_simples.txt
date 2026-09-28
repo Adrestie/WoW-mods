@@ -26,6 +26,26 @@ interface/icons/unknown_8197097.blp => interface/icons/inv_sidetab_honor_allianc
 interface/icons/unknown_8197098.blp => interface/icons/inv_sidetab_honor_horde_c60.blp
 interface/icons/unknown_8197104.blp => interface/icons/inv_sidetab_stats_c60.blp
 
+# le portrait du livre des metiers (ProfessionsMixin:SelectBookPage :
+# Interface/ICONS/INV_SideTab_Professions_c60), sans nom lui aussi ; reconnu
+# a l'oeil parmi ses voisines (marteau et pioche croises)
+interface/icons/unknown_8197101.blp => interface/icons/inv_sidetab_professions_c60.blp
+
+# les onglets lateraux de la fenetre des metiers (ProfessionsMixin:
+# RefreshRightTab : l'icone de la competence, SkillLine.SpellIconFileID de
+# camelot) ; joaillerie et calligraphie, absentes de camelot : l'icone de
+# leur competence en 3.3.5 (SkillLine.dbc)
+interface/icons/trade_alchemy.blp
+interface/icons/trade_blacksmithing.blp
+interface/icons/trade_engraving.blp
+interface/icons/trade_engineering.blp
+interface/icons/trade_leatherworking.blp
+interface/icons/trade_mining.blp
+interface/icons/trade_tailoring.blp
+interface/icons/inv_misc_food_15.blp
+interface/icons/spell_holy_sealofsacrifice.blp
+interface/icons/inv_misc_gem_01.blp
+
 # LE MASQUE DES ONGLETS LATERAUX. L'addon ne s'en sert PAS a l'ecran -- 3.3.5
 # n'a pas de MaskTexture -- mais tools/cuire_masque.py le cuit dans l'alpha
 # des icones d'onglet. Il entre donc dans l'atelier pour que cette cuisson se
@@ -223,3 +243,34 @@ interface/guildbankframe/corners.blp
 interface/guildbankframe/verttile.blp
 interface/guildbankframe/horiztile.blp
 interface/guildbankframe/guildvaultbg.blp
+
+# les PNJ, etape 3 : le maitre (blizzard_trainerui/mainline) -- plaque, survol,
+# selection et fond de la liste ; cadre de l'argent
+interface/classtrainerframe/trainertextures.blp
+interface/moneyframe/ui-moneyframe-border.blp
+# le sertissage (blizzard_itemsocketingui.xml) : parchemin, plaques et cadre
+# du bouton, bordure doree ; la UI-ItemSocketingFrame de 3.3.5 est une autre
+# image (la fenetre entiere), celle-ci est une feuille de morceaux
+interface/itemsocketingframe/ui-itemsocketingframe.blp
+interface/itemsocketingframe/ui-itemsocketingframe-_tile.blp
+interface/itemsocketingframe/ui-itemsocketparchementframe-left.blp
+interface/common/ui-goldborder.blp
+interface/common/ui-goldborder-!tile.blp
+interface/common/ui-goldborder-_tile.blp
+# l'etable (camelot/blizzard_stableui.xml) : l'ombre de la scene du modele
+# (ShadowOverlayTemplate) ; la gauche est deja la
+interface/common/shadowoverlay-corner.blp
+interface/common/shadowoverlay-top.blp
+interface/common/shadowoverlay-bottom.blp
+interface/common/shadowoverlay-right.blp
+# la carte de vol (TaxiFrame de camelot, shared/taxiframe.lua) : les images des
+# boutons (TaxiButtonTypes, TaxiButtonTemplate), le trait des trajets, et les
+# images de vol des cartes 1463 (Royaumes de l'Est, UiMapArtTile : fichier
+# 8033753, sans nom) et 1464 (Kalimdor)
+interface/taxiframe/ui-taxi-icon-green.blp
+interface/taxiframe/ui-taxi-icon-white.blp
+interface/taxiframe/ui-taxi-icon-nub.blp
+interface/taxiframe/ui-taxi-icon-highlight.blp
+interface/taxiframe/ui-taxi-line.blp
+interface/taxiframe/taximap1-classic.blp
+fdid:8033753.blp => interface/taxiframe/taximap-1463.blp

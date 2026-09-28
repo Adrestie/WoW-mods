@@ -208,6 +208,12 @@ local function ajusterLargeur(liste)
 	if not voulue or voulue <= 0 then
 		return
 	end
+	-- un menu de ForeverUI peut demander la regle de camelot telle quelle :
+	-- le bouton comme PLANCHER, la liste s'elargissant a son contenu
+	-- (SetMinimumWidth ; filtre des metiers, demande du 2026-09-28)
+	if ouvreur.foreverPlancher and liste.foreverContenu then
+		voulue = math.max(voulue, liste.foreverContenu + LISTE_MARGE)
+	end
 	fixerLargeur(liste, voulue)
 end
 

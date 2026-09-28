@@ -216,6 +216,14 @@ ForeverUI.AjouterTextes("enUS", {
 	PLAYERFRAME_DEBUG_NO_TARGET = "none",
 	PLAYERFRAME_EDIT_LABEL = "Player Frame",
 
+	-- ProfessionsBook.lua
+	PROFESSIONSBOOK_COOKING_MISSING = "Visit a trainer to learn cooking. Cooking lets you learn recipes to create food that heals you out of combat and grants you temporary buffs.",
+	PROFESSIONSBOOK_FIRST_AID_MISSING = "Visit a trainer to learn first aid.  First aid lets you turn cloth into bandages for healing yourself and others.",
+	PROFESSIONSBOOK_FIRST_PROFESSION = "First Profession",
+	PROFESSIONSBOOK_FISHING_MISSING = "Visit a trainer to learn fishing.  Fishing lets you catch fish and other strange things from water.  Fish can be cooked into delicious meals with the Cooking skill.",
+	PROFESSIONSBOOK_MISSING_PROFESSION = "Visit a profession trainer in a major city to learn a new profession. You may have two professions. You may have any combination of gathering and production professions.",
+	PROFESSIONSBOOK_SECOND_PROFESSION = "Second Profession",
+
 	-- PvPArena.lua
 	PVPARENA_DEBUG_DETAIL = "detail: open=%s team=%s season=%s",
 	PVPARENA_DEBUG_NO_TEAM = "team %d: none",
@@ -345,6 +353,11 @@ ForeverUI.AjouterTextes("enUS", {
 	SPELLBOOKSEARCH_NOT_ON_ACTIONBAR = "Missing from action bar",
 	SPELLBOOKSEARCH_PREVIEW_OVERFLOW = "And %s more",
 
+	-- Stable.lua (the pet's specialization, as the client names it)
+	STABLE_TALENT_CUNNING = "Cunning",
+	STABLE_TALENT_FEROCITY = "Ferocity",
+	STABLE_TALENT_TENACITY = "Tenacity",
+
 	-- StanceBar.lua
 	STANCEBAR_EDIT_LABEL = "Stance Bar",
 
@@ -385,6 +398,9 @@ ForeverUI.AjouterTextes("enUS", {
 	-- TargetFrame.lua
 	TARGETFRAME_EDIT_LABEL = "Target Frame",
 
+	-- Taxi.lua
+	TAXI_TITLE = "Flight Map",
+
 	-- Titles.lua
 	TITLES_DEBUG_ABSENT = "absent",
 	TITLES_DEBUG_HIDDEN = "hidden",
@@ -395,6 +411,25 @@ ForeverUI.AjouterTextes("enUS", {
 	TOKENSTAB_DEBUG_CLIENT = "client: selectedToken=%s selectedID=%s | screen=%s",
 	TOKENSTAB_DEBUG_ROW = "   %2d %-28s %s count=%-8s special=%-4s watched=%-5s unused=%s",
 	TOKENSTAB_DEBUG_SUMMARY = "currencies: %d in the list, offset %d, %d placed, selected=%s",
+
+	-- TradeSkill.lua
+	TRADESKILL_CHECK_ALL = "Check All",
+	TRADESKILL_CREATE_ALL_FORMAT = "%s [%d]",
+	TRADESKILL_FILTER_SKILL_UP = "Has skill up",
+	TRADESKILL_FILTER_SLOTS = "Slots",
+	TRADESKILL_NAME_RANK = "%s %d/%d",
+	TRADESKILL_NAME_RANK_MODIFIER = "%s %d (|cff20ff20+%d|r ) /%d",
+	TRADESKILL_NO_RESULTS = "There are no results with your current filters.",
+	TRADESKILL_REAGENT_COUNT = "%s/%d",
+	TRADESKILL_REAGENTS = "Reagents:",
+	TRADESKILL_SKILL_UP_EASY = "Low chance of gaining skill",
+	TRADESKILL_SKILL_UP_MEDIUM = "High chance of gaining skill",
+	TRADESKILL_SKILL_UP_OPTIMAL = "Guaranteed chance of gaining %d skill ups",
+	TRADESKILL_UNCHECK_ALL = "Uncheck All",
+
+	-- Trainer.lua
+	TRAINER_RANK = "%d/%d",
+	TRAINER_RANK_BONUS = "%d |cff20ff20(+%d)|r/%d",
 
 	-- WorldMap.lua
 	WORLDMAP_CURSOR_COORDS = "Cursor: %d, %d",

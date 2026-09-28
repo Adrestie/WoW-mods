@@ -216,6 +216,14 @@ ForeverUI.AjouterTextes("frFR", {
 	PLAYERFRAME_DEBUG_NO_TARGET = "aucune",
 	PLAYERFRAME_EDIT_LABEL = "Cadre du joueur",
 
+	-- ProfessionsBook.lua
+	PROFESSIONSBOOK_COOKING_MISSING = "Rendez-vous auprès d'un maître pour apprendre la cuisine. La cuisine vous permet d'apprendre des recettes de plats qui vous soignent hors combat et vous confèrent des bonus temporaires.",
+	PROFESSIONSBOOK_FIRST_AID_MISSING = "Rendez-vous auprès d'un maître pour apprendre le secourisme. Le secourisme vous permet de transformer du tissu en bandages pour vous soigner et soigner les autres.",
+	PROFESSIONSBOOK_FIRST_PROFESSION = "Premier métier",
+	PROFESSIONSBOOK_FISHING_MISSING = "Rendez-vous auprès d'un maître pour apprendre la pêche. La pêche vous permet d'attraper des poissons et d'autres choses étranges dans l'eau. Le poisson peut être cuisiné en délicieux plats grâce à la cuisine.",
+	PROFESSIONSBOOK_MISSING_PROFESSION = "Rendez-vous auprès d'un maître de métier dans une grande ville pour apprendre un nouveau métier. Vous pouvez avoir deux métiers, en combinant à votre guise métiers de récolte et d'artisanat.",
+	PROFESSIONSBOOK_SECOND_PROFESSION = "Second métier",
+
 	-- PvPArena.lua
 	PVPARENA_DEBUG_DETAIL = "détail : ouvert=%s équipe=%s saison=%s",
 	PVPARENA_DEBUG_NO_TEAM = "équipe %d : aucune",
@@ -345,6 +353,11 @@ ForeverUI.AjouterTextes("frFR", {
 	SPELLBOOKSEARCH_NOT_ON_ACTIONBAR = "Absent des barres d'action",
 	SPELLBOOKSEARCH_PREVIEW_OVERFLOW = "Et %s de plus",
 
+	-- Stable.lua (la specialisation du familier, telle que le client la nomme)
+	STABLE_TALENT_CUNNING = "Ruse",
+	STABLE_TALENT_FEROCITY = "Férocité",
+	STABLE_TALENT_TENACITY = "Ténacité",
+
 	-- StanceBar.lua
 	STANCEBAR_EDIT_LABEL = "Barre des postures",
 
@@ -385,6 +398,9 @@ ForeverUI.AjouterTextes("frFR", {
 	-- TargetFrame.lua
 	TARGETFRAME_EDIT_LABEL = "Cadre de la cible",
 
+	-- Taxi.lua
+	TAXI_TITLE = "Carte de vol",
+
 	-- Titles.lua
 	TITLES_DEBUG_ABSENT = "absent",
 	TITLES_DEBUG_HIDDEN = "masqué",
@@ -395,6 +411,25 @@ ForeverUI.AjouterTextes("frFR", {
 	TOKENSTAB_DEBUG_CLIENT = "client : selectedToken=%s selectedID=%s | écran=%s",
 	TOKENSTAB_DEBUG_ROW = "   %2d %-28s %s compte=%-8s special=%-4s suivie=%-5s inutilisée=%s",
 	TOKENSTAB_DEBUG_SUMMARY = "monnaies : %d dans la liste, décalage %d, %d posée(s), choisie=%s",
+
+	-- TradeSkill.lua
+	TRADESKILL_CHECK_ALL = "Tout cocher",
+	TRADESKILL_CREATE_ALL_FORMAT = "%s [%d]",
+	TRADESKILL_FILTER_SKILL_UP = "Progression possible",
+	TRADESKILL_FILTER_SLOTS = "Emplacements",
+	TRADESKILL_NAME_RANK = "%s %d/%d",
+	TRADESKILL_NAME_RANK_MODIFIER = "%s %d (|cff20ff20+%d|r ) /%d",
+	TRADESKILL_NO_RESULTS = "Aucun résultat avec les filtres actuels.",
+	TRADESKILL_REAGENT_COUNT = "%s/%d",
+	TRADESKILL_REAGENTS = "Composants :",
+	TRADESKILL_SKILL_UP_EASY = "Faible chance de progresser",
+	TRADESKILL_SKILL_UP_MEDIUM = "Forte chance de progresser",
+	TRADESKILL_SKILL_UP_OPTIMAL = "Gain assuré de %d point(s) de compétence",
+	TRADESKILL_UNCHECK_ALL = "Tout décocher",
+
+	-- Trainer.lua
+	TRAINER_RANK = "%d/%d",
+	TRAINER_RANK_BONUS = "%d |cff20ff20(+%d)|r/%d",
 
 	-- WorldMap.lua
 	WORLDMAP_CURSOR_COORDS = "Curseur : %d, %d",

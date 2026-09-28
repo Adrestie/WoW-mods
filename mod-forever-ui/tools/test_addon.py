@@ -442,6 +442,10 @@ function CreateFrame(kind, name, parent, template)
         if avait and self.scripts and self.scripts.OnEditFocusLost then self.scripts.OnEditFocusLost(self) end
     end
     function f:HighlightText(a, b) self.surligne = { a or 0, b or -1 } end
+    -- un EditBox numerique (SetNumeric, SetNumber / GetNumber du vrai)
+    function f:SetNumeric(v) self.numerique = v and true or false end
+    function f:SetNumber(n) self.text = tostring(n) end
+    function f:GetNumber() return tonumber(self.text) or 0 end
     -- 3.3.5 n'accepte qu'un CHEMIN : un objet texture y leve une erreur, et
     -- le faux client doit lever la meme, sinon il laisse passer un fichier
     -- qui mourra en jeu.
@@ -533,6 +537,15 @@ function CreateFrame(kind, name, parent, template)
     if name then _G[name] = f end
     table.insert(frames, f)
     f.rangCadre = #frames
+    -- UIDropDownMenuTemplate : Left / Middle / Right, Text, le bouton a
+    -- fleche, comme le gabarit du vrai client les cree
+    if template == "UIDropDownMenuTemplate" and name then
+        f:SetWidth(40) f:SetHeight(32)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do f:CreateTexture(name .. s, "ARTWORK") end
+        f:CreateFontString(name .. "Text", "ARTWORK")
+        local b = CreateFrame("Button", name .. "Button", f)
+        b:SetWidth(24) b:SetHeight(24)
+    end
     return f
 end
 
@@ -2400,6 +2413,16 @@ function MainMenuMicroButton_SetNormal()
     MainMenuBarPerformanceBar:SetPoint("TOPLEFT", MainMenuMicroButton, "TOPLEFT", 10, -34)
 end
 function UpdateMicroButtons() end
+-- MicroButtonTooltipText (MainMenuBarMicroButtons.lua de 3.3.5) : le texte,
+-- suivi du raccourci s'il y en a un
+RACCOURCIS = {}
+function MicroButtonTooltipText(texte, action)
+    if RACCOURCIS[action] then return texte .. " |cffffd200(" .. RACCOURCIS[action] .. ")|r" end
+    return texte
+end
+TRADE_SKILLS = "Professions"
+UNLEARN_SKILL_TOOLTIP = "Unlearn this profession"
+ERR_NOT_IN_COMBAT = "You can't do that while in combat"
 
 for _, nom in ipairs({ "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot",
                        "CharacterBag2Slot", "CharacterBag3Slot" }) do
@@ -3950,6 +3973,7 @@ function CreateFont(nom)
     function f:SetShadowOffset(x, y) self.ombre = { x, y } end
     function f:SetShadowColor(r, v, b) self.ombreCouleur = { r, v, b } end
     function f:SetTextColor(r, v, b) self.couleur = { r, v, b } end
+    function f:SetFont(chemin, taille, drapeaux) self.chemin, self.taille, self.drapeaux = chemin, taille, drapeaux end
     _G[nom] = f
     return f
 end
@@ -7763,6 +7787,534 @@ do
         return avant(nom)
     end
 end
+
+-- LES PNJ, ETAPE 3 (TaxiFrame.xml / .lua et PetStable.xml / .lua de
+-- FrameXML ; Blizzard_TrainerUI et Blizzard_ItemSocketingUI charges a la
+-- demande par CHARGER_ADDON) : les cadres, noms, tailles et ancrages que
+-- l'addon touche, et ce que les fonctions du client font de ce qu'il lit.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    local function croix(nom, parent)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(32) b:SetHeight(32)
+        b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Down"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Highlight"))
+        return b
+    end
+    local function bouton(nom, parent, largeur, texte)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(largeur) b:SetHeight(22)
+        b:SetText(texte or "")
+        return b
+    end
+    local function argent(nom, parent)
+        local m = CreateFrame("Frame", nom, parent)
+        m:SetWidth(128) m:SetHeight(13)
+        return m
+    end
+    -- un defilement du client : sa barre, ses fleches
+    local function defilement(nom, parent, l, h)
+        local fx = CreateFrame("ScrollFrame", nom, parent)
+        fx:SetWidth(l) fx:SetHeight(h)
+        local sb = CreateFrame("Slider", nom .. "ScrollBar", fx)
+        sb:SetWidth(16)
+        sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+        for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+            local b = CreateFrame("Button", nom .. "ScrollBar" .. s, sb)
+            b:SetNormalTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Up"))
+        end
+        return fx
+    end
+
+    -- ------------------------------------------------ le maitre de vol
+    -- TAXI_NOEUDS[i] = { u, v, type, nom, prix } (fractions de la carte de
+    -- vol, v depuis le bas) ; TAXI_TRAJETS[i] = ses etapes { su, sv, du, dv } ;
+    -- TAXI_CARTE : le fichier que SetTaxiMap pose sur la texture donnee
+    TAXI_NOEUDS, TAXI_TRAJETS, TAXI_PRIS = {}, {}, {}
+    TAXI_CARTE = fichier("Interface", "TaxiFrame", "TAXIMAP0")
+    TAXINODEYOUAREHERE = "You are here"
+    function NumTaxiNodes() return #TAXI_NOEUDS end
+    function TaxiNodeGetType(i) return TAXI_NOEUDS[i] and TAXI_NOEUDS[i][3] or "NONE" end
+    function TaxiNodePosition(i) return TAXI_NOEUDS[i][1], TAXI_NOEUDS[i][2] end
+    function TaxiNodeName(i) return TAXI_NOEUDS[i][4] end
+    function TaxiNodeCost(i) return TAXI_NOEUDS[i][5] or 0 end
+    function TaxiNodeSetCurrent(i) TAXI_COURANT = i end
+    function TakeTaxiNode(i) table.insert(TAXI_PRIS, i) end
+    function GetNumRoutes(i) return TAXI_TRAJETS[i] and #TAXI_TRAJETS[i] or 0 end
+    function TaxiGetSrcX(i, r) return TAXI_TRAJETS[i][r][1] end
+    function TaxiGetSrcY(i, r) return TAXI_TRAJETS[i][r][2] end
+    function TaxiGetDestX(i, r) return TAXI_TRAJETS[i][r][3] end
+    function TaxiGetDestY(i, r) return TAXI_TRAJETS[i][r][4] end
+    function SetTaxiMap(t) t:SetTexture(TAXI_CARTE) end
+    function SetTooltipMoney(bulle, argent) bulle.argent = argent end
+    TAXIROUTE_LINEFACTOR = 32 / 30
+    TAXIROUTE_LINEFACTOR_2 = TAXIROUTE_LINEFACTOR / 2
+    function DrawRouteLine(T, C, sx, sy, ex, ey, w, relPoint)
+        T.trace = { sx, sy, ex, ey, w }
+        if not relPoint then relPoint = "BOTTOMLEFT" end
+        local dx, dy = ex - sx, ey - sy
+        local cx, cy = (sx + ex) / 2, (sy + ey) / 2
+        if dx < 0 then dx, dy = -dx, -dy end
+        local l = math.sqrt(dx * dx + dy * dy)
+        if l == 0 then
+            T:SetTexCoord(0, 0, 0, 0, 0, 0, 0, 0)
+            T:SetPoint("BOTTOMLEFT", C, relPoint, cx, cy)
+            T:SetPoint("TOPRIGHT", C, relPoint, cx, cy)
+            return
+        end
+        local s, c = -dy / l, dx / l
+        local sc = s * c
+        local Bwid, Bhgt, BLx, BLy, TLx, TLy, TRx, TRy, BRx, BRy
+        if dy >= 0 then
+            Bwid = ((l * c) - (w * s)) * TAXIROUTE_LINEFACTOR_2
+            Bhgt = ((w * c) - (l * s)) * TAXIROUTE_LINEFACTOR_2
+            BLx, BLy, BRy = (w / l) * sc, s * s, (l / w) * sc
+            BRx, TLx, TLy, TRx = 1 - BLy, BLy, 1 - BRy, 1 - BLx
+            TRy = BRx
+        else
+            Bwid = ((l * c) + (w * s)) * TAXIROUTE_LINEFACTOR_2
+            Bhgt = ((w * c) + (l * s)) * TAXIROUTE_LINEFACTOR_2
+            BLx, BLy, BRx = s * s, -(l / w) * sc, 1 + (w / l) * sc
+            BRy, TLx, TLy, TRy = BLx, 1 - BRx, 1 - BLx, 1 - BLy
+            TRx = TLy
+        end
+        T:ClearAllPoints()
+        T:SetTexCoord(TLx, TLy, BLx, BLy, TRx, TRy, BRx, BRy)
+        T:SetPoint("BOTTOMLEFT", C, relPoint, cx - Bwid, cy - Bhgt)
+        T:SetPoint("TOPRIGHT", C, relPoint, cx + Bwid, cy + Bhgt)
+    end
+    local tf = CreateFrame("Frame", "TaxiFrame", UIParent)
+    tf:SetWidth(384) tf:SetHeight(512)
+    tf:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    tf:CreateTexture("TaxiPortrait", "BACKGROUND"):SetPoint("TOPLEFT", tf, "TOPLEFT", 8, -9)
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        tf:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "TaxiFrame", "UI-TaxiFrame-" .. n))
+    end
+    tf:CreateFontString("TaxiMerchant", "ARTWORK"):SetPoint("TOP", tf, "TOP", 5, -17)
+    local carte = tf:CreateTexture("TaxiMap", "OVERLAY")
+    carte:SetWidth(316) carte:SetHeight(352)
+    carte:SetPoint("TOP", tf, "TOP", -13, -75)
+    croix("TaxiCloseButton", tf):SetPoint("TOPRIGHT", tf, "TOPRIGHT", -29, -8)
+    local route = CreateFrame("Frame", "TaxiRouteMap", tf)
+    route:SetWidth(316) route:SetHeight(352)
+    route:SetPoint("TOP", tf, "TOP", -13, -75)
+    -- TaxiFrame_OnEvent (TAXIMAP_OPENED) : les noeuds a la taille de 3.3.5,
+    -- depuis le bas ; lie au XML par function= (le script, pas la globale)
+    function TaxiFrame_OnEvent(self, evenement)
+        if evenement ~= "TAXIMAP_OPENED" then return end
+        TaxiMerchant:SetText(UnitName("npc"))
+        SetTaxiMap(TaxiMap)
+        for i = 1, NumTaxiNodes() do
+            local b = _G["TaxiButton" .. i] or CreateFrame("Button", "TaxiButton" .. i, TaxiRouteMap)
+            b:SetID(i)
+            b:SetWidth(16) b:SetHeight(16)
+            if TaxiNodeGetType(i) ~= "NONE" then
+                local x, y = TaxiNodePosition(i)
+                b:ClearAllPoints()
+                b:SetPoint("CENTER", "TaxiMap", "BOTTOMLEFT", x * 316, y * 352)
+                b:Show()
+            else
+                b:Hide()
+            end
+        end
+        self:Show()
+    end
+    tf:SetScript("OnEvent", TaxiFrame_OnEvent)
+    tf:RegisterEvent("TAXIMAP_OPENED")
+    tf:Hide()
+
+    -- ------------------------------------------------ l'etable
+    STABLES, CURRENT_PET, STABLED_PETS = "Stables", "Current Pet:", "Stabled Pets:"
+    ETABLE = { choisi = 0, places = 2, familiers = { [0] = { "i0", "Rex", 80, "Wolf", "Ferocity" } }, xp = { 100, 400 } }
+    function GetSelectedStablePet() return ETABLE.choisi end
+    function GetStablePetInfo(i) local p = ETABLE.familiers[i] if p then return p[1], p[2], p[3], p[4], p[5] end end
+    function GetPetTalentTree() return ETABLE.familiers[0] and ETABLE.familiers[0][5] end
+    function GetPetExperience() return ETABLE.xp[1], ETABLE.xp[2] end
+    local ps = CreateFrame("Frame", "PetStableFrame", UIParent)
+    ps:SetWidth(384) ps:SetHeight(512)
+    ps:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    ps:SetHitRectInsets(0, 34, 0, 75)
+    ps:CreateTexture("PetStableFramePortrait", "BACKGROUND")
+    ps:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "PetStableFrame", "UI-PetStable-TopLeft"))
+    ps:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "PetStableFrame", "UI-PetStable-TopRight"))
+    ps:CreateTexture("PetStableFrameBottomLeft", "BORDER"):SetTexture(fichier("Interface", "PetStableFrame", "UI-PetStable-BottomLeft"))
+    ps:CreateTexture("PetStableFrameBottomRight", "BORDER"):SetTexture(fichier("Interface", "PetStableFrame", "UI-PetStable-BottomRight"))
+    ps:CreateFontString("PetStableTitleLabel", "BORDER"):SetText(STABLES)
+    ps:CreateFontString("PetStableLevelText", "BORDER")
+    ps:CreateFontString("PetStableSlotText", "BORDER")
+    ps:CreateFontString("PetStableCostLabel", "BORDER")
+    local modele = CreateFrame("PlayerModel", "PetStableModel", ps)
+    modele:SetWidth(313) modele:SetHeight(223)
+    modele:SetPoint("TOPLEFT", ps, "TOPLEFT", 23, -76)
+    for _, n in ipairs({ "Left", "Right" }) do
+        local b = CreateFrame("Button", "PetStableModelRotate" .. n .. "Button", modele)
+        b:SetWidth(35) b:SetHeight(35)
+        b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Rotation" .. n .. "-Button-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Rotation" .. n .. "-Button-Down"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "ButtonHilight-Round"))
+    end
+    local regime = CreateFrame("Frame", "PetStablePetInfo", modele)
+    regime:SetWidth(24) regime:SetHeight(23)
+    local function place(nom, id, etiquette)
+        local b = CreateFrame("CheckButton", nom, ps)
+        b:SetWidth(37) b:SetHeight(37)
+        b:SetID(id)
+        if etiquette then b:CreateFontString(nil, "BACKGROUND"):SetText(etiquette) end
+        return b
+    end
+    place("PetStableCurrentPet", 0, CURRENT_PET):SetPoint("BOTTOMLEFT", ps, "BOTTOMLEFT", 45, 150)
+    place("PetStableStabledPet1", 1)
+    place("PetStableStabledPet2", 2, STABLED_PETS)
+    place("PetStableStabledPet3", 3)
+    place("PetStableStabledPet4", 4)
+    bouton("PetStablePurchaseButton", ps, 80, "Purchase"):SetPoint("BOTTOMRIGHT", ps, "BOTTOMRIGHT", -110, 105)
+    argent("PetStableMoneyFrame", ps):SetPoint("BOTTOMRIGHT", ps, "BOTTOMRIGHT", -45, 84)
+    argent("PetStableCostMoneyFrame", ps)
+    croix("PetStableFrameCloseButton", ps)
+    -- PetStable_Update : le portrait du joueur, le texte du familier choisi,
+    -- l'achat selon les places (4 = plus d'achat)
+    function PetStable_Update()
+        SetPortraitTexture(PetStableFramePortrait, "player")
+        local p = ETABLE.familiers[ETABLE.choisi]
+        if p then
+            PetStableLevelText:SetText(p[2] .. " Level " .. p[3] .. " " .. p[4])
+            PetStableModel:Show()
+        else
+            PetStableLevelText:SetText("")
+            PetStableModel:Hide()
+        end
+        if ETABLE.places >= 4 then PetStablePurchaseButton:Hide() else PetStablePurchaseButton:Show() end
+    end
+    ps:Hide()
+
+    -- ------------------------------------------------ le maitre (a la demande)
+    CLASS_TRAINER_SKILLS_DISPLAYED = 11
+    TRAINER_REQ_LEVEL, TRAINER_REQ_LEVEL_RED = "Level |cffffffff%d|r", "Level |cffff2020%d|r"
+    TRAINER_REQ_SKILL_RANK, TRAINER_REQ_SKILL_RANK_RED = "%s (|cffffffff%d|r)", "%s (|cffff2020%d|r)"
+    TRAINER_REQ_ABILITY, TRAINER_REQ_ABILITY_RED = "|cffffffff%s|r", "|cffff2020%s|r"
+    REQUIRES_LABEL, ITEM_SPELL_KNOWN, PLAYER_LIST_DELIMITER = "Requires:", "Already known", ", "
+    PARENS_TEMPLATE, TRAIN, FILTER = "(%s)", "Train", "Filter"
+    -- MAITRE.services[i] = { nom, rang, type, deplie, icone, niveau, cout,
+    -- metier } ; MAITRE.metier : le nom de son metier (maitre de metier)
+    MAITRE = { services = {}, appels = {} }
+    function GetNumTrainerServices() return #MAITRE.services end
+    function GetTrainerServiceInfo(i) local s = MAITRE.services[i] if s then return s[1], s[2], s[3], s[4] end end
+    function GetTrainerServiceIcon(i) return MAITRE.services[i] and MAITRE.services[i][5] end
+    function GetTrainerServiceLevelReq(i) return MAITRE.services[i] and MAITRE.services[i][6] or 0 end
+    function GetTrainerServiceSkillReq(i) return nil end
+    function GetTrainerServiceNumAbilityReq(i) return 0 end
+    function GetTrainerServiceAbilityReq(i, j) return nil end
+    function GetTrainerServiceCost(i) return MAITRE.services[i] and MAITRE.services[i][7] or 0, 0, 0 end
+    function GetTrainerServiceItemLink(i) return "lien:maitre:" .. i end
+    function GetTrainerServiceSkillLine(i) return MAITRE.metier end
+    function IsTradeskillTrainer() return MAITRE.metier ~= nil end
+    function ExpandTrainerSkillLine(i) table.insert(MAITRE.appels, "Expand " .. i) end
+    function CollapseTrainerSkillLine(i) table.insert(MAITRE.appels, "Collapse " .. i) end
+    function ClassTrainer_SetSelection(i) ClassTrainerFrame.selectedService = i end
+    function ClassTrainerSkillButton_OnClick(self, bouton)
+        if bouton == "LeftButton" then
+            ClassTrainerFrame.selectedService = self:GetID()
+            ClassTrainerFrame.showSkillDetails = 1
+            ClassTrainer_SetSelection(self:GetID())
+            ClassTrainerFrame_Update()
+        end
+    end
+    local function batirMaitre()
+        local f = CreateFrame("Frame", "ClassTrainerFrame", UIParent)
+        f:SetWidth(384) f:SetHeight(512)
+        f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+        f:SetHitRectInsets(0, 34, 0, 75)
+        f:CreateTexture("ClassTrainerFramePortrait", "BACKGROUND")
+        f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-TopLeft"))
+        f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-TopRight"))
+        f:CreateTexture("ClassTrainerFrameBottomLeft", "BORDER"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-BotLeft"))
+        f:CreateTexture("ClassTrainerFrameBottomRight", "BORDER"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-BotRight"))
+        f:CreateFontString("ClassTrainerNameText", "BORDER")
+        f:CreateFontString("ClassTrainerGreetingText", "BORDER")
+        f:CreateTexture("ClassTrainerHorizontalBarLeft", "ARTWORK"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-HorizontalBar"))
+        f:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-HorizontalBar"))
+        local ex = CreateFrame("Frame", "ClassTrainerExpandButtonFrame", f)
+        bouton("ClassTrainerCollapseAllButton", ex, 40, "All")
+        local dd = CreateFrame("Frame", "ClassTrainerFrameFilterDropDown", f)
+        dd:SetWidth(155) dd:SetHeight(32)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do
+            dd:CreateTexture("ClassTrainerFrameFilterDropDown" .. s, "ARTWORK"):SetTexture(fichier("Interface", "Glues", "CharacterCreate", "CharacterCreate-LabelFrame"))
+        end
+        dd:CreateFontString("ClassTrainerFrameFilterDropDownText", "ARTWORK"):SetText(FILTER)
+        local ddb = CreateFrame("Button", "ClassTrainerFrameFilterDropDownButton", dd)
+        ddb:SetNormalTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Up"))
+        CreateFrame("Frame", "ClassTrainerSkillHighlightFrame", f)
+        for i = 1, 11 do bouton("ClassTrainerSkill" .. i, f, 293) end
+        defilement("ClassTrainerListScrollFrame", f, 296, 184)
+        defilement("ClassTrainerDetailScrollFrame", f, 296, 119)
+        CreateFrame("Button", "ClassTrainerSkillIcon", ClassTrainerDetailScrollFrame)
+        argent("ClassTrainerMoneyFrame", f)
+        bouton("ClassTrainerTrainButton", f, 80, TRAIN)
+        bouton("ClassTrainerCancelButton", f, 80, "Exit")
+        croix("ClassTrainerFrameCloseButton", f)
+        f:Hide()
+    end
+    -- ClassTrainerFrame_Update : le nom du PNJ et l'accueil, puis la liste
+    -- plate du client (ses lignes, cachees ici)
+    function ClassTrainerFrame_Update()
+        ClassTrainerNameText:SetText(UnitName("npc"))
+        ClassTrainerGreetingText:SetText("Salut")
+        for i = 1, 11 do _G["ClassTrainerSkill" .. i]:Show() end
+    end
+
+    -- ------------------------------------------------ le sertissage (a la demande)
+    MAX_NUM_SOCKETS, ITEM_SOCKETING_DESCRIPTION_MIN_WIDTH = 3, 240
+    ITEM_SOCKETING, APPLY = "Item Socketing", "Apply"
+    SERTISSAGE = { types = { "Red", "Blue", "Meta" }, icone = "i-casque" }
+    function GetNumSockets() return #SERTISSAGE.types end
+    function GetSocketTypes(i) return SERTISSAGE.types[i] end
+    function GetSocketItemInfo() return "Casque", SERTISSAGE.icone, 4 end
+    local function batirSertissage()
+        local f = CreateFrame("Frame", "ItemSocketingFrame", UIParent)
+        f:SetWidth(354) f:SetHeight(467)
+        f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+        f:CreateTexture("ItemSocketingFramePortrait", "BACKGROUND")
+        f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "ItemSocketingFrame", "UI-ItemSocketingFrame"))
+        f:CreateFontString(nil, "BORDER"):SetText(ITEM_SOCKETING)
+        croix("ItemSocketingCloseButton", f)
+        local fx = defilement("ItemSocketingScrollFrame", f, 269, 255)
+        fx.scrollBarHideable = 1
+        fx:CreateTexture("ItemSocketingScrollFrameTop", "ARTWORK")
+        fx:CreateTexture("ItemSocketingScrollFrameBottom", "ARTWORK")
+        local enfant = CreateFrame("Frame", "ItemSocketingScrollChild", fx)
+        enfant:SetWidth(259) enfant:SetHeight(250)
+        local d = CreateFrame("GameTooltip", "ItemSocketingDescription", enfant)
+        function d:SetMinimumWidth(l, force) self.minimum = l end
+        function d:SetSocketedItem() self.rempli = (self.rempli or 0) + 1 end
+        function d:SetOwner() end
+        d:SetMinimumWidth(ITEM_SOCKETING_DESCRIPTION_MIN_WIDTH, 1)
+        for i = 1, 3 do
+            local nom = "ItemSocketingSocket" .. i
+            local s = CreateFrame("Button", nom, f)
+            s:SetWidth(40) s:SetHeight(40)
+            s:SetID(i)
+            local r = s:CreateTexture(nom .. "Right", "BACKGROUND")
+            r:SetWidth(73) r:SetHeight(55)
+            s:CreateTexture(nom .. "Left", "BACKGROUND")
+            s:CreateTexture(nom .. "Background", "BORDER")
+            local c = CreateFrame("Frame", nom .. "BracketFrame", s)
+            c:SetAllPoints(s)
+            c:CreateTexture(nom .. "BracketFrameClosedBracket", "OVERLAY")
+            c:CreateTexture(nom .. "BracketFrameOpenBracket", "OVERLAY"):SetPoint("CENTER", c, "CENTER", 0, -1)
+            CreateFrame("Frame", nom .. "Shine", s):SetPoint("CENTER", s, "CENTER", -1, 0)
+            if i > 1 then s:SetPoint("LEFT", _G["ItemSocketingSocket" .. (i - 1)], "RIGHT", 40, 0) end
+        end
+        bouton("ItemSocketingSocketButton", f, 162, "Socket Gems"):SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 33)
+        f:Hide()
+    end
+    -- ItemSocketingFrame_Update : les chasses a 62, la largeur selon la
+    -- plage (269 + 28 et 240 + 28 sans barre), puis la description remplie
+    local function largeursClient()
+        local offset = (ItemSocketingScrollFrame:GetVerticalScrollRange() ~= 0) and 0 or 28
+        ItemSocketingScrollFrame:SetWidth(269 + offset)
+        ItemSocketingDescription:SetMinimumWidth(ITEM_SOCKETING_DESCRIPTION_MIN_WIDTH + offset, 1)
+        ItemSocketingDescription:SetSocketedItem()
+    end
+    function ItemSocketingFrame_Update()
+        local n = GetNumSockets()
+        ItemSocketingSocket1:ClearAllPoints()
+        ItemSocketingSocket1:SetPoint("BOTTOM", ItemSocketingFrame, "BOTTOM", (n == 3 and -75) or (n == 2 and -35) or 0, 62)
+        for i = 1, 3 do
+            local s = _G["ItemSocketingSocket" .. i]
+            if i <= n then s:Show() else s:Hide() end
+        end
+        SetPortraitToTexture(ItemSocketingFramePortrait, SERTISSAGE.icone)
+        largeursClient()
+    end
+    function ItemSocketingSocketButton_OnScrollRangeChanged() largeursClient() end
+
+    -- ------------------------------------------------ les boites de dialogue
+    -- StaticPopup.xml : quatre boites a Backdrop, une croix chacune ;
+    -- StaticPopup_Show y pose le type et repose les images de la croix
+    for i = 1, 4 do
+        local f = CreateFrame("Frame", "StaticPopup" .. i, UIParent)
+        f:SetWidth(320) f:SetHeight(72)
+        f:SetBackdrop({ bgFile = fichier("Interface", "DialogFrame", "UI-DialogBox-Background"),
+            edgeFile = fichier("Interface", "DialogFrame", "UI-DialogBox-Border") })
+        f:CreateFontString("StaticPopup" .. i .. "Text", "ARTWORK")
+        croix("StaticPopup" .. i .. "CloseButton", f):SetPoint("TOPRIGHT", f, "TOPRIGHT", -3, -3)
+        f:Hide()
+    end
+    local montrerAvant = StaticPopup_Show
+    function StaticPopup_Show(quoi, ...)
+        local r = montrerAvant(quoi, ...)
+        local info = StaticPopupDialogs and StaticPopupDialogs[quoi]
+        if not info then return r end
+        local f, b = StaticPopup1, StaticPopup1CloseButton
+        f.which = quoi
+        if info.closeButton then
+            if info.closeButtonIsHide then
+                b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-HideButton-Up"))
+                b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-HideButton-Down"))
+            else
+                b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+                b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Down"))
+            end
+            b:Show()
+        else
+            b:Hide()
+        end
+        f:Show()
+        return f
+    end
+
+    -- ------------------------------------------------ les metiers (a la demande)
+    -- Blizzard_TradeSkillUI.xml / .lua de 3.3.5 : les cadres que l'addon
+    -- touche, et ce que ses fonctions font. METIER : les donnees du client.
+    CREATE, CREATE_ALL, CRAFT_IS_MAKEABLE = "Create", "Create All", "Have Materials"
+    LINK_TRADESKILL_TOOLTIP = "Click here to create a link to your profession."
+    TRADE_SKILL_TITLE, TRADE_SKILLS_DISPLAYED, MAX_TRADE_SKILL_REAGENTS = "%s", 8, 8
+    GameFontRedSmall = GameFontRedSmall or "GameFontRedSmall"
+    -- recettes[i] = { nom, type, fabricables, deplie, verbe, icone, lien,
+    -- mini, maxi, reactifs = { { nom, icone, requis, possede, lien } },
+    -- outils = { nom, a, ... }, recharge, description }
+    METIER = { ligne = { "Tailoring", 150, 300 }, choisi = 0, rep = 1, recettes = {}, faits = {},
+               appels = {}, icones = { Tailoring = fichier("Interface", "Icons", "Trade_Tailoring") },
+               emplacements = { "Chest", "Legs" }, filtreEmpl = { [0] = 1 } }
+    function GetTradeSkillLine() local l = METIER.ligne return l[1], l[2], l[3], l[4] end
+    function GetNumTradeSkills() return #METIER.recettes end
+    function GetTradeSkillInfo(i) local r = METIER.recettes[i] if r then return r[1], r[2], r[3], r[4], r[5] end end
+    function GetTradeSkillSelectionIndex() return METIER.choisi end
+    function SelectTradeSkill(i) METIER.choisi = i end
+    function GetTradeSkillIcon(i) return METIER.recettes[i][6] end
+    function GetTradeSkillItemLink(i) return METIER.recettes[i][7] end
+    function GetTradeSkillRecipeLink(i) return "recette:" .. i end
+    function GetTradeSkillNumMade(i) local r = METIER.recettes[i] return r[8] or 1, r[9] or 1 end
+    function GetTradeSkillNumReagents(i) local r = METIER.recettes[i] return r and r.reactifs and #r.reactifs or 0 end
+    function GetTradeSkillReagentInfo(i, j) local x = METIER.recettes[i].reactifs[j] return x[1], x[2], x[3], x[4] end
+    function GetTradeSkillReagentItemLink(i, j) return METIER.recettes[i].reactifs[j][5] end
+    function GetTradeSkillTools(i) local o = METIER.recettes[i].outils if o then return (table.unpack or unpack)(o) end end
+    function GetTradeSkillCooldown(i) return METIER.recettes[i].recharge end
+    function GetTradeSkillDescription(i) return METIER.recettes[i].description end
+    function GetTradeskillRepeatCount() return METIER.rep end
+    function DoTradeSkill(i, n) table.insert(METIER.faits, { i, n }) end
+    function IsTradeSkillLinked() return METIER.lie, METIER.lieNom end
+    function GetTradeSkillListLink() return METIER.lien end
+    function TradeSkillOnlyShowMakeable(oui) METIER.fabricables = oui end
+    function SetTradeSkillItemNameFilter(t) METIER.filtreNom = t end
+    function GetTradeSkillInvSlots() return (table.unpack or unpack)(METIER.emplacements) end
+    function GetTradeSkillInvSlotFilter(i) return METIER.filtreEmpl[i] end
+    function SetTradeSkillInvSlotFilter(i, oui, seul) table.insert(METIER.appels, "empl " .. i .. " " .. oui .. " " .. seul) end
+    function ExpandTradeSkillSubClass(i) table.insert(METIER.appels, "Expand " .. i) end
+    function CollapseTradeSkillSubClass(i) table.insert(METIER.appels, "Collapse " .. i) end
+    -- BuildColoredListString (3.3.5) : nom, possede, nom, possede... ; rouge
+    -- si absent ; nil sans outil
+    function BuildColoredListString(...)
+        local n = select("#", ...)
+        if n == 0 then return nil end
+        local t = {}
+        for k = 1, n, 2 do
+            local nom, a = select(k, ...)
+            t[#t + 1] = a and nom or ("|cffff2020" .. nom .. "|r")
+        end
+        return table.concat(t, ", ")
+    end
+    CHAT_ACTIF = nil
+    function ChatEdit_InsertLink(l) if CHAT_ACTIF then CHAT_ACTIF = l return true end return false end
+    function ChatEdit_GetLastActiveWindow() return { Show = function() CHAT_ACTIF = "ouvert" end } end
+    local textureSort = GetSpellTexture
+    function GetSpellTexture(a, b)
+        if type(a) == "string" and b == nil then return METIER.icones[a] end
+        return textureSort(a, b)
+    end
+    local function batirMetiers()
+        local f = CreateFrame("Frame", "TradeSkillFrame", UIParent)
+        f:SetWidth(384) f:SetHeight(512)
+        f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+        f:SetHitRectInsets(0, 34, 0, 75)
+        f:CreateTexture("TradeSkillFramePortrait", "BACKGROUND")
+        f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "TradeSkillFrame", "UI-TradeSkill-TopLeft"))
+        f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "TradeSkillFrame", "UI-TradeSkill-TopRight"))
+        f:CreateTexture("TradeSkillFrameBottomLeftTexture", "BORDER"):SetTexture(fichier("Interface", "TradeSkillFrame", "UI-TradeSkill-BotLeft"))
+        f:CreateTexture("TradeSkillFrameBottomRightTexture", "BORDER"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-BotRight"))
+        f:CreateFontString("TradeSkillFrameTitleText", "ARTWORK")
+        f:CreateFontString("TradeSkillFrameDummyString", "ARTWORK")
+        f:CreateTexture("TradeSkillHorizontalBarLeft", "ARTWORK"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-HorizontalBar"))
+        f:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "ClassTrainerFrame", "UI-ClassTrainer-HorizontalBar"))
+        bouton("TradeSkillLinkButton", f, 32)
+        local c = CreateFrame("CheckButton", "TradeSkillFrameAvailableFilterCheckButton", f)
+        c:SetWidth(24) c:SetHeight(24)
+        CreateFrame("StatusBar", "TradeSkillRankFrame", f)
+        CreateFrame("EditBox", "TradeSkillFrameEditBox", f)
+        local ex = CreateFrame("Frame", "TradeSkillExpandButtonFrame", f)
+        bouton("TradeSkillCollapseAllButton", ex, 40)
+        CreateFrame("Frame", "TradeSkillInvSlotDropDown", f)
+        CreateFrame("Frame", "TradeSkillSubClassDropDown", f)
+        CreateFrame("Frame", "TradeSkillHighlightFrame", f)
+        for i = 1, 8 do bouton("TradeSkillSkill" .. i, f, 293) end
+        defilement("TradeSkillListScrollFrame", f, 296, 130)
+        local d = defilement("TradeSkillDetailScrollFrame", f, 297, 176)
+        CreateFrame("Button", "TradeSkillSkillIcon", d)
+        for i = 1, 8 do CreateFrame("Button", "TradeSkillReagent" .. i, d) end
+        bouton("TradeSkillCreateButton", f, 80, "Create")
+        bouton("TradeSkillCancelButton", f, 80, "Exit")
+        bouton("TradeSkillCreateAllButton", f, 80, "Create All")
+        bouton("TradeSkillDecrementButton", f, 23)
+        CreateFrame("EditBox", "TradeSkillInputBox", f)
+        bouton("TradeSkillIncrementButton", f, 23)
+        croix("TradeSkillFrameCloseButton", f)
+        f:Hide()
+    end
+    -- le client : TradeSkillFrame_SetSelection choisit la recette (un
+    -- en-tete se replie) ; TradeSkillFrame_Update remplit ses lignes ;
+    -- TradeSkillFrame_Show ouvre et choisit la premiere
+    function TradeSkillFrame_SetSelection(id)
+        local nom, genre, _, deplie = GetTradeSkillInfo(id)
+        if genre == "header" then
+            if deplie then CollapseTradeSkillSubClass(id) else ExpandTradeSkillSubClass(id) end
+            return
+        end
+        TradeSkillFrame.selectedSkill = id
+        SelectTradeSkill(id)
+    end
+    function TradeSkillFrame_Update()
+        TradeSkillFrameTitleText:SetText(GetTradeSkillLine())
+        for i = 1, 8 do _G["TradeSkillSkill" .. i]:Show() end
+    end
+    function TradeSkillFrame_Show()
+        TradeSkillFrame:Show()
+        TradeSkillOnlyShowMakeable(TradeSkillFrameAvailableFilterCheckButton:GetChecked())
+        local premier = 1
+        for i = 1, GetNumTradeSkills() do
+            local _, genre = GetTradeSkillInfo(i)
+            if genre ~= "header" then premier = i break end
+        end
+        TradeSkillFrame_SetSelection(premier)
+        TradeSkillFrame_Update()
+    end
+
+    local prevenir = function(nom)
+        for _, c in ipairs(FRAMES) do
+            if c.events and c.events["ADDON_LOADED"] and c.scripts and c.scripts.OnEvent then
+                c.scripts.OnEvent(c, "ADDON_LOADED", nom)
+            end
+        end
+    end
+    local avant = CHARGER_ADDON
+    function CHARGER_ADDON(nom)
+        if nom == "Blizzard_TrainerUI" then
+            batirMaitre()
+            prevenir(nom)
+            return
+        elseif nom == "Blizzard_ItemSocketingUI" then
+            batirSertissage()
+            prevenir(nom)
+            return
+        elseif nom == "Blizzard_TradeSkillUI" then
+            batirMetiers()
+            prevenir(nom)
+            return
+        end
+        return avant(nom)
+    end
+end
 """
 
 
@@ -7832,7 +8384,8 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua",
+             "Trainer.lua", "Taxi.lua", "Stable.lua", "Socketing.lua", "Dialogues.lua", "TradeSkill.lua", "ProfessionsBook.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -11019,8 +11572,10 @@ def main():
     micro = g.ForeverUIMicroMenu
     print("micro-menu : %d x %d pour %d boutons" % (
         micro.width, micro.height, len(list(g.ForeverUI.MicroButtons.values()))))
-    assert micro.width == 8 * 32 + 7 * (-5), "le bandeau a la largeur de ses huit boutons (221), sans rallonge"
-    # LES BOUTONS JcJ ET AIDE SONT RETIRES (2026-09-26) : huit boutons, et
+    # neuf boutons depuis le 2026-09-28 : celui des metiers, apres la feuille
+    # de personnage
+    assert micro.width == 9 * 32 + 8 * (-5), "le bandeau a la largeur de ses neuf boutons (248), sans rallonge"
+    # LES BOUTONS JcJ ET AIDE SONT RETIRES (2026-09-26) : neuf boutons, et
     # ceux du client restent caches meme quand le client les reprend
     noms = [e.bouton.name for e in g.ForeverUI.MicroButtons.values()]
     g.VehicleMenuBar_MoveMicroButtons()
@@ -11028,7 +11583,7 @@ def main():
     g.HelpMicroButton.Show(g.HelpMicroButton)
     print("   micro-menu sans JcJ ni Aide : %d boutons, JcJ visible=%s, Aide visible=%s" % (
         len(noms), g.PVPMicroButton.shown, g.HelpMicroButton.shown))
-    assert "PVPMicroButton" not in noms and "HelpMicroButton" not in noms and len(noms) == 8
+    assert "PVPMicroButton" not in noms and "HelpMicroButton" not in noms and len(noms) == 9
     assert not g.PVPMicroButton.shown and not g.HelpMicroButton.shown, "les boutons du client ne reviennent pas"
     # LA DEMANDE D'AIDE AU MENU ECHAP, entre AddOns (ACP) et Log Out, une
     # section de chaque cote. Depuis le 2026-09-28 (menu et reglages, etape
@@ -11081,7 +11636,7 @@ def main():
         assert [(q[0], q[1].name, q[2], q[3], q[4]) for q in pts_perf] == [("BOTTOM", "MainMenuMicroButton", "BOTTOM", 0, 0)], (fn, pts_perf)
     print("   latence apres appui et relachement : une seule ancre, BOTTOM (0, 0)")
 
-    b1, b2 = g.CharacterMicroButton, g.SpellbookMicroButton
+    b1, b2 = g.CharacterMicroButton, g.ForeverUIProfessionMicroButton
     print("bouton de micro-menu : %d x %d (32 x 46 : l'ouverture du cadre ; 28 x 58 d'origine)" % (
         b1.width, b1.height))
     assert b1.width == 32 and b1.height == 46, "le bouton ne remplit pas l'ouverture du cadre"
@@ -11187,9 +11742,9 @@ def main():
     assert len(separateurs) == 5
 
     # ------------------------------------------------- la rangee complete
-    # le bandeau fait 221 (sans rallonge) : barre d'action et sacs s'en
-    # rapprochent -- 116,5 -/+ 110,5, puis -4,5 et +7
-    for nom, attendu in (("micromenu", (116.5, 6)), ("actionbar", (1.5, 2)), ("sacs", (234, 2))):
+    # le bandeau fait 248 (sans rallonge) : barre d'action et sacs s'en
+    # rapprochent -- 116,5 -/+ 124, puis -4,5 et +7
+    for nom, attendu in (("micromenu", (116.5, 6)), ("actionbar", (-12, 2)), ("sacs", (247.5, 2))):
         d = g.ForeverUI.Layout.systems[nom].defaults
         print("%-10s : %s sur %s (%.1f, %.1f)" % (nom, d.point, d.relativePoint, d.x, d.y))
         assert abs(d.x - attendu[0]) < 1e-6 and abs(d.y - attendu[1]) < 1e-6, (
@@ -18544,6 +19099,937 @@ def main():
     assert all(r.alpha == 0 for r in g.GuildRegistrarGreetingFrame.regions.values() if r.kind == "texture" and "BotLeftPatch" in str(r.texture))
     print("   338 x 424 a portrait (48 : livre, charte, PNJ), parchemin de camelot (357 / 334), croix ; livre : matiere, page, fleches, defilement, barre si besoin et page pleine ; petition et registre : places et boutons de camelot")
 
+    # ------------------------------------------------- LES PNJ, ETAPE 3
+    print("\nle maitre de vol :")
+    tf = g.TaxiFrame
+    vh = tf.foreverHabit
+    req = lua.eval("rawequal")
+    assert vh and (tf.width, tf.height) == (590, 608)
+    art = [r for r in tf.regions.values() if r.kind == "texture" and "UI-TaxiFrame-" in str(r.texture)]
+    assert len(art) == 4 and all(r.alpha == 0 for r in art), "l'art de 3.3.5 eteint"
+    assert g.TaxiPortrait.alpha == 0 and g.TaxiMerchant.alpha == 0 and g.TaxiMap.alpha == 0
+    assert not g.TaxiRouteMap.shown and g.TaxiRouteMap.foreverSuppressed, "ses boutons et ses traits avec elle"
+    # le cadre : le metal bronze de camelot sans portrait (choix de
+    # l'utilisateur), dans un cadre fils au-dessus de la carte et des boutons ;
+    # fond de roche et stries de PortraitFrameTemplate
+    assert vh.roche.layer == "BACKGROUND" and pts(vh.roche)[0][2:] == ["TOPLEFT", 2, -21] and pts(vh.roche)[1][2:] == ["BOTTOMRIGHT", -2, 2]
+    assert vh.stries.height == 43 and pts(vh.stries)[0][2:] == ["TOPLEFT", 6, -21]
+    me = vh.metal
+    hg = me.TopLeftCorner
+    assert atlas_jeu(hg, "ui-frame-metal-cornertopleft") and pts(hg)[0][2:] == ["TOPLEFT", -8, 16] and req(pts(hg)[0][1], tf)
+    assert atlas_jeu(me.TopEdge, "_ui-frame-metal-edgetop") and atlas_jeu(me.RightEdge, "!ui-frame-metal-edgeright")
+    assert atlas_jeu(me.BottomRightCorner, "ui-frame-metal-cornerbottomright") and pts(me.BottomRightCorner)[0][2:] == ["BOTTOMRIGHT", 2, -8]
+    assert hg.owner.frameLevel == tf.GetFrameLevel(tf) + 20
+    assert not any("uiframe" + chr(92) in str(r.texture).replace("uiframemetal", "") for r in tf.regions.values()), "plus de pieces UI-Frame grises"
+    c = vh.carte
+    assert c.layer == "BORDER" and pts(c)[0][2:] == ["TOPLEFT", 4, -24] and pts(c)[1][2:] == ["BOTTOMRIGHT", -6, 4]
+    assert all(t.layer == "ARTWORK" for t in vh.lisere.values()), "le lisere de l'encart en ARTWORK"
+    ro = vh.routes
+    assert req(ro.allPoints, c) and ro.frameLevel == tf.GetFrameLevel(tf) + 1
+    assert vh.titre.text == "Flight Map" and pts(vh.titre)[0][2:] == ["TOP", 0, -5]
+    ct = vh.titre.owner
+    assert ct.height == 20 and pts(ct)[0][2:] == ["TOPLEFT", 0, -1] and ct.frameLevel > hg.owner.frameLevel
+    x = g.TaxiCloseButton
+    assert (x.width, x.height) == (24, 24) and pts(x)[-1][2:] == ["TOPRIGHT", -2, 1]
+    # les Royaumes de l'Est : l'image de camelot (1463), les positions du monde
+    # (DBC) passees par la carte de vol de 3.3.5 puis reportees sur son carre
+    TX = (-16530, -16530, 12270, 12270)
+    CM = (-15980, -11880, 5817, 9917)
+    def taxi(mx, my):
+        return (TX[3] - my) / (TX[3] - TX[1]), (mx - TX[0]) / (TX[2] - TX[0])
+    def camelot(mx, my):
+        return (CM[3] - my) / (CM[3] - CM[1]) * 580, (mx - CM[0]) / (CM[2] - CM[0]) * 580
+    monde = [(-8835.76, 490.08), (-4821.13, -1152.4), (-10628.3, 1037.2), (2269.51, -5341.63), (6975.0, -4765.0)]
+    nd = [taxi(*m) for m in monde]
+    lua.execute("""
+        TAXI_CARTE = "Interface\\\\TaxiFrame\\\\TAXIMAP0"
+        TAXI_NOEUDS = { { %r, %r, "CURRENT", "Stormwind" }, { %r, %r, "REACHABLE", "Ironforge", 150 },
+                        { %r, %r, "REACHABLE", "Sentinel Hill", 300 }, { %r, %r, "DISTANT", "Light's Hope" },
+                        { %r, %r, "DISTANT", "Silvermoon" }, { 0.9, 0.9, "NONE", "?" } }
+        TAXI_TRAJETS = { [2] = { { %r, %r, %r, %r } }, [3] = { { %r, %r, %r, %r }, { %r, %r, %r, %r } } }
+        TaxiFrame.scripts.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+        TaxiFrame.hooks.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+    """ % (nd[0] + nd[1] + nd[2] + nd[3] + nd[4] + nd[0] + nd[1] + nd[0] + nd[1] + nd[1] + nd[2]))
+    V = g.ForeverUI.MaitreDeVol
+    assert tf.shown and V.imageCamelot and c.texture.endswith("taximap-1463")
+    assert list(c.texcoord.values()) == [0, 1, 0, 1]
+    B = vh.boutons
+    for i in range(4):
+        b = B[i + 1]
+        ex, ey = camelot(*monde[i])
+        assert abs(b.x - ex) < 1e-6 and abs(b.y - ey) < 1e-6, (i, b.x, ex, b.y, ey)
+        p = pts(b)[-1]
+        assert p[0] == "CENTER" and req(p[1], c) and p[2:] == ["BOTTOMLEFT", int(ex + 0.5), int(ey + 0.5)]
+    print("   Hurlevent sur l'image de camelot : (%d, %d) depuis le bas-gauche de 580" % (pts(B[1])[-1][3], pts(B[1])[-1][4]))
+    assert B[5] is None and B[6] is None, "Lune-d'argent (Burning Crusade) et un point inconnu : pas de bouton"
+    b1, b2, b3, b4 = B[1], B[2], B[3], B[4]
+    assert (b1.width, b1.height) == (16, 16) and req(b1.parent, ro)
+    assert b1._normal.texture.endswith("ui-taxi-icon-green") and b2._normal.texture.endswith("ui-taxi-icon-white")
+    assert b4._normal.texture.endswith("ui-taxi-icon-nub")
+    l1 = b1._highlight
+    assert l1.texture.endswith("ui-taxi-icon-highlight") and (l1.width, l1.height) == (32, 32) and pts(l1)[-1][2:] == ["CENTER", 0, 0]
+    assert (b1._highlight.alpha, b2._highlight.alpha, b4._highlight.alpha) == (0, 1, 0)
+    assert b1.shown and b2.shown and b3.shown and not b4.shown, "le lointain cache hors d'un trajet"
+    # les vols directs : un seul (Hurlevent -> Forgefer), trace par
+    # DrawRouteLine (le DrawLine de camelot), epaisseur 32
+    tr = vh.traits
+    t1 = tr[1]
+    assert t1.shown and t1.texture.endswith("ui-taxi-line") and t1.layer == "BACKGROUND" and req(t1.owner, ro)
+    assert list(t1.trace.values()) == [b1.x, b1.y, b2.x, b2.y, 32] and tr[2] is None
+    # le survol d'un joignable : prix, etapes de son trajet
+    b3.scripts.OnEnter(b3)
+    bulle = g.GameTooltip
+    assert bulle.anchor == "ANCHOR_RIGHT" and list(bulle.lignes.values()) == ["Sentinel Hill"] and bulle.argent == 300
+    assert g.TAXI_COURANT == 3
+    assert list(tr[1].trace.values()) == [b1.x, b1.y, b2.x, b2.y, 32] and list(tr[2].trace.values()) == [b2.x, b2.y, b3.x, b3.y, 32]
+    assert tr[1].shown and tr[2].shown
+    b3.scripts.OnLeave(b3)
+    assert not bulle.shown and tr[2].shown, "les etapes restent (camelot ne retrace qu'au survol du courant)"
+    # le survol du point courant : « vous etes ici », les vols directs
+    b1.scripts.OnEnter(b1)
+    assert list(bulle.lignes.values()) == ["Stormwind", "You are here"]
+    assert tr[1].shown and not tr[2].shown
+    b1.scripts.OnLeave(b1)
+    b2.scripts.OnClick(b2, "LeftButton")
+    assert list(g.TAXI_PRIS.values())[-1] == 2
+    # Lune-d'argent : le point courant est en Burning Crusade -> l'image de 3.3.5
+    lua.execute("""
+        TaxiFrame:Hide()
+        TAXI_NOEUDS[1][3], TAXI_NOEUDS[5][3] = "REACHABLE", "CURRENT"
+        TaxiFrame.scripts.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+        TaxiFrame.hooks.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+    """)
+    assert not V.imageCamelot and c.texture.endswith("TAXIMAP0")
+    assert abs(B[5].x - nd[4][0] * 580) < 1e-6 and abs(B[5].y - nd[4][1] * 580) < 1e-6 and B[5].shown
+    # Kalimdor : le meme carre qu'en 3.3.5, l'image taximap1-classic
+    lua.execute("""
+        TaxiFrame:Hide()
+        TAXI_CARTE = "Interface\\\\TaxiFrame\\\\TAXIMAP1"
+        TAXI_NOEUDS = { { 0.628, 0.557, "CURRENT", "Orgrimmar" }, { 0.557, 0.47, "REACHABLE", "Crossroads", 50 } }
+        TAXI_TRAJETS = { [2] = { { 0.628, 0.557, 0.557, 0.47 } } }
+        TaxiFrame.scripts.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+        TaxiFrame.hooks.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+    """)
+    assert V.imageCamelot and c.texture.endswith("taximap1-classic")
+    assert abs(B[1].x - 0.628 * 580) < 1e-6 and abs(B[1].y - 0.557 * 580) < 1e-6
+    assert not B[3].shown and not B[4].shown, "les boutons d'avant sont eteints"
+    # l'Outreterre : l'image de 3.3.5, et l'ecartement de camelot (18, un
+    # lointain ne pousse pas un point qui ne l'est pas)
+    lua.execute("""
+        TaxiFrame:Hide()
+        TAXI_CARTE = "Interface\\\\TaxiFrame\\\\TAXIMAP530"
+        TAXI_NOEUDS = { { 0.5, 0.5, "CURRENT", "a" }, { 0.5 + 5 / 580, 0.5, "REACHABLE", "b" },
+                        { 0.2, 0.3, "DISTANT", "c" }, { 0.2 + 3 / 580, 0.3, "REACHABLE", "d" } }
+        TAXI_TRAJETS = {}
+        TaxiFrame.scripts.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+        TaxiFrame.hooks.OnEvent(TaxiFrame, "TAXIMAP_OPENED")
+    """)
+    assert not V.imageCamelot and c.texture.endswith("TAXIMAP530")
+    def centre(i):
+        p = pts(B[i])[-1]
+        return p[3], p[4]
+    print("   ecartement : %s" % [centre(i) for i in (1, 2, 3, 4)])
+    assert centre(1) == (290, 290) and centre(2) == (308, 290), "trop pres du premier : repousse a 18"
+    assert centre(3) == (116, 174) and centre(4) == (119, 174), "un lointain ne pousse pas un point qui ne l'est pas"
+    lua.execute("TaxiFrame:Hide() TAXI_CARTE = 'Interface\\\\TaxiFrame\\\\TAXIMAP0'")
+    print("   590 x 608, cadre metal bronze sans portrait, image de camelot (1463 / 1464) ou de 3.3.5, boutons et trajets de camelot")
+
+    print("\nl'etable :")
+    ps = g.PetStableFrame
+    eh = ps.foreverHabit
+    assert eh and list(ps.hitRect.values()) == [0, 0, 0, 0]
+    art = [r for r in ps.regions.values() if r.kind == "texture" and "UI-PetStable-" in str(r.texture)]
+    assert len(art) == 4 and all(r.alpha == 0 for r in art) and g.PetStableFramePortrait.alpha == 0 and g.PetStableTitleLabel.alpha == 0
+    assert eh.titre.text == "Stables" and (eh.portrait.width, eh.portrait.height) == (48, 48)
+    sc = eh.scene
+    assert pts(sc)[0][2:] == ["TOPLEFT", 7, -72] and pts(sc)[1][2:] == ["BOTTOMRIGHT", -10, 140]
+    assert pts(g.PetStableModel)[0][2:] == ["TOPLEFT", 0, 0] and lua.eval("rawequal")(pts(g.PetStableModel)[0][1], sc)
+    o = eh.ombreFamilier
+    assert atlas_jeu(o, "perks-char-shadow") and (o.width, o.height) == (410, 90) and pts(o)[0][2:] == ["CENTER", -8, -80] and o.alpha == 0.6
+    assert eh.marbre.layer == "BACKGROUND" and eh.fond.layer == "BORDER" and o.layer == "ARTWORK"
+    # les commandes : trois boutons carres de 32 a -6, au-dessus de la scene
+    gauche, droite, retour = eh.boutons.values()
+    assert gauche.name == "PetStableModelRotateLeftButton" and (gauche.width, gauche.height) == (32, 32)
+    assert atlas_jeu(gauche.foreverCarre.fond, "common-button-square-gray-up") and atlas_jeu(retour.foreverCarre.image, "common-icon-undo")
+    pd = pts(droite)[-1]
+    assert pd[0] == "LEFT" and lua.eval("rawequal")(pd[1], gauche) and pd[2:] == ["RIGHT", -6, 0] and eh.commandes.width == 3 * 32 - 12
+    assert pts(eh.commandes)[0][2:] == ["TOP", 0, -10]
+    # apres PetStable_Update : fond de la specialisation, rangee, experience
+    lua.execute("AVEC_FAMILIER = true PetStableFrame:Show() PetStable_Update()")
+    assert eh.fond.shown and atlas_jeu(eh.fond, "hunter-stable-bg-art_ferocity") and eh.fond.alpha == 0.8
+    assert pts(g.PetStableCurrentPet)[-1][2:] == ["BOTTOM", -123, -23] and lua.eval("rawequal")(pts(g.PetStableCurrentPet)[-1][1], sc)
+    lua.execute("ETABLE.places = 4 PetStable_Update()")
+    assert pts(g.PetStableCurrentPet)[-1][2:] == ["BOTTOM", -123, -43], "sans achat, la rangee descend (camelot)"
+    lua.execute("ETABLE.places = 2 ETABLE.familiers[0][5] = 'Inconnue' PetStable_Update()")
+    assert not eh.fond.shown, "une specialisation inconnue laisse le marbre"
+    lua.execute("ETABLE.familiers[0][5] = 'Ferocity' PetStable_Update()")
+    etiq = [r for r in g.PetStableStabledPet2.regions.values() if r.kind == "fontstring" and r.text == "Stabled Pets:"][0]
+    assert pts(etiq)[-1][2:] == ["TOP", 26, 6], "centree sur les quatre places"
+    assert pts(g.PetStableSlotText)[-1][2:] == ["BOTTOM", 0, 55] and pts(g.PetStableCostLabel)[-1][2:] == ["BOTTOMLEFT", 70, 30]
+    assert pts(g.PetStablePurchaseButton)[-1][2:] == ["BOTTOMRIGHT", -75, 25] and g.PetStablePurchaseButton.width == 80
+    assert pts(g.PetStableMoneyFrame)[0][2:] == ["BOTTOMLEFT", 10, 7] and pts(g.PetStableMoneyFrame)[1][2:] == ["BOTTOMRIGHT", -10, 7]
+    bg, bm, bd = eh.bourse.values()
+    assert atlas_jeu(bg, "common-coinbox-left") and (bg.width, bg.height) == (8, 17) and atlas_jeu(bd, "common-coinbox-right")
+    assert pts(g.PetStableLevelText)[-1][2:] == ["TOP", 0, -34]
+    # l'experience : celle du familier invoque, et de lui seul
+    xp = g.ForeverUIPetStableExpBar
+    assert xp.shown and xp.texte.text == "100 / 400  (25%)" and (xp.width, xp.height) == (322, 10)
+    assert pts(xp)[0][2:] == ["BOTTOM", 0, 10] and lua.eval("rawequal")(pts(xp)[0][1], sc)
+    lua.execute("ETABLE.choisi = 1 ETABLE.familiers[1] = { 'i1', 'Rox', 70, 'Bear', 'Tenacity' } PetStable_Update()")
+    assert not xp.shown, "un familier de l'etable : pas d'experience connue"
+    assert eh.fond.shown and atlas_jeu(eh.fond, "hunter-stable-bg-art_tenacity")
+    lua.execute("ETABLE.choisi = 0 ETABLE.familiers[1] = nil PetStable_Update()")
+    # les commandes : sur la scene seulement, a 0,5, a 1 sur un bouton
+    dessus = g.PetStablePetInfo.parent
+    assert pts(g.PetStablePetInfo)[-1][2:] == ["TOPLEFT", 4, -6]
+    dessus.scripts.OnUpdate(dessus)
+    assert not eh.commandes.shown
+    sc.souris = True
+    dessus.scripts.OnUpdate(dessus)
+    assert eh.commandes.shown and eh.commandes.alpha == 0.5
+    gauche.souris = True
+    dessus.scripts.OnUpdate(dessus)
+    assert eh.commandes.alpha == 1
+    gauche.souris = False
+    sc.souris = False
+    dessus.scripts.OnUpdate(dessus)
+    assert not eh.commandes.shown
+    lua.execute("PetStableFrame:Hide()")
+    print("   384 x 512 a portrait, scene 367 x 300 (fond de la specialisation, ombre, commandes), rangee centree, bourse de camelot")
+
+    print("\nle maitre :")
+    lua.execute("CHARGER_ADDON('Blizzard_TrainerUI')")
+    cf = g.ClassTrainerFrame
+    th = cf.foreverHabit
+    assert th and (cf.width, cf.height) == (338, 424) and list(cf.hitRect.values()) == [0, 0, 0, 0]
+    art = [r for r in cf.regions.values() if r.kind == "texture" and ("UI-ClassTrainer-" in str(r.texture))]
+    assert len(art) == 6 and all(r.alpha == 0 for r in art), "l'art de 3.3.5 et la barre horizontale eteints"
+    assert all(g["ClassTrainerSkill%d" % i].alpha == 0 and g["ClassTrainerSkill%d" % i].mouseEnabled is False for i in range(1, 12))
+    assert g.ClassTrainerListScrollFrame.alpha == 0 and g.ClassTrainerDetailScrollFrame.alpha == 0 and g.ClassTrainerSkillIcon.mouseEnabled is False
+    assert g.ClassTrainerGreetingText.alpha == 0 and not g.ClassTrainerCancelButton.shown and not g.ClassTrainerExpandButtonFrame.shown
+    # le filtre : le bouton « b » de camelot, 18 de haut, texte + 60
+    dd = g.ClassTrainerFrameFilterDropDown
+    assert pts(dd)[-1][2:] == ["TOPRIGHT", -13, -35] and dd.height == 18 and dd.foreverHauteur == 18
+    assert all(g["ClassTrainerFrameFilterDropDown" + s].alpha == 0 for s in ("Left", "Middle", "Right"))
+    fg, fm, fd = dd.foreverFond.values()
+    assert fg.width == 8 and fd.width == 18 and fg.texture == g.ForeverUI.AtlasEntry("common-dropdown-b-button-c60")[1]
+    assert dd.width == len("Filter") * 6 + 60, "la largeur suit le texte (+ 60)"
+    assert (pts(g.ClassTrainerTrainButton)[-1][2:], g.ClassTrainerTrainButton.width) == (["BOTTOMRIGHT", -6, 4], 80)
+    ca = th.cadreArgent
+    assert (ca.width, ca.height) == (148, 34) and pts(ca)[0][2:] == ["BOTTOMLEFT", 5, -9]
+    assert pts(g.ClassTrainerMoneyFrame)[-1][2:] == ["RIGHT", 8, 6]
+    # la liste : un en-tete, ses competences en retrait de 10
+    lua.execute("""
+        MAITRE.services = {
+            { "Arcane", "", "header", true },
+            { "Arcane Missiles", "Rank 2", "available", nil, "i-missiles", 20, 1500 },
+            { "Blink", "", "unavailable", nil, "i-blink", 30, 800 },
+            { "Frostbolt", "Rank 1", "used", nil, "i-bolt", 4, 100 },
+        }
+        ClassTrainerFrame:Show()
+        ClassTrainerFrame.selectedService = 2
+        ClassTrainerFrame_Update()
+    """)
+    li = th.liste
+    cat = th.categories[1]
+    c1, c2, c3 = th.competences[1], th.competences[2], th.competences[3]
+    print("   liste : %s | %s (%s) %r | %s" % (cat.nom.text, c1.titre.text, c1.rang.text, c1.prerequis.text, c3.prerequis.text))
+    assert cat.nom.text == "Arcane" and cat.height == 25 and pts(cat)[-1][2:] == ["TOPLEFT", 0, -1]
+    assert atlas_jeu(cat.fleche, "professions-recipe-header-collapse"), "depliee : la fleche de repli"
+    assert (c1.titre.text, c1.rang.text) == ("Arcane Missiles", "(Rank 2)") and c1.prerequis.text == "Requires: Level |cffffffff20|r"
+    assert pts(c1)[-1][2:] == ["TOPLEFT", 10, -(1 + 25)] and c1.height == 47
+    assert pts(c2)[-1][2:] == ["TOPLEFT", 10, -(1 + 25 + 47)]
+    assert c1.choix.shown and not c2.choix.shown, "la competence choisie"
+    assert c2.voile.shown and c2.icone.desaturated and not c1.voile.shown, "indisponible : voile et icone grisee"
+    assert c1.prix.shown and g.ForeverUITrainerSkill1Money.argent == 1500 and g.ForeverUITrainerSkill1Money.couleur == "red", "trop cher : en rouge"
+    assert c3.prerequis.text == "Already known" and not c3.prix.shown, "connue : ni prix ni prerequis"
+    # tout tient : pas de barre, la liste prend sa place (318)
+    assert not th.barre.shown and li.width == 318
+    assert c1.width == 318 - 1 - 10 and cat.width == 318 - 1
+    # un clic : ce que fait la ligne du client
+    c2.scripts.OnClick(c2, "LeftButton")
+    assert g.ClassTrainerFrame.selectedService == 3 and c2.choix.shown and not c1.choix.shown
+    cat.scripts.OnClick(cat)
+    assert list(g.MAITRE.appels.values())[-1] == "Collapse 1", "l'en-tete se replie par la fonction du client"
+    # beaucoup de competences : la barre, et la liste a sa place de camelot
+    lua.execute("""
+        for i = 1, 12 do table.insert(MAITRE.services, { "Sort " .. i, "", "available", nil, "i", 1, 10 }) end
+        ClassTrainerFrame_Update()
+    """)
+    assert th.barre.shown and li.width == 302
+    # le rang d'un maitre de metier, lu dans les competences du joueur
+    lua.execute("""
+        MAITRE.metier = "Tailoring"
+        COMPETENCES_MAITRE = { { "Professions", 1 }, { "Tailoring", nil, nil, 150, nil, 5, 300 } }
+        AVANT_NB, AVANT_INFO = GetNumSkillLines, GetSkillLineInfo
+        GetNumSkillLines = function() return #COMPETENCES_MAITRE end
+        GetSkillLineInfo = function(j) local c = COMPETENCES_MAITRE[j] return c[1], c[2], c[3], c[4], c[5], c[6], c[7] end
+        ClassTrainerFrame_Update()
+    """)
+    rg = th.rang
+    print("   rang : %s" % rg.texte.text)
+    assert rg.shown and rg.texte.text == "150 |cff20ff20(+5)|r/300" and pts(rg)[0][2:] == ["TOPLEFT", 64, -35] and (rg.width, rg.height) == (130, 18)
+    lua.execute("MAITRE.metier = nil ClassTrainerFrame_Update() ClassTrainerFrame:Hide() GetNumSkillLines, GetSkillLineInfo = AVANT_NB, AVANT_INFO")
+    assert not th.rang.shown
+    print("   338 x 424 a portrait, liste de camelot (en-tetes, competences, prix, prerequis), barre si besoin, filtre b, rang du metier")
+
+    print("\nle sertissage :")
+    lua.execute("CHARGER_ADDON('Blizzard_ItemSocketingUI')")
+    sf = g.ItemSocketingFrame
+    sh = sf.foreverHabit
+    assert sh and (sf.width, sf.height) == (338, 424)
+    vieux = [r for r in sf.regions.values() if (r.kind == "texture" and "UI-ItemSocketingFrame" in str(r.texture) and "ForeverUI" not in str(r.texture))
+             or (r.kind == "fontstring" and r.text == "Item Socketing")]
+    assert len(vieux) == 2 and all(r.alpha == 0 for r in vieux)
+    assert pts(sh.titre)[-1][2:] == ["TOP", 15, -5] and sh.titre.text == "Item Socketing"
+    D = sh.decor
+    assert D.cadre.frameLevel == sf.GetFrameLevel(sf) + 1 and D.parchemin.haut.height == 42 and pts(D.parchemin.haut)[0][2:] == ["TOPLEFT", 2, -21]
+    assert all((t.width, t.height) == (66, 55) for t in D.or_.values()) and len(list(D.clous.values())) == 6
+    assert D.parchemin.haut.layer == "ARTWORK" and D.ombre.hg.layer == "BACKGROUND" and list(D.clous.values())[0].layer == "BORDER"
+    assert sh.panneau.couleur.layer == "ARTWORK" and sh.panneau.lumiere.layer == "OVERLAY" and sh.encart.marbre.layer == "BORDER"
+    fx = g.ItemSocketingScrollFrame
+    assert pts(fx)[-1][2:] == ["TOPLEFT", 22, -74] and fx.frameLevel == sf.GetFrameLevel(sf) + 2 and g.ItemSocketingScrollFrameTop.alpha == 0
+    sb = g.ItemSocketingScrollFrameScrollBar
+    assert sb.foreverBarre and pts(sb)[0][2:] == ["TOPRIGHT", -14 - 4, -5 - 11]
+    # apres ItemSocketingFrame_Update : places, atlas de camelot, portrait,
+    # largeurs selon la barre
+    lua.execute("ItemSocketingFrame:Show() ItemSocketingScrollFrame.plage = 0 ItemSocketingFrame_Update()")
+    assert pts(g.ItemSocketingSocket1)[-1][2:] == ["BOTTOM", -75, 33]
+    b1 = g.ItemSocketingSocket1Background
+    assert atlas_jeu(b1, "socket-red-background") and (b1.width, b1.height) == (43, 43)
+    assert atlas_jeu(g.ItemSocketingSocket3Background, "socket-meta-background") and g.ItemSocketingSocket3Background.width == 58
+    assert atlas_jeu(g.ItemSocketingSocket2BracketFrameOpenBracket, "socket-blue-open") and pts(g.ItemSocketingSocket2BracketFrameOpenBracket)[-1][2:] == ["CENTER", 0, 0]
+    r1 = g.ItemSocketingSocket1Right
+    assert (r1.width, r1.height) == (70, 55) and [round(v, 5) for v in list(r1.texcoord.values())[:4]] == [0.28516, 0.565, 0, 0.21484]
+    assert pts(g.ItemSocketingSocket1Shine)[-1][2:] == ["CENTER", 1, 0]
+    assert sh.portrait.portrait == "i-casque"
+    # sans barre : la largeur minimale traduite a 240 + 35, et le defilement a 294
+    print("   sans barre : minimum %s, defilement %s, enfant %s" % (g.ItemSocketingDescription.minimum, fx.width, g.ItemSocketingScrollChild.width))
+    assert g.ItemSocketingDescription.minimum == 275 and fx.width == 294 and g.ItemSocketingScrollChild.width == 294
+    lua.execute("ItemSocketingScrollFrame.plage = 60 ItemSocketingSocketButton_OnScrollRangeChanged()")
+    assert g.ItemSocketingDescription.minimum == 240 and fx.width == 293 and g.ItemSocketingScrollChild.width == 259
+    lua.execute("SERTISSAGE.types = { 'Yellow' } ItemSocketingFrame_Update()")
+    assert pts(g.ItemSocketingSocket1)[-1][2:] == ["BOTTOM", 0, 33] and atlas_jeu(g.ItemSocketingSocket1Background, "socket-yellow-background")
+    ap = g.ItemSocketingSocketButton
+    assert ap.text == "Apply" and pts(ap)[-1][2:] == ["BOTTOMRIGHT", -5, 4] and (ap.width, ap.height) == (162, 22)
+    lua.execute("ItemSocketingFrame:Hide()")
+    print("   338 x 424 a portrait (l'objet), parchemin et or de camelot, chasses de camelot, description selon la barre")
+
+    print("\nles boites de dialogue :")
+    for i in range(1, 5):
+        f = g["StaticPopup%d" % i]
+        h = f.foreverHabit
+        assert h and f.backdrop is None, "le Backdrop de 3.3.5 retire"
+        fo = h.fond
+        assert fo.layer == "BACKGROUND" and fo.texture.endswith("uiframedialogboxbackgrounddark") and fo.tile and fo.vtile
+        assert pts(fo)[0][2:] == ["TOPLEFT", 7, -7] and pts(fo)[1][2:] == ["BOTTOMRIGHT", -7, 7]
+        bo = h.bord
+        assert req(bo.rect.allPoints, f)
+        pieces = list(bo.pieces.values())
+        assert len(pieces) == 9 and all(p.layer == "BORDER" and p.texture.endswith("uiframediamondmetalborder2xc60") for p in pieces)
+        assert (pieces[0].width, pieces[0].height) == (32, 32)
+        x = h.croix
+        assert (x.width, x.height) == (24, 24) and pts(x)[-1][2:] == ["TOPRIGHT", -3, -3]
+    lua.execute("""
+        StaticPopupDialogs.ESSAI_CROIX = { text = "x", button1 = "OK", closeButton = 1 }
+        StaticPopupDialogs.ESSAI_CACHE = { text = "x", button1 = "OK", closeButton = 1, closeButtonIsHide = 1 }
+        StaticPopup_Show("ESSAI_CROIX")
+    """)
+    b = g.StaticPopup1CloseButton
+    e = g.ForeverUI.AtlasEntry("redbutton-exit")
+    assert b._normal.texture == e[1] and list(b._normal.texcoord.values()) == [e[2], e[3], e[4], e[5]], "la croix de camelot, reposee apres le client"
+    e = g.ForeverUI.AtlasEntry("redbutton-exit-pressed")
+    assert b._pushed.texture == e[1] and list(b._pushed.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    lua.execute('StaticPopup1:Hide() StaticPopup_Show("ESSAI_CACHE")')
+    e = g.ForeverUI.AtlasEntry("redbutton-minicondense")
+    assert b._normal.texture == e[1] and list(b._normal.texcoord.values()) == [e[2], e[3], e[4], e[5]], "une boite qui se cache : MiniCondense"
+    lua.execute("StaticPopup1:Hide() StaticPopupDialogs.ESSAI_CROIX = nil StaticPopupDialogs.ESSAI_CACHE = nil")
+    print("   StaticPopup1 a 4 : fond sombre en mosaique a 7, bordure en losanges decoupee en neuf, croix de camelot a (-3, -3)")
+
+    print("\nles metiers :")
+    lua.execute("""
+        METIER.recettes = {
+            { "Cloth", "header", 0, 1 },
+            { "Bolt of Linen Cloth", "optimal", 3, nil, nil, "i-toile", "|cffffffff|Hitem:2996:0|h[Bolt of Linen Cloth]|h|r", 1, 1,
+              reactifs = { { "Linen Cloth", "i-lin", 2, 7, "|Hitem:2589|h" } }, outils = { "Loom", 1 }, description = "Weave." },
+            { "Brown Linen Vest", "trivial", 0, nil, nil, "i-veste", "|cff1eff00|Hitem:2568:0|h[Brown Linen Vest]|h|r", 1, 1,
+              reactifs = { { "Bolt of Linen Cloth", "i-toile", 1, 0, "|Hitem:2996|h" }, { "Coarse Thread", "i-fil", 1, 3, "|Hitem:2320|h" } },
+              recharge = 3600 },
+            { "Bags", "header", 0, nil },
+        }
+        CHARGER_ADDON('Blizzard_TradeSkillUI')
+    """)
+    OBJ = g.OBJETS
+    lua.execute("""
+        OBJETS["|cffffffff|Hitem:2996:0|h[Bolt of Linen Cloth]|h|r"] = { nom = "Bolt of Linen Cloth", qualite = 1 }
+        OBJETS["|cff1eff00|Hitem:2568:0|h[Brown Linen Vest]|h|r"] = { nom = "Brown Linen Vest", qualite = 2 }
+        OBJETS["|Hitem:2589|h"] = { nom = "Linen Cloth", qualite = 1 }
+        OBJETS["|Hitem:2996|h"] = { nom = "Bolt of Linen Cloth", qualite = 1 }
+        OBJETS["|Hitem:2320|h"] = { nom = "Coarse Thread", qualite = 1 }
+    """)
+    tf = g.TradeSkillFrame
+    mh = tf.foreverHabit
+    assert mh and (tf.width, tf.height) == (673, 594) and list(tf.hitRect.values()) == [0, 0, 0, 0]
+    vieux = [r for r in tf.regions.values() if r.kind == "texture" and isinstance(r.texture, str) and ("TradeSkill" in r.texture or "ClassTrainer" in r.texture)]
+    assert len(vieux) == 6 and all(r.alpha == 0 for r in vieux) and g.TradeSkillFramePortrait.alpha == 0
+    assert g.TradeSkillFrameTitleText.alpha == 0
+    assert all(g["TradeSkillSkill%d" % i].alpha == 0 and g["TradeSkillSkill%d" % i].mouseEnabled is False for i in range(1, 9))
+    assert g.TradeSkillDetailScrollFrame.alpha == 0 and g.TradeSkillReagent1.mouseEnabled is False and g.TradeSkillSkillIcon.mouseEnabled is False
+    for nom in ("TradeSkillCreateButton", "TradeSkillCreateAllButton", "TradeSkillInputBox", "TradeSkillFrameEditBox",
+                "TradeSkillLinkButton", "TradeSkillRankFrame", "TradeSkillCancelButton", "TradeSkillExpandButtonFrame"):
+        assert not g[nom].shown and g[nom].foreverSuppressed, nom
+    # le cadre : fond Overview sans stries, page Template2 a sa taille
+    assert atlas_jeu(mh.roche, "profession-background-overview") and not mh.stries.shown
+    fp = mh.fondPage
+    assert atlas_jeu(fp, "profession-background-template2") and (fp.width, fp.height) == (665, 570) and pts(fp)[0][2:] == ["TOPLEFT", 3, -21]
+    li = mh.liste
+    assert li.width == 304 and pts(li)[0][2:] == ["TOPLEFT", 5, -72] and pts(li)[1][2:] == ["BOTTOMLEFT", 5, 5]
+    dd = mh.filtre
+    assert pts(dd)[-1][2:] == ["TOPRIGHT", -8, -9] and dd.height == 18 and dd.foreverBouton
+    rb = mh.recherche
+    assert pts(rb)[0][2:] == ["TOPLEFT", 13, -8] and req(pts(rb)[1][1], dd) and pts(rb)[1][2:] == ["LEFT", -4, 0] and rb.height == 20
+    rg = mh.rang
+    assert (rg.width, rg.height) == (453, 18) and pts(rg)[0][2:] == ["TOPLEFT", 110, -40]
+    ln = mh.lien
+    assert (ln.width, ln.height) == (23, 23) and req(pts(ln)[0][1], rg) and pts(ln)[0][2:] == ["RIGHT", -2, -4]
+    fi = mh.fiche.cadre
+    assert (fi.width, fi.height) == (360, 484) and req(pts(fi)[0][1], li) and pts(fi)[0][2:] == ["TOPRIGHT", 2, 0]
+    # l'ouverture : titre, portrait (l'icone du metier), rang
+    lua.execute("METIER.lien = 'lien:couture' TradeSkillFrame_Show()")
+    assert tf.shown and mh.titre.text == "Tailoring" and mh.portrait.portrait.endswith("Trade_Tailoring")
+    assert rb.shown, "a 150 : la recherche"
+    assert rg.texte.text == "Tailoring 150/300"
+    rp = rg.rempli
+    print("   rang : remplissage %.1f, eclat a %s" % (rp.width, pts(rg.eclat)[-1][3:]))
+    assert rp.shown and rp.width == 226.5 and pts(rp)[0][2:] == ["TOPLEFT", 6, -3]
+    assert rp.texture.endswith("skillbar_fill_flipbook_tailoring")
+    assert pts(rg.eclat)[-1][2:] == ["TOPLEFT", 6 + 226.5, -3 - 9] and rg.eclat.alpha == 1 and rg.eclat.blend == "ADD"
+    ee = g.ForeverUI.AtlasEntry("skillbar_flare_tailoring")
+    assert rg.eclat.width == 53 and list(rg.eclat.texcoord.values()) == [ee[2], ee[3], ee[4], ee[5]]
+    # a faible rang, l'eclat ne deborde pas a gauche : il est rogne a la
+    # largeur du masque (453 x 1/450), sa partie droite gardee
+    lua.execute("METIER.ligne = { 'Tailoring', 1, 450 } ForeverUI.Metiers.MajRang()")
+    l = 453 / 450
+    tc = list(rg.eclat.texcoord.values())
+    print("   eclat a 1/450 : %.3f de large, depuis u=%.4f" % (rg.eclat.width, tc[0]))
+    assert abs(rg.eclat.width - l) < 1e-9 and abs(tc[0] - (ee[3] - (ee[3] - ee[2]) / 53 * l)) < 1e-9 and tc[1] == ee[3]
+    assert abs(pts(rg.eclat)[-1][3] - (6 + l)) < 1e-9 and rg.eclat.shown
+    lua.execute("METIER.ligne = { 'Tailoring', 150, 300 } ForeverUI.Metiers.MajRang()")
+    assert ln.shown
+    # la liste : l'en-tete deplie, ses recettes en retrait de 10, 1 au-dessus
+    # et 10 en dessous, 1 entre deux ; sans barre, 288 de large
+    zp = pts(mh.zone)
+    assert zp[0][2:] == ["TOPLEFT", 8, -35] and zp[1][2:] == ["BOTTOMRIGHT", -8, 5] and not mh.barre.shown
+    c1, c2 = mh.categories[1], mh.categories[2]
+    r1, r2 = mh.recettes[1], mh.recettes[2]
+    print("   lignes : %s %s | %s %s | %s %s | %s %s" % (c1.texte.text, pts(c1)[-1][3:], r1.nom.text, pts(r1)[-1][2:], r2.nom.text, pts(r2)[-1][2:], c2.texte.text, pts(c2)[-1][3:]))
+    assert pts(c1)[-1][2:] == ["TOPLEFT", 0, -5] and c1.width == 288 - 5 and c1.height == 25
+    assert pts(r1)[-1][2:] == ["TOPLEFT", 10, -33] and r1.width == 288 - 5 - 10 and r1.height == 20
+    assert pts(r2)[-1][2:] == ["TOPLEFT", 10, -54]
+    assert pts(c2)[-1][2:] == ["TOPLEFT", 0, -86]
+    assert atlas_jeu(c1.plus.Icon, "common-button-list-minus") and atlas_jeu(c2.plus.Icon, "common-button-list-plus")
+    em = g.ForeverUI.AtlasEntry("common-button-list-minus")
+    assert (c1.plus.Icon.width, c1.plus.Icon.height) == (em[6], em[7])
+    # la recette : icone de progression (optimale, +1 en y), nombre, choisie
+    assert r1.progres.shown and atlas_jeu(r1.progres.Icon, "professions-icon-skill-high") and pts(r1.progres)[-1][2:] == ["LEFT", -9, 1]
+    assert (r1.progres.Icon.width, r1.progres.Icon.height) == (13, 15)
+    assert r1.nombre.text == " [3] " and r1.choisie.shown and not r1.survol.shown
+    assert not r2.progres.shown, "triviale : pas d'icone"
+    assert list(r1.nom.textColor.values())[:3] == [0.8863, 0.8627, 0.8392]
+    # la fiche : carte du metier, resultat, nom, outils, description,
+    # reactifs, boutons
+    F = mh.fiche
+    assert atlas_jeu(F.carte, "profession-background-card-tailoring") and F.contenu.shown
+    assert F.icone.portrait == "i-toile" and atlas_jeu(F.contour, "auctionhouse-itemicon-border-white")
+    assert (F.contour.width, F.contour.height) == (68, 68)
+    assert F.nom.text.endswith("Bolt of Linen Cloth|r") and F.outils.text == "|cffffd200Requires:|r Loom"
+    assert F.description.text == "Weave." and not F.recharge.shown
+    assert pts(F.description)[-1][2:] == ["BOTTOMLEFT", -1, -12]
+    s1 = mh.emplacements[1]
+    assert s1.shown and s1.nom.text == "7/2 Linen Cloth" and list(s1.nom.textColor.values())[:3] == [1, 1, 1]
+    assert pts(s1)[-1][2:] == ["TOPLEFT", 1, -20] and (s1.width, s1.height) == (180, 50)
+    assert atlas_jeu(s1.bouton.contour, "professions-slot-frame")
+    B = mh.boutons
+    assert B.creer.shown and B.creer.text == "Create" and B.creer.enabled is not False
+    assert B.tout.shown and B.tout.text == "Create All [3]" and B.compteur.shown and B.compteur.GetNumber(B.compteur) == 1
+    assert pts(B.creer)[0][2:] == ["BOTTOMRIGHT", -9, 7] and pts(B.tout)[0][2:] == ["BOTTOMRIGHT", -362, 7]
+    assert pts(B.compteur)[0][2:] == ["BOTTOMRIGHT", -185, 11] and (B.compteur.width, B.compteur.height) == (31, 20)
+    assert B.creer.width >= 80 and B.creer.height == 28
+    B.creer.scripts.OnClick(B.creer)
+    assert list(list(g.METIER.faits.values())[-1].values()) == [2, 1], "Creer : DoTradeSkill(recette, compteur)"
+    # une autre recette : la recharge, deux reactifs dont un manquant, Creer
+    # grise
+    r2.scripts.OnClick(r2, "LeftButton")
+    assert g.METIER.choisi == 3 and r2.choisie.shown and not r1.choisie.shown
+    assert F.recharge.shown and F.recharge.text == "Cooldown remaining: 3600 sec"
+    assert pts(F.description)[-1][2:] == ["BOTTOMLEFT", 0, -9], "sous la recharge, 4 + 5"
+    s1, s2 = mh.emplacements[1], mh.emplacements[2]
+    assert s1.nom.text == "0/1 Bolt of Linen Cloth" and list(s1.nom.textColor.values())[:3] == [0.6275, 0.6275, 0.6275]
+    assert pts(s2)[-1][2:] == ["TOPLEFT", 1, -75]
+    assert B.creer.enabled is False and atlas_jeu(F.contour, "auctionhouse-itemicon-border-green")
+    # un en-tete : replie par la fonction du client
+    c1.scripts.OnClick(c1)
+    assert list(g.METIER.appels.values())[-1] == "Collapse 1"
+    # le filtre : « Has skill up » ecarte la triviale ; « Have Materials »
+    # passe au client ; les emplacements
+    lua.execute("MENU_ENTREES = {} ForeverUITradeSkillFilter.initialize(ForeverUITradeSkillFilter, 1)")
+    ent = list(g.MENU_ENTREES.values())
+    assert [e.text for e in ent] == ["Has skill up", "Have Materials", "Slots"] and ent[2].hasArrow
+    ent[0].func(ent[0])
+    assert r1.shown and not mh.recettes[2].shown, "la triviale ecartee"
+    ent[1].func(ent[1])
+    assert g.METIER.fabricables is True and g.TradeSkillFrameAvailableFilterCheckButton.checked is True
+    lua.execute("MENU_ENTREES = {} UIDROPDOWNMENU_MENU_VALUE = 'emplacements' ForeverUITradeSkillFilter.initialize(ForeverUITradeSkillFilter, 2)")
+    ent = list(g.MENU_ENTREES.values())
+    assert [e.text for e in ent] == ["Check All", "Uncheck All", "Chest", "Legs"] and ent[2].checked
+    ent[0].func(ent[0])
+    assert list(g.METIER.appels.values())[-1] == "empl 0 1 1"
+    # la liste du filtre : au moins le bouton, elargie a ses entrees
+    # (regle de camelot, demande du 28/09)
+    assert dd.foreverPlancher is True
+    lua.execute("""
+        UIDROPDOWNMENU_OPEN_MENU = ForeverUITradeSkillFilter
+        DropDownList1.numButtons = 0
+        ForeverUITradeSkillFilter.initialize(ForeverUITradeSkillFilter, 1)
+        DropDownList1:SetWidth(60)
+    """)
+    l1 = g.DropDownList1
+    l1.hooks.OnShow(l1)
+    attendu = max(dd.width, len("Have Materials") * 6 + 40 + 25)
+    print("   liste du filtre : %d (bouton %d, attendu %d)" % (l1.width, dd.width, attendu))
+    assert l1.width == attendu and attendu > dd.width, "le texte le plus long + 40 + 25, au moins le bouton"
+    assert g.DropDownList1Button1.width == attendu - 25
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = nil")
+    lua.execute("ForeverUI.Metiers.seulementProgression = nil ForeverUI.Metiers.MajListe()")
+    # la recherche : le nom au client
+    rb.scripts.OnTextChanged(rb)
+    lua.execute("ForeverUITradeSkillSearchBox:SetText('lin') ForeverUITradeSkillSearchBox.scripts.OnTextChanged(ForeverUITradeSkillSearchBox)")
+    assert g.METIER.filtreNom == "lin"
+    # beaucoup de recettes : la barre, et la zone a sa place de camelot
+    lua.execute("""
+        table.insert(METIER.recettes, { "More", "header", 0, 1 })
+        for i = 1, 30 do table.insert(METIER.recettes, { "Recette " .. i, "easy", 0, nil, nil, "i", nil, 1, 1, reactifs = {} }) end
+        TradeSkillFrame_Update()
+    """)
+    assert mh.barre.shown and pts(mh.zone)[1][2:] == ["BOTTOMRIGHT", -20, 5]
+    # un metier lie : ni boutons ni lien, le titre porte le joueur
+    lua.execute("METIER.lie, METIER.lieNom = 1, 'Bob' TradeSkillFrame_Update()")
+    assert mh.titre.text == "Tailoring |cffffffff[Bob]|r" and not B.creer.shown and not ln.shown
+    # la joaillerie : pas de carte chez camelot -> Professions-Recipe-Background
+    lua.execute("""
+        METIER.lie = nil METIER.ligne = { "Jewelcrafting", 20, 75 }
+        METIER.icones.Jewelcrafting = "Interface\\\\Icons\\\\INV_Misc_Gem_02"
+        TradeSkillFrame_SetSelection(2) TradeSkillFrame_Update()
+    """)
+    assert atlas_jeu(F.carte, "professions-recipe-background") and rg.rempli.texture.endswith("skillbar_fill_flipbook_jewelcrafting")
+    assert not rb.shown, "sous 75 de competence : pas de recherche (le client vide le filtre)"
+    # UNE LIGNE REUTILISEE : un nom long apres un nom court n'est pas coupe.
+    # Le client mesure un texte DANS la largeur qu'on lui a posee (d'ou le
+    # TradeSkillFrameDummyString de 3.3.5) : on le simule sur les noms des
+    # lignes ; le nom se mesure a part, jamais borne (« Rough Blast... »,
+    # signale le 2026-09-28)
+    lua.execute("""
+        local function bornee(self)
+            local l = string.len(self.text or "") * 6
+            if self.width and self.width > 0 and self.width < l then return self.width end
+            return l
+        end
+        METIER.lie = nil
+        METIER.recettes = { { "Parts", "header", 0, 1 }, { "Linen", "optimal", 0, nil, nil, "i", nil, 1, 1, reactifs = {} } }
+        TradeSkillFrame_Update()
+        for _, b in ipairs(ForeverUI.Metiers.habit.recettes) do b.nom.GetStringWidth = bornee end
+        METIER.recettes[2][1] = "Rough Blasting Powder"
+        TradeSkillFrame_Update()
+    """)
+    rr = mh.recettes[1]
+    print("   ligne reutilisee : %r, %s de large, coupee=%s" % (rr.nom.text, rr.nom.width, rr.tronque))
+    assert rr.nom.text == "Rough Blasting Powder" and rr.nom.width == 21 * 6 and not rr.tronque
+    lua.execute("TradeSkillFrame:Hide() METIER.ligne = { 'Tailoring', 150, 300 }")
+    print("   673 x 594 a portrait, liste de camelot (en-tetes, progression, nombre), rang, fiche (carte, resultat, reactifs), boutons, filtre")
+
+    print("\nle livre des metiers :")
+    # le joueur : alchimie et minage, cuisine (sa categorie repliee), la
+    # monte ; le grimoire : leurs sorts, un passif de minage, et l'attaque
+    lua.execute("""
+        AVANT_LIVRE = { livre = LIVRE.spell, onglets = ONGLETS, lien = GetSpellLink, info = GetSkillLineInfo,
+                        competences = COMPETENCES, erreur = UIErrorsFrame.AddMessage }
+        LIVRE.spell = {
+            { "Attack", "", false, "icone:attaque", 6603 },
+            { "Alchemy", "Artisan", false, "icone:alchimie", 11611 },
+            { "Smelting", "", false, "icone:fondre", 2656 },
+            { "Find Minerals", "", false, "icone:gisements", 2580 },
+            { "Toughness", "Rank 1", true, "icone:robustesse", 53120 },
+            { "Cooking", "Journeyman", false, "icone:cuisine", 3102 },
+            { "Basic Campfire", "", false, "icone:feu", 818 },
+        }
+        ONGLETS = { { "General", "icone:livre", 0, 7 } }
+        function GetSpellLink(slot, livre)
+            local e = LIVRE[livre][slot]
+            if e and e[5] then return "|cff71d5ff|Hspell:" .. e[5] .. "|h[" .. e[1] .. "]|h|r" end
+        end
+        for id, nom in pairs({ [2259] = "Alchemy", [2018] = "Blacksmithing", [7411] = "Enchanting", [4036] = "Engineering",
+                               [9134] = "Herbalism", [45357] = "Inscription", [25229] = "Jewelcrafting",
+                               [2108] = "Leatherworking", [2575] = "Mining", [8613] = "Skinning", [3908] = "Tailoring",
+                               [2550] = "Cooking", [7620] = "Fishing", [3273] = "First Aid" }) do
+            SORTS_PAR_ID[id] = nom
+        end
+        COMPETENCES = {
+            { nom = "Professions", entete = true },
+            { nom = "Alchemy", rang = 210, maxi = 300, bonus = 0, abandon = 1 },
+            { nom = "Mining", rang = 75, maxi = 75, bonus = 15, abandon = 1 },
+            { nom = "Secondary Skills", entete = true, replie = true },
+            { nom = "Cooking", rang = 50, maxi = 150 },
+            { nom = "Riding", rang = 75, maxi = 75 },
+        }
+        -- le vrai rend « abandonnable » (1 / nil)
+        function GetSkillLineInfo(i)
+            local c = _competences()[i]
+            if not c then return nil end
+            return c.nom, c.entete and 1 or nil, (not c.replie) and 1 or nil, c.rang or 0, 0, c.bonus or 0,
+                   c.maxi or 0, c.abandon, 0, 0, 0, 0, c.desc or ""
+        end
+        StaticPopupDialogs = StaticPopupDialogs or {}
+        StaticPopupDialogs.UNLEARN_SKILL = StaticPopupDialogs.UNLEARN_SKILL or { text = "Do you want to unlearn %s?" }
+        function UIErrorsFrame:AddMessage(m) ERREUR_UI = m end
+    """)
+    # le micro-bouton : juste apres la feuille de personnage, les images de
+    # camelot, l'infobulle TRADE_SKILLS
+    mb = g.ForeverUIProfessionMicroButton
+    noms = [e.bouton.name for e in g.ForeverUI.MicroButtons.values()]
+    assert noms[:3] == ["CharacterMicroButton", "ForeverUIProfessionMicroButton", "SpellbookMicroButton"], noms
+    pm = pts(mb)[-1]
+    assert pm[0] == "LEFT" and pm[1].name == "ForeverUIMicroMenu" and pm[2:] == ["LEFT", 27, 0]
+    assert (mb.width, mb.height) == (32, 46) and req(mb.parent, g.CharacterMicroButton.parent)
+    for cle, etat in (("_normal", "up"), ("_pushed", "down"), ("_disabled", "disable")):
+        assert atlas_jeu(mb[cle], "ui-hud-micromenu-professions-%s-c60-2x" % etat), cle
+    assert atlas_jeu(mb["_highlight"], "ui-hud-micromenu-professions-mouseover-c60-2x")
+    mb.scripts.OnEnter(mb)
+    assert g.GameTooltip.text == "Professions" and g.GameTooltip.shown
+    mb.scripts.OnLeave(mb)
+    # en vehicule, il suit ses voisins
+    lua.execute("VehicleMenuBar_MoveMicroButtons()")
+    assert pts(mb)[-1][2:] == ["LEFT", 27, 0] and req(mb.parent, g.CharacterMicroButton.parent)
+    # le clic ouvre le livre : panneau de gauche comme la page de
+    # fabrication, bouton enfonce
+    mb.scripts.OnClick(mb, "LeftButton")
+    lv = g.ForeverUIProfessionsBook
+    assert lv and lv.shown and (lv.width, lv.height) == (673, 594)
+    at = lv.attributes
+    assert (at["UIPanelLayout-area"], at["UIPanelLayout-pushable"], at["UIPanelLayout-whileDead"]) == ("left", 3, 1)
+    assert at["UIPanelLayout-defined"] and at["UIPanelLayout-enabled"]
+    assert mb.buttonState == "PUSHED" and atlas_jeu(mb["_highlight"], "ui-hud-micromenu-professions-down-c60-2x")
+    hb = lv.habit
+    # le portrait cuit rond (tools/cuire_portrait.py), pose tel quel
+    assert hb.titre.text == "Professions" and hb.portrait.texture.lower().endswith("inv_sidetab_professions_c60-rond")
+    assert list(hb.portrait.texcoord.values()) == [0, 1, 0, 1] and hb.portrait.portrait is None
+    assert atlas_jeu(hb.roche, "profession-background-overview") and not hb.stries.shown
+    assert req(pts(lv.croix)[0][1], lv) and pts(lv.croix)[0][2:] == ["TOPRIGHT", -2, 1]
+    # les cartes : deux principales, trois secondaires cote a cote
+    p1, p2 = lv.principaux[1], lv.principaux[2]
+    s1, s2, s3 = lv.secondaires[1], lv.secondaires[2], lv.secondaires[3]
+    # les rangees dans leur zone a defilement (deux : 279 de haut), les
+    # colonnes dessous, devant elle
+    zn = lv.zone
+    assert pts(zn)[0][2:] == ["TOPLEFT", 5, -41] and (zn.width, zn.height) == (664, 279) and req(zn.scrollChild, lv.enfant)
+    assert (p1.width, p1.height) == (664, 142) and req(pts(p1)[0][1], lv.enfant) and pts(p1)[0][2:] == ["TOPLEFT", 0, 0]
+    assert req(pts(p2)[0][1], p1) and pts(p2)[0][2:] == ["BOTTOMLEFT", 0, 5]
+    assert (s1.width, s1.height) == (225, 275) and req(pts(s1)[0][1], zn) and pts(s1)[0][2:] == ["BOTTOMLEFT", 0, 4]
+    assert s1.frameLevel > lv.enfant.frameLevel and not lv.barre.shown and not s1.fondBord.shown
+    assert req(pts(s2)[0][1], s1) and pts(s2)[0][2:] == ["TOPRIGHT", -6, 0]
+    assert req(pts(s3)[0][1], s2) and pts(s3)[0][2:] == ["TOPRIGHT", -6, 0]
+    # l'alchimie : sa carte, son rang (441 x 0,7 - 7 vus), un seul sort a (15, 46)
+    assert atlas_jeu(p1.fond, "profession-overview-card-alchemy") and p1.nom.text == "Alchemy"
+    assert not p1.absentTitre.shown and not p1.absentTexte.shown and pts(p1.nom)[0][2:] == ["TOPLEFT", 20, -24]
+    r = p1.rang
+    assert (r.width, r.height) == (441, 18) and req(pts(r)[0][1], p1) and pts(r)[0][2:] == ["RIGHT", -40, 0]
+    assert r.texte.text == "Alchemy 210/300" and r.shown
+    vu = 441 * 210 / 300 - 7
+    print("   rang de l'alchimie : %.1f vus, eclat a %s" % (r.rempli.width, pts(r.eclat)[-1][3:]))
+    assert abs(r.rempli.width - vu) < 1e-9 and r.rempli.texture.endswith("skillbar_fill_flipbook_alchemy_c60")
+    assert pts(r.rempli)[0][2:] == ["TOPLEFT", 3, -3] and r.rempli.height == 18
+    assert r.eclat.shown and r.eclat.alpha == 1 and pts(r.eclat)[-1][0] == "RIGHT"
+    assert abs(pts(r.eclat)[-1][3] - (3 + vu)) < 1e-9 and pts(r.eclat)[-1][4] == -12
+    assert atlas_jeu(r.fond, "profession-progressbar-bg") and (r.fond.width, r.fond.height) == (441, 23)
+    assert r.eclat.width == 53
+    # a faible rang, l'eclat est rogne a la largeur visible (441 x 20/450 - 7)
+    lua.execute("COMPETENCES[2].rang, COMPETENCES[2].maxi = 20, 450 ForeverUI.LivreMetiers.Maj()")
+    l = 441 * 20 / 450 - 7
+    ea = g.ForeverUI.AtlasEntry("skillbar_flare_alchemy_c60")
+    assert abs(r.eclat.width - l) < 1e-9 and abs(list(r.eclat.texcoord.values())[0] - (ea[3] - (ea[3] - ea[2]) / 53 * l)) < 1e-9
+    assert abs(pts(r.eclat)[-1][3] - (3 + l)) < 1e-9
+    lua.execute("COMPETENCES[2].rang, COMPETENCES[2].maxi = 210, 300 ForeverUI.LivreMetiers.Maj()")
+    tranches = sorted(t.width for t in r.regions.values() if t.kind == "texture" and isinstance(t.texture, str)
+                      and t.texture.endswith("professionsbookc60") and t.layer == "OVERLAY")
+    assert tranches == [30, 30, 381], tranches
+    b1, b2 = p1.sorts[1], p1.sorts[2]
+    assert b1.shown and not b2.shown and pts(b1)[-1][2:] == ["BOTTOMLEFT", 15, 46] and (b1.width, b1.height) == (40, 40)
+    assert b1.attributes["type"] == "spell" and b1.attributes["spell"] == "Alchemy(Artisan)"
+    assert b1.attributes["shift-type1"] == "lien"
+    assert b1.texte.text == "Alchemy" and b1.sous.text == "Artisan" and b1.icone.texture == "icone:alchimie"
+    assert list(b1.texte.textColor.values())[:3] == [1, 0.82, 0] and atlas_jeu(b1.cadre, "profession-square-frame")
+    assert (b1.cadre.width, b1.cadre.height) == (48, 48) and pts(b1.icone)[0][2:] == ["TOPLEFT", 3, -3]
+    assert p1.oubli.shown and req(pts(p1.oubli)[0][1], r) and pts(p1.oubli)[0][2:] == ["RIGHT", 1, -4]
+    # le minage : bonus au texte, barre pleine (eclat eteint), deux sorts --
+    # Fondre en haut, Decouverte de gisements en bas ; le passif n'y est pas
+    assert atlas_jeu(p2.fond, "profession-overview-card-mining") and p2.nom.text == "Mining"
+    assert p2.rang.texte.text == "Mining 75 (|cff20ff20+15|r ) /75" and p2.rang.eclat.alpha == 0
+    m1, m2 = p2.sorts[1], p2.sorts[2]
+    assert m1.shown and m2.shown and m1.texte.text == "Smelting" and m2.texte.text == "Find Minerals"
+    assert pts(m1)[-1][2:] == ["BOTTOMLEFT", 15, 60] and pts(m2)[-1][2:] == ["BOTTOMLEFT", 15, 10]
+    # la cuisine : sa categorie depliee le temps de la lecture, puis repliee
+    assert atlas_jeu(s1.fond, "profession-overview-card-generic-cooking") and s1.nom.text == "Cooking"
+    assert s1.rang.texte.text == "Cooking 50/150" and s1.rang.width == 190 and pts(s1.rang)[0][2:] == ["TOP", 0, -47]
+    assert abs(s1.rang.rempli.width - (190 * 50 / 150 - 5)) < 1e-9
+    c1, c2 = s1.sorts[1], s1.sorts[2]
+    assert c1.attributes["spell"] == "Cooking(Journeyman)" and c2.texte.text == "Basic Campfire" and not s1.sorts[3].shown
+    assert pts(c1)[-1][2:] == ["BOTTOMLEFT", 20, 25] and req(pts(c2)[-1][1], c1) and pts(c2)[-1][2:] == ["TOP", 0, 0]
+    assert g.COMPETENCES[4].replie is True, "la categorie repliee le reste"
+    # la peche et le secourisme : absents, le texte de camelot
+    assert s2.absentTitre.shown and s2.absentTitre.text == "Fishing" and s2.absentTexte.shown
+    assert s2.absentTexte.text.startswith("Visit a trainer to learn fishing.") and s2.absentTexte.width == 175
+    assert req(pts(s2.absentTexte)[0][1], s2.absentTitre) and pts(s2.absentTexte)[0][2:] == ["BOTTOM", 5, -13]
+    assert not s2.rang.shown and not any(b.shown for b in s2.sorts.values()) and s2.nom.text == ""
+    assert s3.absentTitre.text == "First Aid" and atlas_jeu(s3.fond, "profession-overview-card-generic-firstaid")
+    # le sort : infobulle, prise, lien au clic modifie
+    b1.scripts.OnEnter(b1)
+    assert list(g.GameTooltip.sort.values()) == [2, "spell"]
+    b1.scripts.OnLeave(b1)
+    b1.scripts.OnDragStart(b1)
+    assert list(g.PRIS.values())[-1] == "spell2"
+    # l'oubli : la boite du client, sur l'indice de la competence
+    p1.oubli.scripts.OnClick(p1.oubli)
+    assert list(g.POPUPS.values())[-1].quoi == "UNLEARN_SKILL" and list(g.POPUPS.values())[-1].texte == "Alchemy"
+    assert g.StaticPopup1.data == 2
+    lua.execute("StaticPopup1:Hide()")
+    # un seul metier : la seconde carte dit ce qui manque, sur la carte
+    # generique
+    lua.execute("table.remove(COMPETENCES, 3) ForeverUI.LivreMetiers.Maj()")
+    assert p2.absentTitre.shown and p2.absentTitre.text == "Second Profession" and p2.absentTexte.shown
+    assert atlas_jeu(p2.fond, "profession-overview-card") and not p2.rang.shown and not p2.oubli.shown
+    assert not any(b.shown for b in p2.sorts.values()) and p2.absentTexte.width == 485
+    # la joaillerie : pas de carte chez camelot, la generique ; sa bande
+    lua.execute("""
+        table.insert(COMPETENCES, 3, { nom = "Jewelcrafting", rang = 20, maxi = 75, bonus = 0, abandon = 1 })
+        ForeverUI.LivreMetiers.Maj()
+    """)
+    assert p2.nom.text == "Jewelcrafting" and atlas_jeu(p2.fond, "profession-overview-card")
+    assert p2.rang.rempli.texture.endswith("skillbar_fill_flipbook_jewelcrafting")
+    # UN TROISIEME METIER PRINCIPAL (serveur prive) : une troisieme rangee,
+    # les colonnes perdent sa hauteur (275 - 137), leur bord haut garde, et
+    # leurs sorts passent en ligne, icones seules
+    lua.execute("""
+        table.insert(COMPETENCES, 4, { nom = "Tailoring", rang = 300, maxi = 450, bonus = 0, abandon = 1 })
+        ForeverUI.LivreMetiers.Maj()
+    """)
+    p3 = lv.principaux[3]
+    assert p3.shown and p3.nom.text == "Tailoring" and req(pts(p3)[0][1], p2) and pts(p3)[0][2:] == ["BOTTOMLEFT", 0, 5]
+    assert (zn.width, zn.height) == (664, 416) and not lv.barre.shown and p3.width == 664
+    assert s1.height == 138 and s2.height == 138 and s3.height == 138 and req(pts(s1)[0][1], zn)
+    e = g.ForeverUI.AtlasEntry("profession-overview-card-generic-cooking")
+    dv = (e[5] - e[4]) / 275
+    assert s1.fondBord.shown and s1.fondBord.height == 20 and list(s1.fondBord.texcoord.values()) == [e[2], e[3], e[4], e[4] + dv * 20]
+    tc = list(s1.fond.texcoord.values())
+    assert abs(tc[2] - (e[5] - dv * 118)) < 1e-9 and tc[3] == e[5] and pts(s1.fond)[0][2:] == ["TOPLEFT", 0, -20]
+    assert pts(c1)[-1][2:] == ["BOTTOMLEFT", 20, 25] and req(pts(c2)[-1][1], c1) and pts(c2)[-1][2:] == ["RIGHT", 5, 0]
+    assert c1.shown and c2.shown and not c1.texte.shown and not c1.sous.shown and not c2.texte.shown
+    # CINQ : trois rangees visibles, la barre dans sa gouttiere (646 de
+    # large), les suivantes dessous, derriere les colonnes
+    lua.execute("""
+        table.insert(COMPETENCES, 5, { nom = "Engineering", rang = 1, maxi = 75, bonus = 0, abandon = 1 })
+        table.insert(COMPETENCES, 6, { nom = "Blacksmithing", rang = 450, maxi = 450, bonus = 0, abandon = 1 })
+        ForeverUI.LivreMetiers.Maj()
+    """)
+    ba = lv.barre
+    p4, p5 = lv.principaux[4], lv.principaux[5]
+    print("   cinq metiers : zone %s x %s, rangees de %s, barre=%s, enfant de %s" % (zn.width, zn.height, p1.width, ba.shown, lv.enfant.height))
+    assert not p4.shown and not p5.shown and p5.nom.text == "Blacksmithing" and req(pts(p5)[0][1], p4)
+    assert ba.shown and (zn.width, zn.height) == (646, 416) and all(lv.principaux[k].width == 646 for k in range(1, 6))
+    assert lv.enfant.height == 5 * 137 + 5 and s1.height == 138 and s1.frameLevel > lv.enfant.frameLevel
+    assert req(pts(ba)[0][1], zn) and pts(ba)[0][2:] == ["TOPRIGHT", 5, -2] and pts(ba)[1][2:] == ["BOTTOMRIGHT", 5, 4]
+    e = g.ForeverUI.AtlasEntry("profession-overview-card-alchemy")
+    du = (e[3] - e[2]) / 664
+    assert p1.fondBord.shown and p1.fondBord.width == 20 and list(p1.fondBord.texcoord.values()) == [e[2], e[2] + du * 20, e[4], e[5]]
+    tc = list(p1.fond.texcoord.values())
+    assert abs(tc[0] - (e[3] - du * 626)) < 1e-9 and tc[1] == e[3] and pts(p1.fond)[0][2:] == ["TOPLEFT", 20, 0]
+    # la molette : une rangee par cran, bornee
+    zn.scripts.OnMouseWheel(zn, -1)
+    assert zn.verticalScroll == 137 and ba.decalage == 1 and not p1.shown and p2.shown and p4.shown and not p5.shown
+    zn.scripts.OnMouseWheel(zn, -1)
+    zn.scripts.OnMouseWheel(zn, -1)
+    assert zn.verticalScroll == 274 and ba.decalage == 2 and not p2.shown and p3.shown and p5.shown
+    zn.scripts.OnMouseWheel(zn, 1)
+    assert zn.verticalScroll == 137
+    # retour a deux : plus de barre, largeur et hauteur de camelot
+    lua.execute("""
+        for i = #COMPETENCES, 1, -1 do
+            local n = COMPETENCES[i].nom
+            if n == "Tailoring" or n == "Engineering" or n == "Blacksmithing" then table.remove(COMPETENCES, i) end
+        end
+        ForeverUI.LivreMetiers.Maj()
+    """)
+    assert not ba.shown and not p3.shown and not p5.shown and p1.shown and p2.shown and p1.width == 664 and not p1.fondBord.shown
+    assert (zn.width, zn.height) == (664, 279) and zn.verticalScroll == 0
+    assert s1.height == 275 and not s1.fondBord.shown and c1.texte.shown and pts(c2)[-1][2:] == ["TOP", 0, 0]
+    # LES ONGLETS LATERAUX, a droite de la page montree (le faux ne resout pas
+    # les ancres : les bords des fenetres sont poses ici). Le livre : l'onglet
+    # d'ensemble choisi ; un onglet par metier a fabrication dont le sort est
+    # au grimoire -- l'alchimie, la cuisine ; ni la joaillerie (pas de sort),
+    # ni le minage (desappris plus haut)
+    lua.execute("""
+        ForeverUIProfessionsBook.GetRight = function() return 700 end
+        ForeverUIProfessionsBook.GetTop = function() return 660 end
+        TradeSkillFrame.GetRight = function() return 690 end
+        TradeSkillFrame.GetTop = function() return 650 end
+        ForeverUI.LivreMetiers.MajOnglets()
+    """)
+    tb = g.ForeverUIProfessionsTabs
+    t0, t1, t2 = g.ForeverUIProfessionsTab0, g.ForeverUIProfessionsTab1, g.ForeverUIProfessionsTab2
+    SEPA = chr(92)
+    assert tb.shown and req(tb.parent, g.UIParent) and pts(tb)[-1][2:] == ["BOTTOMLEFT", 700, 660]
+    assert tb.frameLevel == lv.GetFrameLevel(lv) + 1
+    assert pts(t0)[0][2:] == ["TOPLEFT", 0, -60] and (t0.width, t0.height) == (55, 55)
+    assert t0.choisi.shown and t0.infobulle == "Professions"
+    assert t0.icone.texture.lower().endswith("tabicons" + SEPA + "inv_sidetab_professions_c60")
+    assert t1.shown and t2.shown and t1.infobulle == "Alchemy" and t2.infobulle == "Cooking"
+    # le troisieme (le minage, ouvert plus haut) est cache
+    assert g.ForeverUIProfessionsTab3 and not g.ForeverUIProfessionsTab3.shown, "pas d'onglet sans sort de fabrication"
+    assert req(pts(t1)[0][1], t0) and pts(t1)[0][2:] == ["BOTTOMLEFT", 0, -2] and req(pts(t2)[0][1], t1)
+    assert t1.icone.texture.lower().endswith("tabicons" + SEPA + "trade_alchemy") and t2.icone.texture.lower().endswith("inv_misc_food_15")
+    assert t1.attributes["type"] == "spell" and t1.attributes["spell"] == "Alchemy(Artisan)" and not t1.choisi.shown
+    assert t2.attributes["spell"] == "Cooking(Journeyman)"
+    assert (t1.icone.width, t1.icone.height) == (50, 50) and pts(t1.icone)[-1][2:] == ["CENTER", -3, 0]
+    assert list(t1.icone.texcoord.values()) == [0.03125, 0.96875, 0.03125, 0.96875]
+    t1.scripts.OnMouseDown(t1, "LeftButton")
+    assert pts(t1.icone)[-1][3:] == [-2, -1]
+    t1.scripts.OnMouseUp(t1, "LeftButton")
+    assert pts(t1.icone)[-1][3:] == [-3, 0]
+    t1.scripts.OnEnter(t1)
+    assert g.GameTooltip.text == "Alchemy" and g.GameTooltip.anchor == "ANCHOR_RIGHT"
+    t1.scripts.OnLeave(t1)
+    # la page de fabrication de l'alchimie : les onglets passent a sa droite,
+    # celui de l'alchimie choisi -- et il ne relance pas son sort
+    lua.execute("""
+        METIER.ligne = { "Alchemy", 210, 300 }
+        TradeSkillFrame_Show()
+        ForeverUI.LivreMetiers.veille.scripts.OnEvent(ForeverUI.LivreMetiers.veille, 'TRADE_SKILL_SHOW')
+    """)
+    assert not lv.shown and g.TradeSkillFrame.shown and tb.shown and pts(tb)[-1][2:] == ["BOTTOMLEFT", 690, 650]
+    assert not t0.choisi.shown and t1.choisi.shown and t1.attributes["type"] is None and t2.attributes["type"] == "spell"
+    # la place des onglets, retenue a droite des deux pages (largeur de camelot)
+    assert g.TradeSkillFrame.attributes["UIPanelLayout-width"] == 750 and lv.attributes["UIPanelLayout-width"] == 750
+    # l'onglet d'ensemble : la fabrication se ferme, le livre s'ouvre
+    t0.scripts.OnClick(t0, "LeftButton")
+    assert lv.shown and not g.TradeSkillFrame.shown and t0.choisi.shown and not t1.choisi.shown
+    assert t1.attributes["type"] == "spell" and pts(tb)[-1][2:] == ["BOTTOMLEFT", 700, 660]
+    # le placement des panneaux : les onglets suivent la fenetre
+    lua.execute("ForeverUIProfessionsBook.GetRight = function() return 720 end UpdateUIPanelPositions(ForeverUIProfessionsBook)")
+    assert pts(tb)[-1][2:] == ["BOTTOMLEFT", 720, 660]
+    lua.execute("ForeverUIProfessionsBook.GetRight = function() return 700 end METIER.ligne = { 'Tailoring', 150, 300 }")
+    # TROP D'ONGLETS POUR LA HAUTEUR DE LA FENETRE (serveur prive : neuf
+    # metiers principaux, secourisme, cuisine -- douze onglets avec celui
+    # d'ensemble) : ils retrecissent ensemble et finissent au bas de la
+    # fenetre ; le premier reste a -60, tous colles au bord
+    lua.execute("""
+        AVANT_ONGLETS = { livre = LIVRE.spell, onglets = ONGLETS, competences = COMPETENCES }
+        LIVRE.spell = {
+            { "Alchemy", "Artisan", false, "i", 11611 }, { "Blacksmithing", "Artisan", false, "i", 9785 },
+            { "Enchanting", "Artisan", false, "i", 13920 }, { "Engineering", "Artisan", false, "i", 12656 },
+            { "Inscription", "Artisan", false, "i", 45360 }, { "Jewelcrafting", "Artisan", false, "i", 28895 },
+            { "Leatherworking", "Artisan", false, "i", 10662 }, { "Smelting", "", false, "i", 2656 },
+            { "Tailoring", "Artisan", false, "i", 12180 }, { "First Aid", "Artisan", false, "i", 10846 },
+            { "Cooking", "Artisan", false, "i", 18260 },
+        }
+        ONGLETS = { { "General", "icone:livre", 0, 11 } }
+        COMPETENCES = { { nom = "Professions", entete = true } }
+        for _, n in ipairs({ "Alchemy", "Blacksmithing", "Enchanting", "Engineering", "Inscription",
+                             "Jewelcrafting", "Leatherworking", "Mining", "Tailoring" }) do
+            table.insert(COMPETENCES, { nom = n, rang = 1, maxi = 75 })
+        end
+        table.insert(COMPETENCES, { nom = "Secondary Skills", entete = true })
+        table.insert(COMPETENCES, { nom = "First Aid", rang = 1, maxi = 75 })
+        table.insert(COMPETENCES, { nom = "Cooking", rang = 1, maxi = 75 })
+        ForeverUI.LivreMetiers.MajOnglets()
+    """)
+    e = 534 / 682
+    ts = [g["ForeverUIProfessionsTab%d" % k] for k in range(0, 12)]
+    print("   douze onglets : echelle %.4f, onglet %.2f, icone %.2f" % (e, ts[0].width, ts[0].icone.width))
+    assert all(x.shown for x in ts) and tb.shown and [x.infobulle for x in ts][-2:] == ["First Aid", "Cooking"]
+    assert all(abs(x.width - 55 * e) < 1e-9 and abs(x.height - 55 * e) < 1e-9 for x in ts)
+    assert all(abs(x.icone.width - 50 * e) < 1e-9 and abs(x.icone.height - 50 * e) < 1e-9 for x in ts)
+    assert all(pts(x.icone)[-1][2] == "CENTER" and abs(pts(x.icone)[-1][3] + 3 * e) < 1e-9 for x in ts)
+    assert pts(ts[0])[0][2:] == ["TOPLEFT", 0, -60] and pts(tb)[-1][2:] == ["BOTTOMLEFT", 700, 660]
+    assert all(req(pts(x)[-1][1], ts[k]) and pts(x)[-1][2:4] == ["BOTTOMLEFT", 0] and abs(pts(x)[-1][4] + 2 * e) < 1e-9
+               for k, x in enumerate(ts[1:]))
+    assert abs(60 + 12 * 55 * e + 11 * 2 * e - lv.height) < 1e-9, "le dernier finit au bas de la fenetre"
+    ts[4].scripts.OnMouseDown(ts[4], "LeftButton")
+    assert abs(pts(ts[4].icone)[-1][3] - (1 - 3 * e)) < 1e-9 and pts(ts[4].icone)[-1][4] == -1
+    ts[4].scripts.OnMouseUp(ts[4], "LeftButton")
+    assert abs(pts(ts[4].icone)[-1][3] + 3 * e) < 1e-9
+    # neuf onglets tiennent : pleine taille ; retour aux trois du joueur
+    lua.execute("for i = 1, 3 do table.remove(COMPETENCES, 2) end ForeverUI.LivreMetiers.MajOnglets()")
+    assert ts[8].shown and not ts[9].shown and ts[0].width == 55 and ts[1].icone.width == 50
+    assert pts(ts[1])[-1][2:] == ["BOTTOMLEFT", 0, -2] and pts(ts[1].icone)[-1][2:] == ["CENTER", -3, 0]
+    lua.execute("""
+        LIVRE.spell, ONGLETS, COMPETENCES = AVANT_ONGLETS.livre, AVANT_ONGLETS.onglets, AVANT_ONGLETS.competences
+        ForeverUI.LivreMetiers.MajOnglets()
+    """)
+    assert t1.infobulle == "Alchemy" and t2.infobulle == "Cooking" and not ts[3].shown and t1.width == 55
+    # LE DEPLACEMENT : la bande de titre du livre deplace la fenetre ; la
+    # place vaut aussi pour la page de fabrication, et revient apres le
+    # systeme de panneaux ; les onglets suivent pendant le glisser
+    bd = lv.habit.bandeau
+    assert lv.movable and lv.clamped and bd.mouseEnabled and bd.dragButtons[1] == "LeftButton"
+    lua.execute("AVANT_UI = { UIParent._cx, UIParent._top } UIParent._cx, UIParent._top = 512, 768 ForeverUIProfessionsBook._cx = 400")
+    bd.scripts.OnDragStart(bd)
+    assert lv.moving and bd.scripts.OnUpdate is not None
+    bd.scripts.OnDragStop(bd)
+    pm = g.ForeverUIDB.positions.metiers
+    print("   deplacement : place retenue (%s, %s)" % (pm.x, pm.y))
+    assert (pm.x, pm.y) == (-112, -108) and not lv.userPlaced and not lv.moving and bd.scripts.OnUpdate is None
+    assert len(pts(lv)) == 1 and req(pts(lv)[0][1], g.UIParent) and pts(lv)[0][2:] == ["TOP", -112, -108]
+    lua.execute("ForeverUIProfessionsBook:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 0, -104) UpdateUIPanelPositions(ForeverUIProfessionsBook)")
+    assert len(pts(lv)) == 1 and pts(lv)[0][2:] == ["TOP", -112, -108], "le systeme de panneaux ne garde pas la main"
+    # en combat, le livre (protege) ne bouge pas
+    lua.execute("STATE.inLockdown = true")
+    bd.scripts.OnDragStart(bd)
+    assert not lv.moving
+    lua.execute("STATE.inLockdown = false")
+    # la page de fabrication : meme poignee, meme place
+    tsf = g.TradeSkillFrame
+    bt = tsf.foreverHabit.bandeau
+    assert tsf.movable and tsf.clamped and bt.mouseEnabled and bt.dragButtons[1] == "LeftButton"
+    lua.execute("METIER.ligne = { 'Alchemy', 210, 300 } TradeSkillFrame_Show() ForeverUI.LivreMetiers.veille.scripts.OnEvent(ForeverUI.LivreMetiers.veille, 'TRADE_SKILL_SHOW')")
+    assert tsf.shown and not lv.shown and len(pts(tsf)) == 1 and req(pts(tsf)[0][1], g.UIParent) and pts(tsf)[0][2:] == ["TOP", -112, -108]
+    lua.execute("TradeSkillFrame:Hide() METIER.ligne = { 'Tailoring', 150, 300 } ForeverUIDB.positions.metiers = nil")
+    lua.execute("UIParent._cx, UIParent._top = AVANT_UI[1], AVANT_UI[2]")
+    lua.execute("ForeverUI.LivreMetiers.Basculer()")
+    assert lv.shown
+    # le bouton reclique : le livre se ferme, le bouton se releve
+    mb.scripts.OnClick(mb, "LeftButton")
+    assert not lv.shown and mb.buttonState == "NORMAL"
+    # ouvrir un metier : la page de fabrication remplace le livre
+    mb.scripts.OnClick(mb, "LeftButton")
+    assert lv.shown
+    lua.execute("ForeverUI.LivreMetiers.veille.scripts.OnEvent(ForeverUI.LivreMetiers.veille, 'TRADE_SKILL_SHOW') TradeSkillFrame:Show()")
+    assert not lv.shown and g.TradeSkillFrame.shown and mb.buttonState == "PUSHED"
+    # le bouton ferme la page de fabrication
+    mb.scripts.OnClick(mb, "LeftButton")
+    assert not g.TradeSkillFrame.shown and not lv.shown and mb.buttonState == "NORMAL" and not tb.shown
+    # le combat : le livre se ferme a l'entree, et ne s'ouvre pas pendant
+    mb.scripts.OnClick(mb, "LeftButton")
+    assert tb.shown
+    lua.execute("ForeverUI.LivreMetiers.veille.scripts.OnEvent(ForeverUI.LivreMetiers.veille, 'PLAYER_REGEN_DISABLED')")
+    assert not lv.shown and not tb.shown
+    lua.execute("STATE.inLockdown = true")
+    mb.scripts.OnClick(mb, "LeftButton")
+    assert not lv.shown and g.ERREUR_UI == "You can't do that while in combat"
+    lua.execute("STATE.inLockdown = false")
+    lua.execute("""
+        LIVRE.spell, ONGLETS, GetSpellLink = AVANT_LIVRE.livre, AVANT_LIVRE.onglets, AVANT_LIVRE.lien
+        GetSkillLineInfo, COMPETENCES, UIErrorsFrame.AddMessage = AVANT_LIVRE.info, AVANT_LIVRE.competences, AVANT_LIVRE.erreur
+    """)
+    print("   micro-bouton apres la feuille de personnage, livre 673 x 594 (panneau de gauche), cartes de camelot, rangs, sorts securises, oubli, combat, onglets lateraux")
+
     # ------------------------------------------------- LA TAILLE DES TEXTURES
     # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
     # 3.3.5 : un morceau d'atlas pose par une seule ancre, ou par deux ancres
@@ -18569,7 +20055,10 @@ def main():
     # les fenetres du commerce et des PNJ (les fenetres deja validees ne sont pas
     # reprises ici : un effet valide ne se touche pas sans accord)
     racines = {"MerchantFrame", "TradeFrame", "MailFrame", "OpenMailFrame", "BankFrame", "GuildBankFrame", "AuctionFrame",
-               "GossipFrame", "QuestFrame", "QuestInfoFrame", "ItemTextFrame", "PetitionFrame", "GuildRegistrarFrame"}
+               "GossipFrame", "QuestFrame", "QuestInfoFrame", "ItemTextFrame", "PetitionFrame", "GuildRegistrarFrame",
+               "TaxiFrame", "PetStableFrame", "ClassTrainerFrame", "ItemSocketingFrame",
+               "StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4", "TradeSkillFrame",
+               "ForeverUIProfessionsBook", "ForeverUIProfessionsTabs"}
     def du_commerce(f):
         while f is not None:
             if f.name in racines:

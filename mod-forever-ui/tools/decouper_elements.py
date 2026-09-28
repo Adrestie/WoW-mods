@@ -150,6 +150,50 @@ ELEMENTS = {
         "auctionhouse-background-categories", "auctionhouse-background-index",
         "auctionhouse-background-sell-left",
     ],
+    # les PNJ, etape 3 : l'en-tete de categorie du maitre (TrainerUICategory-
+    # Template), feuille de 2048
+    "interface/professions/professions.blp": [
+        "professions-recipe-header-left", "professions-recipe-header-middle",
+        "professions-recipe-header-right", "professions-recipe-header-expand",
+        "professions-recipe-header-collapse",
+        # les metiers (etape 4) : barre de rang, icones de progression, lignes
+        # de la liste, fond de la liste, emplacements des reactifs
+        "professions-skillbar-bg", "professions-skillbar-frame",
+        "skillbar_fill_flipbook_defaultblue",
+        "professions-icon-skill-high", "professions-icon-skill-medium", "professions-icon-skill-low",
+        "professions_recipe_active", "professions_recipe_hover",
+        "professions-background-summarylist",
+        "professions-slot-bg", "professions-slot-frame", "professions-slot-frame-green",
+        "professions-slot-frame-blue", "professions-slot-frame-epic", "professions-slot-frame-legendary",
+    ],
+    # la barre de rang de chaque metier : sa bande animee (Skillbar_Fill_
+    # Flipbook_<metier>, 2 colonnes d'images de 34) n'entre pas dans 3.3.5 --
+    # seule sa PREMIERE image est gardee (PREMIERE_IMAGE) ; et son eclat
+    "interface/professions/professionsfxalchemyc60.blp": ["skillbar_fill_flipbook_alchemy_c60", "skillbar_flare_alchemy_c60"],
+    "interface/professions/professionsfxblacksmithing.blp": ["skillbar_fill_flipbook_blacksmithing", "skillbar_flare_blacksmithing"],
+    "interface/professions/professionsfxcooking.blp": ["skillbar_fill_flipbook_cooking", "skillbar_flare_cooking"],
+    "interface/professions/professionsfxenchantingc60.blp": ["skillbar_fill_flipbook_enchanting_c60", "skillbar_flare_enchanting_c60"],
+    "interface/professions/professionsfxengineering.blp": ["skillbar_fill_flipbook_engineering", "skillbar_flare_engineering"],
+    "interface/professions/professionsfxfirstaidc60.blp": ["skillbar_fill_flipbook_firstaid_c60", "skillbar_flare_firstaid_c60"],
+    "interface/professions/professionsfxinscription.blp": ["skillbar_fill_flipbook_inscription", "skillbar_flare_inscription"],
+    "interface/professions/professionsfxjewelcrafting.blp": ["skillbar_fill_flipbook_jewelcrafting", "skillbar_flare_jewelcrafting"],
+    "interface/professions/professionsfxleatherworking.blp": ["skillbar_fill_flipbook_leatherworking", "skillbar_flare_leatherworking"],
+    "interface/professions/professionsfxmining.blp": ["skillbar_fill_flipbook_mining", "skillbar_flare_mining"],
+    "interface/professions/professionsfxtailoring.blp": ["skillbar_fill_flipbook_tailoring", "skillbar_flare_tailoring"],
+    # le livre des metiers : les metiers qui n'ont pas de page de fabrication
+    "interface/professions/professionsfxherbalism.blp": ["skillbar_fill_flipbook_herbalism", "skillbar_flare_herbalism"],
+    "interface/professions/professionsfxskinningc60.blp": ["skillbar_fill_flipbook_skinning_c60", "skillbar_flare_skinning_c60"],
+    "interface/professions/professionsfxfishing.blp": ["skillbar_fill_flipbook_fishing", "skillbar_flare_fishing"],
+    # l'etable : le fond de la scene selon la specialisation du familier, et
+    # l'ombre sous le familier (feuilles de 2048)
+    "interface/petstableframe/hunterpetstable.blp": [
+        "hunter-stable-bg-art_cunning", "hunter-stable-bg-art_ferocity",
+        "hunter-stable-bg-art_tenacity",
+    ],
+    "interface/store/perks.blp": ["perks-char-shadow"],
+    # les metiers : l'ombre du nombre fabrique sur l'icone du resultat
+    # (ProfessionsOutputButtonTemplate, CountShadow)
+    "interface/petbattles/petbattlehudatlas.blp": ["battlebar-swappetshadow"],
 }
 
 
@@ -180,6 +224,10 @@ APERCUS = {
 }
 
 COTE_MIN = 8
+
+# les bandes animees (FlipBook) dont on ne garde que la premiere image : 2
+# colonnes d'images de 34 de haut (ProfessionsRankBarMixin:Update)
+PREMIERE_IMAGE = ("skillbar_fill_flipbook_",)
 
 DEBORDER = {"interface/buttons/128redbuttonc60.blp", "interface/buttons/128redbutton.blp"}
 MARGE = 2
@@ -232,6 +280,8 @@ def main():
         os.makedirs(os.path.join(ART, dossier), exist_ok=True)
         for nom in ELEMENTS[feuille]:
             r = trouve[(feuille, nom.lower())]
+            if nom.lower().startswith(PREMIERE_IMAGE) and nom.lower() != "skillbar_fill_flipbook_defaultblue":
+                r = dict(r, width=r["width"] // 2, height=34)
             w, h = r["width"], r["height"]
             morceau = image.crop((r["left"], r["top"], r["left"] + w, r["top"] + h))
             # une bande d'un texel (les vignettes de la creation, 1 x 451 ou
