@@ -55,12 +55,13 @@ local K = {}
 ForeverUI.TalentsSearch = K
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 local TEXTE = {
-	consigne = SEARCH or "Search",
-	pasSurBarre = "Missing from action bar",          -- TALENT_FRAME_SEARCH_NOT_ON_ACTIONBAR
-	masquerPassifs = "Hide Passives",                 -- CLASS_TALENT_SEARCH_OPTION_HIDE_PASSIVES
-	rangs = "Show Ranks",                             -- CLASS_TALENT_SEARCH_OPTION_SHOW_RANKS
-	depassement = "And %s more",                      -- TALENT_FRAME_SEARCH_PREVIEW_OVERFLOW_FORMAT
+	consigne = SEARCH,
+	pasSurBarre = L.TALENTSSEARCH_NOT_ON_ACTIONBAR,   -- TALENT_FRAME_SEARCH_NOT_ON_ACTIONBAR
+	masquerPassifs = L.TALENTSSEARCH_HIDE_PASSIVES,   -- CLASS_TALENT_SEARCH_OPTION_HIDE_PASSIVES
+	rangs = L.TALENTSSEARCH_SHOW_RANKS,               -- CLASS_TALENT_SEARCH_OPTION_SHOW_RANKS
+	depassement = L.TALENTSSEARCH_PREVIEW_OVERFLOW,   -- TALENT_FRAME_SEARCH_PREVIEW_OVERFLOW_FORMAT
 }
 local MIN_LETTRES = 3                                 -- MIN_CHARACTER_SEARCH
 
@@ -68,14 +69,14 @@ local MIN_LETTRES = 3                                 -- MIN_CHARACTER_SEARCH
 local TYPE = { description = 1, nom = 2, apparente = 3, exact = 4, absent = 5, postureInactive = 6, barreDesactivee = 7 }
 -- SearchMatchStyles (blizzard_sharedtalentutil.lua)
 local STYLES = {
-	[TYPE.apparente] = { icone = "talents-search-relatedmatch", info = "Related to the talent you searched for" },
-	[TYPE.nom] = { icone = "talents-search-match", info = "Search match" },
-	[TYPE.description] = { icone = "talents-search-match", info = "Search match" },
-	[TYPE.exact] = { icone = "talents-search-exactmatch", info = "Exact search match" },
-	[TYPE.absent] = { icone = "talents-search-notonactionbar", info = "Not on action bar" },
+	[TYPE.apparente] = { icone = "talents-search-relatedmatch", info = L.TALENTSSEARCH_TOOLTIP_RELATED_MATCH },
+	[TYPE.nom] = { icone = "talents-search-match", info = L.TALENTSSEARCH_TOOLTIP_MATCH },
+	[TYPE.description] = { icone = "talents-search-match", info = L.TALENTSSEARCH_TOOLTIP_MATCH },
+	[TYPE.exact] = { icone = "talents-search-exactmatch", info = L.TALENTSSEARCH_TOOLTIP_EXACT_MATCH },
+	[TYPE.absent] = { icone = "talents-search-notonactionbar", info = L.TALENTSSEARCH_TOOLTIP_NOT_ON_ACTIONBAR },
 	[TYPE.postureInactive] = { icone = "talents-search-notonactionbarhidden",
-		info = "On an action bar belonging to a different stance" },
-	[TYPE.barreDesactivee] = { icone = "talents-search-notonactionbarhidden", info = "On a disabled action bar" },
+		info = L.TALENTSSEARCH_TOOLTIP_ON_INACTIVE_BONUSBAR },
+	[TYPE.barreDesactivee] = { icone = "talents-search-notonactionbarhidden", info = L.TALENTSSEARCH_TOOLTIP_ON_DISABLED_ACTIONBAR },
 }
 
 local M = {

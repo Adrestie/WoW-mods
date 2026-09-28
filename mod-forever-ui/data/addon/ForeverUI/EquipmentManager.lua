@@ -48,6 +48,7 @@
 --   la liste defile a la molette, et le trait de camelot marque son bas.
 
 ForeverUI = ForeverUI or {}
+local L = ForeverUI.L
 
 -- ECARTS ASSUMES, sur demande. camelot donne une carte de 169 x 44 dont le
 -- fond fait 152 x 49 pose a x = 42. Ici :
@@ -433,7 +434,7 @@ local function habillerCarte(bouton)
 	end
 
 	bouton.foreverSupprimer = petitBouton("ForeverUIDelete", SUPPRIMER,
-		ICONE_SUPPRIMER, DELETE or "Delete", function(self)
+		ICONE_SUPPRIMER, DELETE, function(self)
 			local carte = self:GetParent()
 			if not carte.name or carte.name == "" then
 				return
@@ -449,7 +450,7 @@ local function habillerCarte(bouton)
 		SUPPRIMER_X, SUPPRIMER_Y)
 
 	bouton.foreverEditer = petitBouton("ForeverUIEdit", EDITER,
-		ICONE_EDITER, SETTINGS or "Settings", function(self)
+		ICONE_EDITER, SETTINGS, function(self)
 			local carte = self:GetParent()
 			if not carte.name or carte.name == "" then
 				return
@@ -674,11 +675,10 @@ local function poserBoutons()
 		nouveau:SetHeight(NOUVEAU_H)
 		nouveau:SetPoint("BOTTOM", panneau, "BOTTOM", 0, NOUVEAU_Y)
 
-		-- ECRIT EN DUR, faute de mieux : camelot ecrit
+		-- DANS LA TABLE DES TEXTES : camelot ecrit
 		-- PAPERDOLL_NEWEQUIPMENTSET, et ce client ne porte aucune chaine
-		-- equivalente -- ni celle-la, ni "New Set" sous un autre nom. Ce
-		-- libelle ne se traduira donc pas.
-		nouveau:SetText("New Set")
+		-- equivalente -- ni celle-la, ni "New Set" sous un autre nom.
+		nouveau:SetText(L.EQUIPMENTMANAGER_NEW_SET)
 
 		-- Le meme visuel que les selecteurs de statistiques : le bouton
 		-- tertiaire, presse tant qu'on le tient.
@@ -1086,31 +1086,31 @@ function ForeverUI.EquipmentSetsDebug()
 		local nom, icone = GetEquipmentSetInfo(index)
 		noms[#noms + 1] = string.format("%d=%s(%s)", index, tostring(nom), tostring(icone))
 	end
-	dire(string.format("ensembles : le client en publie %d : %s", total,
+	dire(string.format(L.EQUIPMENTMANAGER_DEBUG_SETS, total,
 		table.concat(noms, ", ")))
 
-	dire("ordre retenu : " .. table.concat(ordreRetenu(), ", "))
+	dire(L.EQUIPMENTMANAGER_DEBUG_KEPT_ORDER .. table.concat(ordreRetenu(), ", "))
 
 	local rangs = {}
 	for position, index in ipairs(ensemblesOrdonnes()) do
 		rangs[#rangs + 1] = string.format("%d<-%d", position, index)
 	end
-	dire("ordre pose : " .. table.concat(rangs, ", "))
-	dire(string.format("defilement = %d, cartes qui tiennent = %d, panneau %s",
-		decalage, cartesVisibles(), (panneau and panneau:IsShown()) and "ouvert" or "ferme"))
-	dire(string.format("porte = %s, edition = %s",
+	dire(L.EQUIPMENTMANAGER_DEBUG_PLACED_ORDER .. table.concat(rangs, ", "))
+	dire(string.format(L.EQUIPMENTMANAGER_DEBUG_SCROLL,
+		decalage, cartesVisibles(), (panneau and panneau:IsShown()) and L.EQUIPMENTMANAGER_DEBUG_OPEN or L.EQUIPMENTMANAGER_DEBUG_CLOSED))
+	dire(string.format(L.EQUIPMENTMANAGER_DEBUG_WORN,
 		tostring(ForeverUIDB and ForeverUIDB.ensembleEquipe), tostring(edition and edition.ancien)))
 
 	local dialogue = _G["GearManagerDialog"]
 	if not dialogue or not dialogue.buttons then
-		dire("aucune carte : le dialogue du client n'est pas la.")
+		dire(L.EQUIPMENTMANAGER_DEBUG_NO_DIALOG)
 		return
 	end
 	for index, bouton in ipairs(dialogue.buttons) do
 		if bouton.name and bouton.name ~= "" or bouton:IsShown() then
 			local ancre = bouton:GetPoint(1)
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"   carte %d : nom=%s visible=%s ancre=%s coche=%s",
+				L.EQUIPMENTMANAGER_DEBUG_CARD,
 				index, tostring(bouton.name), tostring(bouton:IsShown()),
 				tostring(ancre),
 				tostring(bouton.foreverCoche and bouton.foreverCoche:IsShown())))

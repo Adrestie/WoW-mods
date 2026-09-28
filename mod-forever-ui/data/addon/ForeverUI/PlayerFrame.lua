@@ -18,6 +18,7 @@
 -- ForeverUI.Layout, qui decide et retient. Voir Layout.lua.
 
 local FRAME_WIDTH, FRAME_HEIGHT = 232, 100
+local L = ForeverUI.L
 
 local ART_NORMAL = "ui-hud-unitframe-player-portraiton"
 -- "-incombat" n'est PAS un art de cadre de rechange : dans les deux clients,
@@ -380,9 +381,9 @@ end
 -- valeurs constatees plutot que supposees.
 ForeverUI.PlayerFrameDebug = function()
 	local status = UnitThreatSituation and UnitThreatSituation("player")
-	local cible = UnitExists("target") and UnitName("target") or "aucune"
+	local cible = UnitExists("target") and UnitName("target") or L.PLAYERFRAME_DEBUG_NO_TARGET
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r etat : frappe=%s liste_haine=%s menace=%s cible=%s hostile=%s me_vise=%s lueur=%s alpha=%.2f",
+		"|cff66ccffForeverUI|r " .. L.PLAYERFRAME_DEBUG,
 		tostring(frame.inCombat), tostring(frame.onHateList), tostring(status), cible,
 		tostring(UnitExists("target") and UnitCanAttack("player", "target") or false),
 		tostring(UnitIsUnit("targettarget", "player")),
@@ -571,4 +572,4 @@ frame:RegisterEvent("PLAYER_TARGET_CHANGED")
 frame:RegisterEvent("UNIT_TARGET")
 
 ForeverUI.PlayerFrame = frame
-ForeverUI.Layout.Register(frame, "playerframe", "Cadre joueur", "TOPLEFT", "TOPLEFT", 10, -10)
+ForeverUI.Layout.Register(frame, "playerframe", L.PLAYERFRAME_EDIT_LABEL, "TOPLEFT", "TOPLEFT", 10, -10)

@@ -70,6 +70,7 @@ local S = {}
 ForeverUI.Social = S
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 
 -- une table : Lua 5.1 limite a 60 les valeurs capturees par une fonction
 local G = {
@@ -1180,16 +1181,16 @@ end
 function ForeverUI.SocialDebug()
 	local dire = function(t) DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t) end
 	if not S.cadre then
-		dire("fenetre Social : non construite (FriendsFrame absent ?)")
+		dire(L.SOCIAL_DEBUG_NOT_BUILT)
 		return
 	end
 	local total, enLigne = GetNumFriends()
-	dire(string.format("social : onglet %s, sous-onglet %s | notre fenetre %s | panneau souris %s",
+	dire(string.format(L.SOCIAL_DEBUG_STATE,
 		tostring(FriendsFrame.selectedTab), tostring(FriendsTabHeader and FriendsTabHeader.selectedTab),
 		tostring(S.cadre:IsShown()), tostring(FriendsFrame:IsMouseEnabled())))
-	dire(string.format("amis %s (%s en ligne), choisi %s | ignores %s, choisi %s",
+	dire(string.format(L.SOCIAL_DEBUG_FRIENDS,
 		tostring(total), tostring(enLigne), tostring(GetSelectedFriend()), tostring(GetNumIgnores()),
 		tostring(GetSelectedIgnore())))
-	dire(string.format("liste : %d entree(s), %d visible(s), decalage %d",
+	dire(string.format(L.SOCIAL_DEBUG_LIST,
 		#(S.contenu or {}), S.visibles or 0, S.decalage or 0))
 end

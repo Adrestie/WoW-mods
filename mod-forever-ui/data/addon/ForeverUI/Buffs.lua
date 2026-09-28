@@ -68,6 +68,7 @@ local B = {}
 ForeverUI.Buffs = B
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 
 local G = {
 	largeur = 30, hauteur = 40, icone = 30,
@@ -83,9 +84,9 @@ local G = {
 
 local BARRES = {
 	buffs = { nom = "ForeverUIBuffFrame", filtre = "HELPFUL", max = 32, parLigne = 11,
-		x = -255, y = -10, libelle = "Améliorations" },
+		x = -255, y = -10, libelle = L.BUFFS_EDIT_LABEL_BUFFS },
 	debuffs = { nom = "ForeverUIDebuffFrame", filtre = "HARMFUL", max = 16, parLigne = 8,
-		x = -270, y = -155, libelle = "Affaiblissements", typeVisible = true },
+		x = -270, y = -155, libelle = L.BUFFS_EDIT_LABEL_DEBUFFS, typeVisible = true },
 }
 
 -- la bordure par type (DEBUFF_DISPLAY_INFO de camelot)
@@ -636,11 +637,11 @@ function ForeverUI.BuffsDebug()
 	local f = B.buffs
 	local montres = 0
 	for _, b in ipairs(f.boutons) do if b:IsShown() then montres = montres + 1 end end
-	dire(string.format("ameliorations : unite %s, %d auras, %d cachables, %d montrees | repli %s (deplie %s) | regroupement %s (%d) | durees %s",
-		B.unite(), #f.auras, f.cachables or 0, montres, f.repli:IsShown() and "visible" or "cache", tostring(B.deplie),
-		f.regroupement:IsShown() and "visible" or "cache", f.regroupement.nombre or 0, tostring(durees())))
+	dire(string.format(L.BUFFS_DEBUG_BUFFS,
+		B.unite(), #f.auras, f.cachables or 0, montres, f.repli:IsShown() and L.BUFFS_DEBUG_VISIBLE or L.BUFFS_DEBUG_HIDDEN, tostring(B.deplie),
+		f.regroupement:IsShown() and L.BUFFS_DEBUG_VISIBLE or L.BUFFS_DEBUG_HIDDEN, f.regroupement.nombre or 0, tostring(durees())))
 	local d = B.debuffs
 	local types = {}
-	for _, info in ipairs(d.auras) do table.insert(types, tostring(info.debuffType or "aucun")) end
-	dire(string.format("affaiblissements : %d (%s)", #d.auras, table.concat(types, ", ")))
+	for _, info in ipairs(d.auras) do table.insert(types, tostring(info.debuffType or NONE)) end
+	dire(string.format(L.BUFFS_DEBUG_DEBUFFS, #d.auras, table.concat(types, ", ")))
 end

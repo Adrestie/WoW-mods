@@ -2011,6 +2011,37 @@ function IsModifiedClick() return false end
 function IsShiftKeyDown() return false end
 -- Alt et Ctrl : un essai les enfonce (TOUCHES.alt, TOUCHES.ctrl)
 TOUCHES = {}
+-- la langue du client : un essai la change (LANGUE = "frFR")
+LANGUE = "enUS"
+function GetLocale() return LANGUE end
+-- chaines du client 3.3.5 (GlobalStrings.lua) que les textes lisent
+-- depuis la reprise des langues (2026-09-28), avec leur valeur enUS
+ACHIEVEMENTS = "Achievements"
+ACTIVATE = "Activate"
+ADDMEMBER_TEAM = "Add Member"
+ARENA_TEAM_RATING = "Team Rating"
+ARENA_THIS_WEEK = "This Week"
+ATTACK_POWER_TOOLTIP = "Attack Power"
+BATTLEFIELD_GROUP_JOIN = "Join as Group"
+BATTLEFIELD_QUEUE_STATUS = "In Queue"
+CONTINUE = "Continue"
+GAMES = "Games"
+GENERAL = "General"
+GLYPHS = "Glyphs"
+JOIN_AS_PARTY = "Join as Party"
+LOCKED = "Locked"
+MINIMAP_LABEL = "Minimap"
+NEWBIE_TOOLTIP_ADDTEAMMEMBER = "Adds a new player to the team."
+OBJECTIVES_VIEW_ACHIEVEMENT = "Open Achievement"
+OBJECTIVES_VIEW_IN_QUESTLOG = "Open Quest Details"
+QUESTS_LABEL = "Quests"
+QUEST_REWARDS = "Rewards"
+RANK = "Rank"
+SHOW_ALL_SPELL_RANKS = "Show all spell ranks"
+TALENT_SPEC_PRIMARY_GLYPH = "Primary Glyphs"
+TALENT_SPEC_SECONDARY_GLYPH = "Secondary Glyphs"
+WIN = "Win"
+WIN_LOSS = "Win - Loss"
 function IsAltKeyDown() return TOUCHES.alt end
 function IsControlKeyDown() return TOUCHES.ctrl end
 -- le personnage (vitesse, orientation, chute, taxi), la saisie qui a le
@@ -5149,7 +5180,8 @@ def main():
 
     ordre = ["UIAtlas.lua", "UIAtlas_01_selection_perso.lua", "UIAtlas_02_creation_perso.lua",
              "UIAtlas_03_barre_action.lua", "UIAtlas_04_cadres_unite.lua",
-             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "UIAtlas_07_decoupes.lua", "AtlasUtil.lua",
+             "UIAtlas_05_feuille_perso.lua", "UIAtlas_06_complements.lua", "UIAtlas_07_decoupes.lua",
+             "Textes.lua", "Textes_enUS.lua", "Textes_frFR.lua", "AtlasUtil.lua",
              "Panes.lua", "ScrollBar.lua", "Layout.lua", "Superposition.lua", "DropDown.lua",
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua", "PartyFrame.lua", "RaidFrame.lua",
@@ -5217,6 +5249,44 @@ def main():
             print("  ECHEC %-34s %s" % (fn, err))
         sys.exit("chargement interrompu")
     print("chargement : %d fichiers, aucune erreur" % len(ordre))
+
+    # AUCUN TEXTE EN DUR (demande du 2026-09-28) : toute cle employee dans le
+    # code (L.CLE, L["CLE"], ForeverUI.L.CLE ; G.L.CLE en glue) existe en
+    # anglais ET en francais, et les deux langues ont les memes cles.
+    import re as _re
+    GLUE = os.path.join(RACINE, "data", "glue", "Interface", "GlueXML")
+    def cles_de(chemin):
+        return set(_re.findall(r"^\t([A-Z0-9_]+) = ", io.open(chemin, encoding="utf-8").read(), _re.M))
+    def employees(dossier, exclus):
+        vues = {}
+        for fn in os.listdir(dossier):
+            if fn.endswith(".lua") and not fn.startswith(exclus):
+                src = io.open(os.path.join(dossier, fn), encoding="utf-8").read()
+                for cle in _re.findall(r"\bL(?:\.|\[\")([A-Z][A-Z0-9]*_[A-Z0-9_]+)", src):
+                    vues.setdefault(cle, fn)
+        return vues
+    for nom, dossier, prefixe, exclus in [
+            ("jeu", ADDON, "Textes_", "Textes"), ("glue", GLUE, "ForeverUIGlueTextes_", "ForeverUIGlueTextes")]:
+        en = cles_de(os.path.join(dossier, prefixe + "enUS.lua"))
+        fr = cles_de(os.path.join(dossier, prefixe + "frFR.lua"))
+        emp = employees(dossier, exclus)
+        absentes = {c: f for c, f in emp.items() if c not in en}
+        for c, f in sorted(absentes.items()):
+            print("  CLE SANS TEXTE ANGLAIS (%s) %-40s %s" % (nom, c, f))
+        assert not absentes, "des cles employees n'ont pas de texte anglais"
+        assert en == fr, "anglais et francais n'ont pas les memes cles (%s) : %s" % (nom, sorted(en ^ fr)[:20])
+        print("textes (%s) : %d cles, anglais et francais complets, %d employees" % (nom, len(en), len(emp)))
+    assert not list(lua.globals().ForeverUI.textesManquants), list(lua.globals().ForeverUI.textesManquants)
+    # le client francais lit le francais, l'anglais reste la base ; une langue
+    # sans fichier (deDE) lit l'anglais
+    L_ = lua.globals().ForeverUI.L
+    lua.execute('LANGUE = "frFR"')
+    fr = L_.BAGS_CLEANUP
+    lua.execute('LANGUE = "deDE"')
+    de = L_.BAGS_CLEANUP
+    lua.execute('LANGUE = "enUS"')
+    print("langues : %s / %s / %s" % (L_.BAGS_CLEANUP, fr, de))
+    assert (L_.BAGS_CLEANUP, de) == ("Clean Up Bags", "Clean Up Bags") and fr != "Clean Up Bags"
 
     # UN FICHIER AJOUTE AU .toc N ARRIVE QU AU PROCHAIN DEMARRAGE : le client
     # dresse la liste des fichiers d un addon a l ouverture, et /reload ne la
@@ -9660,7 +9730,7 @@ def main():
     """)
     msgs = list(g.RECORDED.messages.values())
     print("   refus : %s zoom(s) arriere | %s" % (g.CARTE.zoomsArriere, msgs[-1]))
-    assert g.CARTE.zoomsArriere == 1 and "refuse par le client" in msgs[-1]
+    assert g.CARTE.zoomsArriere == 1 and "refused by the client" in msgs[-1]
     # EN DONJON, le fil est vide (ni continent ni zone) : "World" reste
     # cliquable ; il ne se desactive que sur la vue cosmique
     lua.execute("CARTE.fichier = 'Naxxramas' CARTE.continent = -1 CARTE.zone = 0 WorldMapFrame_UpdateMap()")
@@ -9728,9 +9798,9 @@ def main():
         SlashCmdList["FOREVERUI"]("souris")
     """)
     msgs = list(g.RECORDED.messages.values())
-    trace = [m for m in msgs if "sous la souris" in m]
+    trace = [m for m in msgs if "under the mouse" in m]
     print("   espion : %s" % trace[-1])
-    assert trace and "sous la souris" in trace[-1] and not g.ESPION.shown, "le banc confond GetName et .name ; le client, non"
+    assert trace and "under the mouse" in trace[-1] and not g.ESPION.shown, "le banc confond GetName et .name ; le client, non"
 
     # la liste d'un bouton : ses soeurs
     lua.execute("MENU_ENTREES = {} ForeverUIWorldMapNavButton2.MenuArrowButton:GetScript('OnClick')(ForeverUIWorldMapNavButton2.MenuArrowButton)")

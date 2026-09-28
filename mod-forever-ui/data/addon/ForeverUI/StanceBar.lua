@@ -54,6 +54,7 @@ local CADRE_L, CADRE_H = 35, 35         -- NormalTexture et PushedTexture
 local ETAT_L, ETAT_H = 31.6, 30.9       -- survol, coche, bordure, eclat
 local NB_BOUTONS = 10                   -- numButtons
 local GRISE = 0.4                       -- icone non lancable
+local L = ForeverUI.L
 
 local ATLAS = {
 	normal = "ui-hud-actionbar-iconframe",
@@ -306,5 +307,5 @@ tout()
 -- et se deplace par /fui. Par defaut la barre s'aligne sur le bord gauche de
 -- la barre d'action (-25,5 - 562 = -587,5 du centre) et se pose au-dessus
 -- des barres d'experience et de reputation.
-ForeverUI.Layout.Register(porteur, "postures", "Barre des postures",
+ForeverUI.Layout.Register(porteur, "postures", L.STANCEBAR_EDIT_LABEL,
 	"BOTTOMLEFT", "BOTTOM", -587.5, 84)

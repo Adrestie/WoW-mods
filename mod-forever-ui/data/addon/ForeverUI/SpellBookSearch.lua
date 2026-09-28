@@ -75,16 +75,17 @@ local R = {}
 ForeverUI.SpellBookSearch = R
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 local TEXTE = {
-	consigne = "Search abilities, keywords",         -- SPELLBOOK_SEARCH_INSTRUCTIONS
-	pasSurBarre = "Missing from action bar",         -- SPELLBOOK_SEARCH_NOT_ON_ACTIONBAR
-	exact = "Exact Matches",                         -- SPELLBOOK_SEARCH_HEADER_EXACT
-	apparente = "Related Matches",                   -- SPELLBOOK_SEARCH_HEADER_RELATED
-	nom = "Name Matches",                            -- SPELLBOOK_SEARCH_HEADER_NAME
-	description = "Description Matches",             -- SPELLBOOK_SEARCH_HEADER_DESCRIPTION
-	generique = "Matches",                           -- SPELLBOOK_SEARCH_HEADER_GENERIC
-	depassement = "And %s more",                     -- TALENT_FRAME_SEARCH_PREVIEW_OVERFLOW_FORMAT
-	passif = SPELL_PASSIVE or "Passive",
+	consigne = L.SPELLBOOKSEARCH_INSTRUCTIONS,       -- SPELLBOOK_SEARCH_INSTRUCTIONS
+	pasSurBarre = L.SPELLBOOKSEARCH_NOT_ON_ACTIONBAR, -- SPELLBOOK_SEARCH_NOT_ON_ACTIONBAR
+	exact = L.SPELLBOOKSEARCH_HEADER_EXACT,          -- SPELLBOOK_SEARCH_HEADER_EXACT
+	apparente = L.SPELLBOOKSEARCH_HEADER_RELATED,    -- SPELLBOOK_SEARCH_HEADER_RELATED
+	nom = L.SPELLBOOKSEARCH_HEADER_NAME,             -- SPELLBOOK_SEARCH_HEADER_NAME
+	description = L.SPELLBOOKSEARCH_HEADER_DESCRIPTION, -- SPELLBOOK_SEARCH_HEADER_DESCRIPTION
+	generique = L.SPELLBOOKSEARCH_HEADER_GENERIC,    -- SPELLBOOK_SEARCH_HEADER_GENERIC
+	depassement = L.SPELLBOOKSEARCH_PREVIEW_OVERFLOW, -- TALENT_FRAME_SEARCH_PREVIEW_OVERFLOW_FORMAT
+	passif = SPELL_PASSIVE,
 }
 local MIN_LETTRES = 3                                -- MIN_CHARACTER_SEARCH
 

@@ -62,6 +62,7 @@ ForeverUI = ForeverUI or {}
 
 local J = {}
 ForeverUI.QuestLog = J
+local L = ForeverUI.L
 
 local V = {
 	largeur = 330, x = -3, haut = -25, bas = 3,
@@ -111,23 +112,23 @@ local COULEUR = {
 }
 
 -- Les textes : ceux de 3.3.5 quand il les a, ceux de camelot sinon
--- (GlobalStrings.db2 du client camelot).
+-- (GlobalStrings.db2 du client camelot), dans Textes_<langue>.lua.
 local TEXTE = {
-	recherche = "Search Quest Log",                  -- SEARCH_QUEST_LOG
-	aucunResultat = "No results found",              -- QUEST_LOG_NO_RESULTS
-	vide = "No quests available|n|nAccept quests by talking to characters with a |TInterface\\GossipFrame\\AvailableQuestIcon:16:16|t above their head.",
-	compteur = "Quests: %s%d|r|cffffffff/%d|r",     -- QUEST_LOG_COUNT_TEMPLATE
-	montrerObjectifs = "Show Quest Objectives",     -- QUEST_LOG_SHOW_OBJECTIVES
-	pret = "Ready for turn-in",                      -- QUEST_WATCH_QUEST_READY
-	details = "<Click to view Quest Details>",       -- CLICK_QUEST_DETAILS
-	nePlusSuivre = "Untrack Quest",                  -- UNTRACK_QUEST
-	partagerChat = "Share in Chat",                  -- SHARE_IN_CHAT
-	toutSuivre = "Track All",                        -- QUEST_LOG_TRACK_ALL
-	neRienSuivre = "Untrack All",                    -- QUEST_LOG_UNTRACK_ALL
+	recherche = L.QUESTLOG_SEARCH,                   -- SEARCH_QUEST_LOG
+	aucunResultat = L.QUESTLOG_NO_RESULTS,           -- QUEST_LOG_NO_RESULTS
+	vide = L.QUESTLOG_EMPTY,                         -- QUEST_LOG_NO_QUESTS
+	compteur = L.QUESTLOG_COUNT,                     -- QUEST_LOG_COUNT_TEMPLATE
+	montrerObjectifs = L.QUESTLOG_SHOW_OBJECTIVES,   -- QUEST_LOG_SHOW_OBJECTIVES
+	pret = L.QUESTLOG_READY,                         -- QUEST_WATCH_QUEST_READY
+	details = L.QUESTLOG_CLICK_DETAILS,              -- CLICK_QUEST_DETAILS
+	nePlusSuivre = L.QUESTLOG_UNTRACK_QUEST,         -- UNTRACK_QUEST
+	partagerChat = L.QUESTLOG_SHARE_IN_CHAT,         -- SHARE_IN_CHAT
+	toutSuivre = L.QUESTLOG_TRACK_ALL,               -- QUEST_LOG_TRACK_ALL
+	neRienSuivre = L.QUESTLOG_UNTRACK_ALL,           -- QUEST_LOG_UNTRACK_ALL
 	-- la page d'une quete
-	nePlusSuivreCourt = "Untrack",                   -- UNTRACK_QUEST_ABBREV
-	recompenses = "Rewards",                         -- REWARDS
-	titreEchec = "%s - (Failed)",                    -- QUEST_TITLE_FORMAT_FAILED
+	nePlusSuivreCourt = L.QUESTLOG_UNTRACK,          -- UNTRACK_QUEST_ABBREV
+	recompenses = QUEST_REWARDS,                     -- REWARDS (3.3.5 : QUEST_REWARDS)
+	titreEchec = L.QUESTLOG_TITLE_FAILED,            -- QUEST_TITLE_FORMAT_FAILED
 }
 
 local POLICE = "Fonts\\FRIZQT__.TTF"
@@ -2172,14 +2173,14 @@ ForeverUI.QuestLogDebug = function()
 	local v = J.volet
 	local prefixe = "|cff66ccffForeverUI|r "
 	if not v then
-		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. "journal : pas construit.")
+		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. L.QUESTLOG_DEBUG_NOT_BUILT)
 		return
 	end
 	local entetes, quetes = 0, 0
 	for _, f in ipairs(v.entetes) do if f:IsShown() then entetes = entetes + 1 end end
 	for _, f in ipairs(v.quetes) do if f:IsShown() then quetes = quetes + 1 end end
 	DEFAULT_CHAT_FRAME:AddMessage(prefixe .. string.format(
-		"journal : volet %s (%.0f x %.0f) | %d en-tete(s), %d quete(s) | recherche '%s' | objectifs %s",
-		v:IsShown() and "ouvert" or "ferme", v:GetWidth(), v:GetHeight(), entetes, quetes,
+		L.QUESTLOG_DEBUG_STATE,
+		v:IsShown() and L.QUESTLOG_DEBUG_OPEN or L.QUESTLOG_DEBUG_CLOSED, v:GetWidth(), v:GetHeight(), entetes, quetes,
 		tostring(R.texte), tostring(reglages().objectifs)))
 end

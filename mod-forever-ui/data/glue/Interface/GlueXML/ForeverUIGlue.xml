@@ -3,6 +3,9 @@
 	<!-- ForeverUI : les ecrans d'accueil copies de camelot. Charge apres tout
 	     le GlueXML d'origine (GlueXML.toc). -->
 	<Include file="ForeverUIGlueFonts.xml"/>
+	<Script file="ForeverUIGlueTextes.lua"/>
+	<Script file="ForeverUIGlueTextes_enUS.lua"/>
+	<Script file="ForeverUIGlueTextes_frFR.lua"/>
 	<Script file="ForeverUIGlueAtlas.lua"/>
 	<Script file="ForeverUIGlueDonnees.lua"/>
 	<Script file="ForeverUIGlueCouleurs.lua"/>

@@ -45,10 +45,11 @@
 -- a l'autre (CreditsFrame_Switch) restent ceux du client.
 
 local G = ForeverUIGlue
+local L = G.L
 local F = CreditsFrame
 
--- textes absents de 3.3.5 : ceux de camelot (GlobalStrings du client moderne)
-local TEXTE = { EXTENSION = "Expansion" }
+-- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes)
+local TEXTE = { EXTENSION = L.GLUECREDITS_EXPANSION }
 
 -- creditsType du client (1, 2, 3) -> extension de camelot (0, 1, 2)
 local EXTENSIONS = {

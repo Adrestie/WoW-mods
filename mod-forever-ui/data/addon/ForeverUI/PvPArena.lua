@@ -74,6 +74,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local A = {}
 ForeverUI.PvPArena = A
@@ -324,12 +325,12 @@ local function creerCarte(bloc, rang)
 	d.cote:SetPoint("TOPRIGHT", c, "TOPRIGHT", COTE_X, COTE_Y)
 	d.coteEtiquette = texte(d, "GameFontDisableSmall", "RIGHT")
 	d.coteEtiquette:SetPoint("RIGHT", d.cote, "LEFT", -4, 0)
-	d.coteEtiquette:SetText(txt("ARENA_TEAM_RATING", "Team Rating"))
+	d.coteEtiquette:SetText(ARENA_TEAM_RATING)
 	d.type = texte(d, "GameFontHighlightSmall", "LEFT")
 	d.type:SetPoint("TOPLEFT", c, "TOPLEFT", TEXTE_X, TYPE_Y)
-	d.jeuxEtiquette, d.jeux = colonne(d, COLONNES_CARTE.jeux, ETIQUETTES_Y, txt("GAMES", "Games"))
-	d.bilanEtiquette, d.bilan = colonne(d, COLONNES_CARTE.bilan, ETIQUETTES_Y, txt("WIN_LOSS", "Win - Loss"))
-	d.jouesEtiquette, d.joues = colonne(d, COLONNES_CARTE.joues, ETIQUETTES_Y, txt("PLAYED", "Played"))
+	d.jeuxEtiquette, d.jeux = colonne(d, COLONNES_CARTE.jeux, ETIQUETTES_Y, GAMES)
+	d.bilanEtiquette, d.bilan = colonne(d, COLONNES_CARTE.bilan, ETIQUETTES_Y, WIN_LOSS)
+	d.jouesEtiquette, d.joues = colonne(d, COLONNES_CARTE.joues, ETIQUETTES_Y, PLAYED)
 
 	-- L'emplacement vide : "(2v2)", en GameFontDisableLarge.
 	c.vide = c:CreateFontString(nil, "ARTWORK", "GameFontDisableLarge")
@@ -341,8 +342,8 @@ local function creerCarte(bloc, rang)
 			self.survol:SetAlpha(self.equipe and SURVOL_ALPHA or 0)
 		end
 		if GameTooltip_AddNewbieTip then
-			GameTooltip_AddNewbieTip(self, txt("ARENA_TEAM", "Arena Team"), 1.0, 1.0, 1.0,
-				self.equipe and txt("CLICK_FOR_DETAILS", "") or txt("ARENA_TEAM_LEAD_IN", ""), 1)
+			GameTooltip_AddNewbieTip(self, ARENA_TEAM, 1.0, 1.0, 1.0,
+				self.equipe and CLICK_FOR_DETAILS or ARENA_TEAM_LEAD_IN, 1)
 		end
 	end)
 	c:SetScript("OnLeave", function(self)
@@ -371,7 +372,7 @@ local function remplirCarte(c, id)
 		c.bord:Hide()
 		c.embleme:Hide()
 		d:Hide()
-		c.vide:SetText(string.format(txt("PVP_TEAMSIZE", "(%dv%d)"), c.taille, c.taille))
+		c.vide:SetText(string.format(PVP_TEAMSIZE, c.taille, c.taille))
 		c.vide:Show()
 		return
 	end
@@ -386,7 +387,7 @@ local function remplirCarte(c, id)
 	local pct = pourcentage(mesJoues, joues)
 	d.nom:SetText(e.nom)
 	d.cote:SetText(e.cote)
-	d.type:SetText(txt("ARENA_THIS_WEEK", "This Week"))
+	d.type:SetText(ARENA_THIS_WEEK)
 	d.jeux:SetText(joues)
 	d.bilan:SetText(tostring(victoires) .. " - " .. tostring(joues - victoires))
 	d.joues:SetText(tostring(mesJoues) .. " (" .. string.format("%d", pct) .. "%)")
@@ -450,7 +451,7 @@ function A.maj()
 			c:Hide()
 		end
 		local precedente = GetPreviousArenaSeason and GetPreviousArenaSeason() or 0
-		horsSaison:SetText(string.format(txt("ARENA_OFF_SEASON_TEXT", "%d %d"),
+		horsSaison:SetText(string.format(ARENA_OFF_SEASON_TEXT,
 			precedente, precedente + 1))
 		horsSaison:Show()
 	else
@@ -538,7 +539,7 @@ local function creerEntete(f, n, precedent)
 	local fs = b:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	fs:SetPoint("CENTER", m, "CENTER", 0, 0)
 	b:SetFontString(fs)
-	b:SetText(txt(def.texte, def.texte))
+	b:SetText(txt(def.texte))
 	b:SetHighlightTexture(SURBRILLANCE_COLONNE)
 	local s = b:GetHighlightTexture()
 	if s then
@@ -660,10 +661,10 @@ local function creerFenetre(bloc)
 	f.type = texte(f, "GameFontHighlightSmall", "LEFT")
 	f.type:SetPoint("TOPLEFT", f, "TOPLEFT", STATS_X, STATS_Y - 8)
 	local _
-	_, f.jeux = colonne(f, COLONNES_STATS[1], STATS_Y, txt("GAMES", "Games"), nil, STATS_VALEUR_ECART)
-	_, f.bilan = colonne(f, COLONNES_STATS[2], STATS_Y, txt("WIN_LOSS", "Win - Loss"), nil, STATS_VALEUR_ECART)
-	_, f.rang = colonne(f, COLONNES_STATS[3], STATS_Y, txt("RANK", "Rank"), nil, STATS_VALEUR_ECART)
-	_, f.cote = colonne(f, COLONNES_STATS[4], STATS_Y, txt("ARENA_TEAM_RATING", "Team Rating"),
+	_, f.jeux = colonne(f, COLONNES_STATS[1], STATS_Y, GAMES, nil, STATS_VALEUR_ECART)
+	_, f.bilan = colonne(f, COLONNES_STATS[2], STATS_Y, WIN_LOSS, nil, STATS_VALEUR_ECART)
+	_, f.rang = colonne(f, COLONNES_STATS[3], STATS_Y, RANK, nil, STATS_VALEUR_ECART)
+	_, f.cote = colonne(f, COLONNES_STATS[4], STATS_Y, ARENA_TEAM_RATING,
 		"GameFontNormalSmall", STATS_VALEUR_ECART)
 
 	local trait = f:CreateTexture(nil, "ARTWORK")
@@ -683,15 +684,15 @@ local function creerFenetre(bloc)
 		f.lignes[n] = creerLigne(f, n)
 	end
 
-	f.ajouter = boutonPanneau(f, txt("ADDMEMBER_TEAM", "Add Member"), AJOUTER_L, AJOUTER_H)
+	f.ajouter = boutonPanneau(f, ADDMEMBER_TEAM, AJOUTER_L, AJOUTER_H)
 	f.ajouter:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", AJOUTER_X, AJOUTER_Y)
 	f.ajouter:SetScript("OnClick", function()
 		StaticPopup_Show("ADD_TEAMMEMBER")
 	end)
 	f.ajouter:SetScript("OnEnter", function(self)
 		if GameTooltip_AddNewbieTip then
-			GameTooltip_AddNewbieTip(self, txt("ADDMEMBER", "Add Member"), 1.0, 1.0, 1.0,
-				txt("NEWBIE_TOOLTIP_ADDTEAMMEMBER", ""), 1)
+			GameTooltip_AddNewbieTip(self, ADDMEMBER, 1.0, 1.0, 1.0,
+				NEWBIE_TOOLTIP_ADDTEAMMEMBER, 1)
 		end
 	end)
 	f.ajouter:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -752,19 +753,19 @@ function A.majDetail()
 	end
 
 	f.titre:SetText(tostring(e.nom) .. " |cffffffff"
-		.. string.format(txt("PVP_TEAMSIZE", "(%dv%d)"), e.taille, e.taille) .. "|r")
+		.. string.format(PVP_TEAMSIZE, e.taille, e.taille) .. "|r")
 	f.rang:SetText(e.rang)
 	f.cote:SetText(e.cote)
 
 	local jouesEquipe, victoires
 	if f.saison then
 		jouesEquipe, victoires = e.jouesSaison or 0, e.victoiresSaison or 0
-		f.type:SetText(string.upper(txt("ARENA_THIS_SEASON", "This Season")))
-		f.bascule.texte:SetText(txt("ARENA_THIS_WEEK_TOGGLE", ""))
+		f.type:SetText(string.upper(ARENA_THIS_SEASON))
+		f.bascule.texte:SetText(ARENA_THIS_WEEK_TOGGLE)
 	else
 		jouesEquipe, victoires = e.joues or 0, e.victoires or 0
-		f.type:SetText(string.upper(txt("ARENA_THIS_WEEK", "This Week")))
-		f.bascule.texte:SetText(txt("ARENA_THIS_SEASON_TOGGLE", ""))
+		f.type:SetText(string.upper(ARENA_THIS_WEEK))
+		f.bascule.texte:SetText(ARENA_THIS_SEASON_TOGGLE)
 	end
 	f.jeux:SetText(jouesEquipe)
 	f.bilan:SetText(tostring(victoires) .. " - " .. tostring(jouesEquipe - victoires))
@@ -861,7 +862,7 @@ function A.monter(bloc, volet)
 	points:EnableMouse(true)
 	points.etiquette = texte(points, "GameFontHighlightSmall", "LEFT")
 	points.etiquette:SetPoint("LEFT", points, "LEFT", 0, 0)
-	points.etiquette:SetText(txt("PVP_LABEL_ARENA", "ARENA:"))
+	points.etiquette:SetText(PVP_LABEL_ARENA)
 	points.valeur = texte(points, "GameFontNormal", "RIGHT")
 	points.valeur:SetPoint("LEFT", points.etiquette, "RIGHT", POINTS_ECART, 0)
 	points.icone = points:CreateTexture(nil, "ARTWORK")
@@ -871,8 +872,8 @@ function A.monter(bloc, volet)
 	points.icone:SetPoint("LEFT", points.valeur, "RIGHT", ICONE_ECART, 0)
 	points:SetScript("OnEnter", function(self)
 		GameTooltip_SetDefaultAnchor(GameTooltip, self)
-		GameTooltip:SetText(txt("ARENA_POINTS", "Arena Points"), 1.0, 1.0, 1.0)
-		GameTooltip:AddLine(txt("TOOLTIP_ARENA_POINTS", ""), nil, nil, nil, 1)
+		GameTooltip:SetText(ARENA_POINTS, 1.0, 1.0, 1.0)
+		GameTooltip:AddLine(TOOLTIP_ARENA_POINTS, nil, nil, nil, 1)
 		GameTooltip:Show()
 	end)
 	points:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -949,25 +950,24 @@ function ForeverUI.PvPArenaDebug()
 	local dire = function(t)
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t)
 	end
-	dire(string.format("saison %s (precedente %s) | points d'arene %s",
+	dire(string.format(L.PVPARENA_DEBUG_SEASON,
 		tostring(GetCurrentArenaSeason and GetCurrentArenaSeason()),
 		tostring(GetPreviousArenaSeason and GetPreviousArenaSeason()),
 		tostring(GetArenaCurrency and GetArenaCurrency())))
 	for i = 1, MAX_EQUIPES do
 		local e = lireEquipe(i)
 		if e.nom then
-			dire(string.format("equipe %d : %s (%dv%d) cote %s | semaine %s/%s, moi %s"
-				.. " | saison %s/%s | banniere bord %s embleme %s",
+			dire(string.format(L.PVPARENA_DEBUG_TEAM,
 				i, e.nom, e.taille or 0, e.taille or 0, tostring(e.cote),
 				tostring(e.victoires), tostring(e.joues), tostring(e.mesJoues),
 				tostring(e.victoiresSaison), tostring(e.jouesSaison),
 				tostring(e.bord), tostring(e.embleme)))
 		else
-			dire(string.format("equipe %d : aucune", i))
+			dire(string.format(L.PVPARENA_DEBUG_NO_TEAM, i))
 		end
 	end
 	if fenetre then
-		dire(string.format("detail : ouvert=%s equipe=%s saison=%s",
+		dire(string.format(L.PVPARENA_DEBUG_DETAIL,
 			tostring(fenetre:IsShown()), tostring(fenetre.equipe), tostring(fenetre.saison)))
 	end
 end

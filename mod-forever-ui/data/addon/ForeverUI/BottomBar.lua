@@ -91,6 +91,7 @@ local BAGS_OFFSET_X, BAGS_OFFSET_Y = 7, -4
 local SEP = string.char(92)
 local ICONE_SAC = "Interface" .. SEP .. "ForeverUI" .. SEP .. "icons" .. SEP .. "ui-hud-actionbar-bag"
 local PERFORMANCE_IMAGE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "mainmenubar" .. SEP .. "ui-mainmenubar-performancebar"
+local L = ForeverUI.L
 
 -- L'ordre de camelot, reduit aux boutons que ce client possede.
 local MICRO = {
@@ -697,8 +698,8 @@ local function toutPoser()
 	end
 end
 
-ForeverUI.Layout.Register(micro, "micromenu", "Micro-menu", "BOTTOM", "BOTTOM", MICRO_X, MICRO_Y)
-ForeverUI.Layout.Register(sacs, "sacs", "Barre des sacs", "BOTTOMLEFT", "BOTTOM",
+ForeverUI.Layout.Register(micro, "micromenu", L.BOTTOMBAR_EDIT_LABEL_MICROMENU, "BOTTOM", "BOTTOM", MICRO_X, MICRO_Y)
+ForeverUI.Layout.Register(sacs, "sacs", L.BOTTOMBAR_EDIT_LABEL_BAGS, "BOTTOMLEFT", "BOTTOM",
 	MICRO_X + micro:GetWidth() / 2 + BAGS_OFFSET_X, MICRO_Y + BAGS_OFFSET_Y)
 positionsParDefaut()
 mesurerRangee()
@@ -737,15 +738,14 @@ function ForeverUI.MicroDebug()
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
 	end
 
-	dire(string.format("micro-menu : %d boutons, bandeau %.0f x %.0f, pas %d",
+	dire(string.format(L.BOTTOMBAR_MICRO_DEBUG,
 		#boutonsMicro, micro:GetWidth() or 0, micro:GetHeight() or 0, MICRO_PITCH))
 
 	for index, entree in ipairs(boutonsMicro) do
 		local bouton = entree.bouton
 		local point, cible, pointCible, x, y = bouton:GetPoint(1)
 		DEFAULT_CHAT_FRAME:AddMessage(string.format(
-			"   %2d %-24s %s sur %s (%s, %s) | %.0f x %.0f | attendu x=%d | "
-			.. "visible=%s actif=%s niveau=%d ancres=%d",
+			"   " .. L.BOTTOMBAR_MICRO_BUTTON,
 			index, bouton:GetName() or "?", tostring(point),
 			tostring(cible and cible.GetName and cible:GetName()),
 			tostring(x), tostring(y), bouton:GetWidth() or 0, bouton:GetHeight() or 0,
@@ -760,16 +760,16 @@ function ForeverUI.MicroDebug()
 	veille:SetScript("OnUpdate", function(self, ecoule)
 		reste = reste - (ecoule or 0)
 		local sous = GetMouseFocus and GetMouseFocus()
-		local nom = sous and sous.GetName and sous:GetName() or "(rien)"
+		local nom = sous and sous.GetName and sous:GetName() or L.BOTTOMBAR_NOTHING
 		if nom ~= dernier then
 			dernier = nom
-            DEFAULT_CHAT_FRAME:AddMessage("   sous le curseur : " .. nom)
+            DEFAULT_CHAT_FRAME:AddMessage("   " .. L.BOTTOMBAR_UNDER_CURSOR .. nom)
 		end
 		if reste <= 0 then
 			self:SetScript("OnUpdate", nil)
 		end
 	end)
-	dire("promenez le curseur sur le bouton du personnage : cinq secondes.")
+	dire(L.BOTTOMBAR_HOVER_PROMPT)
 end
 
 -- LES CONTENANTS VIDES NE PRENNENT PLUS LA SOURIS.
@@ -796,7 +796,7 @@ ForeverUI.BagsDividers = separateurs
 ForeverUI.BottomBarDebug = function()
 	local point, _relativeTo, relativePoint, x, y = sacs:GetPoint(1)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r bas : micro %.0f x %.0f (%d boutons) | sacs %.0f x %.0f | ancre %s sur %s (%.1f, %.1f) | trousseau visible=%s",
+		"|cff66ccffForeverUI|r " .. L.BOTTOMBAR_DEBUG,
 		micro:GetWidth(), micro:GetHeight(), #boutonsMicro,
 		sacs:GetWidth(), sacs:GetHeight(),
 		tostring(point), tostring(relativePoint), x or 0, y or 0,

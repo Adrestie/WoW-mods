@@ -93,23 +93,25 @@
 -- pas. Les fleches cyclent par CharacterCustomization_Left / _Right.
 
 local G = ForeverUIGlue
+local L = G.L
 local cadre = CharacterCreateFrame
 
--- textes absents de 3.3.5 : ceux de camelot (GlobalStrings du client moderne)
+-- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes) ; les noms des
+-- factions sont ceux du client (ALLIANCE, HORDE de GlueStrings)
 local TEXTE = {
-	CUSTOMIZE = "Customize",
-	FINISH = "Finish",
-	RACIAL_TRAITS = "Racial Traits",
-	FACTION = { Alliance = "Alliance", Horde = "Horde" },
+	CUSTOMIZE = L.GLUECHARACTERCREATE_CUSTOMIZE,
+	FINISH = L.GLUECHARACTERCREATE_FINISH,
+	RACIAL_TRAITS = L.GLUECHARACTERCREATE_RACIAL_TRAITS,
+	FACTION = { Alliance = ALLIANCE, Horde = HORDE },
 	LORE = {
-		Alliance = "The noble races of the Alliance are bound together by proud traditions of nobility, honor, faith, justice, and sacrifice.\n\nThe many different Alliance peoples all contribute their technical, arcane, and spiritual wisdom toward the goal of a peaceful and just world.\n\nTake up their banner to represent the high ideals of the Alliance throughout Azeroth and beyond.",
-		Horde = "The proud nations of the Horde are loosely joined in an alliance of convenience against a hostile world that would see them destroyed.\n\nFocused, ferocious, and sometimes monstrous, the Horde values strength and honor, but struggles to keep aggression in check.\n\nJoin the Horde and fight to build a world where their people can live free.",
+		Alliance = L.GLUECHARACTERCREATE_LORE_ALLIANCE,
+		Horde = L.GLUECHARACTERCREATE_LORE_HORDE,
 	},
-	BODY = { [SEX_MALE] = "Body 1", [SEX_FEMALE] = "Body 2" },
-	RANDOMIZE_APPEARANCE = "Randomize Appearance",
-	RESET_CAMERA = "Reset Camera",
-	ROTATE_LEFT = "Rotate Left",
-	ROTATE_RIGHT = "Rotate Right",
+	BODY = { [SEX_MALE] = L.GLUECHARACTERCREATE_BODY_1, [SEX_FEMALE] = L.GLUECHARACTERCREATE_BODY_2 },
+	RANDOMIZE_APPEARANCE = L.GLUECHARACTERCREATE_RANDOMIZE_APPEARANCE,
+	RESET_CAMERA = L.GLUECHARACTERCREATE_RESET_CAMERA,
+	ROTATE_LEFT = L.GLUECHARACTERCREATE_ROTATE_LEFT,
+	ROTATE_RIGHT = L.GLUECHARACTERCREATE_ROTATE_RIGHT,
 }
 
 local ART = "Interface\\ForeverUI\\charactercreate\\"

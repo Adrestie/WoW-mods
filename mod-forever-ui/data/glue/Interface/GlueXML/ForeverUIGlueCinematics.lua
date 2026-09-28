@@ -37,9 +37,10 @@
 -- passe par Cinematics_PlayMovie du client, avec son bouton.
 
 local G = ForeverUIGlue
+local L = G.L
 
--- textes absents de 3.3.5 : ceux de camelot (GlobalStrings du client moderne)
-local TEXTE = { SOUS_TITRES = "Show Subtitles" }
+-- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes)
+local TEXTE = { SOUS_TITRES = L.GLUECINEMATICS_SHOW_SUBTITLES }
 
 local FILMS = {
 	{ titre = WORLD_OF_WARCRAFT, vignette = "StreamCinematic-Classic-Large" },

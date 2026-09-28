@@ -46,9 +46,10 @@
 --   La barre de defilement reste celle de 3.3.5 : MinimalScrollBar n'est pas
 --   portee.
 --   ICON_SELECTION_TITLE_CURRENT et sa description n'existent pas dans ce
---   client. Les deux lignes sont ecrites en dur, comme "New Set".
+--   client. Les deux lignes viennent de la table des textes, comme "New Set".
 
 ForeverUI = ForeverUI or {}
+local L = ForeverUI.L
 
 -- ECART ASSUME, sur demande : la fenetre prend la HAUTEUR DE LA FEUILLE de
 -- personnage, et non les 495 de camelot. Le nombre de rangees s'en deduit :
@@ -149,15 +150,15 @@ local function poserChoixCourant(popup)
 	surlignage:SetBlendMode("ADD")
 	surlignage:SetAllPoints(bouton)
 
-	-- Ecrites en dur : ICON_SELECTION_TITLE_CURRENT et sa description
-	-- n'existent pas dans ce client.
+	-- Dans la table des textes : ICON_SELECTION_TITLE_CURRENT et sa
+	-- description n'existent pas dans ce client.
 	local titre = zone:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	titre:SetPoint("TOPRIGHT", bouton, "TOPLEFT", -6, -2)
-	titre:SetText("Currently Selected")
+	titre:SetText(L.ICONPICKER_CURRENTLY_SELECTED)
 
 	local aide = zone:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	aide:SetPoint("TOPRIGHT", titre, "BOTTOMRIGHT", 0, -2)
-	aide:SetText("Click to view in the list")
+	aide:SetText(L.ICONPICKER_CLICK_TO_VIEW)
 
 	bouton:SetScript("OnClick", function()
 		if RecalculateGearManagerDialogPopup then

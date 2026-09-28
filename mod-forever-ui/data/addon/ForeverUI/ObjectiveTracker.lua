@@ -61,6 +61,7 @@ ForeverUI = ForeverUI or {}
 
 local T = {}
 ForeverUI.ObjectiveTracker = T
+local L = ForeverUI.L
 
 local G = {
 	largeur = 260, enteteH = 32, enteteTexteX = 7, enteteTexteL = 208,
@@ -93,18 +94,19 @@ COULEUR.normalSurvol.inverse = COULEUR.normal
 COULEUR.echec.inverse = COULEUR.echecSurvol
 COULEUR.echecSurvol.inverse = COULEUR.echec
 
--- Les textes de 3.3.5 quand il les a, ceux de camelot sinon.
+-- Les textes de 3.3.5 quand il les a, ceux de camelot sinon (dans
+-- Textes_<langue>.lua).
 local TEXTE = {
-	tout = "All Objectives",                  -- TRACKER_ALL_OBJECTIVES
-	quetes = "Quests",                        -- TRACKER_HEADER_QUESTS
-	hautsFaits = "Achievements",              -- TRACKER_HEADER_ACHIEVEMENTS
-	pret = "Ready for turn-in",               -- QUEST_WATCH_QUEST_READY
-	voirPage = "Open Quest Details",          -- OBJECTIVES_VIEW_IN_QUESTLOG
-	voirCarte = "Open Quest Map",             -- OBJECTIVES_SHOW_QUEST_MAP
-	nePlusSuivre = "Untrack",                 -- OBJECTIVES_STOP_TRACKING
-	partagerChat = "Share in Chat",           -- SHARE_IN_CHAT
-	abandonner = "Abandon",                   -- ABANDON_QUEST_ABBREV
-	voirHautFait = "Open Achievement",        -- OBJECTIVES_VIEW_ACHIEVEMENT
+	tout = L.OBJECTIVETRACKER_ALL_OBJECTIVES, -- TRACKER_ALL_OBJECTIVES
+	quetes = QUESTS_LABEL,                   -- TRACKER_HEADER_QUESTS (3.3.5 : QUESTS_LABEL)
+	hautsFaits = ACHIEVEMENTS,               -- TRACKER_HEADER_ACHIEVEMENTS (3.3.5 : ACHIEVEMENTS)
+	pret = L.OBJECTIVETRACKER_READY,         -- QUEST_WATCH_QUEST_READY
+	voirPage = OBJECTIVES_VIEW_IN_QUESTLOG,  -- OBJECTIVES_VIEW_IN_QUESTLOG (3.3.5 l'a)
+	voirCarte = L.OBJECTIVETRACKER_OPEN_MAP, -- OBJECTIVES_SHOW_QUEST_MAP
+	nePlusSuivre = L.OBJECTIVETRACKER_UNTRACK, -- OBJECTIVES_STOP_TRACKING
+	partagerChat = L.OBJECTIVETRACKER_SHARE_IN_CHAT, -- SHARE_IN_CHAT
+	abandonner = ABANDON_QUEST_ABBREV,       -- ABANDON_QUEST_ABBREV (3.3.5 l'a)
+	voirHautFait = OBJECTIVES_VIEW_ACHIEVEMENT, -- OBJECTIVES_VIEW_ACHIEVEMENT (3.3.5 l'a)
 	minutes = "%.2d:%.2d",                    -- MINUTES_SECONDS
 	heures = "%.2d:%.2d:%.2d",                -- HOURS_MINUTES_SECONDS
 }
@@ -1192,7 +1194,7 @@ local function construirePorteur()
 	T.porteur = porteur
 	local L = ForeverUI.Layout
 	if L and L.Register then
-		L.Register(porteur, "suivi", "Suivi de quetes", "TOPRIGHT", "TOPRIGHT", G.defautX, G.defautY)
+		L.Register(porteur, "suivi", ForeverUI.L.OBJECTIVETRACKER_EDIT_LABEL, "TOPRIGHT", "TOPRIGHT", G.defautX, G.defautY)
 		-- deplace, remis a zero ou repose a l'entree en jeu : le suivi suit
 		local function apres(id)
 			if id == "suivi" then T.placer() end
@@ -1273,7 +1275,7 @@ construire()
 ForeverUI.ObjectiveTrackerDebug = function()
 	local prefixe = "|cff66ccffForeverUI|r "
 	if not T.entete then
-		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. "suivi : pas construit.")
+		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. L.OBJECTIVETRACKER_DEBUG_NOT_BUILT)
 		return
 	end
 	local n = 0
@@ -1281,7 +1283,7 @@ ForeverUI.ObjectiveTrackerDebug = function()
 	local a = 0
 	for _ in pairs(T.hautsFaits.blocs) do a = a + 1 end
 	DEFAULT_CHAT_FRAME:AddMessage(prefixe .. string.format(
-		"suivi : %.0f x %.0f, replie=%s | en-tete %s | quetes %d bloc(s) (%s) | hauts faits %d bloc(s) (%s) | gestionnaires %d | tri %s, filtre %s",
+		L.OBJECTIVETRACKER_DEBUG_STATE,
 		WatchFrame:GetWidth(), WatchFrame:GetHeight(), tostring(WatchFrame.collapsed), tostring(T.entete:IsShown()),
 		n, tostring(T.quetes:IsShown()), a, tostring(T.hautsFaits:IsShown()), #WATCHFRAME_OBJECTIVEHANDLERS,
 		tostring(WATCHFRAME_SORT_TYPE), tostring(WATCHFRAME_FILTER_TYPE)))

@@ -190,22 +190,23 @@ local SEP = string.char(92)
 local POLICE = "Fonts" .. SEP .. "FRIZQT__.TTF"
 local ROCHE = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-rock"
 local PORTRAIT = "Interface" .. SEP .. "ForeverUI" .. SEP .. "talents" .. SEP .. "portrait_"
+local L = ForeverUI.L
 local TEXTE = {
-	titre = TALENTS or "Talents",
-	nonDepenses = "Unspent Talents",                                -- UNSPENT_POINTS
-	porte = "Spend %d more points to unlock this row",             -- TALENT_FRAME_GATE_TOOLTIP_FORMAT
-	appliquer = "Apply Changes",                                   -- TALENT_FRAME_APPLY_BUTTON_TEXT
-	annuler = "Undo Pending Changes",                              -- TALENT_FRAME_DISCARD_CHANGES_BUTTON_TOOLTIP
-	activer = "Activate",                                          -- TALENT_SPEC_ACTIVATE
-	confirmerFermeture = "You will lose any pending changes if you continue.", -- TALENT_FRAME_CONFIRM_CLOSE
-	actif = "Active",                                              -- TALENT_SPEC_ACTIVE
-	verrouille = "Locked",                                         -- TALENT_SPEC_LOCKED
-	primaire = "Primary",                                          -- DUAL_SPEC_PRIMARY
-	secondaire = "Secondary",                                      -- DUAL_SPEC_SECONDARY
-	familier = PET or "Pet",
-	glyphes = GLYPHS or "Glyphs",                                  -- GLYPHS
-	glyphesPrimaires = TALENT_SPEC_PRIMARY_GLYPH or "Primary Glyphs",
-	glyphesSecondaires = TALENT_SPEC_SECONDARY_GLYPH or "Secondary Glyphs",
+	titre = TALENTS,
+	nonDepenses = L.TALENTS_UNSPENT_POINTS,                        -- UNSPENT_POINTS
+	porte = L.TALENTS_GATE_TOOLTIP,                                -- TALENT_FRAME_GATE_TOOLTIP_FORMAT
+	appliquer = L.TALENTS_APPLY_CHANGES,                           -- TALENT_FRAME_APPLY_BUTTON_TEXT
+	annuler = L.TALENTS_UNDO_PENDING_CHANGES,                      -- TALENT_FRAME_DISCARD_CHANGES_BUTTON_TOOLTIP
+	activer = ACTIVATE,                                            -- TALENT_SPEC_ACTIVATE
+	confirmerFermeture = L.TALENTS_CONFIRM_CLOSE,                  -- TALENT_FRAME_CONFIRM_CLOSE
+	actif = L.TALENTS_SPEC_ACTIVE,                                 -- TALENT_SPEC_ACTIVE
+	verrouille = LOCKED,                                           -- TALENT_SPEC_LOCKED
+	primaire = L.TALENTS_SPEC_PRIMARY,                             -- DUAL_SPEC_PRIMARY
+	secondaire = L.TALENTS_SPEC_SECONDARY,                         -- DUAL_SPEC_SECONDARY
+	familier = PET,
+	glyphes = GLYPHS,                                              -- GLYPHS
+	glyphesPrimaires = TALENT_SPEC_PRIMARY_GLYPH,
+	glyphesSecondaires = TALENT_SPEC_SECONDARY_GLYPH,
 }
 -- l'icone d'une specialisation (TalentFrame_UpdateSpecInfoCache) : l'arbre
 -- principal, l'hybride, ou celle par defaut ; cuites (tools/cuire_masque.py)
@@ -1671,8 +1672,8 @@ end
 -- que notre cle.
 StaticPopupDialogs["FOREVERUI_TALENTS_CONFIRM_CLOSE"] = {
 	text = TEXTE.confirmerFermeture,
-	button1 = CONTINUE or "Continue",
-	button2 = CANCEL or "Cancel",
+	button1 = CONTINUE,
+	button2 = CANCEL,
 	OnAccept = function() T.fermerSansAttente() end,
 	timeout = 0,
 	whileDead = 1,

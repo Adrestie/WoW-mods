@@ -119,7 +119,7 @@ end)
 function G.Police(nom)
 	local police = _G["ForeverUIGlue_" .. nom]
 	if not police then
-		error("police de camelot absente : " .. tostring(nom))
+		error(G.L.GLUE_ERROR_MISSING_FONT .. tostring(nom))
 	end
 	return police
 end
@@ -152,7 +152,7 @@ end
 function G.PoserAtlas(texture, nom, tailleAtlas)
 	local e = G.atlas[string.lower(nom)]
 	if not e then
-		error("element d'atlas absent de la table d'accueil : " .. tostring(nom))
+		error(G.L.GLUE_ERROR_MISSING_ATLAS .. tostring(nom))
 	end
 	texture:SetTexture(e[1])
 	texture:SetTexCoord(e[2], e[3], e[4], e[5])

@@ -60,6 +60,7 @@
 
 local LARGEUR, HAUTEUR = 631, 484
 local VOLET_GAUCHE, VOLET_DROIT = 398, 233
+local L = ForeverUI.L
 
 -- LE REPLI DU VOLET DROIT.
 --
@@ -709,10 +710,8 @@ local function bibliothequeLa()
 	end
 	if not manqueSignale then
 		manqueSignale = true
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r : Panes.lua n'est pas "
-			.. "charge. Un fichier ajoute a l'addon n'arrive qu'au prochain "
-			.. "demarrage du jeu : fermez et rouvrez le client. La feuille de "
-			.. "personnage reste inactive d'ici la.")
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r : "
+			.. L.CHARACTERFRAME_PANES_MISSING)
 	end
 	return false
 end
@@ -1421,7 +1420,7 @@ local function poserNiveau()
 	local classe = UnitClass and UnitClass("player")
 	local texte = ""
 	if niveau and classe then
-		texte = string.format(UNIT_LEVEL_TEMPLATE or "Level %d", niveau) .. " " .. classe
+		texte = string.format(UNIT_LEVEL_TEMPLATE, niveau) .. " " .. classe
 	elseif source then
 		texte = source:GetText() or ""
 	end
@@ -1511,12 +1510,12 @@ local function poserOngletsVolet()
 		voletDroit.pagesDuVolet = PAGES
 
 		voletDroit.ongletStats = creerOngletVolet("ForeverUICharacterStatsTab",
-			CHARACTER_INFO or "Character Info",
+			CHARACTER_INFO,
 			function() choisir("stats") end)
 		voletDroit.ongletStats.choisi:Show()
 
 		voletDroit.ongletEquipement = creerOngletVolet(
-			"ForeverUICharacterGearTab", EQUIPMENT_MANAGER or "Equipment Manager",
+			"ForeverUICharacterGearTab", EQUIPMENT_MANAGER,
 			function() choisir("equipement") end)
 		voletDroit.ongletEquipement.icone:SetTexture(ICONE_GESTIONNAIRE)
 		voletDroit.ongletEquipement.icone:SetTexCoord(
@@ -1524,8 +1523,7 @@ local function poserOngletsVolet()
 			ICONE_GESTIONNAIRE_COORD[3], ICONE_GESTIONNAIRE_COORD[4])
 
 		voletDroit.ongletTitres = creerOngletVolet(
-			"ForeverUICharacterTitlesTab", PAPERDOLL_SIDEBAR_TITLES
-			or TITLES or "Titles",
+			"ForeverUICharacterTitlesTab", L.CHARACTERFRAME_TITLES,
 			function() choisir("titres") end)
 		voletDroit.ongletTitres.icone:SetTexture(ICONE_TITRES)
 		voletDroit.ongletTitres.icone:SetTexCoord(
@@ -1900,9 +1898,9 @@ local function majBoutonRepli(cadre)
 	bouton:SetNormalTexture(art[1])
 	bouton:SetPushedTexture(art[2])
 	if replie then
-		bouton.infobulle = CHARACTER_FRAME_SHOW_DETAILS_TOOLTIP or "Show details"
+		bouton.infobulle = L.CHARACTERFRAME_SHOW_DETAILS
 	else
-		bouton.infobulle = CHARACTER_FRAME_HIDE_DETAILS_TOOLTIP or "Hide details"
+		bouton.infobulle = L.CHARACTERFRAME_HIDE_DETAILS
 	end
 end
 
@@ -2119,9 +2117,9 @@ local function poserOngletsCrees()
 	local faction = (UnitFactionGroup and UnitFactionGroup("player")) or "Alliance"
 	creerOngletLateral("pvp", "ForeverUICharacterTabPvP",
 		ONGLET_ICONES.pvp[faction] or ONGLET_ICONES.pvp.Alliance,
-		PVP or "PvP", ECRAN_PVP)
+		PVP, ECRAN_PVP)
 	creerOngletLateral("stats", "ForeverUICharacterTabStats",
-		ONGLET_ICONES.stats, STATISTICS or "Statistics", ECRAN_STATS)
+		ONGLET_ICONES.stats, STATISTICS, ECRAN_STATS)
 
 	-- Les notres suivent la meme regle que ceux du client : sous le metal.
 	local niveauOnglets = barreOnglets:GetFrameLevel()
@@ -2438,7 +2436,7 @@ local function nomDe(cadre)
 	if not cadre then
 		return "?"
 	end
-	return (cadre.GetName and cadre:GetName()) or "(sans nom)"
+	return (cadre.GetName and cadre:GetName()) or L.CHARACTERFRAME_DEBUG_UNNAMED
 end
 
 local function couvre(cadre, x, y)
@@ -2495,7 +2493,7 @@ function ForeverUI.CharacterTabsDebug()
 	end
 
 	if not CharacterFrame or not CharacterFrame:IsShown() then
-		dire("onglets : ouvrez la feuille d'abord, puis refaites /fui onglets")
+		dire(L.CHARACTERFRAME_DEBUG_TABS_OPEN_FIRST)
 		return
 	end
 
@@ -2509,8 +2507,8 @@ function ForeverUI.CharacterTabsDebug()
 			montres[#montres + 1] = nom
 		end
 	end
-	dire(string.format("ecrans du client montres : %s | groupe ouvert : %s",
-		(#montres > 0) and table.concat(montres, ", ") or "aucun",
+	dire(string.format(L.CHARACTERFRAME_DEBUG_SHOWN_SCREENS,
+		(#montres > 0) and table.concat(montres, ", ") or L.CHARACTERFRAME_DEBUG_NONE,
 		tostring(ForeverUI.Panes and ForeverUI.Panes.CurrentGroup
 			and ForeverUI.Panes.CurrentGroup())))
 
@@ -2529,8 +2527,7 @@ function ForeverUI.CharacterTabsDebug()
 
 	for _, onglet in ipairs(colonne) do
 		local gauche = onglet.GetLeft and onglet:GetLeft()
-		dire(string.format("%-30s montre=%-5s souris=%-5s actif=%-5s "
-			.. "strate=%-10s niveau=%d clic=%s",
+		dire(string.format(L.CHARACTERFRAME_DEBUG_TAB_STATE,
 			nomDe(onglet), tostring(onglet:IsVisible()),
 			tostring(onglet:IsMouseEnabled()),
 			tostring(estActif(onglet)),
@@ -2552,7 +2549,7 @@ function ForeverUI.CharacterTabsDebug()
 				end
 			end
 			if #noms > 0 then
-				DEFAULT_CHAT_FRAME:AddMessage("      couvert par : "
+				DEFAULT_CHAT_FRAME:AddMessage(L.CHARACTERFRAME_DEBUG_COVERED_BY
 					.. table.concat(noms, ", "))
 			end
 		end
@@ -2564,8 +2561,7 @@ function ForeverUI.CharacterTabsDebug()
 		guetteur.dernier = nil
 		guetteur:Show()
 	end
-	dire("promenez le curseur sur les onglets : /fui perso dit ce que la "
-		.. "souris touche vraiment")
+	dire(L.CHARACTERFRAME_DEBUG_HOVER_TABS)
 end
 
 function ForeverUI.CharacterSheetDebug()
@@ -2573,7 +2569,7 @@ function ForeverUI.CharacterSheetDebug()
 	-- de cette fenetre se lisent la, et nulle part ailleurs.
 	if ForeverUI.Panes and ForeverUI.Panes.Report then
 		for _, ligne in ipairs(ForeverUI.Panes.Report()) do
-			DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r volets : " .. ligne)
+			DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.CHARACTERFRAME_DEBUG_PANES .. ligne)
 		end
 	end
 
@@ -2583,11 +2579,11 @@ function ForeverUI.CharacterSheetDebug()
 
 	local bouton = _G["CharacterHeadSlot"]
 	if not bouton or not bouton:GetLeft() then
-		dire("feuille : ouvrez-la d'abord, puis refaites /fui perso")
+		dire(L.CHARACTERFRAME_DEBUG_SHEET_OPEN_FIRST)
 		return
 	end
 
-	dire(string.format("tete : %dx%d strate=%s niveau=%d souris=%s montre=%s",
+	dire(string.format(L.CHARACTERFRAME_DEBUG_HEAD_STATE,
 		bouton:GetWidth(), bouton:GetHeight(), tostring(bouton:GetFrameStrata()),
 		bouton:GetFrameLevel(), tostring(bouton:IsMouseEnabled()),
 		tostring(bouton:IsVisible())))
@@ -2595,7 +2591,7 @@ function ForeverUI.CharacterSheetDebug()
 	-- Un bouton peut aussi avoir perdu ses scripts ou avoir ete desactive :
 	-- cela ne se voit pas davantage a l'ecran.
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   clic=%s glisser=%s recoit=%s actif=%s",
+		L.CHARACTERFRAME_DEBUG_HEAD_SCRIPTS,
 		tostring(bouton:GetScript("OnClick") ~= nil),
 		tostring(bouton:GetScript("OnDragStart") ~= nil),
 		tostring(bouton:GetScript("OnReceiveDrag") ~= nil),
@@ -2606,9 +2602,9 @@ function ForeverUI.CharacterSheetDebug()
 	local trouves = {}
 	parcourir(CharacterFrame, x, y, trouves, 0)
 
-	DEFAULT_CHAT_FRAME:AddMessage("   ce qui couvre son centre et prend la souris :")
+	DEFAULT_CHAT_FRAME:AddMessage(L.CHARACTERFRAME_DEBUG_COVERING)
 	for _, cadre in ipairs(trouves) do
-		DEFAULT_CHAT_FRAME:AddMessage(string.format("      %-34s strate=%-16s niveau=%d",
+		DEFAULT_CHAT_FRAME:AddMessage(string.format(L.CHARACTERFRAME_DEBUG_COVERING_ROW,
 			nomDe(cadre), tostring(cadre:GetFrameStrata()), cadre:GetFrameLevel()))
 	end
 
@@ -2626,7 +2622,7 @@ function ForeverUI.CharacterSheetDebug()
 		if self.reste <= 0 then
 			self:Hide()
 			self:SetScript("OnUpdate", nil)
-			DEFAULT_CHAT_FRAME:AddMessage("   (fin de la veille)")
+			DEFAULT_CHAT_FRAME:AddMessage(L.CHARACTERFRAME_DEBUG_WATCH_END)
 			return
 		end
 
@@ -2634,11 +2630,11 @@ function ForeverUI.CharacterSheetDebug()
 		local nom = nomDe(sous)
 		if nom ~= self.dernier then
 			self.dernier = nom
-			DEFAULT_CHAT_FRAME:AddMessage("      sous le curseur : " .. nom)
+			DEFAULT_CHAT_FRAME:AddMessage(L.CHARACTERFRAME_DEBUG_UNDER_CURSOR .. nom)
 		end
 	end)
 	guetteur:Show()
-	dire("promenez le curseur sur un emplacement pendant cinq secondes.")
+	dire(L.CHARACTERFRAME_DEBUG_HOVER_SLOT)
 end
 
 -- LE REGLAGE DU MODELE EN JEU. Aucune des deux valeurs ne se releve dans la
@@ -2675,12 +2671,12 @@ function ForeverUI.CharacterModelTune(argument)
 			if x then
 				reglage.position = { tonumber(x), tonumber(y), tonumber(z) }
 			else
-				dire("modele : /fui modele position <profondeur> <lateral> <hauteur>")
+				dire(L.CHARACTERFRAME_MODEL_POSITION_USAGE)
 				return
 			end
 		end
 	elseif cle ~= "" then
-		dire("modele : echelle <n> | position <x> <y> <z> | position defaut")
+		dire(L.CHARACTERFRAME_MODEL_USAGE)
 		return
 	end
 
@@ -2693,6 +2689,6 @@ function ForeverUI.CharacterModelTune(argument)
 	if modele.GetPosition then
 		x, y, z = modele:GetPosition()
 	end
-	dire(string.format("modele : echelle=%s position=(%s, %s, %s)",
+	dire(string.format(L.CHARACTERFRAME_MODEL_STATE,
 		tostring(echelle), tostring(x), tostring(y), tostring(z)))
 end

@@ -53,6 +53,7 @@ ForeverUI.Panes = Panes
 
 local hotes = {}        -- nom -> { cadre, contenus, groupe, page, montre }
 local ordreHotes = {}
+local L = ForeverUI.L
 
 -- --------------------------------------------------------------- les hotes
 
@@ -85,7 +86,7 @@ end
 function Panes.Register(def)
 	local hote = hotes[def.hote]
 	if not hote then
-		error("ForeverUI.Panes : hote inconnu -- " .. tostring(def.hote))
+		error(ForeverUI.L.PANES_ERROR_UNKNOWN_HOST .. tostring(def.hote))
 	end
 
 	local contenu = {
@@ -280,12 +281,12 @@ function Panes.Report()
 		for _, id in ipairs(hote.ordre) do
 			local contenu = hote.contenus[id]
 			if contenu.groupe == hote.groupe then
-				pages[#pages + 1] = string.format("%s(%d cadres%s)", id,
-					#contenu.cadres, contenu.bati and "" or ", jamais bati")
+				pages[#pages + 1] = string.format(L.PANES_REPORT_PAGE, id,
+					#contenu.cadres, contenu.bati and "" or L.PANES_REPORT_NEVER_BUILT)
 			end
 		end
 		lignes[#lignes + 1] = string.format(
-			"%s : groupe=%s page=%s visible=%s | pages du groupe : %s",
+			L.PANES_REPORT_LINE,
 			nom, tostring(hote.groupe), tostring(hote.actuel),
 			tostring(hote.montre), table.concat(pages, ", "))
 	end

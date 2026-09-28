@@ -19,6 +19,7 @@
 
 local BAR_WIDTH, BAR_HEIGHT = 214, 16
 local FILL_WIDTH, FILL_HEIGHT = 209, 11
+local L = ForeverUI.L
 
 local FILL = {
 	standard = "ui-castingbar-filling-standard",
@@ -129,9 +130,9 @@ frame:SetScript("OnEvent", function(_self, event, unit)
 	elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
 		stopBar()
 	elseif event == "UNIT_SPELLCAST_FAILED" then
-		showFailure("interrupted", FAILED or "Echec")
+		showFailure("interrupted", FAILED)
 	elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
-		showFailure("interrupted", INTERRUPTED or "Interrompu")
+		showFailure("interrupted", INTERRUPTED)
 	elseif event == "UNIT_SPELLCAST_INTERRUPTIBLE" then
 		shield:Hide()
 		frame.fillKey = frame.channeling and "channel" or "standard"
@@ -196,4 +197,4 @@ frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
 
 ForeverUI.CastBar = frame
-ForeverUI.Layout.Register(frame, "castbar", "Barre d'incantation", "BOTTOM", "BOTTOM", 0, 190)
+ForeverUI.Layout.Register(frame, "castbar", L.CASTBAR_EDIT_LABEL, "BOTTOM", "BOTTOM", 0, 190)
