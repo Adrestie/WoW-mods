@@ -87,6 +87,11 @@ voile de recherche d'inventaire, la rotation des textures quand la barre passe
 en vertical. La fenêtre du trousseau elle-même suit le chemin des sacs, sans
 traitement particulier.
 
+**Revu le 2026-09-28, à la demande :** le bouton s'assombrit quand la recherche
+des sacs ne trouve rien dans le trousseau, l'animation d'entrée de camelot
+(FlyIn joué à l'envers) remplace l'animation 3D de 3.3.5, et l'icône prend sa
+variante double densité. Voir `Bags.lua` et `BottomBar.lua`.
+
 ### 1.6 Le sac à composants n'existe pas
 
 3.3.5 n'a pas ce sac. Sa place n'est plus tenue (elle l'a été un temps par un
@@ -1516,6 +1521,10 @@ parcours des icônes, ni le défilement, ni la sélection ne sont réécrits.
 **Un sac peut sortir par le haut de l'écran.** Selon le nombre et la taille
 des sacs ouverts, le dernier de la pile passe au-dessus du bord supérieur.
 
+**Corrigé le 2026-09-28 (écart assumé, validé) :** chaque sac empilé coûte sa
+hauteur et l'écart de 8, et 8 restent libres sous le haut de l'écran. Le
+nouveau sac est empilé dès son ouverture (voir `poserSacs` dans `Bags.lua`).
+
 C'est une **reproduction fidèle d'un défaut de la source**.
 `UpdateContainerFrameAnchors` (mainline ; camelot ne la redéfinit pas)
 calcule la place restante ainsi :
@@ -1549,6 +1558,8 @@ qui est en place aujourd'hui est l'en-tête de catégorie
 (`CharacterStatFrameCategoryTemplate`, `UI-Character-Info-Title`), choisi pour
 coiffer un groupe de statistiques — pas le contrôle de menu déroulant que
 camelot emploie ailleurs.
+
+**Tranché le 2026-09-28 :** l'en-tête de catégorie est gardé.
 
 Le gabarit de camelot est `WowStyle1DropdownTemplate`
 (`Blizzard_Menu/mainline/MenuTemplates.xml`), 120 × 25 :

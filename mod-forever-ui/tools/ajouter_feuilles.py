@@ -242,6 +242,21 @@ def regenerer_table(voulues):
         lignes.append('\t[%d] = "%s", -- %d x %d' % (i, chemin, t["width"], t["height"]))
     lignes += ["}", "", "local D = {"]
 
+    # UN NOM LOGIQUE DEJA SERVI PAR UNE AUTRE TABLE GARDE SA FEUILLE
+    # (2026-09-28). Verser une feuille double densite (uiactionbar2xc60, pour
+    # l'icone du trousseau) donnait ses noms logiques -- ceux des griffons,
+    # des cadres d'icones... -- a sa variante 2x, a la place de la feuille
+    # simple que la barre d'action validee emploie : seuls ses noms bruts
+    # s'ajoutent alors.
+    # Ce que la table servait deja reste servi a l'identique.
+    ailleurs = set()
+    for p in os.listdir(ADDON):
+        if p.startswith("UIAtlas") and p.endswith(".lua") and p != "UIAtlas_06_complements.lua":
+            ailleurs.update(re.findall(r'\["([^"]+)"\] = \{', io.open(os.path.join(ADDON, p), encoding="utf-8").read()))
+    table = os.path.join(ADDON, "UIAtlas_06_complements.lua")
+    if os.path.exists(table):
+        ailleurs -= set(re.findall(r'\["([^"]+)"\] = \{', io.open(table, encoding="utf-8").read()))
+
     total = 0
     deja = set()
     for f in ordre:
@@ -258,8 +273,9 @@ def regenerer_table(voulues):
             hauteur = int(round(reg["height"] * facteur))
 
             # Le nom brut, et le nom logique que le code de camelot emploie.
-            for nom in (r["atlas"].lower(), _logique(r["atlas"])):
-                if nom in deja:
+            brut = r["atlas"].lower()
+            for nom in (brut, _logique(r["atlas"])):
+                if nom in deja or (nom != brut and nom in ailleurs):
                     continue
                 deja.add(nom)
                 lignes.append('\t["%s"] = {%d, %.6f, %.6f, %.6f, %.6f, %d, %d},' % (

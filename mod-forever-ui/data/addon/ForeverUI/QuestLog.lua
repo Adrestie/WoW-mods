@@ -325,6 +325,9 @@ J.montrerSurCarte = montrerSurCarte
 -- ------------------------------------------------------------- les actions
 
 -- _QuestLog_ToggleQuestWatch de QuestLogFrame.lua (locale au client : recopiee)
+-- ; puis la liste et la page se redessinent : AddQuestWatch et
+-- RemoveQuestWatch ne declenchent aucun evenement que le volet ecoute, et la
+-- case gardait l'etat d'avant (AMELIORATIONS, 2026-09-28)
 local function basculerSuivi(index)
 	if IsQuestWatched(index) then
 		RemoveQuestWatch(index)
@@ -336,6 +339,10 @@ local function basculerSuivi(index)
 		end
 		AddQuestWatch(index)
 		WatchFrame_Update()
+	end
+	if J.estOuvert() then
+		J.maj()
+		J.majDetails()
 	end
 end
 J.basculerSuivi = basculerSuivi
@@ -1597,19 +1604,61 @@ end
 
 -- --------------------------------------------------------------- les lignes
 
+-- LE FOND D'UN EN-TETE (AMELIORATIONS, 2026-09-28 : « mal 9-slice »).
+-- common-button-list-collapseExpand porte une decoupe que le client moderne
+-- applique d'office (UiTextureAtlasElementSliceData : 18 a gauche, 18 a
+-- droite, rien en haut ni en bas, CENTRE EN MOSAIQUE) ; posee d'une piece
+-- sur 289, l'image etirait ses bouts arrondis et le grain de son centre.
+-- Ici : les deux bouts a leur largeur, et le centre (28 texels sur 64) pose
+-- tuile a tuile, la derniere rognee -- 3.3.5 ne repete pas un morceau de
+-- feuille.
+local DECOUPE_ENTETE = { cote = 18, image = 64 }
+local function poserFondEntete(b, couche, mode, alpha)
+	local e = ForeverUI.AtlasEntry("common-button-list-collapseexpand")
+	if not e then return end
+	local du = (e[3] - e[2]) / DECOUPE_ENTETE.image
+	local cote = DECOUPE_ENTETE.cote
+	local milieu = DECOUPE_ENTETE.image - 2 * cote
+	local function piece(u1, u2)
+		local t = b:CreateTexture(nil, couche)
+		t:SetTexture(e[1])
+		t:SetTexCoord(u1, u2, e[4], e[5])
+		if mode then t:SetBlendMode(mode) end
+		if alpha then t:SetAlpha(alpha) end
+		return t
+	end
+	local gauche = piece(e[2], e[2] + cote * du)
+	gauche:SetWidth(cote)
+	gauche:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+	gauche:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
+	local droite = piece(e[3] - cote * du, e[3])
+	droite:SetWidth(cote)
+	droite:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
+	droite:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
+	local reste = V.enteteL - 2 * cote
+	local x = 0
+	while reste > 0 do
+		local l = math.min(milieu, reste)
+		local u1 = e[2] + cote * du
+		local t = piece(u1, u1 + l * du)
+		t:SetWidth(l)
+		t:SetPoint("TOPLEFT", gauche, "TOPRIGHT", x, 0)
+		t:SetPoint("BOTTOMLEFT", gauche, "BOTTOMRIGHT", x, 0)
+		x = x + l
+		reste = reste - l
+	end
+end
+
 local function creerEntete(v, i)
 	local b = CreateFrame("Button", "ForeverUIQuestLogHeader" .. i, v.contenu)
 	b:SetWidth(V.enteteL)
 	b:SetHeight(V.enteteH)
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	local fondNom = ForeverUI.AtlasEntry("common-button-list-collapseexpand")
-	b:SetNormalTexture(fondNom[1])
-	ForeverUI.SetAtlas(b:GetNormalTexture(), "common-button-list-collapseexpand", true)
-	b:SetHighlightTexture(fondNom[1])
-	local s = b:GetHighlightTexture()
-	ForeverUI.SetAtlas(s, "common-button-list-collapseexpand", true)
-	s:SetBlendMode("ADD")
-	s:SetAlpha(0.4)
+	-- NormalTexture et HighlightTexture de ListHeaderVisualTemplate : le fond
+	-- en BACKGROUND, et le meme en ADD a 0,4 dans le calque HIGHLIGHT, qui ne
+	-- se dessine qu'au survol
+	poserFondEntete(b, "BACKGROUND")
+	poserFondEntete(b, "HIGHLIGHT", "ADD", 0.4)
 
 	local plus = CreateFrame("Button", nil, b)
 	plus:SetWidth(20) plus:SetHeight(20)
@@ -2039,8 +2088,8 @@ function J.basculerJournal()
 	-- deplacable elle est un panneau "center" qui cede sa place
 	-- (UIParent.lua:1355). Fermee dans cette meme image avec son volet, c'est
 	-- que L voulait la fermer.
-	if J.fermeeA and J.fermeeA == GetTime() and J.fermeeAvecVolet then
-		J.fermeeA = nil
+	if J.fermee and J.fermeeAvecVolet then
+		J.fermee = nil
 		return
 	end
 	reglages().volet = true
@@ -2100,11 +2149,42 @@ J.construire = construire
 -- OnShow marchent pour les addons, mais le montrer ouvre le volet. Le greffon
 -- passe APRES ShowUIPanel : on le referme dans la meme image, il n'est jamais
 -- dessine.
+-- le greffon de ShowUIPanel a pris la main dans cette image : une marque,
+-- effacee a l'image suivante. PAS GetTime() : le temps avance PENDANT
+-- l'image (ouvrir la carte la fige pres d'une seconde), et le rattrapage
+-- ci-dessous croyait alors a un echec -- il rebasculait le journal et
+-- refermait la carte qu'on venait d'ouvrir (constate en jeu le 2026-09-28)
+local effaceur = CreateFrame("Frame")
+effaceur:Hide()
+effaceur:SetScript("OnUpdate", function(self)
+	J.pris, J.fermee = nil, nil
+	self:Hide()
+end)
+J.effaceurPris = effaceur
+
 if hooksecurefunc then
 	hooksecurefunc("ShowUIPanel", function(cadre)
 		if cadre and cadre == QuestLogFrame and QuestLogFrame:IsShown() then
+			J.pris = true
+			effaceur:Show()
 			HideUIPanel(QuestLogFrame)
 			J.basculerJournal()
+		end
+	end)
+	-- MONTRER QuestLogFrame PEUT ECHOUER SANS BRUIT : carte agrandie (panneau
+	-- "full"), le gestionnaire des panneaux refuse tout autre panneau
+	-- (FramePositionDelegate:ShowUIPanel, UIParent.lua:1341) ; le greffon
+	-- ci-dessus n'etait pas appele, et le micro-bouton comme L ne faisaient
+	-- rien -- le journal « avait du mal a se fermer » (AMELIORATIONS,
+	-- 2026-09-28). ToggleFrame(QuestLogFrame) est leur seul chemin : s'il n'a
+	-- pas abouti au greffon (pas de marque), on prend la main.
+	hooksecurefunc("ToggleFrame", function(cadre)
+		if cadre and cadre == QuestLogFrame then
+			if J.pris then
+				J.pris = nil
+			elseif not QuestLogFrame:IsShown() then
+				J.basculerJournal()
+			end
 		end
 	end)
 end
@@ -2143,8 +2223,11 @@ end
 
 if WorldMapFrame and WorldMapFrame.HookScript then
 	WorldMapFrame:HookScript("OnHide", function()
-		J.fermeeA = GetTime()
+		-- une marque, effacee a l'image suivante (pas GetTime : voir plus
+		-- haut)
+		J.fermee = true
 		J.fermeeAvecVolet = J.estOuvert() and true or false
+		J.effaceurPris:Show()
 	end)
 end
 

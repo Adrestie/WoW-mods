@@ -194,6 +194,7 @@ local R = {
 	ecartColonnes = -11,    -- le saut de colonne
 	bordDroit = 10,         -- GetInitialContainerFrameOffsetX, hors barres
 	bordBas = 85,           -- CONTAINER_OFFSET_Y
+	margeHaute = 8,         -- ECART (2026-09-28) : garde sous le haut de l'ecran
 
 	-- L'ENSEMBLE
 	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
@@ -488,12 +489,45 @@ function Recherche.Appliquer(cadre)
 	end
 end
 
+-- LE BOUTON DU TROUSSEAU S'ASSOMBRIT quand la recherche ne trouve rien
+-- dedans (demande du 2026-09-28) : BaseBagSlotButtonMixin:UpdateBagMatchesSearch
+-- de camelot -- SetMatchesSearch(not C_Container.IsContainerFiltered(sac)),
+-- c'est-a-dire le voile searchOverlay de l'ItemButton, noir a 80 % sur tout
+-- le bouton, quand aucun objet du trousseau ne correspond. Sans recherche,
+-- pas de voile.
+function Recherche.Trousseau()
+	local b = KeyRingButton
+	if not b then
+		return
+	end
+	if not b.foreverVoile then
+		local voile = b:CreateTexture(nil, "OVERLAY")
+		voile:SetTexture(0, 0, 0, 0.8)
+		voile:SetAllPoints(b)
+		voile:Hide()
+		b.foreverVoile = voile
+	end
+	local trouve = Recherche.texte == ""
+	if not trouve then
+		local sac = KEYRING_CONTAINER or -2
+		for emplacement = 1, GetContainerNumSlots(sac) or 0 do
+			local lien = GetContainerItemLink(sac, emplacement)
+			if lien and Recherche.Correspond(lien) then
+				trouve = true
+				break
+			end
+		end
+	end
+	if trouve then b.foreverVoile:Hide() else b.foreverVoile:Show() end
+end
+
 function Recherche.Tout()
 	for _, cadre in ipairs(cadres) do
 		if cadre:IsShown() then
 			Recherche.Appliquer(cadre)
 		end
 	end
+	Recherche.Trousseau()
 end
 
 function Recherche.Set(texte)
@@ -1248,30 +1282,40 @@ local function sacsOuverts()
 	return liste
 end
 
+-- ECART ASSUME (AMELIORATIONS, 2026-09-28 : « selon la taille des sacs, les
+-- ouvrir peut faire que l'un d'eux sorte en haut de l'ecran »). La source
+-- ne retranche de la place libre que la HAUTEUR de chaque sac : les ecarts
+-- de 8 empiles entre eux ne sont jamais comptes, et rien n'est garde en
+-- haut -- le dernier sac d'une colonne pouvait donc depasser le bord. Ici un
+-- sac empile coute sa hauteur ET l'ecart qui le separe du precedent, et la
+-- colonne s'arrete a margeHaute sous le haut de l'ecran.
 local function poserSacs()
 	local hauteurEcran = GetScreenHeight() / R.echelle
 	local decalageX = (largeurBarresDroite() + R.bordDroit) / R.echelle
 	local decalageY = R.bordBas / R.echelle
-	local libre = hauteurEcran - decalageY
+	local disponible = hauteurEcran - decalageY - R.margeHaute / R.echelle
+	local libre = disponible
 	local precedent, premierDeColonne
 
 	for index, cadre in ipairs(sacsOuverts()) do
 		cadre:SetScale(R.echelle)
 		cadre:ClearAllPoints()
+		local hauteur = cadre:GetHeight()
 		if index == 1 then
 			cadre:SetPoint("BOTTOMRIGHT", cadre:GetParent(), "BOTTOMRIGHT",
 				-decalageX, decalageY)
 			premierDeColonne = cadre
-		elseif libre < cadre:GetHeight() then
-			libre = hauteurEcran - decalageY
+			libre = libre - hauteur
+		elseif libre < hauteur + R.ecartSacs then
 			cadre:SetPoint("BOTTOMRIGHT", premierDeColonne, "BOTTOMLEFT",
 				R.ecartColonnes, 0)
 			premierDeColonne = cadre
+			libre = disponible - hauteur
 		else
 			cadre:SetPoint("BOTTOMRIGHT", precedent, "TOPRIGHT", 0, R.ecartSacs)
+			libre = libre - hauteur - R.ecartSacs
 		end
 		precedent = cadre
-		libre = libre - cadre:GetHeight()
 	end
 end
 ForeverUI.BagsStack = poserSacs
@@ -1327,6 +1371,13 @@ if hooksecurefunc then
 		habillerCadre(cadre)
 		poserGrille(cadre)
 		poserOutils()
+		-- L'EMPILEMENT, UNE FOIS LE SAC MONTRE (2026-09-28). GenerateFrame
+		-- inscrit le sac, appelle updateContainerFrameAnchors -- donc notre
+		-- empilement --, et ne le montre QU'APRES : l'empilement, qui ne
+		-- prend que les sacs montres, le sautait, et le nouveau sac gardait
+		-- la place du client (colle au bord de l'ecran, ou au sac du dessous)
+		-- jusqu'a l'ouverture suivante. Ici il est montre, a sa taille.
+		poserSacs()
 		Recherche.Tout()
 		demanderRattrapage()
 	end)

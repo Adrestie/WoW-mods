@@ -242,3 +242,6 @@ interface/buttons/128redbuttonpart2.blp
 # creation, personnalisation : le champ gris du nom (common-gray-button-
 # entrybox-left / -right / -center, feuille c60 1024 x 1024)
 fdid:8117690 => interface/common/commongraybuttonentryboxc60.blp
+# le trousseau : son icone en double densite (ui-hud-actionbar-keyring-small-
+# c60-2x, 54 x 80) -- la simple, 27 x 40, s agrandissait et se pixelisait
+interface/hud/uiactionbar2xc60.blp

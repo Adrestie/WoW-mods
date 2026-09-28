@@ -337,6 +337,7 @@ ForeverUI.AjouterTextes("enUS", {
 	STANCEBAR_EDIT_LABEL = "Stance Bar",
 
 	-- StatusBars.lua
+	STATUSBARS_DEBUG_STATE = "   level %s, max level %s, xp to earn %s | reputation default y=%s, saved y=%s, user placed %s",
 	STATUSBARS_DEBUG = "status bars: row %.1f -> %.1f, top %s | width %.0f | xp visible=%s at y=%s | reputation visible=%s at y=%s",
 	STATUSBARS_EDIT_LABEL_EXPERIENCE = "Experience Bar",
 	STATUSBARS_EDIT_LABEL_REPUTATION = "Reputation Bar",

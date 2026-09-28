@@ -258,6 +258,7 @@ function CreateFrame(kind, name, parent, template)
     function f:RegisterForDrag(...) self.dragButtons = { ... } end
     function f:RegisterForClicks() end
     function f:EnableMouse(v) self.mouseEnabled = (v ~= false) end
+    function f:IsMouseEnabled() return self.mouseEnabled == true end
     -- IL REND UN NOMBRE, 0 OU 1, comme IsTitleKnown : zero est VRAI en Lua.
     function f:Enable() self.enabled = true end
     function f:Disable() self.enabled = false end
@@ -947,7 +948,12 @@ WorldMapFrameTitle:SetText("World Map")
 WorldMapPositioningGuide = CreateFrame("Frame", "WorldMapPositioningGuide", WorldMapFrame)
 WorldMapDetailFrame = CreateFrame("Frame", "WorldMapDetailFrame", WorldMapFrame)
 WorldMapDetailFrame:SetWidth(1002) WorldMapDetailFrame:SetHeight(668)
-WorldMapBlobFrame = CreateFrame("Frame", "WorldMapBlobFrame", WorldMapDetailFrame)
+-- WorldMapFrame.xml : la nappe, le bouton et les numeros de quete sont
+-- FRERES de WorldMapDetailFrame (enfants de WorldMapFrame), poses a son coin
+-- haut-gauche -- leurs echelles ne se multiplient pas
+WorldMapBlobFrame = CreateFrame("Frame", "WorldMapBlobFrame", WorldMapFrame)
+WorldMapBlobFrame:SetWidth(1002) WorldMapBlobFrame:SetHeight(668)
+WorldMapBlobFrame:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT", 0, 0)
 -- Douze tuiles de 256 x 256 en 4 x 3 (WorldMapFrame.xml:541-636) : 1024 x 768
 -- pour une carte utile de 1002 x 668.
 for i = 1, 12 do
@@ -965,9 +971,17 @@ function WorldMapFrame_Update()
         t:SetTexCoord(0, 1, 0, 1)
     end
 end
-WorldMapButton = CreateFrame("Button", "WorldMapButton", WorldMapDetailFrame)
+WorldMapButton = CreateFrame("Button", "WorldMapButton", WorldMapFrame)
 WorldMapButton:SetWidth(1002) WorldMapButton:SetHeight(668)
-WorldMapPOIFrame = CreateFrame("Frame", "WorldMapPOIFrame", WorldMapDetailFrame)
+WorldMapButton:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT", 0, 0)
+WorldMapPOIFrame = CreateFrame("Frame", "WorldMapPOIFrame", WorldMapFrame)
+WorldMapPOIFrame:SetWidth(1002) WorldMapPOIFrame:SetHeight(668)
+WorldMapPOIFrame:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT", 0, 0)
+-- la fleche du joueur : un modele du moteur, pose par deux fonctions
+FLECHE = { montree = true }
+function PositionWorldMapArrowFrame(point, cadre, relatif, x, y) FLECHE.pos = { point, cadre, relatif, x, y } end
+function ShowWorldMapArrowFrame(v) FLECHE.montree = v and true or false end
+WorldMapPlayer = CreateFrame("Frame", "WorldMapPlayer", WorldMapButton)
 WorldMapFrameAreaFrame = CreateFrame("Frame", "WorldMapFrameAreaFrame", WorldMapButton)
 WorldMapTitleButton = CreateFrame("Button", "WorldMapTitleButton", WorldMapFrame)
 WorldMapTitleButton:SetWidth(544) WorldMapTitleButton:SetHeight(22)
@@ -1114,6 +1128,9 @@ function WorldMap_ToggleSizeUp()
     WorldMapFrame_ResetFrameLevels()
     WorldMapFrame:ClearAllPoints()
     WorldMapFrame:SetAllPoints()
+    -- WorldMapFrame.lua:1317 : agrandie, la carte est un panneau "full"
+    WorldMapFrame:SetAttribute("UIPanelLayout-area", "full")
+    WorldMapFrame:SetAttribute("UIPanelLayout-allowOtherPanels", false)
     -- SetupFullscreenScale : une echelle propre au plein ecran
     WorldMapFrame:SetScale(1)
     WorldMapDetailFrame:SetScale(WORLDMAP_QUESTLIST_SIZE)
@@ -2160,6 +2177,16 @@ QuestLogFrame:Hide()
 function ToggleFrame(cadre)
     if cadre:IsShown() then HideUIPanel(cadre) else ShowUIPanel(cadre) end
 end
+-- WorldMapFrame.lua:1277 : fermer, changer de taille, rouvrir
+function WorldMapFrame_ToggleWindowSize()
+    ToggleFrame(WorldMapFrame)
+    if WORLDMAP_SETTINGS.size == WORLDMAP_WINDOWED_SIZE then
+        WorldMap_ToggleSizeUp()
+    else
+        WorldMap_ToggleSizeDown()
+    end
+    ToggleFrame(WorldMapFrame)
+end
 
 -- L heure du serveur : 14 h, donc le jour.
 function GetGameTime() return 14, 30 end
@@ -2232,6 +2259,16 @@ end
 MicroButtonPortrait = CharacterMicroButton:CreateTexture("MicroButtonPortrait", "OVERLAY")
 PVPMicroButtonTexture = PVPMicroButton:CreateTexture("PVPMicroButtonTexture", "OVERLAY")
 MainMenuBarPerformanceBar = MainMenuMicroButton:CreateTexture("MainMenuBarPerformanceBar", "OVERLAY")
+-- MainMenuBarMicroButtons.lua de 3.3.5 : chaque appui et chaque relachement
+-- AJOUTENT une ancre TOPLEFT a la barre de latence, sans ClearAllPoints
+function MainMenuMicroButton_SetPushed()
+    MainMenuMicroButton:SetButtonState("PUSHED", 1)
+    MainMenuBarPerformanceBar:SetPoint("TOPLEFT", MainMenuMicroButton, "TOPLEFT", 9, -36)
+end
+function MainMenuMicroButton_SetNormal()
+    MainMenuMicroButton:SetButtonState("NORMAL")
+    MainMenuBarPerformanceBar:SetPoint("TOPLEFT", MainMenuMicroButton, "TOPLEFT", 10, -34)
+end
 function UpdateMicroButtons() end
 
 for _, nom in ipairs({ "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot",
@@ -2251,6 +2288,11 @@ KeyRingButton:SetNormalTexture("trousseau-up")
 KeyRingButton:SetPushedTexture("trousseau-down")
 KeyRingButton:SetHighlightTexture("trousseau-highlight")
 KeyRingButton:Hide()
+-- MainMenuBarBagButtons.xml : son OnLoad lui donne KEYRING_CONTAINER (-2) ;
+-- son animation 3D d'entree (ItemAnimTemplate) ecoute ITEM_PUSH
+KeyRingButton:SetID(-2)
+KeyRingButtonItemAnim = CreateFrame("Model", "KeyRingButtonItemAnim", KeyRingButton)
+KeyRingButtonItemAnim:RegisterEvent("ITEM_PUSH")
 
 -- les sacs du client
 NUM_CONTAINER_FRAMES = 13
@@ -3338,6 +3380,12 @@ SOURIS_Y = 0
 function GetCursorPosition() return SOURIS_X or 0, SOURIS_Y end
 function ShowUIPanel(cadre)
     local carte = rawget(_G, "WorldMapFrame")
+    -- FramePositionDelegate:ShowUIPanel (UIParent.lua:1341) : un panneau
+    -- "full" ouvert refuse tout autre panneau, sans bruit
+    if carte and cadre ~= carte and carte:IsShown()
+       and carte.attributes and carte.attributes["UIPanelLayout-area"] == "full" then
+        return
+    end
     if carte and cadre ~= carte and carte:IsShown()
        and carte.attributes and carte.attributes["UIPanelLayout-area"] == "center"
        and carte.attributes["UIPanelLayout-allowOtherPanels"] then
@@ -5186,7 +5234,7 @@ def main():
              "PlayerFrame.lua",
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua", "PartyFrame.lua", "RaidFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
-             "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
+             "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua"]
 
@@ -5781,7 +5829,23 @@ def main():
     print("niveau maximum           : visible=%s (la barre doit disparaitre)" % xp.shown)
     assert not xp.shown, "la barre d'experience reste au niveau maximum"
     assert rep.shown, "la reputation doit rester quand l'experience disparait"
+    drep = g.ForeverUI.Layout.systems["reputationbar"].defaults
+    print("niveau maximum           : reputation a y=%.0f (la place de l'experience : %.0f)" % (drep.y, rangee.haut))
+    assert drep.y == rangee.haut, "la reputation doit descendre a la place de l'experience"
+    # sa place REELLE, apres la sequence du jeu (connexion, entree en jeu)
+    lua.execute("""
+        local w = CreateFrame("Frame")
+        for _, f in ipairs({ ForeverUIReputationBar, ForeverUIExperienceBar }) do end
+    """)
+    prep = list(rep.points[len(list(rep.points.values()))].values())
+    print("niveau maximum           : reputation ancree %s" % [prep[0], prep[2], round(prep[3], 2), prep[4]])
+    assert prep[4] == rangee.haut, "la barre elle-meme doit descendre"
+    g.STATE.level = 40
+    g.ForeverUI.StatusBarsUpdate()
+    drep = g.ForeverUI.Layout.systems["reputationbar"].defaults
+    assert xp.shown and drep.y == rangee.haut + 13, "sous le niveau maximum, elle remonte au-dessus"
     g.STATE.level = 80
+    g.ForeverUI.StatusBarsUpdate()
 
 
 
@@ -8309,7 +8373,20 @@ def main():
     perf = g.MainMenuBarPerformanceBar
     print("   latence : %s, %s x %s" % (perf.texture, perf.width, perf.height))
     assert perf.texture.lower().endswith("foreverui" + chr(92) + "mainmenubar" + chr(92) + "ui-mainmenubar-performancebar")
-    assert (perf.width, perf.height) == (19, 39)
+    # le trait a 3 pixels (demande du 2026-09-28) : 1,5 pixel d'ecran par
+    # ligne de l'image, sur un ecran de 1600 de haut
+    lua.execute("SetCVar('gxResolution', '3840x1600') MainMenuMicroButton_SetNormal()")
+    eff = g.MainMenuMicroButton.GetEffectiveScale(g.MainMenuMicroButton)
+    attendu_h = 64 * 1.5 / (1600 / 768 * eff)
+    print("   latence : %s x %.2f (attendu %.2f : 3 pixels pour les deux lignes du trait)" % (perf.width, perf.height, attendu_h))
+    assert perf.width == 19 and abs(perf.height - attendu_h) < 1e-9
+    # 3.3.5 lui ajoute une ancre TOPLEFT a chaque clic : on repose la notre,
+    # seule (AMELIORATIONS, 2026-09-28 : l'indicateur etait invisible)
+    for fn in ("MainMenuMicroButton_SetPushed", "MainMenuMicroButton_SetNormal"):
+        lua.execute(fn + "()")
+        pts_perf = [list(v.values()) for v in perf.points.values()]
+        assert [(q[0], q[1].name, q[2], q[3], q[4]) for q in pts_perf] == [("BOTTOM", "MainMenuMicroButton", "BOTTOM", 0, 0)], (fn, pts_perf)
+    print("   latence apres appui et relachement : une seule ancre, BOTTOM (0, 0)")
 
     b1, b2 = g.CharacterMicroButton, g.SpellbookMicroButton
     print("bouton de micro-menu : %d x %d (32 x 46 : l'ouverture du cadre ; 28 x 58 d'origine)" % (
@@ -8375,11 +8452,36 @@ def main():
     # trousseau est permanent, alors que la condition de CVar de la source
     # vient d'un client ou il n'est plus qu'un reste du passe, masque tant
     # que le joueur n'a pas ramasse de cle.
-    icone = trousseau.regions[len(list(trousseau.regions.values()))]
+    icones = [r for r in trousseau.regions.values() if r.texture and "uiactionbar" in str(r.texture).lower()]
+    icone = icones[0]
     print("   icone du trousseau : %s, %d x %d" % (
         icone.texture and icone.texture.split(chr(92))[-1], icone.width, icone.height))
     assert icone.texture is not None, "l emplacement du trousseau doit porter une icone"
     assert icone.width == 27 and icone.height == 40,         "UI-HUD-ActionBar-Keyring-Small fait 27 x 40"
+    # la variante double densite (demande du 2026-09-28 : icone pixelisee)
+    assert icone.texture.lower().endswith("uiactionbar2xc60"), icone.texture
+
+    # L'ANIMATION D'ENTREE (demande du 2026-09-28) : FlyIn de camelot joue a
+    # l'envers -- l'icone part de (-75, 60), entiere et opaque, et rentre
+    # dans le bouton en 1 s, reduite au huitieme et effacee ; l'animation 3D
+    # de 3.3.5 n'ecoute plus ITEM_PUSH
+    vol = g.ForeverUI.KeyRingFly
+    assert not g.KeyRingButtonItemAnim.events["ITEM_PUSH"] and not g.KeyRingButtonItemAnim.shown
+    vol.scripts.OnEvent(vol, "ITEM_PUSH", 1, "icone-sac")
+    assert not vol.shown, "un autre sac : rien"
+    vol.scripts.OnEvent(vol, "ITEM_PUSH", -2, "Interface" + chr(92) + "Icons" + chr(92) + "INV_Misc_Key_03")
+    vol.scripts.OnUpdate(vol, 0)
+    ic = vol.icone
+    p0 = list(ic.points[len(list(ic.points.values()))].values())
+    print("   vol : depart (%s, %s) %s x %s alpha %s" % (p0[3], p0[4], ic.width, ic.height, ic.alpha))
+    assert (round(p0[3], 6), round(p0[4], 6)) == (-75, 60) and (ic.width, ic.height) == (33, 45) and ic.alpha == 1
+    vol.scripts.OnUpdate(vol, 0.5)
+    p1 = list(ic.points[len(list(ic.points.values()))].values())
+    assert abs(ic.alpha - 0.5) < 1e-9 and abs(ic.width - 33 * (0.125 + 0.875 * 0.5)) < 1e-9
+    assert (round(p1[3], 6), round(p1[4], 6)) == (-15, 30), "a mi-course, le point de controle"
+    vol.scripts.OnUpdate(vol, 0.6)
+    assert not vol.shown and not ic.shown, "au bout d'une seconde, fini"
+    print("   vol : a mi-course (-15, 30), alpha 0,5 ; fini a 1 s")
     assert trousseau.shown, "camelot garde toujours le trousseau dans la barre"
 
     assert g.ForeverUIBagsFiller is None, "l emplacement decoratif est encore construit"
@@ -8711,6 +8813,45 @@ def main():
         p1[1], p1[4], p1[5], p2[1], p2[3], p2[4], p2[5]))
     assert (p1[1], p1[4], p1[5]) == ("BOTTOMRIGHT", -10, 85),         "le premier sac n'est pas a 10 du bord droit et 85 du bas"
     assert (p2[1], p2[3], p2[4], p2[5]) == ("BOTTOMRIGHT", "TOPRIGHT", 0, 8),         "les sacs ne sont pas espaces de CONTAINER_SPACING"
+    # L'ORDRE DU CLIENT (ContainerFrame_GenerateFrame, 28/09) : le sac est
+    # inscrit, updateContainerFrameAnchors passe -- il est encore cache --,
+    # PUIS il se montre. Le nouveau sac doit etre empile des l'ouverture, pas
+    # a l'ouverture suivante
+    lua.execute("""
+        ContainerFrame2:Hide()
+        ContainerFrame2.id, ContainerFrame2.size = 1, 16
+        ContainerFrame1.bags = { "ContainerFrame1", "ContainerFrame2" }
+        ContainerFrame2:ClearAllPoints()
+        ContainerFrame2:SetPoint("BOTTOMRIGHT", ContainerFrame1, "TOPRIGHT", 0, 0)
+    """)
+    g.HOOKS["updateContainerFrameAnchors"]()
+    g.ContainerFrame2.Show(g.ContainerFrame2)
+    g.HOOKS["ContainerFrame_GenerateFrame"](g.ContainerFrame2)
+    p2 = g.ContainerFrame2.points[len(list(g.ContainerFrame2.points.values()))]
+    print("   sac tout juste ouvert : %s sur %s de %s (%s, %s)" % (p2[1], p2[3], p2[2].name, p2[4], p2[5]))
+    assert (p2[1], p2[2].name, p2[3], p2[4], p2[5]) == ("BOTTOMRIGHT", "ContainerFrame1", "TOPRIGHT", 0, 8),         "le sac qu'on vient d'ouvrir garde la place du client"
+
+    # TROIS SACS DE 330 sur un ecran de 1080 : la source (qui ne compte pas
+    # les ecarts) empilerait le troisieme, dont le haut finirait a 85 + 990 +
+    # 16 = 1091 ; chaque ecart compte, et 8 restent libres en haut : il passe
+    # en colonne (AMELIORATIONS, 2026-09-28)
+    lua.execute("""
+        ContainerFrame3:Show()
+        ContainerFrame1.bags = { "ContainerFrame1", "ContainerFrame2", "ContainerFrame3" }
+        HAUTEURS_SACS = { ContainerFrame1.height, ContainerFrame2.height, ContainerFrame3.height }
+        ContainerFrame1.height, ContainerFrame2.height, ContainerFrame3.height = 330, 330, 330
+        ForeverUI.BagsStack()
+    """)
+    p2 = g.ContainerFrame2.points[len(list(g.ContainerFrame2.points.values()))]
+    p3 = g.ContainerFrame3.points[len(list(g.ContainerFrame3.points.values()))]
+    print("   trois sacs de 330 : second %s sur %s de %s, troisieme %s sur %s de %s (%s, %s)" % (
+        p2[1], p2[3], p2[2].name, p3[1], p3[3], p3[2].name, p3[4], p3[5]))
+    assert (p2[3], p2[2].name) == ("TOPRIGHT", "ContainerFrame1"), "le second s'empile"
+    assert (p3[1], p3[2].name, p3[3], p3[4], p3[5]) == ("BOTTOMRIGHT", "ContainerFrame1", "BOTTOMLEFT", -11, 0),         "le troisieme depasserait le haut de l'ecran : il part en colonne"
+    lua.execute("""
+        ContainerFrame1.height, ContainerFrame2.height, ContainerFrame3.height = HAUTEURS_SACS[1], HAUTEURS_SACS[2], HAUTEURS_SACS[3]
+        ContainerFrame3:Hide()
+    """)
     g.ContainerFrame2.Hide(g.ContainerFrame2)
     g.ContainerFrame2.id = 0
     lua.execute("ContainerFrame1.bags = nil")
@@ -8792,6 +8933,24 @@ def main():
     print("recherche par type          : voiles = %s" % voiles)
     assert voiles[0] == False and voiles[2] == False, "le type ne compte pas dans la recherche"
     g.ForeverUI.BagSearch.Set("")
+
+    # LE TROUSSEAU A LA RECHERCHE (demande du 2026-09-28) : voile noir a 80 %
+    # sur le bouton quand rien ne correspond dans le trousseau ; aucun sans
+    # recherche
+    lua.execute("""
+        TAILLES[-2] = 4
+        SACS[-2] = SACS[-2] or {}
+        SACS[-2][1] = { lien = "|cffffffff|Hitem:1|h[Pain]|h|r", nombre = 1 }
+    """)
+    kr = g.KeyRingButton
+    g.ForeverUI.BagSearch.Set("epee")
+    assert kr.foreverVoile.shown and kr.foreverVoile.layer == "OVERLAY", "rien dans le trousseau : voile"
+    g.ForeverUI.BagSearch.Set("pain")
+    assert not kr.foreverVoile.shown, "le pain est dans le trousseau : pas de voile"
+    g.ForeverUI.BagSearch.Set("")
+    assert not kr.foreverVoile.shown, "sans recherche, pas de voile"
+    print("   trousseau a la recherche : voile si rien ne correspond, aucun sinon")
+    lua.execute("SACS[-2][1] = nil TAILLES[-2] = nil")
 
     # le tri : deux piles de pain se reunissent, puis l'ordre se fait
     lua.execute("""
@@ -9484,6 +9643,21 @@ def main():
     lua.execute("Minimap.souris = false MinimapZoomIn.souris = false MinimapZoomOut.souris = false ForeverUIMinimapZoomHitArea.souris = false")
     carte.hooks["OnLeave"](carte)
     assert not plus.shown, "et OnLeave les reprend quand la souris n est nulle part"
+    # LA MOLETTE : le meme effet que les boutons -- vers le haut « + », vers
+    # le bas « - », rien sur un bouton eteint en bout de course
+    lua.execute("""
+        CLICS_ZOOM = ""
+        MinimapZoomIn:SetScript("OnClick", function() CLICS_ZOOM = CLICS_ZOOM .. "+" end)
+        MinimapZoomOut:SetScript("OnClick", function() CLICS_ZOOM = CLICS_ZOOM .. "-" end)
+    """)
+    assert carte.wheelEnabled, "la carte prend la molette"
+    carte.scripts.OnMouseWheel(carte, 1)
+    carte.scripts.OnMouseWheel(carte, -1)
+    lua.execute("MinimapZoomIn:Disable()")
+    carte.scripts.OnMouseWheel(carte, 1)
+    lua.execute("MinimapZoomIn:Enable()")
+    print("   molette : %s" % g.CLICS_ZOOM)
+    assert g.CLICS_ZOOM == "+-", "haut = +, bas = -, rien sur un bouton eteint"
 
     # LE CYCLE JOUR / NUIT : le faux dit 14 h.
     print("   cycle : %s" % ("jour" if g.ForeverUI.Minimap.jour else "nuit"))
@@ -9908,6 +10082,18 @@ def main():
     print("   premier en-tete a (%s, %s) | premiere quete a (%s, %s)" % (pe[3], pe[4], pq[3], pq[4]))
     assert (pe[3], pe[4]) == (9, -8), "premier en-tete : x = 9, ecart 8"
     assert (pq[3], pq[4]) == (0, -(8 + 22 + 2)), "quete apres en-tete : ecart 2"
+    # LE FOND D'EN-TETE EN TROIS TRANCHES, centre en mosaique (AMELIORATIONS,
+    # 2026-09-28) : deux bouts de 18, et des tuiles de 28 jusqu'a 289
+    fonds = [r for r in lua.eval("{ ForeverUIQuestLogHeader1:GetRegions() }").values()
+             if r.kind == "texture" and r.layer == "BACKGROUND"]
+    survols = [r for r in lua.eval("{ ForeverUIQuestLogHeader1:GetRegions() }").values()
+               if r.kind == "texture" and r.layer == "HIGHLIGHT"]
+    largeurs = sorted([r.width for r in fonds])
+    print("   fond d'en-tete : %d pieces, largeurs %s, total %s ; survol %d pieces en %s a %s" % (
+        len(fonds), largeurs, sum(largeurs), len(survols), survols[0].blend, survols[0].alpha))
+    assert sum(largeurs) == 289 and largeurs.count(18) >= 2 and max(largeurs) == 28, "18 + 9 x 28 + 1 + 18"
+    assert len(survols) == len(fonds) and all(s.blend == "ADD" and s.alpha == 0.4 for s in survols)
+    assert not e1._normal, "plus d'image etiree d'une piece"
     objectifsQ1 = [o.texte.text for o in q1.lignesObjectif.values()]
     print("   objectifs de la premiere quete : %s" % objectifsQ1)
     assert objectifsQ1 == ["Kobold Vermin slain: 3/10"], "seuls les objectifs non remplis"
@@ -9917,9 +10103,16 @@ def main():
     print("   compteur : %s" % compteur)
     assert compteur == "Quests: |cffffffff3|r|cffffffff/25|r"
 
-    # le suivi par la case
-    lua.execute("ForeverUIQuestLogTitle1.case:GetScript('OnClick')(ForeverUIQuestLogTitle1.case) ForeverUI.QuestLog.maj()")
+    # le suivi par la case : le clic seul redessine la case, sans attendre un
+    # evenement que 3.3.5 n'envoie pas (AMELIORATIONS, 2026-09-28 -- l'essai
+    # appelait lui-meme maj() et cachait le defaut)
+    lua.execute("ForeverUIQuestLogTitle1.case:GetScript('OnClick')(ForeverUIQuestLogTitle1.case)")
     assert g.SUIVIES["A Threat Within"] and q1.coche.shown
+    lua.execute("ForeverUIQuestLogTitle1.case:GetScript('OnClick')(ForeverUIQuestLogTitle1.case)")
+    assert not g.SUIVIES["A Threat Within"] and not q1.coche.shown, "decocher efface la coche"
+    lua.execute("ForeverUIQuestLogTitle1.case:GetScript('OnClick')(ForeverUIQuestLogTitle1.case)")
+    assert q1.coche.shown
+    print("   case de suivi : cocher / decocher / cocher, la coche suit")
 
     # replier un en-tete : 3.3.5 retire ses quetes
     lua.execute("ForeverUIQuestLogHeader1:GetScript('OnClick')(ForeverUIQuestLogHeader1, 'LeftButton') ForeverUI.QuestLog.maj()")
@@ -10150,14 +10343,36 @@ def main():
     lua.execute("ForeverUIWorldMapSidePanelToggle.ouvrir:GetScript('OnClick')()")
     assert abs(carteMonde.width * kR - 1035) < 1e-6 and volet.shown
 
+    # une image passe : les marques d'une image s'effacent (le jeu le fait a
+    # chaque image ; le banc, quand l'essai le dit)
+    lua.execute("""
+        function IMAGE_SUIVANTE()
+            local e = ForeverUI.QuestLog.effaceurPris
+            if e and e:IsShown() then e.scripts.OnUpdate(e, 0.01) end
+            STATE.time = STATE.time + 1
+        end
+    """)
     # L : QuestLogFrame reste invisible, la carte s'ouvre avec le volet ;
     # L encore la ferme, meme si le gestionnaire l'a deja fermee avant nous.
-    lua.execute("WorldMapFrame:Hide() STATE.time = STATE.time + 1 ForeverUI.QuestLog.reglages().volet = false ToggleFrame(QuestLogFrame)")
+    lua.execute("WorldMapFrame:Hide() IMAGE_SUIVANTE() ForeverUI.QuestLog.reglages().volet = false ToggleFrame(QuestLogFrame)")
     print("   L : QuestLogFrame %s | carte %s | volet %s" % (g.QuestLogFrame.shown, carteMonde.shown, volet.shown))
     assert not g.QuestLogFrame.shown and carteMonde.shown and volet.shown
     lua.execute("ToggleFrame(QuestLogFrame)")
     print("   L encore : carte %s" % carteMonde.shown)
     assert not carteMonde.shown and not g.QuestLogFrame.shown, "L referme le journal"
+    # LE CHARGEMENT DE LA CARTE PREND DU TEMPS (constate en jeu le 28/09 :
+    # pres d'une seconde, le temps avance PENDANT l'image) : L ouvre quand
+    # meme, et ne referme pas aussitot
+    lua.execute("""
+        IMAGE_SUIVANTE()
+        WorldMapFrame:HookScript("OnShow", function() STATE.time = STATE.time + 0.8 end)
+        ForeverUI.QuestLog.reglages().volet = false
+        ToggleFrame(QuestLogFrame)
+    """)
+    print("   L avec une carte lente a charger : carte %s, volet %s" % (carteMonde.shown, volet.shown))
+    assert carteMonde.shown and volet.shown, "la carte reste ouverte"
+    lua.execute("IMAGE_SUIVANTE() ToggleFrame(QuestLogFrame)")
+    assert not carteMonde.shown, "et L la referme"
 
     # LE MODE AGRANDI (etape 4) : le plein ecran de WotLK habille a la camelot.
     # L'ecran de l'utilisateur : 3840 x 1600 a l'echelle 0,64, soit une
@@ -10232,6 +10447,121 @@ def main():
     fermer = g.WorldMapFrameCloseButton
     assert abs(fermer.GetEffectiveScale(fermer) - 1) < 1e-9 and list(barre.points[1].values())[3] == 66
     assert g.ForeverUIQuestLogPanel.shown == bool(g.ForeverUI.QuestLog.reglages().volet), "le volet revient avec la petite fenetre"
+
+    # L ET LE MICRO-BOUTON SUR LA CARTE AGRANDIE (AMELIORATIONS, 2026-09-28) :
+    # le gestionnaire refuse QuestLogFrame sans bruit (panneau "full") ; on
+    # reprend la main -- la carte repasse en petite fenetre, journal ouvert,
+    # et un second appui la ferme
+    lua.execute("WorldMapFrame:Hide() WorldMap_ToggleSizeUp() WorldMapFrame:Show() IMAGE_SUIVANTE()")
+    assert not g.ForeverUIQuestLogPanel.shown
+    lua.execute("ToggleFrame(QuestLogFrame)")
+    print("   L sur la carte agrandie : carte %s, taille %s, volet %s" % (
+        carteMonde.shown, g.WORLDMAP_SETTINGS.size, g.ForeverUIQuestLogPanel.shown))
+    assert carteMonde.shown and g.WORLDMAP_SETTINGS.size == g.WORLDMAP_WINDOWED_SIZE and g.ForeverUIQuestLogPanel.shown
+    lua.execute("IMAGE_SUIVANTE() ToggleFrame(QuestLogFrame)")
+    assert not carteMonde.shown and not g.QuestLogFrame.shown, "un second appui ferme"
+
+    # LE ZOOM DE LA CARTE (AMELIORATIONS, 2026-09-28) : la molette met la
+    # carte a l'echelle vers le curseur, un glisser la deplace, les tuiles
+    # sont rognees a la vue, les reperes hors vue s'eteignent, la fleche est
+    # reposee x zoom ; retour a 1 au changement de carte et a la fermeture
+    lua.execute("IMAGE_SUIVANTE() ToggleFrame(QuestLogFrame)")
+    Z = g.ForeverUI.WorldMap.zoom
+    can, det, btn = g.ForeverUIWorldMapCanvas, g.WorldMapDetailFrame, g.WorldMapButton
+    taille = g.WORLDMAP_SETTINGS.size
+    assert carteMonde.shown and Z.z == 1 and btn.wheelEnabled
+    # le canevas a l'ecran : 697 x 465, centre en (500, 400) ; le curseur au centre
+    lua.execute("""
+        local c = ForeverUIWorldMapCanvas
+        local e = c:GetEffectiveScale()
+        c._cx, c._cy = 500 / e, 400 / e
+        c._left, c._right = (500 - 697 / 2 * e) / e, (500 + 697 / 2 * e) / e
+        c._bottom, c._top = (400 - 465 / 2 * e) / e, (400 + 465 / 2 * e) / e
+        SOURIS_X, SOURIS_Y = 500, 400
+    """)
+    btn.scripts.OnMouseWheel(btn, 1)
+    print("   zoom : %.4f, centre (%.3f, %.3f), echelle de la carte %.4f (%.4f x 1,25)" % (Z.z, Z.cx, Z.cy, det.scale, taille))
+    assert abs(Z.z - 1.25) < 1e-9 and abs(det.scale - taille * 1.25) < 1e-9 and abs(btn.scale - taille * 1.25) < 1e-9
+    assert abs(g.WorldMapPOIFrame.scale - 1.25) < 1e-9 and g.WorldMapBlobFrame.alpha == 0
+    assert abs(Z.cx - 0.5) < 1e-9 and abs(Z.cy - 0.5) < 1e-9, "curseur au centre : le centre reste"
+    pd = list(det.points[1].values())
+    assert pd[0] == "CENTER" and pd[1].name == "ForeverUIWorldMapCanvas"
+    x0, y0, x1, y1 = Z.vue()
+    t1 = g.WorldMapDetailTile1
+    pt1 = list(t1.points[1].values())
+    print("   vue (%.1f, %.1f) -> (%.1f, %.1f) ; tuile 1 a (%.1f, %.1f) %.1f x %.1f" % (x0, y0, x1, y1, pt1[3], -pt1[4], t1.width, t1.height))
+    assert abs(pt1[3] - x0) < 1e-6 and abs(-pt1[4] - y0) < 1e-6 and abs(t1.width - (256 - x0)) < 1e-6, "la tuile 1 commence au bord de la vue"
+    assert abs(list(t1.texcoord.values())[0] - x0 / 256) < 1e-9
+    hr = list(btn.hitRect.values())
+    assert abs(hr[0] - x0) < 1e-6 and abs(hr[1] - (1002 - x1)) < 1e-6, "la surface cliquable est bornee a la vue"
+    # un cran de plus, curseur decale de (100, 50) : le point sous le curseur y reste
+    lua.execute("SOURIS_X, SOURIS_Y = 600, 450")
+    de = det.GetEffectiveScale(det)
+    fx, fy = Z.cx + 100 / (1002 * de), Z.cy - 50 / (668 * de)
+    btn.scripts.OnMouseWheel(btn, 1)
+    de2 = det.GetEffectiveScale(det)
+    fx2, fy2 = Z.cx + 100 / (1002 * de2), Z.cy - 50 / (668 * de2)
+    print("   sous le curseur : (%.4f, %.4f) avant, (%.4f, %.4f) apres" % (fx, fy, fx2, fy2))
+    assert abs(fx - fx2) < 1e-9 and abs(fy - fy2) < 1e-9
+    # la fleche du joueur, x zoom
+    lua.execute("POSITION.x, POSITION.y = 0.5, 0.5")
+    btn.hooks["OnUpdate"](btn)
+    fl = list(g.FLECHE.pos.values())
+    print("   fleche : %s" % fl)
+    assert abs(fl[3] - 0.5 * 1002 * taille * Z.z) < 1e-6 and abs(fl[4] + 0.5 * 668 * taille * Z.z) < 1e-6
+    # un repere hors de la vue s'eteint, il revient en y rentrant
+    lua.execute("""
+        local j = WorldMapPlayer
+        j:Show()
+        j:EnableMouse(true)
+        local e = j:GetEffectiveScale()
+        j._cx, j._cy = 50 / e, 400 / e
+        ForeverUI.WorldMap.zoom.veille.scripts.OnUpdate(ForeverUI.WorldMap.zoom.veille, 0.01)
+    """)
+    assert g.WorldMapPlayer.alpha == 0 and g.WorldMapPlayer.mouseEnabled is False, "hors de la vue, sans souris"
+    lua.execute("""
+        local j = WorldMapPlayer
+        local e = j:GetEffectiveScale()
+        j._cx, j._cy = 500 / e, 400 / e
+        ForeverUI.WorldMap.zoom.veille.scripts.OnUpdate(ForeverUI.WorldMap.zoom.veille, 0.01)
+    """)
+    assert g.WorldMapPlayer.alpha == 1 and g.WorldMapPlayer.mouseEnabled, "revenu dans la vue, sa souris rendue"
+    # LE GLISSER : bouton gauche enfonce, 60 px vers la droite : la carte
+    # suit, WorldMapButton lache la souris ; au relachement il la reprend
+    veilleZ = Z.veille
+    cx0 = Z.cx
+    lua.execute("SOURIS_X, SOURIS_Y = 500, 400 SOURIS.LeftButton = true")
+    btn.hooks["OnMouseDown"](btn, "LeftButton")
+    lua.execute("SOURIS_X = 560")
+    veilleZ.scripts.OnUpdate(veilleZ, 0.01)
+    de = det.GetEffectiveScale(det)
+    print("   glisser de 60 : centre %.4f -> %.4f, souris de la carte %s" % (cx0, Z.cx, btn.mouseEnabled))
+    assert Z.glisse and btn.mouseEnabled is False and abs(Z.cx - (cx0 - 60 / (1002 * de))) < 1e-9
+    lua.execute("SOURIS.LeftButton = nil")
+    veilleZ.scripts.OnUpdate(veilleZ, 0.01)
+    assert not Z.glisse and btn.mouseEnabled, "le relachement rend la souris a la carte"
+    # retour a 1 par la molette : tout revient
+    for _ in range(3):
+        btn.scripts.OnMouseWheel(btn, -1)
+    t2 = g.WorldMapDetailTile2
+    pt2 = list(t2.points[1].values())
+    print("   retour a 1 : echelle %.4f, tuile 2 sur %s, tuile 4 %s x %s, marges %s" % (
+        det.scale, pt2[1].name, g.WorldMapDetailTile4.width, g.WorldMapDetailTile4.height, list(btn.hitRect.values())))
+    assert Z.z == 1 and not Z.actif and abs(det.scale - taille) < 1e-9 and g.WorldMapPOIFrame.scale == 1
+    assert pt2[1].name == "WorldMapDetailTile1" and pt2[2] == "TOPRIGHT", "les tuiles reprennent leur chaine"
+    assert g.WorldMapDetailTile4.width == 234 and g.WorldMapBlobFrame.alpha == 1 and list(btn.hitRect.values()) == [0, 0, 0, 0]
+    assert list(det.points[1].values())[0] == "TOPLEFT", "la carte reprend son ancre de la petite fenetre"
+    # un changement de carte ramene a 1
+    btn.scripts.OnMouseWheel(btn, 1)
+    assert Z.actif
+    lua.execute("CARTE.id = (CARTE.id or 0) + 1")
+    veilleZ.scripts.OnUpdate(veilleZ, 0.01)
+    assert Z.z == 1 and not Z.actif, "nouvelle carte : zoom a 1"
+    # fermer la carte ramene a 1
+    btn.scripts.OnMouseWheel(btn, 1)
+    lua.execute("WorldMapFrame:Hide()")
+    assert Z.z == 1 and not Z.actif
+    print("   zoom ramene a 1 : changement de carte, fermeture")
 
     # ------------------------------------------------------------------
     # LE SUIVI DE QUETES (docs/SUIVI_DES_QUETES.md)

@@ -28,7 +28,10 @@
 --
 -- DONNEES 3.3.5
 --   experience : UnitXP, UnitXPMax, GetXPExhaustion ; la barre disparait au
---                niveau maximum, comme celle du client.
+--                niveau maximum, comme celle du client -- et la reputation
+--                DESCEND a sa place (StatusTrackingBarManager de camelot : les
+--                barres montrees remplissent les conteneurs depuis le bas ;
+--                demande du 2026-09-28).
 --   reputation : GetWatchedFactionInfo() rend nom, attitude, min, max, valeur ;
 --                la barre disparait quand aucune faction n'est suivie.
 --
@@ -121,6 +124,18 @@ end
 local experience = creerBarre("ForeverUIExperienceBar")
 local reputation = creerBarre("ForeverUIReputationBar")
 
+-- la reputation : juste au-dessus de l'experience, ou a sa place quand
+-- l'experience n'est pas montree (niveau maximum)
+local function placerReputation()
+	local rangee = ForeverUI.BottomRow
+	if not rangee then
+		return
+	end
+	local centre = (rangee.gauche + rangee.droite) / 2
+	local y = experience:IsShown() and rangee.haut + HAUTEUR or rangee.haut
+	ForeverUI.Layout.SetDefaults("reputationbar", "BOTTOM", "BOTTOM", centre, y)
+end
+
 -- ------------------------------------------------------------ experience
 local function majExperience()
 	local maximum = UnitXPMax("player")
@@ -129,10 +144,12 @@ local function majExperience()
 
 	if not maximum or maximum <= 0 or (niveau and niveau >= maxNiveau) then
 		experience:Hide()
+		placerReputation()
 		return
 	end
 
 	experience:Show()
+	placerReputation()
 
 	local largeur = experience:GetWidth()
 	local acquis = UnitXP("player")
@@ -171,7 +188,7 @@ end
 -- ------------------------------------------------------------- placement
 -- Les deux barres font la longueur de la rangee -- barre d'action, micro-menu
 -- et sacs alignes -- et se touchent : l'experience pose sur la rangee, la
--- reputation juste au-dessus.
+-- reputation juste au-dessus (ou sur la rangee, sans experience).
 local function poser()
 	local rangee = ForeverUI.BottomRow
 	if not rangee then
@@ -185,7 +202,7 @@ local function poser()
 	reputation:SetWidth(largeur)
 
 	ForeverUI.Layout.SetDefaults("experiencebar", "BOTTOM", "BOTTOM", centre, rangee.haut)
-	ForeverUI.Layout.SetDefaults("reputationbar", "BOTTOM", "BOTTOM", centre, rangee.haut + HAUTEUR)
+	placerReputation()
 end
 
 local veilleur = CreateFrame("Frame")
@@ -228,4 +245,14 @@ ForeverUI.StatusBarsDebug = function()
 		experience:GetWidth(),
 		tostring(experience:IsShown()), tostring(select(5, experience:GetPoint(1))),
 		tostring(reputation:IsShown()), tostring(select(5, reputation:GetPoint(1)))))
+	-- ce qui decide de la place de la reputation : le niveau, le niveau
+	-- maximum que le client annonce, l'XP a gagner, la place par defaut, une
+	-- place retenue
+	local systeme = ForeverUI.Layout.systems["reputationbar"]
+	local retenue = ForeverUIDB and ForeverUIDB.positions and ForeverUIDB.positions["reputationbar"]
+	DEFAULT_CHAT_FRAME:AddMessage(string.format(
+		"|cff66ccffForeverUI|r " .. L.STATUSBARS_DEBUG_STATE,
+		tostring(UnitLevel("player")), tostring(MAX_PLAYER_LEVEL), tostring(UnitXPMax("player")),
+		tostring(systeme and systeme.defaults and systeme.defaults.y), tostring(retenue and retenue.y),
+		tostring(reputation.IsUserPlaced and reputation:IsUserPlaced())))
 end
