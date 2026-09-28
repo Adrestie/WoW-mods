@@ -665,6 +665,9 @@ function GetCVarBool(name) return STATE.cvars[name] == "1" end
 -- ------------------------------------------------- bouchons supplementaires
 function UnitClass(unit) return STATE.className, STATE.classToken end
 function UnitIsPlayer(unit) return STATE.isPlayer end
+-- le GUID d'une unite, sous la forme de 3.3.5 : "0xF130" .. entree .. compteur
+GUIDS = {}
+function UnitGUID(unit) return GUIDS[unit] end
 function UnitSelectionColor(unit)
     return STATE.selection[1], STATE.selection[2], STATE.selection[3]
 end
@@ -764,6 +767,7 @@ GameTooltip = {
     Hide = function(self) self.shown = false end,
     -- l'infobulle d'une unite, d'un affaiblissement ; FadeOut la fait partir
     SetUnit = function(self, unite) self.unite = unite; self.text = UnitName(unite); self.lignes = {} end,
+    GetUnit = function(self) return self.text, self.unite end,
     SetUnitDebuff = function(self, unite, i, filtre) self.debuff = { unite, i, filtre } end,
     FadeOut = function(self) self.shown = false end,
 }
@@ -1358,7 +1362,13 @@ function SendAddonMessage(prefixe, message, canal, cible)
         MESSAGE_ADDON("PVPTITLES", "RANKS:" .. SERVEUR_SEUILS, "WHISPER", cible)
         MESSAGE_ADDON("PVPTITLES", "DISHONOR:0,0,5,86400", "WHISPER", cible)
     end
+    -- « CIV:<entree> » : le drapeau civil du modele de creature
+    local entree = string.match(message, "^CIV:(%d+)$")
+    if SERVEUR_PVPTITLES and prefixe == "PVPTITLES" and entree and canal == "WHISPER" and cible == UnitName("player") then
+        MESSAGE_ADDON("PVPTITLES", "CIV:" .. entree .. ":" .. (SERVEUR_CIVILS[tonumber(entree)] and "1" or "0"), "WHISPER", cible)
+    end
 end
+SERVEUR_CIVILS = { [152] = true }
 -- l'entree dans le monde, pour les seuls cadres qui ecoutent le canal
 function ENTREE_DANS_LE_MONDE()
     for _, c in ipairs(FRAMES) do
@@ -8856,6 +8866,17 @@ def main():
     g.ForeverUI.PvPUpdate()
     assert principal.numero.text == "1" and principal.progres.text == "67", principal.progres.text
     assert not any(principal.jauge[q].plein.shown or principal.jauge[q].arc.shown for q in range(1, 5)), "pas de jauge sans seuils"
+    # LES CIVILS DANS LES INFOBULLES : le survol d une creature demande son
+    # drapeau au serveur -- a condition qu il ait le module, ce qu il n a pas
+    # encore dit
+    def survoler(guid):
+        lua.execute("GUIDS.mouseover = %s" % (('"%s"' % guid) if guid else "nil"))
+        lua.execute("GameTooltip:SetOwner(UIParent); GameTooltip:SetUnit('mouseover'); GameTooltip:Show();"
+                    " GameTooltip.hooks.OnTooltipSetUnit(GameTooltip)")
+        return list(g.GameTooltip.lignes.values())
+    CIVIL_152 = "0xF130000098000ABC"  # Brother Danil, entree 152
+    envois = len(g.ADDON_ENVOYES)
+    assert survoler(CIVIL_152) == [] and len(g.ADDON_ENVOYES) == envois, "rien a demander a un serveur sans le module"
     # a l entree dans le monde, l addon les demande ; le serveur repond
     lua.execute("SERVEUR_PVPTITLES = true; ENTREE_DANS_LE_MONDE()")
     envoi = list(g.ADDON_ENVOYES.values())[-1]
@@ -8886,6 +8907,32 @@ def main():
     assert not any(b.shown and b.info and b.info.deshonneur for b in g.ForeverUI.Buffs.debuffs.boutons.values()), "le debuff part avec l etat"
     lua.execute("TITRES_CONNUS = {}")
     print("   canal du serveur : sans lui, victoires seules et pas de jauge ; REQ a l entree, seuils recus, deshonore affiche puis leve")
+
+    # le serveur a le module : la premiere infobulle demande l entree, la
+    # reponse la complete ; ensuite la reponse gardee sert sans redemander
+    envois = len(g.ADDON_ENVOYES)
+    assert survoler(CIVIL_152) == ["Civilian"], list(g.GameTooltip.lignes.values())
+    assert list(g.ADDON_ENVOYES.values())[envois:] == ["PVPTITLES|CIV:152|WHISPER|" + g.UnitName("player")]
+    assert survoler(CIVIL_152) == ["Civilian"] and len(g.ADDON_ENVOYES) == envois + 1, "une entree se demande une fois"
+    # une creature sans le drapeau : demandee une fois, rien d ajoute
+    assert survoler("0xF13000000E000001") == [] and survoler("0xF13000000E000002") == []
+    assert len(g.ADDON_ENVOYES) == envois + 2
+    # un joueur, un familier : pas d entree, pas de demande
+    assert survoler("0x0000000000000042") == [] and survoler("0xF140000123000456") == [] and survoler(None) == []
+    assert len(g.ADDON_ENVOYES) == envois + 2
+    # une reponse qui ne vient pas du joueur lui-meme est ignoree
+    lua.execute("MESSAGE_ADDON('PVPTITLES', 'CIV:14:1', 'WHISPER', 'Mechant')")
+    assert survoler("0xF13000000E000003") == []
+    # la reponse arrivee apres le depart de la souris ne touche pas une
+    # infobulle qui montre autre chose
+    lua.execute("SERVEUR_CIVILS[3074] = true; SERVEUR_PVPTITLES = false")
+    assert survoler("0xF130000C02000001") == []
+    survoler("0xF13000000E000004")
+    lua.execute("MESSAGE_ADDON('PVPTITLES', 'CIV:3074:1', 'WHISPER', UnitName('player'))")
+    assert list(g.GameTooltip.lignes.values()) == []
+    assert survoler("0xF130000C02000001") == ["Civilian"]
+    lua.execute("SERVEUR_PVPTITLES = true")
+    print("   civils : drapeau demande au serveur une fois par entree, ligne Civilian ajoutee, joueurs et familiers ignores")
 
     # LE RANG VIENT DES TITRES, PAS DU COMPTEUR.
     #
