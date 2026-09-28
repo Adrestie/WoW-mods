@@ -337,6 +337,7 @@ ForeverUI.AjouterTextes("frFR", {
 	STANCEBAR_EDIT_LABEL = "Barre des postures",
 
 	-- StatusBars.lua
+	STATUSBARS_DEBUG_STATE = "   niveau %s, niveau maximum %s, XP à gagner %s | réputation : y par défaut=%s, y retenu=%s, placée à la main %s",
 	STATUSBARS_DEBUG = "barres d'état : rangée %.1f -> %.1f, haut %s | largeur %.0f | xp visible=%s à y=%s | réputation visible=%s à y=%s",
 	STATUSBARS_EDIT_LABEL_EXPERIENCE = "Barre d'expérience",
 	STATUSBARS_EDIT_LABEL_REPUTATION = "Barre de réputation",

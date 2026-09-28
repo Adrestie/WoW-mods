@@ -716,6 +716,24 @@ local function construire()
 			moins:HookScript("OnEnter", montrer)
 			moins:HookScript("OnLeave", cacherSiPossible)
 		end
+		-- LA MOLETTE (demande du 2026-09-28) : MinimapMixin:OnMouseWheel de
+		-- camelot -- vers le haut Minimap_ZoomIn, vers le bas Minimap_ZoomOut,
+		-- qui cliquent les boutons « + » et « - » : meme effet, meme son, et
+		-- rien quand le bouton est eteint en bout de course. 3.3.5 ne donne
+		-- pas la molette a la carte : on la lui donne. IsEnabled rend 0 ou 1,
+		-- et 0 est vrai en Lua.
+		local function cliquer(bouton)
+			local etat = bouton and bouton:IsEnabled()
+			if etat and etat ~= 0 then bouton:Click() end
+		end
+		carte:EnableMouseWheel(true)
+		carte:SetScript("OnMouseWheel", function(_, sens)
+			if sens > 0 then
+				cliquer(plus)
+			elseif sens < 0 then
+				cliquer(moins)
+			end
+		end)
 		M.zoomBranche = true
 	end
 

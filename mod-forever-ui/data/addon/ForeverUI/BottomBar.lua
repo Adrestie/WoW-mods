@@ -206,6 +206,32 @@ local function etatMicro(entree)
 	end
 end
 
+-- la barre de latence du bouton du menu : camelot l'ancre a (0, -2) ; son
+-- trait (le bas de l'image) deborde alors d'un pixel sous le bouton, ou il
+-- n'y a rien. Ici le bord interieur de l'encadrement du bandeau tombe au bas
+-- du bouton et le couvrait : ancre a (0, 0), le trait passe juste au-dessus.
+--
+-- LE TRAIT A 3 PIXELS (demande du 2026-09-28 : « pas assez epais, vise les
+-- 3 pixels »). Sur l'image (32 x 64), le trait tient sur les lignes 58 et
+-- 59 -- la 57 est son liseré sombre. A 39 de haut, une ligne de l'image
+-- faisait moins d'un pixel d'ecran, et le trait, un seul. L'image prend
+-- donc la hauteur qui donne 1,5 pixel par ligne : ses deux lignes colorees
+-- font 3 pixels. La largeur reste celle de camelot (19). Le pixel se
+-- compte sur la hauteur de l'ecran (gxResolution) et l'echelle du bouton.
+local LATENCE = { lignes = 64, pixelsParLigne = 1.5, largeur = 19 }
+local function pixelsParUnite(cadre)
+	local h = tonumber(string.match(GetCVar("gxResolution") or "", "%d+x(%d+)")) or 768
+	return h / 768 * cadre:GetEffectiveScale()
+end
+ForeverUI.PixelsParUnite = pixelsParUnite
+
+local function poserLatence(bouton)
+	MainMenuBarPerformanceBar:SetWidth(LATENCE.largeur)
+	MainMenuBarPerformanceBar:SetHeight(LATENCE.lignes * LATENCE.pixelsParLigne / pixelsParUnite(bouton))
+	MainMenuBarPerformanceBar:ClearAllPoints()
+	MainMenuBarPerformanceBar:SetPoint("BOTTOM", bouton, "BOTTOM", 0, 0)
+end
+
 local function habillerMicro(definition, index)
 	local bouton = _G[definition.nom]
 	if not bouton then
@@ -292,14 +318,25 @@ local function habillerMicro(definition, index)
 		-- l'image de camelot (32 x 64, un trait en bas) : celle de 3.3.5 est
 		-- un pave de 16 x 8, qui s'etirait en gros carre vert
 		MainMenuBarPerformanceBar:SetTexture(PERFORMANCE_IMAGE)
-		MainMenuBarPerformanceBar:SetWidth(19)
-		MainMenuBarPerformanceBar:SetHeight(39)
-		MainMenuBarPerformanceBar:ClearAllPoints()
-		-- camelot l'ancre a (0, -2) : son trait (le bas de l'image) deborde
-		-- alors d'un pixel sous le bouton, ou il n'y a rien. Ici le bord
-		-- interieur de l'encadrement du bandeau tombe au bas du bouton et le
-		-- couvrait : ancre a (0, 0), le trait passe juste au-dessus.
-		MainMenuBarPerformanceBar:SetPoint("BOTTOM", bouton, "BOTTOM", 0, 0)
+		poserLatence(bouton)
+		-- l'ecran ou l'echelle changent : le pixel aussi
+		local veilleLatence = CreateFrame("Frame")
+		veilleLatence:RegisterEvent("DISPLAY_SIZE_CHANGED")
+		veilleLatence:RegisterEvent("UI_SCALE_CHANGED")
+		veilleLatence:RegisterEvent("PLAYER_ENTERING_WORLD")
+		veilleLatence:SetScript("OnEvent", function() poserLatence(bouton) end)
+		-- 3.3.5 REANCRE la barre a chaque appui et a chaque relachement
+		-- (MainMenuMicroButton_SetPushed / _SetNormal : SetPoint TOPLEFT
+		-- (9, -36) / (10, -34), sans ClearAllPoints). Cette ancre s'ajoutait a
+		-- la notre : l'image, tiree entre les deux, tombait a 12 x 12 et son
+		-- trait disparaissait (AMELIORATIONS, 2026-09-28). On repose la notre
+		-- derriere elles ; camelot ne deplace pas la barre quand le bouton
+		-- s'enfonce.
+		for _, nom in ipairs({ "MainMenuMicroButton_SetPushed", "MainMenuMicroButton_SetNormal" }) do
+			if _G[nom] then
+				hooksecurefunc(nom, function() poserLatence(bouton) end)
+			end
+		end
 	end
 
 	bouton:ClearAllPoints()
@@ -572,11 +609,85 @@ local function habillerTrousseau()
 	-- element permanent de la barre, et notre barre montre toujours sa
 	-- cellule : un emplacement vide y serait faux. L'image du trousseau est
 	-- donc TOUJOURS posee.
-	ForeverUI.SetAtlas(iconeTrousseau, "ui-hud-actionbar-keyring-small")
+	-- LA VARIANTE DOUBLE DENSITE (demande du 2026-09-28 : « l'icone semble
+	-- pixelisee ou zoomee ») : la simple fait 27 x 40 texels pour 27 x 40
+	-- unites, et une unite vaut plus d'un pixel a l'ecran -- elle
+	-- s'agrandissait. La -2x (uiactionbar2xc60, 54 x 80) se pose a la meme
+	-- taille, nette.
+	ForeverUI.SetAtlas(iconeTrousseau, "ui-hud-actionbar-keyring-small-c60-2x")
 
 	-- camelot garde toujours ce bouton dans la barre ; 3.3.5 le laisse cache
 	-- tant que le joueur n'a pas ramasse de cle.
 	bouton:Show()
+end
+
+-- L'ANIMATION D'ENTREE DU TROUSSEAU (demande du 2026-09-28). RELEVE --
+-- BaseBagSlotButtonTemplate (mainline/mainmenubarbagbuttontemplates.xml) :
+-- AnimIcon, calque OVERLAY, sur tout le bouton ; FlyIn : en 1 s, echelle de
+-- 0,125 a 1, alpha de 0 a 1, chemin doux (SMOOTH) par (-15, 30) et
+-- (-75, 60). KeyRingMixin le joue A L'ENVERS (FlyIn:Play(true)) : l'icone
+-- de la cle part de (-75, 60), entiere et opaque, et rentre dans le bouton,
+-- reduite au huitieme et effacee. 3.3.5 n'a ni lecture a l'envers ni echelle
+-- de depart : on la joue image par image. Elle remplace l'animation 3D de
+-- 3.3.5 (KeyRingButtonItemAnim, ForcedBackpackItem.mdx).
+local VOL = { duree = 1, echelle = 0.125, points = { { 0, 0 }, { -15, 30 }, { -75, 60 } } }
+
+-- la courbe douce : Catmull-Rom par les points, extremites doublees
+local function courbe(q)
+	local p = VOL.points
+	local n = #p - 1
+	local s = math.min(n - 1e-9, math.max(0, q * n))
+	local i = math.floor(s) + 1
+	local u = s - (i - 1)
+	local a, b, c, d = p[math.max(1, i - 1)], p[i], p[i + 1], p[math.min(#p, i + 2)]
+	local function axe(k)
+		return 0.5 * (2 * b[k] + (c[k] - a[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * u * u
+			+ (3 * b[k] - a[k] - 3 * c[k] + d[k]) * u * u * u)
+	end
+	return axe(1), axe(2)
+end
+ForeverUI.KeyRingFlyCurve = courbe
+
+local vol = CreateFrame("Frame")
+vol:Hide()
+vol:SetScript("OnUpdate", function(self, ecoule)
+	self.t = self.t + (ecoule or 0)
+	local icone = self.icone
+	if self.t >= VOL.duree then
+		icone:Hide()
+		self:Hide()
+		return
+	end
+	-- a l'envers : la progression va de 1 a 0
+	local q = 1 - self.t / VOL.duree
+	local x, y = courbe(q)
+	local k = VOL.echelle + (1 - VOL.echelle) * q
+	local b = KeyRingButton
+	icone:ClearAllPoints()
+	icone:SetPoint("CENTER", b, "CENTER", x, y)
+	icone:SetWidth(b:GetWidth() * k)
+	icone:SetHeight(b:GetHeight() * k)
+	icone:SetAlpha(q)
+	icone:Show()
+end)
+vol:RegisterEvent("ITEM_PUSH")
+vol:SetScript("OnEvent", function(self, _, sac, texture)
+	local b = KeyRingButton
+	if not b or sac ~= b:GetID() then
+		return
+	end
+	if not self.icone then
+		self.icone = b:CreateTexture(nil, "OVERLAY")
+		self.icone:Hide()
+	end
+	self.icone:SetTexture(texture)
+	self.t = 0
+	self:Show()
+end)
+ForeverUI.KeyRingFly = vol
+if KeyRingButtonItemAnim then
+	KeyRingButtonItemAnim:UnregisterEvent("ITEM_PUSH")
+	KeyRingButtonItemAnim:Hide()
 end
 
 local ORDRE_SACS = {

@@ -41,6 +41,7 @@ StatusBars.lua
 Minimap.lua
 WorldMapInstances.lua
 WorldMap.lua
+WorldMapZoom.lua
 QuestLog.lua
 ObjectiveTracker.lua
 SpellBook.lua
