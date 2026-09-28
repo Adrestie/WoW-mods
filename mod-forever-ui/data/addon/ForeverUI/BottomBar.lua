@@ -94,8 +94,14 @@ local PERFORMANCE_IMAGE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "mainmenub
 local L = ForeverUI.L
 
 -- L'ordre de camelot, reduit aux boutons que ce client possede.
+--
+-- LE BOUTON DES METIERS (demande du 2026-09-28) : ProfessionMicroButton de
+-- camelot, juste apres la feuille de personnage. 3.3.5 n'en a pas : le
+-- bouton est cree ici (creer), a l'image de ceux du client ; il ouvre le
+-- livre des metiers (ProfessionsBook.lua).
 local MICRO = {
 	{ nom = "CharacterMicroButton", portrait = true },
+	{ nom = "ForeverUIProfessionMicroButton", jeu = "professions", creer = true },
 	{ nom = "SpellbookMicroButton", jeu = "spellbookabilities" },
 	{ nom = "TalentMicroButton", jeu = "spectalents" },
 	{ nom = "AchievementMicroButton", jeu = "achievements" },
@@ -232,7 +238,43 @@ local function poserLatence(bouton)
 	MainMenuBarPerformanceBar:SetPoint("BOTTOM", bouton, "BOTTOM", 0, 0)
 end
 
+-- ProfessionMicroButtonMixin (mainline/mainmenubarmicrobuttons.lua) :
+-- LoadMicroButtonTextures(self, "Professions") ; infobulle
+-- MicroButtonTooltipText(PROFESSIONS_BUTTON, "TOGGLEPROFESSIONBOOK") --
+-- PROFESSIONS_BUTTON est TRADE_SKILLS dans 3.3.5, qui n'a pas ce raccourci ;
+-- le clic ouvre ou ferme les metiers (ToggleProfessionsBook). L'infobulle
+-- et les images sont posees comme celles des boutons du client (OnEnter de
+-- MainMenuBarMicroButton, GameTooltip_AddNewbieTip) ; habillerMicro les
+-- reprend ensuite.
+local function creerMicro(definition)
+	local parent = (CharacterMicroButton and CharacterMicroButton:GetParent()) or micro
+	local bouton = CreateFrame("Button", definition.nom, parent)
+	for etat, methode in pairs(ETATS_MICRO) do
+		local e = ForeverUI.AtlasEntry(microAtlas(definition.jeu, etat))
+		if e then
+			bouton[string.gsub(methode, "^Get", "Set")](bouton, e[1])
+		end
+	end
+	bouton:RegisterForClicks("AnyUp")
+	bouton.tooltipText = MicroButtonTooltipText(TRADE_SKILLS, "TOGGLEPROFESSIONBOOK")
+	bouton:SetScript("OnEnter", function(self)
+		GameTooltip_AddNewbieTip(self, self.tooltipText, 1.0, 1.0, 1.0, self.newbieText)
+	end)
+	bouton:SetScript("OnLeave", function()
+		GameTooltip:Hide()
+	end)
+	bouton:SetScript("OnClick", function()
+		if ForeverUI.LivreMetiers then
+			ForeverUI.LivreMetiers.Basculer()
+		end
+	end)
+	return bouton
+end
+
 local function habillerMicro(definition, index)
+	if definition.creer and not _G[definition.nom] then
+		creerMicro(definition)
+	end
 	local bouton = _G[definition.nom]
 	if not bouton then
 		return nil
@@ -248,7 +290,7 @@ local function habillerMicro(definition, index)
 		bouton:SetFrameLevel(MainMenuBarArtFrame:GetFrameLevel() + index)
 	end
 
-	local entree = { bouton = bouton, jeu = definition.jeu, portrait = definition.portrait }
+	local entree = { bouton = bouton, jeu = definition.jeu, portrait = definition.portrait, cree = definition.creer }
 
 	entree.fond = bouton:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(entree.fond, "ui-hud-micromenu-buttonbg-up-c60-2x", true)
@@ -537,13 +579,39 @@ end
 -- MainMenuBar_ToVehicleArt -- donc a chaque entree ou sortie de vehicule,
 -- et le micro-menu se disloquait. Releve par /fui micro, qui a montre ces
 -- deux boutons-la ancres ailleurs que sur notre bandeau.
+--
+-- Le bouton des metiers suit ses voisins : en vehicule, le client les passe
+-- sur VehicleMenuBarArtFrame (MainMenuBar cache) ; il change de parent avec
+-- eux, un cran au-dessus de la feuille de personnage.
 local function poserMicro()
 	for index, entree in ipairs(boutonsMicro) do
+		if entree.cree and CharacterMicroButton then
+			local parent = CharacterMicroButton:GetParent()
+			if entree.bouton:GetParent() ~= parent then
+				entree.bouton:SetParent(parent)
+			end
+			entree.bouton:SetFrameLevel(CharacterMicroButton:GetFrameLevel() + index - 1)
+		end
 		entree.bouton:ClearAllPoints()
 		entree.bouton:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
 	end
 end
 ForeverUI.MicroLayout = poserMicro
+
+-- l'etat du bouton des metiers : enfonce tant que les metiers sont ouverts
+-- (le livre ou la page de fabrication) -- voir ProfessionsBook.lua
+function ForeverUI.MajMicroMetiers(ouvert)
+	for _, entree in ipairs(boutonsMicro) do
+		if entree.cree then
+			if ouvert then
+				entree.bouton:SetButtonState("PUSHED", 1)
+			else
+				entree.bouton:SetButtonState("NORMAL")
+			end
+			etatMicro(entree)
+		end
+	end
+end
 
 poserMicro()
 

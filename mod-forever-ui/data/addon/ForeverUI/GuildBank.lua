@@ -64,12 +64,6 @@ local SEP = string.char(92)
 
 local N = {
 	fenetre = { 750, 428 },
-	fond = { 2, -21, -2, 2 }, titreFond = { 2, -1, -25, -1 }, stries = { 0, -21, -2, -21 },
-	coins = { hg = { -6, 1 }, hd = { 0, 1 }, bg = { -6, -5 }, bd = { 0, -5 } },
-	-- les tailles des textures virtuelles de camelot (UI-Frame-TopLeftCorner
-	-- = l'atlas UI-Frame-TopLeftCornerNoPortrait, 33 x 33)
-	pieces = { titreFond = 18, stries = 43, coinHaut = 33, coinBasGauche = 14, coinBasDroit = 11,
-		haut = 28, bas = 9, gauche = 16, droite = 10 },
 	marbre = { 2, -20, -2, 20 },
 	exterieur = { bg = { -2, 21 }, bd = { 0, 21 }, hd = { 0, -18 }, hg = { -2, -18 } },
 	interieur = { bg = { 14, 32 }, bd = { -9, 32 }, hd = { -9, -35 }, hg = { 14, -35 } },
@@ -90,7 +84,6 @@ local N = {
 }
 
 local ART = {
-	roche = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-rock",
 	coffre = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildbankframe" .. SEP .. "guildvaultbg",
 	coinsGB = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildbankframe" .. SEP .. "corners",
 	vertical = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildbankframe" .. SEP .. "verttile",
@@ -117,57 +110,6 @@ local function mosaique(t, fichier, h, v)
 		t:SetHorizTile(h and true or false)
 		t:SetVertTile(v and true or false)
 	end
-end
-
--- BaseBasicFrameTemplate : les pieces UI-Frame, en regions de la fenetre,
--- A LA TAILLE DE LEUR TEXTURE VIRTUELLE (mainline/shareduipaneltemplates.xml)
--- -- sans taille, le client 3.3.5 dessine une texture a la taille de sa
--- feuille entiere (constate en jeu le 28/09 : cadre casse)
-local function cadreSimple(f)
-	local F, T, S, P = N.fond, N.titreFond, N.stries, N.pieces
-	local roche = f:CreateTexture(nil, "BACKGROUND")
-	mosaique(roche, ART.roche, true, true)
-	roche:SetPoint("TOPLEFT", f, "TOPLEFT", F[1], F[2])
-	roche:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", F[3], F[4])
-	local titreFond = f:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(titreFond, "_ui-frame-titletilebg", true)
-	titreFond:SetHeight(P.titreFond)
-	titreFond:SetPoint("TOPLEFT", f, "TOPLEFT", T[1], T[2])
-	titreFond:SetPoint("TOPRIGHT", f, "TOPRIGHT", T[3], T[4])
-	local stries = f:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(stries, "_ui-frame-toptilestreaks", true)
-	stries:SetHeight(P.stries)
-	stries:SetPoint("TOPLEFT", f, "TOPLEFT", S[1], S[2])
-	stries:SetPoint("TOPRIGHT", f, "TOPRIGHT", S[3], S[4])
-	local C = N.coins
-	local function coin(atlas, couche, point, o, cote)
-		local t = f:CreateTexture(nil, couche)
-		ForeverUI.SetAtlas(t, atlas, true)
-		t:SetWidth(cote)
-		t:SetHeight(cote)
-		t:SetPoint(point, f, point, o[1], o[2])
-		return t
-	end
-	local hg = coin("ui-frame-topleftcornernoportrait", "OVERLAY", "TOPLEFT", C.hg, P.coinHaut)
-	local hd = coin("ui-frame-topcornerright", "OVERLAY", "TOPRIGHT", C.hd, P.coinHaut)
-	local bg = coin("ui-frame-botcornerleft", "BORDER", "BOTTOMLEFT", C.bg, P.coinBasGauche)
-	local bd = coin("ui-frame-botcornerright", "BORDER", "BOTTOMRIGHT", C.bd, P.coinBasDroit)
-	-- un bord : sa longueur par ses deux ancres, son epaisseur fixee
-	local function bord(atlas, couche, epaisseur, horizontal, a1, c1, r1, a2, c2, r2, x)
-		local t = f:CreateTexture(nil, couche)
-		ForeverUI.SetAtlas(t, atlas, true)
-		if horizontal then t:SetHeight(epaisseur) else t:SetWidth(epaisseur) end
-		t:SetPoint(a1, c1, r1, x or 0, 0)
-		t:SetPoint(a2, c2, r2)
-		return t
-	end
-	return {
-		roche = roche, titreFond = titreFond, stries = stries, coins = { hg = hg, hd = hd, bg = bg, bd = bd },
-		haut = bord("_ui-frame-titletile", "OVERLAY", P.haut, true, "TOPLEFT", hg, "TOPRIGHT", "TOPRIGHT", hd, "TOPLEFT"),
-		bas = bord("_ui-frame-bot", "BORDER", P.bas, true, "BOTTOMLEFT", bg, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "BOTTOMLEFT"),
-		gauche = bord("!ui-frame-lefttile", "BORDER", P.gauche, false, "TOPLEFT", hg, "BOTTOMLEFT", "BOTTOMLEFT", bg, "TOPLEFT"),
-		droite = bord("!ui-frame-righttile", "BORDER", P.droite, false, "TOPRIGHT", hd, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "TOPRIGHT", 1),
-	}
 end
 
 -- un cadre de Corners / VertTile / HorizTile : ses quatre coins places
@@ -290,7 +232,8 @@ function G.Habiller()
 	f:SetWidth(N.fenetre[1])
 	f:SetHeight(N.fenetre[2])
 	f:SetHitRectInsets(0, 0, 0, 0)
-	local habit = cadreSimple(f)
+	-- BasicFrameTemplate : les pieces UI-Frame (Gb.CadreSimple, venu d'ici)
+	local habit = Gb.CadreSimple(f)
 	f.foreverHabit = habit
 	-- le coffre : marbre rouge, cadres exterieur et interieur, fond noir
 	local M = N.marbre

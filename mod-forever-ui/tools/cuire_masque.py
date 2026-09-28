@@ -136,6 +136,13 @@ ICONES += ["classicon_%s.blp" % c for c in (
 ICONES += ["inv_sidetab_bank_c60.blp", "achievement_guildperk_mobilebanking.blp",
            "trade_archaeology_chestoftinyglassanimals.blp", "ability_racial_packhobgoblin.blp"]
 
+# les metiers (2026-09-28) : l'onglet d'ensemble et ceux des metiers
+# (calligraphie : inv_inscription_tradeskill01, deja cuite plus haut)
+ICONES += ["%s.blp" % n for n in (
+    "inv_sidetab_professions_c60", "trade_alchemy", "trade_blacksmithing", "trade_engraving",
+    "trade_engineering", "trade_leatherworking", "trade_mining", "trade_tailoring",
+    "inv_misc_food_15", "spell_holy_sealofsacrifice", "inv_misc_gem_01")]
+
 ONGLET_L, ONGLET_H = 55.0, 55.0
 MASQUE_L, MASQUE_H = 55.0, 60.0
 ICONE = 50.0

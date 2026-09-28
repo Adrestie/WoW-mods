@@ -50,6 +50,11 @@ local ART = {
 	["_ui-frame-innerbottile"] = { "interface\\ForeverUI\\framegeneral\\uiframehorizontal", 0.000000, 1.000000, 0.867188, 0.890625, 256, 3, true, false },
 	["!ui-frame-innerlefttile"] = { "interface\\ForeverUI\\framegeneral\\uiframevertical", 0.484375, 0.531250, 0.000000, 1.000000, 3, 256, false, true },
 	["!ui-frame-innerrighttile"] = { "interface\\ForeverUI\\framegeneral\\uiframevertical", 0.562500, 0.609375, 0.000000, 1.000000, 3, 256, false, true },
+	-- le cadre de la fiche des metiers (SchematicFormCraftingTemplate), decoupe
+	-- 53 / 53 / 53 / 53 (UiTextureAtlasElementSliceData), variante c60
+	["common-insideframe"] = { "interface\\ForeverUI\\common\\commoninsideframec60", 0.007812, 0.843750, 0.007812, 0.843750, 107, 107, false, false, { 53, 53, 53, 53, 0 } },
+	-- la bordure des boites de dialogue (GameDialogBackgroundTop), variante c60
+	["ui-diamonddialogbox-border"] = { "interface\\ForeverUI\\dialogframe\\uiframediamondmetalborder2xc60", 0.003906, 0.550781, 0.003906, 0.550781, 70, 70, false, false, { 32, 32, 32, 32, 0 } },
 	["redbutton-exit"] = { "interface\\ForeverUI\\buttons\\redbuttonsc60", 0.136719, 0.261719, 0.007812, 0.257812, 32, 32 },
 	["redbutton-exit-pressed"] = { "interface\\ForeverUI\\buttons\\redbuttonsc60", 0.136719, 0.261719, 0.539062, 0.789062, 32, 32 },
 	["redbutton-exit-disabled"] = { "interface\\ForeverUI\\buttons\\redbuttonsc60", 0.136719, 0.261719, 0.273438, 0.523438, 32, 32 },
@@ -275,15 +280,16 @@ local MORCEAUX = {
 
 -- pose une disposition sur un cadre, en regions de ce cadre (un cadre fils
 -- couvrirait ses textes). cible : le rectangle sur lequel se calent les
--- coins, l'hote par defaut. Rend les morceaux par nom.
-function Gb.NeufTranches(hote, nomDisposition, cible)
+-- coins, l'hote par defaut ; couche : un autre calque que celui de la
+-- disposition (3.3.5 n'a pas de sous-calques). Rend les morceaux par nom.
+function Gb.NeufTranches(hote, nomDisposition, cible, couche)
 	local disposition = Gb.DISPOSITIONS[nomDisposition]
 	local p = {}
 	for _, m in ipairs(MORCEAUX) do
 		local nom = m[1]
 		local l = disposition[nom]
 		if l then
-			local t = hote:CreateTexture(nil, l.layer or "BORDER")
+			local t = hote:CreateTexture(nil, couche or l.layer or "BORDER")
 			p[nom] = t
 			if nom == "Center" then
 				local e = Gb.Poser(t, l.atlas, true)
@@ -976,6 +982,76 @@ function Gb.FenetrePortrait(f, o)
 		bandeau = bandeau, cadrePortrait = cadrePortrait }
 end
 
+-- ------------------------------------------------------------ la fenetre simple
+
+-- BaseBasicFrameTemplate (mainline/uipaneltemplates.xml, BasicFrameTemplate) :
+-- les pieces UI-Frame, en regions de la fenetre, A LA TAILLE DE LEUR TEXTURE
+-- VIRTUELLE (mainline/shareduipaneltemplates.xml) -- sans taille, le client
+-- 3.3.5 dessine une texture a la taille de sa feuille entiere (constate en
+-- jeu le 28/09 : cadre casse). Roche (2, -21 / -2, 2), bande de titre
+-- _UI-Frame-TitleTileBg de 18 (2, -1 / -25, -1), stries de 43 (0, -21 /
+-- -2, -21) ; coins du haut 33 (-6, 1) et (0, 1), du bas 14 (-6, -5) et 11
+-- (0, -5) ; bords : haut 28, bas 9, gauche 16, droite 10 (+1). Venue de la
+-- banque de guilde (VALIDEE le 28/09) ; o.bords : le calque des bords du
+-- bas et des cotes et des coins du bas (BORDER par defaut, comme camelot).
+local SIMPLE = {
+	fond = { 2, -21, -2, 2 }, titreFond = { 2, -1, -25, -1 }, stries = { 0, -21, -2, -21 },
+	coins = { hg = { -6, 1 }, hd = { 0, 1 }, bg = { -6, -5 }, bd = { 0, -5 } },
+	pieces = { titreFond = 18, stries = 43, coinHaut = 33, coinBasGauche = 14, coinBasDroit = 11,
+		haut = 28, bas = 9, gauche = 16, droite = 10 },
+}
+
+function Gb.CadreSimple(f, o)
+	o = o or {}
+	local SEP = string.char(92)
+	local F, T, S, P = SIMPLE.fond, SIMPLE.titreFond, SIMPLE.stries, SIMPLE.pieces
+	local couche = o.bords or "BORDER"
+	local roche = f:CreateTexture(nil, "BACKGROUND")
+	roche:SetTexture("interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-rock", true)
+	if roche.SetHorizTile then roche:SetHorizTile(true) roche:SetVertTile(true) end
+	roche:SetPoint("TOPLEFT", f, "TOPLEFT", F[1], F[2])
+	roche:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", F[3], F[4])
+	local titreFond = f:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(titreFond, "_ui-frame-titletilebg", true)
+	titreFond:SetHeight(P.titreFond)
+	titreFond:SetPoint("TOPLEFT", f, "TOPLEFT", T[1], T[2])
+	titreFond:SetPoint("TOPRIGHT", f, "TOPRIGHT", T[3], T[4])
+	local stries = f:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(stries, "_ui-frame-toptilestreaks", true)
+	stries:SetHeight(P.stries)
+	stries:SetPoint("TOPLEFT", f, "TOPLEFT", S[1], S[2])
+	stries:SetPoint("TOPRIGHT", f, "TOPRIGHT", S[3], S[4])
+	local C = SIMPLE.coins
+	local function coin(atlas, c, point, p, cote)
+		local t = f:CreateTexture(nil, c)
+		ForeverUI.SetAtlas(t, atlas, true)
+		t:SetWidth(cote)
+		t:SetHeight(cote)
+		t:SetPoint(point, f, point, p[1], p[2])
+		return t
+	end
+	local hg = coin("ui-frame-topleftcornernoportrait", "OVERLAY", "TOPLEFT", C.hg, P.coinHaut)
+	local hd = coin("ui-frame-topcornerright", "OVERLAY", "TOPRIGHT", C.hd, P.coinHaut)
+	local bg = coin("ui-frame-botcornerleft", couche, "BOTTOMLEFT", C.bg, P.coinBasGauche)
+	local bd = coin("ui-frame-botcornerright", couche, "BOTTOMRIGHT", C.bd, P.coinBasDroit)
+	-- un bord : sa longueur par ses deux ancres, son epaisseur fixee
+	local function bord(atlas, c, epaisseur, horizontal, a1, c1, r1, a2, c2, r2, x)
+		local t = f:CreateTexture(nil, c)
+		ForeverUI.SetAtlas(t, atlas, true)
+		if horizontal then t:SetHeight(epaisseur) else t:SetWidth(epaisseur) end
+		t:SetPoint(a1, c1, r1, x or 0, 0)
+		t:SetPoint(a2, c2, r2)
+		return t
+	end
+	return {
+		roche = roche, titreFond = titreFond, stries = stries, coins = { hg = hg, hd = hd, bg = bg, bd = bd },
+		haut = bord("_ui-frame-titletile", "OVERLAY", P.haut, true, "TOPLEFT", hg, "TOPRIGHT", "TOPRIGHT", hd, "TOPLEFT"),
+		bas = bord("_ui-frame-bot", couche, P.bas, true, "BOTTOMLEFT", bg, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "BOTTOMLEFT"),
+		gauche = bord("!ui-frame-lefttile", couche, P.gauche, false, "TOPLEFT", hg, "BOTTOMLEFT", "BOTTOMLEFT", bg, "TOPLEFT"),
+		droite = bord("!ui-frame-righttile", couche, P.droite, false, "TOPRIGHT", hd, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "TOPRIGHT", 1),
+	}
+end
+
 -- ------------------------------------------------------------ le cadre interieur
 
 -- Options_InnerFrame de camelot (voir R.Interieur, Settings.lua, VALIDE sur
@@ -1247,11 +1323,115 @@ function Gb.MenuStyle1(dd, largeur, hauteur, compact)
 	return dd
 end
 
+-- ------------------------------------------------------------ le menu filtre
+
+-- WowStyle1FilterDropdownTemplate (blizzard_menu/mainline/menutemplates.xml
+-- 66-104, menutemplates.lua 692-732 et 991-1013 ; le maitre, 28/09) : le
+-- bouton « b », common-dropdown-b-button (variante c60, celle que camelot
+-- affiche) de (-4, 4) a (4, -4) du menu, decoupe en trois par le moteur
+-- (bouts de 8 et 18 : UiTextureAtlasElementSliceData, la fleche est dans
+-- le bout droit) ; etats -hover, -pressed, -pressedhover, -open,
+-- -disabled ; texte GameFontNormal TOP sur 20, decale de (2, -1) enfonce ;
+-- largeur = texte + 60 (resizeToText, padding 60) ; la liste a (6, 2) sous
+-- le menu. Le menu du client (UIDropDownMenuTemplate) garde sa logique.
+local FILTRE = { fond = { -4, 4, 4, -4 }, bouts = { 8, 18 }, texteHaut = 20, enfonce = { 2, -1 }, marge = 60,
+	liste = { 6, 2 } }
+local menusFiltre = {}
+
+local function peindreFiltre(dd)
+	local b = dd.foreverBouton
+	local etat = ""
+	if not vrai(b:IsEnabled()) then
+		etat = "-disabled"
+	elseif b.foreverBas and b.foreverDessus then
+		etat = "-pressedhover"
+	elseif b.foreverDessus then
+		etat = "-hover"
+	elseif b.foreverBas then
+		etat = "-pressed"
+	elseif DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == dd then
+		etat = "-open"
+	end
+	local e = ForeverUI.AtlasEntry("common-dropdown-b-button" .. etat .. "-c60")
+		or ForeverUI.AtlasEntry("common-dropdown-b-button" .. etat)
+	if not e then return end
+	local g, m, d = dd.foreverFond[1], dd.foreverFond[2], dd.foreverFond[3]
+	local du = (e[3] - e[2]) / e[6]
+	local u1, u2 = e[2] + FILTRE.bouts[1] * du, e[3] - FILTRE.bouts[2] * du
+	for _, t in ipairs(dd.foreverFond) do t:SetTexture(e[1]) end
+	g:SetTexCoord(e[2], u1, e[4], e[5])
+	m:SetTexCoord(u1, u2, e[4], e[5])
+	d:SetTexCoord(u2, e[3], e[4], e[5])
+	local texte = _G[dd:GetName() .. "Text"]
+	texte:ClearAllPoints()
+	if b.foreverBas and vrai(b:IsEnabled()) then
+		texte:SetPoint("TOP", dd, "TOP", FILTRE.enfonce[1], FILTRE.enfonce[2])
+	else
+		texte:SetPoint("TOP", dd, "TOP", 0, 0)
+	end
+end
+
+function Gb.MenuFiltre(dd, hauteur)
+	if dd.foreverBouton then return dd end
+	local F = FILTRE
+	local nom = dd:GetName()
+	for _, suffixe in ipairs({ "Left", "Middle", "Right" }) do
+		_G[nom .. suffixe]:SetAlpha(0)
+	end
+	-- la hauteur tenue (UIDropDownMenu_Initialize la remet a 32)
+	dd.foreverHauteur = hauteur
+	dd:SetHeight(hauteur)
+	local b = _G[nom .. "Button"]
+	dd.foreverBouton = b
+	b:ClearAllPoints()
+	b:SetAllPoints(dd)
+	Gb.EffacerArt(b)
+	local rect = CreateFrame("Frame", nil, dd)
+	rect:SetPoint("TOPLEFT", dd, "TOPLEFT", F.fond[1], F.fond[2])
+	rect:SetPoint("BOTTOMRIGHT", dd, "BOTTOMRIGHT", F.fond[3], F.fond[4])
+	local function morceau()
+		return dd:CreateTexture(nil, "BACKGROUND")
+	end
+	local g, m, d = morceau(), morceau(), morceau()
+	g:SetWidth(F.bouts[1])
+	g:SetPoint("TOPLEFT", rect, "TOPLEFT", 0, 0)
+	g:SetPoint("BOTTOMLEFT", rect, "BOTTOMLEFT", 0, 0)
+	d:SetWidth(F.bouts[2])
+	d:SetPoint("TOPRIGHT", rect, "TOPRIGHT", 0, 0)
+	d:SetPoint("BOTTOMRIGHT", rect, "BOTTOMRIGHT", 0, 0)
+	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
+	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
+	dd.foreverFond = { g, m, d }
+	local texte = _G[nom .. "Text"]
+	texte:SetFontObject(GameFontNormal)
+	texte:SetJustifyH("CENTER")
+	texte:SetHeight(F.texteHaut)
+	-- la largeur suit le texte (resizeToText)
+	local function largeur()
+		dd:SetWidth((texte:GetStringWidth() or 0) + F.marge)
+		texte:SetWidth(dd:GetWidth())
+	end
+	largeur()
+	hooksecurefunc(texte, "SetText", largeur)
+	UIDropDownMenu_SetAnchor(dd, F.liste[1], F.liste[2], "TOPLEFT", dd, "BOTTOMLEFT")
+	b:HookScript("OnEnter", function(self) self.foreverDessus = true peindreFiltre(dd) end)
+	b:HookScript("OnLeave", function(self) self.foreverDessus = false peindreFiltre(dd) end)
+	b:HookScript("OnMouseDown", function(self) self.foreverBas = true peindreFiltre(dd) end)
+	b:HookScript("OnMouseUp", function(self) self.foreverBas = false peindreFiltre(dd) end)
+	b:HookScript("OnEnable", function() peindreFiltre(dd) end)
+	b:HookScript("OnDisable", function() peindreFiltre(dd) end)
+	dd:HookScript("OnShow", function() peindreFiltre(dd) end)
+	menusFiltre[#menusFiltre + 1] = dd
+	peindreFiltre(dd)
+	return dd
+end
+
 -- la fleche passe a « open » quand la liste s'ouvre, et en revient quand
 -- elle se ferme (le client vide UIDROPDOWNMENU_OPEN_MENU en la fermant :
 -- on repeint tous les menus de ce style)
 hooksecurefunc("ToggleDropDownMenu", function()
 	for _, dd in ipairs(menusStyle1) do peindreStyle1(dd) end
+	for _, dd in ipairs(menusFiltre) do peindreFiltre(dd) end
 end)
 -- la hauteur demandee, reposee apres le client (voir Gb.MenuStyle1)
 hooksecurefunc("UIDropDownMenu_Initialize", function(dd)
@@ -1260,5 +1440,6 @@ end)
 if DropDownList1 and DropDownList1.HookScript then
 	DropDownList1:HookScript("OnHide", function()
 		for _, dd in ipairs(menusStyle1) do peindreStyle1(dd) end
+		for _, dd in ipairs(menusFiltre) do peindreFiltre(dd) end
 	end)
 end

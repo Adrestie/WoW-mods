@@ -92,3 +92,10 @@ Bank.lua
 GuildBank.lua
 AuctionHouse.lua
 NpcDialog.lua
+Trainer.lua
+Taxi.lua
+Stable.lua
+Socketing.lua
+Dialogues.lua
+TradeSkill.lua
+ProfessionsBook.lua
