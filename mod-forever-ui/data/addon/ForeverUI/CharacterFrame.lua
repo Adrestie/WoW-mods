@@ -2564,6 +2564,85 @@ function ForeverUI.CharacterTabsDebug()
 	dire(L.CHARACTERFRAME_DEBUG_HOVER_TABS)
 end
 
+-- TEMOIN -- /fui croix (2026-09-28 : la croix de la feuille est « la mais
+-- invisible »). Releve l'etat de la croix et de ses quatre images, le
+-- niveau de l'habillage (le metal) et du titre, tout cadre VISIBLE qui
+-- couvre son centre -- la souris n'y compte pas : un metal passe devant
+-- sans la prendre -- et le plus haut niveau que le client accepte. Les bords
+-- se comparent en pixels d'ecran (bord x echelle effective) : les cadres
+-- n'ont pas tous la meme echelle. Ecrit dans ForeverUIDB.temoinCroix, que le
+-- /reload suivant pose sur le disque.
+local function couvreEcran(cadre, x, y)
+	if not cadre.GetLeft or not cadre.GetEffectiveScale then return false end
+	local g, d, h, b = cadre:GetLeft(), cadre:GetRight(), cadre:GetTop(), cadre:GetBottom()
+	if not (g and d and h and b) then return false end
+	local s = cadre:GetEffectiveScale()
+	return x >= g * s and x <= d * s and y >= b * s and y <= h * s
+end
+
+local function visiblesSous(cadre, x, y, trouves, profondeur)
+	if not cadre or profondeur > 10 then return end
+	if cadre.IsVisible and cadre:IsVisible() and couvreEcran(cadre, x, y) then
+		trouves[#trouves + 1] = cadre
+	end
+	if cadre.GetChildren then
+		for _, enfant in ipairs({ cadre:GetChildren() }) do
+			visiblesSous(enfant, x, y, trouves, profondeur + 1)
+		end
+	end
+end
+
+function ForeverUI.CharacterCloseDebug()
+	local r = {}
+	local function noter(...)
+		local t = {}
+		for i = 1, select("#", ...) do t[i] = tostring((select(i, ...))) end
+		r[#r + 1] = table.concat(t, " ")
+	end
+	local c, b = CharacterFrame, _G["CharacterFrameCloseButton"]
+	noter("feuille shown", c:IsShown(), "level", c:GetFrameLevel(), "strata", c:GetFrameStrata(),
+		"alpha", c:GetAlpha())
+	if b then
+		noter("croix shown", b:IsShown(), "visible", b:IsVisible(), "alpha", b:GetAlpha(),
+			"level", b:GetFrameLevel(), "strata", b:GetFrameStrata(), "parent", nomDe(b:GetParent()),
+			"w", b:GetWidth(), "h", b:GetHeight(), "left", b:GetLeft(), "top", b:GetTop(),
+			"scale", b:GetEffectiveScale(), "mouse", b:IsMouseEnabled())
+		for _, etat in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
+			local lire = b["Get" .. etat .. "Texture"]
+			local t = lire and lire(b)
+			if t then
+				noter(etat, "tex", t:GetTexture(), "coords", table.concat({ t:GetTexCoord() }, ","),
+					"shown", t:IsShown(), "alpha", t:GetAlpha(), "layer", t.GetDrawLayer and t:GetDrawLayer(),
+					"w", t:GetWidth(), "h", t:GetHeight(), "left", t:GetLeft(), "top", t:GetTop())
+			else
+				noter(etat, "nil")
+			end
+		end
+	end
+	local h, titre = c.foreverHabillage, c.foreverBandeTitre
+	noter("habillage level", h and h:GetFrameLevel(), "visible", h and h:IsVisible())
+	noter("titre level", titre and titre:GetFrameLevel())
+	-- le plus haut niveau accepte : une sonde qu'on pose tres haut
+	local sonde = ForeverUI.sondeNiveau or CreateFrame("Frame")
+	ForeverUI.sondeNiveau = sonde
+	local ok = pcall(sonde.SetFrameLevel, sonde, 100000)
+	noter("niveau-max", ok, sonde:GetFrameLevel())
+	if b and b:GetLeft() then
+		local s = b:GetEffectiveScale()
+		local x = (b:GetLeft() + b:GetRight()) / 2 * s
+		local y = (b:GetTop() + b:GetBottom()) / 2 * s
+		local trouves = {}
+		visiblesSous(UIParent, x, y, trouves, 0)
+		for _, f in ipairs(trouves) do
+			noter("couvre", nomDe(f), "parent", nomDe(f:GetParent()), "strata", f:GetFrameStrata(),
+				"level", f:GetFrameLevel())
+		end
+	end
+	ForeverUIDB = ForeverUIDB or {}
+	ForeverUIDB.temoinCroix = r
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.CHARACTERFRAME_DEBUG_CLOSE_SAVED)
+end
+
 function ForeverUI.CharacterSheetDebug()
 	-- CE QUE CHAQUE HOTE MONTRE, d'abord : la plupart des fautes d'affichage
 	-- de cette fenetre se lisent la, et nulle part ailleurs.

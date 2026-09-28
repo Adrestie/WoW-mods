@@ -151,6 +151,9 @@ local ATLAS_ANNEAU = "ui-character-info-honor-bar-bg"
 local ATLAS_FOND = "ui-character-info-honor-bar-bg-%s"
 local ATLAS_BADGE_FACTION = "ui-character-info-honor-icon-%s"
 local ATLAS_BADGE_RANG = "ui-character-info-honor-icon-%d"
+-- deshonore : le blason brise de sa faction (tools/cuire_deshonneur.py), a
+-- la place du symbole de faction
+local BLASON_BRISE = "Interface\\ForeverUI\\pvpframe\\honor-dishonored-%s"
 local ATLAS_ANNEAU_RECOMPENSE = "ui-character-info-honor-rewardring"
 local ATLAS_SEPARATEUR_LONG = "ui-character-info-scrollline-long"
 
@@ -270,21 +273,46 @@ local function rangParLesTitres()
 	return 0
 end
 
--- CE QU'IL FAUT DE VICTOIRES POUR CHAQUE RANG.
+-- CE QU'IL FAUT DE VICTOIRES POUR CHAQUE RANG : LE SERVEUR LE DIT.
 --
--- ECART ASSUME, ET LE SEUL DE CET ECRAN QUE LE CLIENT NE PEUT PAS VERIFIER.
 -- Ces quatorze nombres sont la CONFIGURATION DU SERVEUR --
 -- configs/modules/mod_pvptitles.conf, cles PvPTitles.Rank_1 a Rank_14 --
--- et aucune fonction du client ne les demande. Ils sont donc recopies ici,
--- releves le 23/09/2026 sur la production. Si le serveur change ses seuils,
--- CETTE TABLE EST LE SEUL ENDROIT A REPRENDRE.
+-- et aucune fonction du client ne les demande. Une table recopiee ici a deja
+-- menti (28/09 : « rang 2 a 3 necessite 500 victoires et l'interface
+-- indique 250 », relevee sur un serveur qui ne tournait plus) ; et chaque
+-- serveur a les siens, quand il a le module.
 --
--- Sans eux la jauge resterait vide : GetPVPRankProgress ne rend rien, pour
--- la meme raison qu'UnitPVPRank.
-local SEUILS = { 50, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000,
-                 3500, 4000, 5000, 6500 }
+-- DEPUIS LE 2026-09-28, notre fork du module (mod-pvp-titles-ext) les
+-- chuchote au joueur en langue d'addon -- prefixe PVPTITLES,
+-- « RANKS:k1,...,k14 » -- a la connexion et a la demande (« REQ », envoye a
+-- l'entree dans le monde, donc aussi apres un /reload).
+--
+-- SANS REPONSE (autre serveur, module d'origine ou absent) LES SEUILS
+-- RESTENT INCONNUS, et l'ecran n'affiche que ce qui est certain (decision du
+-- 2026-09-28) : le rang par les titres et les victoires, sans « / seuil » ni
+-- jauge ; en inspection, l'embleme de la faction sans nom de rang.
+local SEUILS = nil
+
+-- L'ETAT « DESHONORE » (mod-pvp-titles-ext, « DISHONOR:reste,... ») : la fin,
+-- en temps de GetTime ; nil hors de l'etat. Il se lit comme un rang : le
+-- rang negatif « Dishonored » (PVP_RANK_4), et le temps qui reste a la place
+-- de la progression.
+local DESHONNEUR = { fin = nil }
+-- partage avec Buffs.lua, qui en fait un debuff : l'etat, et son nom -- le
+-- rang negatif du client, dans sa langue
+DESHONNEUR.nom = function() return nomDuRang(4) or "" end
+ForeverUI.Deshonneur = DESHONNEUR
+
+local function majDebuffs()
+	if ForeverUI.Buffs and ForeverUI.Buffs.maj then
+		ForeverUI.Buffs.maj()
+	end
+end
 
 local function progresParLesVictoires(numero, victoires)
+	if not SEUILS then
+		return 0          -- seuils inconnus : pas de jauge
+	end
 	local suivant = SEUILS[numero + 1]
 	if not suivant then
 		return 1          -- rang maximal : la jauge est pleine
@@ -301,6 +329,33 @@ local function progresParLesVictoires(numero, victoires)
 	end
 	return part
 end
+
+-- LE RANG D'UN AUTRE JOUEUR, pour l'inspection (Inspect.lua, retour du
+-- 2026-09-28). Ses titres ne se lisent pas -- IsTitleKnown ne parle que du
+-- joueur -- mais ses victoires honorables a vie, si (GetInspectHonorData).
+-- Le module du serveur pose le titre de chaque seuil atteint
+-- (mod_pvp_titles.cpp : kills >= RequiredKills) : le rang est le nombre de
+-- seuils atteints. Memes seuils, memes chaines, meme civil que cet onglet.
+-- Seuils inconnus : nil, le rang ne se deduit pas.
+ForeverUI.PvPRangs = {
+	parVictoires = function(victoires)
+		if not SEUILS then
+			return nil
+		end
+		local numero = 0
+		for i, seuil in ipairs(SEUILS) do
+			if (victoires or 0) >= seuil then numero = i end
+		end
+		return numero
+	end,
+	nom = function(numero, fac)
+		if not numero or numero <= 0 then return NOM_SANS_RANG end
+		local faction01 = (fac == "Alliance") and 1 or 0
+		return _G["PVP_RANK_" .. tostring(numero + 4) .. "_" .. tostring(faction01)]
+	end,
+	badgeRang = ATLAS_BADGE_RANG,
+	badgeFaction = ATLAS_BADGE_FACTION,
+}
 
 local function lireRang()
 	local indice = UnitPVPRank and UnitPVPRank("player") or 0
@@ -346,13 +401,26 @@ local function lireRang()
 		progres = progresParLesVictoires(numero, victoires)
 	end
 
+	-- DESHONORE : le rang negatif, sans jauge ; le temps qui reste
+	local reste = DESHONNEUR.fin and (DESHONNEUR.fin - GetTime())
+	if reste and reste > 0 then
+		return {
+			indice = 4,
+			nom = nomDuRang(4),
+			numero = 0,
+			progres = 0,
+			victoires = victoires,
+			deshonore = reste,
+		}
+	end
+
 	return {
 		indice = indice,
 		nom = nom,
 		numero = numero,
 		progres = progres,
 		victoires = victoires,
-		seuil = SEUILS[numero + 1],
+		seuil = SEUILS and SEUILS[numero + 1],
 	}
 end
 
@@ -494,6 +562,18 @@ local function poserBadge(rang)
 		return
 	end
 
+	-- DESHONORE (retours du 2026-09-28) : plus de symbole de faction -- le
+	-- blason brise de sa faction, dessine sur la silhouette de l'embleme pour
+	-- se fondre dans le cadran comme lui (l'icone carree du debuff montrait
+	-- ses bords et se faisait couper aux coins)
+	if rang.deshonore then
+		bloc.badge:SetTexture(string.format(BLASON_BRISE, string.lower(faction())))
+		bloc.badge:SetTexCoord(0, 1, 0, 1)
+		bloc.badge:SetWidth(BADGE_L)
+		bloc.badge:SetHeight(BADGE_H)
+		return
+	end
+
 	-- UpdateFactionBadge : sans rang, l'embleme de la faction ; avec, le
 	-- badge du rang.
 	local pose = false
@@ -574,14 +654,16 @@ local function majBloc()
 	-- HONORABLES de toute une vie et le seuil du palier suivant : ce sont
 	-- eux que mod-pvp-titles compare, et eux qui font avancer la jauge.
 	--
-	-- AU RANG MAXIMAL il n'y a plus de seuil : le compte reste seul.
-	if rang.seuil then
+	-- AU RANG MAXIMAL il n'y a plus de seuil : le compte reste seul ; de meme
+	-- quand le serveur ne dit pas ses seuils. DESHONORE : le temps qui reste.
+	if rang.deshonore then
+		bloc.progres:SetText(string.format(L.PVPTAB_DISHONORED_LEFT,
+			SecondsToTime(rang.deshonore)))
+	elseif rang.seuil then
 		bloc.progres:SetText(string.format("%d / %d", rang.victoires or 0,
 			rang.seuil))
-	elseif rang.numero and rang.numero > 0 then
-		bloc.progres:SetText(tostring(rang.victoires or 0))
 	else
-		bloc.progres:SetText("")
+		bloc.progres:SetText(tostring(rang.victoires or 0))
 	end
 
 	-- SANS RANG, PAS D'ANNEAU. Un cercle dore vide se lit comme un defaut ;
@@ -922,5 +1004,71 @@ veilleur:RegisterEvent("HONOR_CURRENCY_UPDATE")
 veilleur:SetScript("OnEvent", function()
 	if bloc then
 		majBloc()
+	end
+end)
+
+-- LE CANAL DU SERVEUR (mod-pvp-titles-ext, 2026-09-28). Le module chuchote
+-- au joueur, en langue d'addon, ses seuils de rang et l'etat « Deshonore » :
+--   RANKS:k1,...,k14                         victoires a vie pour chaque rang
+--   DISHONOR:reste,victimes,requises,fenetre secondes restantes (0 : non)
+-- On les redemande a chaque entree dans le monde : l'envoi de la connexion
+-- peut arriver avant l'interface, et un /reload l'efface. Seul le joueur
+-- lui-meme est ecoute : personne d'autre ne peut chuchoter en son nom.
+local PREFIXE_SERVEUR = "PVPTITLES"
+local canal = CreateFrame("Frame")
+canal:RegisterEvent("PLAYER_ENTERING_WORLD")
+canal:RegisterEvent("CHAT_MSG_ADDON")
+canal:SetScript("OnEvent", function(_, evenement, prefixe, message, distribution, auteur)
+	if evenement == "PLAYER_ENTERING_WORLD" then
+		SendAddonMessage(PREFIXE_SERVEUR, "REQ", "WHISPER", UnitName("player"))
+		return
+	end
+	if prefixe ~= PREFIXE_SERVEUR or distribution ~= "WHISPER" or auteur ~= UnitName("player") then
+		return
+	end
+	local rangs = string.match(message or "", "^RANKS:(.+)$")
+	if rangs then
+		local lus = {}
+		for n in string.gmatch(rangs, "%d+") do
+			lus[#lus + 1] = tonumber(n)
+		end
+		if #lus == 14 then
+			SEUILS = lus
+		end
+	end
+	local reste = tonumber(string.match(message or "", "^DISHONOR:(%d+)") or "")
+	if reste then
+		DESHONNEUR.fin = (reste > 0) and (GetTime() + reste) or nil
+		majDebuffs()
+	end
+	if bloc then
+		majBloc()
+	end
+	if ForeverUI.Inspection and ForeverUI.Inspection.MajJcJ then
+		ForeverUI.Inspection.MajJcJ()
+	end
+end)
+
+-- le temps qui reste, seconde apres seconde, la feuille ouverte ; a la fin,
+-- le rang revient
+local ecoule = 0
+canal:SetScript("OnUpdate", function(_, e)
+	if not DESHONNEUR.fin then
+		return
+	end
+	ecoule = ecoule + e
+	if ecoule < 1 then
+		return
+	end
+	ecoule = 0
+	local reste = DESHONNEUR.fin - GetTime()
+	if reste <= 0 then
+		DESHONNEUR.fin = nil
+		majDebuffs()
+		if bloc then
+			majBloc()
+		end
+	elseif bloc and bloc:IsVisible() then
+		bloc.progres:SetText(string.format(L.PVPTAB_DISHONORED_LEFT, SecondsToTime(reste)))
 	end
 end)

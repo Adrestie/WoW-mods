@@ -764,10 +764,11 @@ function K.poser(largeurPage)
 end
 
 -- apres chaque mise a jour de l'ecran : les marques (UpdateFullSearchResults) ;
--- rien sur la page des glyphes
+-- rien sur la page des glyphes, ni sur les talents d'un inspecte (retour du
+-- 2026-09-28) -- la recherche du joueur reprend a son retour
 function K.maj()
 	if not boite or not T then return end
-	if T.glyphes then
+	if T.glyphes or T.inspection then
 		boite:Hide()
 		fleche:Hide()
 		liste:Hide()

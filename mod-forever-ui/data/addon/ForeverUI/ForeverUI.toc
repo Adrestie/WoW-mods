@@ -79,3 +79,9 @@ Bindings.lua
 Macros.lua
 ChatConfig.lua
 ColorPicker.lua
+Tutorial.lua
+Achievements.lua
+TimeManager.lua
+ZoneMap.lua
+DressUp.lua
+Inspect.lua

@@ -254,3 +254,6 @@ interface/common/commonbuttonsdropdown.blp
 # le selecteur de couleur : le damier derriere la colonne d opacite
 # (colorpicker-checkerboard, mainline/colorpickerframe.xml)
 interface/dialogframe/colorpicker.blp
+# la carte de zone : le cadre de BattlefieldMapFrame (battlefieldminimap-
+# border-*, mainline/blizzard_battlefieldmap.xml)
+interface/battlefieldframe/battlefieldminimap.blp

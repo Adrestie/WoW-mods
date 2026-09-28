@@ -49,6 +49,8 @@ local function newRegion(kind)
         return "Frame"
     end
     function r:IsObjectType(t) return self:GetObjectType() == t end
+    -- le nom d'une region (nil sans nom), comme le vrai client
+    function r:GetName() return self.name end
     function r:SetRotation(angle) self.rotation = angle end
     function r:GetRotation() return self.rotation or 0 end
     function r:SetWidth(w) self.width = w end
@@ -294,6 +296,7 @@ function CreateFrame(kind, name, parent, template)
         if avant ~= false then etat(self, "OnDisable") end
     end
     function f:SetPushedTextOffset(x, y) self.decalageEnfonce = { x, y } end
+    function f:SetMotionScriptsWhileDisabled(v) self.survolDesactive = v and true or false end
     -- un curseur : son image de poignee, une texture qu'il cree
     function f:SetThumbTexture(v)
         if not self._thumb then self._thumb = self:CreateTexture() end
@@ -1335,6 +1338,35 @@ function MoneyFrame_Update(nom, v) _G[nom].argent = v end
 function MoneyFrame_SetType(f, t) f.moneyType = t end
 function SetMoneyFrameColor(nom, c) _G[nom].couleur = c end
 function SecondsToTime(s) return tostring(math.floor(s)) .. " sec" end
+-- LE CANAL D'ADDON (SendAddonMessage, CHAT_MSG_ADDON) et un faux serveur
+-- mod-pvp-titles-ext : a « REQ » chuchote a soi-meme, il repond ses seuils
+-- et son etat (src/PvPTitlesAddon.cpp du module). Eteint par defaut : un
+-- serveur sans le module ne repond rien.
+ADDON_ENVOYES = {}
+SERVEUR_PVPTITLES = false
+SERVEUR_SEUILS = "50,100,500,1000,2000,4000,5000,6000,8000,10000,12500,15000,20000,25000"
+function MESSAGE_ADDON(prefixe, message, canal, auteur)
+    for _, c in ipairs(FRAMES) do
+        if c.events and c.events["CHAT_MSG_ADDON"] and c.scripts and c.scripts.OnEvent then
+            c.scripts.OnEvent(c, "CHAT_MSG_ADDON", prefixe, message, canal, auteur)
+        end
+    end
+end
+function SendAddonMessage(prefixe, message, canal, cible)
+    table.insert(ADDON_ENVOYES, table.concat({ prefixe, message, canal, cible or "" }, "|"))
+    if SERVEUR_PVPTITLES and prefixe == "PVPTITLES" and message == "REQ" and canal == "WHISPER" and cible == UnitName("player") then
+        MESSAGE_ADDON("PVPTITLES", "RANKS:" .. SERVEUR_SEUILS, "WHISPER", cible)
+        MESSAGE_ADDON("PVPTITLES", "DISHONOR:0,0,5,86400", "WHISPER", cible)
+    end
+end
+-- l'entree dans le monde, pour les seuls cadres qui ecoutent le canal
+function ENTREE_DANS_LE_MONDE()
+    for _, c in ipairs(FRAMES) do
+        if c.events and c.events["PLAYER_ENTERING_WORLD"] and c.events["CHAT_MSG_ADDON"] and c.scripts and c.scripts.OnEvent then
+            c.scripts.OnEvent(c, "PLAYER_ENTERING_WORLD")
+        end
+    end
+end
 function HandleModifiedItemClick(lien) LIEN_CLIQUE = lien end
 function GameTooltip_ShowCompareItem() end
 GameTooltip.SetQuestLogItem = function(self, t, i) self.objetQuete = { t, i } end
@@ -1897,12 +1929,19 @@ TALENTS_FAMILIER = {}
 POINTS_FAMILIER = 0
 GROUPE_ACTIF = 1
 NB_GROUPES = 1
-local function jeu(pet, groupe)
+-- l'INSPECTE a son jeu (TALENTS_INSPECT, sinon celui du joueur), ses points
+-- (POINTS_INSPECT) et son groupe actif (GROUPE_INSPECT) : l'argument inspect
+-- du vrai client
+TALENTS_INSPECT = nil
+POINTS_INSPECT = 0
+GROUPE_INSPECT = 1
+local function jeu(pet, groupe, inspect)
+    if inspect then return TALENTS_INSPECT or TALENTS end
     if pet then return TALENTS_FAMILIER end
     if groupe == 2 and TALENTS_2 then return TALENTS_2 end
     return TALENTS
 end
-function GetNumTalentTabs(inspect, pet) return #jeu(pet) end
+function GetNumTalentTabs(inspect, pet) return #jeu(pet, nil, inspect) end
 -- L'APERCU DE WOTLK : t.attente = les points en attente d'un talent
 local function attenteOnglet(j, o)
     local n = 0
@@ -1910,12 +1949,12 @@ local function attenteOnglet(j, o)
     return n
 end
 function GetTalentTabInfo(o, inspect, pet, groupe)
-    local j = jeu(pet, groupe) local t = j[o]
+    local j = jeu(pet, groupe, inspect) local t = j[o]
     return t.nom, t.icone, t.depenses, t.fond, attenteOnglet(j, o)
 end
-function GetNumTalents(o, inspect, pet) return #jeu(pet)[o].talents end
+function GetNumTalents(o, inspect, pet) return #jeu(pet, nil, inspect)[o].talents end
 function GetTalentInfo(o, i, inspect, pet, groupe)
-    local t = jeu(pet, groupe)[o].talents[i]
+    local t = jeu(pet, groupe, inspect)[o].talents[i]
     return t[1], t[2], t[3], t[4], t[5], t[6], false, t[7], t[5] + (t.attente or 0), t[7]
 end
 function GetGroupPreviewTalentPointsSpent(pet, groupe)
@@ -1923,7 +1962,10 @@ function GetGroupPreviewTalentPointsSpent(pet, groupe)
     for o = 1, #j do n = n + attenteOnglet(j, o) end
     return n
 end
-function GetUnspentTalentPoints(inspect, pet) if pet then return POINTS_FAMILIER end return POINTS_TALENTS end
+function GetUnspentTalentPoints(inspect, pet)
+    if inspect then return POINTS_INSPECT end
+    if pet then return POINTS_FAMILIER end return POINTS_TALENTS
+end
 function AddPreviewTalentPoints(o, i, n, pet, groupe)
     local t = jeu(pet, groupe)[o].talents[i]
     local a = t.attente or 0
@@ -1953,10 +1995,13 @@ function ResetGroupPreviewTalentPoints(pet, groupe)
 end
 function GetTalentLink(o, i) return "lien talent:" .. o .. ":" .. i end
 function GetTalentPrereqs(o, i, inspect, pet, groupe)
-    local t = jeu(pet, groupe)[o].talents[i]
+    local t = jeu(pet, groupe, inspect)[o].talents[i]
     if t.pre then return t.pre[1], t.pre[2], t.pre[3], t.pre[3] end
 end
-function GetActiveTalentGroup(inspect, pet) if pet then return 1 end return GROUPE_ACTIF end
+function GetActiveTalentGroup(inspect, pet)
+    if inspect then return GROUPE_INSPECT end
+    if pet then return 1 end return GROUPE_ACTIF
+end
 function GetNumTalentGroups() return NB_GROUPES end
 -- l'activation est un sort incante (63645 / 63644) : il reste "en cours"
 -- jusqu'a ce que le banc le termine
@@ -1984,7 +2029,7 @@ function CHARGER_TALENTS()
         end
     end
 end
-GameTooltip.SetTalent = function(self, o, i) self.talent = { o, i } end
+GameTooltip.SetTalent = function(self, o, i, inspect) self.talent = { o, i } self.talentInspect = inspect end
 
 -- LE GRIMOIRE DE 3.3.5 (SpellBookFrame.xml / .lua) : le panneau, son art,
 -- ses douze boutons, ses onglets, sa croix -- dont le OnClick ferme SON
@@ -5984,6 +6029,430 @@ do
         edgeFile = fichier("Interface", "Buttons", "UI-SliderBar-Border"), tile = true })
     of:Hide()
 end
+
+-- LES FENETRES SECONDAIRES DU CLIENT (TutorialFrame.xml / .lua de 3.3.5 ;
+-- Blizzard_AchievementUI, Blizzard_TimeManager et Blizzard_BattlefieldMinimap,
+-- charges a la demande, lus par la chaine d'archives) : le tutoriel est la
+-- des le chargement ; les trois autres, CHARGER_ADDON(nom) les batit puis
+-- previent ADDON_LOADED, comme le client.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    GameFontWhite = GameFontWhite or "GameFontWhite"
+    GameFontHighlightLarge = GameFontHighlightLarge or "GameFontHighlightLarge"
+
+    -- le tutoriel : TUTORIAL_TRIGGER -> TutorialFrame_NewTutorial, qui montre
+    -- le bouton d'alerte et ouvre la fenetre
+    local tf = CreateFrame("Frame", "TutorialFrame", UIParent)
+    tf:RegisterEvent("TUTORIAL_TRIGGER")
+    CreateFrame("Button", "TutorialFrameAlertButton", UIParent):Hide()
+    CreateFrame("Frame", "TutorialFrameAlertButtonBadge", UIParent):Hide()
+    function TutorialFrame_NewTutorial(id)
+        TutorialFrameAlertButton.id = id
+        TutorialFrameAlertButton:Show()
+        TutorialFrame:Show()
+    end
+    tf:SetScript("OnEvent", function(self, event, id)
+        if event == "TUTORIAL_TRIGGER" then TutorialFrame_NewTutorial(id) end
+    end)
+    tf:Hide()
+
+    local function prevenirChargement(nom)
+        for _, f in ipairs(FRAMES) do
+            if f.events and f.events["ADDON_LOADED"] and f.scripts and f.scripts.OnEvent then
+                f.scripts.OnEvent(f, "ADDON_LOADED", nom)
+            end
+        end
+    end
+    local function etats(b, base)
+        b:SetNormalTexture(fichier("Interface", "Buttons", base .. "-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", base .. "-Down"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", base .. "-Highlight"))
+    end
+    -- UIPanelCloseButton de 3.3.5
+    local function croix(nom, parent)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(32) b:SetHeight(32)
+        etats(b, "UI-Panel-MinimizeButton")
+        return b
+    end
+    -- UIDropDownMenuTemplate : Left / Middle / Right, Text, le bouton a fleche
+    local function menu(nom, parent)
+        local dd = CreateFrame("Frame", nom, parent)
+        dd:SetWidth(40) dd:SetHeight(32)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do
+            dd:CreateTexture(nom .. s, "ARTWORK"):SetTexture(fichier("Interface", "Glues", "CharacterCreate", "CharacterCreate-LabelFrame"))
+        end
+        dd:CreateFontString(nom .. "Text", "ARTWORK")
+        local b = CreateFrame("Button", nom .. "Button", dd)
+        b:SetWidth(24) b:SetHeight(24)
+        b:SetNormalTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Up"))
+        b:SetPushedTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Down"))
+        b:SetDisabledTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Disabled"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Common-MouseHilight"))
+        return dd
+    end
+    -- UICheckButtonTemplate
+    local function case(nom, parent, texte)
+        local c = CreateFrame("CheckButton", nom, parent)
+        c:SetWidth(24) c:SetHeight(24)
+        etats(c, "UI-CheckBox")
+        c:SetCheckedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Check"))
+        c:CreateFontString(nom .. "Text", "ARTWORK"):SetText(texte)
+        return c
+    end
+
+    local function batirHautsFaits()
+        UIPanelWindows["AchievementFrame"] = { area = "doublewide", pushable = 0, width = 840, xoffset = 80, whileDead = 1 }
+        local f = CreateFrame("Frame", "AchievementFrame", UIParent)
+        f:SetWidth(768) f:SetHeight(500)
+        f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+        local h = CreateFrame("Frame", "AchievementFrameHeader", f)
+        h:SetWidth(726) h:SetHeight(106)
+        h:EnableMouse(true)
+        h:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 26, -39)
+        f:Hide()
+    end
+
+    local function batirHorloge()
+        TIMEMANAGER_TITLE, TIMEMANAGER_TICKER = "Clock", "Time"
+        TIMEMANAGER_ALARM_ENABLED, TIMEMANAGER_ALARM_DISABLED = "Alarm Enabled", "Alarm Disabled"
+        TIMEMANAGER_ALARM_TIME, TIMEMANAGER_ALARM_MESSAGE = "Alarm Time", "Alarm Message"
+        TIMEMANAGER_SHOW_STOPWATCH = "Show Stopwatch"
+        TIMEMANAGER_24HOURMODE, TIMEMANAGER_LOCALTIME = "24 Hour Mode", "Use Local Time"
+        STATE.cvars.timeMgrAlarmEnabled = STATE.cvars.timeMgrAlarmEnabled or "0"
+        local f = CreateFrame("Frame", "TimeManagerFrame", UIParent)
+        f:SetWidth(256) f:SetHeight(256)
+        f:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", 45, -170)
+        local globe = f:CreateTexture("TimeManagerGlobe", "BACKGROUND")
+        globe:SetTexture(fichier("Interface", "TimeManager", "GlobeIcon"))
+        globe:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -4)
+        for _, n in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
+            f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-General-" .. n))
+        end
+        local heure = f:CreateFontString("TimeManagerFrameTicker", "BORDER")
+        heure:SetText(TIMEMANAGER_TICKER)
+        heure:SetPoint("CENTER", globe, "CENTER", -2, 0)
+        f:CreateFontString(nil, "BORDER"):SetText(TIMEMANAGER_TITLE)
+        croix("TimeManagerCloseButton", f):SetPoint("TOPRIGHT", f, "TOPRIGHT", -46, -8)
+        local chrono = CreateFrame("Frame", "TimeManagerStopwatchFrame", f)
+        chrono:SetPoint("TOPRIGHT", f, "TOPRIGHT", -40, -24)
+        chrono:CreateTexture("TimeManagerStopwatchFrameBackground", "BACKGROUND"):SetTexture(fichier("Interface", "QuestFrame", "UI-QuestItemNameFrame"))
+        chrono:CreateFontString("TimeManagerStopwatchFrameText", "ARTWORK"):SetText(TIMEMANAGER_SHOW_STOPWATCH)
+        CreateFrame("CheckButton", "TimeManagerStopwatchCheck", chrono)
+        local alarme = CreateFrame("Frame", "TimeManagerAlarmTimeFrame", f)
+        alarme:SetPoint("TOPLEFT", f, "TOPLEFT", 25, -80)
+        alarme:CreateFontString("TimeManagerAlarmTimeLabel", "ARTWORK"):SetText(TIMEMANAGER_ALARM_TIME)
+        alarme:CreateFontString("TimeManagerAMPMDummyText", "ARTWORK")
+        menu("TimeManagerAlarmHourDropDown", alarme):SetPoint("TOPLEFT", TimeManagerAlarmTimeLabel, "BOTTOMLEFT", -20, -4)
+        menu("TimeManagerAlarmMinuteDropDown", alarme):SetPoint("LEFT", TimeManagerAlarmHourDropDown, "RIGHT", -22, 0)
+        menu("TimeManagerAlarmAMPMDropDown", alarme):SetPoint("LEFT", TimeManagerAlarmMinuteDropDown, "RIGHT", -22, 0)
+        local msg = CreateFrame("Frame", "TimeManagerAlarmMessageFrame", f)
+        msg:SetPoint("TOPLEFT", TimeManagerAlarmHourDropDown, "BOTTOMLEFT", 20, 0)
+        msg:CreateFontString("TimeManagerAlarmMessageLabel", "ARTWORK"):SetText(TIMEMANAGER_ALARM_MESSAGE)
+        -- InputBoxTemplate : ses trois morceaux
+        local champ = CreateFrame("EditBox", "TimeManagerAlarmMessageEditBox", msg)
+        champ:SetWidth(160) champ:SetHeight(20)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do
+            champ:CreateTexture("TimeManagerAlarmMessageEditBox" .. s, "BACKGROUND"):SetTexture(fichier("Interface", "Common", "Common-Input-Border"))
+        end
+        -- UIPanelButtonTemplate 160 x 20
+        local b = CreateFrame("Button", "TimeManagerAlarmEnabledButton", f)
+        b:SetWidth(160) b:SetHeight(20)
+        b:SetPoint("CENTER", f, "CENTER", -20, -50)
+        etats(b, "UI-Panel-Button")
+        b:SetFontString(b:CreateFontString("TimeManagerAlarmEnabledButtonText", "ARTWORK"))
+        -- TimeManagerAlarmEnabledButton_Update et _OnClick, recopies du client
+        function TimeManagerAlarmEnabledButton_Update()
+            local bouton = TimeManagerAlarmEnabledButton
+            if GetCVar("timeMgrAlarmEnabled") == "1" then
+                bouton:SetText(TIMEMANAGER_ALARM_ENABLED)
+                bouton:SetNormalFontObject(GameFontNormal)
+                bouton:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Up"))
+                bouton:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Down"))
+            else
+                bouton:SetText(TIMEMANAGER_ALARM_DISABLED)
+                bouton:SetNormalFontObject(GameFontHighlight)
+                bouton:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Disabled"))
+                bouton:SetPushedTexture(fichier("Interface", "Buttons", "UI-Panel-Button-Disabled-Down"))
+            end
+        end
+        b:SetScript("OnClick", function()
+            SetCVar("timeMgrAlarmEnabled", GetCVar("timeMgrAlarmEnabled") == "1" and "0" or "1")
+            TimeManagerAlarmEnabledButton_Update()
+        end)
+        case("TimeManagerMilitaryTimeCheck", f, TIMEMANAGER_24HOURMODE):SetPoint("TOPLEFT", f, "TOPLEFT", 171, -203)
+        case("TimeManagerLocalTimeCheck", f, TIMEMANAGER_LOCALTIME):SetPoint("TOPRIGHT", TimeManagerMilitaryTimeCheck, "BOTTOMRIGHT", 0, 6)
+        -- les langues aux AM / PM longs : le client reancre a l'ouverture
+        -- et a la fermeture du menu AM / PM (TimeManagerFrame_OnLoad)
+        function TimeManagerAlarmAMPMDropDown_OnShow()
+            TimeManagerAlarmAMPMDropDown:SetPoint("TOPLEFT", TimeManagerAlarmHourDropDown, "BOTTOMLEFT", 0, 5)
+            TimeManagerAlarmMessageFrame:SetPoint("TOPLEFT", TimeManagerAlarmHourDropDown, "BOTTOMLEFT", 20, -23)
+            TimeManagerAlarmEnabledButton:SetPoint("CENTER", TimeManagerFrame, "CENTER", -20, -69)
+            TimeManagerMilitaryTimeCheck:SetPoint("TOPLEFT", TimeManagerFrame, "TOPLEFT", 174, -207)
+        end
+        function TimeManagerAlarmAMPMDropDown_OnHide()
+            TimeManagerAlarmAMPMDropDown:SetPoint("LEFT", TimeManagerAlarmHourDropDown, "RIGHT", -22, 0)
+            TimeManagerAlarmMessageFrame:SetPoint("TOPLEFT", TimeManagerAlarmHourDropDown, "BOTTOMLEFT", 20, 0)
+            TimeManagerAlarmEnabledButton:SetPoint("CENTER", TimeManagerFrame, "CENTER", -20, -50)
+            TimeManagerMilitaryTimeCheck:SetPoint("TOPLEFT", TimeManagerFrame, "TOPLEFT", 174, -207)
+        end
+        TimeManagerAlarmAMPMDropDown:SetScript("OnShow", TimeManagerAlarmAMPMDropDown_OnShow)
+        TimeManagerAlarmAMPMDropDown:SetScript("OnHide", TimeManagerAlarmAMPMDropDown_OnHide)
+        function TimeManager_Update()
+            TimeManagerFrameTicker:SetText("12:00")
+            TimeManagerAlarmEnabledButton_Update()
+        end
+        f:SetScript("OnShow", function() TimeManager_Update() end)
+        -- TimeManagerFrame_OnLoad
+        TimeManager_Update()
+        f:Hide()
+    end
+
+    local function batirCarteDeZone()
+        BattlefieldMinimapOptions = BattlefieldMinimapOptions or { opacity = 0 }
+        local tab = CreateFrame("Button", "BattlefieldMinimapTab", UIParent)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do
+            tab:CreateTexture("BattlefieldMinimapTab" .. s, "BACKGROUND"):SetTexture(fichier("Interface", "ChatFrame", "ChatFrameTab"))
+        end
+        local texte = tab:CreateFontString("BattlefieldMinimapTabText", "ARTWORK")
+        tab:SetFontString(texte)
+        texte:SetPoint("LEFT", BattlefieldMinimapTabLeft, "RIGHT", 0, -5)
+        local f = CreateFrame("Frame", "BattlefieldMinimap", UIParent)
+        f:SetWidth(225) f:SetHeight(150)
+        f:SetFrameStrata("BACKGROUND")
+        for i = 1, 12 do f:CreateTexture("BattlefieldMinimap" .. i, "BACKGROUND") end
+        f:CreateTexture("BattlefieldMinimapCorner", "BORDER"):SetTexture(fichier("Interface", "DialogFrame", "UI-DialogBox-Corner"))
+        f:CreateTexture("BattlefieldMinimapBackground", "OVERLAY"):SetTexture(fichier("Interface", "BattlefieldFrame", "UI-BattlefieldMinimap-Border"))
+        croix("BattlefieldMinimapCloseButton", f):SetPoint("TOPRIGHT", f, "TOPRIGHT", 2, 7)
+        -- BattlefieldMinimap_UpdateOpacity, recopie du client
+        function BattlefieldMinimap_UpdateOpacity(opacite)
+            BattlefieldMinimapOptions.opacity = opacite or 0
+            local alpha = 1.0 - BattlefieldMinimapOptions.opacity
+            BattlefieldMinimapBackground:SetAlpha(alpha)
+            for i = 1, 12 do _G["BattlefieldMinimap" .. i]:SetAlpha(alpha) end
+            if alpha >= 0.15 then alpha = alpha - 0.15 end
+            BattlefieldMinimapCloseButton:SetAlpha(alpha)
+            BattlefieldMinimapCorner:SetAlpha(alpha)
+        end
+        f:SetScript("OnShow", function()
+            BattlefieldMinimap_UpdateOpacity(BattlefieldMinimapOptions.opacity)
+            BattlefieldMinimapTab:Show()
+        end)
+        f:Hide()
+    end
+
+    local avant = CHARGER_ADDON
+    function CHARGER_ADDON(nom)
+        if nom == "Blizzard_AchievementUI" then batirHautsFaits()
+        elseif nom == "Blizzard_TimeManager" then batirHorloge()
+        elseif nom == "Blizzard_BattlefieldMinimap" then batirCarteDeZone()
+        else return avant(nom) end
+        prevenirChargement(nom)
+    end
+end
+
+-- LA CABINE D'ESSAYAGE ET L'INSPECTION DU CLIENT (DressUpFrame.xml / .lua de
+-- 3.3.5, chargee d'emblee ; Blizzard_InspectUI, chargee a la demande par
+-- CHARGER_ADDON), et l'unite inspectee : INSPECTE, quand il est pose, repond
+-- pour "target" aux fonctions d'unite.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    DRESSUP_FRAME = "Dressing Room"
+    DRESSUP_FRAME_INSTRUCTIONS = "Ctrl-click an item to try it on"
+    UNAVAILABLE = UNAVAILABLE or "Unavailable"
+    PLAYER_V_PLAYER = PLAYER_V_PLAYER or "Player vs. Player"
+    KILLS = KILLS or "Kills"
+    HONOR_LIFETIME = HONOR_LIFETIME or "Lifetime"
+    RATING = RATING or "Rating"
+    MAX_ARENA_TEAMS = 3
+
+    INSPECTE = nil
+    local nomAvant, niveauAvant, classeAvant, factionAvant = UnitName, UnitLevel, UnitClass, UnitFactionGroup
+    function UnitName(u)
+        if u == "target" and INSPECTE then return INSPECTE.nom end
+        return nomAvant(u)
+    end
+    function UnitLevel(u)
+        if u == "target" and INSPECTE then return INSPECTE.niveau end
+        return niveauAvant(u)
+    end
+    function UnitClass(u)
+        if u == "target" and INSPECTE then return INSPECTE.classe, INSPECTE.jeton end
+        return classeAvant(u)
+    end
+    function UnitFactionGroup(u)
+        if u == "target" and INSPECTE then return INSPECTE.faction end
+        return factionAvant(u)
+    end
+    function UnitRace(u)
+        if u == "target" and INSPECTE then return INSPECTE.race, INSPECTE.race end
+        return "Human", "Human"
+    end
+    HONNEUR_INSPECTE = { 5, 100, 3, 50, 4321, 0 }
+    function GetInspectHonorData()
+        local h = HONNEUR_INSPECTE
+        return h[1], h[2], h[3], h[4], h[5], h[6]
+    end
+    -- HasInspectHonorData (InspectPVPFrame_OnShow) : les donnees de
+    -- l'inspecte sont-elles arrivees ; avant, GetInspectHonorData rend des
+    -- zeros
+    HONNEUR_INSPECTE_ARRIVE = true
+    function HasInspectHonorData() if HONNEUR_INSPECTE_ARRIVE then return 1 end end
+    -- le rang 6, a l'indice 10 (GlobalStrings de 3.3.5)
+    PVP_RANK_7_0 = "Sergeant"
+    PVP_RANK_7_1 = "Sergeant"
+    PVP_RANK_10_0 = "Stone Guard"
+    PVP_RANK_10_1 = "Knight"
+    EQUIPES_INSPECTEES = {}
+    function GetInspectArenaTeamData(i)
+        local e = EQUIPES_INSPECTEES[i]
+        if e then return (table.unpack or unpack)(e) end
+    end
+    function TalentFrame_LoadUI()
+        if not rawget(_G, "PlayerTalentFrame") then CHARGER_TALENTS() end
+    end
+
+    local function etats(b, base)
+        b:SetNormalTexture(fichier("Interface", "Buttons", base .. "-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", base .. "-Down"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", base .. "-Highlight"))
+    end
+    local function croix(nom, parent)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(32) b:SetHeight(32)
+        etats(b, "UI-Panel-MinimizeButton")
+        return b
+    end
+    local function boutonPanneau(nom, parent, texte)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(80) b:SetHeight(22)
+        etats(b, "UI-Panel-Button")
+        b:SetFontString(b:CreateFontString(nom .. "Text", "ARTWORK"))
+        b:SetText(texte)
+        return b
+    end
+    -- les fleches du client : DressUpModelRotate*Button, InspectModelRotate*Button
+    local function fleches(modele, prefixe)
+        for _, s in ipairs({ "Left", "Right" }) do
+            local b = CreateFrame("Button", prefixe .. "Rotate" .. s .. "Button", modele)
+            b:SetWidth(35) b:SetHeight(35)
+            etats(b, "UI-Rotation" .. s .. "-Button")
+        end
+    end
+
+    -- la cabine : chargee avec le FrameXML
+    local f = CreateFrame("Frame", "DressUpFrame", UIParent)
+    f:SetWidth(384) f:SetHeight(512)
+    f:SetHitRectInsets(0, 30, 0, 45)
+    f:CreateTexture("DressUpFramePortrait", "BACKGROUND")
+    for _, n in ipairs({ { "PaperDollInfoFrame", "UI-Character-General-TopLeft" }, { "PaperDollInfoFrame", "UI-Character-General-TopRight" },
+                         { "PaperDollInfoFrame", "SkillFrame-BotLeft" }, { "PaperDollInfoFrame", "SkillFrame-BotRight" } }) do
+        f:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", n[1], n[2]))
+    end
+    f:CreateFontString("DressUpFrameTitleText", "ARTWORK"):SetText(DRESSUP_FRAME)
+    f:CreateFontString("DressUpFrameDescriptionText", "ARTWORK"):SetText(DRESSUP_FRAME_INSTRUCTIONS)
+    for i, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        f:CreateTexture("DressUpBackground" .. n, "OVERLAY"):SetTexture(fichier("Interface", "DressUpFrame", "DressUpBackground-Orc" .. i))
+    end
+    DressUpBackgroundTopLeft:SetWidth(256) DressUpBackgroundTopLeft:SetHeight(255)
+    DressUpBackgroundTopRight:SetWidth(62) DressUpBackgroundTopRight:SetHeight(255)
+    DressUpBackgroundBotLeft:SetWidth(256) DressUpBackgroundBotLeft:SetHeight(128)
+    DressUpBackgroundBotRight:SetWidth(62) DressUpBackgroundBotRight:SetHeight(128)
+    croix("DressUpFrameCloseButton", f)
+    boutonPanneau("DressUpFrameCancelButton", f, "Close")
+    boutonPanneau("DressUpFrameResetButton", f, "Reset")
+    local m = CreateFrame("DressUpModel", "DressUpModel", f)
+    m:SetWidth(316) m:SetHeight(331)
+    m.rotation = 0.61
+    fleches(m, "DressUpModel")
+    f:SetScript("OnShow", function() SetPortraitTexture(DressUpFramePortrait, "player") end)
+    f:Hide()
+
+    -- l'inspection
+    local function batirInspection()
+        UIPanelWindows["InspectFrame"] = { area = "left", pushable = 0 }
+        INSPECTFRAME_SUBFRAMES = { "InspectPaperDollFrame", "InspectPVPFrame", "InspectTalentFrame" }
+        local i = CreateFrame("Frame", "InspectFrame", UIParent)
+        i:SetWidth(384) i:SetHeight(512)
+        i:SetHitRectInsets(0, 30, 0, 45)
+        i:CreateTexture("InspectFramePortrait", "ARTWORK")
+        local nf = CreateFrame("Frame", "InspectNameFrame", i)
+        nf:CreateFontString("InspectNameText", "ARTWORK")
+        croix("InspectFrameCloseButton", i)
+        for n = 1, 3 do CreateFrame("Button", "InspectFrameTab" .. n, i):SetID(n) end
+        local p = CreateFrame("Frame", "InspectPaperDollFrame", i)
+        p:SetAllPoints(i)
+        for _, n in ipairs({ "L1", "R1", "BottomLeft", "BottomRight" }) do
+            p:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-CharacterTab-" .. n))
+        end
+        p:CreateFontString("InspectLevelText", "BACKGROUND")
+        local mo = CreateFrame("PlayerModel", "InspectModelFrame", p)
+        mo:SetWidth(233) mo:SetHeight(300)
+        mo.rotation = 0.61
+        fleches(mo, "InspectModel")
+        for _, n in ipairs({ "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist", "Hands", "Waist",
+                             "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1", "MainHand", "SecondaryHand", "Ranged" }) do
+            local b = CreateFrame("Button", "Inspect" .. n .. "Slot", p)
+            b:SetWidth(37) b:SetHeight(37)
+            b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Quickslot2"))
+            b:CreateTexture("Inspect" .. n .. "SlotIconTexture", "BORDER")
+        end
+        local pvp = CreateFrame("Frame", "InspectPVPFrame", i)
+        pvp:SetAllPoints(i)
+        pvp:EnableMouse(true)
+        for n = 1, 3 do CreateFrame("Button", "InspectPVPTeam" .. n, pvp):EnableMouse(true) end
+        pvp:SetScript("OnShow", function() DEMANDES_HONNEUR = (DEMANDES_HONNEUR or 0) + 1 end)
+        pvp:Hide()
+        CreateFrame("Frame", "InspectTalentFrame", i):Hide()
+        -- InspectSwitchTabs, InspectFrame_UnitChanged, OnShow / OnHide :
+        -- recopies du client
+        function InspectSwitchTabs(nouveau)
+            local neuf = _G[INSPECTFRAME_SUBFRAMES[nouveau]]
+            local ancien = _G[INSPECTFRAME_SUBFRAMES[PanelTemplates_GetSelectedTab(InspectFrame) or 0] or ""]
+            if neuf then
+                if ancien then ancien:Hide() end
+                PanelTemplates_SetTab(InspectFrame, nouveau)
+                ShowUIPanel(InspectFrame)
+                neuf:Show()
+            end
+        end
+        function InspectFrame_UnitChanged(self)
+            SetPortraitTexture(InspectFramePortrait, self.unit)
+            InspectNameText:SetText(UnitName(self.unit))
+        end
+        i:SetScript("OnShow", function(self)
+            if not self.unit then return end
+            SetPortraitTexture(InspectFramePortrait, self.unit)
+            InspectNameText:SetText(UnitName(self.unit))
+        end)
+        i:SetScript("OnHide", function(self)
+            self.unit = nil
+            INSPECTION_EFFACEE = (INSPECTION_EFFACEE or 0) + 1
+        end)
+        PanelTemplates_SetNumTabs(i, 3)
+        PanelTemplates_SetTab(i, 1)
+        i:Hide()
+    end
+
+    local prevenir = function(nom)
+        for _, c in ipairs(FRAMES) do
+            if c.events and c.events["ADDON_LOADED"] and c.scripts and c.scripts.OnEvent then
+                c.scripts.OnEvent(c, "ADDON_LOADED", nom)
+            end
+        end
+    end
+    local avant = CHARGER_ADDON
+    function CHARGER_ADDON(nom)
+        if nom == "Blizzard_InspectUI" then
+            batirInspection()
+            prevenir(nom)
+            return
+        end
+        return avant(nom)
+    end
+end
 """
 
 
@@ -6053,7 +6522,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -8380,13 +8849,51 @@ def main():
     g.ForeverUI.PvPUpdate()
     assert principal.cadran.width == 154, "le cadran fait 154"
 
+    # LES SEUILS VIENNENT DU SERVEUR (mod-pvp-titles-ext, 2026-09-28). Tant
+    # qu il ne les a pas dits, l ecran n affiche que le certain : le rang par
+    # les titres, les victoires seules, pas de jauge.
+    lua.execute("TITRES_CONNUS = { [1] = true }; VICTOIRES_PVP = 67; PROGRES_PVP = 0")
+    g.ForeverUI.PvPUpdate()
+    assert principal.numero.text == "1" and principal.progres.text == "67", principal.progres.text
+    assert not any(principal.jauge[q].plein.shown or principal.jauge[q].arc.shown for q in range(1, 5)), "pas de jauge sans seuils"
+    # a l entree dans le monde, l addon les demande ; le serveur repond
+    lua.execute("SERVEUR_PVPTITLES = true; ENTREE_DANS_LE_MONDE()")
+    envoi = list(g.ADDON_ENVOYES.values())[-1]
+    assert envoi == "PVPTITLES|REQ|WHISPER|" + g.UnitName("player"), envoi
+    assert principal.progres.text == "67 / 100", principal.progres.text
+    # personne d autre ne parle au nom du serveur
+    lua.execute("MESSAGE_ADDON('PVPTITLES', 'RANKS:1,2,3,4,5,6,7,8,9,10,11,12,13,14', 'WHISPER', 'Mechant')")
+    g.ForeverUI.PvPUpdate()
+    assert principal.progres.text == "67 / 100"
+    # DESHONORE : le rang negatif, le temps qui reste, pas d anneau
+    lua.execute("MESSAGE_ADDON('PVPTITLES', 'DISHONOR:3600,0,5,86400', 'WHISPER', UnitName('player'))")
+    assert principal.rang.text == "Dishonored" and principal.progres.text == "Dishonored: 3600 sec left", (principal.rang.text, principal.progres.text)
+    assert not principal.recompense.shown
+    # le symbole de faction cede la place au blason brise de la faction, a la
+    # taille des emblemes
+    icone = "Interface\\ForeverUI\\pvpframe\\honor-dishonored-" + g.UnitFactionGroup("player").lower()
+    assert principal.badge.texture == icone and (principal.badge.width, principal.badge.height) == (72, 84), principal.badge.texture
+    assert list(principal.badge.texcoord.values()) == [0, 1, 0, 1]
+    # le debuff « Deshonore », dessine par ForeverUI, en tete des
+    # affaiblissements, avec son infobulle
+    bd = g.ForeverUI.Buffs.debuffs.boutons[1]
+    assert bd.shown and bd.info.deshonneur and bd.Icon.texture == "Interface\\Icons\\Ability_Hunter_MarkedForDeath"
+    bd.scripts.OnEnter(bd)
+    assert g.GameTooltip.text == "Dishonored" and list(g.GameTooltip.lignes.values()) == [g.ForeverUI.L.BUFFS_DISHONORED_DESC]
+    lua.execute("MESSAGE_ADDON('PVPTITLES', 'DISHONOR:0,0,5,86400', 'WHISPER', UnitName('player'))")
+    assert principal.rang.text == "Private" and principal.progres.text == "67 / 100"
+    assert principal.badge.texture != icone and (principal.badge.width, principal.badge.height) == (72, 84)
+    assert not any(b.shown and b.info and b.info.deshonneur for b in g.ForeverUI.Buffs.debuffs.boutons.values()), "le debuff part avec l etat"
+    lua.execute("TITRES_CONNUS = {}")
+    print("   canal du serveur : sans lui, victoires seules et pas de jauge ; REQ a l entree, seuils recus, deshonore affiche puis leve")
+
     # LE RANG VIENT DES TITRES, PAS DU COMPTEUR.
     #
     # Releve dans modules/mod-pvp-titles/src/mod_pvp_titles.cpp : le module
     # pose un TITRE de CharTitles et ne touche jamais au compteur de rang.
     # UnitPVPRank reste donc a zero, et le rang se demande a IsTitleKnown --
     # identifiants 1 a 14 pour l Alliance, 15 a 28 pour la Horde.
-    lua.execute("RANG_PVP = 0; PROGRES_PVP = 0; VICTOIRES_PVP = 800")
+    lua.execute("RANG_PVP = 0; PROGRES_PVP = 0; VICTOIRES_PVP = 2400")
     lua.execute("TITRES_CONNUS = { [1] = true, [5] = true }")
     g.ForeverUI.PvPUpdate()
     print("   par les titres : titre=\"%s\", numero=\"%s\", anneau=%s" % (
@@ -8395,10 +8902,11 @@ def main():
     assert principal.rang.text == "Sergeant Major",         "le nom se lit toujours dans PVP_RANK_<numero + 4>_<faction>"
 
     # LA PROGRESSION VIENT DES VICTOIRES, comparees aux seuils du serveur.
-    # Rang 5 acquis a 750, rang 6 a 1000 : 800 victoires font un cinquieme.
+    # Rang 5 acquis a 2000, rang 6 a 4000 (le serveur en service, releve du
+    # 2026-09-28) : 2400 victoires font un cinquieme.
     plein = sum(1 for q in range(1, 5) if principal.jauge[q].plein.shown)
     arc = [q for q in range(1, 5) if principal.jauge[q].arc.shown]
-    print("   progression par les victoires : 800 -> %d quart(s) plein(s),"
+    print("   progression par les victoires : 2400 -> %d quart(s) plein(s),"
           " arc sur %s" % (plein, arc))
     assert plein == 0 and arc == [3],         "un cinquieme de tour : rien de plein, l arc dans le premier quart"
 
@@ -8419,6 +8927,10 @@ def main():
     # honorables et le seuil du palier suivant, comme CurrentRankProgressField.
     print("   progression ecrite : \"%s\"" % principal.progres.text)
     assert principal.progres.text == "67 / 100",         "les deux nombres que le module du serveur compare, pas un pourcentage"
+    # du rang 2 au rang 3 : 500 victoires, pas 250 (retour du 2026-09-28)
+    lua.execute("TITRES_CONNUS = { [1] = true, [2] = true }; VICTOIRES_PVP = 300")
+    g.ForeverUI.PvPUpdate()
+    assert principal.numero.text == "2" and principal.progres.text == "300 / 500", principal.progres.text
     lua.execute("VICTOIRES_PVP = 800")
 
     # AU RANG MAXIMAL, la jauge est pleine et il n y a plus de seuil.
@@ -15394,6 +15906,419 @@ def main():
     of = g.OpacityFrame
     assert of.backdrop is None and of.foreverHabit and g.OpacityFrameSlider.backdrop is not None
     print("   selecteur de couleur : 388 / 331 x 210, roue a (23, -37), nuancier 47 x 25, colonne d'opacite en degrade, boutons 154 x 22 ; OpacityFrame")
+
+    # ------------------------------------------------- LES FENETRES SECONDAIRES
+    print("\nfenetres secondaires :")
+    req = lua.eval("rawequal")
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def atlas_jeu(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    # le tutoriel : plus d'astuce, et rien ne reste ouvert
+    tf = g.TutorialFrame
+    assert tf.events["TUTORIAL_TRIGGER"] is None, "TutorialFrame n'ecoute plus TUTORIAL_TRIGGER"
+    lua.execute("TutorialFrame_NewTutorial(3)")
+    assert not tf.shown and not g.TutorialFrameAlertButton.shown
+    lua.execute("TutorialFrameAlertButtonBadge:Show()")
+    assert not g.TutorialFrameAlertButtonBadge.shown
+    print("   tutoriel : TUTORIAL_TRIGGER n'est plus ecoute ; fenetre, bouton et compteur se referment")
+
+    # les hauts faits : l'en-tete deplace la fenetre, la place survit au
+    # systeme de panneaux
+    lua.execute("CHARGER_ADDON('Blizzard_AchievementUI')")
+    af, h = g.AchievementFrame, g.AchievementFrameHeader
+    assert af.movable and af.clamped and h.dragButtons[1] == "LeftButton"
+    lua.execute("UIParent._cx, UIParent._top = 512, 768 AchievementFrame._cx, AchievementFrame._top = 600, 700")
+    h.scripts.OnDragStart(h)
+    assert af.moving
+    h.scripts.OnDragStop(h)
+    p = g.ForeverUIDB.positions.hautsfaits
+    assert (p.x, p.y) == (88, -68) and not af.userPlaced
+    assert len(pts(af)) == 1 and pts(af)[0][0] == "TOP" and pts(af)[0][2:] == ["TOP", 88, -68]
+    lua.execute("AchievementFrame:Show() UpdateUIPanelPositions(AchievementFrame)")
+    assert len(pts(af)) == 1 and req(pts(af)[0][1], g.UIParent) and pts(af)[0][2:] == ["TOP", 88, -68], pts(af)
+    lua.execute("AchievementFrame:Hide()")
+    print("   hauts faits : deplaces par l'en-tete, place (88, -68) retenue et reposee apres le systeme de panneaux")
+
+    # l'horloge
+    lua.execute("CHARGER_ADDON('Blizzard_TimeManager')")
+    tm = g.TimeManagerFrame
+    habit = tm.foreverHabit
+    assert (tm.width, tm.height) == (220, 240) and len(pts(tm)) == 1 and pts(tm)[0][2:] == ["TOPRIGHT", -10, -190]
+    gen = [r for r in tm.regions.values() if r.kind == "texture" and isinstance(r.texture, str) and "UI-Character-General" in r.texture]
+    assert len(gen) == 4 and all(r.alpha == 0 for r in gen)
+    assert [r.alpha for r in tm.regions.values() if r.kind == "fontstring" and r.text == "Clock" and not r.name] == [0]
+    assert g.TimeManagerGlobe.alpha == 0 and pts(g.TimeManagerGlobe)[0][2:] == ["TOPLEFT", -6, 9]
+    assert habit.portrait.texture.endswith("GlobeIcon") and (habit.portrait.width, habit.portrait.height) == (64, 64)
+    assert pts(habit.portrait)[0][2:] == ["TOPLEFT", -6, 9]
+    assert habit.titre.text == "Clock" and habit.titre.font == "GameFontWhite" and pts(habit.titre)[0][2:] == ["TOP", 15, -5]
+    lua.execute("TimeManagerFrameTicker:SetText('12:34')")
+    assert habit.heure.text == "12:34" and g.TimeManagerFrameTicker.alpha == 0 and req(habit.heure.owner, habit.metal)
+    assert habit.marbre.texture.endswith("ui-background-marble") and len(list(habit.encadre.values())) > 0
+    x = g.TimeManagerCloseButton
+    assert (x.width, x.height) == (24, 24) and pts(x)[0][2:] == ["TOPRIGHT", -2, 1] and x.frameLevel == tm.GetFrameLevel(tm) + 22
+    assert pts(g.TimeManagerStopwatchFrame)[-1][2:] == ["TOPRIGHT", 10, -12] and g.TimeManagerStopwatchFrameBackground.alpha == 0
+    assert pts(g.TimeManagerAlarmTimeFrame)[-1][2:] == ["TOPLEFT", 12, -65]
+    # les trois menus : WowStyle1DropdownTemplate
+    heure, minute, ampm = g.TimeManagerAlarmHourDropDown, g.TimeManagerAlarmMinuteDropDown, g.TimeManagerAlarmAMPMDropDown
+    assert (heure.width, heure.height, minute.width, ampm.width) == (60, 25, 60, 65)
+    assert pts(heure)[-1][1].name == "TimeManagerAlarmTimeLabel" and pts(heure)[-1][2:] == ["BOTTOMLEFT", 0, -4]
+    assert req(pts(minute)[-1][1], heure) and pts(minute)[-1][0] == "LEFT" and pts(minute)[-1][2:] == ["RIGHT", 5, 0]
+    assert req(pts(ampm)[-1][1], minute) and pts(ampm)[-1][2:] == ["RIGHT", 5, 0]
+    b = heure.foreverBouton
+    assert g.TimeManagerAlarmHourDropDownLeft.alpha == 0 and req(b.allPoints, heure) and b._normal.texture is None
+    fl = heure.foreverFleche
+    assert atlas_jeu(fl, "common-dropdown-a-button") and pts(fl)[0][2:] == ["RIGHT", 1, -3]
+    e = g.ForeverUI.AtlasEntry("common-dropdown-a-button")
+    assert (fl.width, fl.height) == (e[6], e[7]), "la fleche a sa taille d'atlas"
+    t = g.TimeManagerAlarmHourDropDownText
+    assert t.font == "GameFontHighlight" and t.justify == "LEFT" and pts(t)[0][2:] == ["TOPLEFT", 8, -8] and req(pts(t)[1][1], fl)
+    fond = list(heure.foreverFond.values())
+    assert len(fond) == 3 and fond[0].width == 16 and fond[2].width == 19 and fond[0].texture == g.ForeverUI.AtlasEntry("common-dropdown-textholder-c60")[1]
+    assert req(heure.relativeTo, heure) and heure.point == "TOPLEFT" and heure.relativePoint == "BOTTOMLEFT"
+    b.hooks.OnEnter(b)
+    assert atlas_jeu(fl, "common-dropdown-a-button-hover")
+    b.hooks.OnMouseDown(b)
+    assert atlas_jeu(fl, "common-dropdown-a-button-pressedhover")
+    b.hooks.OnMouseUp(b)
+    b.hooks.OnLeave(b)
+    assert atlas_jeu(fl, "common-dropdown-a-button")
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = TimeManagerAlarmHourDropDown DropDownList1:Show()")
+    b.hooks.OnEnter(b)
+    b.hooks.OnLeave(b)
+    assert atlas_jeu(fl, "common-dropdown-a-button-open")
+    lua.execute("DropDownList1:Hide()")
+    assert atlas_jeu(fl, "common-dropdown-a-button"), "la liste fermee, la fleche revient au repos"
+    lua.execute("UIDROPDOWNMENU_OPEN_MENU = nil TimeManagerAlarmHourDropDownButton:Disable()")
+    assert atlas_jeu(fl, "common-dropdown-a-button-disabled")
+    lua.execute("TimeManagerAlarmHourDropDownButton:Enable()")
+    # le message
+    assert pts(g.TimeManagerAlarmMessageFrame)[-1][2:] == ["BOTTOMLEFT", 0, -5] and req(pts(g.TimeManagerAlarmMessageFrame)[-1][1], heure)
+    champ = g.TimeManagerAlarmMessageEditBox
+    assert champ.width == 190 and champ.bordCamelot and g.TimeManagerAlarmMessageEditBoxLeft.alpha == 0
+    # l'alarme : une case
+    al = g.TimeManagerAlarmEnabledButton
+    assert (al.width, al.height) == (24, 24) and pts(al)[-1][2:] == ["LEFT", 12, -45]
+    assert al.foreverCase.texture.endswith("UI-CheckBox-Up") and not al.foreverCoche.shown
+    assert al._normal.texture is None and al._normal.alpha == 0 and al.GetText(al) == "Alarm Enabled"
+    assert al._highlight.texture.endswith("UI-CheckBox-Highlight") and al._highlight.blend == "ADD"
+    assert pts(al.fontString)[0][2:] == ["RIGHT", -2, 0]
+    al.scripts.OnClick(al)
+    assert al.foreverCoche.shown and al._normal.texture is None and al.GetText(al) == "Alarm Enabled"
+    assert al.normalFont == "GameFontNormalSmall"
+    al.scripts.OnClick(al)
+    assert not al.foreverCoche.shown
+    al.hooks.OnMouseDown(al)
+    assert al.foreverCase.texture.endswith("UI-CheckBox-Down")
+    al.hooks.OnMouseUp(al)
+    assert pts(g.TimeManagerMilitaryTimeCheck)[-1][2:] == ["TOPLEFT", 185, -190]
+    # le client reancre a l'ouverture du menu AM / PM : la place revient
+    lua.execute("TimeManagerFrame:Show() TimeManagerAlarmAMPMDropDown:Hide() TimeManagerAlarmAMPMDropDown:Show()")
+    assert len(pts(ampm)) == 1 and pts(ampm)[0][2:] == ["RIGHT", 5, 0]
+    assert len(pts(g.TimeManagerAlarmMessageFrame)) == 1 and len(pts(al)) == 1 and pts(al)[0][2:] == ["LEFT", 12, -45]
+    lua.execute("TimeManagerFrame:Hide()")
+    print("   horloge : 220 x 240, globe en portrait, heure au-dessus, encart, menus de style 1 (60 / 60 / 65), champ 190, alarme en case")
+
+    # la carte de zone
+    lua.execute("CHARGER_ADDON('Blizzard_BattlefieldMinimap')")
+    bm = g.BattlefieldMinimap
+    bord = bm.foreverBord
+    pieces = list(bord.pieces.values())
+    assert bord.strata == "HIGH" and len(pieces) == 8
+    for i, (nom, point, x0, y0, l, hh) in enumerate((("topleft", "TOPLEFT", -11, 13, 16, 17), ("topright", "TOPRIGHT", 7, 13, 16, 17),
+                                                   ("bottomleft", "BOTTOMLEFT", -11, -7, 16, 16), ("bottomright", "BOTTOMRIGHT", 7, -7, 16, 16))):
+        c = pieces[i]
+        assert atlas_jeu(c, "battlefieldminimap-border-" + nom) and pts(c)[0][0] == point and pts(c)[0][2:] == [point, x0, y0] and (c.width, c.height) == (l, hh), nom
+    haut = pieces[4]
+    assert atlas_jeu(haut, "battlefieldminimap-border-top") and req(pts(haut)[0][1], pieces[0]) and pts(haut)[0][2:] == ["TOPRIGHT", 0, 0]
+    assert req(pts(haut)[1][1], pieces[1]) and pts(haut)[1][0] == "BOTTOMRIGHT" and pts(haut)[1][2:] == ["BOTTOMLEFT", 0, 0]
+    gauche = pieces[6]
+    assert req(pts(gauche)[0][1], pieces[0]) and pts(gauche)[0][2:] == ["BOTTOMLEFT", 0, 0] and req(pts(gauche)[1][1], pieces[2])
+    for nom in ("BattlefieldMinimapBackground", "BattlefieldMinimapCorner"):
+        assert g[nom].texture is None and not g[nom].shown, nom
+    x = g.BattlefieldMinimapCloseButton
+    assert (x.width, x.height) == (24, 24) and len(pts(x)) == 1 and pts(x)[0][2:] == ["TOPRIGHT", 2, 6] and x.strata == "HIGH"
+    assert x.frameLevel == bord.GetFrameLevel(bord) + 1
+    assert pts(g.BattlefieldMinimapTabText)[-1][2:] == ["RIGHT", -5, -5]
+    lua.execute("BattlefieldMinimapOptions.opacity = 0.4 BattlefieldMinimap:Show()")
+    assert abs(bord.alpha - 0.6) < 1e-9 and not g.BattlefieldMinimapBackground.shown
+    lua.execute("BattlefieldMinimap_UpdateOpacity(0.1)")
+    assert abs(bord.alpha - 0.9) < 1e-9 and not g.BattlefieldMinimapCorner.shown
+    lua.execute("BattlefieldMinimap:Hide()")
+    print("   carte de zone : cadre de camelot en strate HIGH (coins a leur taille), cadre de 3.3.5 cache, croix a (2, 6), alpha qui suit l'opacite")
+
+    # ------------------------------------------------- LA CABINE ET L'INSPECTION
+    print("\ncabine d'essayage et inspection :")
+    req = lua.eval("rawequal")
+    def pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def atlas_jeu(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    # la cabine
+    du = g.DressUpFrame
+    h = du.foreverHabit
+    assert (du.width, du.height) == (450, 545) and h.titre.text == "Dressing Room"
+    assert all(r.alpha == 0 for r in du.regions.values() if r.kind == "texture" and not r.name and isinstance(r.texture, str) and "PaperDollInfoFrame" in r.texture)
+    assert g.DressUpFramePortrait.alpha == 0 and g.DressUpFrameTitleText.alpha == 0 and g.DressUpFrameDescriptionText.alpha == 0
+    assert (h.portrait.width, h.portrait.height) == (60, 60) and pts(h.portrait)[0][2:] == ["TOPLEFT", -5, 7]
+    assert h.marbre.texture.endswith("ui-background-marble")
+    sc = h.scene
+    assert pts(sc)[0][2:] == ["TOPLEFT", 7, -63] and pts(sc)[1][2:] == ["BOTTOMRIGHT", -9, 28]
+    tl, tr, bl, br = g.DressUpBackgroundTopLeft, g.DressUpBackgroundTopRight, g.DressUpBackgroundBotLeft, g.DressUpBackgroundBotRight
+    assert pts(tl)[0][2:] == ["TOPLEFT", 0, 0] and req(pts(tl)[0][1], sc) and pts(tl)[1][2:] == ["TOPRIGHT", -85, 0] and tl.height == 348
+    assert (tr.width, tr.height) == (85, 348) and pts(tr)[0][2:] == ["TOPRIGHT", 0, 0]
+    assert bl.height == 106 and br.width == 85 and list(bl.texcoord.values()) == [0, 1, 0, 106 / 175], list(bl.texcoord.values())
+    assert req(pts(bl)[0][1], tl) and pts(bl)[0][2:] == ["BOTTOMLEFT", 0, 0]
+    mo = g.DressUpModel
+    assert req(pts(mo)[0][1], sc) and pts(mo)[0][2:] == ["TOPLEFT", 0, 0] and pts(mo)[1][2:] == ["BOTTOMRIGHT", 0, 0]
+    assert pts(g.DressUpModelRotateLeftButton)[0][2:] == ["TOP", -19.5, -10] and pts(g.DressUpModelRotateRightButton)[0][2:] == ["TOP", 19.5, -10]
+    assert mo.foreverSouris and mo.mouseEnabled
+    x = g.DressUpFrameCloseButton
+    assert (x.width, x.height) == (24, 24) and x.frameLevel == du.GetFrameLevel(du) + 22
+    an, re = g.DressUpFrameCancelButton, g.DressUpFrameResetButton
+    assert (an.width, an.height) == (80, 22) and pts(an)[0][2:] == ["BOTTOMRIGHT", -7, 4] and an._normal.texture is None
+    assert req(pts(re)[0][1], an) and pts(re)[0][2:] == ["LEFT", 0, 0]
+    lua.execute("DressUpFrame:Show()")
+    assert h.portrait.portraitOf == "player"
+    lua.execute("DressUpFrame:Hide()")
+    print("   cabine : 450 x 545, portrait du joueur, encart, fond de la race sur la scene (bas rogne a 106), modele et fleches, boutons 80 x 22")
+
+    # l'inspection
+    lua.execute("""
+        INSPECTE = { nom = "Arthas", niveau = 80, classe = "Paladin", jeton = "PALADIN", race = "Human", faction = "Horde" }
+        EQUIPES_INSPECTEES = { [2] = { "Les Gueux", 3, 1850, 40, 25, 30, 1790, 0.1, 0.2, 0.3, 7, 1, 1, 1, 2, 0.5, 0.5, 0.5 } }
+        CHARGER_ADDON('Blizzard_InspectUI')
+    """)
+    it = g.InspectFrame
+    ih = it.foreverHabit
+    assert (it.width, it.height) == (338, 424) and list(it.hitRect.values()) == [0, 0, 0, 0]
+    assert g.InspectFramePortrait.alpha == 0 and g.InspectNameFrame.alpha == 0
+    assert all(not g["InspectFrameTab%d" % n].shown and g["InspectFrameTab%d" % n].alpha == 0 for n in (1, 2, 3))
+    enc = ih.encart
+    assert pts(enc)[0][2:] == ["TOPLEFT", 4, -60] and pts(enc)[1][2:] == ["BOTTOMRIGHT", -6, 4]
+    lua.execute("InspectFrame.unit = 'target' InspectSwitchTabs(1)")
+    assert it.shown and ih.titre.text == "Arthas" and ih.portrait.portraitOf == "target"
+    assert (ih.portrait.width, ih.portrait.height) == (48, 48) and pts(ih.portrait)[0][2:] == ["TOPLEFT", 1, 1.5], \
+        "le portrait de la feuille : 48, centre sur le trou de l'anneau"
+    o1, o2 = g.ForeverUIInspectTab1, g.ForeverUIInspectTab2
+    assert o1.icone.portraitOf == "target" and list(o1.icone.texcoord.values()) == [0.03125, 0.96875, 0.03125, 0.96875]
+    assert o2.icone.texture.endswith("Inv_SideTab_Honor_Horde_c60")
+    assert o1.choisi.shown and not o2.choisi.shown
+    assert pts(o1)[0][2:] == ["TOPLEFT", 0, 0] and req(pts(o2)[0][1], o1) and pts(o2)[0][2:] == ["BOTTOMLEFT", 0, -2]
+    barre = pts(o1)[0][1]
+    assert pts(barre)[0][2:] == ["TOPRIGHT", 1, -30]
+    # la page du personnage
+    p = g.InspectPaperDollFrame
+    assert all(r.alpha == 0 for r in p.regions.values() if r.kind == "texture" and isinstance(r.texture, str) and "CharacterTab" in r.texture)
+    assert pts(g.InspectLevelText)[0][2:] == ["TOP", 0, -27] and g.InspectLevelText.width == 220
+    tb = g.ForeverUIInspectTalentsButton
+    assert (tb.width, tb.height) == (102, 20) and pts(tb)[0][2:] == ["TOP", 0, -39] and tb.enabled is not False
+    m = g.InspectModelFrame
+    assert pts(m)[0][2:] == ["TOPLEFT", 52, -66] and (m.width, m.height) == (231, 320) and m.foreverSouris
+    assert pts(g.InspectModelRotateLeftButton)[0][2:] == ["TOP", -19.5, -2] and req(pts(g.InspectModelRotateLeftButton)[0][1], m)
+    fond = list(g.ForeverUI.Inspection.fond.values())
+    assert [f.texture for f in fond] == ["Interface\\DressUpFrame\\DressUpBackground-Human%d" % n for n in (1, 2, 3, 4)]
+    assert all(f.desaturated for f in fond)
+    assert (fond[0].width, fond[0].height) == (212, 245) and (fond[1].width, fond[1].height) == (19, 245)
+    assert fond[2].height == 109 and list(fond[2].texcoord.values()) == [0.171875, 1, 0, 109 / 128]
+    v = g.ForeverUI.Inspection.voile
+    assert v.layer == "BORDER" and pts(v)[1][2:] == ["BOTTOMRIGHT", 0, -76]
+    c = g.ForeverUI.Inspection.cadre
+    assert req(pts(c.coinHG)[0][1], enc) and pts(c.coinHG)[0][2:] == ["TOPLEFT", 46, -4] and (c.coinHG.width, c.coinHG.height) == (7, 7)
+    assert pts(c.coinBD)[0][2:] == ["BOTTOMRIGHT", -47, 31] and c.coinBD.texture.endswith("char-paperdoll-parts")
+    assert c.bas2 is None, "pas de second filet bas (contour en trop)"
+    assert pts(c.bas)[0][2:] == ["BOTTOMRIGHT", 0, -1] and c.bas.height == 5 and c.gauche.width == 5
+    niveau_cadre = c.coinHG.owner.frameLevel
+    assert all(g["Inspect%sSlot" % n].frameLevel == niveau_cadre + 1 for n in ("Head", "Wrist", "Hands", "Trinket1", "MainHand", "SecondaryHand", "Ranged")), \
+        "les emplacements passent au-dessus du cadre : le filet du bas ne traverse plus les armes"
+    tete, cou, mains, arme, second = g.InspectHeadSlot, g.InspectNeckSlot, g.InspectHandsSlot, g.InspectMainHandSlot, g.InspectSecondaryHandSlot
+    assert req(pts(tete)[0][1], enc) and pts(tete)[0][2:] == ["TOPLEFT", 4, -2] and pts(cou)[0][2:] == ["BOTTOMLEFT", 0, -4]
+    assert pts(mains)[0][2:] == ["TOPRIGHT", -4, -2] and pts(arme)[0][2:] == ["BOTTOMLEFT", 116, 16] and pts(second)[0][2:] == ["TOPRIGHT", 5, 0]
+    assert atlas_jeu(tete.foreverCadre, "ui-character-info-gearslot") and tete._normal.texture.endswith("UI-Quickslot2")
+    print("   inspection : 338 x 424, titre et portrait de l'unite, onglets lateraux, page du personnage de camelot (fond de la race, cadre, 37 x 37)")
+    # le JcJ
+    CLIC = lua.eval("function(b) b.scripts.OnClick(b) end")
+    CLIC(o2)
+    pg = g.ForeverUIInspectPvP
+    assert g.InspectPVPFrame.shown and g.InspectPVPFrame.alpha == 0 and not g.InspectPVPFrame.mouseEnabled and not g.InspectPVPTeam1.mouseEnabled
+    assert pg.shown and not p.shown and o2.choisi.shown and not o1.choisi.shown
+    assert [x.text for x in pg.valeurs.values()] == [5, 3, 4321, 100, 50, "-"]
+    cartes = list(pg.cartes.values())
+    assert cartes[0].vide.shown and cartes[0].vide.text == "(2v2)" and cartes[0].alpha == 0.4
+    assert cartes[1].donnees.nom.text == "Les Gueux" and cartes[1].donnees.cote.text == 1850 and cartes[1].donnees.bilan.text == "25 - 15"
+    assert cartes[1].donnees.perso.text == 1790 and cartes[1].banniere.texture.endswith("PVP-Banner-3")
+    assert cartes[2].vide.text == "(5v5)" and cartes[0].width == 338 - 6 - 4 - 16
+    # le rang, en tete : 4321 victoires a vie = six seuils atteints (50, 100,
+    # 500, 1000, 2000, 4000 : ceux du serveur en service), Horde ;
+    # le nom et son trait, puis l'embleme de SA faction a 50 % sous l'insigne
+    # du rang
+    assert pg.tete.height == 90 and pg.rang.text == "Stone Guard" and pg.badge.shown and pg.insigne.shown
+    assert atlas_jeu(pg.badge, "ui-character-info-honor-icon-horde") and (pg.badge.width, pg.badge.height) == (36, 42)
+    assert pg.badge.alpha == 0.5 and pg.badge.layer == "ARTWORK"
+    assert atlas_jeu(pg.insigne, "ui-character-info-honor-icon-6") and (pg.insigne.width, pg.insigne.height) == (36, 42)
+    assert pg.insigne.layer == "OVERLAY" and req(pts(pg.insigne)[0][1], pg.badge) and pts(pg.insigne)[0][2:] == ["CENTER", 0, 0]
+    assert req(pts(pg.rang)[0][1], pg.tete) and pts(pg.rang)[0][2:] == ["TOP", 0, -12]
+    assert atlas_jeu(pg.ligne, "ui-character-info-honor-levelbg") and pg.ligne.width == 312
+    assert req(pts(pg.ligne)[0][1], pg.rang) and pts(pg.ligne)[0][2:] == ["BOTTOM", 0, -10]
+    assert req(pts(pg.badge)[0][1], pg.ligne) and pts(pg.badge)[0][2:] == ["BOTTOM", 0, -4]
+    assert req(pts(pg.separateur)[0][1], pg.tete) and pts(pg.separateur)[0][2:] == ["BOTTOM", 0, -64]
+    assert req(pts(cartes[0])[0][1], pg.tete) and pts(cartes[0])[0][2:] == ["BOTTOMLEFT", 8, -74]
+    lua.execute("HONNEUR_INSPECTE = { 6, 110, 3, 50, 4322, 0 }")
+    ev = [f for f in g.FRAMES.values() if f.events and f.events["INSPECT_HONOR_UPDATE"] and f.scripts.OnEvent]
+    def honneur_arrive():
+        for f in ev:
+            f.scripts.OnEvent(f, "INSPECT_HONOR_UPDATE")
+    honneur_arrive()
+    assert pg.valeurs[1].text == 6
+    # sans rang (sous 50) : « Civilian » et l'embleme plein, sans insigne
+    lua.execute("HONNEUR_INSPECTE = { 0, 0, 0, 0, 49, 0 }")
+    honneur_arrive()
+    assert pg.rang.text == "Civilian" and pg.badge.shown and pg.badge.alpha == 1 and not pg.insigne.shown
+    assert atlas_jeu(pg.badge, "ui-character-info-honor-icon-horde")
+    # la frontiere du rang 3 : 500 victoires (le serveur en service), pas 250
+    lua.execute("HONNEUR_INSPECTE = { 0, 0, 0, 0, 499, 0 }")
+    honneur_arrive()
+    assert pg.rang.text == "Grunt" and atlas_jeu(pg.insigne, "ui-character-info-honor-icon-2")
+    lua.execute("HONNEUR_INSPECTE = { 0, 0, 0, 0, 500, 0 }")
+    honneur_arrive()
+    assert pg.rang.text == "Sergeant" and atlas_jeu(pg.insigne, "ui-character-info-honor-icon-3")
+    # sans donnees (hors de portee, attaquable : le serveur n'envoie rien, le
+    # client rend des zeros) : le cas sans rang, jamais une tete vide
+    lua.execute("HONNEUR_INSPECTE_ARRIVE = false HONNEUR_INSPECTE = { 0, 0, 0, 0, 0, 0 }")
+    honneur_arrive()
+    assert pg.rang.text == "Civilian" and pg.badge.shown and pg.badge.alpha == 1 and not pg.insigne.shown
+    lua.execute("HONNEUR_INSPECTE_ARRIVE = true INSPECTE.faction = 'Alliance' HONNEUR_INSPECTE = { 6, 110, 3, 50, 4322, 0 }")
+    honneur_arrive()
+    assert pg.rang.text == "Knight" and atlas_jeu(pg.badge, "ui-character-info-honor-icon-alliance")
+    assert pg.badge.alpha == 0.5 and pg.insigne.shown and atlas_jeu(pg.insigne, "ui-character-info-honor-icon-6")
+    lua.execute("INSPECTE.faction = 'Horde'")
+    honneur_arrive()
+    assert atlas_jeu(pg.badge, "ui-character-info-honor-icon-horde")
+    CLIC(o1)
+    assert not pg.shown and p.shown
+    print("   JcJ : rang de l'inspecte en tete (nom, trait, embleme de SA faction a 50 % sous l'insigne du rang ; sans rang ni donnees : Civilian et embleme plein), honneur, separateur, trois cartes ; cadre du client invisible et sans souris")
+    # les talents de l'inspecte
+    lua.execute("""
+        TALENTS_AVANT = TALENTS
+        TALENTS_INSPECT = {
+            { nom = "Holy", icone = "icone:sacre", fond = "PaladinHoly", depenses = 5, talents = {
+                { "Spiritual Focus", "ic:focus", 1, 2, 5, 5, true },
+            } },
+            { nom = "Protection", icone = "icone:prot", fond = "PaladinProtection", depenses = 0, talents = {
+                { "Divinity", "ic:divinite", 1, 2, 0, 5, true },
+                { "Guardian's Favor", "ic:faveur", 3, 1, 0, 2, true },
+            } },
+            { nom = "Retribution", icone = "icone:vindicte", fond = "PaladinCombat", depenses = 0, talents = {
+                { "Deflection", "ic:deviation", 1, 2, 0, 5, true },
+            } },
+        }
+        POINTS_INSPECT = 2
+        ForeverUITalentsButtonClic = ForeverUIInspectTalentsButton:GetScript("OnClick")
+        ForeverUITalentsButtonClic(ForeverUIInspectTalentsButton)
+    """)
+    T = g.ForeverUI.Talents
+    tl = g.ForeverUITalentsFrame
+    assert T.inspection == "target" and g.PlayerTalentFrame.shown
+    assert tl.titre.text == "Arthas's Talents" and tl.portrait.texture.endswith("portrait_paladin")
+    assert not T.appliquerBouton.shown and not T.annulerBouton.shown and not T.activerBouton.shown
+    assert all(not b.shown for b in T.barreOnglets.onglets.values())
+    K = g.ForeverUI.TalentsSearch
+    assert not T.points.shown, "pas de points non depenses chez l'inspecte"
+    assert not K.boite.shown and not K.fleche.shown, "pas de recherche chez l'inspecte"
+    noeuds = [b for b in T.arbre.noeuds.values() if b.shown and b.talent]
+    assert sorted(b.talent.nom for b in noeuds) == ["Deflection", "Divinity", "Guardian's Favor", "Spiritual Focus"]
+    # PLUS COMPACTE : colonnes de 260, pas de bande du bas, pas de portes
+    faveur = [b for b in noeuds if b.talent.nom == "Guardian's Favor"][0]
+    assert faveur.talent.etat == "locked" and not any(p.shown for p in T.arbre.portes.values()), "pas de portes chez l'inspecte"
+    assert (tl.width, tl.height) == (1218 - 1212 + 780, 708 - 36) and (T.page.width, T.page.height) == (780, 681 - 36)
+    assert T.fond.height == 701 - 36 and pts(T.classe)[1][2:] == ["BOTTOMRIGHT", 0, 0] and pts(T.classe)[0][2:] == ["TOPLEFT", 0, -70]
+    e_pierre = g.ForeverUI.AtlasEntry("talents-background-c60")
+    pierre = T.fond.pierres[1]
+    assert abs(pierre.texcoord[4] - (e_pierre[4] + (e_pierre[5] - e_pierre[4]) * 665 / 701)) < 1e-9, "la pierre rognee par le bas, pas tassee"
+    assert [pts(v)[0][2:] for v in T.verticaux.values()] == [["TOPLEFT", 262, -46], ["TOPLEFT", 522, -46]]
+    ech = T.arbre.scale
+    focus = [b for b in noeuds if b.talent.nom == "Spiritual Focus"][0]
+    cx = pts(focus)[0][3] * ech
+    assert abs(cx - (130 - 0.5 * 1.5 * 40 * ech)) < 1e-6, cx
+    ent = list(T.entetes.values())
+    assert [pts(h)[0][2:] for h in ent] == [["TOPLEFT", 68, -38.5], ["TOPLEFT", 324, -38.5], ["TOPLEFT", 580, -38.5]]
+    e_sep = g.ForeverUI.AtlasEntry("talents-small-divider-c60")
+    du = (e_sep[3] - e_sep[2]) / e_sep[6]
+    tr = ent[0].trait
+    assert abs(tr.width - 250) < 1e-9 and pts(tr)[0][2:] == ["BOTTOM", 64, -8.5], (tr.width, pts(tr))
+    assert abs(tr.texcoord[1] - (e_sep[2] + 56.5 * du)) < 1e-9 and abs(tr.texcoord[2] - (e_sep[2] + 306.5 * du)) < 1e-9
+    e_fond = g.ForeverUI.AtlasEntry("talent-background-paladin")
+    tiers = (e_fond[3] - e_fond[2]) / 3
+    marge = tiers * (1 - 260 / 404) / 2
+    fonds = list(T.classe.textures.values())
+    for i in range(3):
+        f = fonds[i]
+        assert f.shown and f.width == 260 and pts(f)[0][2:] == ["TOPLEFT", 260 * i, 0], (i, pts(f))
+        assert abs(f.texcoord[1] - (e_fond[2] + tiers * i + marge)) < 1e-9 and abs(f.texcoord[2] - (e_fond[2] + tiers * (i + 1) - marge)) < 1e-9
+    divinite = [b for b in noeuds if b.talent.nom == "Divinity"][0]
+    assert divinite.talent.etat == "disabled", "rien ne s'achete chez l'inspecte"
+    divinite.scripts.OnClick(divinite, "LeftButton")
+    assert not g.TALENTS_INSPECT[2].talents[1].attente
+    divinite.scripts.OnEnter(divinite)
+    assert g.GameTooltip.talentInspect is True
+    lua.execute("PlayerTalentFrame:Hide()")
+    assert T.inspection is None
+    # ses propres talents : le compteur et la recherche reviennent
+    lua.execute("PlayerTalentFrame:Show()")
+    assert T.inspection is None and T.points.shown and K.boite.shown and K.fleche.shown
+    # ... et la mise en page de toujours
+    assert (tl.width, tl.height) == (1218, 708) and (T.page.width, T.page.height) == (1212, 681) and T.fond.height == 701
+    assert pts(T.classe)[1][2:] == ["BOTTOMRIGHT", 0, 36] and abs(T.fond.pierres[1].texcoord[4] - e_pierre[5]) < 1e-9
+    assert [pts(v)[0][2:] for v in T.verticaux.values()] == [["TOPLEFT", 406, -46], ["TOPLEFT", 810, -46]]
+    ent = list(T.entetes.values())
+    assert [pts(h)[0][2:] for h in ent] == [["TOPLEFT", 140, -38.5], ["TOPLEFT", 540, -38.5], ["TOPLEFT", 940, -38.5]]
+    assert ent[0].trait.width == e_sep[6] and pts(ent[0].trait)[0][2:] == ["BOTTOM", 60, -8.5]
+    assert list(ent[0].trait.texcoord.values()) == [e_sep[2], e_sep[3], e_sep[4], e_sep[5]]
+    lua.execute("PlayerTalentFrame:Hide()")
+    # rouverte depuis l'inspection, puis l'inspection se ferme : les talents aussi
+    lua.execute("ForeverUITalentsButtonClic(ForeverUIInspectTalentsButton)")
+    assert T.inspection == "target" and g.PlayerTalentFrame.shown
+    # LE DEPLACEMENT : la barre du titre ; la fenetre des talents ne suit pas
+    bi = ih.bandeau
+    assert it.movable and it.clamped and bi.mouseEnabled and bi.dragButtons[1] == "LeftButton"
+    place_talents = dict(g.ForeverUIDB.positions.talents)
+    avant = [(list(v.values())[0], list(v.values())[2:]) for v in tl.points.values()]
+    lua.execute("""
+        UIParent._cx, UIParent._top = 960, 1080
+        InspectFrame._cx, InspectFrame._top = 300, 900
+    """)
+    bi.scripts.OnDragStart(bi)
+    assert it.moving
+    assert [(list(v.values())[0], list(v.values())[2:]) for v in tl.points.values()] == avant
+    assert all(not req(list(v.values())[1], it) for v in tl.points.values()), "les talents ne s'accrochent pas a l'inspection"
+    lua.execute("InspectFrame._cx, InspectFrame._top = 400, 860")
+    bi.scripts.OnDragStop(bi)
+    pi = g.ForeverUIDB.positions.inspection
+    assert (pi.x, pi.y) == (-560, -220) and not it.userPlaced and not it.moving
+    assert len(pts(it)) == 1 and req(pts(it)[0][1], g.UIParent) and pts(it)[0][2:] == ["TOP", -560, -220]
+    assert [(list(v.values())[0], list(v.values())[2:]) for v in tl.points.values()] == avant, "les talents n'ont pas bouge"
+    assert dict(g.ForeverUIDB.positions.talents) == place_talents
+    # le systeme de panneaux repose l'inspection : elle revient a sa place
+    lua.execute("UpdateUIPanelPositions(InspectFrame) InspectFrame:SetWidth(338) InspectFrame:SetHeight(424)")
+    assert len(pts(it)) == 1 and req(pts(it)[0][1], g.UIParent) and pts(it)[0][2:] == ["TOP", -560, -220]
+    print("   deplacement : barre du titre, place (-560, -220) retenue et reposee apres le systeme de panneaux ; les talents de l'inspecte ne suivent pas")
+    lua.execute("InspectFrame:Hide()")
+    assert not g.PlayerTalentFrame.shown and T.inspection is None
+    # sous le niveau 10 : le bouton est desactive et le dit
+    lua.execute("INSPECTE.niveau = 8 InspectFrame.unit = 'target' InspectFrame:Show()")
+    assert tb.enabled is False
+    tb.scripts.OnEnter(tb)
+    assert g.GameTooltip.text == "Unavailable"
+    lua.execute("InspectFrame:Hide() INSPECTE = nil TALENTS = TALENTS_AVANT")
+    # le temoin /fui croix : un releve dans ForeverUIDB.temoinCroix, sans erreur
+    lua.execute("CharacterFrame:Show() ForeverUI.CharacterCloseDebug() CharacterFrame:Hide()")
+    rel = list(g.ForeverUIDB.temoinCroix.values())
+    assert rel[0].startswith("feuille shown") and any(l.startswith("croix shown") for l in rel), rel[:3]
+    assert any(l.startswith("Normal tex") for l in rel) and any(l.startswith("niveau-max") for l in rel)
+    print("   temoin /fui croix : %d lignes relevees" % len(rel))
+    print("   talents de l'inspecte : fenetre des talents en lecture seule, titre, classe, sans onglets ni boutons ; compacte (colonnes de 260, ni portes ni bande du bas, illustration et separateurs rognes) ; fermee avec l'inspection")
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

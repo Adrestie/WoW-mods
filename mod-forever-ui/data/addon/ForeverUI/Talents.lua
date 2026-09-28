@@ -173,11 +173,27 @@ local G = {
 	ongletIconeX = -3, ongletRognage = 0.03125, cocheL = 20, cocheH = 15, cadenasL = 10, cadenasH = 14,
 	appliquerL = 164, appliquerH = 22, appliquerY = 8, annulerCote = 25, annulerX = 14,
 	annulerIconeL = 21, annulerIconeH = 20, lueurL = 25, lueurH = 49, lueurX = 12,
+	-- LES TALENTS D'UN INSPECTE, PLUS COMPACTS (retour du 2026-09-28 : « retire
+	-- les prerequis de paliers, rogne sur la gauche et la droite de chaque
+	-- arbre et retire l'espace inutilise en bas de la fenetre ») : des
+	-- colonnes de 260 au lieu de 404 -- les noeuds tiennent a +-95 de leur
+	-- centre, l'anneau de l'en-tete descend a -91, le petit separateur est
+	-- plein de -120 a +110 : 35 de marge aux noeuds. Le petit separateur est
+	-- rogne a 5 du bord de sa colonne (ses bouts s'estompent) ; chaque arbre
+	-- garde le tiers de l'illustration qui est le sien, rogne d'autant de
+	-- chaque cote ; la bande du bas (Apply / Undo, fondBas) s'en va. Pas de
+	-- portes.
+	colonneInspection = 260, petitSeparateurMarge = 5,
 }
 -- l'echelle qui fait tenir les paliers : 10 pas + un noeud = la hauteur
 G.echelle = (G.premierHaut - G.dernierBas) / (40 * ((G.paliers - 1) * G.rapportRangee + 1))
 G.rangeePas = G.rapportRangee * 40 * G.echelle
 G.colonnePas = G.rapportColonne * 40 * G.echelle
+-- les separateurs verticaux : a -60 sous le centre des barres (camelot)
+G.hautVertical = G.separateurHaut - 28 + G.verticalY
+-- l'inspection : les centres des trois colonnes, et leurs transitions
+G.colonnesInspection = { G.colonneInspection / 2, 1.5 * G.colonneInspection, 2.5 * G.colonneInspection }
+G.transitionsInspection = { G.colonneInspection, 2 * G.colonneInspection }
 
 local METAL = {
 	{ cle = "hg", nom = "ui-frame-portraitmetal-cornertopleft", point = "TOPLEFT", x = -13, y = 16 },
@@ -207,6 +223,7 @@ local TEXTE = {
 	glyphes = GLYPHS,                                              -- GLYPHS
 	glyphesPrimaires = TALENT_SPEC_PRIMARY_GLYPH,
 	glyphesSecondaires = TALENT_SPEC_SECONDARY_GLYPH,
+	inspection = L.TALENTS_INSPECT_TITLE,                          -- TALENTS_INSPECT_FORMAT
 }
 -- l'icone d'une specialisation (TalentFrame_UpdateSpecInfoCache) : l'arbre
 -- principal, l'hybride, ou celle par defaut ; cuites (tools/cuire_masque.py)
@@ -474,10 +491,12 @@ function T.boutonPanneau(parent, nom, texte, largeur)
 	return b
 end
 
--- la pierre, bout a bout sur la largeur de la page
-local function poserPierre(largeur)
+-- la pierre, bout a bout sur la largeur de la page ; moins haute (l'inspecte,
+-- sans la bande du bas), elle est rognee par le bas, pas tassee
+local function poserPierre(largeur, hauteur)
 	local fond = T.fond
 	local e = ForeverUI.AtlasEntry("talents-background-c60")
+	local bas = e and (e[4] + (e[5] - e[4]) * (hauteur or G.fondH) / G.fondH)
 	local x, n = 0, 0
 	while x < largeur do
 		n = n + 1
@@ -486,7 +505,7 @@ local function poserPierre(largeur)
 		local l = math.min(G.fondL, largeur - x)
 		if e then
 			t:SetTexture(e[1])
-			t:SetTexCoord(e[2], e[2] + (e[3] - e[2]) * l / G.fondL, e[4], e[5])
+			t:SetTexCoord(e[2], e[2] + (e[3] - e[2]) * l / G.fondL, e[4], bas)
 		end
 		t:SetWidth(l)
 		t:ClearAllPoints()
@@ -548,12 +567,11 @@ local function construirePage(livre)
 	droite:SetPoint("TOP", cadre, "TOP", 0, G.separateurHaut)
 	-- les separateurs verticaux : a -60 sous le centre des barres (camelot),
 	-- sur les transitions des illustrations (le cadre commence a -2 de la page)
-	local hautVertical = G.separateurHaut - 28 + G.verticalY
 	local verticaux = {}
 	for i, x in ipairs(G.transitionsX) do
 		local v = cadre:CreateTexture(nil, "OVERLAY")
 		atlas(v, "talents-divider-vertical-c60")
-		v:SetPoint("TOP", cadre, "TOPLEFT", x - G.cadreG, hautVertical)
+		v:SetPoint("TOP", cadre, "TOPLEFT", x - G.cadreG, G.hautVertical)
 		verticaux[i] = v
 	end
 	T.verticaux = verticaux
@@ -612,7 +630,7 @@ local function construirePage(livre)
 		local trait = h:CreateTexture(nil, "OVERLAY")
 		atlas(trait, "talents-small-divider-c60")
 		trait:SetPoint("BOTTOM", h, "BOTTOM", 60, G.petitSeparateurY)
-		h.icone, h.nom, h.depenses = icone, nom, depenses
+		h.icone, h.nom, h.depenses, h.trait = icone, nom, depenses, trait
 		T.entetes[i] = h
 	end
 
@@ -685,9 +703,16 @@ local function construirePage(livre)
 end
 
 -- ------------------------------------------------------------ les noeuds
+-- les centres des colonnes et leurs transitions : celles, plus etroites, de
+-- l'inspection, ou celles de la page
+local function colonnesX()
+	if T.inspection then return G.colonnesInspection, G.transitionsInspection end
+	return G.colonnesX, G.transitionsX
+end
+
 -- le centre d'un noeud, en coordonnees de l'arbre (sous l'echelle)
 local function centre(onglet, palier, colonne)
-	local x = G.colonnesX[onglet] + (colonne - 2.5) * G.colonnePas
+	local x = colonnesX()[onglet] + (colonne - 2.5) * G.colonnePas
 	-- le familier (fenetre reduite) : l'arbre dans la seule colonne
 	local y = G.premierHaut - 20 * G.echelle - (palier - 1) * G.rangeePas
 	return x / G.echelle, y / G.echelle
@@ -726,7 +751,7 @@ local function creerNoeud(n)
 		if not self.talent then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		-- le rang en attente compte (l'apercu de WotLK)
-		GameTooltip:SetTalent(self.talent.onglet, self.talent.index, false, T.pet, T.groupe, true)
+		GameTooltip:SetTalent(self.talent.onglet, self.talent.index, T.inspection ~= nil, T.pet, T.groupe, T.inspection == nil)
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnClick", function(self, bouton) T.cliquer(self, bouton) end)
@@ -905,10 +930,26 @@ end
 -- LA VUE : la specialisation affichee (nil = l'active) ou le familier
 T.vue = { groupe = nil, pet = false }
 
+-- L'INSPECTION (demande du 2026-09-28, fenetres secondaires, etape 2) :
+-- camelot ouvre sa fenetre des talents sur le joueur inspecte
+-- (InspectPaperDollFrameTalentsButtonMixin : PlayerSpellsUtil.
+-- OpenToClassTalentsTab(unite) ; PlayerSpellsFrameMixin:SetInspecting) --
+-- titre TALENTS_INSPECT_FORMAT, la classe de l'inspecte, pas d'onglet de
+-- specialisation, Apply / Undo caches, rien ne s'achete. Ici T.inspection
+-- porte l'unite ; les fonctions de talents de 3.3.5 lisent l'inspecte par
+-- leur argument inspect ; la specialisation active seule, comme l'onglet
+-- des talents de l'inspection de 3.3.5 ; Maj-clic donne le lien. Nil hors
+-- inspection : l'ecran du joueur est inchange. Chez l'inspecte, la fenetre
+-- est plus compacte -- ni portes, colonnes rognees, pas de bande du bas (voir
+-- G.colonneInspection) -- et sans recherche ni points non depenses.
+T.inspection = nil
+
 function T.lire()
 	-- les glyphes : l'etat est celui de WotLK (GlyphFrame montre, et la
 	-- specialisation que PlayerSpecTab_OnClick a choisie)
-	T.glyphes = (GlyphFrame and GlyphFrame:IsShown()) and true or false
+	local ins = T.inspection ~= nil
+	T.glyphes = (not ins and GlyphFrame and GlyphFrame:IsShown()) and true or false
+	if ins then T.vue.pet = false end
 	if T.glyphes then
 		T.vue.pet = false
 		T.vue.groupe = PlayerTalentFrame.talentGroup or T.vue.groupe
@@ -916,17 +957,17 @@ function T.lire()
 	-- le familier parti (ou sans talents), la vue revient au joueur
 	if T.vue.pet and (GetNumTalentTabs(false, true) or 0) == 0 then T.vue.pet = false end
 	local pet = T.vue.pet and true or false
-	local actif = GetActiveTalentGroup and GetActiveTalentGroup(false, pet) or 1
-	local groupe = (not pet and T.vue.groupe) or actif
+	local actif = GetActiveTalentGroup and GetActiveTalentGroup(ins, pet) or 1
+	local groupe = (not pet and not ins and T.vue.groupe) or actif
 	T.groupe, T.pet, T.actif = groupe, pet, (groupe == actif)
 	local onglets = {}
-	for o = 1, math.min(GetNumTalentTabs(false, pet) or 0, 3) do
-		local nom, icone, depenses, fond, attente = GetTalentTabInfo(o, false, pet, groupe)
+	for o = 1, math.min(GetNumTalentTabs(ins, pet) or 0, 3) do
+		local nom, icone, depenses, fond, attente = GetTalentTabInfo(o, ins, pet, groupe)
 		local tab = { nom = nom, icone = icone, depenses = (depenses or 0) + (attente or 0), fond = fond, talents = {} }
 		local carres = ForeverUI.TalentsCarres and ForeverUI.TalentsCarres[fond or ""] or {}
-		for i = 1, (GetNumTalents(o, false, pet) or 0) do
+		for i = 1, (GetNumTalents(o, ins, pet) or 0) do
 			local n, ic, palier, colonne, rang, max, _, prerequis, rangApercu, prerequisApercu =
-				GetTalentInfo(o, i, false, pet, groupe)
+				GetTalentInfo(o, i, ins, pet, groupe)
 			if n then
 				-- le rang MONTRE est celui de l'apercu : appris + en attente
 				table.insert(tab.talents, { onglet = o, index = i, nom = n, icone = ic, palier = palier,
@@ -938,9 +979,9 @@ function T.lire()
 		onglets[o] = tab
 	end
 	-- les points restants : moins ceux qui attendent
-	local attente = GetGroupPreviewTalentPointsSpent and GetGroupPreviewTalentPointsSpent(pet, groupe) or 0
+	local attente = (not ins and GetGroupPreviewTalentPointsSpent) and GetGroupPreviewTalentPointsSpent(pet, groupe) or 0
 	T.attente = attente
-	return onglets, (GetUnspentTalentPoints(false, pet, groupe) or 0) - attente
+	return onglets, (GetUnspentTalentPoints(ins, pet, groupe) or 0) - attente
 end
 
 -- ------------------------------------------------------------ le glisser
@@ -976,7 +1017,7 @@ end
 
 function T.prendreSort(b)
 	local t = b.talent
-	if not t or not t.carre or (t.appris or 0) == 0 or not T.actif then return end
+	if T.inspection or not t or not t.carre or (t.appris or 0) == 0 or not T.actif then return end
 	local slot, livre = T.sortDuTalent(t)
 	if slot then PickupSpell(slot, livre) end
 end
@@ -988,12 +1029,13 @@ function T.cliquer(b, bouton)
 	local t = b.talent
 	if not t then return end
 	if IsModifiedClick("CHATLINK") then
-		local lien = GetTalentLink(t.onglet, t.index, false, T.pet, T.groupe)
+		local lien = GetTalentLink(t.onglet, t.index, T.inspection ~= nil, T.pet, T.groupe)
 		if lien then ChatEdit_InsertLink(lien) end
 		return
 	end
-	-- une specialisation inactive se consulte seulement (IsLocked)
-	if not T.actif then return end
+	-- une specialisation inactive, ou celle d'un inspecte, se consulte
+	-- seulement (IsLocked)
+	if not T.actif or T.inspection then return end
 	if bouton == "RightButton" then
 		if t.rang > t.appris then
 			AddPreviewTalentPoints(t.onglet, t.index, -1, T.pet, T.groupe)
@@ -1109,6 +1151,11 @@ function T.poserOnglets()
 	local barre = T.barreOnglets
 	if not barre then return end
 	barre.onglets = barre.onglets or {}
+	-- l'inspection n'a pas d'onglets (IsTabAvailable de camelot)
+	if T.inspection then
+		for _, b in ipairs(barre.onglets) do b:Hide() end
+		return
+	end
 	local actif = GetActiveTalentGroup and GetActiveTalentGroup(false, false) or 1
 	local nbGroupes = GetNumTalentGroups and GetNumTalentGroups(false, false) or 1
 	local defs = {
@@ -1421,12 +1468,46 @@ function T.brancherGlyphes()
 	T.poserGlyphes()
 end
 
--- LA LARGEUR : trois arbres, ou un seul (le familier, les glyphes)
+-- LA LARGEUR : trois arbres, ou un seul (le familier, les glyphes), ou trois
+-- colonnes rognees (l'inspection) ; et la hauteur, sans la bande du bas chez
+-- l'inspecte
 function T.poserLargeur(etroit)
-	local pageL = etroit and G.pageEtroite or G.pageL
+	local pageL = etroit and G.pageEtroite or (T.inspection and 3 * G.colonneInspection) or G.pageL
+	local retrait = T.inspection and G.fondBas or 0
+	T.livre:SetHeight(G.hauteur - retrait)
+	T.page:SetHeight(G.pageH - retrait)
+	T.fond:SetHeight(G.fondH - retrait)
+	T.classe:ClearAllPoints()
+	T.classe:SetPoint("TOPLEFT", T.fond, "TOPLEFT", 0, G.fondHaut)
+	T.classe:SetPoint("BOTTOMRIGHT", T.fond, "BOTTOMRIGHT", 0, G.fondBas - retrait)
+	-- les en-tetes, au meme ecart du centre de leur colonne ; chez
+	-- l'inspecte, le petit separateur rogne a sa colonne
+	local centres, transitions = colonnesX()
+	local e = ForeverUI.AtlasEntry("talents-small-divider-c60")
+	for i, h in ipairs(T.entetes) do
+		local ecart = G.enteteX + (i - 1) * G.enteteEcart - (G.colonnesX[i] - G.cadreG)
+		h:ClearAllPoints()
+		h:SetPoint("CENTER", T.cadre, "TOPLEFT", centres[i] - G.cadreG + ecart, G.enteteY)
+		local t = h.trait
+		atlas(t, "talents-small-divider-c60")
+		local g, d = 0, e and e[6] or t:GetWidth()
+		if T.inspection and e then
+			-- le centre du separateur depuis celui de la colonne ; la fenetre
+			-- gardee, en coordonnees du separateur
+			local centreTrait = ecart + 60
+			local a = G.colonneInspection / 2 - G.petitSeparateurMarge
+			g = math.max(0, -a - centreTrait + e[6] / 2)
+			d = math.min(e[6], a - centreTrait + e[6] / 2)
+			local du = (e[3] - e[2]) / e[6]
+			t:SetTexCoord(e[2] + g * du, e[2] + d * du, e[4], e[5])
+			t:SetWidth(d - g)
+		end
+		t:ClearAllPoints()
+		t:SetPoint("BOTTOM", h, "BOTTOM", 60 + (g + d) / 2 - (e and e[6] or d) / 2, G.petitSeparateurY)
+	end
 	T.livre:SetWidth(G.largeur - G.pageL + pageL)
 	T.page:SetWidth(pageL)
-	poserPierre(pageL)
+	poserPierre(pageL, G.fondH - retrait)
 	-- les barres horizontales, rognees a la demi-largeur : l'ornement du bout
 	-- reste, le trait rejoint le centre
 	local demi = (pageL - 2 * G.cadreG) / 2
@@ -1444,7 +1525,9 @@ function T.poserLargeur(etroit)
 			t:SetWidth(l)
 		end
 	end
-	for _, v in ipairs(T.verticaux) do
+	for i, v in ipairs(T.verticaux) do
+		v:ClearAllPoints()
+		v:SetPoint("TOP", T.cadre, "TOPLEFT", transitions[i] - G.cadreG, G.hautVertical)
 		if etroit then v:Hide() else v:Show() end
 	end
 	T.etroit = etroit
@@ -1453,18 +1536,27 @@ end
 local function poserFond(onglets)
 	local classe = T.classe
 	for _, t in ipairs(classe.textures) do t:Hide() end
-	local _, token = UnitClass("player")
-	if token == "DEATHKNIGHT" and not T.etroit then
-		-- un fond par arbre : le tiers du milieu de chaque image moderne
-		local l = G.pageL / 3
+	local _, token = UnitClass(T.inspection or "player")
+	-- le portrait : la classe affichee (celle de l'inspecte en inspection)
+	T.livre.portrait:SetTexture(PORTRAIT .. string.lower(token or "warrior"))
+	-- un fond par arbre : le chevalier de la mort (le tiers du milieu de
+	-- chaque image moderne), et l'inspection (le tiers de l'illustration qui
+	-- est celui de l'arbre) ; chez l'inspecte, rogne d'autant de chaque cote
+	-- que la colonne
+	local dk = token == "DEATHKNIGHT"
+	if (dk or T.inspection) and not T.etroit then
+		local l = T.inspection and G.colonneInspection or G.pageL / 3
+		local garde = l / (G.pageL / 3)
 		for i = 1, 3 do
 			local t = classe.textures[i] or classe:CreateTexture(nil, "BACKGROUND")
 			classe.textures[i] = t
-			local e = ForeverUI.AtlasEntry(FOND_DK[i])
+			local e = ForeverUI.AtlasEntry(dk and FOND_DK[i] or ("talent-background-" .. string.lower(token or "warrior")))
 			if e then
 				t:SetTexture(e[1])
 				local du = (e[3] - e[2]) / 3
-				t:SetTexCoord(e[2] + du, e[3] - du, e[4], e[5])
+				local debut = e[2] + du * (dk and 1 or (i - 1))
+				local marge = du * (1 - garde) / 2
+				t:SetTexCoord(debut + marge, debut + du - marge, e[4], e[5])
 			end
 			t:ClearAllPoints()
 			t:SetPoint("TOPLEFT", classe, "TOPLEFT", (i - 1) * l, 0)
@@ -1501,7 +1593,12 @@ function T.maj()
 	for _, f in ipairs({ T.classe, T.arbre, T.points, T.barreGauche, T.barreDroite }) do
 		if glyphes then f:Hide() else f:Show() end
 	end
-	T.livre.titre:SetText(glyphes and _G.GlyphFrameTitleText and _G.GlyphFrameTitleText:GetText() or TEXTE.titre)
+	-- les points non depenses ne se montrent pas chez l'inspecte (retour du
+	-- 2026-09-28), ni la recherche (TalentsSearch.lua)
+	if T.inspection then T.points:Hide() end
+	local titre = TEXTE.titre
+	if T.inspection then titre = string.format(TEXTE.inspection, UnitName(T.inspection) or "") end
+	T.livre.titre:SetText(glyphes and _G.GlyphFrameTitleText and _G.GlyphFrameTitleText:GetText() or titre)
 	if T.decor then
 		if glyphes then T.decor:Show() else T.decor:Hide() end
 	end
@@ -1541,7 +1638,11 @@ function T.maj()
 	-- Apply et Undo : seulement s'il y a des changements en attente ; sur une
 	-- specialisation inactive, Activate a leur place
 	local attente = (T.attente or 0) > 0
-	if T.actif then
+	if T.inspection then
+		T.appliquerBouton:Hide()
+		T.annulerBouton:Hide()
+		T.activerBouton:Hide()
+	elseif T.actif then
 		T.activerBouton:Hide()
 		T.appliquerBouton:Show()
 		T.appliquerBouton:Activer(attente)
@@ -1570,7 +1671,7 @@ function T.maj()
 			local b = arbre.noeuds[n] or creerNoeud(n)
 			arbre.noeuds[n] = b
 			local ouvert = (t.palier - 1) * parPalier <= o.depenses
-			t.etat = etatDe(t, ouvert, points)
+			t.etat = etatDe(t, ouvert, T.inspection and 0 or points)
 			remplirNoeud(b, t, t.etat)
 			parPlace[t.onglet .. ":" .. t.palier .. ":" .. t.colonne] = t
 		end
@@ -1584,7 +1685,7 @@ function T.maj()
 	local nT, nP = 1, 1
 	for _, o in ipairs(onglets) do
 		for _, t in ipairs(o.talents) do
-			local p = { GetTalentPrereqs(t.onglet, t.index, false, T.pet, T.groupe) }
+			local p = { GetTalentPrereqs(t.onglet, t.index, T.inspection ~= nil, T.pet, T.groupe) }
 			for k = 1, #p, 4 do
 				local source = parPlace[t.onglet .. ":" .. p[k] .. ":" .. p[k + 1]]
 				if source then
@@ -1600,7 +1701,8 @@ function T.maj()
 	for i = nP, #arbre.pointes do arbre.pointes[i]:Hide() end
 
 	-- portes : une par arbre, au premier palier ferme qui porte un talent,
-	-- a gauche de son premier noeud
+	-- a gauche de son premier noeud ; aucune chez l'inspecte (retour du
+	-- 2026-09-28)
 	local nPorte = 0
 	for oi, o in ipairs(onglets) do
 		local premier
@@ -1610,7 +1712,7 @@ function T.maj()
 				premier = t
 			end
 		end
-		if premier then
+		if premier and not T.inspection then
 			nPorte = nPorte + 1
 			local p = arbre.portes[nPorte] or creerPorte(nPorte)
 			arbre.portes[nPorte] = p
@@ -1628,6 +1730,25 @@ function T.maj()
 	if recherche then
 		recherche.poser(T.page:GetWidth())
 		recherche.maj()
+	end
+end
+
+-- ------------------------------------------------------------ l'inspection
+-- le bouton Talents de l'inspection (Inspect.lua) : la fenetre s'ouvre sur
+-- l'inspecte ; deja ouverte, elle passe a lui. Sa fermeture rend l'ecran
+-- du joueur (OnHide, plus bas).
+function T.inspecter(unite)
+	if not unite then return end
+	if not PlayerTalentFrame and TalentFrame_LoadUI then TalentFrame_LoadUI() end
+	if not PlayerTalentFrame then return end
+	T.construire()
+	T.fermerGlyphes()
+	T.inspection = unite
+	if PlayerTalentFrame:IsShown() then
+		T.vue.groupe, T.vue.pet = nil, false
+		T.maj()
+	else
+		ShowUIPanel(PlayerTalentFrame)
 	end
 end
 
@@ -1732,6 +1853,7 @@ function T.construire()
 		T.maj()
 	end)
 	PlayerTalentFrame:HookScript("OnHide", function()
+		T.inspection = nil
 		if T.fini or T.confirme or not T.enAttente() then return end
 		rouvreur:Show()
 	end)
@@ -1762,6 +1884,7 @@ veille:RegisterEvent("PLAYER_LEVEL_UP")
 veille:RegisterEvent("PLAYER_LOGOUT")
 veille:RegisterEvent("PLAYER_LEAVING_WORLD")
 veille:RegisterEvent("PLAYER_ENTERING_WORLD")
+veille:RegisterEvent("INSPECT_TALENT_READY")
 veille:SetScript("OnEvent", function(_, ev, arg1)
 	if ev == "ADDON_LOADED" then
 		if arg1 == "Blizzard_TalentUI" then T.construire() end
