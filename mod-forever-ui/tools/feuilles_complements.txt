@@ -257,3 +257,18 @@ interface/dialogframe/colorpicker.blp
 # la carte de zone : le cadre de BattlefieldMapFrame (battlefieldminimap-
 # border-*, mainline/blizzard_battlefieldmap.xml)
 interface/battlefieldframe/battlefieldminimap.blp
+# le marchand : le fond du bas et les icones de reparation
+# (UI-Merchant-BotFrame, SpellIcon-256x256-Repair*, mainline/merchantframe.xml)
+interface/merchantframe/merchant.blp
+# la banque : fond, cases, sacs, cadenas, filet, ombres (camelot/bankframe.xml,
+# mainline/bankframetemplates.xml) ; la case de banque (bags-item-bankslot64)
+interface/bankframe/bankframepanelc60.blp
+interface/bankframe/bankframebackgroundc60.blp
+interface/bankframe/bankframe.blp
+interface/bankframe/bankframevertical.blp
+interface/containerframe/bagsitembankslot2xc60.blp
+# l'hotel des ventes : boutons des categories, lignes, fleche de tri, cadres
+# d'icone (auctionhouse-nav-button*, auctionhouse-ui-row-*, auctionhouse-
+# rowstripe-*, auctionhouse-ui-sortarrow, auctionhouse-itemicon-*,
+# blizzard_auctionhouseui/mainline et shared)
+interface/auctionframe/auctionhouse.blp

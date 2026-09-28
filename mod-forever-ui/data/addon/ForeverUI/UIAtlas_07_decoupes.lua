@@ -4,6 +4,9 @@
 
 UIAtlas = UIAtlas or { sheets = {}, data = {} }
 
+UIAtlas.data["auctionhouse-background-categories"] = { "interface\\ForeverUI\\auctionframe\\auctionhouse-background-categories", 0, 0.539062, 0, 0.845703, 138, 433 }
+UIAtlas.data["auctionhouse-background-index"] = { "interface\\ForeverUI\\auctionframe\\auctionhouse-background-index", 0, 0.581055, 0, 0.806641, 595, 413 }
+UIAtlas.data["auctionhouse-background-sell-left"] = { "interface\\ForeverUI\\auctionframe\\auctionhouse-background-sell-left", 0, 0.697266, 0, 0.853516, 357, 437 }
 UIAtlas.data["128-redbutton-highlight"] = { "interface\\ForeverUI\\buttons\\128-redbutton-highlight", 0.003906, 0.865234, 0, 1.000000, 441, 128 }
 UIAtlas.data["128-redbutton-arrowdown-highlight"] = { "interface\\ForeverUI\\buttons\\128-redbutton-arrowdown-highlight", 0.007812, 0.507812, 0, 1.000000, 128, 128 }
 UIAtlas.data["128-redbutton-arrowupglow-highlight"] = { "interface\\ForeverUI\\buttons\\128-redbutton-arrowupglow-highlight", 0.007812, 0.507812, 0, 1.000000, 128, 128 }

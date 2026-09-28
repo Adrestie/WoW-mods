@@ -144,6 +144,12 @@ ELEMENTS = {
         "glues-characterselect-icon-racechange-2x", "glues-characterselect-icon-racechange-hover-2x",
         "glues-characterselect-icon-appearancechange-2x", "glues-characterselect-icon-appearancechange-hover-2x",
     ],
+    # l'hotel des ventes : les fonds des encadres (feuille de 2048 de large) --
+    # categories, resultats et listes, panneau de mise en vente
+    "interface/auctionframe/auctionhousebackgrounds.blp": [
+        "auctionhouse-background-categories", "auctionhouse-background-index",
+        "auctionhouse-background-sell-left",
+    ],
 }
 
 

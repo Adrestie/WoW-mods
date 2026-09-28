@@ -756,6 +756,19 @@ function Gb.Barre(sb)
 	return v
 end
 
+-- LA BARRE D'UNE FENETRE A DEFILEMENT DU CLIENT, A LA PLACE DE CAMELOT
+-- (ScrollFrame_OnLoad : scrollBarX, scrollBarTopY, scrollBarBottomY, depuis
+-- le TOPRIGHT / BOTTOMRIGHT de la fenetre) : le Slider de 16 du client
+-- centre sur les 8 de MinimalScrollBar, ses fleches de 11 au-dessus et
+-- au-dessous -- le calcul de Macros.lua, VALIDE -- puis habillee.
+function Gb.BarreA(sb, cible, x, haut, bas)
+	local demi = (16 - 8) / 2
+	sb:ClearAllPoints()
+	sb:SetPoint("TOPLEFT", cible, "TOPRIGHT", x - demi, haut - 11)
+	sb:SetPoint("BOTTOMLEFT", cible, "BOTTOMRIGHT", x - demi, bas + 11)
+	return Gb.Barre(sb)
+end
+
 -- ------------------------------------------------------------ le bouton argente
 
 -- UIMenuButtonStretchTemplate (mainline/shareduipaneltemplates.xml / .lua),
@@ -988,6 +1001,61 @@ function Gb.Recopier(fs, hote, police)
 	return copie
 end
 
+-- ------------------------------------------------------------ la qualite d'un objet
+
+-- IconBorder de l'ItemButton de camelot : WhiteIconFrame 37 x 37 au centre,
+-- en OVERLAY, teinte par BAG_ITEM_QUALITY_COLORS -- commun en
+-- COMMON_GRAY_COLOR (GlobalColor.db2 de camelot, voir QuestLog.lua),
+-- mediocre sans contour (SetItemButtonQuality_Base).
+local QUALITE = {
+	contour = "Interface" .. string.char(92) .. "ForeverUI" .. string.char(92) .. "common" .. string.char(92) .. "whiteiconframe",
+	communGris = { 0.659, 0.659, 0.659 },
+}
+
+function Gb.Contour(b)
+	if b.foreverContour then return b.foreverContour end
+	local t = b:CreateTexture(nil, "OVERLAY")
+	t:SetTexture(QUALITE.contour)
+	t:SetWidth(37)
+	t:SetHeight(37)
+	t:SetPoint("CENTER", b, "CENTER", 0, 0)
+	t:Hide()
+	b.foreverContour = t
+	return t
+end
+
+-- le contour d'un bouton d'objet pour la qualite q (nil : aucun)
+function Gb.ContourQualite(b, q)
+	local t = Gb.Contour(b)
+	local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+	if q == 1 then
+		local g = QUALITE.communGris
+		t:SetVertexColor(g[1], g[2], g[3])
+		t:Show()
+	elseif q and q >= 2 and c then
+		t:SetVertexColor(c.r, c.g, c.b)
+		t:Show()
+	else
+		t:Hide()
+	end
+end
+
+-- MerchantFrameItem_UpdateQuality / TradeFrame_Update*Item : le nom a la
+-- couleur de qualite (NORMAL_FONT_COLOR sans qualite connue), l'icone son
+-- contour. lien ou qualite : la qualite se lit dans le lien si elle manque.
+function Gb.Qualite(nom, bouton, lien, q)
+	q = q or (lien and select(3, GetItemInfo(lien)))
+	local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+	if nom then
+		if c then
+			nom:SetTextColor(c.r, c.g, c.b)
+		else
+			nom:SetTextColor(NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+		end
+	end
+	Gb.ContourQualite(bouton, q)
+end
+
 -- ------------------------------------------------------------ le menu deroulant, style 1
 
 -- WowStyle1DropdownTemplate (blizzard_menu/mainline/menutemplates.xml et
@@ -1001,7 +1069,11 @@ end
 -- (un clic n'importe ou l'ouvre, comme chez camelot) et la liste, celle du
 -- style 1 (DropDown.lua), s'ouvre sous lui. La couleur du texte reste celle
 -- que le client pose (blanc, gris desactive : celles de camelot).
-local STYLE1 = { haut = 25, fond = { -8, 7, 8, -9 }, bouts = { 16, 19 }, fleche = { 1, -3 }, texte = { 8, -8, 10 } }
+local STYLE1 = { haut = 25, fond = { -8, 7, 8, -9 }, bouts = { 16, 19 }, fleche = { 1, -3 }, texte = { 8, -8, 10 },
+	-- le mode compact : la boite opaque de common-dropdown-textholder-c60
+	-- (colonnes 8 a 46 sur 54, rangs 7 a 32 sur 41 ; l'ombre autour), ses
+	-- bouts de 8 et 11 dedans
+	boite = { 8, 46, 7, 32 }, boutsBoite = { 8, 11 }, texteCompact = 12 }
 local menusStyle1 = {}
 
 local function peindreStyle1(dd)
@@ -1018,18 +1090,46 @@ local function peindreStyle1(dd)
 	elseif DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == dd then
 		etat = etat .. "-open"
 	end
+	-- compact : la fleche sans ombre (variantes -shadowless de camelot)
+	if dd.foreverCompact then etat = etat .. "-shadowless" end
 	ForeverUI.SetAtlas(dd.foreverFleche, etat)
+	-- a une autre hauteur que 25, la fleche suit l'echelle du menu
+	local k = dd.foreverEchelle or 1
+	if k ~= 1 then
+		local e = ForeverUI.AtlasEntry(etat)
+		if e then
+			dd.foreverFleche:SetWidth(e[6] * k)
+			dd.foreverFleche:SetHeight(e[7] * k)
+		end
+	end
 end
 
-function Gb.MenuStyle1(dd, largeur)
+-- hauteur : facultative (25 par defaut, celle de camelot). Une autre hauteur
+-- met TOUT l'art a la meme echelle -- fond, bouts, ombre, fleche -- pour un
+-- menu pose dans une disposition de 3.3.5 plus serree (hotel des ventes,
+-- 28/09 : « cadres trop epais »). Le texte garde sa police, centre.
+-- compact : facultatif ; le fond rogne a sa boite opaque, pose sur le menu
+-- meme, et la fleche sans ombre -- rien ne deborde : le cadre fait la
+-- hauteur du menu, comme un champ (hotel, 28/09 : « sur une ligne »).
+function Gb.MenuStyle1(dd, largeur, hauteur, compact)
 	if dd.foreverBouton then return dd end
 	local S = STYLE1
+	local k = (hauteur or S.haut) / S.haut
+	dd.foreverEchelle = k
+	dd.foreverCompact = compact and true or nil
+	-- la hauteur est TENUE : UIDropDownMenu_Initialize (a chaque ouverture
+	-- de la liste, par ToggleDropDownMenu) remet le menu a 32
+	-- (UIDropDownMenu_InitializeHelper : UIDROPDOWNMENU_BUTTON_HEIGHT * 2) --
+	-- le fond suivait, le texte restait en haut, la fleche descendait (hotel,
+	-- puis horloge a la demande de l'utilisateur, 28/09). Voir l'accroche
+	-- plus bas.
+	dd.foreverHauteur = S.haut * k
 	local nom = dd:GetName()
 	for _, suffixe in ipairs({ "Left", "Middle", "Right" }) do
 		_G[nom .. suffixe]:SetAlpha(0)
 	end
 	dd:SetWidth(largeur)
-	dd:SetHeight(S.haut)
+	dd:SetHeight(S.haut * k)
 	local b = _G[nom .. "Button"]
 	dd.foreverBouton = b
 	b:ClearAllPoints()
@@ -1038,22 +1138,33 @@ function Gb.MenuStyle1(dd, largeur)
 	-- le fond : regions du menu, sous son texte
 	local e = ForeverUI.AtlasEntry("common-dropdown-textholder-c60")
 	local rect = CreateFrame("Frame", nil, dd)
-	rect:SetPoint("TOPLEFT", dd, "TOPLEFT", S.fond[1], S.fond[2])
-	rect:SetPoint("BOTTOMRIGHT", dd, "BOTTOMRIGHT", S.fond[3], S.fond[4])
-	local du = (e[3] - e[2]) / e[6]
-	local u1, u2 = e[2] + S.bouts[1] * du, e[3] - S.bouts[2] * du
+	local du, dv = (e[3] - e[2]) / e[6], (e[5] - e[4]) / e[7]
+	-- le rectangle de l'art (u, v) et ses bouts
+	local ug, ud, vh, vb, bg, bd
+	if compact then
+		rect:SetAllPoints(dd)
+		ug, ud = e[2] + S.boite[1] * du, e[2] + S.boite[2] * du
+		vh, vb = e[4] + S.boite[3] * dv, e[4] + S.boite[4] * dv
+		bg, bd = S.boutsBoite[1], S.boutsBoite[2]
+	else
+		rect:SetPoint("TOPLEFT", dd, "TOPLEFT", S.fond[1] * k, S.fond[2] * k)
+		rect:SetPoint("BOTTOMRIGHT", dd, "BOTTOMRIGHT", S.fond[3] * k, S.fond[4] * k)
+		ug, ud, vh, vb = e[2], e[3], e[4], e[5]
+		bg, bd = S.bouts[1], S.bouts[2]
+	end
+	local u1, u2 = ug + bg * du, ud - bd * du
 	local function morceau(a, z)
 		local t = dd:CreateTexture(nil, "BACKGROUND")
 		t:SetTexture(e[1])
-		t:SetTexCoord(a, z, e[4], e[5])
+		t:SetTexCoord(a, z, vh, vb)
 		return t
 	end
-	local g = morceau(e[2], u1)
-	g:SetWidth(S.bouts[1])
+	local g = morceau(ug, u1)
+	g:SetWidth(bg * k)
 	g:SetPoint("TOPLEFT", rect, "TOPLEFT", 0, 0)
 	g:SetPoint("BOTTOMLEFT", rect, "BOTTOMLEFT", 0, 0)
-	local d = morceau(u2, e[3])
-	d:SetWidth(S.bouts[2])
+	local d = morceau(u2, ud)
+	d:SetWidth(bd * k)
 	d:SetPoint("TOPRIGHT", rect, "TOPRIGHT", 0, 0)
 	d:SetPoint("BOTTOMRIGHT", rect, "BOTTOMRIGHT", 0, 0)
 	local m = morceau(u1, u2)
@@ -1062,15 +1173,27 @@ function Gb.MenuStyle1(dd, largeur)
 	dd.foreverFond = { g, m, d }
 	-- la fleche, sur le bouton (cadre fils, au-dessus du fond)
 	local fleche = b:CreateTexture(nil, "OVERLAY")
-	fleche:SetPoint("RIGHT", dd, "RIGHT", S.fleche[1], S.fleche[2])
+	fleche:SetPoint("RIGHT", dd, "RIGHT", S.fleche[1] * k, S.fleche[2] * k)
 	dd.foreverFleche = fleche
 	local texte = _G[nom .. "Text"]
 	texte:SetFontObject(GameFontHighlight)
 	texte:SetJustifyH("LEFT")
-	texte:SetHeight(S.texte[3])
 	texte:ClearAllPoints()
-	texte:SetPoint("TOPLEFT", dd, "TOPLEFT", S.texte[1], S.texte[2])
-	texte:SetPoint("TOPRIGHT", fleche, "LEFT", 0, 0)
+	if compact then
+		-- compact : le texte sur la ligne de la fleche, centre sur le menu
+		-- (la partie visible de la fleche sans ombre l'est aussi), jusqu'au
+		-- bord gauche de la fleche
+		texte:SetHeight(S.texteCompact)
+		texte:SetPoint("LEFT", dd, "LEFT", S.texte[1], 0)
+		texte:SetPoint("RIGHT", dd, "RIGHT", (S.fleche[1] - 27) * k, 0)
+	else
+		texte:SetHeight(S.texte[3])
+		-- (8, -8) a 25 : le texte de 10 centre, un demi-point plus bas ; la
+		-- meme regle a toute hauteur
+		local texteY = (k == 1) and S.texte[2] or -((S.haut * k - S.texte[3]) / 2 + 0.5 * k)
+		texte:SetPoint("TOPLEFT", dd, "TOPLEFT", S.texte[1], texteY)
+		texte:SetPoint("TOPRIGHT", fleche, "LEFT", 0, 0)
+	end
 	UIDropDownMenu_SetAnchor(dd, 0, 0, "TOPLEFT", dd, "BOTTOMLEFT")
 	b:HookScript("OnEnter", function(self) self.foreverDessus = true peindreStyle1(dd) end)
 	b:HookScript("OnLeave", function(self) self.foreverDessus = false peindreStyle1(dd) end)
@@ -1089,6 +1212,10 @@ end
 -- on repeint tous les menus de ce style)
 hooksecurefunc("ToggleDropDownMenu", function()
 	for _, dd in ipairs(menusStyle1) do peindreStyle1(dd) end
+end)
+-- la hauteur demandee, reposee apres le client (voir Gb.MenuStyle1)
+hooksecurefunc("UIDropDownMenu_Initialize", function(dd)
+	if dd and dd.foreverHauteur then dd:SetHeight(dd.foreverHauteur) end
 end)
 if DropDownList1 and DropDownList1.HookScript then
 	DropDownList1:HookScript("OnHide", function()

@@ -159,7 +159,10 @@ local function newRegion(kind)
     -- FontStyles.xml du client. Le faux ne touchait pas a justify : un
     -- SetJustifyH pose a la creation paraissait donc survivre, alors qu en
     -- jeu le nom se retrouvait centre et se deplacait au fil du defilement.
-    function r:GetFont() return self.policeChemin or "Fonts" .. string.char(92) .. "FRIZQT__.TTF", self.policeTaille or 12, self.policeDrapeaux or "" end
+    -- rend ce que SetFont a pose (la seconde definition, plus bas, ecrit
+    -- fontFile / fontSize : le faux rendait sinon toujours la police par
+    -- defaut)
+    function r:GetFont() return self.fontFile or self.policeChemin or "Fonts" .. string.char(92) .. "FRIZQT__.TTF", self.fontSize or self.policeTaille or 12, self.fontFlags or self.policeDrapeaux or "" end
     function r:SetFont(chemin, taille, drapeaux) self.policeChemin, self.policeTaille, self.policeDrapeaux = chemin, taille, drapeaux return true end
     function r:SetFontObject(o)
         self.font = o
@@ -6463,6 +6466,1008 @@ do
         return avant(nom)
     end
 end
+
+-- LE MARCHAND DU CLIENT (MerchantFrame.xml / .lua de 3.3.5, FrameXML) : les
+-- cadres, noms, tailles et ancrages que l'addon touche, recopies du XML ; les
+-- fonctions de mise a jour reprennent ce que le client repose a chaque fois
+-- (places des reparations, titre, portrait, rangees). MARCHAND : ses objets
+-- (liens), RACHAT : les objets a racheter, REPARER / REPARER_GUILDE.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    MERCHANT = "Merchant"
+    BUYBACK = "Buyback"
+    MERCHANT_BUYBACK = "Merchant Buyback"
+    REPAIR_ITEMS = "Repair Items:"
+    MERCHANT_ITEMS_PER_PAGE = 10
+    BUYBACK_ITEMS_PER_PAGE = 12
+    MARCHAND, RACHAT = {}, {}
+    REPARER, REPARER_GUILDE = true, false
+    function GetMerchantNumItems() return #MARCHAND end
+    function GetMerchantItemLink(i) return MARCHAND[i] end
+    function GetNumBuybackItems() return #RACHAT end
+    function GetBuybackItemLink(i) return RACHAT[i] end
+    function CanMerchantRepair() return REPARER end
+    function CanGuildBankRepair() return REPARER_GUILDE end
+
+    local function boutonObjet(nom, parent)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(37) b:SetHeight(37)
+        b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Quickslot2"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Quickslot-Depress"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "ButtonHilight-Square"))
+        b:CreateTexture(nom .. "IconTexture", "BORDER")
+        b:CreateFontString(nom .. "Count", "BORDER"):SetFont("Fonts" .. S .. "ARIALN.TTF", 14, "OUTLINE")
+        return b
+    end
+
+    local f = CreateFrame("Frame", "MerchantFrame", UIParent)
+    f:SetWidth(384) f:SetHeight(512)
+    f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    f:SetHitRectInsets(0, 35, 0, 61)
+    f:CreateTexture("MerchantFramePortrait", "BACKGROUND")
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "MerchantFrame", "UI-Merchant-" .. n))
+    end
+    f:CreateFontString("MerchantNameText", "BORDER"):SetText("Merchant Name")
+    local page = f:CreateFontString("MerchantPageText", "BORDER")
+    page:SetWidth(104)
+    page:SetPoint("BOTTOM", f, "BOTTOM", -14, 150)
+    f:CreateFontString("MerchantRepairText", "BORDER"):SetText(REPAIR_ITEMS)
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        f:CreateTexture("BuybackFrame" .. n, "ARTWORK"):SetTexture(fichier("Interface", "MerchantFrame", "UI-BuyBack-" .. n))
+    end
+    local bg = f:CreateTexture("MerchantFrameBottomLeftBorder", "OVERLAY")
+    bg:SetTexture(fichier("Interface", "MerchantFrame", "UI-Merchant-BottomBorder"))
+    bg:SetWidth(256) bg:SetHeight(61)
+    bg:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 14, 85)
+    f:CreateTexture("MerchantFrameBottomRightBorder", "OVERLAY"):SetTexture(fichier("Interface", "MerchantFrame", "UI-Merchant-BottomBorder"))
+    for i = 1, 12 do
+        local nom = "MerchantItem" .. i
+        local it = CreateFrame("Frame", nom, f)
+        it:SetWidth(153) it:SetHeight(44)
+        it:CreateTexture(nom .. "SlotTexture", "BACKGROUND"):SetTexture(fichier("Interface", "Buttons", "UI-EmptySlot"))
+        it:CreateTexture(nom .. "NameFrame", "BACKGROUND"):SetTexture(fichier("Interface", "MerchantFrame", "UI-Merchant-LabelSlots"))
+        it:CreateFontString(nom .. "Name", "BACKGROUND")
+        boutonObjet(nom .. "ItemButton", it)
+        CreateFrame("Frame", nom .. "MoneyFrame", it)
+        CreateFrame("Frame", nom .. "AltCurrencyFrame", it)
+    end
+    MerchantItem1:SetPoint("TOPLEFT", f, "TOPLEFT", 24, -80)
+    for i = 2, 12 do
+        local it = _G["MerchantItem" .. i]
+        if i % 2 == 0 then
+            it:SetPoint("TOPLEFT", _G["MerchantItem" .. (i - 1)], "TOPRIGHT", 12, 0)
+        else
+            it:SetPoint("TOPLEFT", _G["MerchantItem" .. (i - 2)], "BOTTOMLEFT", 0, i == 11 and -15 or -8)
+        end
+    end
+    local function reparation(nom, taille, icone)
+        local b = CreateFrame("Button", nom, f)
+        b:SetWidth(taille) b:SetHeight(taille)
+        b:CreateTexture(icone, "BORDER"):SetTexture(fichier("Interface", "MerchantFrame", "UI-Merchant-RepairIcons"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", "UI-Quickslot-Depress"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "ButtonHilight-Square"))
+        return b
+    end
+    reparation("MerchantRepairAllButton", 36, "MerchantRepairAllIcon"):SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", 172, 91)
+    reparation("MerchantRepairItemButton", 36, nil):SetPoint("RIGHT", MerchantRepairAllButton, "LEFT", -2, 0)
+    reparation("MerchantGuildBankRepairButton", 32, "MerchantGuildBankRepairButtonIcon"):SetPoint("LEFT", MerchantRepairAllButton, "RIGHT", 4, 0)
+    MerchantGuildBankRepairButton:Hide()
+    local bb = CreateFrame("Frame", "MerchantBuyBackItem", f)
+    bb:SetWidth(153) bb:SetHeight(37)
+    bb:SetPoint("TOPLEFT", MerchantItem10, "BOTTOMLEFT", 0, -53)
+    bb:CreateTexture("MerchantBuyBackItemSlotTexture", "BACKGROUND"):SetTexture(fichier("Interface", "Buttons", "UI-EmptySlot"))
+    local nf = bb:CreateTexture("MerchantBuyBackItemNameFrame", "BACKGROUND")
+    nf:SetWidth(128) nf:SetHeight(64)
+    local bn = bb:CreateFontString("MerchantBuyBackItemName", "BACKGROUND")
+    bn:SetWidth(90) bn:SetHeight(30)
+    boutonObjet("MerchantBuyBackItemItemButton", bb)
+    CreateFrame("Frame", "MerchantBuyBackItemMoneyFrame", bb)
+    CreateFrame("Frame", "MerchantMoneyFrame", f):SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -40, 67)
+    for _, v in ipairs({ { "Prev", 37 }, { "Next", 324 } }) do
+        local b = CreateFrame("Button", "Merchant" .. v[1] .. "PageButton", f)
+        b:SetWidth(32) b:SetHeight(32)
+        b:SetPoint("CENTER", f, "BOTTOMLEFT", v[2], 156)
+    end
+    local x = CreateFrame("Button", "MerchantFrameCloseButton", f)
+    x:SetWidth(32) x:SetHeight(32)
+    x:SetPoint("TOPRIGHT", f, "TOPRIGHT", -30, -8)
+    x:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+    for i = 1, 2 do
+        local t = CreateFrame("Button", "MerchantFrameTab" .. i, f)
+        t:SetID(i)
+        t:SetScript("OnClick", function()
+            PanelTemplates_SetTab(MerchantFrame, i)
+            MerchantFrame_Update()
+        end)
+    end
+    PanelTemplates_SetNumTabs(f, 2)
+    PanelTemplates_SetTab(f, 1)
+    f.page = 1
+
+    -- les mises a jour du client, pour ce qui touche aux places
+    function MerchantFrame_UpdateRepairButtons()
+        if CanMerchantRepair() then
+            if CanGuildBankRepair() then
+                MerchantRepairAllButton:SetWidth(32) MerchantRepairAllButton:SetHeight(32)
+                MerchantRepairItemButton:SetWidth(32) MerchantRepairItemButton:SetHeight(32)
+                MerchantRepairItemButton:SetPoint("RIGHT", MerchantRepairAllButton, "LEFT", -4, 0)
+                MerchantRepairAllButton:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMLEFT", 115, 89)
+                MerchantGuildBankRepairButton:Show()
+            else
+                MerchantRepairAllButton:SetWidth(36) MerchantRepairAllButton:SetHeight(36)
+                MerchantRepairItemButton:SetWidth(36) MerchantRepairItemButton:SetHeight(36)
+                MerchantRepairItemButton:SetPoint("RIGHT", MerchantRepairAllButton, "LEFT", -2, 0)
+                MerchantRepairAllButton:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMLEFT", 172, 91)
+                MerchantGuildBankRepairButton:Hide()
+            end
+            MerchantRepairText:Show()
+            MerchantRepairAllButton:Show()
+            MerchantRepairItemButton:Show()
+        else
+            MerchantRepairText:Hide()
+            MerchantRepairAllButton:Hide()
+            MerchantRepairItemButton:Hide()
+            MerchantGuildBankRepairButton:Hide()
+        end
+    end
+    function MerchantFrame_UpdateMerchantInfo()
+        MerchantNameText:SetText(UnitName("NPC") or "Marchand")
+        SetPortraitTexture(MerchantFramePortrait, "NPC")
+        for i = 1, MERCHANT_ITEMS_PER_PAGE do
+            local lien = MARCHAND[(MerchantFrame.page - 1) * MERCHANT_ITEMS_PER_PAGE + i]
+            _G["MerchantItem" .. i .. "Name"]:SetText(lien and GetItemInfo(lien) or "")
+        end
+        MerchantFrame_UpdateRepairButtons()
+        MerchantBuyBackItem:Show()
+        MerchantFrameBottomLeftBorder:Show()
+        MerchantFrameBottomRightBorder:Show()
+        MerchantItem11:Hide() MerchantItem12:Hide()
+        for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do _G["BuybackFrame" .. n]:Hide() end
+        MerchantItem3:SetPoint("TOPLEFT", "MerchantItem1", "BOTTOMLEFT", 0, -8)
+    end
+    function MerchantFrame_UpdateBuybackInfo()
+        MerchantNameText:SetText(MERCHANT_BUYBACK)
+        MerchantFramePortrait:SetTexture(fichier("Interface", "MerchantFrame", "UI-BuyBack-Icon"))
+        MerchantItem11:Show() MerchantItem12:Show()
+        for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do _G["BuybackFrame" .. n]:Show() end
+        MerchantItem3:SetPoint("TOPLEFT", "MerchantItem1", "BOTTOMLEFT", 0, -15)
+        for i = 1, BUYBACK_ITEMS_PER_PAGE do
+            local lien = RACHAT[i]
+            _G["MerchantItem" .. i .. "Name"]:SetText(lien and GetItemInfo(lien) or "")
+        end
+        MerchantRepairAllButton:Hide()
+        MerchantRepairItemButton:Hide()
+        MerchantBuyBackItem:Hide()
+        MerchantFrameBottomLeftBorder:Hide()
+        MerchantFrameBottomRightBorder:Hide()
+        MerchantRepairText:Hide()
+        MerchantGuildBankRepairButton:Hide()
+    end
+    function MerchantFrame_Update()
+        if MerchantFrame.selectedTab == 1 then
+            MerchantFrame_UpdateMerchantInfo()
+        else
+            MerchantFrame_UpdateBuybackInfo()
+        end
+    end
+    f:Hide()
+end
+
+-- L'ECHANGE DU CLIENT (TradeFrame.xml / .lua de 3.3.5, FrameXML) : les cadres,
+-- noms, tailles et ancrages que l'addon touche. ECHANGE_JOUEUR /
+-- ECHANGE_AUTRE : { [id] = { nom, lien, qualite } }.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    MAX_TRADE_ITEMS = 7
+    TRADE_ENCHANT_SLOT = 7
+    ECHANGE_JOUEUR, ECHANGE_AUTRE = {}, {}
+    function GetTradePlayerItemLink(id) return ECHANGE_JOUEUR[id] and ECHANGE_JOUEUR[id].lien end
+    function GetTradeTargetItemLink(id) return ECHANGE_AUTRE[id] and ECHANGE_AUTRE[id].lien end
+    function GetTradeTargetItemInfo(id)
+        local o = ECHANGE_AUTRE[id]
+        if not o then return nil end
+        return o.nom, "icone", 1, o.qualite, 1, nil
+    end
+    local f = CreateFrame("Frame", "TradeFrame", UIParent)
+    f:SetWidth(384) f:SetHeight(512)
+    f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+    f:SetHitRectInsets(0, 35, 0, 72)
+    f:CreateTexture("TradeFrameRecipientPortrait", "BACKGROUND")
+    f:CreateTexture("TradeFramePlayerPortrait", "BACKGROUND")
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        f:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "TradeFrame", "UI-TradeFrame-" .. n))
+    end
+    local nr = f:CreateFontString("TradeFrameRecipientNameText", "ARTWORK")
+    nr:SetWidth(80) nr:SetHeight(12)
+    nr:SetPoint("TOPLEFT", f, "TOPLEFT", 245, -17)
+    local nj = f:CreateFontString("TradeFramePlayerNameText", "ARTWORK")
+    nj:SetWidth(100) nj:SetHeight(12)
+    nj:SetPoint("TOPLEFT", f, "TOPLEFT", 75, -17)
+    f:CreateFontString("TradeFramePlayerEnchantText", "ARTWORK"):SetPoint("TOPLEFT", f, "TOPLEFT", 26, -374)
+    f:CreateFontString("TradeFrameRecipientEnchantText", "ARTWORK"):SetPoint("LEFT", TradeFramePlayerEnchantText, "LEFT", 170, 0)
+    for _, n in ipairs({ "Player", "Recipient", "PlayerEnchant", "RecipientEnchant" }) do
+        local h = CreateFrame("Frame", "TradeHighlight" .. n, f)
+        h:SetWidth(161) h:SetHeight(string.find(n, "Enchant") and 61 or 266)
+    end
+    TradeHighlightPlayer:SetPoint("TOPLEFT", f, "TOPLEFT", 19, -100)
+    TradeHighlightRecipient:SetPoint("TOPLEFT", f, "TOPLEFT", 189, -100)
+    for _, cote in ipairs({ "Player", "Recipient" }) do
+        for i = 1, 7 do
+            local nom = "Trade" .. cote .. "Item" .. i
+            local it = CreateFrame("Frame", nom, f)
+            it:SetWidth(153) it:SetHeight(37)
+            it:SetID(i)
+            it:CreateFontString(nom .. "Name", "BACKGROUND")
+            local b = CreateFrame("Button", nom .. "ItemButton", it)
+            b:SetWidth(37) b:SetHeight(37)
+        end
+    end
+    TradePlayerItem1:SetPoint("TOPLEFT", f, "TOPLEFT", 26, -104)
+    TradeRecipientItem1:SetPoint("TOPLEFT", f, "TOPLEFT", 195, -104)
+    local tb = CreateFrame("Button", "TradeFrameTradeButton", f)
+    tb:SetWidth(85) tb:SetHeight(22)
+    tb:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -113, 55)
+    local cb = CreateFrame("Button", "TradeFrameCancelButton", f)
+    cb:SetPoint("TOPLEFT", tb, "TOPRIGHT", 3, 0)
+    local x = CreateFrame("Button", "TradeFrameCloseButton", f)
+    x:SetWidth(32) x:SetHeight(32)
+    x:SetPoint("TOPRIGHT", f, "TOPRIGHT", -25, -8)
+    x:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+    CreateFrame("Frame", "TradePlayerInputMoneyFrame", f):SetPoint("TOPLEFT", f, "TOPLEFT", 26, -73)
+    CreateFrame("Frame", "TradeRecipientMoneyFrame", f):SetPoint("TOPRIGHT", f, "TOPRIGHT", -40, -78)
+
+    -- les mises a jour du client, pour ce qui touche aux places et aux noms
+    function TradeFrame_UpdatePlayerItem(id)
+        local o = ECHANGE_JOUEUR[id]
+        _G["TradePlayerItem" .. id .. "Name"]:SetText(o and o.nom or nil)
+    end
+    function TradeFrame_UpdateTargetItem(id)
+        local o = ECHANGE_AUTRE[id]
+        _G["TradeRecipientItem" .. id .. "Name"]:SetText(o and o.nom or nil)
+    end
+    function TradeFrame_Update()
+        SetPortraitTexture(TradeFramePlayerPortrait, "player")
+        SetPortraitTexture(TradeFrameRecipientPortrait, "NPC")
+        TradeFramePlayerNameText:SetText(UnitName("player"))
+        TradeFrameRecipientNameText:SetText("Arthas")
+        for i = 1, MAX_TRADE_ITEMS do
+            TradeFrame_UpdateTargetItem(i)
+            TradeFrame_UpdatePlayerItem(i)
+        end
+    end
+    f:Hide()
+end
+
+-- LE COURRIER DU CLIENT (MailFrame.xml / .lua de 3.3.5, FrameXML) : les
+-- cadres, noms, tailles et ancrages que l'addon touche. BOITE : les lettres
+-- ({ argent, mj, objets = { [piece] = { nom, qualite } }, papeterie, lue }),
+-- A_ENVOYER : les pieces jointes a envoyer, PRIS : ce que le client a retire.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    INBOX, SENDMAIL, OPENMAIL = "Inbox", "Send Mail", "Open Mail"
+    INBOXITEMS_TO_DISPLAY = 7
+    ATTACHMENTS_MAX, ATTACHMENTS_MAX_SEND, ATTACHMENTS_PER_ROW_SEND, ATTACHMENTS_MAX_ROWS_SEND = 16, 12, 7, 2
+    ATTACHMENTS_MAX_RECEIVE, ATTACHMENTS_PER_ROW_RECEIVE = 16, 7
+    BOITE, A_ENVOYER, PRIS = {}, {}, {}
+    PLACES_LIBRES = 10
+    function GetContainerNumFreeSlots(sac) return sac == 0 and PLACES_LIBRES or 0 end
+    function GetInboxNumItems() return #BOITE end
+    function GetInboxHeaderInfo(i)
+        local l = BOITE[i]
+        if not l then return nil end
+        local n = 0
+        for _ in pairs(l.objets or {}) do n = n + 1 end
+        return nil, l.papeterie or "papeterie", "Expediteur", "Sujet", l.argent or 0, l.contre or 0, 3,
+            (n > 0) and n or nil, l.lue, nil, nil, 1, l.mj
+    end
+    function GetInboxItem(i, p)
+        local o = BOITE[i] and BOITE[i].objets and BOITE[i].objets[p]
+        if o then return o.nom, "icone", 1, o.qualite, 1 end
+    end
+    function GetSendMailItem(i)
+        local o = A_ENVOYER[i]
+        if o then return o.nom, "icone", 1, o.qualite end
+    end
+    function TakeInboxMoney(i)
+        table.insert(PRIS, "argent" .. i)
+        BOITE[i].argent = 0
+    end
+    function TakeInboxItem(i, p)
+        table.insert(PRIS, "objet" .. i .. ":" .. p)
+        BOITE[i].objets[p] = nil
+    end
+
+    local function defilement(nom, parent, l, h, fond, couche)
+        local sf = CreateFrame("ScrollFrame", nom, parent)
+        sf:SetWidth(l) sf:SetHeight(h)
+        local sb = CreateFrame("Slider", nom .. "ScrollBar", sf)
+        sb:SetWidth(16)
+        sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+        for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+            local b = CreateFrame("Button", sb:GetName() .. s, sb)
+            b:SetWidth(16) b:SetHeight(16)
+            b:SetNormalTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Up"))
+        end
+        sf:CreateTexture(fond, couche):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+        sf:CreateTexture(nil, couche):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+        return sf
+    end
+
+    local f = CreateFrame("Frame", "MailFrame", UIParent)
+    f:SetWidth(384) f:SetHeight(512)
+    f:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "MailFrame", "Mail-Icon"))
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        f:CreateTexture("MailFrame" .. n, "BORDER"):SetTexture(fichier("Interface", "ItemTextFrame", "UI-ItemText-" .. n))
+    end
+    local x = CreateFrame("Button", "InboxCloseButton", f)
+    x:SetWidth(32) x:SetHeight(32)
+    x:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+    -- la reception
+    local ib = CreateFrame("Frame", "InboxFrame", f)
+    ib:SetWidth(384) ib:SetHeight(512)
+    ib:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+    ib:CreateFontString("InboxTitleText", "ARTWORK"):SetText(INBOX)
+    ib:CreateFontString("InboxCurrentPage", "ARTWORK")
+    CreateFrame("Frame", "InboxTooMuchMail", ib)
+    for i = 1, 7 do
+        local it = CreateFrame("Frame", "MailItem" .. i, ib)
+        it:SetWidth(305) it:SetHeight(45)
+        local b = CreateFrame("CheckButton", "MailItem" .. i .. "Button", it)
+        b:SetWidth(37) b:SetHeight(37)
+    end
+    MailItem1:SetPoint("TOPLEFT", ib, "TOPLEFT", 28, -80)
+    CreateFrame("Button", "InboxPrevPageButton", ib):SetPoint("CENTER", ib, "BOTTOMLEFT", 50, 104)
+    CreateFrame("Button", "InboxNextPageButton", ib):SetPoint("CENTER", ib, "BOTTOMLEFT", 314, 104)
+    ib.pageNum = 1
+    -- l'envoi
+    local sm = CreateFrame("Frame", "SendMailFrame", f)
+    sm:SetWidth(384) sm:SetHeight(512)
+    sm:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+    sm:Hide()
+    sm:CreateFontString("SendMailTitleText", "BACKGROUND"):SetText(SENDMAIL)
+    sm:CreateTexture("SendMailHorizontalBarLeft", "BACKGROUND"):SetPoint("TOPLEFT", sm, "TOPLEFT", 15, -350)
+    sm:CreateTexture("SendMailHorizontalBarLeft2", "BACKGROUND"):SetPoint("TOPLEFT", sm, "TOPLEFT", 15, -251)
+    local sf = defilement("SendMailScrollFrame", sm, 296, 257, "SendScrollBarBackgroundTop", "ARTWORK")
+    sf:SetPoint("TOPLEFT", sm, "TOPLEFT", 21, -97)
+    sf:CreateTexture("SendStationeryBackgroundLeft", "BACKGROUND")
+    sf:CreateTexture("SendStationeryBackgroundRight", "BACKGROUND")
+    CreateFrame("Frame", "SendMailScrollChildFrame", sf)
+    local nom = CreateFrame("EditBox", "SendMailNameEditBox", sm)
+    nom:SetWidth(109) nom:SetHeight(20)
+    nom:SetPoint("TOPLEFT", sm, "TOPLEFT", 105, -46)
+    nom:CreateTexture("SendMailNameEditBoxLeft", "BACKGROUND"):SetPoint("TOPLEFT", nom, "TOPLEFT", -8, 0)
+    CreateFrame("EditBox", "SendMailSubjectEditBox", sm):SetPoint("TOPLEFT", nom, "BOTTOMLEFT", 0, -3)
+    CreateFrame("Frame", "SendMailCostMoneyFrame", sm):SetPoint("TOPRIGHT", sm, "TOPRIGHT", -36, -48)
+    local mb = CreateFrame("Frame", "SendMailMoneyButton", sm)
+    mb:SetPoint("BOTTOMLEFT", sm, "BOTTOMLEFT", 30, 110)
+    CreateFrame("Frame", "SendMailMoney", mb)
+    CreateFrame("CheckButton", "SendMailSendMoneyButton", mb):SetPoint("TOPLEFT", SendMailMoney, "TOPRIGHT", 0, 12)
+    CreateFrame("Frame", "SendMailMoneyFrame", sm):SetPoint("BOTTOMRIGHT", sm, "BOTTOMLEFT", 183, 84)
+    CreateFrame("Button", "SendMailCancelButton", sm):SetPoint("BOTTOMRIGHT", sm, "BOTTOMRIGHT", -39, 80)
+    for i = 1, 16 do
+        local b = CreateFrame("Button", "SendMailAttachment" .. i, sm)
+        b:SetWidth(37) b:SetHeight(37)
+        b:CreateTexture(nil, "BACKGROUND"):SetPoint("TOPLEFT", b, "TOPLEFT", -2, 2)
+    end
+    for i = 1, 2 do
+        local t = CreateFrame("Button", "MailFrameTab" .. i, f)
+        t:SetID(i)
+    end
+    PanelTemplates_SetNumTabs(f, 2)
+    PanelTemplates_SetTab(f, 1)
+    -- la lettre ouverte
+    local o = CreateFrame("Frame", "OpenMailFrame", UIParent)
+    o:SetWidth(384) o:SetHeight(512)
+    o:SetPoint("TOPLEFT", ib, "TOPRIGHT", -10, 0)
+    o:Hide()
+    o:CreateTexture("OpenMailFrameIcon", "BACKGROUND")
+    for _, n in ipairs({ "TopLeft", "TopRight", "BotLeft", "BotRight" }) do
+        o:CreateTexture("OpenMailFrame" .. n, "BORDER")
+    end
+    o:CreateFontString("OpenMailTitleText", "ARTWORK"):SetText(OPENMAIL)
+    local at = o:CreateFontString("OpenMailAttachmentText", "ARTWORK")
+    at:SetHeight(12) at:SetText("Take attachments:")
+    o:CreateFontString("OpenMailSenderLabel", "ARTWORK"):SetPoint("TOPRIGHT", o, "TOPLEFT", 114, -45)
+    o:CreateFontString("OpenMailSender", "ARTWORK"):SetPoint("LEFT", OpenMailSenderLabel, "RIGHT", 5, 0)
+    o:CreateFontString("OpenMailSubjectLabel", "ARTWORK"):SetPoint("TOPRIGHT", o, "TOPLEFT", 114, -65)
+    o:CreateTexture("OpenMailHorizontalBarLeft", "ARTWORK")
+    local spam = CreateFrame("Button", "OpenMailReportSpamButton", o)
+    spam:SetWidth(110) spam:SetHeight(22)
+    spam:SetPoint("TOPRIGHT", o, "TOPRIGHT", -45, -45)
+    local of = defilement("OpenMailScrollFrame", o, 296, 257, "OpenScrollBarBackgroundTop", "OVERLAY")
+    of:SetPoint("TOPLEFT", o, "TOPLEFT", 21, -97)
+    CreateFrame("Frame", "OpenMailScrollChildFrame", of)
+    for i = 1, 16 do
+        local b = CreateFrame("Button", "OpenMailAttachmentButton" .. i, o)
+        b:SetWidth(37) b:SetHeight(37)
+        b:SetID(i)
+    end
+    for _, n in ipairs({ "OpenMailLetterButton", "OpenMailMoneyButton" }) do
+        local b = CreateFrame("Button", n, o)
+        b:SetWidth(37) b:SetHeight(37)
+    end
+    CreateFrame("Button", "OpenMailCancelButton", o):SetPoint("BOTTOMRIGHT", o, "BOTTOMRIGHT", -39, 80)
+    local ox = CreateFrame("Button", "OpenMailCloseButton", o)
+    ox:SetWidth(32) ox:SetHeight(32)
+    ox:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+
+    -- les mises a jour du client, pour ce qui touche aux places
+    function MailFrameTab_OnClick(self, id)
+        PanelTemplates_SetTab(MailFrame, id)
+        if id == 1 then InboxFrame:Show() SendMailFrame:Hide() else InboxFrame:Hide() SendMailFrame:Show() SendMailFrame_Update() end
+    end
+    function InboxFrame_Update() end
+    function SendMailFrame_Update()
+        local dernier = 0
+        for i = 1, ATTACHMENTS_MAX_SEND do if A_ENVOYER[i] then dernier = i end end
+        SendMailFrame.maxRowsShown = (dernier > ATTACHMENTS_PER_ROW_SEND) and 2 or 1
+        -- les places de 3.3.5, que l'addon refait
+        SendMailAttachment1:SetPoint("TOPLEFT", SendMailFrame, "BOTTOMLEFT", 31, 201)
+    end
+    function OpenMail_Update()
+        local id = InboxFrame.openMailID
+        local l = BOITE[id]
+        OpenMailReportSpamButton:Show()
+        OpenMailFrame.activeAttachmentButtons, OpenMailFrame.activeAttachmentRowPositions = {}, {}
+        local n = 0
+        if (l.argent or 0) > 0 then
+            table.insert(OpenMailFrame.activeAttachmentButtons, OpenMailMoneyButton)
+            n = n + 1
+        end
+        for p = 1, 16 do
+            if l.objets and l.objets[p] then
+                table.insert(OpenMailFrame.activeAttachmentButtons, _G["OpenMailAttachmentButton" .. p])
+                n = n + 1
+            end
+        end
+        if n > 0 then
+            local depart = (ATTACHMENTS_PER_ROW_RECEIVE - n) / 2
+            OpenMailFrame.activeAttachmentRowPositions[1] = { cursorxstart = depart, cursorxend = depart + n - 1 }
+        end
+        OpenMailFrame.itemButtonCount = n
+    end
+    f:Hide()
+end
+
+-- LA BANQUE DU CLIENT (BankFrame.xml / .lua de 3.3.5, FrameXML) : les cadres,
+-- noms, tailles et ancrages que l'addon touche. Les cases se lisent dans
+-- SACS / TAILLES (la banque : -1 ; ses sacs : 5 a 11) ; SACS_ACHETES : les
+-- sacs de banque achetes. ContainerFrameItemButtonTemplate recoit ses
+-- enfants (IconTexture, Count, Cooldown), comme le vrai.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    BANK_CONTAINER, NUM_BANKGENERIC_SLOTS, NUM_BANKBAGSLOTS = -1, 28, 7
+    BAGSLOTTEXT = "Bag Slots"
+    BANKSLOTPURCHASE_LABEL = "Do you wish to purchase space for an additional bag?"
+    PAGE_NUMBER = "Page %d"
+    SACS[-1] = {}
+    TAILLES[-1] = 28
+    for sac = 5, 11 do SACS[sac] = {} TAILLES[sac] = 0 end
+    SACS_ACHETES = 0
+    SACS_PRIS = {}
+    function GetNumBankSlots() return SACS_ACHETES, SACS_ACHETES == 7 end
+    function PickupBagFromSlot(inv) table.insert(SACS_PRIS, inv) end
+    -- PutItemInBag : pose ce que tient le curseur dans l'emplacement de sac
+    SACS_POSES = {}
+    function PutItemInBag(inv)
+        local tenu = CURSEUR ~= nil
+        if tenu then table.insert(SACS_POSES, inv) CURSEUR = nil end
+        return tenu
+    end
+    function SetItemButtonDesaturated(b, d) b.desature = d and true or false end
+    function SetItemButtonTextureVertexColor(b, r, g, bb) b.teinte = { r, g, bb } end
+    function ContainerFrame_UpdateCooldown(sac, b) b.recharge = sac end
+    local avant = CreateFrame
+    function CreateFrame(kind, name, parent, template)
+        local f = avant(kind, name, parent, template)
+        if template == "ContainerFrameItemButtonTemplate" and name then
+            f:SetWidth(37) f:SetHeight(37)
+            f:SetNormalTexture(fichier("Interface", "Buttons", "UI-Quickslot2"))
+            f:CreateTexture(name .. "IconTexture", "BORDER")
+            f:CreateFontString(name .. "Count", "BORDER")
+            avant("Cooldown", name .. "Cooldown", f)
+        end
+        return f
+    end
+    local function boutonObjet(nom, parent, id)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(37) b:SetHeight(37)
+        b:SetID(id)
+        b:SetNormalTexture(fichier("Interface", "Buttons", "UI-Quickslot2"))
+        b:CreateTexture(nom .. "IconTexture", "BORDER")
+        b:CreateFontString(nom .. "Count", "BORDER")
+        return b
+    end
+    local f = CreateFrame("Frame", "BankFrame", UIParent)
+    f:SetWidth(425) f:SetHeight(512)
+    f:CreateTexture("BankPortraitTexture", "ARTWORK")
+    f:CreateTexture(nil, "BORDER"):SetTexture(fichier("Interface", "BankFrame", "UI-BankFrame"))
+    f:CreateFontString("BankFrameTitleText", "BORDER")
+    f:CreateFontString(nil, "BORDER"):SetText("Item Slots")
+    f:CreateFontString(nil, "BORDER"):SetText(BAGSLOTTEXT)
+    local x = CreateFrame("Button", "BankCloseButton", f)
+    x:SetWidth(32) x:SetHeight(32)
+    x:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+    for i = 1, 28 do boutonObjet("BankFrameItem" .. i, f, i) end
+    BankFrameItem1:SetPoint("TOPLEFT", f, "TOPLEFT", 40, -73)
+    for i = 1, 7 do
+        local b = boutonObjet("BankFrameBag" .. i, f, 4 + i)
+        b.isBag = 1
+        b.GetInventorySlot = function(self) return 67 + i end
+        b:SetScript("OnClick", function(self) TOGGLE_SAC = self:GetID() end)
+    end
+    local pi = CreateFrame("Frame", "BankFramePurchaseInfo", f)
+    pi:CreateFontString(nil, "BACKGROUND"):SetText(BANKSLOTPURCHASE_LABEL)
+    pi:CreateFontString("BankFrameSlotCost", "BACKGROUND")
+    CreateFrame("Button", "BankFramePurchaseButton", pi)
+    CreateFrame("Frame", "BankFrameDetailMoneyFrame", pi)
+    CreateFrame("Frame", "BankFrameMoneyFrame", f):SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 103)
+    function BankFrameItemButton_Update(b)
+        SetItemButtonTexture(b, GetContainerItemLink(BANK_CONTAINER, b:GetID()) and "icone" or nil)
+    end
+    function UpdateBagSlotStatus()
+        for i = 1, 7 do
+            local b = _G["BankFrameBag" .. i]
+            if i <= SACS_ACHETES then SetItemButtonTextureVertexColor(b, 1, 1, 1) else SetItemButtonTextureVertexColor(b, 1, 0.1, 0.1) end
+        end
+    end
+    f:SetScript("OnShow", function()
+        for i = 1, 28 do BankFrameItemButton_Update(_G["BankFrameItem" .. i]) end
+        UpdateBagSlotStatus()
+    end)
+    f:Hide()
+end
+
+-- LA BANQUE DE GUILDE DU CLIENT (Blizzard_GuildBankUI.xml / .lua de 3.3.5,
+-- chargee a la demande par CHARGER_ADDON) : les cadres, noms, tailles et
+-- ancrages que l'addon touche. COFFRE_GUILDE[slot] : le lien de l'objet.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    GUILD_BANK, GUILD_BANK_LOG, GUILD_BANK_MONEY_LOG, GUILD_BANK_TAB_INFO = "Guild Bank", "Log", "Money Log", "Info"
+    NUM_GUILDBANK_COLUMNS, NUM_SLOTS_PER_GUILDBANK_GROUP = 7, 14
+    COFFRE_GUILDE = {}
+    function GetCurrentGuildBankTab() return 1 end
+    function GetGuildBankItemLink(onglet, slot) return COFFRE_GUILDE[slot] end
+    local function batir()
+        local f = CreateFrame("Frame", "GuildBankFrame", UIParent)
+        f:SetWidth(769) f:SetHeight(444)
+        f:CreateTexture("GuildBankFrameLeft", "ARTWORK"):SetTexture(fichier("Interface", "GuildBankFrame", "UI-GuildBankFrame-Left"))
+        f:CreateTexture("GuildBankFrameRight", "ARTWORK"):SetTexture(fichier("Interface", "GuildBankFrame", "UI-GuildBankFrame-Right"))
+        f:CreateTexture("GuildBankTabTitleBackground", "OVERLAY"):SetPoint("TOP", f, "TOP", 6, -43)
+        f:CreateTexture("GuildBankTabLimitBackground", "OVERLAY"):SetPoint("TOP", f, "TOP", 6, -388)
+        f:CreateFontString("GuildBankMoneyLimitLabel", "OVERLAY"):SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 26, 16)
+        local x = CreateFrame("Button", nil, f)
+        x:SetWidth(32) x:SetHeight(32)
+        x:SetPoint("TOPRIGHT", f, "TOPRIGHT", 3, -8)
+        x:SetNormalTexture(fichier("Interface", "Buttons", "UI-Panel-MinimizeButton-Up"))
+        CreateFrame("Frame", "GuildBankEmblemFrame", f):SetPoint("TOP", f, "TOP", -70, 46)
+        for c = 1, 7 do
+            local col = CreateFrame("Frame", "GuildBankColumn" .. c, f)
+            col:SetWidth(100) col:SetHeight(311)
+            for i = 1, 14 do
+                local b = CreateFrame("Button", "GuildBankColumn" .. c .. "Button" .. i, col)
+                b:SetWidth(37) b:SetHeight(37)
+            end
+        end
+        GuildBankColumn1:SetPoint("TOPLEFT", f, "TOPLEFT", 30, -70)
+        CreateFrame("Frame", "GuildBankMoneyFrame", f):SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, 16)
+        CreateFrame("Button", "GuildBankFrameDepositButton", f):SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -11, 37)
+        for i = 1, 4 do
+            local t = CreateFrame("Button", "GuildBankFrameTab" .. i, f)
+            t:SetID(i)
+        end
+        CreateFrame("Frame", "GuildBankTab1", f):SetPoint("TOPLEFT", f, "TOPRIGHT", -1, -32)
+        local log = CreateFrame("Frame", "GuildBankFrameLog", f)
+        CreateFrame("ScrollingMessageFrame", "GuildBankMessageFrame", log):SetPoint("TOPLEFT", log, "TOPLEFT", 33, -73)
+        local fx = CreateFrame("ScrollFrame", "GuildBankTransactionsScrollFrame", log)
+        fx:SetPoint("TOPRIGHT", f, "TOPRIGHT", -50, -75)
+        fx:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+        fx:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+        for _, n in ipairs({ "GuildBankTransactionsScrollFrame", "GuildBankInfoScrollFrame" }) do
+            local parent = (n == "GuildBankTransactionsScrollFrame") and fx or nil
+            if not parent then
+                local info = CreateFrame("Frame", "GuildBankInfo", f)
+                info:SetPoint("TOPLEFT", f, "TOPLEFT", 32, -74)
+                parent = CreateFrame("ScrollFrame", "GuildBankInfoScrollFrame", info)
+                CreateFrame("Button", "GuildBankInfoSaveButton", info):SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 25, 37)
+            end
+            local sb = CreateFrame("Slider", n .. "ScrollBar", parent)
+            sb:SetWidth(16)
+            sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+            for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+                local b = CreateFrame("Button", sb:GetName() .. s, sb)
+                b:SetNormalTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Up"))
+            end
+        end
+        PanelTemplates_SetNumTabs(f, 4)
+        PanelTemplates_SetTab(f, 1)
+        function GuildBankFrame_Update() end
+        function GuildBankFrameTab_OnClick(tab, id)
+            PanelTemplates_SetTab(GuildBankFrame, id)
+            GuildBankFrame_Update()
+        end
+        f:Hide()
+    end
+    local prevenir = function(nom)
+        for _, c in ipairs(FRAMES) do
+            if c.events and c.events["ADDON_LOADED"] and c.scripts and c.scripts.OnEvent then
+                c.scripts.OnEvent(c, "ADDON_LOADED", nom)
+            end
+        end
+    end
+    local avant = CHARGER_ADDON
+    function CHARGER_ADDON(nom)
+        if nom == "Blizzard_GuildBankUI" then
+            batir()
+            prevenir(nom)
+            return
+        end
+        return avant(nom)
+    end
+end
+
+-- L'HOTEL DES VENTES DU CLIENT (Blizzard_AuctionUI.xml, -Templates.xml et
+-- .lua de 3.3.5, charge a la demande par CHARGER_ADDON) : les cadres, noms,
+-- tailles et ancrages que l'addon touche, et les fonctions qu'il suit,
+-- recopiees du client pour ce qui compte (largeurs sans barre, surbrillance
+-- verrouillee, fleches, art des categories). TRIS_HOTEL[type] = { colonne,
+-- inverse } ; CHOIX_HOTEL[type] : la ligne choisie ; NOMBRE_HOTEL[type] :
+-- le nombre de lignes.
+do
+    local S = string.char(92)
+    local function fichier(...) return table.concat({ ... }, S) end
+    BROWSE = BROWSE or "Browse"
+    BIDS, AUCTIONS, BROWSE_AUCTIONS, BID = "Bids", "Auctions", "Browse Auctions", "Bid"
+    AUCTION_TITLE, CREATE_AUCTION, AUCTION_ITEM = "Auctions: %s", "Create Auction", "Auction Item"
+    AUCTION_PRICE, AUCTION_DURATION, RARITY = "Price", "Duration", "Rarity"
+    NUM_FILTERS_TO_DISPLAY, NUM_BROWSE_TO_DISPLAY, NUM_BIDS_TO_DISPLAY, NUM_AUCTIONS_TO_DISPLAY = 15, 8, 9, 9
+    TRIS_HOTEL = { list = { "quality", false }, bidder = { "quality", false }, owner = { "quality", false } }
+    CHOIX_HOTEL = {}
+    NOMBRE_HOTEL = { list = 0, bidder = 0, owner = 0 }
+    function GetAuctionSort(genre, n) local t = TRIS_HOTEL[genre] return t[1], t[2] end
+    function GetSelectedAuctionItem(genre) return CHOIX_HOTEL[genre] end
+    local function etats(b, base)
+        b:SetNormalTexture(fichier("Interface", "Buttons", base .. "-Up"))
+        b:SetPushedTexture(fichier("Interface", "Buttons", base .. "-Down"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", base .. "-Highlight"))
+    end
+    local function nommer(t, n) t.name = n _G[n] = t return t end
+    -- InputBoxTemplate : ses trois morceaux
+    local function champ(nom, parent, l)
+        local c = CreateFrame("EditBox", nom, parent)
+        c:SetWidth(l) c:SetHeight(16)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do
+            c:CreateTexture(nom .. s, "BACKGROUND"):SetTexture(fichier("Interface", "Common", "Common-Input-Border"))
+        end
+        return c
+    end
+    -- UIDropDownMenuTemplate : Left / Middle / Right, Text, le bouton a fleche
+    local function menu(nom, parent, libelle)
+        local dd = CreateFrame("Frame", nom, parent)
+        dd:SetWidth(130) dd:SetHeight(32)
+        for _, s in ipairs({ "Left", "Middle", "Right" }) do
+            dd:CreateTexture(nom .. s, "ARTWORK"):SetTexture(fichier("Interface", "Glues", "CharacterCreate", "CharacterCreate-LabelFrame"))
+        end
+        dd:CreateFontString(nom .. "Text", "ARTWORK")
+        local b = CreateFrame("Button", nom .. "Button", dd)
+        b:SetWidth(24) b:SetHeight(24)
+        b:SetNormalTexture(fichier("Interface", "ChatFrame", "UI-ChatIcon-ScrollDown-Up"))
+        b:SetHighlightTexture(fichier("Interface", "Buttons", "UI-Common-MouseHilight"))
+        if libelle then
+            local l = dd:CreateFontString(nil, "OVERLAY")
+            l:SetText(libelle)
+            l:SetPoint("LEFT", dd, "RIGHT", -192, 3)
+        end
+        return dd
+    end
+    -- UICheckButtonTemplate
+    local function case(nom, parent)
+        local c = CreateFrame("CheckButton", nom, parent)
+        c:SetWidth(24) c:SetHeight(24)
+        etats(c, "UI-CheckBox")
+        c:SetCheckedTexture(fichier("Interface", "Buttons", "UI-CheckBox-Check"))
+        c:CreateFontString(nom .. "Text", "ARTWORK")
+        return c
+    end
+    -- FauxScrollFrameTemplate : ses deux fonds, sa barre et ses fleches
+    local function defile(nom, parent, l, h)
+        local fx = CreateFrame("ScrollFrame", nom, parent)
+        fx:SetWidth(l) fx:SetHeight(h)
+        for _ = 1, 2 do
+            fx:CreateTexture(nil, "ARTWORK"):SetTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-ScrollBar"))
+        end
+        local sb = CreateFrame("Slider", nom .. "ScrollBar", fx)
+        sb:SetWidth(16)
+        sb:SetThumbTexture(fichier("Interface", "Buttons", "UI-ScrollBar-Knob"))
+        for _, s in ipairs({ "ScrollUpButton", "ScrollDownButton" }) do
+            local b = CreateFrame("Button", sb:GetName() .. s, sb)
+            b:SetNormalTexture(fichier("Interface", "Buttons", "UI-ScrollBar-" .. s .. "-Up"))
+        end
+        fx.offset = 0
+        return fx
+    end
+    -- AuctionSortButtonTemplate : trois morceaux, texte, fleche (NormalTexture)
+    local function tri(nom, parent, l)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(l) b:SetHeight(19)
+        for _, s in ipairs({ "Left", "Right", "Middle" }) do
+            b:CreateTexture(nom .. s, "BACKGROUND"):SetTexture(fichier("Interface", "FriendsFrame", "WhoFrame-ColumnTabs"))
+        end
+        b:SetFontString(b:CreateFontString(nom .. "Text", "ARTWORK"))
+        local fleche = nommer(b:SetNormalTexture(fichier("Interface", "Buttons", "UI-SortArrow")), nom .. "Arrow")
+        fleche:SetWidth(9) fleche:SetHeight(8)
+        fleche:SetPoint("LEFT", _G[nom .. "Text"], "RIGHT", 3, -2)
+        b:SetHighlightTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-Tab-Highlight"))
+        return b
+    end
+    -- BrowseButtonTemplate / BidButtonTemplate / AuctionsButtonTemplate
+    local function ligne(nom, parent, l)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(l) b:SetHeight(37)
+        b:CreateFontString(nom .. "Name", "BACKGROUND")
+        b:CreateTexture(nom .. "Left", "BACKGROUND"):SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionItemNameFrame"))
+        b:CreateTexture(nom .. "Right", "BACKGROUND"):SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionItemNameFrame"))
+        b:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionItemNameFrame"))
+        local o = CreateFrame("Button", nom .. "Item", b)
+        o:SetWidth(32) o:SetHeight(32)
+        o:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+        o:CreateTexture(nom .. "ItemIconTexture", "BORDER")
+        nommer(o:SetNormalTexture(fichier("Interface", "Buttons", "UI-Quickslot2")), nom .. "ItemNormalTexture")
+        o:SetPushedTexture(fichier("Interface", "Buttons", "UI-Quickslot-Depress"))
+        o:SetHighlightTexture(fichier("Interface", "Buttons", "ButtonHilight-Square"))
+        -- le survol de l'icone verrouille la surbrillance de la ligne
+        o:SetScript("OnEnter", function(self) self:GetParent():LockHighlight() end)
+        o:SetScript("OnLeave", function(self) self:GetParent():UnlockHighlight() end)
+        nommer(b:SetHighlightTexture(fichier("Interface", "HelpFrame", "HelpFrameButton-Highlight")), nom .. "Highlight")
+        return b
+    end
+    -- AuctionClassButtonTemplate
+    local function categorie(nom, parent)
+        local b = CreateFrame("Button", nom, parent)
+        b:SetWidth(136) b:SetHeight(20)
+        b:CreateTexture(nom .. "Lines", "BACKGROUND"):SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-FilterLines"))
+        nommer(b:SetNormalTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-FilterBg")), nom .. "NormalTexture")
+        b:SetHighlightTexture(fichier("Interface", "PaperDollInfoFrame", "UI-Character-Tab-Highlight"))
+        b:SetFontString(b:CreateFontString(nom .. "NormalText", "ARTWORK"))
+        return b
+    end
+
+    local function batir()
+        UIPanelWindows["AuctionFrame"] = { area = "doublewide", pushable = 0, width = 840 }
+        local f = CreateFrame("Frame", "AuctionFrame", UIParent)
+        f:SetWidth(832) f:SetHeight(447)
+        f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
+        f:CreateTexture("AuctionPortraitTexture", "BACKGROUND")
+        for _, n in ipairs({ "TopLeft", "Top", "TopRight", "BotLeft", "Bot", "BotRight" }) do
+            f:CreateTexture("AuctionFrame" .. n, "ARTWORK"):SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-Browse-" .. n))
+        end
+        for i, texte in ipairs({ BROWSE, BIDS, AUCTIONS }) do
+            local t = CreateFrame("Button", "AuctionFrameTab" .. i, f)
+            t:SetID(i)
+            t:SetFontString(t:CreateFontString(nil, "ARTWORK"))
+            t:SetText(texte)
+        end
+        CreateFrame("Frame", "AuctionFrameMoneyFrame", f):SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", 181, 20)
+        local x = CreateFrame("Button", "AuctionFrameCloseButton", f)
+        x:SetWidth(32) x:SetHeight(32)
+        x:SetPoint("TOPRIGHT", f, "TOPRIGHT", 3, -8)
+        etats(x, "UI-Panel-MinimizeButton")
+
+        -- Parcourir
+        local p = CreateFrame("Frame", "AuctionFrameBrowse", f)
+        p:SetWidth(758) p:SetHeight(447)
+        p:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+        p:CreateFontString("BrowseTitle", "BACKGROUND"):SetText(BROWSE_AUCTIONS)
+        p:CreateFontString("BrowseNameText", "ARTWORK"):SetPoint("TOPLEFT", p, "TOPLEFT", 80, -41)
+        local lvl = p:CreateFontString("BrowseLevelText", "ARTWORK")
+        lvl:SetPoint("BOTTOMLEFT", p, "TOPLEFT", 230, -47)
+        champ("BrowseName", p, 140):SetPoint("TOPLEFT", BrowseNameText, "BOTTOMLEFT", 3, -2)
+        champ("BrowseMinLevel", p, 25):SetPoint("TOPLEFT", lvl, "BOTTOMLEFT", 3, -6)
+        champ("BrowseMaxLevel", p, 25):SetPoint("LEFT", BrowseMinLevel, "RIGHT", 12, 0)
+        local dd = menu("BrowseDropDown", p)
+        dd:SetPoint("TOPLEFT", lvl, "BOTTOMRIGHT", -5, -1)
+        local nomRarete = dd:CreateFontString("BrowseDropDownName", "OVERLAY")
+        nomRarete:SetText(RARITY)
+        nomRarete:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 20, 0)
+        case("IsUsableCheckButton", p):SetPoint("LEFT", BrowseDropDownButton, "RIGHT", 10, 13)
+        case("ShowOnPlayerCheckButton", p):SetPoint("TOPLEFT", IsUsableCheckButton, "BOTTOMLEFT", 0, 2)
+        for i = 1, 15 do
+            local b = categorie("AuctionFilterButton" .. i, p)
+            b:SetID(i)
+            if i == 1 then b:SetPoint("TOPLEFT", p, "TOPLEFT", 23, -105)
+            else b:SetPoint("TOPLEFT", _G["AuctionFilterButton" .. (i - 1)], "BOTTOMLEFT", 0, 0) end
+        end
+        defile("BrowseFilterScrollFrame", p, 160, 305):SetPoint("TOPRIGHT", p, "TOPLEFT", 158, -105)
+        defile("BrowseScrollFrame", p, 465, 306):SetPoint("TOPRIGHT", p, "TOPRIGHT", 39, -105)
+        local precedent
+        for _, v in ipairs({ { "BrowseQualitySort", 214 }, { "BrowseLevelSort", 57 }, { "BrowseDurationSort", 91 },
+            { "BrowseHighBidderSort", 76 }, { "BrowseCurrentBidSort", 207 } }) do
+            local b = tri(v[1], p, v[2])
+            if precedent then b:SetPoint("LEFT", precedent, "RIGHT", -2, 0) else b:SetPoint("TOPLEFT", p, "TOPLEFT", 186, -82) end
+            precedent = b
+        end
+        for i = 1, 8 do
+            local b = ligne("BrowseButton" .. i, p, 597)
+            b:SetID(i)
+            if i == 1 then b:SetPoint("TOPLEFT", p, "TOPLEFT", 195, -110)
+            else b:SetPoint("TOPLEFT", _G["BrowseButton" .. (i - 1)], "BOTTOMLEFT", 0, 0) end
+        end
+
+        -- Offres
+        local o = CreateFrame("Frame", "AuctionFrameBid", f)
+        o:SetWidth(758) o:SetHeight(447)
+        o:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+        o:CreateFontString("BidTitle", "BACKGROUND"):SetText(BID)
+        precedent = nil
+        for _, v in ipairs({ { "BidQualitySort", 195 }, { "BidLevelSort", 65 }, { "BidDurationSort", 79 },
+            { "BidBuyoutSort", 162 }, { "BidStatusSort", 94 }, { "BidBidSort", 169 } }) do
+            local b = tri(v[1], o, v[2])
+            if precedent then b:SetPoint("LEFT", precedent, "RIGHT", -2, 0) else b:SetPoint("TOPLEFT", o, "TOPLEFT", 65, -52) end
+            precedent = b
+        end
+        defile("BidScrollFrame", o, 625, 335):SetPoint("TOPRIGHT", o, "TOPRIGHT", 40, -74)
+        for i = 1, 9 do
+            local b = ligne("BidButton" .. i, o, 793)
+            b:SetID(i)
+            if i == 1 then b:SetPoint("TOPLEFT", o, "TOPLEFT", 27, -76)
+            else b:SetPoint("TOPLEFT", _G["BidButton" .. (i - 1)], "BOTTOMLEFT", 0, 0) end
+        end
+        o:Hide()
+
+        -- Encheres
+        local a = CreateFrame("Frame", "AuctionFrameAuctions", f)
+        a:SetWidth(758) a:SetHeight(447)
+        a:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+        a:CreateFontString("AuctionsTitle", "BACKGROUND")
+        local onglet = a:CreateFontString("AuctionsTabText", "ARTWORK")
+        onglet:SetText(CREATE_AUCTION)
+        onglet:SetPoint("TOP", a, "TOPLEFT", 121, -55)
+        a:CreateFontString("AuctionsItemText", "ARTWORK"):SetPoint("TOPLEFT", a, "TOPLEFT", 25, -80)
+        precedent = nil
+        for _, v in ipairs({ { "AuctionsQualitySort", 185 }, { "AuctionsDurationSort", 100 },
+            { "AuctionsHighBidderSort", 108 }, { "AuctionsBidSort", 213 } }) do
+            local b = tri(v[1], a, v[2])
+            if precedent then b:SetPoint("LEFT", precedent, "RIGHT", -2, 0) else b:SetPoint("TOPLEFT", a, "TOPLEFT", 219, -51) end
+            precedent = b
+        end
+        defile("AuctionsScrollFrame", a, 435, 339):SetPoint("TOPRIGHT", a, "TOPRIGHT", 40, -72)
+        for i = 1, 9 do
+            local b = ligne("AuctionsButton" .. i, a, 576)
+            b:SetID(i)
+            if i == 1 then b:SetPoint("TOPLEFT", a, "TOPLEFT", 219, -76)
+            else b:SetPoint("TOPLEFT", _G["AuctionsButton" .. (i - 1)], "BOTTOMLEFT", 0, 0) end
+        end
+        local objet = CreateFrame("Button", "AuctionsItemButton", a)
+        objet:SetWidth(37) objet:SetHeight(37)
+        objet:SetPoint("TOPLEFT", a, "TOPLEFT", 30, -94)
+        objet:CreateFontString("AuctionsItemButtonName", "BACKGROUND")
+        objet:CreateTexture(nil, "BACKGROUND"):SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-ItemSlot"))
+        objet:CreateFontString("AuctionsItemButtonCount", "OVERLAY")
+        objet:SetHighlightTexture(fichier("Interface", "Buttons", "ButtonHilight-Square"))
+        for _, n in ipairs({ "AuctionsStackSizeEntry", "AuctionsNumStacksEntry" }) do
+            local c = CreateFrame("EditBox", n, a)
+            c:SetWidth(50) c:SetHeight(20)
+            for _, s in ipairs({ "Left", "Right", "Middle" }) do
+                c:CreateTexture(n .. s, "BACKGROUND"):SetTexture(fichier("Interface", "Common", "Common-Input-Border"))
+            end
+        end
+        menu("PriceDropDown", a, AUCTION_PRICE):SetPoint("TOPRIGHT", a, "TOPLEFT", 217, -215)
+        menu("DurationDropDown", a, AUCTION_DURATION):SetPoint("BOTTOMRIGHT", a, "BOTTOMLEFT", 217, 89)
+        a:Hide()
+
+        PanelTemplates_SetNumTabs(f, 3)
+        PanelTemplates_SetTab(f, 1)
+
+        -- ce que le client fait, pour ce que l'addon suit
+        function SortButton_UpdateArrow(button, genre, colonne)
+            local primaire, inverse = GetAuctionSort(genre, 1)
+            local fleche = _G[button:GetName() .. "Arrow"]
+            if colonne == primaire then
+                fleche:Show()
+                if inverse then fleche:SetTexCoord(0, 0.5625, 1.0, 0) else fleche:SetTexCoord(0, 0.5625, 0, 1.0) end
+            else
+                fleche:Hide()
+            end
+        end
+        function FilterButton_SetType(button, genre, texte, dernier)
+            local fond = _G[button:GetName() .. "NormalTexture"]
+            local trait = _G[button:GetName() .. "Lines"]
+            button:SetText(texte)
+            if genre == "class" then fond:SetAlpha(1.0) trait:Hide()
+            elseif genre == "subclass" then fond:SetAlpha(0.4) trait:Hide()
+            else
+                fond:SetAlpha(0.0)
+                if dernier then trait:SetTexCoord(0.4375, 0.875, 0, 0.625) else trait:SetTexCoord(0, 0.4375, 0, 0.625) end
+                trait:Show()
+            end
+            button.type = genre
+        end
+        -- une categorie ouverte (la 2), une sous-categorie choisie (la 3) et
+        -- un emplacement (la 4) ; sans barre, les boutons s'elargissent a 156
+        function AuctionFrameFilters_Update()
+            for i = 1, 15 do
+                local b = _G["AuctionFilterButton" .. i]
+                b:SetWidth(156)
+                local genre = (i == 3 and "subclass") or (i == 4 and "invtype") or "class"
+                FilterButton_SetType(b, genre, "Filtre " .. i, i == 4)
+                if i == 3 then b:LockHighlight() else b:UnlockHighlight() end
+            end
+        end
+        local function lignes(prefixe, genre, defileur, sans, lueur, colonne, largeurColonne, n, tris)
+            for _, t in ipairs(tris) do SortButton_UpdateArrow(_G[t[1]], genre, t[2]) end
+            local decalage = FauxScrollFrame_GetOffset(_G[defileur])
+            for i = 1, n do
+                local b = _G[prefixe .. i]
+                if i <= NOMBRE_HOTEL[genre] then
+                    b:Show()
+                    b:SetWidth(sans)
+                    _G[prefixe .. i .. "Highlight"]:SetWidth(lueur)
+                    _G[colonne]:SetWidth(largeurColonne)
+                    if CHOIX_HOTEL[genre] == decalage + i then b:LockHighlight() else b:UnlockHighlight() end
+                else
+                    b:Hide()
+                end
+            end
+        end
+        function AuctionFrameBrowse_Update()
+            lignes("BrowseButton", "list", "BrowseScrollFrame", 625, 589, "BrowseCurrentBidSort", 207, 8,
+                { { "BrowseQualitySort", "quality" }, { "BrowseLevelSort", "level" } })
+        end
+        function AuctionFrameBid_Update()
+            lignes("BidButton", "bidder", "BidScrollFrame", 793, 758, "BidBidSort", 169, 9,
+                { { "BidQualitySort", "quality" } })
+        end
+        function AuctionFrameAuctions_Update()
+            lignes("AuctionsButton", "owner", "AuctionsScrollFrame", 599, 565, "AuctionsBidSort", 213, 9,
+                { { "AuctionsQualitySort", "quality" } })
+        end
+        function AuctionFrameTab_OnClick(self)
+            local index = self:GetID()
+            PanelTemplates_SetTab(AuctionFrame, index)
+            AuctionFrameAuctions:Hide()
+            AuctionFrameBrowse:Hide()
+            AuctionFrameBid:Hide()
+            if index == 1 then
+                AuctionFrameTopLeft:SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-Browse-TopLeft"))
+                AuctionFrameBrowse:Show()
+            elseif index == 2 then
+                AuctionFrameTopLeft:SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-Bid-TopLeft"))
+                AuctionFrameBid:Show()
+            else
+                AuctionFrameTopLeft:SetTexture(fichier("Interface", "AuctionFrame", "UI-AuctionFrame-Auction-TopLeft"))
+                AuctionsTitle:SetFormattedText(AUCTION_TITLE, UnitName("player"))
+                AuctionFrameAuctions:Show()
+            end
+        end
+        f:SetScript("OnShow", function()
+            AuctionFrameTab_OnClick(AuctionFrameTab1)
+            SetPortraitTexture(AuctionPortraitTexture, "npc")
+        end)
+        f:Hide()
+    end
+    local prevenir = function(nom)
+        for _, c in ipairs(FRAMES) do
+            if c.events and c.events["ADDON_LOADED"] and c.scripts and c.scripts.OnEvent then
+                c.scripts.OnEvent(c, "ADDON_LOADED", nom)
+            end
+        end
+    end
+    local avant = CHARGER_ADDON
+    function CHARGER_ADDON(nom)
+        if nom == "Blizzard_AuctionUI" then
+            batir()
+            prevenir(nom)
+            return
+        end
+        return avant(nom)
+    end
+end
 """
 
 
@@ -6532,7 +7537,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua"]
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -16366,6 +17371,636 @@ def main():
     assert any(l.startswith("Normal tex") for l in rel) and any(l.startswith("niveau-max") for l in rel)
     print("   temoin /fui croix : %d lignes relevees" % len(rel))
     print("   talents de l'inspecte : fenetre des talents en lecture seule, titre, classe, sans onglets ni boutons ; compacte (colonnes de 260, ni portes ni bande du bas, illustration et separateurs rognes) ; fermee avec l'inspection")
+
+    # ------------------------------------------------- LE MARCHAND
+    print("\nmarchand :")
+    mf = g.MerchantFrame
+    mh = mf.foreverHabit
+    Mc = g.ForeverUI.Marchand
+    assert mh, "le marchand est habille"
+    # ButtonFrameTemplate 336 x 444 ; l'art de 3.3.5 s'eteint
+    assert (mf.width, mf.height) == (336, 444) and list(mf.hitRect.values()) == [0, 0, 0, 0]
+    anciens = [r for r in mf.regions.values() if r.kind == "texture" and not r.name and isinstance(r.texture, str) and "UI-Merchant-" in r.texture]
+    assert len(anciens) == 4 and all(r.alpha == 0 for r in anciens)
+    for nom in ("MerchantFramePortrait", "MerchantNameText", "MerchantRepairText", "BuybackFrameTopLeft", "BuybackFrameTopRight",
+                "BuybackFrameBotLeft", "BuybackFrameBotRight", "MerchantFrameBottomRightBorder"):
+        assert g[nom].alpha == 0, nom
+    assert (mh.portrait.width, mh.portrait.height) == (48, 48) and pts(mh.portrait)[0][2:] == ["TOPLEFT", 1, 1.5]
+    assert pts(mh.encart)[0][2:] == ["TOPLEFT", 4, -60] and pts(mh.encart)[1][2:] == ["BOTTOMRIGHT", -6, 26]
+    assert mh.marbre.texture.endswith("ui-background-marble")
+    fr = Mc.fondRachat
+    assert list(fr.color.values()) == [1, 1, 1, 0.2] and pts(fr)[0][2:] == ["TOPLEFT", 7, -60] and pts(fr)[1][2:] == ["BOTTOMRIGHT", -7, 26]
+    bas = g.MerchantFrameBottomLeftBorder
+    assert atlas_jeu(bas, "ui-merchant-botframe") and (bas.width, bas.height) == (334, 61) and pts(bas)[-1][2:] == ["BOTTOMLEFT", 1, 26]
+    ea = mh.encartArgent
+    assert pts(ea)[0][2:] == ["BOTTOMRIGHT", -171, 27] and pts(ea)[1][2:] == ["BOTTOMRIGHT", -5, 4]
+    assert pts(mh.bordArgent)[0][2:] == ["BOTTOMRIGHT", -166, 6] and pts(mh.bordArgent)[1][2:] == ["BOTTOMRIGHT", -7, 25]
+    assert all(t.texture.endswith("moneyframe") for t in mh.bordDore.values())
+    assert pts(g.MerchantMoneyFrame)[-1][2:] == ["BOTTOMRIGHT", -4, 8] and len(pts(g.MerchantMoneyFrame)) == 1
+    x = g.MerchantFrameCloseButton
+    assert (x.width, x.height) == (24, 24) and x.frameLevel == mf.GetFrameLevel(mf) + 22
+    # les objets, les pages
+    assert len(pts(g.MerchantItem1)) == 1 and pts(g.MerchantItem1)[0][2:] == ["TOPLEFT", 11, -69]
+    assert g.MerchantPageText.width == 104 and pts(g.MerchantPageText)[0][2:] == ["BOTTOM", 0, 86]
+    assert pts(g.MerchantPrevPageButton)[0][2:] == ["BOTTOMLEFT", 25, 96] and pts(g.MerchantNextPageButton)[0][2:] == ["BOTTOMLEFT", 310, 96]
+    # le rachat en bas : 115 x 37, sans cadre de nom, la fleche
+    bb = g.MerchantBuyBackItem
+    assert (bb.width, bb.height) == (115, 37) and pts(bb)[0][2:] == ["BOTTOMLEFT", 30, -53] and len(pts(bb)) == 1
+    assert not g.MerchantBuyBackItemNameFrame.shown and (g.MerchantBuyBackItemName.width, g.MerchantBuyBackItemName.height) == (70, 35)
+    assert pts(g.MerchantBuyBackItemName)[0][2:] == ["RIGHT", -5, 2]
+    assert abs(g.MerchantBuyBackItemItemButtonCount.fontSize - 14 * 0.65) < 1e-9, "le compte a 0,65"
+    assert atlas_jeu(Mc.fleche, "common-icon-undo") and (Mc.fleche.width, Mc.fleche.height) == (20, 20) and pts(Mc.fleche)[0][2:] == ["CENTER", 0, -1]
+
+    # l'onglet du marchand : titre, portrait, reparation, qualite
+    lua.execute("""
+        OBJETS['lienPain'] = { nom = 'Pain', qualite = 1 }
+        OBJETS['lienEpee'] = { nom = 'Epee', qualite = 3 }
+        OBJETS['lienCaillou'] = { nom = 'Caillou', qualite = 0 }
+        MARCHAND = { 'lienPain', 'lienEpee', 'lienCaillou' }
+        RACHAT = { 'lienEpee' }
+        REPARER, REPARER_GUILDE = true, false
+        MerchantFrame:Show()
+        PanelTemplates_SetTab(MerchantFrame, 1)
+        MerchantFrame_Update()
+    """)
+    assert mh.titre.text == g.MerchantNameText.text, mh.titre.text
+    assert mh.portrait.portraitOf == "npc" and not fr.shown
+    ra, ri, rg = g.MerchantRepairAllButton, g.MerchantRepairItemButton, g.MerchantGuildBankRepairButton
+    assert (ra.width, ra.height) == (36, 36) and pts(ra)[-1][2:] == ["BOTTOMLEFT", 118, 33] and pts(ri)[-1][2:] == ["LEFT", -8, 0]
+    assert atlas_jeu(g.MerchantRepairAllIcon, "spellicon-256x256-repairall") and atlas_jeu(g.MerchantGuildBankRepairButtonIcon, "spellicon-256x256-repairallguild")
+    assert ra.foreverFond.texture.endswith("UI-EmptySlot") and pts(ra.foreverFond)[0][2:] == ["TOPLEFT", -13, 14]
+    lua.execute("REPARER_GUILDE = true MerchantFrame_Update()")
+    assert rg.shown and (rg.width, rg.height) == (36, 36) and pts(ra)[-1][2:] == ["BOTTOMLEFT", 96, 33]
+    assert pts(ri)[-1][2:] == ["LEFT", -9, 0] and pts(rg)[-1][2:] == ["RIGHT", 8, 0]
+    b1, b2, b3 = (g["MerchantItem%dItemButton" % i] for i in (1, 2, 3))
+    assert b1.foreverContour.shown and list(b1.foreverContour.vertex.values()) == [0.659, 0.659, 0.659], "commun : COMMON_GRAY_COLOR"
+    assert b2.foreverContour.shown and list(b2.foreverContour.vertex.values()) == [0, 0.44, 0.87], "rare : sa couleur"
+    assert not b3.foreverContour.shown, "mediocre : pas de contour"
+    assert list(g.MerchantItem2Name.textColor.values())[:3] == [0, 0.44, 0.87]
+    assert list(g.MerchantItem3Name.textColor.values())[:3] == [0.62, 0.62, 0.62]
+    assert not g.MerchantItem4ItemButton.foreverContour.shown
+    assert not Mc.fleche.desaturated and g.MerchantBuyBackItemItemButton.foreverContour.shown
+    # les onglets : ceux de Social, qui commandent ceux du client
+    o1, o2 = Mc.onglets[1], Mc.onglets[2]
+    assert not g.MerchantFrameTab1.shown and g.MerchantFrameTab1.foreverSuppressed
+    assert pts(o1)[0][2:] == ["BOTTOMLEFT", 50, -15] and req(pts(o2)[0][1], o1) and pts(o2)[0][2:] == ["TOPRIGHT", 3, 0]
+    assert o1.texte.text == "Merchant" and o2.texte.text == "Buyback"
+    assert o1.art.actifG.shown and not o2.art.actifG.shown
+    # le rachat
+    o2.scripts.OnClick(o2)
+    assert mf.selectedTab == 2 and mh.titre.text == "Merchant Buyback" and mh.portrait.texture.endswith("UI-BuyBack-Icon")
+    assert fr.shown and o2.art.actifG.shown and not o1.art.actifG.shown
+    assert g.MerchantItem1ItemButton.foreverContour.shown and list(g.MerchantItem1Name.textColor.values())[:3] == [0, 0.44, 0.87]
+    o1.scripts.OnClick(o1)
+    assert mf.selectedTab == 1 and not fr.shown
+    lua.execute("RACHAT = {} MerchantFrame_Update()")
+    assert Mc.fleche.desaturated, "sans objet a racheter, la fleche grise"
+    lua.execute("MerchantFrame:Hide() MARCHAND = {} REPARER_GUILDE = false")
+    print("   336 x 444, portrait 48, encart, fond du rachat, fond du bas de camelot, argent encadre ; reparations de camelot a leurs places (avec ou sans guilde) ; qualite des objets ; rachat reduit et sa fleche ; onglets du bas")
+
+    # ------------------------------------------------- L'ECHANGE
+    print("\nechange :")
+    tf = g.TradeFrame
+    th = tf.foreverHabit
+    assert th, "l'echange est habille"
+    assert (tf.width, tf.height) == (344, 446) and list(tf.hitRect.values()) == [0, 0, 0, 0]
+    anciens = [r for r in tf.regions.values() if r.kind == "texture" and not r.name and isinstance(r.texture, str) and "UI-TradeFrame-" in r.texture]
+    assert len(anciens) == 4 and all(r.alpha == 0 for r in anciens)
+    assert g.TradeFramePlayerPortrait.alpha == 0 and g.TradeFrameRecipientPortrait.alpha == 0
+    assert (th.portrait.width, th.portrait.height) == (48, 48) and pts(th.portrait)[0][2:] == ["TOPLEFT", 1, 1.5]
+    # l'autre : coin de metal a TOPRIGHT (-186, 16), portrait 48 a (14, -14,5) de lui
+    assert atlas_jeu(th.coinAutre, "ui-frame-portraitmetal-cornertopleft") and pts(th.coinAutre)[0][2:] == ["TOPRIGHT", -186, 16]
+    assert req(pts(th.portraitAutre)[0][1], th.coinAutre) and pts(th.portraitAutre)[0][2:] == ["TOPLEFT", 14, -14.5]
+    assert th.coinAutre.owner.frameLevel == tf.GetFrameLevel(tf) + 21
+    # les encarts
+    E = th.encarts
+    assert pts(E.joueurObjets)[0][2:] == ["TOPLEFT", 4, -83] and pts(E.joueurObjets)[1][2:] == ["TOPLEFT", 166, -352]
+    assert pts(E.autreEnchant)[0][2:] == ["TOPLEFT", 175, -354] and pts(E.autreEnchant)[1][2:] == ["TOPLEFT", 338, -418]
+    assert E.autreObjets.marbre.alpha == 0.1 and E.autreArgent.marbre.alpha == 0 and E.joueurArgent.marbre.alpha == 1
+    assert list(th.voileAutre.color.values()) == [1, 1, 1, 0.15] and pts(th.voileAutre)[0][2:] == ["TOPRIGHT", -172, -20]
+    assert atlas_jeu(th.separation.filet, "!ui-frame-lefttile") and pts(th.separation.filet)[0][2:] == ["TOPRIGHT", -178, -50]
+    assert atlas_jeu(th.separation.coin, "ui-frame-botcornerleft") and pts(th.separation.coin)[0][2:] == ["BOTTOMRIGHT", -178, -3]
+    assert pts(th.bordAutre)[0][2:] == ["TOPRIGHT", -168, -80] and pts(th.bordAutre)[1][2:] == ["TOPRIGHT", -7, -60]
+    assert all(t.alpha == 0.6 for t in th.bordDore.values())
+    assert pts(g.TradeRecipientMoneyFrame)[0][2:] == ["TOPRIGHT", -5, -64] and pts(g.TradePlayerInputMoneyFrame)[0][2:] == ["TOPLEFT", 11, -61]
+    # noms, surbrillances, objets, boutons
+    assert pts(g.TradeFramePlayerNameText)[0][2:] == ["TOPLEFT", 65, -5] and g.TradeFramePlayerNameText.alpha == 0
+    assert pts(g.TradeFrameRecipientNameText)[0][2:] == ["TOPLEFT", 230, -5] and g.TradeFrameRecipientNameText.width == 80
+    assert th.noms.autre.width == 80 and req(th.noms.joueur.owner, th.coinAutre.owner)
+    assert g.TradeHighlightPlayer.width == 150 and pts(g.TradeHighlightRecipient)[0][2:] == ["TOPLEFT", 176, -85]
+    assert pts(g.TradePlayerItem1)[0][2:] == ["TOPLEFT", 14, -89] and pts(g.TradeRecipientItem1)[0][2:] == ["TOPLEFT", 182, -89]
+    assert pts(g.TradeFramePlayerEnchantText)[0][2:] == ["TOPLEFT", 15, -360] and pts(g.TradeFrameRecipientEnchantText)[0][2:] == ["LEFT", 166, 0]
+    assert pts(g.TradeFrameTradeButton)[0][2:] == ["BOTTOMRIGHT", -85, 5]
+    x = g.TradeFrameCloseButton
+    assert (x.width, x.height) == (24, 24) and x.frameLevel == tf.GetFrameLevel(tf) + 22
+    # a la mise a jour : portraits, noms recopies, qualite
+    lua.execute("""
+        OBJETS['lienRobe'] = { nom = 'Robe', qualite = 4 }
+        ECHANGE_JOUEUR = { [1] = { nom = 'Robe', lien = 'lienRobe' } }
+        ECHANGE_AUTRE = { [2] = { nom = 'Caillou', lien = 'lienCaillou', qualite = 0 }, [7] = { nom = 'Enchant', qualite = 3 } }
+        TradeFrame:Show()
+        TradeFrame_Update()
+    """)
+    assert th.portrait.portraitOf == "player" and th.portraitAutre.portraitOf == "NPC"
+    assert th.noms.autre.text == "Arthas" and th.noms.joueur.text == g.UnitName("player")
+    assert g.TradePlayerItem1ItemButton.foreverContour.shown and list(g.TradePlayerItem1Name.textColor.values())[:3] == [0.64, 0.21, 0.93]
+    assert not g.TradeRecipientItem2ItemButton.foreverContour.shown and list(g.TradeRecipientItem2Name.textColor.values())[:3] == [0.62, 0.62, 0.62]
+    assert g.TradeRecipientItem7ItemButton.foreverContour.shown and g.TradeRecipientItem7Name.textColor is None, "l'enchantement garde sa couleur"
+    lua.execute("TradeFrame:Hide() ECHANGE_JOUEUR = {} ECHANGE_AUTRE = {}")
+    print("   344 x 446, deux portraits 48 (l'autre sous son coin de metal), six encarts, voile et separation de l'autre, argent dore ; noms au-dessus du metal ; qualite des objets")
+
+    # ------------------------------------------------- LE COURRIER
+    print("\ncourrier :")
+    mlf = g.MailFrame
+    mlh = mlf.foreverHabit
+    Cr = g.ForeverUI.Courrier
+    assert mlh, "le courrier est habille"
+    assert (mlf.width, mlf.height) == (338, 424) and all(r.alpha == 0 for r in mlf.regions.values() if r.kind == "texture" and r.texture and "ForeverUI" not in str(r.texture) and "rock" not in str(r.texture))
+    assert (mlh.portrait.width, mlh.portrait.height) == (48, 48) and mlh.portrait.texture.endswith("Mail-Icon")
+    assert mlh.titre.text == "Inbox" and pts(mlh.encart)[0][2:] == ["TOPLEFT", 4, -58] and pts(mlh.encart)[1][2:] == ["BOTTOMRIGHT", -6, 4]
+    assert g.InboxTitleText.alpha == 0 and g.SendMailTitleText.alpha == 0
+    for c in (g.InboxFrame, g.SendMailFrame):
+        assert pts(c)[0][2:] == ["TOPLEFT", 0, 0] and pts(c)[1][2:] == ["BOTTOMRIGHT", 0, 0] and c.width == 338
+    x = g.InboxCloseButton
+    assert (x.width, x.height) == (24, 24) and x.frameLevel == mlf.GetFrameLevel(mlf) + 22
+    # la reception
+    fd = Cr.fondReception
+    assert fd.texture.endswith("ui-mailframebg") and (fd.width, fd.height) == (512, 512) and pts(fd)[0][2:] == ["TOPLEFT", 7, -62]
+    assert pts(g.MailItem1)[0][2:] == ["TOPLEFT", 13, -70] and len(pts(g.MailItem1)) == 1
+    assert pts(g.InboxCurrentPage)[0][2:] == ["BOTTOM", 0, 8] and g.InboxCurrentPage.width == 192
+    assert pts(g.InboxPrevPageButton)[0][2:] == ["BOTTOMLEFT", 14, 10] and pts(g.InboxNextPageButton)[0][2:] == ["BOTTOMRIGHT", -14, 10]
+    assert pts(g.InboxTooMuchMail)[0][2:] == ["TOP", 0, -25]
+    to = Cr.toutOuvrir
+    assert (to.width, to.height) == (120, 24) and pts(to)[0][2:] == ["BOTTOM", 0, 26] and to.text == "Open All"
+    # le contour de la premiere piece jointe, grise une fois lue
+    lua.execute("""
+        BOITE = { { objets = { [1] = { nom = 'Epee', qualite = 3 } } }, { argent = 50, lue = true, objets = { [2] = { nom = 'Robe', qualite = 4 } } }, { mj = true, objets = { [1] = { nom = 'Don', qualite = 1 } } } }
+        InboxFrame_Update()
+    """)
+    assert g.MailItem1Button.foreverContour.shown and list(g.MailItem1Button.foreverContour.vertex.values()) == [0, 0.44, 0.87]
+    assert list(g.MailItem2Button.foreverContour.vertex.values()) == [0.5, 0.5, 0.5], "lue : grise"
+    assert not g.MailItem4Button.foreverContour.shown
+    # tout ouvrir : piece par piece, l'argent, la lettre du MJ laissee
+    lua.execute("PRIS = {} ForeverUIOpenAllMail.scripts.OnClick(ForeverUIOpenAllMail)")
+    assert list(g.PRIS.values()) == ["objet1:1"] and to.text == "Opening..." and to.enabled is False
+    lua.execute("ForeverUIOpenAllMail.scripts.OnUpdate(ForeverUIOpenAllMail, 0.2)")
+    assert list(g.PRIS.values()) == ["objet1:1", "argent2"]
+    lua.execute("ForeverUIOpenAllMail.scripts.OnUpdate(ForeverUIOpenAllMail, 0.2)")
+    assert list(g.PRIS.values()) == ["objet1:1", "argent2", "objet2:2"]
+    lua.execute("ForeverUIOpenAllMail.scripts.OnUpdate(ForeverUIOpenAllMail, 0.2)")
+    assert list(g.PRIS.values()) == ["objet1:1", "argent2", "objet2:2"] and to.text == "Open All" and to.enabled is not False, "la lettre du MJ reste"
+    lua.execute("PLACES_LIBRES = 0 BOITE = { { argent = 5, objets = {} } } PRIS = {} ForeverUIOpenAllMail.scripts.OnClick(ForeverUIOpenAllMail)")
+    assert list(g.PRIS.values()) == [] and to.text == "Open All", "sacs pleins : rien"
+    lua.execute("PLACES_LIBRES = 10")
+
+    # l'envoi
+    o2 = Cr.onglets[2]
+    o2.scripts.OnClick(o2)
+    assert mlf.selectedTab == 2 and mlh.titre.text == "Send Mail" and pts(mlh.encart)[0][2:] == ["TOPLEFT", 4, -80] and pts(mlh.encart)[1][2:] == ["BOTTOMRIGHT", -6, 26]
+    assert o2.art.actifG.shown and not Cr.onglets[1].art.actifG.shown and not g.MailFrameTab1.shown
+    assert pts(Cr.onglets[1])[0][2:] == ["BOTTOMLEFT", 14, -30] and pts(o2)[0][2:] == ["TOPRIGHT", 3, 0]
+    assert pts(g.SendMailScrollFrame)[0][2:] == ["TOPLEFT", 8, -83] and g.SendScrollBarBackgroundTop.alpha == 0
+    sb = g.SendMailScrollFrameScrollBar
+    assert sb.foreverBarre and pts(sb)[0][2:] == ["TOPRIGHT", 6, -15] and pts(sb)[1][2:] == ["BOTTOMRIGHT", 6, 14]
+    assert pts(g.SendMailHorizontalBarLeft)[0][2:] == ["TOPLEFT", 2, -337]
+    assert (g.SendMailNameEditBox.width, g.SendMailNameEditBox.height) == (109, 25) and pts(g.SendMailNameEditBox)[0][2:] == ["TOPLEFT", 90, -30]
+    assert pts(g.SendMailNameEditBoxLeft)[0][2:] == ["TOPLEFT", -8, -2] and pts(g.SendMailSubjectEditBox)[0][2:] == ["BOTTOMLEFT", 0, 0]
+    assert pts(g.SendMailCostMoneyFrame)[0][2:] == ["TOPRIGHT", -4, -34] and pts(g.SendMailMoneyButton)[0][2:] == ["BOTTOMLEFT", 15, 37]
+    assert pts(g.SendMailSendMoneyButton)[0][2:] == ["TOPRIGHT", 20, 12]
+    assert pts(Cr.encartArgent)[0][2:] == ["BOTTOMLEFT", 4, 4] and pts(Cr.encartArgent)[1][2:] == ["BOTTOMLEFT", 170, 27]
+    assert pts(Cr.bordArgent)[1][2:] == ["BOTTOMLEFT", 166, 25] and all(t.texture.endswith("moneyframe") for t in Cr.bordDore.values())
+    assert pts(g.SendMailMoneyFrame)[0][2:] == ["BOTTOMLEFT", 175, 8] and pts(g.SendMailCancelButton)[0][2:] == ["BOTTOMRIGHT", -7, 4]
+    fondPiece = [r for r in g.SendMailAttachment3.regions.values() if r.kind == "texture"][0]
+    assert pts(fondPiece)[-1][2:] == ["TOPLEFT", -1, 1] and len(pts(fondPiece)) == 1
+    # une rangee : pas de 45, premiere piece a (15, 127), barre a (2, 147), texte 198
+    lua.execute("A_ENVOYER = { [1] = { nom = 'Pain', qualite = 1 } } SendMailFrame_Update()")
+    assert pts(g.SendMailAttachment1)[-1][2:] == ["BOTTOMLEFT", 15, 127] and len(pts(g.SendMailAttachment1)) == 1
+    assert pts(g.SendMailAttachment7)[-1][2:] == ["BOTTOMLEFT", 15 + 45 * 6, 127]
+    assert g.SendMailScrollFrame.height == 198 and pts(g.SendMailHorizontalBarLeft2)[-1][2:] == ["BOTTOMLEFT", 2, 147]
+    assert g.SendStationeryBackgroundLeft.texture.endswith("StationeryTest1")
+    assert g.SendMailAttachment1.foreverContour.shown and not g.SendMailAttachment2.foreverContour.shown
+    # deux rangees
+    lua.execute("A_ENVOYER = { [8] = { nom = 'Robe', qualite = 4 } } SendMailFrame_Update()")
+    assert pts(g.SendMailAttachment1)[-1][2:] == ["BOTTOMLEFT", 15, 171] and pts(g.SendMailAttachment8)[-1][2:] == ["BOTTOMLEFT", 15, 127]
+    assert g.SendMailScrollFrame.height == 154
+    Cr.onglets[1].scripts.OnClick(Cr.onglets[1])
+    assert mlh.titre.text == "Inbox" and pts(mlh.encart)[0][2:] == ["TOPLEFT", 4, -58]
+
+    # la lettre ouverte
+    om = g.OpenMailFrame
+    omh = om.foreverHabit
+    assert (om.width, om.height) == (338, 424) and pts(om)[0][2:] == ["TOPRIGHT", 46, 0]
+    assert all(g[n].alpha == 0 for n in ("OpenMailFrameIcon", "OpenMailFrameTopLeft", "OpenMailFrameBotRight", "OpenMailTitleText"))
+    assert omh.titre.text == "Open Mail" and pts(omh.encart)[0][2:] == ["TOPLEFT", 4, -80] and pts(omh.encart)[1][2:] == ["BOTTOMRIGHT", -6, 26]
+    assert pts(g.OpenMailSenderLabel)[0][2:] == ["TOPLEFT", 105, -33] and pts(g.OpenMailSubjectLabel)[0][2:] == ["TOPLEFT", 105, -55]
+    assert pts(g.OpenMailReportSpamButton)[0][2:] == ["TOPRIGHT", -12, -32] and pts(g.OpenMailScrollFrame)[0][2:] == ["TOPLEFT", 8, -84]
+    osb = g.OpenMailScrollFrameScrollBar
+    assert osb.foreverBarre and pts(osb)[0][2:] == ["TOPRIGHT", 6, -14] and pts(osb)[1][2:] == ["BOTTOMRIGHT", 6, 16]
+    assert pts(g.OpenMailCancelButton)[0][2:] == ["BOTTOMRIGHT", -6, 4]
+    assert (g.OpenMailCloseButton.width, g.OpenMailCloseButton.height) == (24, 24)
+    lua.execute("""
+        BOITE = { { argent = 100, papeterie = 'Interface\\\\Icons\\\\INV_Letter_15', objets = { [1] = { nom = 'Epee', qualite = 3 } } } }
+        InboxFrame.openMailID = 1
+        OpenMailFrame:Show()
+        OpenMail_Update()
+    """)
+    assert omh.portrait.texture == "Interface\\Icons\\INV_Letter_15"
+    assert pts(g.OpenMailSender)[0][2:] == ["RIGHT", 5, 0] and pts(g.OpenMailSender)[1][2:] == ["LEFT", -5, 0]
+    assert pts(g.OpenMailMoneyButton)[-1][2:] == ["BOTTOMLEFT", 128.5, 70] and pts(g.OpenMailAttachmentButton1)[-1][2:] == ["BOTTOMLEFT", 173.5, 70]
+    assert g.OpenMailScrollFrame.height == 245 and pts(g.OpenMailHorizontalBarLeft)[-1][2:] == ["BOTTOMLEFT", 2, 99]
+    assert pts(g.OpenMailAttachmentText)[-1][2:] == ["BOTTOMLEFT", 16, 85]
+    assert g.OpenMailAttachmentButton1.foreverContour.shown and not g.OpenMailMoneyButton.foreverContour.shown
+    lua.execute("OpenMailReportSpamButton:Hide() OpenMail_Update = OpenMail_Update")
+    lua.execute("OpenMailFrame:Hide() BOITE = {} A_ENVOYER = {} InboxFrame.openMailID = nil")
+    print("   338 x 424, portrait, titre et encart selon l'onglet, onglets du bas ; reception (parchemin, places, contours, tout ouvrir) ; envoi (places, barre, argent dore, pieces jointes de camelot) ; lettre ouverte (places, portrait de papeterie, pieces jointes et barre de camelot)")
+
+    # ------------------------------------------------- LA BANQUE
+    print("\nbanque :")
+    bf = g.BankFrame
+    bh = bf.foreverHabit
+    Bq = g.ForeverUI.Banque
+    assert bh, "la banque est habillee"
+    assert bf.width == 480 and list(bf.hitRect.values()) == [0, 0, 0, 0]
+    anciens = [r for r in bf.regions.values() if not r.name and ((r.kind == "fontstring" and r.text in ("Item Slots", "Bag Slots"))
+               or (isinstance(r.texture, str) and "UI-BankFrame" in r.texture))]
+    assert len(anciens) == 3 and all(r.alpha == 0 for r in anciens)
+    assert g.BankPortraitTexture.alpha == 0 and g.BankFrameTitleText.alpha == 0 and bh.titre.text == "Bank"
+    assert atlas_jeu(bh.fondBanque, "bank-frame-background") and pts(bh.panneau)[0][2:] == ["TOPLEFT", 0, -20] and pts(bh.panneau)[1][2:] == ["BOTTOMRIGHT", 0, 30]
+    assert pts(bh.ombres.coins.hg)[0][2:] == ["TOPLEFT", 2, -22] and pts(bh.ombres.coins.bd)[0][2:] == ["BOTTOMRIGHT", -3, 2]
+    # coins a la taille de l'atlas ; bords de 17 dans une tranche de l'atlas
+    # (TexCoords de camelot, relatifs a l'atlas)
+    assert (bh.ombres.coins.hg.width, bh.ombres.coins.hg.height) == (46, 46)
+    ev, eh = g.ForeverUI.AtlasEntry("!bank-frame-vert-shadow"), g.ForeverUI.AtlasEntry("_bank-frame-horiz-shadow")
+    od, oh = bh.ombres.droite, bh.ombres.haut
+    assert od.texture == ev[1] and od.width == 17 and abs(list(od.texcoord.values())[1] - (ev[2] + (ev[3] - ev[2]) * 0.28125)) < 1e-9
+    assert oh.texture == eh[1] and oh.height == 17 and abs(list(oh.texcoord.values())[2] - (eh[4] + (eh[5] - eh[4]) * 0.3125)) < 1e-9
+    assert (g.BankCloseButton.width, g.BankCloseButton.height) == (24, 24)
+    # les sacs : a 0,75, le premier a (20, 5) du texte, les suivants a +50
+    assert Bq.texteSacs.text == "Bag Slots:" and pts(Bq.texteSacs)[0][2:] == ["BOTTOMLEFT", 43, 80]
+    b1, b2 = g.BankFrameBag1, g.BankFrameBag2
+    assert b1.scale == 0.75 and req(pts(b1)[0][1], Bq.texteSacs) and pts(b1)[0][2:] == ["TOPRIGHT", 20, 5]
+    assert req(pts(b2)[0][1], b1) and pts(b2)[0][2:] == ["TOPLEFT", 50, 0]
+    assert atlas_jeu(b1.GetNormalTexture(b1), "bank-frame-bag-slotframe") and atlas_jeu(b1.foreverCadenas, "bankslot-icon-lock")
+    # le prix, l'achat, le filet, l'argent, les outils
+    assert g.BankFrameSlotCost.alpha != 0 and pts(g.BankFrameSlotCost)[0][2:] == ["BOTTOMLEFT", 101, 45]
+    assert pts(g.BankFrameDetailMoneyFrame)[0][2:] == ["TOPRIGHT", 8, 0]
+    assert (g.BankFramePurchaseButton.width, g.BankFramePurchaseButton.height) == (124, 21) and pts(g.BankFramePurchaseButton)[0][2:] == ["TOPRIGHT", 8, 4]
+    assert all(r.alpha == 0 for r in g.BankFramePurchaseInfo.regions.values() if r.kind == "fontstring" and r.text == g.BANKSLOTPURCHASE_LABEL)
+    fl = Bq.filet
+    assert atlas_jeu(fl, "bank-divider") and abs(fl.width - 432 * 0.48) < 1e-9 and pts(fl)[0][2:] == ["BOTTOM", 0, 220 * 0.48]
+    assert (Bq.boiteArgent.width, Bq.boiteArgent.height) == (180, 25) and pts(Bq.boiteArgent)[0][2:] == ["BOTTOMRIGHT", -3, 3]
+    assert (Bq.bordArgent.width, Bq.bordArgent.height) == (178, 19) and pts(g.BankFrameMoneyFrame)[0][2:] == ["RIGHT", 0, 0]
+    assert (Bq.champ.width, Bq.champ.height) == (110, 20) and pts(Bq.champ)[0][2:] == ["TOPRIGHT", -56, -33]
+    assert req(pts(Bq.tri)[0][1], Bq.champ) and pts(Bq.tri)[0][2:] == ["RIGHT", 8, -1] and (Bq.tri.width, Bq.tri.height) == (28, 26)
+
+    # une page : la banque (28) et un sac de 16, 6 rangees, 460 de haut
+    lua.execute("""
+        SACS[-1] = { [1] = { lien = '|cff0070dd|Hitem:2|h[Epee]|h|r', nombre = 1 }, [2] = { lien = '|cffffffff|Hitem:1|h[Pain]|h|r', nombre = 5 } }
+        TAILLES[5] = 16
+        SACS[5] = { [1] = { lien = '|cffffffff|Hitem:1|h[Pain]|h|r', nombre = 3 } }
+        SACS_ACHETES = 1
+        BankFrame:Show()
+    """)
+    assert bf.height == 460 and bh.portrait.portraitOf == "npc"
+    assert pts(g.BankFrameItem1)[-1][2:] == ["TOPLEFT", 47, -63] and len(pts(g.BankFrameItem1)) == 1
+    assert pts(g.BankFrameItem8)[-1][2:] == ["TOPLEFT", 47 + 7 * 50, -63] and pts(g.BankFrameItem9)[-1][2:] == ["TOPLEFT", 47, -110]
+    c = g.ForeverUIBankBag5Item1
+    assert c and c.shown and pts(c)[-1][2:] == ["TOPLEFT", 47 + 4 * 50, -63 - 3 * 47] and c.GetParent(c).GetID(c.GetParent(c)) == 5
+    assert c.icone == "icone" and c.nombre == 3 and c.recharge == 5 and atlas_jeu(c.GetNormalTexture(c), "bank-frame-bag-slotframe")
+    assert atlas_jeu(g.ForeverUIBankBag5Item2.GetNormalTexture(g.ForeverUIBankBag5Item2), "bank-frame-item-slotframe"), "vide : le cadre vide"
+    assert g.BankFrameItem1.foreverContour.shown and list(g.BankFrameItem1.foreverContour.vertex.values()) == [0, 0.44, 0.87]
+    assert atlas_jeu(g.BankFrameItem1.foreverCase.fond, "bags-item-bankslot64")
+    assert Bq.onglets[1].shown and not Bq.onglets[2].shown and Bq.onglets[1].actif.shown
+    assert pts(Bq.onglets[1])[0][2:] == ["TOPRIGHT", 3, -60] and Bq.onglets[1].icone.texture.endswith("Inv_SideTab_Bank_c60")
+    # les sacs : cadenas des non achetes, pas de rouge ; un clic prend le sac, sans fenetre
+    assert not b1.foreverCadenas.shown and b2.foreverCadenas.shown and list(b2.teinte.values()) == [1, 1, 1]
+    lua.execute("SACS_PRIS = {} TOGGLE_SAC = nil BankFrameBag1.scripts.OnClick(BankFrameBag1) BankFrameBag2.scripts.OnClick(BankFrameBag2)")
+    assert list(g.SACS_PRIS.values()) == [68] and g.TOGGLE_SAC is None
+    # un sac tenu par le curseur se pose (clic ou lacher), sans rien prendre
+    lua.execute("SACS_PRIS = {} SACS_POSES = {} CURSEUR = { sac = 0, emplacement = 1 } BankFrameBag1.scripts.OnClick(BankFrameBag1)")
+    assert list(g.SACS_POSES.values()) == [68] and not list(g.SACS_PRIS.values()) and g.CURSEUR is None
+    lua.execute("CURSEUR = { sac = 0, emplacement = 1 } BankFrameBag1.scripts.OnReceiveDrag(BankFrameBag1)")
+    assert list(g.SACS_POSES.values()) == [68, 68] and g.TOGGLE_SAC is None
+    lua.execute("SACS_POSES = {} CURSEUR = nil")
+    # la recherche : le voile sur ce qui ne correspond pas
+    lua.execute("ForeverUIBankSearchBox:SetText('Pain')")
+    assert g.BankFrameItem1.foreverVoile.shown and not g.BankFrameItem2.foreverVoile.shown and not c.foreverVoile.shown
+    lua.execute("ForeverUIBankSearchBox:SetText('')")
+    assert not g.BankFrameItem1.foreverVoile.shown
+    # le tri : celui des sacs, sur la banque et ses sacs
+    lua.execute("ForeverUIBankSortButton.scripts.OnClick(ForeverUIBankSortButton)")
+    assert list(g.ForeverUI.BagSort.sacs.values()) == [-1, 5, 6, 7, 8, 9, 10, 11] and g.ForeverUI.BagSort.actif
+    lua.execute("ForeverUI.BagSort.actif = false ForeverUIBagSortTicker:Hide()")
+
+    # deux pages : 28 + 4 x 20 = 108 cases, 11 rangees puis 3
+    lua.execute("for s = 5, 8 do TAILLES[s] = 20 end SACS_ACHETES = 4 Bq = ForeverUI.Banque Bq.Disposer()")
+    assert bf.height == 460 + 5 * 47 and Bq.onglets[2].shown and not Bq.onglets[3].shown
+    assert req(pts(Bq.onglets[2])[0][1], Bq.onglets[1]) and pts(Bq.onglets[2])[0][2:] == ["BOTTOMLEFT", 0, -2]
+    assert g.ForeverUIBankBag8Item1 is None or not g.ForeverUIBankBag8Item1.shown, "pas encore sur la page"
+    Bq.onglets[2].scripts.OnClick(Bq.onglets[2])
+    assert Bq.page == 2 and bf.height == 460 and Bq.onglets[2].actif.shown and not Bq.onglets[1].actif.shown
+    assert g.ForeverUIBankBag8Item1.shown and pts(g.ForeverUIBankBag8Item1)[-1][2:] == ["TOPLEFT", 47, -63]
+    assert not g.BankFrameItem1.shown
+    lua.execute("BankFrame:Hide() SACS[-1] = {} for s = 5, 11 do SACS[s] = {} TAILLES[s] = 0 end SACS_ACHETES = 0")
+    print("   480 de large, fond, lisere et ombres ; une grille de 8 (banque et sacs), 88 par page, hauteur selon les rangees, onglets de page ; sacs a 0,75 et cadenas ; prix, achat, filet, argent dore ; recherche et tri des sacs")
+
+    # ------------------------------------------------- LA BANQUE DE GUILDE
+    print("\nbanque de guilde :")
+    lua.execute("CHARGER_ADDON('Blizzard_GuildBankUI')")
+    gf = g.GuildBankFrame
+    gh = gf.foreverHabit
+    Gq = g.ForeverUI.BanqueDeGuilde
+    assert gh, "la banque de guilde est habillee au chargement"
+    assert (gf.width, gf.height) == (750, 428) and g.GuildBankFrameLeft.alpha == 0 and g.GuildBankFrameRight.alpha == 0
+    # BasicFrameTemplate
+    assert gh.roche.texture.endswith("ui-background-rock") and pts(gh.roche)[0][2:] == ["TOPLEFT", 2, -21]
+    assert atlas_jeu(gh.titreFond, "_ui-frame-titletilebg") and pts(gh.titreFond)[1][2:] == ["TOPRIGHT", -25, -1]
+    # les tailles des textures virtuelles (UI-Frame-TopLeftCorner = l'atlas
+    # UI-Frame-TopLeftCornerNoPortrait, 33 x 33)
+    assert gh.titreFond.height == 18 and gh.stries.height == 43
+    assert atlas_jeu(gh.coins.hg, "ui-frame-topleftcornernoportrait") and pts(gh.coins.hg)[0][2:] == ["TOPLEFT", -6, 1]
+    assert (gh.coins.hg.width, gh.coins.hg.height) == (33, 33) and (gh.coins.hd.width, gh.coins.hd.height) == (33, 33)
+    assert (gh.coins.bg.width, gh.coins.bg.height) == (14, 14) and gh.coins.bg.layer == "BORDER"
+    assert atlas_jeu(gh.coins.bd, "ui-frame-botcornerright") and pts(gh.coins.bd)[0][2:] == ["BOTTOMRIGHT", 0, -5]
+    assert (gh.coins.bd.width, gh.coins.bd.height) == (11, 11)
+    assert atlas_jeu(gh.droite, "!ui-frame-righttile") and pts(gh.droite)[0][2:] == ["BOTTOMRIGHT", 1, 0] and pts(gh.droite)[1][0] == "BOTTOMRIGHT" and pts(gh.droite)[1][2:] == ["TOPRIGHT"]
+    assert gh.droite.width == 10 and gh.gauche.width == 16 and gh.haut.height == 28 and gh.bas.height == 9
+    # le coffre
+    assert gh.marbre.texture.endswith("guildvaultbg") and pts(gh.marbre)[0][2:] == ["TOPLEFT", 2, -20] and pts(gh.marbre)[1][2:] == ["BOTTOMRIGHT", -2, 20]
+    ext, inte = gh.exterieur.coins, gh.interieur.coins
+    assert pts(ext.bg)[0][2:] == ["BOTTOMLEFT", -2, 21] and pts(ext.hd)[0][2:] == ["TOPRIGHT", 0, -18]
+    assert req(pts(inte.hg)[0][1], ext.hg) and pts(inte.hg)[0][2:] == ["TOPLEFT", 14, -35]
+    assert req(pts(inte.bd)[0][1], ext.bd) and pts(inte.bd)[0][2:] == ["BOTTOMRIGHT", -9, 32]
+    assert list(gh.noir.color.values()) == [0, 0, 0, 1] and pts(gh.noir)[0][2:] == ["TOPLEFT", 4, -4]
+    assert gh.exterieur.gauche.texture.endswith("verttile") and pts(gh.exterieur.gauche)[0][2:] == ["BOTTOMLEFT", -3, 0]
+    assert gh.croix and (gh.croix.width, gh.croix.height) == (24, 24)
+    # les places
+    assert pts(g.GuildBankTabTitleBackground)[-1][2:] == ["TOP", 0, -30] and pts(g.GuildBankTabLimitBackground)[-1][2:] == ["TOP", 0, -370]
+    assert pts(g.GuildBankEmblemFrame)[-1][2:] == ["TOP", -70, 59] and pts(g.GuildBankColumn1)[-1][2:] == ["TOPLEFT", 18, -59]
+    assert pts(g.GuildBankTab1)[-1][2:] == ["TOPRIGHT", -1, -17]
+    assert pts(gh.bordArgent)[0][2:] == ["BOTTOMLEFT", 1, 25] and pts(gh.bordArgent)[1][2:] == ["BOTTOMRIGHT", -4, 2]
+    assert pts(g.GuildBankMoneyLimitLabel)[-1][2:] == ["BOTTOMLEFT", 8, 6] and pts(g.GuildBankMoneyFrame)[-1][2:] == ["BOTTOMRIGHT", -2, 6]
+    assert pts(g.GuildBankFrameDepositButton)[-1][2:] == ["BOTTOMRIGHT", -8, 30]
+    assert pts(g.GuildBankMessageFrame)[-1][2:] == ["TOPLEFT", 24, -64]
+    assert req(pts(g.GuildBankTransactionsScrollFrame)[0][1], g.GuildBankMessageFrame)
+    assert g.GuildBankTransactionsScrollFrameScrollBar.foreverBarre and pts(g.GuildBankTransactionsScrollFrameScrollBar)[0][2:] == ["TOPRIGHT", 2, -11]
+    assert all(r.alpha == 0 for r in g.GuildBankTransactionsScrollFrame.regions.values() if r.kind == "texture")
+    assert pts(g.GuildBankInfoScrollFrame)[-1][2:] == ["TOPLEFT", -9, 12] and pts(g.GuildBankInfoSaveButton)[-1][2:] == ["BOTTOMLEFT", 20, 31]
+    assert (Gq.champ.width, Gq.champ.height) == (130, 20) and pts(Gq.champ)[0][2:] == ["TOPRIGHT", -15, -36]
+    # les onglets du bas
+    o1, o4 = Gq.onglets[1], Gq.onglets[4]
+    assert pts(o1)[0][2:] == ["BOTTOMLEFT", 7, -30] and o4.texte.text == "Info" and not g.GuildBankFrameTab1.shown
+    assert o1.art.actifG.shown and not o4.art.actifG.shown
+    o4.scripts.OnClick(o4)
+    assert gf.selectedTab == 4 and o4.art.actifG.shown and not o1.art.actifG.shown
+    o1.scripts.OnClick(o1)
+    # la qualite et la recherche
+    lua.execute("""
+        COFFRE_GUILDE = { [1] = '|cff0070dd|Hitem:2|h[Epee]|h|r', [16] = '|cffffffff|Hitem:1|h[Pain]|h|r' }
+        GuildBankFrame_Update()
+    """)
+    assert g.GuildBankColumn1Button1.foreverContour.shown and list(g.GuildBankColumn1Button1.foreverContour.vertex.values()) == [0, 0.44, 0.87]
+    assert g.GuildBankColumn2Button2.foreverContour.shown and not g.GuildBankColumn1Button2.foreverContour.shown
+    lua.execute("ForeverUIGuildItemSearchBox:SetText('Pain')")
+    assert g.GuildBankColumn1Button1.foreverVoile.shown and not g.GuildBankColumn2Button2.foreverVoile.shown
+    lua.execute("ForeverUIGuildItemSearchBox:SetText('') COFFRE_GUILDE = {}")
+    print("   750 x 428, BasicFrameTemplate, coffre (marbre, deux cadres, fond noir), places de camelot, journal et information avec la barre minimale, onglets du bas, qualite et recherche")
+
+    # ------------------------------------------------- L'HOTEL DES VENTES
+    print("\nhotel des ventes :")
+    lua.execute("CHARGER_ADDON('Blizzard_AuctionUI')")
+    af = g.AuctionFrame
+    ah = af.foreverHabit
+    Hq = g.ForeverUI.HotelDesVentes
+    assert ah, "l'hotel est habille au chargement"
+    niveau = lua.eval("AuctionFrame:GetFrameLevel()")
+    # l'art de 3.3.5 eteint, la fenetre de camelot sur son rectangle visible
+    assert all(g[n].alpha == 0 for n in ("AuctionPortraitTexture", "AuctionFrameTopLeft", "AuctionFrameBotRight",
+                                         "BrowseTitle", "BidTitle", "AuctionsTitle"))
+    assert (af.width, af.height) == (832, 447), "la taille du client reste (UIPanelWindows, ancrages)"
+    cadre = ah.cadre
+    assert pts(cadre)[0][2:] == ["TOPLEFT", 12, -13] and pts(cadre)[1][2:] == ["BOTTOMRIGHT", -2, 8]
+    assert cadre.frameLevel == niveau and not cadre.mouseEnabled
+    assert ah.roche.texture.endswith("ui-background-rock") and ah.metal.frameLevel == niveau + 20
+    assert (ah.portrait.width, ah.portrait.height) == (48, 48) and pts(ah.portrait)[0][2:] == ["TOPLEFT", 1, 1.5]
+    assert ah.titre.text == "Browse Auctions"
+    x = g.AuctionFrameCloseButton
+    assert (x.width, x.height) == (24, 24) and req(pts(x)[0][1], cadre) and x.frameLevel == niveau + 22
+    # l'argent : encart, bord dore, bourse
+    A = ah.argent
+    assert pts(A["encart"])[0][2:] == ["BOTTOMLEFT", 2, 27] and pts(A["encart"])[1][2:] == ["BOTTOMLEFT", 167, 3]
+    assert (A["bord"].width, A["bord"].height) == (158, 19) and pts(A["bord"])[0][2:] == ["BOTTOMLEFT", 5, 6]
+    assert pts(g.AuctionFrameMoneyFrame)[-1][2:] == ["BOTTOMLEFT", 166, 8] and req(pts(g.AuctionFrameMoneyFrame)[-1][1], cadre)
+    # les encadres et leurs fonds, en regions de chaque onglet
+    for cle, hote, r, fond in (("categories", "AuctionFrameBrowse", [20, -99, 182, -409], "auctionhouse-background-categories"),
+                               ("resultats", "AuctionFrameBrowse", [182, -81, 804, -409], "auctionhouse-background-index"),
+                               ("offres", "AuctionFrameBid", [23, -51, 804, -411], "auctionhouse-background-index"),
+                               ("vente", "AuctionFrameAuctions", [15, -68, 214, -411], "auctionhouse-background-sell-left"),
+                               ("encheres", "AuctionFrameAuctions", [215, -50, 804, -411], "auctionhouse-background-index")):
+        e = ah[cle]
+        assert req(pts(e.rect)[0][1], g[hote]) and pts(e.rect)[0][2:] == ["TOPLEFT", r[0], r[1]], cle
+        assert pts(e.rect)[1][2:] == ["TOPLEFT", r[2], r[3]], cle
+        assert atlas_jeu(e.fond, fond) and pts(e.fond)[0][2:] == ["TOPLEFT", 3, -3] and pts(e.fond)[1][2:] == ["BOTTOMRIGHT", -3, 3], cle
+        assert req(e.fond.owner, g[hote]) and e.fond.layer == "BACKGROUND" and e.bord.TopLeftCorner, cle
+    # les barres : celles du client, a la place de camelot, fonds eteints
+    for nom, b in (("BrowseFilterScrollFrame", [5, 0, 7]), ("BrowseScrollFrame", [12, -2, 9]),
+                   ("BidScrollFrame", [11, -3, 5]), ("AuctionsScrollFrame", [11, -4, 7])):
+        sb = g[nom + "ScrollBar"]
+        assert sb.foreverBarre and pts(sb)[0][2:] == ["TOPRIGHT", b[0] - 4, b[1] - 11], nom
+        assert pts(sb)[1][2:] == ["BOTTOMRIGHT", b[0] - 4, b[2] + 11], nom
+        assert all(r.alpha == 0 for r in g[nom].regions.values() if r.kind == "texture"), nom
+    # les categories : art de camelot par niveau, choix et survol
+    lua.execute("AuctionFrameFilters_Update()")
+    c1, c3, c4 = g.AuctionFilterButton1, g.AuctionFilterButton3, g.AuctionFilterButton4
+    n1 = c1._normal
+    assert atlas_jeu(n1, "auctionhouse-nav-button") and (n1.width, n1.height) == (160, 32) and n1.alpha == 1
+    assert pts(n1)[-1][2:] == ["TOPLEFT", -2, 0] and pts(g.AuctionFilterButton1NormalText)[-1][2:] == ["LEFT", 8, 0]
+    assert atlas_jeu(c3._normal, "auctionhouse-nav-button-secondary") and c3._normal.alpha == 1, "la sous-categorie reste pleine (camelot), pas a 0,4"
+    assert atlas_jeu(c3.foreverCategorie.choix, "auctionhouse-nav-button-secondary-select") and c3.foreverCategorie.choix.shown
+    assert not c1.foreverCategorie.choix.shown and c1._highlight.alpha == 0
+    assert c4._normal.alpha == 0 and atlas_jeu(g.AuctionFilterButton4Lines, "auctionhouse-nav-button-tertiary-filterline")
+    assert pts(g.AuctionFilterButton4Lines)[-1][2:] == ["LEFT", 18, 3] and pts(g.AuctionFilterButton4NormalText)[-1][2:] == ["LEFT", 26, 0]
+    sv = c4.foreverCategorie.survol
+    assert atlas_jeu(sv, "auctionhouse-ui-row-highlight") and sv.blend == "ADD" and pts(sv)[-1][2:] == ["TOPRIGHT", 0, -2] and sv.width == 140
+    # chaque categorie au-dessus de la precedente (l'ombre de son art tombe
+    # sur la suivante : un ordre fixe, le meme pour toutes)
+    n1 = g.AuctionFilterButton1.frameLevel
+    assert all(g["AuctionFilterButton%d" % i].frameLevel == n1 + i - 1 for i in range(1, 16))
+    c1.hooks["OnEnter"](c1)
+    assert c1.foreverCategorie.survol.shown
+    c1.hooks["OnLeave"](c1)
+    assert not c1.foreverCategorie.survol.shown
+    # les lignes : largeur avec barre, choix, rayures, icone
+    lua.execute("""
+        NOMBRE_HOTEL = { list = 3, bidder = 4, owner = 2 }
+        CHOIX_HOTEL = { list = 2, bidder = 1 }
+        BidScrollFrame.offset = 1
+        AuctionFrameBrowse_Update() AuctionFrameBid_Update() AuctionFrameAuctions_Update()
+    """)
+    b1, b2 = g.BrowseButton1, g.BrowseButton2
+    assert b1.width == 600 and g.BrowseCurrentBidSort.width == 184 and g.BidButton1.width == 769 and g.AuctionsButton1.width == 576
+    assert g.BidBidSort.width == 145 and g.AuctionsBidSort.width == 193
+    assert b2.foreverLigne.choix.shown and not b1.foreverLigne.choix.shown and atlas_jeu(b2.foreverLigne.choix, "auctionhouse-ui-row-select")
+    assert not g.BidButton1.foreverLigne.choix.shown, "le choix se lit avec le decalage"
+    assert not b1.foreverLigne.rayure.shown, "pas de rayures sur les resultats (hideStripes)"
+    assert atlas_jeu(g.BidButton1.foreverLigne.rayure, "auctionhouse-rowstripe-2") and atlas_jeu(g.BidButton2.foreverLigne.rayure, "auctionhouse-rowstripe-1")
+    assert g.BidButton1.foreverLigne.rayure.shown
+    assert pts(b1.foreverLigne.rayure)[0][2:] == ["TOPLEFT", 0, 2.5] and pts(b1.foreverLigne.rayure)[1][2:] == ["BOTTOMRIGHT", 0, 2.5]
+    assert g.BrowseButton1Left.alpha == 0 and g.BrowseButton1Highlight.alpha == 0
+    milieux = [r for r in b1.regions.values() if r.kind == "texture" and not r.name and "AuctionItemNameFrame" in str(r.texture)]
+    assert milieux and all(r.alpha == 0 for r in milieux)
+    it = g.BrowseButton1Item
+    assert it._normal.alpha == 0 and it._highlight.alpha == 0
+    bi = b1.foreverLigne.bord
+    assert atlas_jeu(bi, "auctionhouse-itemicon-small-border") and (bi.width, bi.height) == (37, 37)
+    it.scripts["OnEnter"](it)
+    it.hooks["OnEnter"](it)
+    assert b1.foreverLigne.survol.shown and not b1.foreverLigne.choix.shown, "le survol de l'icone n'est pas un choix"
+    it.hooks["OnLeave"](it)
+    assert not b1.foreverLigne.survol.shown
+    # les fleches de tri
+    fl = g.BrowseQualitySortArrow
+    assert atlas_jeu(fl, "auctionhouse-ui-sortarrow") and (fl.width, fl.height) == (9, 9) and pts(fl)[-1][2:] == ["RIGHT", 3, 0]
+    e = g.ForeverUI.AtlasEntry("auctionhouse-ui-sortarrow")
+    lua.execute("TRIS_HOTEL.list = { 'quality', true } AuctionFrameBrowse_Update()")
+    assert list(fl.texcoord.values()) == [e[2], e[3], e[5], e[4]], "inverse : la fleche retournee"
+    lua.execute("TRIS_HOTEL.list = { 'quality', false } AuctionFrameBrowse_Update()")
+    assert list(fl.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    # champs, cases, menus
+    assert g.BrowseNameLeft.alpha == 0 and g.BrowseName.bordCamelot and g.AuctionsStackSizeEntry.bordCamelot
+    # les cases : l'art de camelot a la taille de la case visible de WotLK
+    cn = g.IsUsableCheckButton._normal
+    assert atlas_jeu(cn, "checkbox-minimal") and (cn.width, cn.height) == (17, 17) and pts(cn)[-1][2:] == ["CENTER", 0, 0]
+    assert (g.ShowOnPlayerCheckButton._checked.width, g.ShowOnPlayerCheckButton._checked.height) == (17, 17)
+    # les menus : « sur une ligne », 20 de haut comme les champs voisins, en
+    # mode compact -- le fond rogne a sa boite opaque, pose sur le menu meme
+    # (rien ne deborde), la fleche sans ombre, l'art a 0,8
+    dd = g.BrowseDropDown
+    assert dd.foreverBouton and (dd.width, dd.height) == (132, 20) and g.BrowseDropDownLeft.alpha == 0
+    assert abs(dd.foreverEchelle - 0.8) < 1e-9 and dd.foreverCompact
+    assert dd.foreverFond[1].width == 8 * 0.8 and dd.foreverFond[3].width == 11 * 0.8
+    fond = dd.foreverFond[1]
+    rect = pts(fond)[0][1]
+    assert req(rect.allPoints, dd) and not list(rect.points.values()), "le fond couvre le menu, sans marge"
+    et = g.ForeverUI.AtlasEntry("common-dropdown-textholder-c60")
+    du, dv = (et[3] - et[2]) / et[6], (et[5] - et[4]) / et[7]
+    tc = list(fond.texcoord.values())
+    assert abs(tc[0] - (et[2] + 8 * du)) < 1e-9 and abs(tc[2] - (et[4] + 7 * dv)) < 1e-9 and abs(tc[3] - (et[4] + 32 * dv)) < 1e-9
+    assert abs(list(dd.foreverFond[3].texcoord.values())[1] - (et[2] + 46 * du)) < 1e-9
+    assert atlas_jeu(dd.foreverFleche, "common-dropdown-a-button-shadowless") and (dd.foreverFleche.width, dd.foreverFleche.height) == (27 * 0.8, 27 * 0.8)
+    dd.foreverBouton.hooks["OnEnter"](dd.foreverBouton)
+    assert atlas_jeu(dd.foreverFleche, "common-dropdown-a-button-hover-shadowless")
+    dd.foreverBouton.hooks["OnLeave"](dd.foreverBouton)
+    # le texte sur la ligne de la fleche : centre sur le menu, de 8 au bord
+    # gauche de la fleche
+    tx = pts(g.BrowseDropDownText)
+    assert tx[0][0] == "LEFT" and tx[0][2:] == ["LEFT", 8, 0] and tx[1][0] == "RIGHT"
+    assert tx[1][2] == "RIGHT" and abs(tx[1][3] - (1 - 27) * 0.8) < 1e-9 and tx[1][4] == 0
+    # OUVRIR LA LISTE : le client prepare le menu (UIDropDownMenu_Initialize,
+    # par ToggleDropDownMenu) et le remet a 32 ; la hauteur demandee tient
+    lua.execute("UIDropDownMenu_Initialize(BrowseDropDown, BrowseDropDown.initialize)")
+    assert dd.height == 20, "le menu garde ses 20 apres la preparation du client"
+    lua.execute("UIDropDownMenu_Initialize(PriceDropDown, PriceDropDown.initialize)")
+    assert g.PriceDropDown.height == 20
+    # Rarity a 20 des champs de niveau, centre sur leur rangee
+    assert pts(dd)[-1][0] == "LEFT" and pts(dd)[-1][2:] == ["RIGHT", 20, 0] and req(pts(dd)[-1][1], g.BrowseMaxLevel)
+    assert pts(g.BrowseDropDownName)[-1][2:] == ["TOPLEFT", 3, 4] and req(pts(g.BrowseDropDownName)[-1][1], dd)
+    # les deux cases rapprochees : 19 de l'une a l'autre, la paire centree
+    # sur le menu (+9,5 / -9,5)
+    assert pts(g.IsUsableCheckButton)[-1][2:] == ["RIGHT", 10, 9.5]
+    sp = pts(g.ShowOnPlayerCheckButton)[-1]
+    assert sp[0] == "TOPLEFT" and req(sp[1], g.IsUsableCheckButton) and sp[2:] == ["TOPLEFT", 0, -19]
+    assert (g.PriceDropDown.width, g.PriceDropDown.height) == (97, 20) and pts(g.PriceDropDown)[-1][2:] == ["TOPLEFT", 201, -219]
+    prix = [r for r in g.PriceDropDown.regions.values() if r.kind == "fontstring" and r.text == "Price"][0]
+    assert pts(prix)[-1][2:] == ["TOPLEFT", 25, -228] and req(pts(prix)[-1][1], g.AuctionFrameAuctions)
+    assert pts(g.DurationDropDown)[-1][2:] == ["TOPLEFT", 201, -330]
+    # le menu de l'horloge, VALIDE, garde ses 25 et son art a l'echelle 1
+    hr = g.TimeManagerAlarmHourDropDown
+    assert hr.height == 25 and hr.foreverEchelle == 1 and (hr.foreverFleche.width, hr.foreverFleche.height) == (27, 27)
+    assert not hr.foreverCompact and atlas_jeu(hr.foreverFleche, "common-dropdown-a-button")
+    rh = pts(hr.foreverFond[1])[0][1]
+    assert pts(rh)[0][2:] == ["TOPLEFT", -8, 7] and pts(rh)[1][2:] == ["BOTTOMRIGHT", 8, -9] and hr.foreverFond[1].width == 16
+    assert pts(g.TimeManagerAlarmHourDropDownText)[0][2:] == ["TOPLEFT", 8, -8]
+    # la meme correction que l'hotel (demande du 28/09) : ouvrir la liste ne
+    # le remet plus a 32
+    for n in ("TimeManagerAlarmHourDropDown", "TimeManagerAlarmMinuteDropDown", "TimeManagerAlarmAMPMDropDown"):
+        lua.execute("UIDropDownMenu_Initialize(%s, %s.initialize)" % (n, n))
+        assert g[n].height == 25, n
+    # la mise en vente : onglet, cadre d'objet, case vide
+    og = ah.ongletVente
+    assert atlas_jeu(og[1], "auctionhouse-selltab-left") and pts(og[1])[0][2:] == ["TOPLEFT", 42, -3] and req(pts(og[1])[0][1], ah.vente.rect)
+    assert pts(g.AuctionsTabText)[-1][2:] == ["RIGHT", 12, 0] and req(g.AuctionsTabText.font, g.GameFontNormalSmall)
+    assert pts(og[2])[1][2:] == ["RIGHT", 12, 0] and og[2].height == 23
+    fente = [r for r in g.AuctionsItemButton.regions.values() if r.kind == "texture" and "ItemSlot" in str(r.texture)]
+    assert fente and all(r.alpha == 0 for r in fente)
+    ob = ah.objet
+    assert pts(ob.rect)[0][2:] == ["TOPLEFT", -8, 6] and pts(ob.rect)[1][2:] == ["BOTTOMLEFT", 174, -6]
+    assert len(ob.entete) == 3 and abs(ob.entete[1].width - 20 * 49 / 72) < 1e-6
+    assert atlas_jeu(ob.vide, "auctionhouse-itemicon-empty")
+    # les onglets du bas, qui commandent ceux du client, et le titre
+    o1, o3 = Hq.onglets[1], Hq.onglets[3]
+    assert pts(o1)[0][2:] == ["BOTTOMLEFT", 20, -28] and pts(Hq.onglets[2])[0][2:] == ["TOPRIGHT", 3, 0]
+    assert o3.texte.text == "Auctions" and not g.AuctionFrameTab1.shown
+    o3.scripts.OnClick(o3)
+    assert af.selectedTab == 3 and o3.art.actifG.shown and not o1.art.actifG.shown
+    assert g.AuctionFrameAuctions.shown and not g.AuctionFrameBrowse.shown and ah.titre.text.startswith("Auctions: ")
+    o1.scripts.OnClick(o1)
+    assert af.selectedTab == 1 and ah.titre.text == "Browse Auctions"
+    # le portrait de l'unite a l'ouverture
+    lua.execute("AuctionFrame:Show()")
+    assert ah.portrait.portraitOf == "npc"
+    lua.execute("AuctionFrame:Hide() NOMBRE_HOTEL = { list = 0, bidder = 0, owner = 0 } CHOIX_HOTEL = {}")
+    print("   fenetre de camelot sur l'art visible de 3.3.5, argent dore, encadres et fonds, barres minimales, categories par niveau, lignes (largeur avec barre, choix, survol, rayures, icone), fleches de tri, champs, cases, menus, mise en vente, onglets du bas et titre")
+
+    # ------------------------------------------------- LA TAILLE DES TEXTURES
+    # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
+    # 3.3.5 : un morceau d'atlas pose par une seule ancre, ou par deux ancres
+    # d'un seul axe, deborde (echange, banque de guilde, 28/09 -- SetAtlas(t,
+    # nom, true) LAISSE la taille). Le banc ne regardait que l'atlas et les
+    # ancres. Ici : toute texture d'une feuille ForeverUI rognee (TexCoord)
+    # doit avoir sa largeur et sa hauteur, par une taille ou par ses ancres.
+    print("\ntaille des textures d'atlas :")
+    def axes(t):
+        if t.allPoints:
+            return True, True
+        noms = [list(v.values())[0] for v in t.points.values()]
+        l = bool(t.width) or (any("LEFT" in n for n in noms) and any("RIGHT" in n for n in noms))
+        h = bool(t.height) or (any("TOP" in n for n in noms) and any("BOTTOM" in n for n in noms))
+        return l, h
+    def rognee(t):
+        tc = t.texcoord
+        if tc is None:
+            return t.texcoord8 is not None
+        return list(tc.values()) != [0, 1, 0, 1]
+    fautives = []
+    vues = 0
+    # les fenetres du commerce (les fenetres deja validees ne sont pas
+    # reprises ici : un effet valide ne se touche pas sans accord)
+    racines = {"MerchantFrame", "TradeFrame", "MailFrame", "OpenMailFrame", "BankFrame", "GuildBankFrame", "AuctionFrame"}
+    def du_commerce(f):
+        while f is not None:
+            if f.name in racines:
+                return True
+            f = f.parent
+        return False
+    for f in g.FRAMES.values():
+        if not du_commerce(f):
+            continue
+        textures = [r for r in (f.regions or {}).values() if r.kind == "texture"]
+        textures += [f[k] for k in ("_normal", "_pushed", "_highlight", "_checked", "_disabled") if f[k]]
+        for t in textures:
+            if not isinstance(t.texture, str) or "foreverui" not in t.texture.lower() or not rognee(t):
+                continue
+            if not t.points and not t.allPoints:
+                continue  # jamais posee : pas dessinee a une place
+            vues += 1
+            l, h = axes(t)
+            if not (l and h):
+                fautives.append("%s : %s (largeur %s, hauteur %s)" % (f.name or "?", t.texture, l, h))
+    for x in fautives:
+        print("   SANS TAILLE %s" % x)
+    assert not fautives, "%d texture(s) d'atlas sans taille" % len(fautives)
+    print("   %d textures d'atlas posees : toutes ont largeur et hauteur" % vues)
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

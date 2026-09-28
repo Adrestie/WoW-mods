@@ -85,3 +85,9 @@ TimeManager.lua
 ZoneMap.lua
 DressUp.lua
 Inspect.lua
+Merchant.lua
+Trade.lua
+Mail.lua
+Bank.lua
+GuildBank.lua
+AuctionHouse.lua
