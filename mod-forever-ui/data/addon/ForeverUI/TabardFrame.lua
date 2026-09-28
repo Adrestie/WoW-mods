@@ -49,6 +49,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local SEP = string.char(92)
 
@@ -333,7 +334,7 @@ function ForeverUI.TabardModelTune(argument)
 	elseif cle == "position" then
 		local x, y, z = string.match(reste, "^(%-?[%d%.]+)%s+(%-?[%d%.]+)%s+(%-?[%d%.]+)$")
 		if not x then
-			dire("tabard : /fui tabard position <profondeur> <lateral> <hauteur>")
+			dire(L.TABARDFRAME_POSITION_USAGE)
 			return
 		end
 		r.position = { tonumber(x), tonumber(y), tonumber(z) }
@@ -346,14 +347,14 @@ function ForeverUI.TabardModelTune(argument)
 		m:SetUnit("player")
 		if m.InitializeTabardColors then m:InitializeTabardColors() end
 	elseif cle ~= "" then
-		dire("tabard : camera <n> | echelle <s> | position <x> <y> <z> | defaut | client")
+		dire(L.TABARDFRAME_USAGE)
 		return
 	end
 	appliquerReglage()
 	rattraper()
 	local x, y, z
 	if m.GetPosition then x, y, z = m:GetPosition() end
-	dire(string.format("tabard : camera=%s echelle=%s position=(%s, %s, %s)", tostring(T.reglage.camera),
+	dire(string.format(L.TABARDFRAME_STATE, tostring(T.reglage.camera),
 		tostring(m.GetModelScale and m:GetModelScale()), tostring(x), tostring(y), tostring(z)))
 end
 

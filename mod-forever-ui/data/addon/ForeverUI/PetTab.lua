@@ -44,6 +44,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 -- Les memes mesures que les statistiques du personnage, dans
 -- CharacterFrame.lua : une page du meme volet doit avoir le meme bord.
@@ -102,15 +103,15 @@ local function lireGeneral()
     local lignes = {}
 
     lignes[#lignes + 1] = {
-        nom = HEALTH or "Health",
+        nom = HEALTH,
         valeur = tostring((UnitHealthMax and UnitHealthMax("pet")) or 0),
     }
     lignes[#lignes + 1] = {
-        nom = ARMOR or "Armor",
+        nom = ARMOR,
         valeur = lireDuClient("PetArmorFrame", PaperDollFrame_SetArmor) or "",
     }
     lignes[#lignes + 1] = {
-        nom = DAMAGE or "Damage",
+        nom = DAMAGE,
         valeur = lireDuClient("PetDamageFrame", PaperDollFrame_SetDamage) or "",
     }
     -- LE NOM DE LA LIGNE : "Attack Power", et non "Power".
@@ -120,7 +121,7 @@ local function lireGeneral()
     -- est ATTACK_POWER_TOOLTIP, celle de l'infobulle ; c'est donc elle
     -- qu'on prend, et ATTACK_POWER ne sert plus que de dernier recours.
     lignes[#lignes + 1] = {
-        nom = ATTACK_POWER_TOOLTIP or ATTACK_POWER or "Attack Power",
+        nom = ATTACK_POWER_TOOLTIP or ATTACK_POWER,
         valeur = lireDuClient("PetAttackPowerFrame",
             PaperDollFrame_SetAttackPower) or "",
     }
@@ -129,7 +130,7 @@ local function lireGeneral()
     -- l'entete.
     local critique = (GetCritChanceFromAgility and GetCritChanceFromAgility("pet")) or 0
     lignes[#lignes + 1] = {
-        nom = MELEE_CRIT_CHANCE or "Critical Strike",
+        nom = MELEE_CRIT_CHANCE,
         valeur = string.format("%.2f%%", critique),
     }
 
@@ -271,8 +272,8 @@ local function disposer()
     largeur = largeur - 2 * MARGE
 
     local blocs = {
-        { nom = STAT_CATEGORY_GENERAL or "General", lignes = lireGeneral() },
-        { nom = RESISTANCE or "Resistances", icones = true },
+        { nom = GENERAL, lignes = lireGeneral() },
+        { nom = L.PETTAB_RESISTANCES, icones = true },
     }
 
     local y = HAUT
@@ -284,7 +285,7 @@ local function disposer()
     detail.niveau:ClearAllPoints()
     detail.niveau:SetPoint("TOP", detail, "TOP", 0, -y)
     detail.niveau:SetText(string.format("%s %s",
-        string.format(UNIT_LEVEL_TEMPLATE or "Level %d", niveau), nom))
+        string.format(UNIT_LEVEL_TEMPLATE, niveau), nom))
     y = y + NIVEAU_H - NIVEAU_ECART
 
     local rangEntete, rangLigne = 0, 0
@@ -307,7 +308,7 @@ local function disposer()
                 ligne:SetWidth(largeur)
                 ligne:ClearAllPoints()
                 ligne:SetPoint("TOPLEFT", detail, "TOPLEFT", MARGE, -y)
-                ligne.intitule:SetText(string.format(STAT_FORMAT or "%s:", donnees.nom))
+                ligne.intitule:SetText(string.format(STAT_FORMAT, donnees.nom))
                 ligne.valeur:SetText(donnees.valeur)
                 -- La sombre en premier, et le compte repart a chaque
                 -- categorie : la meme regle que les statistiques du
@@ -565,8 +566,7 @@ function ForeverUI.PetDebug()
         DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
     end
 
-    dire(string.format("familier : HasPetUI=%s UnitExists=%s | niveau=%s"
-        .. " nom=%s famille=%s",
+    dire(string.format(L.PETTAB_DEBUG_PET,
         tostring(HasPetUI and HasPetUI()),
         tostring(UnitExists and UnitExists("pet")),
         tostring(UnitLevel and UnitLevel("pet")),
@@ -583,7 +583,7 @@ function ForeverUI.PetDebug()
     end
 
     local modele = _G["PetModelFrame"]
-    dire(string.format("apercu : %s | detail : %s",
+    dire(string.format(L.PETTAB_DEBUG_PREVIEW,
         tostring(modele and modele:IsShown()),
         tostring(detail and detail:IsShown())))
 end

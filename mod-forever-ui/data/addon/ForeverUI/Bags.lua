@@ -230,9 +230,9 @@ local PORTRAIT_TROUSSEAU = "Interface" .. SEP .. "ContainerFrame" .. SEP .. "Key
 local CADRE_GRIS = 0.39
 local QUALITE_TEINTEE = 2
 
-local RANGER = BAG_CLEANUP_BAGS or "Ranger les sacs"
-local RANGER_AIDE = BAG_CLEANUP_BAGS_DESCRIPTION
-	or "Reunit les piles et remet les objets en ordre."
+local L = ForeverUI.L
+local RANGER = L.BAGS_CLEANUP
+local RANGER_AIDE = L.BAGS_CLEANUP_TOOLTIP
 
 ForeverUI = ForeverUI or {}
 
@@ -689,7 +689,7 @@ loupe:SetPoint("LEFT", champ, "LEFT", 1, -1)
 
 local invite = champ:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 invite:SetPoint("LEFT", champ, "LEFT", 16, 0)
-invite:SetText(SEARCH or "Rechercher")
+invite:SetText(SEARCH)
 
 local effacer = CreateFrame("Button", nil, champ)
 effacer:SetWidth(17)
@@ -1445,30 +1445,30 @@ ForeverUI.BagsDebug = function()
 				and (math.abs(reelleL - m.largeur) < 0.5)
 
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"|cff66ccffForeverUI|r %s (sac %d) : %d cases, %d rangees",
+				"|cff66ccffForeverUI|r " .. L.BAGS_DEBUG_FRAME,
 				nom, cadre:GetID(), cadre.size or 0, m.rangees))
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"   calcule %d x %d = grille %d + comble %d + extra %d | le cadre porte %.0f x %.0f  %s",
+				"   " .. L.BAGS_DEBUG_SIZE,
 				m.largeur, m.hauteur, m.grille, m.comble, m.extra, reelleL, reelleH,
-				accord and "|cff44ff44ACCORD|r" or "|cffff4444DESACCORD|r"))
+				accord and ("|cff44ff44" .. L.BAGS_DEBUG_MATCH .. "|r") or ("|cffff4444" .. L.BAGS_DEBUG_MISMATCH .. "|r")))
 
 			if not accord then
 				-- Le temoin dit LEQUEL des deux cas on tient.
 				DEFAULT_CHAT_FRAME:AddMessage(string.format(
-					"   temoin : pose %s, relu aussitot %s, defaite %s fois -> %s",
+					"   " .. L.BAGS_DEBUG_WITNESS,
 					tostring(cadre.foreverDemande), tostring(cadre.foreverRelue),
 					tostring(cadre.foreverDefaite or 0),
 					(cadre.foreverRelue and cadre.foreverDemande
 						and math.abs(cadre.foreverRelue - cadre.foreverDemande) < 0.5)
-						and "|cffff4444quelqu'un repose la taille APRES nous|r"
-						or "|cffff4444les ancrages du cadre imposent sa hauteur|r"))
+						and ("|cffff4444" .. L.BAGS_DEBUG_RESIZED_AFTER .. "|r")
+						or ("|cffff4444" .. L.BAGS_DEBUG_ANCHORS_FORCE .. "|r")))
 
-				local lignes = string.format("   %d ancrage(s) :", cadre:GetNumPoints())
+				local lignes = string.format("   " .. L.BAGS_DEBUG_ANCHORS, cadre:GetNumPoints())
 				for index = 1, cadre:GetNumPoints() do
 					local point, cible, pointCible, x, y = cadre:GetPoint(index)
-					lignes = lignes .. string.format(" [%s sur %s de %s, %d, %d]",
+					lignes = lignes .. string.format(L.BAGS_DEBUG_ANCHOR,
 						tostring(point), tostring(pointCible),
-						cible and (cible.GetName and cible:GetName() or "?") or "l'ecran",
+						cible and (cible.GetName and cible:GetName() or "?") or L.BAGS_DEBUG_SCREEN,
 						x or 0, y or 0)
 				end
 				DEFAULT_CHAT_FRAME:AddMessage(lignes)
@@ -1478,11 +1478,11 @@ ForeverUI.BagsDebug = function()
 
 	if ouverts == 0 then
 		DEFAULT_CHAT_FRAME:AddMessage(
-			"|cff66ccffForeverUI|r aucun sac ouvert : ouvrez-en un puis refaites /fui sacs")
+			"|cff66ccffForeverUI|r " .. L.BAGS_DEBUG_NO_BAG_OPEN)
 	end
 
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   cadres habilles %d | case %.0f | champ visible=%s",
+		"   " .. L.BAGS_DEBUG_SKINNED,
 		#cadres, R.emplacement, tostring(champ:IsShown())))
 
 	-- LE SEGMENT DES MONNAIES SUIVIES : ce que le client donne, et ce qu'on
@@ -1495,10 +1495,10 @@ ForeverUI.BagsDebug = function()
 	local segment = _G["ForeverUIBagTokens"]
 	local ancien = _G["BackpackTokenFrame"]
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   monnaies suivies %d/%d : %s", #suivies, MAX_WATCHED_TOKENS or 3,
-		(#noms > 0) and table.concat(noms, ", ") or "aucune"))
+		"   " .. L.BAGS_DEBUG_TOKENS, #suivies, MAX_WATCHED_TOKENS or 3,
+		(#noms > 0) and table.concat(noms, ", ") or L.BAGS_DEBUG_NONE))
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   segment : le notre visible=%s | celui du client visible=%s",
+		"   " .. L.BAGS_DEBUG_SEGMENT,
 		tostring(segment and segment:IsShown()),
 		tostring(ancien and ancien:IsShown())))
 
@@ -1525,17 +1525,17 @@ end
 -- Changer un reglage en jeu, pour essayer avant de le figer dans le fichier.
 function ForeverUI.BagsSet(cle, valeur)
 	if R[cle] == nil then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r reglage inconnu : " .. tostring(cle))
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.BAGS_UNKNOWN_SETTING .. tostring(cle))
 		return false
 	end
 	local nombre = tonumber(valeur)
 	if not nombre then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r valeur attendue : un nombre")
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.BAGS_NUMBER_EXPECTED)
 		return false
 	end
 	R[cle] = nombre
 	ForeverUI.BagsApply()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r sacs : %s = %s", cle, tostring(nombre)))
+		"|cff66ccffForeverUI|r " .. L.BAGS_SET, cle, tostring(nombre)))
 	return true
 end

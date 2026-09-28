@@ -72,6 +72,7 @@ local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 local LFG = "Interface" .. SEP .. "ForeverUI" .. SEP .. "lfgframe" .. SEP
 
 local P = {
@@ -697,4 +698,4 @@ R.minuterie = minuterie
 creerBoutons()
 RegisterStateDriver(conteneur, "visibility", "[group:raid] show; hide")
 R.disposer()
-ForeverUI.Layout.Register(conteneur, "raidframe", "Cadres de raid", "TOPLEFT", "TOPLEFT", P.x, P.y)
+ForeverUI.Layout.Register(conteneur, "raidframe", L.RAIDFRAME_EDIT_LABEL, "TOPLEFT", "TOPLEFT", P.x, P.y)

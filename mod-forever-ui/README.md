@@ -22,7 +22,7 @@ nothing else is allowed to disturb.
 | Micro menu and bags bar | The micro buttons, and beside them the backpack, the bag slots and the keyring. | done |
 | Experience and reputation bars | Both bars, their fills, and the reputation colour per standing. | done |
 | Bags | Panel, slots, search box, sort button, round portrait in its ring, and under the money the currencies the player has chosen to watch. | done |
-| Character sheet | The window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, and the stat lines -- now on a banded background under a framed category header. The right pane opens on three tabs: character stats, the equipment manager (set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet), and the titles the character has earned, the worn one ticked. The right pane folds away, and the side tabs stay where they are. | done, except the titles tab and the new look of the stat lines, which are waiting to be accepted |
+| Character sheet | The window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, and the stat lines -- now on a banded background under a framed category header. The right pane opens on three tabs: character stats, the equipment manager (set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet), and the titles the character has earned, the worn one ticked. The right pane folds away, and the side tabs stay where they are. | done |
 | Reputation | The factions the player knows, their blocks folded and unfolded, a standing bar per faction, and beside it the faction's own description with its three switches. A faction at war wears its own colour. | done |
 | Skills | The skill lines the player knows, their blocks folded and unfolded, a bar per skill, and beside it the skill's description. | done |
 | PvP | The season, the rank and its badge, and the ring filling towards the next rank. The ranks come from the titles the server awards, the honourable kills being what moves the ring. Beside it, what the client still knows of honour. | done |
@@ -33,23 +33,43 @@ nothing else is allowed to disturb.
 | Minimap | The map in its modern frame, the clock and the calendar, the player's coordinates, and the arrows on the edge. | done |
 | World map and quest log | The map in a window the player can move, the quest log as a pane beside it with the list and each quest's page, the maximized map, and the floor selector of dungeons. | done |
 | Quest tracker | Quests and achievements under their headers, folded and unfolded, the objectives ticked as they are met, the sort and filter menu, a left click opening the quest on the map. | done |
-| Chat | -- | not started |
+| Chat | The window on its background, the button column, the thin scroll bar and the flashing return-to-bottom button, the friends button, the tabs and the dock, the input box. At rest only the messages remain; the window lights up under the mouse. Holding Alt and dragging selects text as in an editor, Ctrl+C copies it, and any other action clears the selection. | done |
 | Tooltips | -- | not started |
-| Buffs and debuffs | -- | not started |
-| Party and raid frames | The party frames beside the screen edge, and the compact raid frames in groups. | party frames done, raid frames waiting to be accepted |
+| Buffs and debuffs | The buff and debuff bars with their timers, weapon enchants, and consolidated buffs. | done |
+| Party and raid frames | The party frames beside the screen edge, and the compact raid frames in groups. | done |
 | Spellbook | The book on one page or two, a category per tab, the spells in a grid under the category's name, passives round, similar spells grouped on flyouts, the settings menu, and the search with its preview. Pages, categories, flyouts, the size and the settings all work in combat. | done |
 | Talents | The talent trees, the specializations, the pet's talents, the glyphs and the search. | done |
 | Social | Contacts (friends and ignored), who, guild, chat channels and raid, in one window with its bottom tabs; the micro button wears the guild tabard. | done |
 | Guild tabard | The window where a guild designs its tabard, the character standing in it. | done |
 | Group finder | The dungeon finder and the raid browser in one movable window with side tabs. Dungeons: roles, the dungeon types as buttons with the chosen one's description and rewards below, the specific dungeons list. Raids: a bottom tab to list the group -- the raids under folding categories like the character sheet's, and a comment -- and one to join, a raid's players and groups with their tooltip. | done |
-| Character select and creation | -- | not started |
+| Login screens | Login, the main menu, character select and creation, the dialogs, the realm list, the AddOns list, the options (video and sound), the cinematics and the credits. | done; the other login screens are left as they are, on request |
 
 Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
 `/fui reset` puts a piece -- or all of them -- back where the reference puts it.
 
+## Languages
+
+No text is written in the code. A text the 3.3.5 client already knows is read
+from its own strings (`GlobalStrings.lua`, `GlueStrings.lua` at the login
+screens), so it follows the client's language by itself. Every other text is
+read from a language file, English being the base:
+
+    data/addon/ForeverUI/Textes_enUS.lua                 in game, English
+    data/addon/ForeverUI/Textes_frFR.lua                 in game, French
+    data/glue/Interface/GlueXML/ForeverUIGlueTextes_*.lua  login screens
+
+A key missing from a language shows the English text, and a client whose
+language has no file reads English. To add a language, copy the `enUS` file to
+the client's locale code (`Textes_deDE.lua`...), translate the values without
+touching the keys or the `%s` / `%d` (same number, same order: Lua 5.1 cannot
+reorder them), and list the file after the English one in the `.toc` (or in
+`ForeverUIGlue.xml`). The mock client refuses a key used in the code that is
+missing from English or French.
+
 ## Layout of this folder
 
     data/addon/ForeverUI/     the addon itself, .lua and .toc -- the source
+    data/glue/                the login screens, which go into patch-Z
     data/art/interface/       the .blp that go into the client patch, each with
                               a .png beside it to see what it holds
     docs/AMELIORATIONS.md     the points asked for, and nothing else
@@ -63,6 +83,8 @@ Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
                               3.3.5 cannot make on screen
     tools/decouper_elements.py  cuts elements out of sheets too wide for 3.3.5,
                               each at its own size
+    tools/cartes_instances.py generates the dungeon and raid maps by name, in
+                              every language the client's map addon knows
 
 ## Working on it
 
@@ -82,6 +104,7 @@ New art follows the same path: the `.blp` and its `.png` preview land in
     python tools/deployer.py                 addon and art
     python tools/deployer.py --addon         the addon alone, client may stay open
     python tools/deployer.py --art           the art alone, close the client first
+    python tools/deployer.py --glue          the login screens, close the client first
 
 The addon files are read at login: after `--addon`, a `/reload` in game is
 enough -- *unless a file was ADDED*. The client lists an addon's files when it

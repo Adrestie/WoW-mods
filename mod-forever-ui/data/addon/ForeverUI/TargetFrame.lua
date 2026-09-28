@@ -39,6 +39,7 @@
 --   portrait quand la cible est verrouillee par quelqu'un d'autre.
 
 local FRAME_WIDTH, FRAME_HEIGHT = 232, 100
+local L = ForeverUI.L
 
 local ART = {
 	normal = "ui-hud-unitframe-target-portraiton",
@@ -566,4 +567,4 @@ ForeverUI.TargetOfTarget = tot
 ForeverUI.TargetOfTargetUpdate = updateTargetOfTarget
 
 ForeverUI.TargetFrame = frame
-ForeverUI.Layout.Register(frame, "targetframe", "Cadre de cible", "TOPLEFT", "TOPLEFT", 250, -10)
+ForeverUI.Layout.Register(frame, "targetframe", L.TARGETFRAME_EDIT_LABEL, "TOPLEFT", "TOPLEFT", 250, -10)

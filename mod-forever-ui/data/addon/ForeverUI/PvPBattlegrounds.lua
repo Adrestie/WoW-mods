@@ -50,6 +50,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local B = {}
 ForeverUI.PvPBattlegrounds = B
@@ -205,12 +206,12 @@ local function majEtats()
 					if statut == "queued" then
 						l.etat.texture:SetTexture(PVP .. "PVP-Currency-" .. faction())
 						l.etat.texture:SetTexCoord(0, 1, 0, 1)
-						l.etat.tooltip = txt("BATTLEFIELD_QUEUE_STATUS", "In Queue")
+						l.etat.tooltip = BATTLEFIELD_QUEUE_STATUS
 						l.etat:Show()
 					elseif statut == "confirm" then
 						l.etat.texture:SetTexture(ICONE_ETAT)
 						l.etat.texture:SetTexCoord(0.45, 0.95, 0.0, 0.5)
-						l.etat.tooltip = txt("BATTLEFIELD_CONFIRM_STATUS", "Ready to Enter")
+						l.etat.tooltip = BATTLEFIELD_CONFIRM_STATUS
 						l.etat:Show()
 					end
 				end
@@ -233,7 +234,7 @@ local function majListe()
 				choisi = i
 			end
 			if fete then
-				l.nom:SetText(nom .. " (" .. txt("BATTLEGROUND_HOLIDAY", "Call to Arms") .. ")")
+				l.nom:SetText(nom .. " (" .. BATTLEGROUND_HOLIDAY .. ")")
 			else
 				l.nom:SetText(nom)
 			end
@@ -365,9 +366,9 @@ end
 local function majBoutons()
 	local _, _, groupeMax = GetBattlefieldInfo()
 	if groupeMax and groupeMax == 5 then
-		rejoindreGroupe:SetText(txt("JOIN_AS_PARTY", "Join as Party"))
+		rejoindreGroupe:SetText(JOIN_AS_PARTY)
 	else
-		rejoindreGroupe:SetText(txt("JOIN_AS_GROUP", "Join as Group"))
+		rejoindreGroupe:SetText(JOIN_AS_GROUP)
 	end
 	if ((GetNumPartyMembers() > 0) or (GetNumRaidMembers() > 0)) and IsPartyLeader() then
 		rejoindreGroupe:Enable()
@@ -411,7 +412,7 @@ function B.monter(volet)
 	end
 	local boutonL = math.floor((largeur - 2 * MARGE - BOUTON_ECART) / 2)
 	rejoindreGroupe = ForeverUI.PvPArena.boutonPanneau(cadre,
-		txt("BATTLEFIELD_GROUP_JOIN", "Join as Group"), boutonL, BOUTON_H)
+		BATTLEFIELD_GROUP_JOIN, boutonL, BOUTON_H)
 	rejoindreGroupe:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", MARGE, BOUTONS_BAS)
 	rejoindreGroupe:SetScript("OnClick", function()
 		if choisi then
@@ -419,7 +420,7 @@ function B.monter(volet)
 		end
 	end)
 	rejoindre = ForeverUI.PvPArena.boutonPanneau(cadre,
-		txt("BATTLEFIELD_JOIN", "Join Battle"), boutonL, BOUTON_H)
+		BATTLEFIELD_JOIN, boutonL, BOUTON_H)
 	rejoindre:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -MARGE, BOUTONS_BAS)
 	rejoindre:SetScript("OnClick", function()
 		if choisi then
@@ -434,10 +435,10 @@ function B.monter(volet)
 	B.recompensesCadre:SetPoint("BOTTOMRIGHT", rejoindre, "TOPRIGHT", 0, RECOMPENSES_SUR_BOUTONS)
 	B.recompensesCadre:SetHeight(2 * RECOMPENSE_H + RECOMPENSES_ECART + 2 * INTERIEUR)
 	recompenses = {}
-	recompenses.victoire = creerRecompense(txt("WIN", "Win"), "GREEN_FONT_COLOR", VERT)
+	recompenses.victoire = creerRecompense(WIN, "GREEN_FONT_COLOR", VERT)
 	recompenses.victoire:SetPoint("TOPLEFT", B.recompensesCadre, "TOPLEFT", INTERIEUR, -INTERIEUR)
 	recompenses.victoire:SetPoint("TOPRIGHT", B.recompensesCadre, "TOPRIGHT", -INTERIEUR, -INTERIEUR)
-	recompenses.defaite = creerRecompense(txt("LOSS", "Loss"), "RED_FONT_COLOR", ROUGE)
+	recompenses.defaite = creerRecompense(LOSS, "RED_FONT_COLOR", ROUGE)
 	recompenses.defaite:SetPoint("TOPLEFT", recompenses.victoire, "BOTTOMLEFT", 0, -RECOMPENSES_ECART)
 	recompenses.defaite:SetPoint("TOPRIGHT", recompenses.victoire, "BOTTOMRIGHT", 0, -RECOMPENSES_ECART)
 	B.recompenses = recompenses
@@ -493,13 +494,13 @@ function ForeverUI.PvPBattlegroundsDebug()
 	end
 	for i = 1, GetNumBattlegroundTypes() do
 		local nom, peutEntrer, fete, aleatoire, id = GetBattlegroundInfo(i)
-		dire(string.format("%d : %s entrer=%s fete=%s aleatoire=%s id=%s%s", i,
+		dire(string.format(L.PVPBATTLEGROUNDS_DEBUG_ROW, i,
 			tostring(nom), tostring(peutEntrer), tostring(fete), tostring(aleatoire),
-			tostring(id), (i == choisi) and " <- choisi" or ""))
+			tostring(id), (i == choisi) and L.PVPBATTLEGROUNDS_DEBUG_SELECTED or ""))
 	end
 	local nomCarte, _, groupeMax = GetBattlefieldInfo()
-	dire(string.format("GetBattlefieldInfo : %s, groupe max %s", tostring(nomCarte), tostring(groupeMax)))
-	dire(string.format("aleatoire : %s | appel aux armes : %s",
+	dire(string.format(L.PVPBATTLEGROUNDS_DEBUG_INFO, tostring(nomCarte), tostring(groupeMax)))
+	dire(string.format(L.PVPBATTLEGROUNDS_DEBUG_BONUSES,
 		table.concat({ tostring((select(2, GetRandomBGHonorCurrencyBonuses()))),
 			tostring((select(3, GetRandomBGHonorCurrencyBonuses()))),
 			tostring((select(4, GetRandomBGHonorCurrencyBonuses()))),
@@ -510,6 +511,6 @@ function ForeverUI.PvPBattlegroundsDebug()
 			tostring((select(5, GetHolidayBGHonorCurrencyBonuses()))) }, "/")))
 	for i = 1, (MAX_BATTLEFIELD_QUEUES or 3) do
 		local statut, nomFile = GetBattlefieldStatus(i)
-		dire(string.format("file %d : %s %s", i, tostring(statut), tostring(nomFile)))
+		dire(string.format(L.PVPBATTLEGROUNDS_DEBUG_QUEUE, i, tostring(statut), tostring(nomFile)))
 	end
 end

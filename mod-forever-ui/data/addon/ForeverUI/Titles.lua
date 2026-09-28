@@ -63,6 +63,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 -- LA LIGNE PREND TOUTE LA LARGEUR DU VOLET, MOINS SA MARGE.
 --
@@ -114,7 +115,7 @@ local panneau, decalage, lignes, titres, choisi = nil, 0, {}, {}, -1
 -- -------------------------------------------------------------- les donnees
 
 local function nomAucun()
-	return PLAYER_TITLE_NONE or NONE or "None"
+	return NONE
 end
 
 -- LES TITRES QUE LE PERSONNAGE POSSEDE.
@@ -389,8 +390,7 @@ function ForeverUI.TitlesDebug()
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t)
 	end
 	local liste = lireTitres()
-	dire(string.format("titres : %d connu(s) + Aucun, porte=%s, decalage=%d,"
-		.. " %d ligne(s) posables", #liste - 1, tostring(titrePorte()),
+	dire(string.format(L.TITLES_DEBUG_SUMMARY, #liste - 1, tostring(titrePorte()),
 		decalage, panneau and tiennent() or 0))
 	local noms = {}
 	for index = 1, math.min(#liste, 8) do
@@ -401,6 +401,7 @@ function ForeverUI.TitlesDebug()
 	for _, nom in ipairs(MENU_DU_CLIENT) do
 		local cadre = _G[nom]
 		dire(string.format("   %s : %s", nom,
-			cadre and (cadre:IsShown() and "VISIBLE" or "masque") or "absent"))
+			cadre and (cadre:IsShown() and L.TITLES_DEBUG_VISIBLE or L.TITLES_DEBUG_HIDDEN)
+			or L.TITLES_DEBUG_ABSENT))
 	end
 end

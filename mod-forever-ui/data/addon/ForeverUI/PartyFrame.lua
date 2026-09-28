@@ -62,6 +62,7 @@ local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 
 -- une table : Lua 5.1 limite a 60 les valeurs capturees par une fonction
 local P = {
@@ -710,4 +711,4 @@ end
 RegisterStateDriver(conteneur, "visibility", "[group:raid] hide; [group] show; hide")
 
 G.disposer()
-ForeverUI.Layout.Register(conteneur, "partyframe", "Cadres de groupe", "TOPLEFT", "TOPLEFT", P.x, P.y)
+ForeverUI.Layout.Register(conteneur, "partyframe", L.PARTYFRAME_EDIT_LABEL, "TOPLEFT", "TOPLEFT", P.x, P.y)

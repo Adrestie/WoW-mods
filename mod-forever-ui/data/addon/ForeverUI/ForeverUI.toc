@@ -1,6 +1,7 @@
 ## Interface: 30300
 ## Title: ForeverUI
-## Notes: Interface moderne portee sur 3.3.5 : atlas adresses par SetTexCoord, positions modifiables.
+## Notes: Modern interface ported to 3.3.5: atlases addressed through SetTexCoord, movable positions.
+## Notes-frFR: Interface moderne portée sur 3.3.5 : atlas adressés par SetTexCoord, positions modifiables.
 ## Version: 1.2
 ## SavedVariables: ForeverUIDB
 
@@ -12,6 +13,10 @@ UIAtlas_04_cadres_unite.lua
 UIAtlas_05_feuille_perso.lua
 UIAtlas_06_complements.lua
 UIAtlas_07_decoupes.lua
+
+Textes.lua
+Textes_enUS.lua
+Textes_frFR.lua
 
 AtlasUtil.lua
 Panes.lua

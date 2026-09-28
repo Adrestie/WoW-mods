@@ -82,6 +82,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local SAISON_X, SAISON_Y = -46, -18
 -- LE HAUT DU VOLET (demande du 2026-09-25 : y faire entrer les equipes
@@ -210,9 +211,9 @@ end
 -- ECART ASSUME : "Civilian" N'EST PAS UNE CHAINE DU CLIENT. Cherchee dans
 -- GlobalStrings -- les quarante chaines de rang vont de PVP_RANK_0 a
 -- PVP_RANK_19, aucune ne la porte -- et dans le binaire : absente des deux.
--- Elle est donc ecrite en clair ici, et ne se traduira pas. L'autre choix
--- serait de n'ecrire aucun titre du tout ; celui-ci a ete demande.
-local NOM_SANS_RANG = "Civilian"
+-- Elle vient donc de la table des textes. L'autre choix serait de n'ecrire
+-- aucun titre du tout ; celui-ci a ete demande.
+local NOM_SANS_RANG = L.PVPTAB_CIVILIAN
 
 local function nomDuRang(indice)
 	if not indice or indice <= 0 then
@@ -547,11 +548,11 @@ local function majBloc()
 	-- "Honorable Kills", HONOR_TODAY "Today", HONOR_YESTERDAY "Yesterday".
 	local honneur = lireHonneur()
 	local cases = {
-		{ HONOR_POINTS or "", honneur.courant },
-		{ HONORABLE_KILLS or "", honneur.vie },
-		{ HONOR_TODAY or "",
+		{ HONOR_POINTS, honneur.courant },
+		{ HONORABLE_KILLS, honneur.vie },
+		{ HONOR_TODAY,
 		  tostring(honneur.jour) .. " (" .. tostring(honneur.pointsJour) .. ")" },
-		{ HONOR_YESTERDAY or "",
+		{ HONOR_YESTERDAY,
 		  tostring(honneur.hier) .. " (" .. tostring(honneur.pointsHier) .. ")" },
 	}
 	for n, c in ipairs(cases) do
@@ -841,7 +842,7 @@ function ForeverUI.PvPDebug(essai)
 	-- regarder ; le prochain evenement de rang la remet sur la vraie.
 	if essai then
 		majJauge(essai)
-		dire(string.format("jauge posee a %.0f %% (valeur d'essai)",
+		dire(string.format(L.PVPTAB_DEBUG_TEST_VALUE,
 			essai * 100))
 	else
 		-- Sans valeur, le temoin REMET la jauge sur la progression reelle :
@@ -854,8 +855,7 @@ function ForeverUI.PvPDebug(essai)
 	if indice and GetPVPRankInfo then
 		nom, numero = GetPVPRankInfo(indice, "player")
 	end
-	dire(string.format("compteur de rang : UnitPVPRank=%s -> nom=%s numero=%s"
-		.. " | GetPVPRankProgress=%s",
+	dire(string.format(L.PVPTAB_DEBUG_RANK_COUNTER,
 		tostring(indice), tostring(nom), tostring(numero),
 		tostring(GetPVPRankProgress and GetPVPRankProgress())))
 
@@ -867,21 +867,19 @@ function ForeverUI.PvPDebug(essai)
 			connus[#connus + 1] = tostring(numero2)
 		end
 	end
-	dire(string.format("titres de rang (%s, identifiants %d a %d) : %s",
+	dire(string.format(L.PVPTAB_DEBUG_RANK_TITLES,
 		faction(), premier, premier + RANGS - 1,
-		(#connus > 0) and table.concat(connus, " ") or "aucun"))
+		(#connus > 0) and table.concat(connus, " ") or L.PVPTAB_DEBUG_NONE))
 
 	local r = lireRang()
-	dire(string.format("retenu : rang=%s nom=%s | victoires=%d seuil=%s"
-		.. " -> progres=%.3f",
+	dire(string.format(L.PVPTAB_DEBUG_KEPT,
 		tostring(r.numero), tostring(r.nom), r.victoires or 0,
 		tostring(r.seuil), r.progres or 0))
 
 	local h = lireHonneur()
-	dire(string.format("honneur : courant=%d vie=%d meilleurRang=%d "
-		.. "aujourd'hui=%d (%d) hier=%d (%d)",
+	dire(string.format(L.PVPTAB_DEBUG_HONOR,
 		h.courant, h.vie, h.meilleurRang, h.jour, h.pointsJour, h.hier, h.pointsHier))
-	dire(string.format("saison d'arene : %s | faction : %s",
+	dire(string.format(L.PVPTAB_DEBUG_SEASON,
 		tostring(GetCurrentArenaSeason and GetCurrentArenaSeason()), faction()))
 
 	-- CE QUE MONTRE LA JAUGE, quart par quart : "plein", "arc" ou "vide".
@@ -889,18 +887,18 @@ function ForeverUI.PvPDebug(essai)
 		local etats = {}
 		for i = 1, 4 do
 			local q = bloc.jauge[i]
-			local etat = "vide"
+			local etat = L.PVPTAB_DEBUG_QUARTER_EMPTY
 			if q.plein:IsShown() then
-				etat = "plein"
+				etat = L.PVPTAB_DEBUG_QUARTER_FULL
 			elseif q.arc:IsShown() then
-				etat = "arc"
+				etat = L.PVPTAB_DEBUG_QUARTER_ARC
 			end
 			etats[i] = string.format("%d(%d)=%s", i, q.depart, etat)
 		end
-		dire("jauge : depart " .. tostring(JAUGE_DEPART) .. " sens "
-			.. tostring(JAUGE_SENS) .. " | " .. table.concat(etats, " "))
+		dire(string.format(L.PVPTAB_DEBUG_GAUGE, tostring(JAUGE_DEPART),
+			tostring(JAUGE_SENS), table.concat(etats, " ")))
 	else
-		dire("jauge : l'ecran n'est pas encore monte")
+		dire(L.PVPTAB_DEBUG_GAUGE_NOT_BUILT)
 	end
 end
 

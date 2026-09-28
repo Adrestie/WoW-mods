@@ -64,6 +64,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local LISTE_X, LISTE_Y = 10, -40
 local LISTE_X2, LISTE_Y2 = -25, 15
@@ -832,14 +833,14 @@ function ForeverUI.TokensDebug()
 	end
 
 	local total = (GetCurrencyListSize and GetCurrencyListSize()) or 0
-	dire(string.format("monnaies : %d dans la liste, decalage %d, %d posee(s),"
-		.. " choisie=%s", total, decalage, visibles, tostring(choisie)))
+	dire(string.format(L.TOKENSTAB_DEBUG_SUMMARY, total, decalage, visibles,
+		tostring(choisie)))
 
 	for rang = 1, math.min(total, 12) do
 		local devise = lireDevise(rang)
 		if devise then
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"   %2d %-28s %s compte=%-8s special=%-4s suivie=%-5s inutilisee=%s",
+				L.TOKENSTAB_DEBUG_ROW,
 				rang, devise.nom,
 				devise.entete and (devise.deplie and "[-]" or "[+]") or "   ",
 				tostring(devise.compte), tostring(devise.special),
@@ -848,7 +849,7 @@ function ForeverUI.TokensDebug()
 	end
 
 	local jeton = _G["TokenFrame"]
-	dire(string.format("client : selectedToken=%s selectedID=%s | ecran=%s",
+	dire(string.format(L.TOKENSTAB_DEBUG_CLIENT,
 		tostring(jeton and jeton.selectedToken),
 		tostring(jeton and jeton.selectedID),
 		tostring(jeton and jeton:IsShown())))

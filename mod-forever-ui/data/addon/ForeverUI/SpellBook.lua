@@ -117,16 +117,17 @@ local METAL = {
 
 local ENCRE = { 0.18, 0.106, 0.059 }       -- SPELLBOOK_FONT_COLOR
 local POLICE = "Fonts\\FRIZQT__.TTF"
+local L = ForeverUI.L
 local TEXTE = {
-	titre = SPELLBOOK or "Spellbook",
-	page = "Page %d/%d",                    -- PAGE_NUMBER_WITH_MAX
-	passif = SPELL_PASSIVE or "Passive",
-	familier = PET or "Pet",
+	titre = SPELLBOOK,
+	page = L.SPELLBOOK_PAGE,                -- PAGE_NUMBER_WITH_MAX
+	passif = SPELL_PASSIVE,
+	familier = PET,
 	-- les reglages : SPELLBOOK_FILTER_PASSIVES et SHOW_ALL_SPELL_RANKS de camelot
-	masquerPassifs = "Hide Passives",
-	tousLesRangs = "Show all spell ranks",
-	volants = "Group Similar Spells on Flyouts",   -- SPELLBOOK_USE_FLYOUTS
-	passifsDesactives = "Hiding Passives is disabled while searching",   -- SPELLBOOK_SEARCH_HIDE_PASSIVES_DISABLED
+	masquerPassifs = L.SPELLBOOK_HIDE_PASSIVES,
+	tousLesRangs = SHOW_ALL_SPELL_RANKS,
+	volants = L.SPELLBOOK_USE_FLYOUTS,   -- SPELLBOOK_USE_FLYOUTS
+	passifsDesactives = L.SPELLBOOK_HIDE_PASSIVES_DISABLED,   -- SPELLBOOK_SEARCH_HIDE_PASSIVES_DISABLED
 }
 
 -- LE MENU DES REGLAGES, en boutons securises. Il reprend la liste du client
@@ -271,71 +272,71 @@ local VOLANTS = {
 	-- et WotLK ajoutent, verifiees dans le Spell.dbc du serveur : Exodar /
 	-- Silvermoon, Shattrath (un sort par faction), Theramore / Stonard,
 	-- Dalaran (le meme pour les deux).
-	{ id = 248, nom = "Portal", icone = "spell_arcane_portalstormwind", faction = "Alliance",
-		texte = "Creates a portal, teleporting group members who use it to a major city.",
+	{ id = 248, nom = L.SPELLBOOK_FLYOUT_PORTAL, icone = "spell_arcane_portalstormwind", faction = "Alliance",
+		texte = L.SPELLBOOK_FLYOUT_PORTAL_DESC,
 		sorts = { 11419, 11416, 10059, 32266, 33691, 49360, 53142 } },
-	{ id = 249, nom = "Portal", icone = "spell_arcane_portalorgrimmar", faction = "Horde",
-		texte = "Creates a portal, teleporting group members who use it to a major city.",
+	{ id = 249, nom = L.SPELLBOOK_FLYOUT_PORTAL, icone = "spell_arcane_portalorgrimmar", faction = "Horde",
+		texte = L.SPELLBOOK_FLYOUT_PORTAL_DESC,
 		sorts = { 11417, 11420, 11418, 32267, 35717, 49361, 53142 } },
-	{ id = 250, nom = "Teleport", icone = "spell_arcane_teleportstormwind", faction = "Alliance",
-		texte = "Teleports you to a major city.",
+	{ id = 250, nom = L.SPELLBOOK_FLYOUT_TELEPORT, icone = "spell_arcane_teleportstormwind", faction = "Alliance",
+		texte = L.SPELLBOOK_FLYOUT_TELEPORT_DESC,
 		sorts = { 3565, 3562, 3561, 1297659, 32271, 33690, 49359, 53140 } },
-	{ id = 251, nom = "Teleport", icone = "spell_arcane_teleportorgrimmar", faction = "Horde",
-		texte = "Teleports you to a major city.",
+	{ id = 251, nom = L.SPELLBOOK_FLYOUT_TELEPORT, icone = "spell_arcane_teleportorgrimmar", faction = "Horde",
+		texte = L.SPELLBOOK_FLYOUT_TELEPORT_DESC,
 		sorts = { 3567, 3566, 3563, 1297659, 32272, 35715, 49358, 53140 } },
-	{ id = 253, nom = "Aspect", icone = "ability_hunter_aspectmastery",
-		texte = "Take on aspects of nature.",
+	{ id = 253, nom = L.SPELLBOOK_FLYOUT_ASPECT, icone = "ability_hunter_aspectmastery",
+		texte = L.SPELLBOOK_FLYOUT_ASPECT_DESC,
 		sorts = { 13163, 13165, 14318, 14319, 14320, 14321, 14322, 25296, 5118, 13161,
 			1299445, 1299446, 1299447, 13159, 20043, 20190,
 			34074, 61846 } },                        -- + Viper, Dragonhawk
-	{ id = 259, nom = "Summon Demon", icone = "spell_shadow_summonimp",
-		texte = "Summons a Demon under the command of the Warlock",
+	{ id = 259, nom = L.SPELLBOOK_FLYOUT_SUMMON_DEMON, icone = "spell_shadow_summonimp",
+		texte = L.SPELLBOOK_FLYOUT_SUMMON_DEMON_DESC,
 		sorts = { 688, 697, 712, 713, 691,
 			30146 } },                               -- + Felguard
-	{ id = 261, nom = "Imp Spells", icone = "spell_fire_firebolt",
-		texte = "[PH] Commands the Imp to cast spells",
+	{ id = 261, nom = L.SPELLBOOK_FLYOUT_IMP_SPELLS, icone = "spell_fire_firebolt",
+		texte = L.SPELLBOOK_FLYOUT_IMP_SPELLS_DESC,
 		sorts = { 20801, 6307, 2949, 4511 } },
-	{ id = 262, nom = "Shapeshift", icone = "ability_racial_bearform",
-		texte = "Shapeshift into a different form.",
+	{ id = 262, nom = L.SPELLBOOK_FLYOUT_SHAPESHIFT, icone = "ability_racial_bearform",
+		texte = L.SPELLBOOK_FLYOUT_SHAPESHIFT_DESC,
 		sorts = { 5487, 9634, 1066, 768, 783, 24858,
 			33943, 40120, 33891 } },                 -- + Flight, Swift Flight, Tree of Life
-	{ id = 264, nom = "Blessings", icone = "spell_magic_magearmor",
-		texte = "Places a Blessing on friendly targets.",
+	{ id = 264, nom = L.SPELLBOOK_FLYOUT_BLESSINGS, icone = "spell_magic_magearmor",
+		texte = L.SPELLBOOK_FLYOUT_BLESSINGS_DESC,
 		-- 1038 (Blessing of Salvation chez camelot) est devenu Hand of
 		-- Salvation : il passe avec les autres Hand, dans Utility Blessings
 		sorts = { 20217, 25291, 19838, 19837, 19836, 19835, 19834, 19740, 25290,
 			19854, 19853, 19852, 19850, 19742, 19979, 19978, 19977,
 			20911 } },                               -- + Sanctuary
-	{ id = 267, nom = "Pet Utilities", icone = "ability_hunter_beasttaming",
-		texte = "Manage your pets.",
+	{ id = 267, nom = L.SPELLBOOK_FLYOUT_PET_UTILITIES, icone = "ability_hunter_beasttaming",
+		texte = L.SPELLBOOK_FLYOUT_PET_UTILITIES_DESC,
 		sorts = { 883, 982, 6991, 2641, 1515, 1462, 5149 } },
-	{ id = 268, nom = "Tracking", icone = "ability_tracking",
-		texte = "Track your quarry.",
+	{ id = 268, nom = L.SPELLBOOK_FLYOUT_TRACKING, icone = "ability_tracking",
+		texte = L.SPELLBOOK_FLYOUT_TRACKING_DESC,
 		sorts = { 1494, 19878, 19879, 19880, 19882, 19885, 19883, 19884 } },
-	{ id = 269, nom = "Stances", icone = "ability_warrior_offensivestance",
-		texte = "Activate a combat stance.",
+	{ id = 269, nom = L.SPELLBOOK_FLYOUT_STANCES, icone = "ability_warrior_offensivestance",
+		texte = L.SPELLBOOK_FLYOUT_STANCES_DESC,
 		sorts = { 2457, 71, 2458 } },
-	{ id = 270, nom = "Auras", icone = "spell_holy_devotionaura",
-		texte = "Activate a protective aura for your group.",
+	{ id = 270, nom = AURAS, icone = "spell_holy_devotionaura",
+		texte = L.SPELLBOOK_FLYOUT_AURAS_DESC,
 		sorts = { 10301, 10300, 10299, 10298, 7294, 10293, 10292, 1032, 10291, 643,
 			10290, 465, 19746, 20218, 19900, 19899, 19891, 19898, 19897, 19888,
 			19896, 19895, 19876,
 			32223 } },                               -- + Crusader Aura
-	{ id = 272, nom = "Greater Blessings", icone = "spell_holy_greaterblessingofkings",
-		texte = "Blessings that target all members of your group that share the same class.",
+	{ id = 272, nom = L.SPELLBOOK_FLYOUT_GREATER_BLESSINGS, icone = "spell_holy_greaterblessingofkings",
+		texte = L.SPELLBOOK_FLYOUT_GREATER_BLESSINGS_DESC,
 		sorts = { 25895, 25898, 25916, 25782, 25918, 25894, 25890,
 			25899 } },                               -- + Greater Sanctuary
-	{ id = 273, nom = "Utility Blessings", icone = "spell_holy_sealofvalor",
-		texte = "Short duration Blessings used to save a single target.",
+	{ id = 273, nom = L.SPELLBOOK_FLYOUT_UTILITY_BLESSINGS, icone = "spell_holy_sealofvalor",
+		texte = L.SPELLBOOK_FLYOUT_UTILITY_BLESSINGS_DESC,
 		sorts = { 10278, 5599, 1022, 1044, 20729, 6940,
 			1038 } },                                -- + Hand of Salvation
 	-- DEUX GROUPES QUE CAMELOT N'A PAS (demande du 2026-09-25) : les sceaux et
 	-- les jugements du paladin, que son client classique ne groupe pas. Ni
 	-- identifiant, ni description, ni icone propre : le groupe prend celle
 	-- de son premier sort. Sorts verifies dans Spell.dbc et SkillLineAbility.
-	{ nom = "Seals",
+	{ nom = L.SPELLBOOK_FLYOUT_SEALS,
 		sorts = { 21084, 20164, 20165, 20166, 20375, 31801, 53736 } },
-	{ nom = "Judgements",
+	{ nom = L.SPELLBOOK_FLYOUT_JUDGEMENTS,
 		sorts = { 20271, 53408, 53407 } },
 }
 S.VOLANTS = VOLANTS
@@ -1821,7 +1822,7 @@ end
 ForeverUI.SpellBookDebug = function()
 	local prefixe = "|cff66ccffForeverUI|r "
 	if not S.livre then
-		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. "grimoire : pas construit.")
+		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. L.SPELLBOOK_DEBUG_NOT_BUILT)
 		return
 	end
 	local cats = categories()
@@ -1829,7 +1830,7 @@ ForeverUI.SpellBookDebug = function()
 	local noms = {}
 	for _, c in ipairs(cats) do table.insert(noms, c.nom .. " (" .. c.nombre .. ")") end
 	DEFAULT_CHAT_FRAME:AddMessage(prefixe .. string.format(
-		"grimoire : %.0f x %.0f, %s | categorie %d/%d, page %d/%d | %s",
-		S.livre:GetWidth(), S.livre:GetHeight(), reglages().reduit and "une page" or "deux pages",
+		L.SPELLBOOK_DEBUG_STATE,
+		S.livre:GetWidth(), S.livre:GetHeight(), reglages().reduit and L.SPELLBOOK_DEBUG_ONE_PAGE or L.SPELLBOOK_DEBUG_TWO_PAGES,
 		e.categorie, #cats, e.page, e.pages or 1, table.concat(noms, ", ")))
 end

@@ -96,7 +96,7 @@ function G.AtlasEtire(hote, nom, couche)
 	function obj:Poser(n)
 		self.e = G.atlas[string.lower(n)]
 		if not self.e then
-			error("element d'atlas absent de la table d'accueil : " .. tostring(n))
+			error(G.L.GLUE_ERROR_MISSING_ATLAS .. tostring(n))
 		end
 		decouper(self)
 	end

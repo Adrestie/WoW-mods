@@ -214,6 +214,7 @@ local AUTOUR = {
 }
 
 local PREFIX = "|cff66ccffForeverUI|r "
+local L = ForeverUI.L
 
 local function dire(message)
 	DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. message)
@@ -456,12 +457,12 @@ local function construire()
 	local fond = _G["MinimapBackdrop"]
 
 	if not cluster or not carte or not fond then
-		dire("minimap : le client n'a pas MinimapCluster, Minimap ou MinimapBackdrop.")
+		dire(L.MINIMAP_DEBUG_NO_CLIENT_FRAMES)
 		return false
 	end
 
 	if not ForeverUI.SetAtlas then
-		dire("minimap : AtlasUtil.lua manque, rien n'est habille.")
+		dire(L.MINIMAP_DEBUG_NO_ATLASUTIL)
 		return false
 	end
 
@@ -874,7 +875,7 @@ if construire() then
 	-- pose sa position definitive lui-meme, sinon elle serait la seule que le
 	-- joueur ne pourrait pas deplacer.
 	if ForeverUI.Layout and ForeverUI.Layout.Register then
-		ForeverUI.Layout.Register(_G["MinimapCluster"], "minimap", "Minimap",
+		ForeverUI.Layout.Register(_G["MinimapCluster"], "minimap", MINIMAP_LABEL,
 			"TOPRIGHT", "TOPRIGHT", 0, 0)
 	end
 end
@@ -883,7 +884,7 @@ end
 ForeverUI.MinimapDebug = function(argument)
 	local cluster, carte = M.cluster, M.carte
 	if not cluster or not carte then
-		dire("minimap : rien de construit.")
+		dire(L.MINIMAP_DEBUG_NOTHING_BUILT)
 		return
 	end
 
@@ -895,7 +896,7 @@ ForeverUI.MinimapDebug = function(argument)
 	local k = argument and tonumber(string.match(argument, "^echelle%s+([%d%.]+)$"))
 	if k and k > 0 then
 		appliquerEchelle(k)
-		dire(string.format("minimap : echelle %.3f, taille %.1f, a l'ecran %.1f",
+		dire(string.format(L.MINIMAP_DEBUG_SCALE,
 			k, carte:GetWidth(), carte:GetWidth() * k))
 		return
 	end
@@ -904,31 +905,31 @@ ForeverUI.MinimapDebug = function(argument)
 		DEFAULT_CHAT_FRAME:AddMessage("   " .. texte)
 	end
 
-	dire(string.format("minimap : cluster %.0f x %.0f | conteneur %.0f x %.0f | carte %.0f",
+	dire(string.format(L.MINIMAP_DEBUG_SIZES,
 		cluster:GetWidth(), cluster:GetHeight(),
 		M.conteneur:GetWidth(), M.conteneur:GetHeight(), carte:GetWidth()))
-	ligne(string.format("cadre %s | masque %s | echelle %.3f (projet %.3f)",
+	ligne(string.format(L.MINIMAP_DEBUG_FRAME,
 		ATLAS_CADRE, CHEMIN_MASQUE, M.echelle or 1, ECHELLE_CARTE))
-	ligne(string.format("zone : \"%s\" justifie %s, largeur %.0f",
+	ligne(string.format(L.MINIMAP_DEBUG_ZONE,
 		tostring(_G["MinimapZoneText"] and _G["MinimapZoneText"]:GetText()),
 		tostring(_G["MinimapZoneText"] and _G["MinimapZoneText"]:GetJustifyH()),
 		_G["MinimapZoneText"] and _G["MinimapZoneText"]:GetWidth() or 0))
-	ligne(string.format("zoom : niveau %s sur %s | plus visible=%s | moins visible=%s",
+	ligne(string.format(L.MINIMAP_DEBUG_ZOOM,
 		tostring(carte:GetZoom()), tostring(carte:GetZoomLevels()),
 		tostring(_G["MinimapZoomIn"] and _G["MinimapZoomIn"]:IsShown()),
 		tostring(_G["MinimapZoomOut"] and _G["MinimapZoomOut"]:IsShown())))
-	ligne(string.format("cycle : heure %s -> %s", tostring(GetGameTime and GetGameTime()),
-		M.jour and "jour" or "nuit"))
+	ligne(string.format(L.MINIMAP_DEBUG_CYCLE, tostring(GetGameTime and GetGameTime()),
+		M.jour and L.MINIMAP_DEBUG_DAY or L.MINIMAP_DEBUG_NIGHT))
 
-	ligne(string.format("horloge : %s | calendrier : %s | coordonnees : '%s'",
-		_G["TimeManagerClockButton"] and (M.horlogeHabillee and "habillee" or "pas habillee") or "pas chargee",
-		_G["GameTimeFrame"] and (_G["GameTimeFrame"]:IsShown() and "visible" or "masque") or "ABSENT",
+	ligne(string.format(L.MINIMAP_DEBUG_CLOCK,
+		_G["TimeManagerClockButton"] and (M.horlogeHabillee and L.MINIMAP_DEBUG_SKINNED or L.MINIMAP_DEBUG_NOT_SKINNED) or L.MINIMAP_DEBUG_NOT_LOADED,
+		_G["GameTimeFrame"] and (_G["GameTimeFrame"]:IsShown() and L.MINIMAP_DEBUG_VISIBLE or L.MINIMAP_DEBUG_HIDDEN) or L.MINIMAP_DEBUG_ABSENT,
 		tostring(M.coords and M.coords.texte:GetText())))
 
 	for _, item in ipairs(AUTOUR) do
 		local bouton = _G[item.nom]
-		ligne(string.format("%-26s %s, angle %d", item.nom,
-			bouton and (bouton:IsShown() and "visible" or "masque") or "ABSENT",
+		ligne(string.format(L.MINIMAP_DEBUG_BUTTON, item.nom,
+			bouton and (bouton:IsShown() and L.MINIMAP_DEBUG_VISIBLE or L.MINIMAP_DEBUG_HIDDEN) or L.MINIMAP_DEBUG_ABSENT,
 			item.angle))
 	end
 end

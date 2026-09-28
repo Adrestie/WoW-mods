@@ -84,6 +84,7 @@ ForeverUI = ForeverUI or {}
 
 local W = {}
 ForeverUI.WorldMap = W
+local L = ForeverUI.L
 
 -- LA GEOMETRIE, en une table (le Lua 5.1 du client refuse plus de 60
 -- upvalues par fonction).
@@ -134,14 +135,15 @@ local METAL_AGRANDI = {
 }
 
 -- LES CHAINES DE CAMELOT (GlobalStrings.db2 du client camelot). 3.3.5 n'a
--- ni MAP_AND_QUEST_LOG, ni les formats de coordonnees, ni WORLD.
+-- ni MAP_AND_QUEST_LOG, ni les formats de coordonnees, ni WORLD : elles
+-- sont dans Textes_<langue>.lua.
 local TEXTE = {
-	titre = "Map & Quest Log",          -- MAP_AND_QUEST_LOG
-	titreAgrandi = WORLD_MAP or "Map",  -- WORLD_MAP (3.3.5 l'a)
-	monde = "World",                    -- WORLD
-	curseur = "Cursor: %d, %d",         -- WORLD_MAP_CURSOR_COORDS_INTEGER
-	joueur = "Player: %d, %d",          -- WORLD_MAP_PLAYER_COORDS_INTEGER
-	montrer = "Show:",                  -- WORLD_MAP_FILTER_LABEL_SHOW
+	titre = L.WORLDMAP_TITLE,           -- MAP_AND_QUEST_LOG
+	titreAgrandi = WORLD_MAP,           -- WORLD_MAP (3.3.5 l'a)
+	monde = L.WORLDMAP_WORLD,           -- WORLD
+	curseur = L.WORLDMAP_CURSOR_COORDS, -- WORLD_MAP_CURSOR_COORDS_INTEGER
+	joueur = L.WORLDMAP_PLAYER_COORDS,  -- WORLD_MAP_PLAYER_COORDS_INTEGER
+	montrer = L.WORLDMAP_FILTER_SHOW,   -- WORLD_MAP_FILTER_LABEL_SHOW
 }
 
 -- LA BARRE DE NAVIGATION (navigationbar.xml). Deux fichiers, pas d'atlas.
@@ -657,7 +659,7 @@ local function construireBarre(carte)
 		end
 		-- le client a refuse : ce qu'il repond, pour comprendre
 		if not estCosmique() then
-			dire(string.format("carte du monde : \"World\" refuse par le client (carte %s, continent %s, zone %s, etage %s, zoom arriere %s)",
+			dire(string.format(L.WORLDMAP_DEBUG_WORLD_REFUSED,
 				tostring(GetMapInfo()), tostring(GetCurrentMapContinent()), tostring(GetCurrentMapZone()),
 				tostring(GetCurrentMapDungeonLevel()), tostring(IsZoomOutAvailable and IsZoomOutAvailable())))
 		end
@@ -1148,14 +1150,14 @@ end
 local function construire()
 	local carte = WorldMapFrame
 	if not carte or not WorldMapDetailFrame then
-		dire("carte du monde : le client n'a pas WorldMapFrame.")
+		dire(L.WORLDMAP_DEBUG_NO_FRAME)
 		return false
 	end
 	if W.construit then
 		return true
 	end
 	if not ForeverUI.SetAtlas then
-		dire("carte du monde : AtlasUtil.lua manque, rien n'est habille.")
+		dire(L.WORLDMAP_DEBUG_NO_ATLAS)
 		return false
 	end
 	-- le canevas : le rectangle de la carte, dans l'un ou l'autre mode
@@ -1579,7 +1581,7 @@ end)
 ForeverUI.WorldMapDebug = function()
 	local carte = WorldMapFrame
 	if not carte then
-		dire("carte du monde : absente.")
+		dire(L.WORLDMAP_DEBUG_MISSING)
 		return
 	end
 	local function ligne(texte)
@@ -1589,26 +1591,26 @@ ForeverUI.WorldMapDebug = function()
 	-- donne
 	for i = 1, (GetNumMapLandmarks and GetNumMapLandmarks() or 0) do
 		local nom, description, icone, x, y, lien = GetMapLandmarkInfo(i)
-		ligne(string.format("repere %d : %s (%s) icone %s, lien %s, carte d'instance %s", i, tostring(nom),
+		ligne(string.format(L.WORLDMAP_DEBUG_LANDMARK, i, tostring(nom),
 			tostring(description), tostring(icone), tostring(lien), tostring(carteDePortail(nom))))
 	end
-	dire(string.format("carte du monde : %.0f x %.0f a l'echelle %.4f, mode %s (taille du client %.4f, petite fenetre %.4f)",
+	dire(string.format(L.WORLDMAP_DEBUG_FRAME,
 		carte:GetWidth(), carte:GetHeight(), carte:GetScale(),
-		enPetiteFenetre() and "reduit" or "plein ecran",
+		enPetiteFenetre() and L.WORLDMAP_DEBUG_MODE_WINDOWED or L.WORLDMAP_DEBUG_MODE_FULLSCREEN,
 		WORLDMAP_SETTINGS.size, WORLDMAP_WINDOWED_SIZE))
 	local ech = WorldMapDetailFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
-	ligne(string.format("carte %.0f x %.0f a l'echelle %.4f de l'interface -> %.1f x %.1f",
+	ligne(string.format(L.WORLDMAP_DEBUG_DETAIL,
 		WorldMapDetailFrame:GetWidth(), WorldMapDetailFrame:GetHeight(), ech,
 		WorldMapDetailFrame:GetWidth() * ech, WorldMapDetailFrame:GetHeight() * ech))
 	local noms = {}
 	for _, d in ipairs(hierarchie()) do
 		table.insert(noms, d.name or "?")
 	end
-	ligne("fil d'Ariane : " .. TEXTE.monde .. (#noms > 0 and (" > " .. table.concat(noms, " > ")) or ""))
-	ligne(string.format("etages : %d | construit : %s | panneau : %s",
+	ligne(L.WORLDMAP_DEBUG_BREADCRUMB .. TEXTE.monde .. (#noms > 0 and (" > " .. table.concat(noms, " > ")) or ""))
+	ligne(string.format(L.WORLDMAP_DEBUG_FLOORS,
 		GetNumDungeonMapLevels and GetNumDungeonMapLevels() or 0,
 		tostring(W.construit), tostring(carte:GetAttribute("UIPanelLayout-area"))))
-	ligne(string.format("deplacable : %s (advancedWorldMap %s, verrou %s)",
+	ligne(string.format(L.WORLDMAP_DEBUG_MOVABLE,
 		tostring(carte:IsMovable()), tostring(GetCVar("advancedWorldMap")),
 		tostring(WORLDMAP_SETTINGS.locked)))
 end

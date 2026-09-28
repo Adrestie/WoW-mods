@@ -110,7 +110,7 @@ local function updateGroup()
 	for index = 1, members do
 		local name, _rank, subgroup = GetRaidRosterInfo(index)
 		if name == playerName and subgroup then
-			groupText:SetText((GROUP or "Groupe") .. " " .. subgroup)
+			groupText:SetText(GROUP .. " " .. subgroup)
 			groupIndicator:SetWidth(groupText:GetWidth() + 40)
 			groupIndicator:Show()
 			return
@@ -145,11 +145,11 @@ end)
 local function updatePlayTime()
 	if PartialPlayTime and PartialPlayTime() then
 		ForeverUI.SetAtlas(playTimeIcon, PLAYTIME_TIRED_ATLAS, true)
-		playTime.tooltip = PLAYTIME_TIRED or "Temps de jeu"
+		playTime.tooltip = PLAYTIME_TIRED
 		playTime:Show()
 	elseif NoPlayTime and NoPlayTime() then
 		ForeverUI.SetAtlas(playTimeIcon, PLAYTIME_UNHEALTHY_ATLAS, true)
-		playTime.tooltip = PLAYTIME_UNHEALTHY or "Temps de jeu"
+		playTime.tooltip = PLAYTIME_UNHEALTHY
 		playTime:Show()
 	else
 		playTime:Hide()

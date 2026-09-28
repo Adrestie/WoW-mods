@@ -68,6 +68,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local LISTE_X, LISTE_Y = 10, -40
 local LISTE_X2, LISTE_Y2 = -25, 15
@@ -792,19 +793,18 @@ function ForeverUI.ReputationDebug(filtre)
 	end
 
 	local total = (GetNumFactions and GetNumFactions()) or 0
-	dire(string.format("reputation : %d factions, decalage %d, %d lignes, %d posees",
+	dire(string.format(L.REPUTATIONTAB_DEBUG_SUMMARY,
 		total, decalage, #lignes, visibles))
 
 	-- CE QUE LE CLIENT EXPOSE, ligne par ligne, drapeaux compris : c'est lui
 	-- qui decide de la hierarchie, pas nous.
-	dire("ce que le client expose :")
+	dire(L.REPUTATIONTAB_DEBUG_CLIENT)
 	for rang = 1, total do
 		local nom, _, attitude, seuil, suivant, valeur, _, _, entete, replie,
 			avecRep, _, enfant = GetFactionInfo(rang)
 		if garde(nom) then
 		DEFAULT_CHAT_FRAME:AddMessage(string.format(
-			"   %2d %-28s entete=%-5s enfant=%-5s replie=%-5s avecRep=%-5s "
-			.. "attitude=%s brut=%s/%s/%s",
+			L.REPUTATIONTAB_DEBUG_CLIENT_ROW,
 			rang, tostring(nom), tostring(entete), tostring(enfant),
 			tostring(replie), tostring(avecRep), tostring(attitude),
 			tostring(seuil), tostring(suivant), tostring(valeur)))
@@ -818,7 +818,7 @@ function ForeverUI.ReputationDebug(filtre)
 	-- le disent. On imprime donc, ligne par ligne, ou elle est posee et ou
 	-- son nom l'est -- avec le NOMBRE d'ancrages, qui trahit un
 	-- ClearAllPoints oublie.
-	dire("geometrie :")
+	dire(L.REPUTATIONTAB_DEBUG_GEOMETRY)
 	for rang, ligne in ipairs(lignes) do
 		if ligne:IsShown() and garde(ligne.factionNom) then
 			local p, _, _, x, y = ligne:GetPoint(1)
@@ -844,10 +844,10 @@ function ForeverUI.ReputationDebug(filtre)
 				local np, cible, ncp, nx, ny = ligne.nom:GetPoint(numero)
 				local qui = connus[cible]
 					or (cible and cible.GetName and cible:GetName())
-					or "inconnu"
+					or L.REPUTATIONTAB_DEBUG_UNKNOWN
 				local bord = "?"
 				if cible and cible.GetLeft and cible:GetLeft() then
-					bord = string.format("g=%.1f d=%.1f",
+					bord = string.format(L.REPUTATIONTAB_DEBUG_EDGES,
 						cible:GetLeft() - (panneau:GetLeft() or 0),
 						(cible:GetRight() or 0) - (panneau:GetLeft() or 0))
 				end
@@ -870,8 +870,7 @@ function ForeverUI.ReputationDebug(filtre)
 			end
 
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"   %d %-24s ligne %s(%s,%s) l=%s h=%s | chevron %sx%s vu=%s"
-				.. " | nom %s : %s",
+				L.REPUTATIONTAB_DEBUG_ROW_GEOMETRY,
 				rang, tostring(ligne.factionNom), tostring(p), tostring(x),
 				tostring(y), tostring(ligne:GetWidth()), tostring(ligne:GetHeight()),
 				tostring(ligne.chevron:GetWidth()),
@@ -880,8 +879,7 @@ function ForeverUI.ReputationDebug(filtre)
 				tostring(ligne.nom:GetNumPoints()),
 				table.concat(ancres, " ")))
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"      resolu : ligne %s | chevron %s | nom %s l=%.1f"
-				.. " justify=%s police=%s",
+				L.REPUTATIONTAB_DEBUG_ROW_RESOLVED,
 				place(ligne), place(ligne.chevron), place(ligne.nom),
 				ligne.nom:GetWidth() or -1,
 				tostring(ligne.nom.GetJustifyH and ligne.nom:GetJustifyH()),
@@ -890,7 +888,7 @@ function ForeverUI.ReputationDebug(filtre)
 		end
 	end
 
-	dire("ce que nous posons :")
+	dire(L.REPUTATIONTAB_DEBUG_PLACED)
 
 	for rang, ligne in ipairs(lignes) do
 		local nom, _, attitude, seuil, suivant, valeur, enGuerre, _, entete,
@@ -898,8 +896,7 @@ function ForeverUI.ReputationDebug(filtre)
 		if ligne:IsShown() and garde(nom) then
 			local r, v, b = ligne.barre.remplissage:GetVertexColor()
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"   %d %s entete=%s attitude=%s brut=%s/%s/%s | barre=%s "
-				.. "large=%s visible=%s teinte=%.2f,%.2f,%.2f",
+				L.REPUTATIONTAB_DEBUG_PLACED_ROW,
 				rang, tostring(nom), tostring(entete), tostring(attitude),
 				tostring(seuil), tostring(suivant), tostring(valeur),
 				tostring(ligne.barre:IsShown()),

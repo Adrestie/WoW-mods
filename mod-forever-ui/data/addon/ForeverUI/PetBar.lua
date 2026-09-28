@@ -55,6 +55,7 @@ local ETAT_L, ETAT_H = 31.6, 30.9       -- survol, coche, bordure, eclat
 local NB_BOUTONS = 10
 local TAILLE_ORIGINE = 36               -- le bouton de 3.3.5
 local AUTOCAST_BORDURE = 58             -- sa bordure d'autolancement
+local L = ForeverUI.L
 local GRISE = 0.4                       -- action inutilisable
 local COCHE_ATTAQUE = 0.5               -- alpha du coche sur l'attaque
 
@@ -361,6 +362,6 @@ tout()
 -- Comme les autres barres : aucune position definitive ici, tout passe par
 -- /fui. Par defaut la barre du familier se pose au-dessus de celle des
 -- postures, sur le meme bord gauche.
-ForeverUI.Layout.Register(porteur, "familier", "Barre du familier",
+ForeverUI.Layout.Register(porteur, "familier", L.PETBAR_EDIT_LABEL,
 	"BOTTOMLEFT", "BOTTOM", BORD_GAUCHE, RANGEE)
 posePardefaut()

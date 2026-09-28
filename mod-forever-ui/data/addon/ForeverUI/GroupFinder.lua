@@ -141,6 +141,7 @@ local F = {}
 ForeverUI.GroupFinder = F
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 local LFG = "Interface" .. SEP .. "LFGFrame" .. SEP
 local BOUTONS = "Interface" .. SEP .. "Buttons" .. SEP
 
@@ -1553,24 +1554,24 @@ end
 function ForeverUI.GroupFinderDebug()
 	local dire = function(t) DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t) end
 	if not F.cadre then
-		dire("chercheur : non construit (LFDParentFrame absent ?)")
+		dire(L.GROUPFINDER_DEBUG_NOT_BUILT)
 		return
 	end
-	dire(string.format("chercheur : vue %s | type %s | mode %s | %d donjons | notre fenetre %s, niveau %d | contenu du client alpha %s, niveau %d",
+	dire(string.format(L.GROUPFINDER_DEBUG_STATE,
 		tostring(F.vue), tostring(LFDQueueFrame.type), tostring(GetLFGMode()),
-		LFDDungeonList and #LFDDungeonList or 0, F.cadre:IsShown() and "affichee" or "cachee",
+		LFDDungeonList and #LFDDungeonList or 0, F.cadre:IsShown() and L.GROUPFINDER_DEBUG_SHOWN or L.GROUPFINDER_DEBUG_HIDDEN,
 		F.cadre:GetFrameLevel(), tostring(LFDQueueFrame:GetAlpha()), LFDQueueFrame:GetFrameLevel()))
 	-- le navigateur de raid : la recherche, et ce qui a ete releve pour
 	-- chacun de ses raids
 	local R = ForeverUI.GroupFinderRaid
 	if R and R.cache then
 		local r = R.recherche
-		dire(string.format("raid : recherche %s | serveur cherche %s",
-			r and r.nom or "aucune", tostring(SearchLFGGetJoinedID and SearchLFGGetJoinedID())))
+		dire(string.format(L.GROUPFINDER_DEBUG_RAID,
+			r and r.nom or L.GROUPFINDER_DEBUG_NONE, tostring(SearchLFGGetJoinedID and SearchLFGGetJoinedID())))
 		for _, id in ipairs(r and r.ids or {}) do
 			local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
-			dire(string.format("   %s (%d) : %s inscrit(s) releve(s)", info and info[1] or "?", id,
-				R.cache[id] and #R.cache[id] or "rien"))
+			dire(string.format(L.GROUPFINDER_DEBUG_RAID_ENTRY, info and info[1] or "?", id,
+				R.cache[id] and #R.cache[id] or L.GROUPFINDER_DEBUG_NOTHING))
 		end
 	end
 end

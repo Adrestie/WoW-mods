@@ -27,9 +27,10 @@
 --     sur l'ecran, comme le client 3.3.5 (camelot retire la main au champ,
 --     puis ouvre le menu).
 -- Les textes suivent la langue du client (chaines de 3.3.5) ; « Menu »
--- (MAINMENU) n'existe pas dans 3.3.5 : texte de camelot.
+-- (MAINMENU) n'existe pas dans 3.3.5 : G.L.ACCOUNTLOGIN_MENU.
 
 local G = ForeverUIGlue
+local L = G.L
 local ui = AccountLoginUI
 local compte = AccountLoginAccountEdit
 local motDePasse = AccountLoginPasswordEdit
@@ -97,7 +98,7 @@ creer:SetScript("OnClick", function()
 end)
 
 local menu = G.CreerBoutonTroisTranches("ForeverUIAccountLoginMenuButton", ui, 200, 30, "128-RedButton",
-	{ "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" }, "Menu")
+	{ "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" }, L.ACCOUNTLOGIN_MENU)
 menu:SetScript("OnClick", function()
 	G.MontrerMenu()
 end)

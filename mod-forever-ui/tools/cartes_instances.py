@@ -32,8 +32,16 @@ le nom en minuscules (celui de la carte, celui de la zone) -> l'ID de
 WorldMapArea. Une instance a plusieurs cartes (les ailes du Monastere
 Ecarlate) : chacune sous le nom de sa zone ; le nom de la carte va a la
 premiere.
+
+LES AUTRES LANGUES (2026-09-28, « aucun texte en dur ») : les portails
+portent le nom que WDM leur donne dans la langue du client, par sa
+LibBabble-Zone-3.0 (Interface/AddOns/WDM/libs, dans les archives du client).
+Chacune de ses sections de langue (frFR, deDE, esES...) ajoute ses noms
+traduits, en minuscules comme string.lower de Lua 5.1 les rend (ASCII
+seulement), vers la meme carte que le nom anglais.
 """
 import os
+import re
 import struct
 import sys
 
@@ -67,6 +75,32 @@ def lire(chaine, nom):
     return lignes, texte
 
 
+BABBLE = SEP.join(["Interface", "AddOns", "WDM", "libs", "LibBabble-Zone-3.0", "LibBabble-Zone-3.0.lua"])
+
+
+def minuscules_lua(s):
+    """string.lower de Lua 5.1 (locale C) : seules les lettres ASCII."""
+    return "".join(c.lower() if "A" <= c <= "Z" else c for c in s)
+
+
+def langues_babble(chaine):
+    """{langue: {nom anglais en minuscules: nom traduit}} de LibBabble-Zone."""
+    nom = next((n for n in chaine.names() if n.lower() == BABBLE.lower()), None)
+    if not nom:
+        return {}
+    src = chaine.read(nom).decode("utf-8", "replace")
+    res = {}
+    marques = list(re.finditer(r'GAME_LOCALE == "(\w+)"', src))
+    for i, m in enumerate(marques):
+        bloc = src[m.end():marques[i + 1].start() if i + 1 < len(marques) else len(src)]
+        noms = {}
+        for e in re.finditer(r'(?:\["((?:[^"\\]|\\.)*)"\]|([A-Za-z_][A-Za-z0-9_]*))\s*=\s*"((?:[^"\\]|\\.)*)"', bloc):
+            anglais = e.group(1) if e.group(1) is not None else e.group(2)
+            noms[anglais.lower()] = e.group(3).replace('\\"', '"')
+        res[m.group(1)] = noms
+    return res
+
+
 def main():
     chaine = mpq.open_client(CLIENT, "enUS")
     cartes, texte_carte = lire(chaine, "Map.dbc")
@@ -89,12 +123,23 @@ def main():
     for alias, nom in ALIAS.items():
         if nom in table and alias not in table:
             table[alias] = table[nom]
+    anglais = dict(table)
+    traduits = 0
+    for langue, noms in sorted(langues_babble(chaine).items()):
+        for cle, ident in sorted(anglais.items()):
+            nom = noms.get(cle)
+            if nom:
+                cle2 = minuscules_lua(nom.strip())
+                if cle2 not in table:
+                    table[cle2] = ident
+                    traduits += 1
 
     lignes = [
         "-- ForeverUI : les cartes des donjons et des raids (SetMapByID), par nom.",
         "-- GENERE par tools/cartes_instances.py depuis les DBC du client -- ne pas",
         "-- modifier a la main. Le nom en minuscules (carte ou zone) -> l'ID de",
-        "-- WorldMapArea.",
+        "-- WorldMapArea. Les noms anglais viennent des DBC, les autres langues de",
+        "-- la LibBabble-Zone de WDM (le nom que ses portails portent).",
         "",
         "ForeverUI = ForeverUI or {}",
         "ForeverUI.CartesInstances = {",
@@ -103,7 +148,7 @@ def main():
         lignes.append('\t["%s"] = %d,' % (cle.replace('"', '\\"'), table[cle]))
     lignes.append("}")
     open(SORTIE, "w", encoding="utf-8", newline="\n").write("\n".join(lignes) + "\n")
-    print("%d noms pour %d instances -> %s" % (len(table), len(vues), os.path.relpath(SORTIE, RACINE)))
+    print("%d noms (%d traduits) pour %d instances -> %s" % (len(table), traduits, len(vues), os.path.relpath(SORTIE, RACINE)))
 
 
 if __name__ == "__main__":

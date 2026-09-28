@@ -17,9 +17,10 @@
 -- Chaque bouton declenche le bouton du client 3.3.5 qui fait la meme chose.
 
 local G = ForeverUIGlue
+local L = G.L
 
--- MAINMENU_BUTTON n'existe pas dans 3.3.5 : le texte de camelot
-local TITRE = "Game Menu"
+-- MAINMENU_BUTTON n'existe pas dans 3.3.5 : G.L (ForeverUIGlueTextes)
+local TITRE = L.GLUEMENU_TITLE
 
 local voile = CreateFrame("Frame", "ForeverUIGlueMenuVoile", GlueParent)
 voile:SetAllPoints(GlueParent)

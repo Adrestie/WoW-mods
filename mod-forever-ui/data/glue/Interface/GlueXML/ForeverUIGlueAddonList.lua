@@ -86,9 +86,10 @@
 -- fonctions de 3.3.5 (GetAddOnInfo, GetAddOnEnableState, EnableAddOn...).
 
 local G = ForeverUIGlue
+local L = G.L
 
--- textes absents de 3.3.5 : ceux de camelot (GlobalStrings du client moderne)
-local TEXTE = { SEARCH = "Search" }
+-- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes)
+local TEXTE = { SEARCH = L.GLUEADDONLIST_SEARCH }
 
 local NOTE = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
 local ETOILE = "Interface\\Glues\\CharacterSelect\\Glues-AddOn-Icons"

@@ -123,6 +123,7 @@ local C = {}
 ForeverUI.Chat = C
 
 local SEP = string.char(92)
+local L = ForeverUI.L
 
 local G = {
 	fondGauche = -2, fondHaut = 3, fondDroite = 7 + 8, fondBas = -6,
@@ -1170,19 +1171,19 @@ function ForeverUI.ChatDebug()
 	for fenetre, d in pairs(C.fenetres) do
 		if fenetre:IsShown() then
 			local total, visibles, rang, maxi = etatDefilement(fenetre)
-			dire(string.format("chat %s : %d messages, %d visibles, rang %d/%d, en bas %s | barre %s alpha %.2f | retour alpha %.2f | SetScrollOffset %s",
+			dire(string.format(L.CHAT_DEBUG_STATE,
 				fenetre:GetName(), total, visibles, rang, maxi, tostring(fenetre:AtBottom()),
-				d.barre:IsShown() and "affichee" or "cachee", d.barre:GetAlpha(), d.retour:GetAlpha(),
-				fenetre.SetScrollOffset and "oui" or "non"))
+				d.barre:IsShown() and L.CHAT_DEBUG_SHOWN or L.CHAT_DEBUG_HIDDEN, d.barre:GetAlpha(), d.retour:GetAlpha(),
+				fenetre.SetScrollOffset and L.CHAT_DEBUG_YES or L.CHAT_DEBUG_NO))
 			-- ce que FCF_OnUpdate regarde avant d'eteindre le chat, et nos pieces
-			local function oui(v) return v and "OUI" or "non" end
-			dire(string.format("   allume %s (client %s, survol %s), dehors depuis %.1f s | souris sur : chat %s, amis %s, colonne %s, barre %s, retour %s",
+			local function oui(v) return v and L.CHAT_DEBUG_YES_UPPER or L.CHAT_DEBUG_NO end
+			dire(string.format(L.CHAT_DEBUG_FADE,
 				oui(d.allume), oui(fenetre.hasBeenFaded), oui(d.survol), d.dehors,
 				oui(fenetre:IsMouseOver(28, -2, -2, 2)), oui(fenetre.isDocked and FriendsMicroButton and FriendsMicroButton:IsMouseOver()),
 				oui(fenetre.buttonFrame and fenetre.buttonFrame:IsMouseOver()),
 				oui(d.barre:IsShown() and MouseIsOver(d.barre)), oui(MouseIsOver(d.retour))))
 			local _, _, _, _, _, opacite = GetChatWindowInfo(fenetre:GetID())
-			dire(string.format("   repos : coefficient %.2f (vise %d) sur %d pieces + %d de saisie | fond %.2f (retenue %.2f, faite %s)",
+			dire(string.format(L.CHAT_DEBUG_REST,
 				d.repos, d.cibleRepos, #d.effaces, #d.saisie, _G[fenetre:GetName() .. "Background"]:GetAlpha(),
 				opacite or -1, oui(ForeverUIDB and ForeverUIDB.chatFondRepos)))
 		end
@@ -1195,10 +1196,14 @@ end
 -- meme largeur. Un long message d'essai est ajoute a la fenetre affichee ;
 -- deux images plus tard, ses objets texte sont releves dans
 -- ForeverUIDB.releveChat (ecrit sur le disque au /reload suivant).
-local ESSAI = "ForeverUI, essai de selection : une ligne assez longue pour etre coupee par le chat,"
-	.. " avec des accents (\195\169 \195\168 \195\160 \195\167), un lien |cffffffff|Hitem:6948:0:0:0:0:0:0:0:80|h[Hearthstone]|h|r,"
-	.. " une icone |TInterface" .. SEP .. "TargetingFrame" .. SEP .. "UI-RaidTargetingIcon_1:0|t"
-	.. " et un motsansespacetreslongpourvoircommentlemoteurlecoupequandiln'yapasdespacedutout fin."
+-- Le texte est L.CHAT_LINES_TEST (le lien puis l'icone en %s) ; le nom de
+-- la pierre de foyer vient du client (GetItemInfo), son numero s'il ne l'a
+-- pas encore en cache.
+local function essai()
+	local lien = "|cffffffff|Hitem:6948:0:0:0:0:0:0:0:80|h[" .. (GetItemInfo(6948) or "6948") .. "]|h|r"
+	return string.format(L.CHAT_LINES_TEST, lien,
+		"|TInterface" .. SEP .. "TargetingFrame" .. SEP .. "UI-RaidTargetingIcon_1:0|t")
+end
 
 local support, mesure
 function C.releverLignes(fenetre)
@@ -1268,7 +1273,7 @@ function C.releverLignes(fenetre)
 	end
 	ForeverUIDB = ForeverUIDB or {}
 	ForeverUIDB.releveChat = rel
-	DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff66ccffForeverUI|r releve du chat %s : %d objets texte (%d visibles), %d messages ; faites /reload pour l'enregistrer.",
+	DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff66ccffForeverUI|r " .. L.CHAT_LINES_RECORDED,
 		rel.fenetre, #rel.textes, visibles, n))
 end
 
@@ -1285,7 +1290,7 @@ C.attenteReleve = attente
 function ForeverUI.ChatReleveLignes()
 	local fenetre = (GENERAL_CHAT_DOCK and GENERAL_CHAT_DOCK.selected) or DEFAULT_CHAT_FRAME
 	if not (fenetre and fenetre:IsShown()) then fenetre = DEFAULT_CHAT_FRAME end
-	fenetre:AddMessage(ESSAI, 1, 1, 0)
+	fenetre:AddMessage(essai(), 1, 1, 0)
 	attente.fenetre, attente.images = fenetre, 0
 	attente:Show()
 end

@@ -44,14 +44,15 @@
 -- barre de defilement se cache quand tout tient ; service payant 53 x 53.
 
 local G = ForeverUIGlue
+local L = G.L
 local ui = CharacterSelectUI
 local liste = CharacterSelectCharacterFrame
 
--- textes absents de 3.3.5 : ceux de camelot (GlobalStrings du client moderne)
+-- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes)
 local TEXTE = {
-	REALMS = "REALMS",
-	MENU = "MENU",
-	TOGGLE = "Toggle Character List",
+	REALMS = L.GLUECHARACTERSELECT_REALMS,
+	MENU = L.GLUECHARACTERSELECT_MENU,
+	TOGGLE = L.GLUECHARACTERSELECT_TOGGLE_LIST,
 }
 
 -- la faction d'une race (jeton de GetSelectBackgroundModel, ou nom anglais
@@ -312,9 +313,46 @@ for i = 1, MAX_CHARACTERS_DISPLAYED do
 	etat.cartes[i] = creerCarte(i)
 end
 
+-- GetCharacterInfo rend la race et la classe TRADUITES. On les ramene a
+-- leur jeton par les noms des fichiers de langue (GLUECHARACTERSELECT_CLASS_*
+-- et _RACE_* : les formes de la langue, separees par « | », feminin compris),
+-- pour que la faction et la couleur de classe ne dependent pas de la langue
+-- du client. PIEGE (2026-09-28) : GetAvailableRaces / GetAvailableClasses
+-- ne s'appellent PAS hors de la creation de personnage -- le client plante
+-- (Fatal Exception, lecture a 0x1C).
+local CLASSES_JETONS = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "DEATHKNIGHT", "SHAMAN", "MAGE", "WARLOCK", "DRUID" }
+local RACES_JETONS = { "Human", "Dwarf", "NightElf", "Gnome", "Draenei", "Orc", "Scourge", "Tauren", "Troll", "BloodElf" }
+local jetons
+local function jetonDe(sorte, nom)
+	if not jetons then
+		jetons = { race = {}, classe = {} }
+		for sorte2, liste in pairs({ classe = CLASSES_JETONS, race = RACES_JETONS }) do
+			local prefixe = sorte2 == "classe" and "GLUECHARACTERSELECT_CLASS_" or "GLUECHARACTERSELECT_RACE_"
+			for _, jeton in ipairs(liste) do
+				for forme in string.gmatch(L[prefixe .. string.upper(jeton)], "[^|]+") do
+					jetons[sorte2][forme] = jeton
+				end
+			end
+		end
+	end
+	return nom and jetons[sorte][nom]
+end
+
+-- la couleur d'une classe, par son jeton (G.CLASSES : nom anglais -> jeton,
+-- couleur)
+local couleurs
+local function couleurClasse(classe)
+	if not couleurs then
+		couleurs = {}
+		for _, c in pairs(G.CLASSES) do couleurs[c[1]] = c end
+	end
+	local jeton = jetonDe("classe", classe)
+	return (jeton and couleurs[jeton]) or G.CLASSES[classe or ""]
+end
+
 local function faction(i, race)
 	local jeton = GetSelectBackgroundModel(i)
-	return FACTIONS[jeton] or FACTIONS[race]
+	return FACTIONS[jeton] or FACTIONS[jetonDe("race", race) or ""] or FACTIONS[race]
 end
 
 local function remplirCarte(c, i)
@@ -322,7 +360,7 @@ local function remplirCarte(c, i)
 	c.index = i
 	c.nom:SetText(nom or "")
 	c.nom:SetTextColor(1, 0.82, 0)
-	local couleur = G.CLASSES[classe or ""]
+	local couleur = couleurClasse(classe)
 	local classeTexte = classe or ""
 	if couleur then
 		classeTexte = string.format("|cff%02x%02x%02x%s|r", couleur[2] * 255, couleur[3] * 255, couleur[4] * 255, classeTexte)

@@ -38,6 +38,7 @@
 -- separement, comme tout le reste.
 
 local HAUTEUR = 13   -- hauteur de l'image camelot (1020 x 13)
+local L = ForeverUI.L
 
 local ATLAS_REPUTATION = {
 	"ui-hud-experiencebar-fill-reputation-faction-red-camelot",     -- hai
@@ -206,8 +207,8 @@ veilleur:SetScript("OnEvent", function(_self, event)
 	majReputation()
 end)
 
-ForeverUI.Layout.Register(experience, "experiencebar", "Barre d'experience", "BOTTOM", "BOTTOM", 0, 54)
-ForeverUI.Layout.Register(reputation, "reputationbar", "Barre de reputation", "BOTTOM", "BOTTOM", 0, 67)
+ForeverUI.Layout.Register(experience, "experiencebar", L.STATUSBARS_EDIT_LABEL_EXPERIENCE, "BOTTOM", "BOTTOM", 0, 54)
+ForeverUI.Layout.Register(reputation, "reputationbar", L.STATUSBARS_EDIT_LABEL_REPUTATION, "BOTTOM", "BOTTOM", 0, 67)
 poser()
 majExperience()
 majReputation()
@@ -222,7 +223,7 @@ end
 ForeverUI.StatusBarsDebug = function()
 	local rangee = ForeverUI.BottomRow or {}
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r barres d'etat : rangee %.1f -> %.1f, haut %s | largeur %.0f | xp visible=%s a y=%s | reputation visible=%s a y=%s",
+		"|cff66ccffForeverUI|r " .. L.STATUSBARS_DEBUG,
 		rangee.gauche or 0, rangee.droite or 0, tostring(rangee.haut),
 		experience:GetWidth(),
 		tostring(experience:IsShown()), tostring(select(5, experience:GetPoint(1))),

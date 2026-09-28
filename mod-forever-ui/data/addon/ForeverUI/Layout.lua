@@ -44,6 +44,7 @@ Layout.order = {}     -- ids, dans l'ordre d'enregistrement
 Layout.editing = false
 
 local PREFIX = "|cff66ccffForeverUI|r : "
+local L = ForeverUI.L
 
 local function say(message)
 	DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. message)
@@ -161,7 +162,7 @@ local function buildOverlay(id, system)
 
 	overlay:SetScript("OnDragStart", function()
 		if InCombatLockdown() then
-			say("deplacement impossible en combat.")
+			say(L.LAYOUT_NO_MOVE_IN_COMBAT)
 			return
 		end
 		system.frame:StartMoving()
@@ -195,7 +196,7 @@ end
 
 function Layout.SetEditMode(enabled)
 	if enabled and InCombatLockdown() then
-		say("le mode edition n'est pas disponible en combat.")
+		say(L.LAYOUT_EDIT_MODE_COMBAT)
 		return false
 	end
 
@@ -210,9 +211,9 @@ function Layout.SetEditMode(enabled)
 	end
 
 	if Layout.editing then
-		say("mode edition actif : glissez les elements, /fui pour terminer.")
+		say(L.LAYOUT_EDIT_MODE_ON)
 	else
-		say("mode edition termine, positions retenues.")
+		say(L.LAYOUT_EDIT_MODE_OFF)
 	end
 	return true
 end
@@ -240,28 +241,28 @@ end)
 local espion = CreateFrame("Frame")
 espion:Hide()
 local function decrire(cadre)
-	if not cadre then return "rien" end
+	if not cadre then return L.LAYOUT_SPY_NOTHING end
 	local nom = cadre.GetName and cadre:GetName() or nil
 	local type_ = cadre.GetObjectType and cadre:GetObjectType() or "?"
-	return (nom or "(sans nom)") .. " [" .. type_ .. "]"
+	return (nom or L.LAYOUT_SPY_UNNAMED) .. " [" .. type_ .. "]"
 end
 espion:SetScript("OnUpdate", function(self)
 	local bas = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
 	if bas and not self.enfonce then
 		local f = GetMouseFocus and GetMouseFocus()
-		say("sous la souris : " .. decrire(f))
+		say(L.LAYOUT_SPY_UNDER_MOUSE .. decrire(f))
 		local p, chemin = f and f:GetParent(), {}
 		while p and #chemin < 8 do
 			table.insert(chemin, decrire(p))
 			p = p:GetParent()
 		end
-		DEFAULT_CHAT_FRAME:AddMessage("   parents : " .. table.concat(chemin, " < "))
+		DEFAULT_CHAT_FRAME:AddMessage("   " .. L.LAYOUT_SPY_PARENTS .. table.concat(chemin, " < "))
 		if f and f.GetRegions then
 			for _, r in ipairs({ f:GetRegions() }) do
 				if r.GetTexture and r:GetTexture() then
-					DEFAULT_CHAT_FRAME:AddMessage("   image : " .. tostring(r:GetTexture()))
+					DEFAULT_CHAT_FRAME:AddMessage("   " .. L.LAYOUT_SPY_TEXTURE .. tostring(r:GetTexture()))
 				elseif r.GetText and r:GetText() then
-					DEFAULT_CHAT_FRAME:AddMessage("   texte : " .. tostring(r:GetText()))
+					DEFAULT_CHAT_FRAME:AddMessage("   " .. L.LAYOUT_SPY_TEXT .. tostring(r:GetText()))
 				end
 			end
 		end
@@ -277,11 +278,11 @@ ForeverUI.SourisEspion = espion
 ForeverUI.SourisDebug = function()
 	if espion:IsShown() then
 		espion:Hide()
-		say("espion de souris arrete.")
+		say(L.LAYOUT_SPY_STOPPED)
 	else
 		espion.enfonce = true
 		espion:Show()
-		say("espion de souris : cliquez sur l'element voulu ; /fui souris pour arreter.")
+		say(L.LAYOUT_SPY_STARTED)
 	end
 end
 
@@ -298,31 +299,31 @@ SlashCmdList["FOREVERUI"] = function(message)
 	elseif command == "reset" then
 		if argument ~= "" then
 			if Layout.Reset(argument) then
-				say("position remise par defaut : " .. argument)
+				say(L.LAYOUT_RESET_ONE .. argument)
 			else
-				say("element inconnu : " .. argument)
+				say(L.LAYOUT_UNKNOWN_ELEMENT .. argument)
 			end
 		else
 			Layout.Reset()
-			say("toutes les positions sont remises par defaut.")
+			say(L.LAYOUT_RESET_ALL)
 		end
 	elseif command == "bar" or command == "barre" then
 		if ForeverUI.ActionBarDebug then
 			ForeverUI.ActionBarDebug()
 		else
-			say("aucun diagnostic de barre disponible.")
+			say(L.LAYOUT_NO_DIAG_ACTIONBAR)
 		end
 	elseif command == "bas" then
 		if ForeverUI.BottomBarDebug then
 			ForeverUI.BottomBarDebug()
 		else
-			say("aucun diagnostic du bas de l ecran disponible.")
+			say(L.LAYOUT_NO_DIAG_BOTTOM)
 		end
 	elseif command == "barres" then
 		if ForeverUI.StatusBarsDebug then
 			ForeverUI.StatusBarsDebug()
 		else
-			say("aucun diagnostic des barres d etat disponible.")
+			say(L.LAYOUT_NO_DIAG_STATUSBARS)
 		end
 	elseif command == "sacs" then
 		local cle, valeur = string.match(argument, "^(%S+)%s+(%S+)$")
@@ -331,31 +332,31 @@ SlashCmdList["FOREVERUI"] = function(message)
 		elseif ForeverUI.BagsDebug then
 			ForeverUI.BagsDebug()
 		else
-			say("aucun diagnostic des sacs disponible.")
+			say(L.LAYOUT_NO_DIAG_BAGS)
 		end
 	elseif command == "modele" then
 		if ForeverUI.CharacterModelTune then
 			ForeverUI.CharacterModelTune(argument)
 		else
-			say("aucun reglage du modele disponible.")
+			say(L.LAYOUT_NO_MODEL_TUNE)
 		end
 	elseif command == "onglets" then
 		if ForeverUI.CharacterTabsDebug then
 			ForeverUI.CharacterTabsDebug()
 		else
-			say("aucun diagnostic des onglets disponible.")
+			say(L.LAYOUT_NO_DIAG_TABS)
 		end
 	elseif command == "perso" then
 		if ForeverUI.CharacterSheetDebug then
 			ForeverUI.CharacterSheetDebug()
 		else
-			say("aucun diagnostic de la feuille disponible.")
+			say(L.LAYOUT_NO_DIAG_SHEET)
 		end
 	elseif command == "minimap" then
 		if ForeverUI.MinimapDebug then
 			ForeverUI.MinimapDebug(argument)
 		else
-			say("aucun diagnostic de la minimap disponible.")
+			say(L.LAYOUT_NO_DIAG_MINIMAP)
 		end
 	elseif command == "souris" then
 		ForeverUI.SourisDebug()
@@ -363,37 +364,37 @@ SlashCmdList["FOREVERUI"] = function(message)
 		if ForeverUI.WorldMapDebug then
 			ForeverUI.WorldMapDebug()
 		else
-			say("aucun diagnostic de la carte du monde disponible.")
+			say(L.LAYOUT_NO_DIAG_WORLDMAP)
 		end
 	elseif command == "journal" then
 		if ForeverUI.QuestLogDebug then
 			ForeverUI.QuestLogDebug()
 		else
-			say("aucun diagnostic du journal de quetes disponible.")
+			say(L.LAYOUT_NO_DIAG_QUESTLOG)
 		end
 	elseif command == "suivi" then
 		if ForeverUI.ObjectiveTrackerDebug then
 			ForeverUI.ObjectiveTrackerDebug()
 		else
-			say("aucun diagnostic du suivi de quetes disponible.")
+			say(L.LAYOUT_NO_DIAG_TRACKER)
 		end
 	elseif command == "grimoire" then
 		if ForeverUI.SpellBookDebug then
 			ForeverUI.SpellBookDebug()
 		else
-			say("aucun diagnostic du grimoire disponible.")
+			say(L.LAYOUT_NO_DIAG_SPELLBOOK)
 		end
 	elseif command == "micro" then
 		if ForeverUI.MicroDebug then
 			ForeverUI.MicroDebug()
 		else
-			say("aucun diagnostic du micro-menu disponible.")
+			say(L.LAYOUT_NO_DIAG_MICROMENU)
 		end
 	elseif command == "titres" or command == "titles" then
 		if ForeverUI.TitlesDebug then
 			ForeverUI.TitlesDebug()
 		else
-			say("aucun diagnostic des titres disponible.")
+			say(L.LAYOUT_NO_DIAG_TITLES)
 		end
 	elseif command == "pvp" then
 		if ForeverUI.PvPDebug then
@@ -401,13 +402,13 @@ SlashCmdList["FOREVERUI"] = function(message)
 			-- voir sans avoir a gagner de l'honneur.
 			ForeverUI.PvPDebug(tonumber(argument))
 		else
-			say("aucun diagnostic PvP disponible.")
+			say(L.LAYOUT_NO_DIAG_PVP)
 		end
 	elseif command == "arene" or command == "arena" then
 		if ForeverUI.PvPArenaDebug then
 			ForeverUI.PvPArenaDebug()
 		else
-			say("aucun diagnostic des equipes d'arene disponible.")
+			say(L.LAYOUT_NO_DIAG_ARENA)
 		end
 	elseif command == "tabard" then
 		if ForeverUI.TabardModelTune then
@@ -417,84 +418,84 @@ SlashCmdList["FOREVERUI"] = function(message)
 		if ForeverUI.ChatDebug then
 			ForeverUI.ChatDebug()
 		else
-			say("aucun diagnostic du chat disponible.")
+			say(L.LAYOUT_NO_DIAG_CHAT)
 		end
 	elseif command == "chatlignes" then
 		if ForeverUI.ChatReleveLignes then
 			ForeverUI.ChatReleveLignes()
 		else
-			say("aucun releve des lignes du chat disponible.")
+			say(L.LAYOUT_NO_CHAT_LINES)
 		end
 	elseif command == "buffs" then
 		if ForeverUI.BuffsDebug then
 			ForeverUI.BuffsDebug()
 		else
-			say("aucun diagnostic des buffs disponible.")
+			say(L.LAYOUT_NO_DIAG_BUFFS)
 		end
 	elseif command == "chercheur" then
 		if ForeverUI.GroupFinderDebug then
 			ForeverUI.GroupFinderDebug()
 		else
-			say("aucun diagnostic du chercheur de donjon disponible.")
+			say(L.LAYOUT_NO_DIAG_GROUPFINDER)
 		end
 	elseif command == "social" then
 		if ForeverUI.SocialDebug then
 			ForeverUI.SocialDebug()
 		else
-			say("aucun diagnostic de la fenetre Social disponible.")
+			say(L.LAYOUT_NO_DIAG_SOCIAL)
 		end
 	elseif command == "bg" then
 		if ForeverUI.PvPBattlegroundsDebug then
 			ForeverUI.PvPBattlegroundsDebug()
 		else
-			say("aucun diagnostic des champs de bataille disponible.")
+			say(L.LAYOUT_NO_DIAG_BATTLEGROUNDS)
 		end
 	elseif command == "familier" then
 		if ForeverUI.PetDebug then
 			ForeverUI.PetDebug()
 		else
-			say("aucun diagnostic du familier disponible.")
+			say(L.LAYOUT_NO_DIAG_PET)
 		end
 	elseif command == "monnaie" or command == "monnaies" then
 		if ForeverUI.TokensDebug then
 			ForeverUI.TokensDebug()
 		else
-			say("aucun diagnostic des monnaies disponible.")
+			say(L.LAYOUT_NO_DIAG_CURRENCY)
 		end
 	elseif command == "skills" then
 		if ForeverUI.SkillsDebug then
 			ForeverUI.SkillsDebug()
 		else
-			say("aucun diagnostic des competences disponible.")
+			say(L.LAYOUT_NO_DIAG_SKILLS)
 		end
 	elseif command == "reput" then
 		if ForeverUI.ReputationDebug then
 			-- /fui reput Alliance : ne garde que cette faction-la.
 			ForeverUI.ReputationDebug(argument ~= "" and argument or nil)
 		else
-			say("aucun diagnostic de la reputation disponible.")
+			say(L.LAYOUT_NO_DIAG_REPUTATION)
 		end
 	elseif command == "sets" then
 		if ForeverUI.EquipmentSetsDebug then
 			ForeverUI.EquipmentSetsDebug()
 		else
-			say("aucun diagnostic des ensembles disponible.")
+			say(L.LAYOUT_NO_DIAG_SETS)
 		end
 	elseif command == "debug" then
 		if ForeverUI.PlayerFrameDebug then
 			ForeverUI.PlayerFrameDebug()
 		else
-			say("aucun diagnostic disponible.")
+			say(L.LAYOUT_NO_DIAG)
 		end
 	elseif command == "list" then
-		say("elements enregistres :")
+		say(L.LAYOUT_LIST_HEADER)
 		for _, id in ipairs(Layout.order) do
 			local system = Layout.systems[id]
 			local saved = positions()[id]
 			DEFAULT_CHAT_FRAME:AddMessage(string.format("   %s (%s)%s", id, system.label,
-				saved and " - deplace" or ""))
+				saved and L.LAYOUT_LIST_MOVED or ""))
 		end
 	else
-		say("commandes : /fui (mode edition), /fui reset [element], /fui list, /fui debug, /fui barre, /fui bas, /fui barres, /fui sacs, /fui perso, /fui onglets, /fui modele, /fui sets, /fui reput [faction], /fui skills, /fui monnaie, /fui familier, /fui pvp [0..1], /fui arene, /fui bg, /fui social, /fui chercheur, /fui chat, /fui chatlignes, /fui titres, /fui minimap [echelle k], /fui carte, /fui souris, /fui journal, /fui suivi, /fui grimoire, /fui micro")
+		say(L.LAYOUT_HELP)
 	end
 end

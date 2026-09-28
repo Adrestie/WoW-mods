@@ -76,6 +76,7 @@
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
+local L = ForeverUI.L
 
 local LISTE_X, LISTE_Y = 10, -40
 local LISTE_X2, LISTE_Y2 = -25, 15
@@ -692,13 +693,13 @@ function ForeverUI.SkillsDebug()
 	end
 
 	local total = (GetNumSkillLines and GetNumSkillLines()) or 0
-	dire(string.format("competences : %d lignes du client, decalage %d, %d posees, choisie=%s",
+	dire(string.format(L.SKILLSTAB_DEBUG_SUMMARY,
 		total, decalage, visibles, tostring(choisie)))
 	for rang = 1, total do
 		local d = lireCompetence(rang)
 		if d then
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
-				"   %2d %-28s entete=%-5s replie=%-5s %s",
+				L.SKILLSTAB_DEBUG_ROW,
 				rang, d.nom, tostring(d.entete), tostring(d.replie), d.texte))
 		end
 	end

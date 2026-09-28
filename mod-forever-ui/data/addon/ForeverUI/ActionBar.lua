@@ -52,6 +52,7 @@ local FRAME_WIDTH, FRAME_HEIGHT = 46, 45      -- taille des quatre etats
 local BUTTON_COUNT = 12
 local END_CAP_WIDTH, END_CAP_HEIGHT = 154, 95
 local DESCENTE_EMBOUT = -2      -- releve a l'ecran : le bas de l'image tombe
+local L = ForeverUI.L
                                 -- 2 px sous le bas de la barre
 
 local ATLAS = {
@@ -540,19 +541,19 @@ layoutButtons()
 ForeverUI.ActionBarDebug = function()
 	local button = _G["ActionButton1"]
 	if not button then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r : ActionButton1 introuvable")
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r : " .. L.ACTIONBAR_BUTTON1_MISSING)
 		return
 	end
 
 	local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
 	local normal = button:GetNormalTexture()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r barre : bouton %.0fx%.0f | parent %s | ancre %s sur %s (%.0f, %.0f) | visible=%s | cadre=%s | normale alpha=%.2f",
+		"|cff66ccffForeverUI|r " .. L.ACTIONBAR_DEBUG,
 		button:GetWidth(), button:GetHeight(),
 		tostring(button:GetParent() and button:GetParent():GetName() or "?"),
 		tostring(point), tostring(relativeTo and relativeTo:GetName() or "?"), x or 0, y or 0,
 		tostring(button:IsShown()),
-		tostring(button.foreverFrame and button.foreverFrame:GetTexture() or "aucun"),
+		tostring(button.foreverFrame and button.foreverFrame:GetTexture() or NONE),
 		normal and normal:GetAlpha() or -1))
 end
 
@@ -566,4 +567,4 @@ ForeverUI.ActionBarSkin = { skinButton = skinButton, skinAll = skinAll, layoutBu
 -- micro-menu etant lui-meme a BOTTOM (116.5, 6) et large de 275, cela met le
 -- bord droit de la barre a -25.5 du centre de l'ecran, a 2 du bas.
 -- BottomBar.lua refait ce calcul avec la largeur reelle du micro-menu.
-ForeverUI.Layout.Register(holder, "actionbar", "Barre d'action", "BOTTOMRIGHT", "BOTTOM", -25.5, 2)
+ForeverUI.Layout.Register(holder, "actionbar", L.ACTIONBAR_EDIT_LABEL, "BOTTOMRIGHT", "BOTTOM", -25.5, 2)
