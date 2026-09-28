@@ -132,6 +132,10 @@ ICONES += ["classicon_%s.blp" % c for c in (
     "deathknight", "druid", "hunter", "mage", "paladin",
     "priest", "rogue", "shaman", "warlock", "warrior")]
 
+# la banque (2026-09-28) : les onglets de page de BankPageTabTemplate
+ICONES += ["inv_sidetab_bank_c60.blp", "achievement_guildperk_mobilebanking.blp",
+           "trade_archaeology_chestoftinyglassanimals.blp", "ability_racial_packhobgoblin.blp"]
+
 ONGLET_L, ONGLET_H = 55.0, 55.0
 MASQUE_L, MASQUE_H = 55.0, 60.0
 ICONE = 50.0

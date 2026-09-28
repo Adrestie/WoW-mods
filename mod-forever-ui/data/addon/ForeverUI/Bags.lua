@@ -595,7 +595,7 @@ end
 -- L'etat courant des sacs : une case par emplacement, dans l'ordre.
 local function relever()
 	local cases = {}
-	for _, sac in ipairs(SACS) do
+	for _, sac in ipairs(Tri.sacs or SACS) do
 		for emplacement = 1, (GetContainerNumSlots(sac) or 0) do
 			table.insert(cases, {
 				sac = sac,
@@ -692,10 +692,13 @@ horloge:SetScript("OnUpdate", function(self, elapsed)
 	end
 end)
 
-function Tri.Lancer()
+-- sacs : les sacs a ranger (la banque, Bank.lua) ; sans eux, ceux du
+-- joueur, comme avant
+function Tri.Lancer(sacs)
 	if Tri.actif then
 		return
 	end
+	Tri.sacs = sacs
 	if CursorHasItem() then
 		ClearCursor()
 	end

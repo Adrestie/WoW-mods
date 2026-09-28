@@ -205,3 +205,21 @@ interface/buttons/ui-silver-button-select.blp
 interface/characterframe/char-paperdoll-parts.blp
 interface/characterframe/char-paperdoll-horizontal.blp
 interface/characterframe/char-paperdoll-vertical.blp
+
+
+# le fond de la boite de reception (InboxFrameBg, blizzard_mailframe) : absent du client 3.3.5
+interface/mailframe/ui-mailframebg.blp
+
+# l'onglet de page de la banque (BankPageTabTemplate, camelot/bankframe.xml)
+interface/icons/unknown_8197077.blp => interface/icons/inv_sidetab_bank_c60.blp
+# les onglets des pages suivantes (iconTexture2..4 de BankPageTabTemplate)
+interface/icons/achievement_guildperk_mobilebanking.blp
+interface/icons/trade_archaeology_chestoftinyglassanimals.blp
+interface/icons/ability_racial_packhobgoblin.blp
+
+# la banque de guilde de camelot (mainline/blizzard_guildbankui.xml) : coins, bords
+# et fond de coffre, absents du client 3.3.5
+interface/guildbankframe/corners.blp
+interface/guildbankframe/verttile.blp
+interface/guildbankframe/horiztile.blp
+interface/guildbankframe/guildvaultbg.blp

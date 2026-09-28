@@ -229,6 +229,14 @@ ForeverUI.AjouterTextes("enUS", {
 	PVPBATTLEGROUNDS_DEBUG_ROW = "%d: %s enter=%s holiday=%s random=%s id=%s%s",
 	PVPBATTLEGROUNDS_DEBUG_SELECTED = " <- selected",
 
+	-- Bank.lua
+	BANK_TITLE = "Bank",
+	BANK_COLON = "%s:",
+
+	-- Mail.lua
+	MAIL_OPEN_ALL = "Open All",
+	MAIL_OPEN_ALL_OPENING = "Opening...",
+
 	-- PvPTab.lua
 	PVPTAB_CIVILIAN = "Civilian",
 	PVPTAB_DISHONORED_LEFT = "Dishonored: %s left",
