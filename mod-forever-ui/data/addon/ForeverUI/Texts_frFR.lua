@@ -6,6 +6,8 @@ ForeverUI.AddTexts("frFR", {
 	ACTIONBAR_BUTTON1_MISSING = "ActionButton1 introuvable",
 	ACTIONBAR_DEBUG = "barre : bouton %.0fx%.0f | parent %s | ancre %s sur %s (%.0f, %.0f) | visible=%s | cadre=%s | normale alpha=%.2f",
 	ACTIONBAR_EDIT_LABEL = "Barre d'action",
+	ACTIONBAR_EDIT_LABEL_LEFT_GRYPHON = "Griffon gauche",
+	ACTIONBAR_EDIT_LABEL_RIGHT_GRYPHON = "Griffon droit",
 
 	-- Bags.lua
 	BAGS_CLEANUP = "Ranger les sacs",
@@ -89,6 +91,27 @@ ForeverUI.AddTexts("frFR", {
 	CHAT_LINES_RECORDED = "relevé du chat %s : %d objets texte (%d visibles), %d messages ; faites /reload pour l'enregistrer.",
 	CHAT_LINES_TEST = "ForeverUI, essai de sélection : une ligne assez longue pour être coupée par le chat, avec des accents (é è à ç), un lien %s, une icône %s et un motsansespacetrèslongpourvoircommentlemoteurlecoupequandiln'yapasdespacedutout fin.",
 
+	-- CustomizeUI.lua
+	CUSTOMIZEUI_GRID_ORIGIN = "Origine de la grille",
+	CUSTOMIZEUI_GRID_SPACING = "Espacement de la grille",
+	CUSTOMIZEUI_MENU_BUTTON = "Personnaliser l'interface",
+	CUSTOMIZEUI_ORIGIN_BOTTOM = "Bas",
+	CUSTOMIZEUI_ORIGIN_BOTTOMLEFT = "Bas gauche",
+	CUSTOMIZEUI_ORIGIN_BOTTOMRIGHT = "Bas droite",
+	CUSTOMIZEUI_ORIGIN_CENTER = "Milieu",
+	CUSTOMIZEUI_ORIGIN_LEFT = "Gauche",
+	CUSTOMIZEUI_ORIGIN_RIGHT = "Droite",
+	CUSTOMIZEUI_ORIGIN_TOP = "Haut",
+	CUSTOMIZEUI_ORIGIN_TOPLEFT = "Haut gauche",
+	CUSTOMIZEUI_ORIGIN_TOPRIGHT = "Haut droite",
+	CUSTOMIZEUI_PERCENT = "%",
+	CUSTOMIZEUI_RESET_CONFIRM = "Remettre tous les éléments à la disposition par défaut ?",
+	CUSTOMIZEUI_SIZE = "Taille",
+	CUSTOMIZEUI_SNAP = "Aimanter à la grille",
+	CUSTOMIZEUI_STICKY = "Coller aux éléments",
+	CUSTOMIZEUI_TITLE = "Personnaliser l'interface",
+	CUSTOMIZEUI_VALIDATE = "Valider",
+
 	-- EquipmentManager.lua
 	EQUIPMENTMANAGER_DEBUG_CARD = "   carte %d : nom=%s visible=%s ancre=%s coche=%s",
 	EQUIPMENTMANAGER_DEBUG_CLOSED = "fermé",
@@ -117,8 +140,6 @@ ForeverUI.AddTexts("frFR", {
 
 	-- Layout.lua
 	LAYOUT_EDIT_MODE_COMBAT = "le mode édition n'est pas disponible en combat.",
-	LAYOUT_EDIT_MODE_OFF = "mode édition terminé, positions retenues.",
-	LAYOUT_EDIT_MODE_ON = "mode édition actif : glissez les éléments, /fui pour terminer.",
 	LAYOUT_HELP = "commandes : /fui (mode édition), /fui reset [élément], /fui list, /fui debug, /fui bar, /fui bottom, /fui statusbars, /fui bags, /fui character, /fui close, /fui tabs, /fui model, /fui sets, /fui rep [faction], /fui skills, /fui currency, /fui pet, /fui pvp [0..1], /fui arena, /fui bg, /fui social, /fui finder, /fui chat, /fui chatlines, /fui titles, /fui minimap [scale k], /fui map, /fui mouse, /fui questlog, /fui tracking, /fui spellbook, /fui micro",
 	LAYOUT_LIST_HEADER = "éléments enregistrés :",
 	LAYOUT_LIST_MOVED = " - déplacé",
@@ -150,7 +171,6 @@ ForeverUI.AddTexts("frFR", {
 	LAYOUT_NO_DIAG_TRACKER = "aucun diagnostic du suivi de quêtes disponible.",
 	LAYOUT_NO_DIAG_WORLDMAP = "aucun diagnostic de la carte du monde disponible.",
 	LAYOUT_NO_MODEL_TUNE = "aucun réglage du modèle disponible.",
-	LAYOUT_NO_MOVE_IN_COMBAT = "déplacement impossible en combat.",
 	LAYOUT_RESET_ALL = "toutes les positions sont remises par défaut.",
 	LAYOUT_RESET_ONE = "position remise par défaut : ",
 	LAYOUT_SPY_NOTHING = "rien",

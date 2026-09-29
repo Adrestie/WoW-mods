@@ -285,3 +285,10 @@ fdid:8164391.blp => interface/professions/professionsbookc60.blp
 interface/professions/professioncardbackgroundgenericc60.blp
 interface/professions/professioncardbackgroundherbalismc60.blp
 interface/professions/professioncardbackgroundskinningc60.blp
+# Customize UI (blizzard_editmode): selection frames (editmode-actionbar-highlight /
+# -selected nine-slices) and the move handles (housing-advancedmode-scale-handle)
+interface/editmode/editmodeui.blp
+interface/editmode/editmodeuihighlightbackground.blp
+interface/editmode/editmodeuiselectedbackground.blp
+interface/housing/housinguiadvancedmodescale.blp
+interface/editmode/editmodeuivertical.blp

@@ -76,6 +76,7 @@ Tooltips.lua
 Templates.lua
 GameMenu.lua
 Settings.lua
+CustomizeUI.lua
 Bindings.lua
 Macros.lua
 ChatConfig.lua

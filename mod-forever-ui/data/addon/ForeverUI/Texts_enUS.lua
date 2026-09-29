@@ -6,6 +6,8 @@ ForeverUI.AddTexts("enUS", {
 	ACTIONBAR_BUTTON1_MISSING = "ActionButton1 not found",
 	ACTIONBAR_DEBUG = "bar: button %.0fx%.0f | parent %s | anchor %s on %s (%.0f, %.0f) | visible=%s | frame=%s | normal alpha=%.2f",
 	ACTIONBAR_EDIT_LABEL = "Action Bar",
+	ACTIONBAR_EDIT_LABEL_LEFT_GRYPHON = "Left Gryphon",
+	ACTIONBAR_EDIT_LABEL_RIGHT_GRYPHON = "Right Gryphon",
 
 	-- Bags.lua
 	BAGS_CLEANUP = "Clean Up Bags",
@@ -89,6 +91,27 @@ ForeverUI.AddTexts("enUS", {
 	CHAT_LINES_RECORDED = "chat record %s: %d text objects (%d visible), %d messages; type /reload to save it.",
 	CHAT_LINES_TEST = "ForeverUI, selection test: a line long enough to be wrapped by the chat, with accents (é è à ç), a link %s, an icon %s and a verylongwordwithoutanyspacetoseehowtheenginebreaksitwhenthereisnospaceatall end.",
 
+	-- CustomizeUI.lua
+	CUSTOMIZEUI_GRID_ORIGIN = "Grid Origin",
+	CUSTOMIZEUI_GRID_SPACING = "Grid Spacing",
+	CUSTOMIZEUI_MENU_BUTTON = "Customize UI",
+	CUSTOMIZEUI_ORIGIN_BOTTOM = "Bottom",
+	CUSTOMIZEUI_ORIGIN_BOTTOMLEFT = "Bottom Left",
+	CUSTOMIZEUI_ORIGIN_BOTTOMRIGHT = "Bottom Right",
+	CUSTOMIZEUI_ORIGIN_CENTER = "Middle",
+	CUSTOMIZEUI_ORIGIN_LEFT = "Left",
+	CUSTOMIZEUI_ORIGIN_RIGHT = "Right",
+	CUSTOMIZEUI_ORIGIN_TOP = "Top",
+	CUSTOMIZEUI_ORIGIN_TOPLEFT = "Top Left",
+	CUSTOMIZEUI_ORIGIN_TOPRIGHT = "Top Right",
+	CUSTOMIZEUI_PERCENT = "%",
+	CUSTOMIZEUI_RESET_CONFIRM = "Put every element back to the default layout?",
+	CUSTOMIZEUI_SIZE = "Size",
+	CUSTOMIZEUI_SNAP = "Snap on Grid",
+	CUSTOMIZEUI_STICKY = "Sticky UI",
+	CUSTOMIZEUI_TITLE = "Customize UI",
+	CUSTOMIZEUI_VALIDATE = "Validate",
+
 	-- EquipmentManager.lua
 	EQUIPMENTMANAGER_DEBUG_CARD = "   card %d: name=%s visible=%s anchor=%s tick=%s",
 	EQUIPMENTMANAGER_DEBUG_CLOSED = "closed",
@@ -117,8 +140,6 @@ ForeverUI.AddTexts("enUS", {
 
 	-- Layout.lua
 	LAYOUT_EDIT_MODE_COMBAT = "edit mode is not available in combat.",
-	LAYOUT_EDIT_MODE_OFF = "edit mode ended, positions saved.",
-	LAYOUT_EDIT_MODE_ON = "edit mode active: drag the elements, /fui to finish.",
 	LAYOUT_HELP = "commands: /fui (edit mode), /fui reset [element], /fui list, /fui debug, /fui bar, /fui bottom, /fui statusbars, /fui bags, /fui character, /fui close, /fui tabs, /fui model, /fui sets, /fui rep [faction], /fui skills, /fui currency, /fui pet, /fui pvp [0..1], /fui arena, /fui bg, /fui social, /fui finder, /fui chat, /fui chatlines, /fui titles, /fui minimap [scale k], /fui map, /fui mouse, /fui questlog, /fui tracking, /fui spellbook, /fui micro",
 	LAYOUT_LIST_HEADER = "registered elements:",
 	LAYOUT_LIST_MOVED = " - moved",
@@ -150,7 +171,6 @@ ForeverUI.AddTexts("enUS", {
 	LAYOUT_NO_DIAG_TRACKER = "no quest tracker diagnostic available.",
 	LAYOUT_NO_DIAG_WORLDMAP = "no world map diagnostic available.",
 	LAYOUT_NO_MODEL_TUNE = "no model adjustment available.",
-	LAYOUT_NO_MOVE_IN_COMBAT = "cannot move while in combat.",
 	LAYOUT_RESET_ALL = "all positions reset to default.",
 	LAYOUT_RESET_ONE = "position reset to default: ",
 	LAYOUT_SPY_NOTHING = "nothing",

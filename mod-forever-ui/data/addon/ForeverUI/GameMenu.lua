@@ -38,6 +38,7 @@ local function entries()
 		{ GameMenuButtonMacros },
 		{ GameMenuButtonRatings },
 		{ _G["GameMenuButtonAddOns"] },
+		{ _G["ForeverUIGameMenuButtonCustomize"] },
 		{ _G["ForeverUIGameMenuButtonHelp"], section = true },
 		{ GameMenuButtonLogout, section = true },
 		{ GameMenuButtonQuit },

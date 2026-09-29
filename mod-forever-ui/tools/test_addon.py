@@ -126,7 +126,14 @@ local function newRegion(kind)
         end
         return rows * h
     end
-    function r:SetText(t) self.text = t end
+    -- A FontString with no font (no template, SetFontObject or SetFont) refuses its text.
+    -- Checked on the addon's own FontStrings: the fake client's stand for XML ones, which have one.
+    function r:SetText(t)
+        if self.strictFont and not (self.font or self.baseFontPath or self.fontFile) then
+            error("<unnamed>:SetText(): Font not set", 2)
+        end
+        self.text = t
+    end
     function r:SetFormattedText(fmt, ...) self.text = string.format(fmt, ...) end
     function r:GetText() return self.text end
     function r:SetJustifyH(j) self.justify = j end
@@ -429,9 +436,12 @@ function CreateFrame(kind, name, parent, template)
     function f:SetHighlightTexture(v) return setTextureKey(self, "_highlight", v) end
     function f:SetDisabledTexture(v) return setTextureKey(self, "_disabled", v) end
     function f:SetCheckedTexture(v) return setTextureKey(self, "_checked", v) end
+    function f:SetDisabledCheckedTexture(v) return setTextureKey(self, "_disabledChecked", v) end
     -- A StatusBar carries a value and bounds.
     function f:SetMinMaxValues(minValue, maxValue) self.minValue, self.maxValue = minValue, maxValue end
     function f:GetMinMaxValues() return self.minValue or 0, self.maxValue or 0 end
+    function f:SetValueStep(v) self.valueStep = v end
+    function f:SetOrientation(o) self.orientation = o end
     -- The real client fires OnValueChanged when the value changes (slider, scroll bar)
     function f:SetValue(v)
         local before = self.value
@@ -479,6 +489,8 @@ function CreateFrame(kind, name, parent, template)
     function f:GetNumRegions() return #self.regions end
     function f:CreateFontString(n, layer, font)
         local t = newRegion("fontstring"); t.layer = layer; t.font = font; t.owner = self
+        local caller = debug.getinfo(2, "S")
+        t.strictFont = caller and string.sub(caller.source, -4) == ".lua"
         if n then t.name = t.name or n; t._name = t._name or n; _G[n] = t end
         -- GetRegions returns FontStrings too, not only textures: a sweep that skips them leaves
         -- client labels such as "Currency Options" on screen.
@@ -5153,6 +5165,8 @@ end
 -- keys, it never replaces the table.
 StaticPopupDialogs = StaticPopupDialogs or {}
 STATICPOPUP_ORIGINAL = StaticPopupDialogs
+-- UIParent.lua: frames Escape closes, by name
+UISpecialFrames = {}
 -- The client's Escape menu (GameMenuFrame.xml): 195 x 240, buttons in a column on
 -- GameMenuButtonTemplate (144 x 21, UIPanelTemplates.xml:603); Macros under Key
 -- Bindings. ToggleHelpFrame opens the help request.
@@ -8367,7 +8381,7 @@ def main():
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "StatisticsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
-             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Templates.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua",
+             "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Templates.lua", "GameMenu.lua", "Settings.lua", "CustomizeUI.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua",
              "Trainer.lua", "Taxi.lua", "Stable.lua", "Socketing.lua", "Dialogs.lua", "TradeSkill.lua", "ProfessionsBook.lua", "BarberShopData.lua", "BarberShopColors.lua", "BarberShop.lua"]
 
     # The .toc order is authoritative: check that it matches.
@@ -8411,11 +8425,13 @@ def main():
         len([n for n in written if n in OURS]), len([n for n in written if n in PENDING]),
         ", ".join(sorted(n for n in written if n in PENDING))))
 
+    # Each file runs under its own name: the fake client tells the addon's code from its own.
+    run_file = lua.eval("function(source, name) local f = assert(load(source, '@' .. name)) return f() end")
     failures = []
     for fn in order:
         source = io.open(os.path.join(ADDON, fn), encoding="utf-8").read()
         try:
-            lua.execute(source)
+            run_file(source, fn)
         except Exception as exc:
             failures.append((fn, str(exc).split("\n")[0]))
     if failures:
@@ -8587,18 +8603,286 @@ def main():
     g.STATE.combat = False
     frame.scripts.OnEvent(frame, "PLAYER_REGEN_ENABLED")
 
-    # 7. edit mode and moving
+    # 7. Customize UI: veil over each element, moves kept in a working copy until Validate.
+    # The fake client does not lay frames out: resolve() gives a frame its edges from its last
+    # anchor on UIParent, on a 1024 x 768 screen.
+    C = g.ForeverUI.CustomizeUI
+    screen = (g.UIParent.width, g.UIParent.height)
+    lua.execute("UIParent:SetWidth(1024) UIParent:SetHeight(768)")
+    W, H = 1024, 768
+    def fraction(point):
+        fx = 0 if "LEFT" in point else 1 if "RIGHT" in point else 0.5
+        fy = 0 if "BOTTOM" in point else 1 if "TOP" in point else 0.5
+        return fx, fy
+    def resolve(f):
+        pt = f.points[len(list(f.points.items()))]
+        k = f.GetEffectiveScale(f) / g.UIParent.GetEffectiveScale(g.UIParent)
+        fx, fy = fraction(pt[1])
+        rx, ry = fraction(pt[3])
+        w, h = f.width * k, f.height * k
+        left = rx * W + pt[4] * k - fx * w
+        bottom = ry * H + pt[5] * k - fy * h
+        f._left, f._bottom = left / k, bottom / k
+        return left, bottom, w, h
+    def anchor():
+        pt = frame.points[len(list(frame.points.items()))]
+        return (pt[1], pt[4], pt[5])
+    held = []
+    same = lua.eval("function(a, b) return rawequal(a, b) end")
+    # Drags the player frame by (dx, dy): by its body, or by one of its handles.
+    def drag(dx, dy, handle=None, during=None):
+        resolve(frame)
+        g.MOUSE_X, g.MOUSE_Y = 400, 300
+        target = C.handles[handle] if handle else C.veils["playerframe"]
+        target.scripts.OnMouseDown(target, "LeftButton")
+        g.MOUSE_X, g.MOUSE_Y = 400 + dx, 300 + dy
+        C.drag.scripts.OnUpdate(C.drag, 0.01)
+        held[:] = [anchor()]
+        target.scripts.OnMouseUp(target, "LeftButton")
+        resolve(frame)
+    def calm():
+        C.settings.snap, C.settings.sticky = False, False
+    start = anchor()
     g.SlashCmdList["FOREVERUI"]("")
-    overlay = g.ForeverUI.Layout.systems["playerframe"].overlay
-    print("mode edition : %s, surface creee = %s" % (g.ForeverUI.Layout.editing, overlay is not None))
-    overlay.scripts.OnDragStart()
-    frame.points = lua.eval("{}")
-    frame.SetPoint(frame, "CENTER", g.UIParent, "CENTER", 120, -40)
-    overlay.scripts.OnDragStop()
+    calm()
+    print("personnalisation ouverte : %s, voile = %s, fenetre = %s, grille = %s" % (
+        C.active, C.veils["playerframe"] is not None, C.window.shown, C.grid.shown))
+    assert C.active and C.window.shown and C.grid.shown, "/fui n'ouvre pas la personnalisation"
+    assert "ForeverUICustomizeUI" in list(g.UISpecialFrames.values()), "Echap ne ferme pas la fenetre"
+    # the veils above the client's HIGH bars (stance/form bar and its buttons), the windows above
+    # the veils, the confirmation above the windows
+    ORDER = ["BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"]
+    v = C.veils["actionbar"]
+    print("couches : voile %s, fenetres %s / %s" % (v.strata, C.window.strata, C.sizeWindow.strata))
+    assert ORDER.index(v.strata) > ORDER.index("HIGH"), "la barre de posture du client passe au-dessus du voile"
+    assert ORDER.index(C.window.strata) > ORDER.index(v.strata) and C.sizeWindow.strata == C.window.strata
+    assert ORDER.index("FULLSCREEN_DIALOG") > ORDER.index(C.window.strata)
+    drag(110, -30)
+    print("deplace par le corps : %s ; non valide : sauvegarde = %s" % (anchor(), g.ForeverUIDB.positions["playerframe"]))
+    assert anchor() == ("TOPLEFT", 120, -40), "le corps ne deplace pas l'element en gardant son ancre"
+    assert g.ForeverUIDB.positions["playerframe"] is None, "le deplacement est sauvegarde avant Validate"
+    C.Cancel()
+    print("Cancel : ouverte = %s, ancrage = %s (depart %s)" % (C.active, anchor(), start))
+    assert not C.active and not C.window.shown and not C.grid.shown
+    assert anchor() == start, "Cancel ne remet pas l'element a sa place"
+
+    # the grid settings too: kept by Validate, dropped by Cancel; the windows' own places (same
+    # table) are not touched by Validate
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    C.SetOrigin("BOTTOMLEFT")
+    C.controls.spacing.SetValue(C.controls.spacing, 250)
+    C.controls.snap.SetChecked(C.controls.snap, True)
+    C.controls.snap.scripts.OnClick(C.controls.snap)
+    C.controls.sticky.SetChecked(C.controls.sticky, True)
+    C.controls.sticky.scripts.OnClick(C.controls.sticky)
+    C.settings.snap, C.settings.sticky = False, False
+    drag(110, -30)
+    lua.execute('ForeverUIDB.positions.sheet = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 5, y = -5 }')
+    C.settings.snap, C.settings.sticky = False, True
+    C.Validate()
     saved = g.ForeverUIDB.positions["playerframe"]
-    print("position retenue apres deplacement : %s/%s %s,%s" % (saved.point, saved.relativePoint, saved.x, saved.y))
+    cz = g.ForeverUIDB.customize
+    print("Validate : %s/%s %s,%s ; grille %s pas %s aimant %s colle %s ; fenetre gardee %s" % (
+        saved.point, saved.relativePoint, saved.x, saved.y, cz.origin, cz.spacing, cz.snap, cz.sticky,
+        g.ForeverUIDB.positions["sheet"] is not None))
+    assert (saved.point, saved.x, saved.y) == ("TOPLEFT", 120, -40), "Validate ne sauvegarde pas"
+    assert (cz.origin, cz.spacing, cz.snap, cz.sticky) == ("BOTTOMLEFT", 250, False, True)
+    assert g.ForeverUIDB.positions["sheet"] is not None, "Validate efface la place d'une fenetre"
+    lua.execute("ForeverUIDB.positions.sheet = nil")
     g.SlashCmdList["FOREVERUI"]("")
-    print("mode edition apres seconde bascule : %s" % g.ForeverUI.Layout.editing)
+    C.SetOrigin("TOP")
+    C.Cancel()
+    print("Cancel apres changement d'origine : origine gardee = %s" % g.ForeverUIDB.customize.origin)
+    assert g.ForeverUIDB.customize.origin == "BOTTOMLEFT"
+
+    # grid: one line per step from the origin, the origin lines in violet, one pixel thick
+    g.SlashCmdList["FOREVERUI"]("")
+    C.grid.width, C.grid.height = 1000, 600
+    def count(origin, spacing):
+        C.SetOrigin(origin)
+        C.controls.spacing.SetValue(C.controls.spacing, spacing)
+        C.DrawGrid()
+        shown = [t for t in C.grid.regions.values() if t.shown]
+        violet = [t for t in shown if abs(t.color[1] - 0.784) < 1e-6]
+        return len(shown), len(violet)
+    for origin, spacing, want in (("CENTER", 100, 18), ("BOTTOMLEFT", 100, 18), ("CENTER", 300, 6),
+                                  ("TOPRIGHT", 200, 10), ("LEFT", 20, 51 + 31)):
+        n, violet = count(origin, spacing)
+        print("grille %-10s pas %3d : %d lignes (%d attendues), %d violettes" % (origin, spacing, n, want, violet))
+        assert n == want and violet == 2, "grille mal tracee"
+    lua.execute("SetCVar('gxResolution', '1920x1080')")
+    C.DrawGrid()
+    t = [t for t in C.grid.regions.values() if t.shown and t.width][0]
+    print("epaisseur d'une ligne : %.4f (768 / 1080 = %.4f)" % (t.width, 768 / 1080))
+    assert abs(t.width - 768 / 1080) < 1e-9, "la ligne ne fait pas un pixel"
+    lua.execute("SetCVar('gxResolution', nil)")
+    C.Cancel()
+
+    # Selection: a click on the veil selects the element (selected frame, nine handles on its
+    # box, size window at its right); another click selects another one
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    veil = C.veils["playerframe"]
+    resolve(frame)
+    veil.scripts.OnMouseDown(veil, "LeftButton")
+    veil.scripts.OnMouseUp(veil, "LeftButton")
+    handles = list(C.handles.values())
+    shown = [h for h in handles if h.shown and same(h.parent, veil)]
+    anchors = sorted(h.points[1][3] for h in shown)
+    sw = C.sizeWindow
+    print("selection : %s, cadre %s, %d poignees sur le voile, fenetre de taille %s '%s' %s %%" % (
+        C.selected, veil.pieces.center.texture, len(shown), sw.shown, sw.title.text, sw.field.text))
+    assert C.selected == "playerframe" and "selected" in veil.pieces.center.texture.lower()
+    assert len(shown) == 9 and anchors == sorted(["TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT",
+                                                  "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"])
+    assert all(h.points[1][1] == "CENTER" and same(h.points[1][2], veil) for h in shown)
+    assert sw.shown and sw.title.text == g.ForeverUI.Layout.systems["playerframe"].label and sw.field.text == "100"
+    assert anchor() == ("TOPLEFT", 120, -40), "un clic sans deplacement a bouge l'element"
+    left, bottom, w, h = resolve(frame)
+    spt = sw.points[1]
+    print("   fenetre de taille : %s sur %s a (%s, %s) ; element %s..%s, haut %s" % (
+        spt[1], spt[3], spt[4], spt[5], left, left + w, bottom + h))
+    assert (spt[1], spt[3], spt[4], spt[5]) == ("TOPLEFT", "BOTTOMLEFT", left + w + 12, bottom + h)
+    target = g.ForeverUI.Layout.systems["targetframe"]
+    other = C.veils["targetframe"]
+    if other:
+        other.scripts.OnMouseDown(other, "LeftButton")
+        other.scripts.OnMouseUp(other, "LeftButton")
+        print("   autre element : %s ; ancien cadre %s" % (C.selected, veil.pieces.center.texture))
+        assert C.selected == "targetframe" and "highlight" in veil.pieces.center.texture.lower()
+        assert all(same(h.parent, other) for h in handles)
+    veil.scripts.OnMouseDown(veil, "LeftButton")
+    veil.scripts.OnMouseUp(veil, "LeftButton")
+
+    # a handle: the held point anchors the element during the drag, then the element gets its
+    # own anchor back at the new place
+    drag(50, 20, "BOTTOMRIGHT")
+    print("   poignee bas droite : pendant %s, apres %s" % (held[0], anchor()))
+    assert held[0][0] == "BOTTOMRIGHT", "la poignee tenue n'est pas l'ancre pendant le glisser"
+    assert anchor() == ("TOPLEFT", 170, -20), "la poignee ne deplace pas l'element"
+    for h in handles:
+        assert not h.held
+
+    # Snap on Grid: the held point is attracted by a line within 8, not beyond
+    C.settings.snap = True
+    C.SetOrigin("BOTTOMLEFT")
+    C.controls.spacing.SetValue(C.controls.spacing, 100)
+    C.grid.width, C.grid.height = W, H
+    lua.execute("ForeverUI.Layout.Reset('playerframe')")
+    drag(95, 0, "TOPLEFT")
+    near = anchor()
+    lua.execute("ForeverUI.Layout.Reset('playerframe')")
+    drag(120, 0, "TOPLEFT")
+    far = anchor()
+    print("aimant : pointe a 105 -> %s ; pointe a 130 -> %s" % (near, far))
+    assert near[:2] == ("TOPLEFT", 100) and far[:2] == ("TOPLEFT", 130)
+
+    # Sticky UI: an edge within 8 of another element's edge sticks to it
+    C.settings.snap, C.settings.sticky = False, True
+    tf = target.frame
+    was = tf.shown
+    tf.shown = True
+    tl, tb, tw, th = resolve(tf)
+    lua.execute("ForeverUI.Layout.Reset('playerframe')")
+    pl, pb, pw, ph = resolve(frame)
+    gap = tl - (pl + pw)
+    drag(gap - 5, 0)
+    stuck = resolve(frame)
+    print("collage : bord droit a 5 du bord gauche de la cible -> %.1f (bord gauche de la cible %.1f)" % (
+        stuck[0] + stuck[2], tl))
+    assert abs(stuck[0] + stuck[2] - tl) < 1e-9, "l'element ne se colle pas a son voisin"
+    lua.execute("ForeverUI.Layout.Reset('playerframe')")
+    drag(gap + 20, 0)
+    free = resolve(frame)
+    print("   a 20 au-dela : reste a %.1f" % (free[0] + free[2]))
+    assert abs(free[0] + free[2] - (tl + 20)) < 1e-9
+    tf.shown = was
+    calm()
+
+    # Size: typed in percent, kept between 50 and 200, around the element's anchor; the veil
+    # and its handles keep the screen's scale
+    lua.execute("ForeverUI.Layout.Reset('playerframe')")
+    field = C.sizeWindow.field
+    def size(text):
+        field.SetText(field, text)
+        field.scripts.OnEnterPressed(field)
+        field.scripts.OnEditFocusLost(field)
+        return field.text
+    shown150 = size("150")
+    pt = frame.points[len(list(frame.points.items()))]
+    print("taille 150 : champ %s, echelle %s, ancre %s (%s, %s), voile a %.4f" % (
+        shown150, frame.scale, pt[1], pt[4], pt[5], veil.scale))
+    assert shown150 == "150" and abs(frame.scale - 1.5) < 1e-9
+    assert (pt[1], abs(pt[4] - 10 / 1.5) < 1e-9, abs(pt[5] + 10 / 1.5) < 1e-9) == ("TOPLEFT", True, True)
+    assert abs(veil.scale - 1 / 1.5) < 1e-9, "le voile grandit avec l'element"
+    print("   300 -> %s ; 20 -> %s ; abc -> %s" % (size("300"), size("20"), size("abc")))
+    assert size("300") == "200" and size("20") == "50" and size("abc") == "50"
+    size("75")
+    drag(30, 0)
+    print("   deplace a 75 %% : ancre %s" % (anchor(),))
+    assert anchor()[0] == "TOPLEFT" and abs(anchor()[1] - 40 / 0.75) < 1e-9, "position faussee par la taille"
+    C.Validate()
+    sp = g.ForeverUIDB.positions["playerframe"]
+    print("Validate : echelle %s, x %s (unites a 100 %%)" % (sp.scale, sp.x))
+    assert sp.scale == 0.75 and abs(sp.x - 40) < 1e-9
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    g.StaticPopupDialogs["FOREVERUI_CUSTOMIZE_RESET"].OnAccept()
+    print("Reset : echelle %s, voile %s" % (frame.scale, veil.scale))
+    assert frame.scale == 1 and veil.scale == 1
+    C.Cancel()
+    print("Cancel : echelle %s, ancre %s" % (frame.scale, anchor()))
+    assert frame.scale == 0.75 and not C.selected and not C.sizeWindow.shown
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    veil.scripts.OnMouseDown(veil, "LeftButton")
+    veil.scripts.OnMouseUp(veil, "LeftButton")
+    size("100")
+    drag(80, -30)
+    C.Validate()
+    print("remis a 100 %% : entree %s" % dict(g.ForeverUIDB.positions["playerframe"].items()))
+    assert g.ForeverUIDB.positions["playerframe"].scale is None and anchor() == ("TOPLEFT", 120, -40)
+
+    # Reset: after the confirmation, every element back to default, the session stays open;
+    # the client's popup is raised above the window while shown, then gets its strata back
+    popup = lua.eval("CreateFrame('Frame', nil, UIParent)")
+    popup.SetFrameStrata(popup, "DIALOG")
+    dialog = g.StaticPopupDialogs["FOREVERUI_CUSTOMIZE_RESET"]
+    dialog.OnShow(popup)
+    raised = popup.strata
+    dialog.OnHide(popup)
+    print("confirmation : strata %s pendant, %s apres" % (raised, popup.strata))
+    assert raised == "FULLSCREEN_DIALOG" and popup.strata == "DIALOG"
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    g.StaticPopupDialogs["FOREVERUI_CUSTOMIZE_RESET"].OnAccept()
+    print("Reset confirme : ouverte = %s, ancrage = %s, sauvegarde intacte = %s" % (
+        C.active, anchor(), g.ForeverUIDB.positions["playerframe"] is not None))
+    assert C.active and anchor() == start and g.ForeverUIDB.positions["playerframe"] is not None
+    C.Cancel()
+    print("Cancel apres Reset : ancrage = %s" % (anchor(),))
+    assert anchor() == ("TOPLEFT", 120, -40), "Cancel ne revient pas a la disposition d'ouverture"
+
+    # Escape (the window hides) cancels; entering combat cancels, a drag in progress too
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    drag(10, 10)
+    C.window.Hide(C.window)
+    print("Echap : ouverte = %s, ancrage = %s" % (C.active, anchor()))
+    assert not C.active and anchor() == ("TOPLEFT", 120, -40)
+    g.SlashCmdList["FOREVERUI"]("")
+    calm()
+    resolve(frame)
+    veil.scripts.OnMouseDown(veil, "LeftButton")
+    g.MOUSE_X = g.MOUSE_X + 30
+    C.drag.scripts.OnUpdate(C.drag, 0.01)
+    g.ARENA_EVENT("PLAYER_REGEN_DISABLED")
+    print("entree en combat pendant un glisser : ouverte = %s, glisser = %s, ancrage = %s" % (
+        C.active, C.drag.shown, anchor()))
+    assert not C.active and not C.drag.shown and anchor() == ("TOPLEFT", 120, -40)
+    g.ARENA_EVENT("PLAYER_REGEN_ENABLED")
+    g.UIParent.width, g.UIParent.height = screen
 
     # 8. reset to defaults
     g.SlashCmdList["FOREVERUI"]("reset")
@@ -8606,10 +8890,11 @@ def main():
     pt = frame.points[len(list(frame.points.items()))]
     print("apres reset : position sauvegardee = %s, ancrage = %s (%s, %s)" % (rest, pt[1], pt[4], pt[5]))
 
-    # 9. combat: edit mode must refuse
+    # 9. combat: Customize UI must refuse
     g.STATE.inLockdown = True
     g.SlashCmdList["FOREVERUI"]("")
-    print("mode edition refuse en combat : %s" % (not g.ForeverUI.Layout.editing))
+    print("personnalisation refusee en combat : %s" % (not C.active))
+    assert not C.active
     g.STATE.inLockdown = False          # otherwise everything below runs in combat
 
     # 10. states: resting, combat, vehicle
@@ -11634,15 +11919,16 @@ def main():
     assert "PVPMicroButton" not in names and "HelpMicroButton" not in names and len(names) == 9
     assert not g.PVPMicroButton.shown and not g.HelpMicroButton.shown, "les boutons du client ne reviennent pas"
     # Help Request in the Escape menu, between AddOns (ACP) and Log Out, one section on each
-    # side. Layout of camelot's MainMenuFrameTemplate: column at (28, -y), red buttons
-    # 200 x 36, sections of 20, margins 48 / 34, width 256; the buttons stay the client's,
-    # in its order.
+    # side; Customize UI right under AddOns (camelot's Edit Mode). Layout of camelot's
+    # MainMenuFrameTemplate: column at (28, -y), red buttons 200 x 36, sections of 20, margins
+    # 48 / 34, width 256; the buttons stay the client's, in its order.
     help = g.ForeverUIGameMenuButtonHelp
     COLUMN = [("GameMenuButtonOptions", 48), ("GameMenuButtonSoundOptions", 84),
                ("GameMenuButtonUIOptions", 120), ("GameMenuButtonKeybindings", 156),
                ("GameMenuButtonMacros", 192), ("GameMenuButtonAddOns", 228),
-               ("ForeverUIGameMenuButtonHelp", 284), ("GameMenuButtonLogout", 340),
-               ("GameMenuButtonQuit", 376), ("GameMenuButtonContinue", 432)]
+               ("ForeverUIGameMenuButtonCustomize", 264),
+               ("ForeverUIGameMenuButtonHelp", 320), ("GameMenuButtonLogout", 376),
+               ("GameMenuButtonQuit", 412), ("GameMenuButtonContinue", 468)]
     # Check the Escape menu column; when: label for the messages.
     def check(when):
         for name, y in COLUMN:
@@ -11650,9 +11936,9 @@ def main():
             pts = [list(x.values()) for x in b.points.values()]
             assert len(pts) == 1 and pts[0][0] == "TOPLEFT" and pts[0][1]._name == "GameMenuFrame"                 and pts[0][2:] == ["TOPLEFT", 28, -y], (when, name, pts)
             assert (b.width, b.height) == (200, 36) and b.foreverThreeSlice, (when, name)
-        print("   menu Echap (%s) : %d boutons en colonne, aide a -284, Log Out a -340, menu %s x %s" % (
+        print("   menu Echap (%s) : %d boutons en colonne, aide a -320, Log Out a -376, menu %s x %s" % (
             when, len(COLUMN), g.GameMenuFrame.width, g.GameMenuFrame.height))
-        assert (g.GameMenuFrame.width, g.GameMenuFrame.height) == (256, 432 + 36 + 34)
+        assert (g.GameMenuFrame.width, g.GameMenuFrame.height) == (256, 468 + 36 + 34)
     assert help.text == "Help Request"
     check("chargement")
     # ACP puts Log Out back under AddOns and grows the menu on each show: the column is
@@ -11663,6 +11949,13 @@ def main():
     check("rouvert")
     help.scripts.OnClick(help)
     assert not g.GameMenuFrame.shown and g.HELP_OPENED == 1, "le menu se ferme, la demande d'aide s'ouvre"
+    custom = g.ForeverUIGameMenuButtonCustomize
+    lua.execute("GameMenuFrame:Show()")
+    custom.scripts.OnClick(custom)
+    print("   Customize UI : '%s', menu ferme = %s, personnalisation ouverte = %s" % (
+        custom.text, not g.GameMenuFrame.shown, g.ForeverUI.CustomizeUI.active))
+    assert custom.text == "Customize UI" and not g.GameMenuFrame.shown and g.ForeverUI.CustomizeUI.active
+    g.ForeverUI.CustomizeUI.Cancel()
     assert micro.height == 40
     # Latency indicator: camelot's image (a line at the bottom), not the 3.3.5 block
     # stretched to a square.
@@ -11795,14 +12088,22 @@ def main():
         assert abs(d.x - expected[0]) < 1e-6 and abs(d.y - expected[1]) < 1e-6, (
             "position par defaut fausse pour %s" % name)
 
-    endCap = g.ForeverUI.ActionBarEndCaps.right
-    pt = endCap.points[1]
-    print("embout droit : %s sur %s (%s, %s)" % (pt[1], pt[3], pt[4], pt[5]))
-    assert pt[1] == "BOTTOMLEFT" and pt[3] == "BOTTOMRIGHT", "l'embout droit n'est pas cale par le bas"
-    assert pt[4] == -30 and pt[5] == -2, "l'embout droit ne tient pas au bord des sacs"
-    left = g.ForeverUI.ActionBarEndCaps.left.points[1]
-    print("embout gauche : %s sur %s (%s, %s)" % (left[1], left[3], left[4], left[5]))
-    assert left[1] == "BOTTOMRIGHT" and left[3] == "BOTTOMLEFT" and left[5] == -2
+    # The gryphons are elements of their own (Customize UI moves them apart from the bar);
+    # by default they hold 30 over the bar's left end and the bags' right end, 2 lower.
+    systems = g.ForeverUI.Layout.systems
+    bar, bags = systems["actionbar"], systems["bags"]
+    for name, parent, point, x in (
+            ("leftgryphon", bar, "BOTTOMRIGHT", bar.defaults.x - bar.frame.width + 30),
+            ("rightgryphon", bags, "BOTTOMLEFT", bags.defaults.x + bags.frame.width - 30)):
+        system = systems[name]
+        d = system.defaults
+        pt = system.frame.points[1]
+        print("%-12s : %s sur %s (%.1f, %.1f), parent %s" % (
+            name, d.point, d.relativePoint, d.x, d.y, system.frame.parent._name))
+        assert system.frame.parent._name == "UIParent", "le griffon depend encore de la barre"
+        assert (d.point, d.relativePoint) == (point, "BOTTOM")
+        assert abs(d.x - x) < 1e-6 and abs(d.y - (parent.defaults.y - 2)) < 1e-6, name
+        assert (pt[1], pt[3], pt[4], pt[5]) == (d.point, d.relativePoint, d.x, d.y), name
 
     # ------------------------------------------------------- bags
     bag = g.ContainerFrame1
