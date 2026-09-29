@@ -16,7 +16,7 @@
 
 r"""A layout, written as the SQL the module ships.
 
-THE GRID IS DATA, and this is where a drawing becomes it: `08_grid.sql`, the
+THE GRID IS DATA, and this is where a drawing becomes it: `spheregrid_08_grid.sql`, the
 very file in `data/sql/world`, so a server that wants its own grid replaces
 that one file and nothing else.
 

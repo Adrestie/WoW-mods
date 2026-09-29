@@ -20,7 +20,8 @@ grid and gets every point back; the account keeps what it earned.
 | [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) | 3.3.5a, built with the module in `modules/` |
 | [ALE](https://github.com/azerothcore/mod-ale) or Eluna | the Lua engine that runs the interface |
 | [AIO](https://github.com/Rochet2/AIO) | server AND client — the interface is sent over it |
-| Python 3 and the `mysql` client | for the installer, and for the layout editor |
+| the WoW-mods installer | `installer.exe`, from the `installer/` folder of this repository; MySQL running |
+| Python 3 and the `mysql` client | for the layout editor only |
 | Pillow and numpy | for the layout editor only: `pip install pillow numpy` |
 | a patched client | the installer does it; see [The client](#the-client) |
 
@@ -32,67 +33,40 @@ stock talent window and the stock frames, through AIO.
 
 ## Installing
 
-`install.bat` on Windows, `install.sh` elsewhere. Both ask the same things —
-where the server is, where the core sources are, where the client is, where to
-keep the copies, what to do, and whether to move the module's identifiers if
-one is already taken — then do the rest and print every step.
+Stop the world server and close the game, then run `installer.exe`, the
+WoW-mods installer (`installer/` folder of this repository), and give it this
+folder, or drop the folder on `installer.exe`. Keep the package where you
+downloaded it: the installer refuses to run from your server's `modules`
+folder. Its window asks for the world server folder and the game folder, finds
+the rest (the sources, the databases, `mysql.exe`, the Lua scripts folder),
+shows what it found of the module, and offers the one action that fits:
+**Install** when there is no trace of it, **Remove** when there is.
+`installer.json` declares everything it puts in place.
+
+Installing puts in place:
+
+- the sources, into `modules/mod-spheregrid` of your AzerothCore sources;
+- `mod-spheregrid.conf` and its `.dist`, into the module configuration folder;
+- the interface, `data/lua/SphereGrid/`, into `lua_scripts/SphereGrid/`;
+- the workbench, `data/lua/Workbench/`, into `lua_scripts/Workbench/`, unless
+  the same or a newer version is already there;
+- the module's rows of fifteen DBC files, merged into the game's own files
+  inside its archives, and the 372 files of `data/art`: into the last custom
+  archive the game reads, or into a new `Data\patch-Z.MPQ` when there is none.
 
 **A client is not optional.** The module's spells exist in no client: without
 its rows a player sees no name, no icon and no effect, and cannot cast them.
-The installer asks for one, and lets you go on without it only if you say so —
-for a server that has no client on it, which is most Linux ones. Patch a client
-where it lives, afterwards:
 
-```
-python tools/install.py --client-only --client <client Data dir>
-```
-
-That mode needs no server and touches no database: it reads the module's own
-rows, merges them into that client's DBC files, and writes the archive.
-
-Three ways to run:
-
-| | |
-|---|---|
-| **Look only** | reads the server, its database and the client; says which identifiers are free; writes nothing |
-| **Rehearse** | announces every step it would take, and still writes nothing |
-| **Install** | does it |
-
-Start with the first. It costs nothing and tells you whether this server has
-room for the module.
-
-**Nothing is written before a copy of it exists.** You choose where those copies
-go: a `Backups/` folder inside the module reproducing each file's own path, or
-a copy beside each original. Each backup leaves a receipt saying what was kept
-and where it came from.
-
-What the installer does, in order:
-
-1. **Survey** — which identifiers the target already uses: in the server's DBC
-   files, in the world database's tables, and inside the client's archives.
-   Rows the module itself wrote on an earlier install are recognised and do not
-   count as taken.
-2. **Shift**, if you allowed it and something was taken — see below.
-3. **Backup** — every file it is about to write, and a dump of every table it
-   is about to change.
-4. **Place** — the sources into `<core>/modules/mod-spheregrid`, the interface
-   into `<server>/lua_scripts/SphereGrid`, the configuration into
-   `<server>/configs/modules`.
-5. **SQL** — the world files, then the characters files, in order.
-6. **Client** — merges the module's rows into the client's own DBC files and
-   writes them, with the module's art, into `patch-Z.MPQ`: a new archive when
-   the client has none, the client's own when it already has one — see
-   [below](#a-client-that-already-has-a-patch-z).
-
-Three things are left to you afterwards. **Rebuild the core**, so the module
-is compiled in. Install **AIO** on both sides — the survey says whether it
-found it, and without it no window ever opens. And **put down a workbench**:
-the module ships the object, not a place for it, since where it stands is a
-decision about your world and not about the module. The workbench is SHARED
-with the other modules of this repository that have recipes -- one object,
-one window, `data/lua/Workbench/` placed once by whichever installs first --
-and each module brings its own recipes to it. Stand where you want one, as a
-game master:
+Three things are left to you afterwards. **Rebuild the core**, the world
+server stopped: the installer prints the commands. On first start, the core
+updater applies `data/sql/world` and `data/sql/characters` (the installer
+applies them itself when `Updates.EnableDatabases` leaves a database out).
+Install **AIO** on both sides: without it no window ever opens. And **put down
+a workbench**: the module ships the object, not a place for it, since where it
+stands is a decision about your world and not about the module. The workbench
+is SHARED with the other modules of this repository that have recipes -- one
+object, one window, one `lua_scripts/Workbench/` folder -- and each module
+brings its own recipes to it. Stand where you want one, as a game master:
 
 ```
 .gobject add 810000
@@ -103,119 +77,39 @@ usual choice. The object is a window, not a gate: `fuse`, `reroll`, `reforge`
 and `grind` are commands, and a player who never walks past a workbench can
 still use them.
 
-Run again on a server that already has the module, the installer does not
-install: it becomes the remover — see [Removing](#removing). To update the
-module, remove it, then install it again. Everything it writes is nonetheless
-written to be run twice: every SQL file deletes what it inserts, the module's
-own archive is set aside before the client is read, and in a shared one the
-module's earlier rows are taken out before its current ones go in.
-
 ### When an identifier is taken
 
-The module allocates its identifiers in blocks — its spells, its items, its
-creatures, its displays, its visuals — and a server may already use some of
-them: another module, a custom patch. The survey says so, table by table.
-
-Told to move them, the installer picks for every family in clash the smallest
-step that puts the whole family on identifiers nobody holds — in the DBC
-files, in the database, in the client — and rewrites **every file of the
-module** to the new numbers: DBC rows, SQL, C++ and Lua alike. The module is
-then what it was, one block over, and you rebuild the core with it.
-`data/dbc/shifts.json` records what moved and by how much, so the next survey
-looks where things now are.
-
-The same can be done by hand, before installing:
-
-```
-python tools/shift.py --list
-python tools/shift.py --family spells --by 200000
-```
-
-Two families are moved by position rather than by sight: the visual kits,
-whose numbers are the size of a duration in milliseconds, and the spell icons,
-whose numbers are the size of anything. They are moved only where one is known
-to be — the DBC fields that hold one, the columns of a `spell_dbc` row, the C++
-constants named for one — and never guessed at.
-
-### A client that already has a `patch-Z`
-
-`patch-Z.MPQ` and `patch-z.MPQ` are the same file on Windows, and a server
-that ships its own patch usually ships it under that name. The installer tells
-three cases apart, and says which one it is in:
-
-| | |
-|---|---|
-| **no `patch-Z`** | a new archive is created holding only what the module adds — the module's **own**. The next run sets it aside and writes it again; the uninstaller deletes it whole. |
-| **the module's own**, from an earlier run | recognised by a mark inside it, whatever identifiers the module carried then. |
-| **the client's own** — another server's patch, perhaps gigabytes of it | the module is written **into** it. |
-
-Written into means: the survey reads the DBC files that archive holds, as it
-reads any other, and a taken identifier is a clash like any other — moved with
-`--shift`, or you stop. Then each file the module is about to replace is copied
-aside (the receipt says where), the module's rows are merged into the archive's
-own DBC files, and those files, with the module's art, are written into the
-archive **in place**: the new data goes at the end, the archive's tables are
-updated to point at it, and nothing else in the archive moves. A DBC in the
-archive holds the server's rows AND the module's. The archive stays the
-client's; it is now **shared**, and a record inside it lists exactly which rows
-and which files are the module's.
-
-That record is what the next run and the uninstaller read. Running the
-installer again takes the module's earlier rows out of each DBC before merging
-its current ones in — so a module updated, or shifted, between two runs leaves
-nothing behind. Uninstalling takes those rows out and puts nothing in, removes
-every file the module added, and puts back from the copies every file of the
-client's it wrote over: the archive is the client's again.
-
-Two things to know. An archive written into never shrinks: what a replaced file
-used to occupy stays in it, unreadable, as with every MPQ tool — a run adds
-about 45 MB, and a compaction tool reclaims it if it matters. And a checksum
-file some tools keep in an archive, `(attributes)`, is removed the first time,
-because its entries could no longer match; the game never reads it, and its
-copy is in the backups.
-
-This writer stops at 4 GB: an archive larger than that keeps a second table
-this module does not handle, and the installer says so before writing a byte.
+The module's numbers sit in tranches 85 and 86 of the repository's register,
+`ID_RANGES.md`. When a server already uses one of them for something else --
+another module, a custom patch -- the installer lists each one and installs
+nothing: the numbers of one of the two have to change.
 
 ### Removing
 
-Run the installer. `install.bat` and `install.sh` look first — the module's
-sources under `modules/`, its interface, its configuration, its tables in the
-world database, its rows in the client's archive — and when any of it is there
-they say so and switch to removing: they ask what becomes of what players
-earned, whether to rehearse first, and go. So does `tools/install.py`, told
-what to do with the characters tables:
+Run the installer again on this folder, the world server stopped and the game
+closed. Finding the module, even in part, it lists what it found and, once you
+confirm, removes all of it: the sources, the configuration, the interface, the
+module's rows in the game's archives and its art, and in the database its
+tables -- the Spherite and the cells players bought included --, its rows in
+the core's tables, the spells it taught (`character_spell`, `character_aura`,
+the action bars) and the updater's record of its files. The workbench stays
+while another module still uses it; the last one to go takes it away, with the
+object 810000 and its spawns. Layouts the in-game editor saved in
+`lua_scripts/SphereGrid/editor/layouts` are yours: they stay, and so does the
+folder that holds them. Then rebuild the core.
 
-```
-python tools/install.py --server <dir> --core <dir> [--client <Data dir>]
-                        --keep-characters | --drop-characters [--dry-run]
-python tools/install.py --server <dir> --core <dir> [--client <Data dir>] --presence
-```
-
-`--presence` only answers the question — exit code 3 when the module is there,
-0 when it is not — and writes nothing. `tools/uninstall.py`, with the same
-flags, is the removal without the detection.
-
-The database is undone by the module's own SQL: every file deletes what it
-inserts, and those statements replayed in reverse are the uninstaller. The
-module's own tables are dropped, and the spells it TAUGHT are taken back from
-the core's own tables — a learnt spell lands in `character_spell`, not in
-anything the module owns, and left behind it names a spell that no longer
-exists. A reinstall teaches them again at the next login, from the cells the
-player still owns. What players earned — the characters tables —
-is kept unless you say otherwise. The placed files are removed. So is the
-client's archive when it is the module's own; when it is the client's, written
-into, the module is taken out of it — see above. The core is yours to rebuild.
+To update the module, remove it, then install it again. The removal takes what
+players earned with it: to keep it, save the four `mod_spheregrid_*` tables of
+the characters database before, and put them back after.
 
 ### By hand
 
-The installer is a convenience, not a requirement. `python tools/install.py
---help` takes the same steps one flag at a time, and every one of them is
-something you can do yourself: copy the module into `modules/`, apply
-`data/sql/world/` then `data/sql/characters/` in order, copy
+Every server step is something you can do yourself: copy the module into
+`modules/`, apply `data/sql/world/` then `data/sql/characters/` in order, copy
 `conf/mod-spheregrid.conf.dist` to `configs/modules/mod-spheregrid.conf`, and
-copy `data/lua/SphereGrid/` into `lua_scripts/`. The client half — merging
-fourteen DBC files and packing an archive — is what the tools are for.
+copy `data/lua/SphereGrid/` and `data/lua/Workbench/` into `lua_scripts/`. The
+client half -- merging fifteen DBC files and packing an archive -- is what the
+installer is for.
 
 ## Configuring
 
@@ -287,8 +181,7 @@ and no visual.
 
 **These are not files to drop into an archive.** Each holds only what the module
 adds, so that their CONTENT can be read, checked against the identifiers a
-target already uses, shifted if one is taken, and merged into the client's own
-files. Server side, no file is touched at all: the core reads DBC rows from its
+target already uses, and merged by the installer into the client's own files. Server side, no file is touched at all: the core reads DBC rows from its
 `*_dbc` tables, and the module's SQL fills them from the same source.
 
 **The module rewrites none of the game's rows.** Where one of its spells
@@ -311,19 +204,17 @@ archive. Everything else the interface draws is borrowed from the game.
 | creatures | 85 800 – 85 817 | summons, props |
 | objects | 850 820 – 850 821 | the gate |
 | displays | 85 001 – 85 157 | item, creature and object displays |
-| visuals and kits | 85 014 – 85 211 | moved by position, never by sight |
-| spell icons | 85 002 – 85 076 | moved by position, never by sight |
-| beams | 85 001 | named by a kit as a float; moved by position |
+| visuals and kits | 85 014 – 85 211 | |
+| spell icons | 85 002 – 85 076 | |
+| beams | 85 001 | named by a kit as a float |
 | effect names | 85 206 – 85 302 | |
 | sounds and emotes | 85 001 – 85 125 | |
 | module strings | 1 – 73 | keyed by the module's name, never in clash |
 
-`python tools/shift.py --list` prints them as they stand, shifts included.
-
 ## What is in the repository
 
 ```
-install.bat, install.sh   the installer, for Windows and for everything else
+installer.json            what the WoW-mods installer puts in place, and removes
 conf/                     the one configuration file
 data/art/                 the art a client has no copy of
 data/dbc/                 the module's own DBC rows, and what was borrowed
@@ -331,7 +222,7 @@ data/lua/                 the interface: editor, player window, workbench, spell
 data/sql/                 world and characters
 docs/                     what the interface draws, and what the grid says
 src/                      the C++ — core, crafting, loot, spells
-tools/                    install.py, uninstall.py, shift.py, and the collector
+tools/                    the client collector and the layout editor
 ```
 
 `tools/collect_client.py` is what PRODUCES `data/dbc` and `data/art`: it reads
@@ -346,7 +237,7 @@ and whether it is a node, a socket or a spell cell. It carries no name and no
 icon: a name is a language and an icon is art the client already owns, so both
 belong to the interface. See `docs/PRESENTATION.md`.
 
-A server that wants its own grid replaces `data/sql/world/08_grid.sql` and
+A server that wants its own grid replaces `data/sql/world/spheregrid_08_grid.sql` and
 nothing else. Two editors write it, and they share one file.
 
 ### In game

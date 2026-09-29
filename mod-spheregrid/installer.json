@@ -1,0 +1,104 @@
+{
+  "format": "wow-mods-installer/1",
+  "module": "mod-spheregrid",
+  "title": "Sphere Grid",
+  "signature": ["src/spheregrid_loader.cpp", "src/spheregrid_scripts.cpp"],
+  "exclude_from_sources": ["data/art", "data/dbc", "data/lua", "Backups"],
+  "configuration": {
+    "file": "mod-spheregrid.conf",
+    "template": "conf/mod-spheregrid.conf.dist"
+  },
+  "lua": {
+    "folder": "SphereGrid",
+    "sources": ["data/lua/SphereGrid"]
+  },
+  "shared": [
+    {
+      "folder": "Workbench",
+      "source": "data/lua/Workbench",
+      "version_file": "VERSION",
+      "provider_mark": "Workbench.Register(",
+      "database": {
+        "world": {
+          "rows": [
+            { "table": "gameobject", "where": "id = 810000" },
+            { "table": "gameobject_template_locale", "where": "entry = 810000" },
+            { "table": "gameobject_template", "where": "entry = 810000" }
+          ]
+        }
+      }
+    }
+  ],
+  "dbc": [
+    { "file": "Spell.dbc", "fields": 234, "text_fields": [[136, 151], [153, 168], [170, 185], [187, 202]],
+      "client": "data/dbc/spheregrid_Spell.dbc" },
+    { "file": "Item.dbc", "fields": 8, "client": "data/dbc/spheregrid_Item.dbc" },
+    { "file": "ItemDisplayInfo.dbc", "fields": 25, "text_fields": [[1, 6], [15, 22]],
+      "client": "data/dbc/spheregrid_ItemDisplayInfo.dbc" },
+    { "file": "SpellIcon.dbc", "fields": 2, "text_fields": [1], "client": "data/dbc/spheregrid_SpellIcon.dbc" },
+    { "file": "SpellVisual.dbc", "fields": 32, "client": "data/dbc/spheregrid_SpellVisual.dbc" },
+    { "file": "SpellVisualKit.dbc", "fields": 38, "client": "data/dbc/spheregrid_SpellVisualKit.dbc" },
+    { "file": "SpellVisualEffectName.dbc", "fields": 7, "text_fields": [1, 2],
+      "client": "data/dbc/spheregrid_SpellVisualEffectName.dbc" },
+    { "file": "SoundEntries.dbc", "fields": 30, "text_fields": [[2, 12], 23],
+      "client": "data/dbc/spheregrid_SoundEntries.dbc" },
+    { "file": "SpellDuration.dbc", "fields": 4, "client": "data/dbc/spheregrid_SpellDuration.dbc" },
+    { "file": "SpellChainEffects.dbc", "fields": 48, "text_fields": [7],
+      "client": "data/dbc/spheregrid_SpellChainEffects.dbc" },
+    { "file": "CreatureDisplayInfo.dbc", "fields": 16, "text_fields": [[6, 9]],
+      "client": "data/dbc/spheregrid_CreatureDisplayInfo.dbc" },
+    { "file": "CreatureModelData.dbc", "fields": 28, "text_fields": [2],
+      "client": "data/dbc/spheregrid_CreatureModelData.dbc" },
+    { "file": "SkillLineAbility.dbc", "fields": 14, "client": "data/dbc/spheregrid_SkillLineAbility.dbc" },
+    { "file": "Emotes.dbc", "fields": 7, "text_fields": [1], "client": "data/dbc/spheregrid_Emotes.dbc" },
+    { "file": "GameObjectDisplayInfo.dbc", "fields": 19, "text_fields": [1],
+      "client": "data/dbc/spheregrid_GameObjectDisplayInfo.dbc" }
+  ],
+  "game_files": {
+    "sources": ["data/art"],
+    "owned_folders": ["Interface/Spheregrid"]
+  },
+  "database": {
+    "characters": {
+      "tables": ["mod_spheregrid_account_points", "mod_spheregrid_account_node",
+                 "mod_spheregrid_character_points", "mod_spheregrid_character_node"],
+      "rows": [
+        { "table": "character_spell", "where": "spell IN ({ids:Spell.dbc})" },
+        { "table": "character_spell_cooldown", "where": "spell IN ({ids:Spell.dbc})" },
+        { "table": "character_aura", "where": "spell IN ({ids:Spell.dbc})" },
+        { "table": "character_action", "where": "type = 0 AND action IN ({ids:Spell.dbc})" },
+        { "table": "updates", "where": "name IN ({sql_files:characters})" }
+      ]
+    },
+    "world": {
+      "tables": ["mod_spheregrid_node", "mod_spheregrid_edge", "mod_spheregrid_start",
+                 "mod_spheregrid_node_spell", "mod_spheregrid_cluster", "mod_spheregrid_rune"],
+      "rows": [
+        { "table": "module_string", "where": "module = 'mod-spheregrid'" },
+        { "table": "module_string_locale", "where": "module = 'mod-spheregrid'" },
+        { "table": "item_template", "where": "entry BETWEEN 85000 AND 86999" },
+        { "table": "item_template_locale", "where": "ID BETWEEN 85000 AND 86999" },
+        { "table": "item_dbc", "where": "ID BETWEEN 85000 AND 86999" },
+        { "table": "spell_ranks",
+          "where": "spell_id BETWEEN 85000 AND 86999 OR first_spell_id IN (642, 1680, 7384, 17364, 17962, 23881, 25898, 31884, 33917, 46924, 46968, 48707, 50464, 51723, 53209, 53385, 53595, 60103)" },
+        { "table": "spell_dbc", "where": "ID BETWEEN 85000 AND 86999" },
+        { "table": "spell_script_names",
+          "where": "spell_id BETWEEN 85000 AND 86999 OR (spell_id = 24858 AND ScriptName = 'spell_spheregrid_moonkin_form')" },
+        { "table": "spell_bonus_data", "where": "entry BETWEEN 85000 AND 86999" },
+        { "table": "spell_custom_attr", "where": "spell_id BETWEEN 85000 AND 86999" },
+        { "table": "creature", "where": "id BETWEEN 85000 AND 86999" },
+        { "table": "creature_template_model", "where": "CreatureID BETWEEN 85000 AND 86999" },
+        { "table": "creature_template_locale", "where": "entry BETWEEN 85000 AND 86999" },
+        { "table": "creature_template", "where": "entry BETWEEN 85000 AND 86999" },
+        { "table": "creature_model_info", "where": "DisplayID BETWEEN 85000 AND 86999" },
+        { "table": "creaturedisplayinfo_dbc", "where": "ID BETWEEN 85000 AND 86999" },
+        { "table": "creaturemodeldata_dbc", "where": "ID BETWEEN 85000 AND 86999" },
+        { "table": "gameobject", "where": "id BETWEEN 850000 AND 869999" },
+        { "table": "gameobject_template_locale", "where": "entry BETWEEN 850000 AND 869999" },
+        { "table": "gameobject_template", "where": "entry BETWEEN 850000 AND 869999" },
+        { "table": "command", "where": "name = 'spheregrid' OR name LIKE 'spheregrid %'" },
+        { "table": "updates", "where": "name IN ({sql_files:world})" }
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
 
-# What the installer keeps aside when it runs from here.
+# What the former installer of the module kept aside.
 Backups/
 
 # The author's own tooling: it names the origin server, and means nothing

@@ -7,7 +7,7 @@ data/lua/SphereGrid/editor/layouts/*
 !data/lua/SphereGrid/editor/layouts/common.xml
 !data/lua/SphereGrid/editor/layouts/index.txt
 
-# What the installer keeps aside when it runs from here.
+# What the former installer of the module kept aside.
 Backups/
 
 # The author's own maps from the origin server's names to the module's: they

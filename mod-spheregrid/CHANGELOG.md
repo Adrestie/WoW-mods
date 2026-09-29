@@ -1,10 +1,14 @@
 # Changelog
 
-The version is the first word of the newest heading; the installer writes it
-into the mark it leaves in the client's archive.
+The version is the first word of the newest heading.
 
 ## 0.2.0 (unreleased)
 
+- Installed and removed by the WoW-mods installer, from `installer.json`. The
+  module's own installer, remover and identifier shift are gone (`install.bat`,
+  `install.sh`, `tools/install.py`, `tools/uninstall.py`, `tools/shift.py`). The
+  SQL files carry the module's name (`spheregrid_01_schema.sql`, ...): the core
+  updater records them by name only.
 - The workbench is a component SHARED with the other modules of the
   repository (`data/lua/Workbench/`, placed once in `lua_scripts/Workbench/`):
   one object, one window, locked to the craft of the first item placed on it.
