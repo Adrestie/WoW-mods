@@ -20392,8 +20392,8 @@ def main():
     """)
     print("   indice rendu par le client patche : cases (nom, echantillon), listes calculees (coiffure, couleur, pilosite, peau selon le visage), noms du client par numero, apercu, Echap, clic, molette, fermeture")
 
-    # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
     # ------------------------------------------------- LA TAILLE DES TEXTURES
+    # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
     # 3.3.5 : un morceau d'atlas pose par une seule ancre, ou par deux ancres
     # d'un seul axe, deborde (echange, banque de guilde, 28/09 -- SetAtlas(t,
     # nom, true) LAISSE la taille). Le banc ne regardait que l'atlas et les
