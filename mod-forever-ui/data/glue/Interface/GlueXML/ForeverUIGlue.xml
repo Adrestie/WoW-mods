@@ -1,25 +1,25 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
 ..\FrameXML\UI.xsd">
-	<!-- ForeverUI : les ecrans d'accueil copies de camelot. Charge apres tout
-	     le GlueXML d'origine (GlueXML.toc). -->
+	<!-- ForeverUI login screens in Camelot's style. Loaded after the whole
+	     original GlueXML (GlueXML.toc). -->
 	<Include file="ForeverUIGlueFonts.xml"/>
-	<Script file="ForeverUIGlueTextes.lua"/>
-	<Script file="ForeverUIGlueTextes_enUS.lua"/>
-	<Script file="ForeverUIGlueTextes_frFR.lua"/>
+	<Script file="ForeverUIGlueTexts.lua"/>
+	<Script file="ForeverUIGlueTexts_enUS.lua"/>
+	<Script file="ForeverUIGlueTexts_frFR.lua"/>
 	<Script file="ForeverUIGlueAtlas.lua"/>
-	<Script file="ForeverUIGlueDonnees.lua"/>
-	<Script file="ForeverUIGlueCouleurs.lua"/>
-	<Script file="ForeverUIGlueChoix.lua"/>
+	<Script file="ForeverUIGlueData.lua"/>
+	<Script file="ForeverUIGlueColors.lua"/>
+	<Script file="ForeverUIGlueChoices.lua"/>
 	<Script file="ForeverUIGlue.lua"/>
-	<Script file="ForeverUIGlueGabarits.lua"/>
+	<Script file="ForeverUIGlueTemplates.lua"/>
 	<Script file="ForeverUIGlueMenu.lua"/>
-	<Script file="ForeverUIGlueDialogues.lua"/>
+	<Script file="ForeverUIGlueDialogs.lua"/>
 	<Script file="ForeverUIAccountLogin.lua"/>
 	<Script file="ForeverUIGlueCharacterSelect.lua"/>
 	<Script file="ForeverUIGlueCharacterCreate.lua"/>
 	<Script file="ForeverUIGlueRealmList.lua"/>
 	<Script file="ForeverUIGlueAddonList.lua"/>
-	<Script file="ForeverUIGlueMenuDeroulant.lua"/>
+	<Script file="ForeverUIGlueDropDown.lua"/>
 	<Script file="ForeverUIGlueOptions.lua"/>
 	<Script file="ForeverUIGlueIllustrations.lua"/>
 	<Script file="ForeverUIGlueCinematics.lua"/>

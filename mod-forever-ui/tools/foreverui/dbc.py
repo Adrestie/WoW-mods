@@ -14,102 +14,103 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
-# Les fonctions de lignes DBC reprennent celles de l'installeur commun du
-# depot WoW-mods (mod-item-upgrade/installer/noyau.py, licence MIT) : ajouter
-# ses lignes a la fin, les retirer seules, le reste intact.
+# The DBC row functions follow the shared installer of the WoW-mods repository
+# (mod-item-upgrade/installer/noyau.py, MIT license): append our rows, remove only
+# ours, leave the rest intact.
 
-"""Ajouter et retirer ses propres lignes d'un fichier DBC.
+"""Add and remove a module's own rows in a DBC file.
 
-AJOUTER : les lignes du module sont d'abord retirees si elles y sont (leurs
-textes avec), puis posees a la fin ; leurs textes vont a la fin du bloc de
-chaines. Rejouable : un second ajout rend les memes octets.
-RETIRER : seules les lignes du module partent ; le bloc de chaines est coupe
-apres la derniere chaine qu'une ligne restante emploie. Rien a retirer : le
-fichier rendu est l'original, octet pour octet.
+ADD: the module's rows are first removed if present (with their strings), then appended;
+their strings go to the end of the string block. Adding twice gives the same bytes.
+REMOVE: only the module's rows go; the string block is cut after the last string a
+remaining row uses. Nothing to remove: the original file is returned byte for byte.
 """
 import struct
 
 
-class Lignes(object):
-    """Les lignes d'un module dans un DBC : nombre de champs, indices des champs
-    texte, lignes (entiers ou textes ; un texte vide vaut 0)."""
+class Rows(object):
+    """A module's rows in a DBC: field count, indices of the string fields,
+    rows (integers or strings; an empty string is 0).
+    """
 
-    def __init__(self, champs, champs_texte, lignes):
-        self.champs = champs
-        self.champs_texte = list(champs_texte)
-        self.lignes = [list(l) for l in lignes]
-        self.ids = [l[0] for l in self.lignes]
-        for l in self.lignes:
-            if len(l) != champs:
-                raise ValueError("ligne %s : %d champs au lieu de %d" % (l[0], len(l), champs))
-
-
-def decouper(brut, nom):
-    if brut[:4] != b"WDBC":
-        raise ValueError("%s n'est pas un DBC (signature WDBC absente)" % nom)
-    nb, champs, taille, taille_chaines = struct.unpack_from("<4I", brut, 4)
-    if taille != champs * 4 or len(brut) < 20 + nb * taille + taille_chaines:
-        raise ValueError("%s : en-tete DBC incoherent" % nom)
-    lignes = [brut[20 + i * taille:20 + (i + 1) * taille] for i in range(nb)]
-    debut = 20 + nb * taille
-    return champs, lignes, bytearray(brut[debut:debut + taille_chaines])
+    def __init__(self, fields, text_fields, rows):
+        self.fields = fields
+        self.text_fields = list(text_fields)
+        self.rows = [list(l) for l in rows]
+        self.ids = [l[0] for l in self.rows]
+        for l in self.rows:
+            if len(l) != fields:
+                raise ValueError("ligne %s : %d champs au lieu de %d" % (l[0], len(l), fields))
 
 
-def assembler(champs, lignes, chaines):
-    return b"WDBC" + struct.pack("<4I", len(lignes), champs, champs * 4, len(chaines)) + \
-        b"".join(lignes) + bytes(chaines)
+# Split a DBC into (field count, rows as bytes, string block). name: file name for errors.
+def cut(raw, name):
+    if raw[:4] != b"WDBC":
+        raise ValueError("%s n'est pas un DBC (signature WDBC absente)" % name)
+    count, fields, size, string_block_size = struct.unpack_from("<4I", raw, 4)
+    if size != fields * 4 or len(raw) < 20 + count * size + string_block_size:
+        raise ValueError("%s : en-tete DBC incoherent" % name)
+    rows = [raw[20 + i * size:20 + (i + 1) * size] for i in range(count)]
+    start = 20 + count * size
+    return fields, rows, bytearray(raw[start:start + string_block_size])
 
 
-def _id(ligne):
-    return struct.unpack_from("<I", ligne)[0]
+def assemble(fields, rows, strings):
+    return b"WDBC" + struct.pack("<4I", len(rows), fields, fields * 4, len(strings)) + \
+        b"".join(rows) + bytes(strings)
 
 
-def compter(brut, nom, ids):
+def _id(row):
+    return struct.unpack_from("<I", row)[0]
+
+
+# Number of rows in the DBC whose id is in ids.
+def tally(raw, name, ids):
     ids = set(ids)
-    return sum(1 for l in decouper(brut, nom)[1] if _id(l) in ids)
+    return sum(1 for l in cut(raw, name)[1] if _id(l) in ids)
 
 
-def ajouter(brut, nom, d):
-    # d'abord le retrait complet, textes compris : sinon les anciens textes
-    # restent dans le bloc, et chaque passage le ferait grossir -- ajouter
-    # deux fois rend alors les memes octets
-    brut, _ = retirer(brut, nom, d)
-    champs, lignes, chaines = decouper(brut, nom)
-    if champs != d.champs:
-        raise ValueError("%s a %d champs, %d attendus : version de client inattendue" % (nom, champs, d.champs))
-    for valeurs in d.lignes:
+# Return the DBC with the rows of d (a Rows) appended. name: file name for errors.
+def add(raw, name, d):
+    # Remove fully first, strings included: otherwise old strings stay in the block
+    # and it grows on each run. Adding twice then gives the same bytes.
+    raw, _ = remove(raw, name, d)
+    fields, rows, strings = cut(raw, name)
+    if fields != d.fields:
+        raise ValueError("%s a %d champs, %d attendus : version de client inattendue" % (name, fields, d.fields))
+    for values in d.rows:
         rec = []
-        for v in valeurs:
+        for v in values:
             if isinstance(v, str):
                 if not v:
                     rec.append(0)
                     continue
-                if not chaines:
-                    chaines.extend(b"\0")          # l'offset 0 est la chaine vide
-                rec.append(len(chaines))
-                chaines.extend(v.encode("utf-8") + b"\0")
+                if not strings:
+                    strings.extend(b"\0")          # offset 0 is the empty string
+                rec.append(len(strings))
+                strings.extend(v.encode("utf-8") + b"\0")
             else:
                 rec.append(int(v) & 0xFFFFFFFF)
-        lignes.append(struct.pack("<%dI" % champs, *rec))
-    return assembler(champs, lignes, chaines)
+        rows.append(struct.pack("<%dI" % fields, *rec))
+    return assemble(fields, rows, strings)
 
 
-def retirer(brut, nom, d):
-    """(DBC sans les lignes du module, nombre retire)."""
-    champs, lignes, chaines = decouper(brut, nom)
+def remove(raw, name, d):
+    """Return (DBC without the module's rows, number of rows removed)."""
+    fields, rows, strings = cut(raw, name)
     ids = set(d.ids)
-    garde = [l for l in lignes if _id(l) not in ids]
-    n = len(lignes) - len(garde)
+    keep = [l for l in rows if _id(l) not in ids]
+    n = len(rows) - len(keep)
     if not n:
-        return brut, 0
-    if d.champs_texte and chaines:
-        fin = 1
-        for l in garde:
-            valeurs = struct.unpack_from("<%dI" % champs, l)
-            for c in d.champs_texte:
-                off = valeurs[c]
-                if 0 < off < len(chaines):
-                    zero = chaines.find(b"\0", off)
-                    fin = max(fin, (zero if zero >= 0 else len(chaines) - 1) + 1)
-        chaines = chaines[:fin]
-    return assembler(champs, garde, chaines), n
+        return raw, 0
+    if d.text_fields and strings:
+        finish = 1
+        for l in keep:
+            values = struct.unpack_from("<%dI" % fields, l)
+            for c in d.text_fields:
+                off = values[c]
+                if 0 < off < len(strings):
+                    zero = strings.find(b"\0", off)
+                    finish = max(finish, (zero if zero >= 0 else len(strings) - 1) + 1)
+        strings = strings[:finish]
+    return assemble(fields, keep, strings), n

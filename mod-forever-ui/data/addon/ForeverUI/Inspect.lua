@@ -1,176 +1,89 @@
--- ForeverUI : l'inspection d'un joueur (InspectFrame), a la DA de camelot
--- (demande de l'utilisateur, 2026-09-28 : « fait le reste des fenetres
--- secondaires », etape 2 ; decision du 2026-09-28 : le bouton Talents de
--- camelot, qui ouvre la fenetre des talents sur l'inspecte, et le JcJ en
--- onglet lateral).
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (Blizzard_InspectUI de 3.3.5, charge a
--- la demande) :
---   InspectFrame 384 x 512, HitRectInsets (0, 30, 0, 45) ; panneau "left"
---     (UIPanelWindows, pushable 0) ; InspectFramePortrait 60 x 60 a (7, -6)
---     (SetPortraitTexture a l'ouverture, au changement d'unite, a
---     UNIT_PORTRAIT_UPDATE) ; InspectNameFrame / InspectNameText (le nom) ;
---     trois onglets du bas InspectFrameTab1..3 (personnage, JcJ, talents),
---     InspectSwitchTabs(id) montre INSPECTFRAME_SUBFRAMES[id] ;
---   InspectPaperDollFrame : art UI-Character-CharacterTab-* (quatre textures
---     sans nom), InspectLevelText (PLAYER_LEVEL) sous le nom ;
---     InspectModelFrame 233 x 300 a (65, -78) et ses deux fleches 35 x 35 ;
---     emplacements ItemButtonTemplate 37 x 37 (UI-Quickslot2 64 x 64 a
---     CENTER (0, -1)) : colonne gauche a (21, -74), droite a (305, -74),
---     ecart 4 ; armes a BOTTOMLEFT (122, 127), ecart 5 ;
---   InspectPVPFrame : honneur (GetInspectHonorData : aujourd'hui, hier, a
---     vie) et trois equipes d'arene (GetInspectArenaTeamData, triees 2, 3,
---     5) ; RequestInspectHonorData a l'ouverture, INSPECT_HONOR_UPDATE ;
---   InspectTalentFrame : l'arbre de talents de 3.3.5 (argument inspect).
---
--- RELEVE -- CAMELOT (blizzard_inspectui/camelot : blizzard_inspectui.xml,
--- .lua, _overrides.lua, inspectpaperdollframe.xml ; mainline/
--- inspectpaperdollframe.lua pour le bouton des talents) :
---   InspectFrame : ButtonFrameTemplate (338 x 424, portrait de l'unite,
---     titre GetUnitName en GameFontHighlight) ; encart (4, -60) a (-6, 4)
---     (ButtonFrameTemplate_HideButtonBar a l'ouverture de la page) ;
---     onglets du bas caches ; onglets LATERAUX (LargeSideTabButtonTemplate,
---     ModeTabs 64 x 384 a TOPLEFT du TOPRIGHT, y -30) : personnage (le
---     portrait de l'unite, rogne a 0,03125) et guilde ;
---   la page du personnage : InspectLevelText a TOP (0, -27), 220 de large,
---     GameFontNormalSmall ; bouton InspectTalents (UIPanelButtonTemplate
---     102 x 20 a TOP (0, -39), INSPECT_TALENTS_BUTTON) ; InspectModelFrame
---     231 x 320 a (52, -66) (ModelWithControlsTemplate : controles a TOP
---     (0, -2)) ; fond de la race desature (SetPaperDollBackground) :
---     BackgroundTopLeft 212 x 245 (u 0,171875 / 1, v 0,0392 / 1), TopRight
---     19 x 245 (u 0 / 0,296875), BotLeft 212 x 128, BotRight 19 x 128 ;
---     BackgroundOverlay noir du TopLeft au BotRight (0, 52) ; cadre
---     Char-Paperdoll-* (coins 7 x 7 a (46, -4), (-47, -4), (46, 31),
---     (-47, 31) de l'encart, filets de 5 entre eux, un second filet bas a
---     27 du bas de l'encart) ; emplacements 37 x 37 (UI-Quickslot2 garde,
---     UI-Character-Info-GearSlot a sa taille derriere) : colonne gauche a
---     TOPLEFT (4, -2) de l'encart, droite a TOPRIGHT (-4, -2), ecart 4 ;
---     armes a BOTTOMLEFT (116, 16), ecart 5.
---
--- CE QUI DIFFERE, ET POURQUOI. « 3.3.5 rhabillee » : les cadres, les
--- emplacements, le modele et la logique du client restent.
---   * Les onglets lateraux : personnage et JcJ. La page JcJ n'existe pas
---     chez camelot (son InspectPVPFrame n'y est pas accessible) : c'est celle
---     de 3.3.5, refaite ici avec l'art deja valide de l'onglet JcJ de la
---     feuille (cartes d'equipes, separateur) ; le cadre du client reste
---     montre (sa demande de donnees, ses evenements), a alpha 0 et sans
---     souris. L'icone du JcJ suit la faction de l'inspecte, comme celle de la
---     feuille. Pas de page de guilde : 3.3.5 n'a pas les donnees
---     (GetInspectGuildInfo).
---   * Les talents : le bouton de camelot ouvre la fenetre des talents
---     (Talents.lua, T.inspecter) sur l'inspecte ; l'onglet des talents de
---     3.3.5 n'est plus accessible. Actif des le niveau 10, comme cet onglet
---     (InspectFrame_UpdateTalentTab) ; desactive, son survol dit UNAVAILABLE.
---   * Les controles du modele n'existent pas en 3.3.5 : les deux fleches
---     prennent leur place, centrees a TOP (0, -2) du modele, a 4 l'une de
---     l'autre ; le modele tourne aussi a la souris, comme la feuille.
---   * ECART : les deux morceaux du bas du fond de la race sont rognes au bas
---     de l'encart (109 des 128) : poses entiers, ils sortiraient de la
---     fenetre ; le voile noir garde sa place (76 au-dessus de leur bas
---     d'origine).
---   * ECART (retour du 2026-09-28, « un contour gris en trop en bas de la
---     fenetre ») : le second filet bas de camelot (BorderBottom2, sur toute
---     la largeur de l'encart, a 27 de son bas) n'est pas pose ; il doublait
---     le filet du bas du cadre, 3 px plus haut. Et les emplacements passent
---     au-dessus du cadre, comme chez camelot (frameLevel 100) : le filet du
---     bas ne traverse plus les armes.
---   * Portrait (retour du 2026-09-28, « le portrait depasse du cercle ») :
---     celui de la feuille, VALIDE (CharacterFrame.lua) -- 48 de cote, centre
---     sur le trou de l'anneau (38 ; -38,5 du coin, pose a (-13, 16)). En 60
---     a (-5, 7), le bord du disque tombait a 30 du centre, au-dela du metal
---     opaque (26 a 29). Le nom passe dans la barre de titre (InspectNameFrame
---     s'eteint).
---   * Pas de logo de faction quand le modele ne peut pas s'afficher :
---     3.3.5 ne le dit pas (SetUnit ne rend rien).
---   * Le rang JcJ de l'inspecte (retours du 2026-09-28), en tete de la page
---     JcJ : le nom du rang et le trait de la feuille, puis l'embleme de SA
---     faction (lion / Horde) -- a 50 % sous l'insigne de son rang s'il en a
---     un ; plein, sous « Civilian », s'il n'en a pas. Ses
---     titres ne se lisent pas (IsTitleKnown ne parle que du joueur) : le rang
---     se deduit de ses victoires honorables a vie, aux seuils de la feuille
---     (PvPTab.lua, ForeverUI.PvPRangs) -- c'est la regle du module du serveur.
---   * Deplacable par la barre du titre (retour du 2026-09-28) : voir « le
---     deplacement », plus bas.
+-- ForeverUI: the inspect window (InspectFrame, load-on-demand Blizzard_InspectUI) in camelot's
+-- style. The client frames, slots, model and logic stay; they are moved and re-skinned.
+-- Side tabs: character and PvP (camelot has no PvP page; this one uses the sheet's PvP art).
+-- No guild tab: 3.3.5 has no inspect guild data. camelot's Talents button opens the talent
+-- window on the inspected unit (Talents.inspect).
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 
 local I = {}
 ForeverUI.Inspection = I
 
 local SEP = string.char(92)
-local ONGLETS = "Interface" .. SEP .. "ForeverUI" .. SEP .. "TabIcons" .. SEP
+local TABS = "Interface" .. SEP .. "ForeverUI" .. SEP .. "TabIcons" .. SEP
 local PARTS = "Interface" .. SEP .. "ForeverUI" .. SEP .. "characterframe" .. SEP .. "char-paperdoll-"
 local PVP = "Interface" .. SEP .. "PVPFrame" .. SEP
 
 local N = {
-	fenetre = { 338, 424 },
-	-- 48, centre sur le trou de l'anneau : (-13 + 38 - 24, 16 - 38,5 + 24)
-	portrait = { cote = 48, x = 1, y = 1.5 },
-	encart = { 4, -60, -6, 4 },
-	onglets = { x = 1, y = -30, l = 64, h = 384, cote = 55, ecart = -2, icone = 50, iconeX = -3, rognage = 0.03125 },
-	niveau = { y = -27, l = 220 },
-	talents = { l = 102, h = 20, y = -39, niveauMin = 10 },
-	modele = { x = 52, y = -66, l = 231, h = 320, flechesY = -2, flechesEcart = 4 },
-	fond = { l = 212, h = 245, droite = 19, bas = 128, voile = 52,
-		uG = { 0.171875, 1 }, uD = { 0, 0.296875 }, vHaut = 0.0392156862745098 },
-	bords = { coin = 7, filet = 5, x = 46, xd = -47, y = -4, yb = 31 },
-	emplacement = 37, ecart = 4, gauche = { 4, -2 }, droite = { -4, -2 },
-	armes = { 116, 16 }, armesEcart = 5,
+	window = { 338, 424 },
+	-- 48, centered on the ring hole: (-13 + 38 - 24, 16 - 38.5 + 24); larger, the disc goes past
+	-- the opaque metal
+	portrait = { side = 48, x = 1, y = 1.5 },
+	inset = { 4, -60, -6, 4 },
+	tabs = { x = 1, y = -30, l = 64, h = 384, side = 55, gap = -2, icon = 50, iconX = -3, crop = 0.03125 },
+	level = { y = -27, l = 220 },
+	talents = { l = 102, h = 20, y = -39, minLevel = 10 },
+	model = { x = 52, y = -66, l = 231, h = 320, arrowsY = -2, arrowsGap = 4 },
+	background = { l = 212, h = 245, right = 19, down = 128, veil = 52,
+		uLeft = { 0.171875, 1 }, uRight = { 0, 0.296875 }, vTop = 0.0392156862745098 },
+	edges = { corner = 7, rule = 5, x = 46, xRight = -47, y = -4, yBottom = 31 },
+	slot = 37, gap = 4, left = { 4, -2 }, right = { -4, -2 },
+	weapons = { 116, 16 }, weaponsGap = 5,
 }
 
--- Char-Paperdoll-* (camelot/characterframe.xml) : fichier, u1, u2, v1, v2
+-- Char-Paperdoll-* (camelot/characterframe.xml): file, u1, u2, v1, v2
 local PIECES = {
-	coinHG = { "parts", 0.40625, 0.43359375, 0.8046875, 0.859375 },
-	coinHD = { "parts", 0.40625, 0.43359375, 0.734375, 0.7890625 },
-	coinBG = { "parts", 0.40625, 0.43359375, 0.6640625, 0.71875 },
-	coinBD = { "parts", 0.40625, 0.43359375, 0.59375, 0.6484375 },
-	gauche = { "vertical", 0.0625, 0.375, 0, 1 },
-	droite = { "vertical", 0.5, 0.8125, 0, 1 },
-	haut = { "horizontal", 0, 1, 0.5, 0.8125 },
-	bas = { "horizontal", 0, 1, 0.0625, 0.375 },
+	cornerTL = { "parts", 0.40625, 0.43359375, 0.8046875, 0.859375 },
+	topRightCorner = { "parts", 0.40625, 0.43359375, 0.734375, 0.7890625 },
+	bottomLeftCorner = { "parts", 0.40625, 0.43359375, 0.6640625, 0.71875 },
+	cornerBR = { "parts", 0.40625, 0.43359375, 0.59375, 0.6484375 },
+	left = { "vertical", 0.0625, 0.375, 0, 1 },
+	right = { "vertical", 0.5, 0.8125, 0, 1 },
+	top = { "horizontal", 0, 1, 0.5, 0.8125 },
+	down = { "horizontal", 0, 1, 0.0625, 0.375 },
 }
 
-local COLONNE_GAUCHE = { "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist" }
-local COLONNE_DROITE = { "Hands", "Waist", "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1" }
-local ARMES = { "MainHand", "SecondaryHand", "Ranged" }
+local LEFT_COLUMN = { "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist" }
+local RIGHT_COLUMN = { "Hands", "Waist", "Legs", "Feet", "Finger0", "Finger1", "Trinket0", "Trinket1" }
+local WEAPONS = { "MainHand", "SecondaryHand", "Ranged" }
 
-local function poser(r, ...)
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
--- ------------------------------------------------------------ les onglets lateraux
--- LargeSideTabButtonTemplate, comme ceux de la feuille : fond
--- common-sidetab, icone 50 a (-3, 0) rognee, common-sidetab-selected pour
--- l'onglet ouvert, common-sidetab-hover au survol
-local function creerOnglet(barre, id, infobulle)
-	local O = N.onglets
-	local b = CreateFrame("Button", "ForeverUIInspectTab" .. id, barre)
-	b:SetWidth(O.cote)
-	b:SetHeight(O.cote)
+-- ------------------------------------------------------------ Side tabs
+-- LargeSideTabButtonTemplate, as on the character sheet: common-sidetab background, cropped
+-- icon 50 at (-3, 0), common-sidetab-selected when open, common-sidetab-hover on mouse over.
+-- bar: parent bar; id: tab index for InspectSwitchTabs; tooltip: tooltip text
+local function createTab(bar, id, tooltip)
+	local O = N.tabs
+	local b = CreateFrame("Button", "ForeverUIInspectTab" .. id, bar)
+	b:SetWidth(O.side)
+	b:SetHeight(O.side)
 	b:SetID(id)
-	local fond = b:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, "common-sidetab", true)
-	fond:SetAllPoints(b)
-	local icone = b:CreateTexture(nil, "ARTWORK")
-	icone:SetWidth(O.icone)
-	icone:SetHeight(O.icone)
-	icone:SetPoint("CENTER", b, "CENTER", O.iconeX, 0)
-	icone:SetTexCoord(O.rognage, 1 - O.rognage, O.rognage, 1 - O.rognage)
-	local choisi = b:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(choisi, "common-sidetab-selected", true)
-	choisi:SetAllPoints(b)
-	choisi:Hide()
-	local survol = b:CreateTexture(nil, "HIGHLIGHT")
-	ForeverUI.SetAtlas(survol, "common-sidetab-hover", true)
-	survol:SetAllPoints(b)
-	b.icone, b.choisi = icone, choisi
+	local background = b:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, "common-sidetab", true)
+	background:SetAllPoints(b)
+	local icon = b:CreateTexture(nil, "ARTWORK")
+	icon:SetWidth(O.icon)
+	icon:SetHeight(O.icon)
+	icon:SetPoint("CENTER", b, "CENTER", O.iconX, 0)
+	icon:SetTexCoord(O.crop, 1 - O.crop, O.crop, 1 - O.crop)
+	local selected = b:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(selected, "common-sidetab-selected", true)
+	selected:SetAllPoints(b)
+	selected:Hide()
+	local hover = b:CreateTexture(nil, "HIGHLIGHT")
+	ForeverUI.SetAtlas(hover, "common-sidetab-hover", true)
+	hover:SetAllPoints(b)
+	b.icon, b.selected = icon, selected
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(infobulle, 1.0, 1.0, 1.0)
+		GameTooltip:SetText(tooltip, 1.0, 1.0, 1.0)
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -181,367 +94,366 @@ local function creerOnglet(barre, id, infobulle)
 	return b
 end
 
-function I.MajOnglets()
-	local choisi = PanelTemplates_GetSelectedTab(InspectFrame)
-	for id, b in ipairs(I.onglets or {}) do
-		Gb.Montrer(b.choisi, id == choisi)
+function I.UpdateTabs()
+	local selected = PanelTemplates_GetSelectedTab(InspectFrame)
+	for id, b in ipairs(I.tabs or {}) do
+		Tpl.SetShown(b.selected, id == selected)
 	end
 end
 
--- ------------------------------------------------------------ la page du personnage
--- DressUpTexturePath de 3.3.5, pour une autre unite : le meme detour pour
--- les fonds qui manquent (gnome, troll)
-local function cheminFond(unite)
-	local _, fichier = UnitRace(unite)
-	local haut = string.upper(fichier or "")
-	if haut == "GNOME" then
-		fichier = "Dwarf"
-	elseif haut == "TROLL" then
-		fichier = "Orc"
+-- ------------------------------------------------------------ Character page
+-- 3.3.5 DressUpTexturePath for another unit: same fallback for the missing backgrounds
+-- (gnome, troll)
+local function backgroundPath(unit)
+	local _, file = UnitRace(unit)
+	local top = string.upper(file or "")
+	if top == "GNOME" then
+		file = "Dwarf"
+	elseif top == "TROLL" then
+		file = "Orc"
 	end
-	return "Interface" .. SEP .. "DressUpFrame" .. SEP .. "DressUpBackground-" .. (fichier or "Orc")
+	return "Interface" .. SEP .. "DressUpFrame" .. SEP .. "DressUpBackground-" .. (file or "Orc")
 end
 
-local function morceau(parent, calque, cle)
-	local d = PIECES[cle]
-	local t = parent:CreateTexture(nil, calque)
+local function createPiece(parent, overlay, key)
+	local d = PIECES[key]
+	local t = parent:CreateTexture(nil, overlay)
 	t:SetTexture(PARTS .. d[1])
 	t:SetTexCoord(d[2], d[3], d[4], d[5])
 	return t
 end
 
-local function habillerEmplacement(nom)
-	local b = _G["Inspect" .. nom .. "Slot"]
-	if not b or b.foreverCadre then return b end
-	b:SetWidth(N.emplacement)
-	b:SetHeight(N.emplacement)
-	local cadre = b:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(cadre, "ui-character-info-gearslot")
-	cadre:SetPoint("CENTER", b, "CENTER", 0, 0)
-	b.foreverCadre = cadre
+-- Resize an inspect slot to 37 and put the gear slot art behind it.
+local function skinSlot(name)
+	local b = _G["Inspect" .. name .. "Slot"]
+	if not b or b.foreverFrame then return b end
+	b:SetWidth(N.slot)
+	b:SetHeight(N.slot)
+	local frame = b:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(frame, "ui-character-info-gearslot")
+	frame:SetPoint("CENTER", b, "CENTER", 0, 0)
+	b.foreverFrame = frame
 	return b
 end
 
-local function habillerPersonnage(encart)
+-- Character page: level, talents button, model, race background, frame and slots.
+local function skinCharacter(inset)
 	local p = InspectPaperDollFrame
 	for _, r in ipairs({ p:GetRegions() }) do
 		if r:GetObjectType() == "Texture" and not r:GetName() then r:SetAlpha(0) end
 	end
-	poser(InspectLevelText, "TOP", p, "TOP", 0, N.niveau.y)
-	InspectLevelText:SetWidth(N.niveau.l)
-	-- le bouton des talents
+	place(InspectLevelText, "TOP", p, "TOP", 0, N.level.y)
+	InspectLevelText:SetWidth(N.level.l)
+	-- talents button, enabled from level 10 (InspectFrame_UpdateTalentTab)
 	local TB = N.talents
 	local b = ForeverUI.CreatePanelButton(p, TALENTS, TB.l, TB.h, "ForeverUIInspectTalentsButton", "GameFontNormal")
 	b:SetPoint("TOP", p, "TOP", 0, TB.y)
 	b:SetMotionScriptsWhileDisabled(true)
 	b:SetScript("OnClick", function()
 		PlaySound("igCharacterInfoTab")
-		if ForeverUI.Talents and InspectFrame.unit then ForeverUI.Talents.inspecter(InspectFrame.unit) end
+		if ForeverUI.Talents and InspectFrame.unit then ForeverUI.Talents.inspect(InspectFrame.unit) end
 	end)
 	b:SetScript("OnEnter", function(self)
-		if Gb.Vrai(self:IsEnabled()) then return end
+		if Tpl.Truthy(self:IsEnabled()) then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:SetText(UNAVAILABLE, 1.0, 0.125, 0.125)
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	I.talents = b
-	-- le modele
-	local M = N.modele
-	local modele = InspectModelFrame
-	poser(modele, "TOPLEFT", p, "TOPLEFT", M.x, M.y)
-	modele:SetWidth(M.l)
-	modele:SetHeight(M.h)
-	local gauche, droite = InspectModelRotateLeftButton, InspectModelRotateRightButton
-	local demi = gauche:GetWidth() / 2 + M.flechesEcart / 2
-	poser(gauche, "TOP", modele, "TOP", -demi, M.flechesY)
-	poser(droite, "TOP", modele, "TOP", demi, M.flechesY)
-	ForeverUI.TournerALaSouris(modele)
-	-- le fond de la race, sous le modele (regions de la page) ; le voile
-	local F = N.fond
-	local fond = {}
+	-- model: 3.3.5 has no model controls, so the two rotate arrows sit at TOP (0, -2), 4 apart
+	local M = N.model
+	local model = InspectModelFrame
+	place(model, "TOPLEFT", p, "TOPLEFT", M.x, M.y)
+	model:SetWidth(M.l)
+	model:SetHeight(M.h)
+	local left, right = InspectModelRotateLeftButton, InspectModelRotateRightButton
+	local half = left:GetWidth() / 2 + M.arrowsGap / 2
+	place(left, "TOP", model, "TOP", -half, M.arrowsY)
+	place(right, "TOP", model, "TOP", half, M.arrowsY)
+	ForeverUI.RotateWithMouse(model)
+	-- race background under the model (page regions), then the black veil
+	local F = N.background
+	local background = {}
 	local function piece(u, v1, v2, l, h)
 		local t = p:CreateTexture(nil, "BACKGROUND")
 		t:SetTexCoord(u[1], u[2], v1, v2)
 		t:SetWidth(l)
 		t:SetHeight(h)
 		t:SetDesaturated(true)
-		fond[#fond + 1] = t
+		background[#background + 1] = t
 		return t
 	end
-	-- le bas rogne au bas de l'encart
-	local basVisible = (N.fenetre[2] - N.encart[4]) - (-M.y + F.h)
-	local hg = piece(F.uG, F.vHaut, 1, F.l, F.h)
-	hg:SetPoint("TOPLEFT", modele, "TOPLEFT", 0, 0)
-	local hd = piece(F.uD, F.vHaut, 1, F.droite, F.h)
-	hd:SetPoint("TOPLEFT", hg, "TOPRIGHT", 0, 0)
-	local bg = piece(F.uG, 0, basVisible / F.bas, F.l, basVisible)
-	bg:SetPoint("TOPLEFT", hg, "BOTTOMLEFT", 0, 0)
-	local bd = piece(F.uD, 0, basVisible / F.bas, F.droite, basVisible)
-	bd:SetPoint("TOPLEFT", hg, "BOTTOMRIGHT", 0, 0)
-	local voile = p:CreateTexture(nil, "BORDER")
-	voile:SetTexture(0, 0, 0, 1)
-	voile:SetPoint("TOPLEFT", hg, "TOPLEFT", 0, 0)
-	voile:SetPoint("BOTTOMRIGHT", hd, "BOTTOMRIGHT", 0, -(F.bas - F.voile))
-	I.fond, I.voile = fond, voile
-	-- le cadre Char-Paperdoll, au-dessus du modele
-	local B = N.bords
-	local cadre = CreateFrame("Frame", nil, p)
-	cadre:SetAllPoints(encart)
-	cadre:SetFrameLevel(modele:GetFrameLevel() + 1)
+	-- bottom pieces are cut at the inset bottom (109 of 128); whole, they leave the window
+	local visibleBottom = (N.window[2] - N.inset[4]) - (-M.y + F.h)
+	local topLeft = piece(F.uLeft, F.vTop, 1, F.l, F.h)
+	topLeft:SetPoint("TOPLEFT", model, "TOPLEFT", 0, 0)
+	local topRight = piece(F.uRight, F.vTop, 1, F.right, F.h)
+	topRight:SetPoint("TOPLEFT", topLeft, "TOPRIGHT", 0, 0)
+	local bottomLeft = piece(F.uLeft, 0, visibleBottom / F.down, F.l, visibleBottom)
+	bottomLeft:SetPoint("TOPLEFT", topLeft, "BOTTOMLEFT", 0, 0)
+	local bottomRight = piece(F.uRight, 0, visibleBottom / F.down, F.right, visibleBottom)
+	bottomRight:SetPoint("TOPLEFT", topLeft, "BOTTOMRIGHT", 0, 0)
+	local veil = p:CreateTexture(nil, "BORDER")
+	veil:SetTexture(0, 0, 0, 1)
+	veil:SetPoint("TOPLEFT", topLeft, "TOPLEFT", 0, 0)
+	veil:SetPoint("BOTTOMRIGHT", topRight, "BOTTOMRIGHT", 0, -(F.down - F.veil))
+	I.background, I.veil = background, veil
+	-- Char-Paperdoll frame above the model. camelot's second bottom rule (BorderBottom2) is not
+	-- drawn: it doubles the frame's bottom rule 3 px higher.
+	local B = N.edges
+	local frame = CreateFrame("Frame", nil, p)
+	frame:SetAllPoints(inset)
+	frame:SetFrameLevel(model:GetFrameLevel() + 1)
 	local c = {}
-	for _, d in ipairs({ { "coinHG", "TOPLEFT", B.x, B.y }, { "coinHD", "TOPRIGHT", B.xd, B.y },
-		{ "coinBG", "BOTTOMLEFT", B.x, B.yb }, { "coinBD", "BOTTOMRIGHT", B.xd, B.yb } }) do
-		local t = morceau(cadre, "OVERLAY", d[1])
-		t:SetWidth(B.coin)
-		t:SetHeight(B.coin)
-		t:SetPoint(d[2], encart, d[2], d[3], d[4])
+	for _, d in ipairs({ { "cornerTL", "TOPLEFT", B.x, B.y }, { "topRightCorner", "TOPRIGHT", B.xRight, B.y },
+		{ "bottomLeftCorner", "BOTTOMLEFT", B.x, B.yBottom }, { "cornerBR", "BOTTOMRIGHT", B.xRight, B.yBottom } }) do
+		local t = createPiece(frame, "OVERLAY", d[1])
+		t:SetWidth(B.corner)
+		t:SetHeight(B.corner)
+		t:SetPoint(d[2], inset, d[2], d[3], d[4])
 		c[d[1]] = t
 	end
-	local function filet(cle, a1, r1, p1, x1, y1, a2, r2, p2, x2, y2)
-		local t = morceau(cadre, "OVERLAY", cle)
+	local function rule(key, a1, r1, p1, x1, y1, a2, r2, p2, x2, y2)
+		local t = createPiece(frame, "OVERLAY", key)
 		t:SetPoint(a1, r1, p1, x1, y1)
 		t:SetPoint(a2, r2, p2, x2, y2)
 		return t
 	end
-	local g = filet("gauche", "TOPLEFT", c.coinHG, "BOTTOMLEFT", -1, 0, "BOTTOMLEFT", c.coinBG, "TOPLEFT", -1, 0)
-	local d = filet("droite", "TOPRIGHT", c.coinHD, "BOTTOMRIGHT", 1, 0, "BOTTOMRIGHT", c.coinBD, "TOPRIGHT", 1, 0)
-	local h = filet("haut", "TOPLEFT", c.coinHG, "TOPRIGHT", 0, 1, "TOPRIGHT", c.coinHD, "TOPLEFT", 0, 1)
-	local bas = filet("bas", "BOTTOMLEFT", c.coinBG, "BOTTOMRIGHT", 0, -1, "BOTTOMRIGHT", c.coinBD, "BOTTOMLEFT", 0, -1)
-	g:SetWidth(B.filet)
-	d:SetWidth(B.filet)
-	h:SetHeight(B.filet)
-	bas:SetHeight(B.filet)
-	c.gauche, c.droite, c.haut, c.bas = g, d, h, bas
-	I.cadre = c
-	-- les emplacements, au-dessus du cadre (camelot : frameLevel 100)
-	local function habillerAuDessus(nom)
-		local s = habillerEmplacement(nom)
-		s:SetFrameLevel(cadre:GetFrameLevel() + 1)
+	local g = rule("left", "TOPLEFT", c.cornerTL, "BOTTOMLEFT", -1, 0, "BOTTOMLEFT", c.bottomLeftCorner, "TOPLEFT", -1, 0)
+	local d = rule("right", "TOPRIGHT", c.topRightCorner, "BOTTOMRIGHT", 1, 0, "BOTTOMRIGHT", c.cornerBR, "TOPRIGHT", 1, 0)
+	local h = rule("top", "TOPLEFT", c.cornerTL, "TOPRIGHT", 0, 1, "TOPRIGHT", c.topRightCorner, "TOPLEFT", 0, 1)
+	local down = rule("down", "BOTTOMLEFT", c.bottomLeftCorner, "BOTTOMRIGHT", 0, -1, "BOTTOMRIGHT", c.cornerBR, "BOTTOMLEFT", 0, -1)
+	g:SetWidth(B.rule)
+	d:SetWidth(B.rule)
+	h:SetHeight(B.rule)
+	down:SetHeight(B.rule)
+	c.left, c.right, c.top, c.down = g, d, h, down
+	I.frame = c
+	-- slots above the frame (camelot: frameLevel 100), so the bottom rule does not cross
+	-- the weapons
+	local function skinRaised(name)
+		local s = skinSlot(name)
+		s:SetFrameLevel(frame:GetFrameLevel() + 1)
 		return s
 	end
-	local precedent
-	for i, nom in ipairs(COLONNE_GAUCHE) do
-		local s = habillerAuDessus(nom)
+	local previous
+	for i, name in ipairs(LEFT_COLUMN) do
+		local s = skinRaised(name)
 		if i == 1 then
-			poser(s, "TOPLEFT", encart, "TOPLEFT", N.gauche[1], N.gauche[2])
+			place(s, "TOPLEFT", inset, "TOPLEFT", N.left[1], N.left[2])
 		else
-			poser(s, "TOPLEFT", precedent, "BOTTOMLEFT", 0, -N.ecart)
+			place(s, "TOPLEFT", previous, "BOTTOMLEFT", 0, -N.gap)
 		end
-		precedent = s
+		previous = s
 	end
-	for i, nom in ipairs(COLONNE_DROITE) do
-		local s = habillerAuDessus(nom)
+	for i, name in ipairs(RIGHT_COLUMN) do
+		local s = skinRaised(name)
 		if i == 1 then
-			poser(s, "TOPRIGHT", encart, "TOPRIGHT", N.droite[1], N.droite[2])
+			place(s, "TOPRIGHT", inset, "TOPRIGHT", N.right[1], N.right[2])
 		else
-			poser(s, "TOPLEFT", precedent, "BOTTOMLEFT", 0, -N.ecart)
+			place(s, "TOPLEFT", previous, "BOTTOMLEFT", 0, -N.gap)
 		end
-		precedent = s
+		previous = s
 	end
-	for i, nom in ipairs(ARMES) do
-		local s = habillerAuDessus(nom)
+	for i, name in ipairs(WEAPONS) do
+		local s = skinRaised(name)
 		if i == 1 then
-			poser(s, "BOTTOMLEFT", p, "BOTTOMLEFT", N.armes[1], N.armes[2])
+			place(s, "BOTTOMLEFT", p, "BOTTOMLEFT", N.weapons[1], N.weapons[2])
 		else
-			poser(s, "TOPLEFT", precedent, "TOPRIGHT", N.armesEcart, 0)
+			place(s, "TOPLEFT", previous, "TOPRIGHT", N.weaponsGap, 0)
 		end
-		precedent = s
+		previous = s
 	end
 end
 
--- ------------------------------------------------------------ la page JcJ
--- en tete, le rang (retours du 2026-09-28) : le nom du rang et le trait
--- ui-character-info-honor-levelbg de la feuille (PvPTab.lua, valide : nom en
--- GameFontHighlightLarge a -12, trait pose par son BAS a 10 sous celui du
--- nom) ; dessous, l'embleme de la faction de l'inspecte -- a 50 % sous
--- l'insigne de son rang s'il en a un, plein sinon (« Civilian ») -- a la
--- taille des insignes de la feuille ramenee de 72 x 84 a 36 x 42 ; sous la
--- tete, l'honneur en tableau
--- (colonnes aujourd'hui / hier / a vie, rangees victoires honorables /
--- honneur, comme InspectPVPHonor), le separateur de la feuille, puis les
--- trois equipes en cartes jointives, comme l'onglet JcJ de la feuille
--- (PvPArena.lua, valide) ramene a la largeur de l'encart. Les hauteurs
--- ci-dessous comptent depuis le bas de la tete.
+-- ------------------------------------------------------------ PvP page
+-- Head: the rank name and the sheet's ui-character-info-honor-levelbg line (PvPTab.lua),
+-- then the inspected player's faction emblem, at 50 % under the rank badge if any, full
+-- otherwise ("Civilian"); badges 36 x 42. Below: honor table (today / yesterday / lifetime,
+-- as InspectPVPHonor), the sheet's separator, and the three teams as cards (PvPArena.lua).
+-- Heights below count from the bottom of the head.
 local J = {
-	tete = { h = 90, nomY = -12, ligneY = -10, emblemeEcart = -4, badgeL = 36, badgeH = 42, alphaSousRang = 0.5 },
-	haut = -12, etiquetteX = 14, colonnes = { 150, 215, 280 }, rangees = { -30, -48 },
-	separateur = -64, cartesY = -74, carteX = 8, carteH = 52,
-	texteX = 50, nomY = -7, nomL = 160, coteX = -14, coteY = -8, typeY = -30,
-	etiquettesY = -24, valeurEcart = -2, cartesColonnes = { 145, 209, 273 },
-	-- l'etendard ramene de 90 a 48 de haut (PvPArena.lua)
-	echelle = 48 / 90,
+	head = { h = 90, nameY = -12, rowY = -10, emblemGap = -4, badgeW = 36, badgeH = 42, underRankAlpha = 0.5 },
+	top = -12, tagX = 14, columns = { 150, 215, 280 }, rowLines = { -30, -48 },
+	separator = -64, cardsY = -74, cardX = 8, cardH = 52,
+	textX = 50, nameY = -7, nameW = 160, ratingX = -14, ratingY = -8, typeY = -30,
+	tagsY = -24, valueGap = -2, cardColumns = { 145, 209, 273 },
+	-- banner scaled from 90 to 48 high (PvPArena.lua)
+	scale = 48 / 90,
 }
-local TAILLES = { 2, 3, 5 }
+local SIZES = { 2, 3, 5 }
 
-local function texte(parent, gabarit, justif)
-	local fs = parent:CreateFontString(nil, "ARTWORK", gabarit)
-	if justif then fs:SetJustifyH(justif) end
+local function text(parent, template, justify)
+	local fs = parent:CreateFontString(nil, "ARTWORK", template)
+	if justify then fs:SetJustifyH(justify) end
 	return fs
 end
 
-local function colonne(parent, x, y, etiquette)
-	local e = texte(parent, "GameFontDisableSmall", "CENTER")
+-- Column label with its value below; returns the value font string.
+local function column(parent, x, y, tag)
+	local e = text(parent, "GameFontDisableSmall", "CENTER")
 	e:SetPoint("TOP", parent, "TOPLEFT", x, y)
-	e:SetText(etiquette)
-	local v = texte(parent, "GameFontHighlightSmall", "CENTER")
-	v:SetPoint("TOP", e, "BOTTOM", 0, J.valeurEcart)
+	e:SetText(tag)
+	local v = text(parent, "GameFontHighlightSmall", "CENTER")
+	v:SetPoint("TOP", e, "BOTTOM", 0, J.valueGap)
 	return v
 end
 
-local function creerCarte(page, rang, largeur)
-	local c = CreateFrame("Frame", "ForeverUIInspectArenaTeam" .. rang, page)
-	c:SetWidth(largeur)
-	c:SetHeight(J.carteH)
-	c.taille = TAILLES[rang]
-	c.plaque = ForeverUI.CreateNineSlice(c, "common-button-list-collapseexpand", 12, { 0, 0, 0, 0 }, "BACKGROUND") or {}
-	local E = J.echelle
-	local etendard = CreateFrame("Frame", nil, c)
-	etendard:SetAllPoints(c)
-	c.etendard = etendard
-	local hampe = etendard:CreateTexture(nil, "BACKGROUND")
-	hampe:SetTexture(PVP .. "UI-Character-PVP-Elements")
-	hampe:SetTexCoord(0, 0.099609375, 0.91015625, 0.935546875)
-	hampe:SetWidth(50 * E)
-	hampe:SetHeight(13 * E)
-	hampe:SetPoint("TOPLEFT", c, "TOPLEFT", 8, -2)
-	local banniere = etendard:CreateTexture(nil, "BORDER")
-	banniere:SetWidth(45 * E)
-	banniere:SetHeight(90 * E)
-	banniere:SetPoint("TOP", hampe, "TOP", 5 * E, -2 * E)
-	local bord = etendard:CreateTexture(nil, "ARTWORK")
-	bord:SetWidth(45 * E)
-	bord:SetHeight(90 * E)
-	bord:SetPoint("CENTER", banniere, "CENTER", 0, 0)
-	local embleme = etendard:CreateTexture(nil, "OVERLAY")
-	embleme:SetWidth(24 * E)
-	embleme:SetHeight(24 * E)
-	embleme:SetPoint("CENTER", bord, "CENTER", -5 * E, 17 * E)
-	c.banniere, c.bord, c.embleme = banniere, bord, embleme
+-- Arena team card: banner, name, rating and season columns. rank: 1..3 for sizes
+-- 2, 3, 5
+local function createCard(page, rank, width)
+	local c = CreateFrame("Frame", "ForeverUIInspectArenaTeam" .. rank, page)
+	c:SetWidth(width)
+	c:SetHeight(J.cardH)
+	c.size = SIZES[rank]
+	c.plate = ForeverUI.CreateNineSlice(c, "common-button-list-collapseexpand", 12, { 0, 0, 0, 0 }, "BACKGROUND") or {}
+	local E = J.scale
+	local bannerFrame = CreateFrame("Frame", nil, c)
+	bannerFrame:SetAllPoints(c)
+	c.bannerFrame = bannerFrame
+	local pole = bannerFrame:CreateTexture(nil, "BACKGROUND")
+	pole:SetTexture(PVP .. "UI-Character-PVP-Elements")
+	pole:SetTexCoord(0, 0.099609375, 0.91015625, 0.935546875)
+	pole:SetWidth(50 * E)
+	pole:SetHeight(13 * E)
+	pole:SetPoint("TOPLEFT", c, "TOPLEFT", 8, -2)
+	local bannerTexture = bannerFrame:CreateTexture(nil, "BORDER")
+	bannerTexture:SetWidth(45 * E)
+	bannerTexture:SetHeight(90 * E)
+	bannerTexture:SetPoint("TOP", pole, "TOP", 5 * E, -2 * E)
+	local edge = bannerFrame:CreateTexture(nil, "ARTWORK")
+	edge:SetWidth(45 * E)
+	edge:SetHeight(90 * E)
+	edge:SetPoint("CENTER", bannerTexture, "CENTER", 0, 0)
+	local emblem = bannerFrame:CreateTexture(nil, "OVERLAY")
+	emblem:SetWidth(24 * E)
+	emblem:SetHeight(24 * E)
+	emblem:SetPoint("CENTER", edge, "CENTER", -5 * E, 17 * E)
+	c.bannerTexture, c.edge, c.emblem = bannerTexture, edge, emblem
 	local d = CreateFrame("Frame", nil, c)
 	d:SetAllPoints(c)
-	c.donnees = d
-	d.nom = texte(d, "GameFontNormal", "LEFT")
-	d.nom:SetWidth(J.nomL)
-	d.nom:SetPoint("TOPLEFT", c, "TOPLEFT", J.texteX, J.nomY)
-	d.cote = texte(d, "GameFontNormalSmall", "RIGHT")
-	d.cote:SetPoint("TOPRIGHT", c, "TOPRIGHT", J.coteX, J.coteY)
-	d.coteEtiquette = texte(d, "GameFontDisableSmall", "RIGHT")
-	d.coteEtiquette:SetPoint("RIGHT", d.cote, "LEFT", -4, 0)
-	d.coteEtiquette:SetText(ARENA_TEAM_RATING)
-	d.type = texte(d, "GameFontHighlightSmall", "LEFT")
-	d.type:SetPoint("TOPLEFT", c, "TOPLEFT", J.texteX, J.typeY)
+	c.data = d
+	d.name = text(d, "GameFontNormal", "LEFT")
+	d.name:SetWidth(J.nameW)
+	d.name:SetPoint("TOPLEFT", c, "TOPLEFT", J.textX, J.nameY)
+	d.side = text(d, "GameFontNormalSmall", "RIGHT")
+	d.side:SetPoint("TOPRIGHT", c, "TOPRIGHT", J.ratingX, J.ratingY)
+	d.ratingLabel = text(d, "GameFontDisableSmall", "RIGHT")
+	d.ratingLabel:SetPoint("RIGHT", d.side, "LEFT", -4, 0)
+	d.ratingLabel:SetText(ARENA_TEAM_RATING)
+	d.type = text(d, "GameFontHighlightSmall", "LEFT")
+	d.type:SetPoint("TOPLEFT", c, "TOPLEFT", J.textX, J.typeY)
 	d.type:SetText(ARENA_THIS_SEASON)
-	local K = J.cartesColonnes
-	d.jeux = colonne(d, K[1], J.etiquettesY, GAMES)
-	d.bilan = colonne(d, K[2], J.etiquettesY, WIN_LOSS)
-	d.perso = colonne(d, K[3], J.etiquettesY, RATING)
-	c.vide = c:CreateFontString(nil, "ARTWORK", "GameFontDisableLarge")
-	c.vide:SetPoint("CENTER", c, "CENTER", 0, 0)
-	c.vide:Hide()
+	local K = J.cardColumns
+	d.games = column(d, K[1], J.tagsY, GAMES)
+	d.winLoss = column(d, K[2], J.tagsY, WIN_LOSS)
+	d.character = column(d, K[3], J.tagsY, RATING)
+	c.empty = c:CreateFontString(nil, "ARTWORK", "GameFontDisableLarge")
+	c.empty:SetPoint("CENTER", c, "CENTER", 0, 0)
+	c.empty:Hide()
 	return c
 end
 
--- une carte : l'equipe de cette taille, ou l'emplacement vide, comme
--- InspectPVPTeam_Update (la saison, et la cote de l'inspecte)
-local function remplirCarte(c, id)
-	local d = c.donnees
+-- One card: the team of that size, or the empty slot, as InspectPVPTeam_Update (season values
+-- and the inspected player's rating). id: GetInspectArenaTeamData index, or nil
+local function populateCard(c, id)
+	local d = c.data
 	if not id then
 		c:SetAlpha(0.4)
-		c.banniere:SetTexture(PVP .. "PVP-Banner-" .. c.taille)
-		c.banniere:SetVertexColor(1, 1, 1)
-		c.etendard:SetAlpha(0.1)
-		c.bord:Hide()
-		c.embleme:Hide()
+		c.bannerTexture:SetTexture(PVP .. "PVP-Banner-" .. c.size)
+		c.bannerTexture:SetVertexColor(1, 1, 1)
+		c.bannerFrame:SetAlpha(0.1)
+		c.edge:Hide()
+		c.emblem:Hide()
 		d:Hide()
-		c.vide:SetText(string.format(PVP_TEAMSIZE, c.taille, c.taille))
-		c.vide:Show()
+		c.empty:SetText(string.format(PVP_TEAMSIZE, c.size, c.size))
+		c.empty:Show()
 		return
 	end
-	local nom, taille, cote, joues, victoires, _, perso, fr, fg, fb, embleme, er, eg, eb, bord, br, bgc, bb =
+	local name, size, side, played, wins, _, character, fr, fg, fb, emblem, er, eg, eb, edge, br, bgc, bb =
 		GetInspectArenaTeamData(id)
 	c:SetAlpha(1)
-	c.etendard:SetAlpha(1)
-	d.nom:SetText(nom)
-	d.cote:SetText(cote)
-	d.jeux:SetText(joues)
-	d.bilan:SetText(tostring(victoires or 0) .. " - " .. tostring((joues or 0) - (victoires or 0)))
-	d.perso:SetText(perso)
-	c.banniere:SetTexture(PVP .. "PVP-Banner-" .. tostring(taille))
-	c.banniere:SetVertexColor(fr or 1, fg or 1, fb or 1)
-	c.bord:SetVertexColor(br or 1, bgc or 1, bb or 1)
-	c.embleme:SetVertexColor(er or 1, eg or 1, eb or 1)
-	if bord and bord ~= -1 then
-		c.bord:SetTexture(PVP .. "PVP-Banner-" .. tostring(taille) .. "-Border-" .. tostring(bord))
+	c.bannerFrame:SetAlpha(1)
+	d.name:SetText(name)
+	d.side:SetText(side)
+	d.games:SetText(played)
+	d.winLoss:SetText(tostring(wins or 0) .. " - " .. tostring((played or 0) - (wins or 0)))
+	d.character:SetText(character)
+	c.bannerTexture:SetTexture(PVP .. "PVP-Banner-" .. tostring(size))
+	c.bannerTexture:SetVertexColor(fr or 1, fg or 1, fb or 1)
+	c.edge:SetVertexColor(br or 1, bgc or 1, bb or 1)
+	c.emblem:SetVertexColor(er or 1, eg or 1, eb or 1)
+	if edge and edge ~= -1 then
+		c.edge:SetTexture(PVP .. "PVP-Banner-" .. tostring(size) .. "-Border-" .. tostring(edge))
 	end
-	if embleme and embleme ~= -1 then
-		c.embleme:SetTexture(PVP .. "Icons" .. SEP .. "PVP-Banner-Emblem-" .. tostring(embleme))
+	if emblem and emblem ~= -1 then
+		c.emblem:SetTexture(PVP .. "Icons" .. SEP .. "PVP-Banner-Emblem-" .. tostring(emblem))
 	end
-	c.bord:Show()
-	c.embleme:Show()
+	c.edge:Show()
+	c.emblem:Show()
 	d:Show()
-	c.vide:Hide()
+	c.empty:Hide()
 end
 
--- le rang de l'inspecte : ses victoires a vie aux seuils de la feuille.
--- SANS SES DONNEES, LE CAS SANS RANG (retour du 2026-09-28 : la tete restait
--- vide). Le serveur ne les envoie pas pour un inspecte hors de portee
--- d'inspection ou attaquable -- autre faction, duel
--- (MiscHandler.cpp, HandleInspectHonorStatsOpcode) : GetInspectHonorData
--- rend alors des zeros, donc « Civilian » et l'embleme de sa faction.
-local function majRang(page, victoires)
-	local R = ForeverUI.PvPRangs
-	local unite = InspectFrame and InspectFrame.unit
-	local faction = unite and UnitFactionGroup(unite)
+-- Rank of the inspected player from lifetime honorable kills at the sheet's thresholds
+-- (IsTitleKnown only knows the player's titles). The server sends no honor data for a player
+-- out of inspect range or attackable (other faction, duel; MiscHandler.cpp,
+-- HandleInspectHonorStatsOpcode): GetInspectHonorData then returns zeros, so "Civilian" and
+-- the faction emblem.
+local function updateRank(page, wins)
+	local R = ForeverUI.PvPRanks
+	local unit = InspectFrame and InspectFrame.unit
+	local faction = unit and UnitFactionGroup(unit)
 	if not R or not faction then
 		page.badge:Hide()
-		page.insigne:Hide()
-		page.rang:SetText("")
+		page.insignia:Hide()
+		page.rank:SetText("")
 		return
 	end
-	-- seuils inconnus (le serveur ne les a pas dits) : le rang ne se deduit
-	-- pas, l'embleme reste seul
-	local numero = R.parVictoires(victoires)
-	page.rang:SetText(numero and R.nom(numero, faction) or "")
-	numero = numero or 0
+	-- unknown thresholds (not sent by the server): no rank, the emblem stays alone
+	local number = R.byWins(wins)
+	page.rank:SetText(number and R.name(number, faction) or "")
+	number = number or 0
 	ForeverUI.SetAtlas(page.badge, string.format(R.badgeFaction, string.lower(faction)), true)
 	page.badge:Show()
-	-- un rang : son insigne par-dessus l'embleme, a moitie efface
-	if numero > 0 and ForeverUI.SetAtlas(page.insigne, string.format(R.badgeRang, numero), true) then
-		page.badge:SetAlpha(J.tete.alphaSousRang)
-		page.insigne:Show()
+	-- a rank: its badge over the emblem, half faded
+	if number > 0 and ForeverUI.SetAtlas(page.insignia, string.format(R.badgeRank, number), true) then
+		page.badge:SetAlpha(J.head.underRankAlpha)
+		page.insignia:Show()
 	else
 		page.badge:SetAlpha(1)
-		page.insigne:Hide()
+		page.insignia:Hide()
 	end
 end
 
-function I.MajJcJ()
-	local page = I.pageJcJ
+function I.UpdatePvP()
+	local page = I.pvpPage
 	if not page then return end
-	local aujK, aujH, hierK, hierH, vieK = GetInspectHonorData()
-	majRang(page, vieK)
-	local v = page.valeurs
-	v[1]:SetText(aujK)
-	v[2]:SetText(hierK)
-	v[3]:SetText(vieK)
-	v[4]:SetText(aujH)
-	v[5]:SetText(hierH)
+	local todayHK, todayHonor, yesterdayHK, yesterdayHonor, lifetimeHK = GetInspectHonorData()
+	updateRank(page, lifetimeHK)
+	local v = page.values
+	v[1]:SetText(todayHK)
+	v[2]:SetText(yesterdayHK)
+	v[3]:SetText(lifetimeHK)
+	v[4]:SetText(todayHonor)
+	v[5]:SetText(yesterdayHonor)
 	v[6]:SetText("-")
 	local indices = {}
 	for i = 1, (MAX_ARENA_TEAMS or 3) do
-		local _, taille = GetInspectArenaTeamData(i)
-		for rang, t in ipairs(TAILLES) do
-			if taille == t then indices[rang] = i end
+		local _, size = GetInspectArenaTeamData(i)
+		for rank, t in ipairs(SIZES) do
+			if size == t then indices[rank] = i end
 		end
 	end
-	for rang, c in ipairs(page.cartes) do
-		remplirCarte(c, indices[rang])
+	for rank, c in ipairs(page.maps) do
+		populateCard(c, indices[rank])
 	end
 end
 
-local function construireJcJ(f, encart)
-	-- le cadre du client : montre (sa demande, ses evenements), invisible
+-- PvP page rebuilt over the client's InspectPVPFrame.
+local function buildPvP(f, inset)
+	-- the client frame stays shown (it requests the data and gets the events), but invisible
 	InspectPVPFrame:SetAlpha(0)
 	InspectPVPFrame:EnableMouse(false)
 	for i = 1, 3 do
@@ -549,86 +461,80 @@ local function construireJcJ(f, encart)
 		if b then b:EnableMouse(false) end
 	end
 	local page = CreateFrame("Frame", "ForeverUIInspectPvP", f)
-	page:SetAllPoints(encart)
+	page:SetAllPoints(inset)
 	page:SetFrameLevel(InspectPVPFrame:GetFrameLevel() + 10)
 	page:Hide()
-	local largeur = N.fenetre[1] + N.encart[3] - N.encart[1] - 2 * J.carteX
-	-- la tete : le nom du rang et son trait, puis l'embleme et l'insigne
-	local R = J.tete
-	local tete = CreateFrame("Frame", nil, page)
-	tete:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
-	tete:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
-	tete:SetHeight(R.h)
-	local nomRang = texte(tete, "GameFontHighlightLarge", "CENTER")
-	nomRang:SetPoint("TOP", tete, "TOP", 0, R.nomY)
-	local ligne = tete:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(ligne, "ui-character-info-honor-levelbg")
-	ligne:SetWidth(largeur)
-	ligne:SetPoint("BOTTOM", nomRang, "BOTTOM", 0, R.ligneY)
-	local badge = tete:CreateTexture(nil, "ARTWORK")
-	badge:SetWidth(R.badgeL)
+	local width = N.window[1] + N.inset[3] - N.inset[1] - 2 * J.cardX
+	-- head: rank name and line, then emblem and badge
+	local R = J.head
+	local head = CreateFrame("Frame", nil, page)
+	head:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+	head:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
+	head:SetHeight(R.h)
+	local rankName = text(head, "GameFontHighlightLarge", "CENTER")
+	rankName:SetPoint("TOP", head, "TOP", 0, R.nameY)
+	local row = head:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(row, "ui-character-info-honor-levelbg")
+	row:SetWidth(width)
+	row:SetPoint("BOTTOM", rankName, "BOTTOM", 0, R.rowY)
+	local badge = head:CreateTexture(nil, "ARTWORK")
+	badge:SetWidth(R.badgeW)
 	badge:SetHeight(R.badgeH)
-	badge:SetPoint("TOP", ligne, "BOTTOM", 0, R.emblemeEcart)
+	badge:SetPoint("TOP", row, "BOTTOM", 0, R.emblemGap)
 	badge:Hide()
-	local insigne = tete:CreateTexture(nil, "OVERLAY")
-	insigne:SetWidth(R.badgeL)
-	insigne:SetHeight(R.badgeH)
-	insigne:SetPoint("CENTER", badge, "CENTER", 0, 0)
-	insigne:Hide()
-	page.tete, page.badge, page.insigne, page.rang, page.ligne = tete, badge, insigne, nomRang, ligne
-	-- l'honneur, sous la tete
+	local insignia = head:CreateTexture(nil, "OVERLAY")
+	insignia:SetWidth(R.badgeW)
+	insignia:SetHeight(R.badgeH)
+	insignia:SetPoint("CENTER", badge, "CENTER", 0, 0)
+	insignia:Hide()
+	page.head, page.badge, page.insignia, page.rank, page.row = head, badge, insignia, rankName, row
+	-- honor, under the head
 	for i, t in ipairs({ HONOR_TODAY, HONOR_YESTERDAY, HONOR_LIFETIME }) do
-		local e = texte(page, "GameFontDisableSmall", "CENTER")
-		e:SetPoint("TOP", tete, "BOTTOMLEFT", J.colonnes[i], J.haut)
+		local e = text(page, "GameFontDisableSmall", "CENTER")
+		e:SetPoint("TOP", head, "BOTTOMLEFT", J.columns[i], J.top)
 		e:SetText(t)
 	end
-	page.valeurs = {}
+	page.values = {}
 	for r, t in ipairs({ KILLS, HONOR }) do
-		local e = texte(page, "GameFontDisableSmall", "LEFT")
-		e:SetPoint("TOPLEFT", tete, "BOTTOMLEFT", J.etiquetteX, J.rangees[r])
+		local e = text(page, "GameFontDisableSmall", "LEFT")
+		e:SetPoint("TOPLEFT", head, "BOTTOMLEFT", J.tagX, J.rowLines[r])
 		e:SetText(t)
 		for i = 1, 3 do
-			local v = texte(page, "GameFontHighlightSmall", "CENTER")
-			v:SetPoint("TOP", tete, "BOTTOMLEFT", J.colonnes[i], J.rangees[r])
-			page.valeurs[#page.valeurs + 1] = v
+			local v = text(page, "GameFontHighlightSmall", "CENTER")
+			v:SetPoint("TOP", head, "BOTTOMLEFT", J.columns[i], J.rowLines[r])
+			page.values[#page.values + 1] = v
 		end
 	end
-	local separateur = page:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(separateur, "ui-character-info-scrollline-long")
-	separateur:SetWidth(largeur)
-	separateur:SetPoint("TOP", tete, "BOTTOM", 0, J.separateur)
-	page.separateur = separateur
-	page.cartes = {}
-	for rang = 1, #TAILLES do
-		local c = creerCarte(page, rang, largeur)
-		if rang == 1 then
-			c:SetPoint("TOPLEFT", tete, "BOTTOMLEFT", J.carteX, J.cartesY)
+	local separator = page:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(separator, "ui-character-info-scrollline-long")
+	separator:SetWidth(width)
+	separator:SetPoint("TOP", head, "BOTTOM", 0, J.separator)
+	page.separator = separator
+	page.maps = {}
+	for rank = 1, #SIZES do
+		local c = createCard(page, rank, width)
+		if rank == 1 then
+			c:SetPoint("TOPLEFT", head, "BOTTOMLEFT", J.cardX, J.cardsY)
 		else
-			c:SetPoint("TOPLEFT", page.cartes[rang - 1], "BOTTOMLEFT", 0, 0)
+			c:SetPoint("TOPLEFT", page.maps[rank - 1], "BOTTOMLEFT", 0, 0)
 		end
-		page.cartes[rang] = c
+		page.maps[rank] = c
 	end
-	I.pageJcJ = page
+	I.pvpPage = page
 	InspectPVPFrame:HookScript("OnShow", function()
 		page:Show()
-		I.MajJcJ()
+		I.UpdatePvP()
 	end)
 	InspectPVPFrame:HookScript("OnHide", function() page:Hide() end)
 end
 
--- ------------------------------------------------------------ le deplacement
--- (retour du 2026-09-28 : « je dois pouvoir deplacer la fenetre
--- d'inspection ») Comme les hauts faits (Achievements.lua, valide) : la
--- barre du titre sert de poignee ; la place est retenue dans
--- ForeverUIDB.positions (cle « inspection », haut-centre de la fenetre,
--- comme Superposition.lua) et reposee a l'ouverture et apres le systeme de
--- panneaux -- InspectFrame est un panneau « left » que
--- UpdateUIPanelPositions repose a chaque ouverture ou fermeture d'un
--- panneau. Rien n'y est securise : le deplacement marche aussi en combat.
--- La fenetre des talents de l'inspecte ne suit pas (retour du 2026-09-28 :
--- « bouger la fenetre d'inspection ne doit pas faire bouger la fenetre de
--- talents inspectes »).
-local CLE = "inspection"
+-- ------------------------------------------------------------ Moving
+-- The title bar is the drag handle, as in Achievements.lua. The position is saved in
+-- ForeverUIDB.positions (key "inspection", top-center, as WindowStack.lua) and re-applied on
+-- show and after UpdateUIPanelPositions, which re-places this "left" panel whenever a panel
+-- opens or closes. Nothing here is secure, so moving works in combat. The inspected talent
+-- window does not follow.
+local KEY = "inspection"
 
 local function positions()
 	ForeverUIDB = ForeverUIDB or {}
@@ -636,142 +542,142 @@ local function positions()
 	return ForeverUIDB.positions
 end
 
-function I.Reposer()
+function I.Reposition()
 	local f = InspectFrame
-	local p = positions()[CLE]
+	local p = positions()[KEY]
 	if not f or not p then return end
 	f:ClearAllPoints()
 	f:SetPoint("TOP", UIParent, "TOP", p.x, p.y)
 end
 
--- le haut-centre d'un cadre, depuis celui d'UIParent (nil tant que le
--- cadre n'est pas place)
-local function hautCentre(cadre)
-	local cx, ux = cadre:GetCenter(), UIParent:GetCenter()
-	local haut, uHaut = cadre:GetTop(), UIParent:GetTop()
-	if not cx or not ux or not haut or not uHaut then return end
-	return cx - ux, haut - uHaut
+-- Top-center of a frame relative to UIParent's (nil while the frame is not placed)
+local function topCenter(frame)
+	local cx, ux = frame:GetCenter(), UIParent:GetCenter()
+	local top, uiTop = frame:GetTop(), UIParent:GetTop()
+	if not cx or not ux or not top or not uiTop then return end
+	return cx - ux, top - uiTop
 end
 
-local function rendreDeplacable(f, poignee)
+local function makeMovable(f, handle)
 	f:SetMovable(true)
 	f:SetClampedToScreen(true)
-	poignee:EnableMouse(true)
-	poignee:RegisterForDrag("LeftButton")
-	poignee:SetScript("OnDragStart", function()
+	handle:EnableMouse(true)
+	handle:RegisterForDrag("LeftButton")
+	handle:SetScript("OnDragStart", function()
 		f:StartMoving()
 	end)
-	poignee:SetScript("OnDragStop", function()
+	handle:SetScript("OnDragStop", function()
 		f:StopMovingOrSizing()
-		local x, y = hautCentre(f)
+		local x, y = topCenter(f)
 		if not x then return end
 		f:ClearAllPoints()
 		f:SetPoint("TOP", UIParent, "TOP", x, y)
-		-- la place est a nous : le client ne la retient pas en plus
+		-- we keep the position: stop the client from saving it too
 		if f.SetUserPlaced then f:SetUserPlaced(false) end
-		positions()[CLE] = { x = x, y = y }
+		positions()[KEY] = { x = x, y = y }
 	end)
-	f:HookScript("OnShow", I.Reposer)
+	f:HookScript("OnShow", I.Reposition)
 	hooksecurefunc("UpdateUIPanelPositions", function()
-		if f:IsShown() then I.Reposer() end
+		if f:IsShown() then I.Reposition() end
 	end)
 end
 
--- ------------------------------------------------------------ l'ouverture
-function I.Maj()
+-- ------------------------------------------------------------ Opening
+-- Refresh portraits, PvP tab icon, race background and talents button for the unit.
+function I.Update()
 	local f = InspectFrame
-	local habit = f and f.foreverHabit
-	local unite = f and f.unit
-	if not habit or not unite then return end
-	SetPortraitTexture(habit.portrait, unite)
-	local o = I.onglets
-	-- UpdateCharacterModeTabPortrait : le portrait, rogne a nouveau
-	local R = N.onglets.rognage
-	SetPortraitTexture(o[1].icone, unite)
-	o[1].icone:SetTexCoord(R, 1 - R, R, 1 - R)
-	local faction = UnitFactionGroup(unite) or UnitFactionGroup("player") or "Alliance"
-	o[2].icone:SetTexture(ONGLETS .. "Inv_SideTab_Honor_" .. faction .. "_c60")
-	local fichier = cheminFond(unite)
-	for i, t in ipairs(I.fond) do t:SetTexture(fichier .. i) end
-	local niveau = UnitLevel(unite) or 0
-	I.talents:Activer(not (niveau > 0 and niveau < N.talents.niveauMin))
-	I.MajOnglets()
+	local skin = f and f.foreverSkin
+	local unit = f and f.unit
+	if not skin or not unit then return end
+	SetPortraitTexture(skin.portrait, unit)
+	local o = I.tabs
+	-- UpdateCharacterModeTabPortrait: the portrait, cropped again
+	local R = N.tabs.crop
+	SetPortraitTexture(o[1].icon, unit)
+	o[1].icon:SetTexCoord(R, 1 - R, R, 1 - R)
+	local faction = UnitFactionGroup(unit) or UnitFactionGroup("player") or "Alliance"
+	o[2].icon:SetTexture(TABS .. "Inv_SideTab_Honor_" .. faction .. "_c60")
+	local file = backgroundPath(unit)
+	for i, t in ipairs(I.background) do t:SetTexture(file .. i) end
+	local level = UnitLevel(unit) or 0
+	I.talents:Activate(not (level > 0 and level < N.talents.minLevel))
+	I.UpdateTabs()
 end
 
-function I.Habiller()
+function I.Skin()
 	local f = InspectFrame
-	if not f or f.foreverHabit then return end
-	f:SetWidth(N.fenetre[1])
-	f:SetHeight(N.fenetre[2])
+	if not f or f.foreverSkin then return end
+	f:SetWidth(N.window[1])
+	f:SetHeight(N.window[2])
 	f:SetHitRectInsets(0, 0, 0, 0)
 	InspectFramePortrait:SetAlpha(0)
 	InspectNameFrame:SetAlpha(0)
-	local habit = Gb.FenetrePortrait(f, {
-		portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = InspectNameText:GetText(),
+	local skin = Tpl.PortraitWindow(f, {
+		portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = InspectNameText:GetText(),
 	})
-	f.foreverHabit = habit
-	rendreDeplacable(f, habit.bandeau)
-	habit.titre:SetFontObject(GameFontHighlight)
+	f.foreverSkin = skin
+	makeMovable(f, skin.banner)
+	skin.title:SetFontObject(GameFontHighlight)
 	hooksecurefunc(InspectNameText, "SetText", function()
-		habit.titre:SetText(InspectNameText:GetText() or "")
+		skin.title:SetText(InspectNameText:GetText() or "")
 	end)
-	-- l'encart, sans barre de boutons
-	local E = N.encart
-	local encart = CreateFrame("Frame", "ForeverUIInspectInset", f)
-	encart:SetPoint("TOPLEFT", f, "TOPLEFT", E[1], E[2])
-	encart:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", E[3], E[4])
-	local marbre = f:CreateTexture(nil, "BACKGROUND")
-	marbre:SetTexture("interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble", true)
-	if marbre.SetHorizTile then marbre:SetHorizTile(true) marbre:SetVertTile(true) end
-	marbre:SetAllPoints(encart)
-	habit.encadre = Gb.NeufTranches(f, "InsetFrameTemplate", encart)
-	habit.marbre, habit.encart = marbre, encart
-	Gb.Croix(InspectFrameCloseButton, f)
+	-- inset, without button bar
+	local E = N.inset
+	local inset = CreateFrame("Frame", "ForeverUIInspectInset", f)
+	inset:SetPoint("TOPLEFT", f, "TOPLEFT", E[1], E[2])
+	inset:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", E[3], E[4])
+	local marble = f:CreateTexture(nil, "BACKGROUND")
+	marble:SetTexture("interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble", true)
+	if marble.SetHorizTile then marble:SetHorizTile(true) marble:SetVertTile(true) end
+	marble:SetAllPoints(inset)
+	skin.frameBox = Tpl.NineSlice(f, "InsetFrameTemplate", inset)
+	skin.marble, skin.inset = marble, inset
+	Tpl.CloseButton(InspectFrameCloseButton, f)
 	InspectFrameCloseButton:SetFrameLevel(f:GetFrameLevel() + 22)
-	-- les onglets du bas s'en vont ; les lateraux les remplacent
+	-- the bottom tabs go away; the side tabs replace them
 	for i = 1, 3 do
 		local t = _G["InspectFrameTab" .. i]
 		t:SetAlpha(0)
 		t:EnableMouse(false)
 		t:Hide()
 	end
-	local O = N.onglets
-	local barre = CreateFrame("Frame", nil, f)
-	barre:SetWidth(O.l)
-	barre:SetHeight(O.h)
-	barre:SetPoint("TOPLEFT", f, "TOPRIGHT", O.x, O.y)
-	barre:SetFrameLevel(f:GetFrameLevel() + 1)
-	I.onglets = { creerOnglet(barre, 1, CHARACTER_INFO), creerOnglet(barre, 2, PLAYER_V_PLAYER) }
-	I.onglets[1]:SetPoint("TOPLEFT", barre, "TOPLEFT", 0, 0)
-	I.onglets[2]:SetPoint("TOPLEFT", I.onglets[1], "BOTTOMLEFT", 0, O.ecart)
-	habillerPersonnage(encart)
-	construireJcJ(f, encart)
-	f:HookScript("OnShow", I.Maj)
-	-- la fenetre des talents suit l'inspection : elle se referme avec elle
+	local O = N.tabs
+	local bar = CreateFrame("Frame", nil, f)
+	bar:SetWidth(O.l)
+	bar:SetHeight(O.h)
+	bar:SetPoint("TOPLEFT", f, "TOPRIGHT", O.x, O.y)
+	bar:SetFrameLevel(f:GetFrameLevel() + 1)
+	I.tabs = { createTab(bar, 1, CHARACTER_INFO), createTab(bar, 2, PLAYER_V_PLAYER) }
+	I.tabs[1]:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+	I.tabs[2]:SetPoint("TOPLEFT", I.tabs[1], "BOTTOMLEFT", 0, O.gap)
+	skinCharacter(inset)
+	buildPvP(f, inset)
+	f:HookScript("OnShow", I.Update)
+	-- the talent window follows the inspection: it closes with it
 	f:HookScript("OnHide", function()
 		if ForeverUI.Talents and ForeverUI.Talents.inspection and PlayerTalentFrame then
 			HideUIPanel(PlayerTalentFrame)
 		end
 	end)
-	hooksecurefunc("InspectSwitchTabs", I.MajOnglets)
-	hooksecurefunc("InspectFrame_UnitChanged", I.Maj)
-	I.Maj()
-	I.Reposer()
+	hooksecurefunc("InspectSwitchTabs", I.UpdateTabs)
+	hooksecurefunc("InspectFrame_UnitChanged", I.Update)
+	I.Update()
+	I.Reposition()
 end
 
-I.Habiller()
+I.Skin()
 
-local veille = CreateFrame("Frame")
-veille:RegisterEvent("ADDON_LOADED")
-veille:RegisterEvent("UNIT_PORTRAIT_UPDATE")
-veille:RegisterEvent("INSPECT_HONOR_UPDATE")
-veille:SetScript("OnEvent", function(_, evenement, arg1)
-	if evenement == "ADDON_LOADED" then
-		if arg1 == "Blizzard_InspectUI" then I.Habiller() end
-	elseif evenement == "UNIT_PORTRAIT_UPDATE" then
-		if InspectFrame and InspectFrame:IsShown() and arg1 == InspectFrame.unit then I.Maj() end
-	elseif I.pageJcJ and I.pageJcJ:IsShown() then
-		I.MajJcJ()
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("ADDON_LOADED")
+watcher:RegisterEvent("UNIT_PORTRAIT_UPDATE")
+watcher:RegisterEvent("INSPECT_HONOR_UPDATE")
+watcher:SetScript("OnEvent", function(_, event, arg1)
+	if event == "ADDON_LOADED" then
+		if arg1 == "Blizzard_InspectUI" then I.Skin() end
+	elseif event == "UNIT_PORTRAIT_UPDATE" then
+		if InspectFrame and InspectFrame:IsShown() and arg1 == InspectFrame.unit then I.Update() end
+	elseif I.pvpPage and I.pvpPage:IsShown() then
+		I.UpdatePvP()
 	end
 end)

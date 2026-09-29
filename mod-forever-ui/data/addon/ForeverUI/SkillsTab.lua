@@ -1,268 +1,199 @@
--- ForeverUI : l'onglet des competences.
---
--- RELEVE -- camelot/SkillsFrame.xml et skillsframe.lua, lus en entier. C'est
--- le meme ecran que la reputation, aux differences pres notees ci-dessous.
---
--- SkillsFrame          setAllPoints, parent CharacterFrame, useParentLevel
---   ScrollBox          TOPLEFT sur CharacterFrameLeftPaneHost (10, -40)
---                      BOTTOMRIGHT sur le meme (-25, 15), avec les deux
---                      traits UI-Character-Info-ScrollLine-Long centres sur
---                      son TOP et son BOTTOM
---   ScrollBar          MinimalScrollBar, TOPLEFT sur le TOPRIGHT du
---                      ScrollBox (5, -2), BOTTOMLEFT sur son BOTTOMRIGHT
---                      (5, 4)
---   SkillDetailFrame   CharacterFrameSidePaneTemplate, plus un RankBar
---
--- SetElementIndentCalculator et SetPadding : identiques a la reputation --
--- retraits 0 / 46 / 2, marges de 10, ecart de 3.
---
--- SkillsHeaderTemplate, hauteur 26 -- et non 28 comme la reputation :
---   fond        common-button-list-collapseExpand, etire sur la ligne
---   StateIcon   common-button-list-plus ou -minus, RIGHT (-8, -1)
---   nom         GameFontNormalLeft, hauteur 15, LEFT x = 10
---
--- SkillsSubHeaderTemplate, hauteur 22 :
---   son bouton  20 x 20, LEFT x = 2 -- et non ancre a une AccountWideIcon
---               comme celui de la reputation
---   nom         a +4 du bouton, jusqu'au LEFT de la barre moins 10
---
--- SkillsEntryTemplate, hauteur 30 :
---   barre       SkillsBarTemplate, RIGHT x = -3
---   nom         GameFontHighlight, hauteur 15, LEFT x = 2 -- il n'y a pas
---               d'AccountWideIcon ici, donc pas le 15 de la reputation
---   survol      les memes trois tranches, aux alphas de
---               RefreshBackgroundHighlightOpacity : 0 / 0,10 / 0,20. Pas de
---               cas "en guerre" : la teinte est toujours blanche.
---
--- SkillsBarTemplate, 160 x 29, herite de ColoredProgressBarTemplate :
---   InitializeBarForStandardSkill pose SetFillTextureByColorType(Blue) puis
---   UpdateBarColor(WHITE_FONT_COLOR). LA BARRE EST DONC BLEUE PAR SON
---   SPRITE, common-stat-bar-blue, et non par une teinte -- c'est tout ce qui
---   la distingue de celle de la reputation.
---   Son texte est TOUJOURS la progression : "rang / maximum", ou
---   "rang (+bonus) / maximum" quand il y a un bonus, celui-ci en vert.
---   TryShowBarProgressText est appele des l'initialisation, pas seulement au
---   survol.
---
--- SkillDetailFrameMixin : titre = le nom de la competence, RankBar de
--- 180 x 29 au TOP du BOTTOM du separateur (y = -6), et la description
--- reancree au TOP du BOTTOM du RankBar avec y = -8 -- et non -6 comme la
--- reputation. Sans competence choisie, le volet affiche
--- SKILL_DETAIL_SELECT_PROMPT.
---
--- SelectFirstSkillIfNoneSelected : a l'ouverture, si rien n'est choisi, la
--- premiere competence qui n'est pas un en-tete l'est -- "opening the tab
--- with an empty detail pane reads as broken", dit le commentaire de la
--- source.
---
--- CE QUE 3.3.5 DONNE. GetNumSkillLines et GetSkillLineInfo, qui rend treize
--- valeurs : nom, en-tete, deplie, rang, points temporaires, bonus, rang
--- maximal, abandonnable, cout d'un pas, cout d'un rang, niveau minimal, type
--- de cout, DESCRIPTION. ExpandSkillHeader et CollapseSkillHeader replient,
--- SetSelectedSkill et GetSelectedSkill choisissent.
---
--- CE QUI DIFFERE, ET POURQUOI :
---   * PAS DE SOUS-EN-TETE. GetSkillLineInfo ne rend pas d'indicateur
---     d'enfant : la hierarchie de 3.3.5 n'a qu'un niveau. Le gabarit existe
---     donc dans le releve mais ne sert pas ici.
---   * LES LIGNES D'ARMES ne sont pas detaillees. camelot ajoute au volet
---     droit le calcul des chances de toucher, de critique et de coup
---     glancant face a un boss ; il demande des chaines --
---     WEAPON_SKILL_DETAIL_* -- que ce client n'a pas. A faire si besoin.
---   * La description ne defile pas : ScrollingFontTemplate n'existe pas.
---   * La barre de defilement est celle de camelot, MinimalScrollBar, refaite
---     dans ScrollBar.lua : 3.3.5 n'a ni ce gabarit ni le ScrollBox qui le
---     pilote.
+-- Skills tab of the character frame (camelot SkillsFrame.xml / skillsframe.lua), the same
+-- screen as the reputation tab. Headers are 26 high (not 28), entries 30. The entry bar
+-- (SkillsBarTemplate 160 x 29) is blue through its sprite, not a tint, and always shows
+-- the progress. Right pane: SkillDetailFrameMixin with a 180 x 29 RankBar.
+-- 3.3.5 differences: GetSkillLineInfo has one level, so there are no sub-headers; weapon
+-- lines get no hit / crit detail (no WEAPON_SKILL_DETAIL_* strings); the description does
+-- not scroll (no ScrollingFontTemplate); the scroll bar is MinimalScrollBar from ScrollBar.lua.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 local L = ForeverUI.L
 
-local LISTE_X, LISTE_Y = 10, -40
-local LISTE_X2, LISTE_Y2 = -25, 15
+local LIST_X, LIST_Y = 10, -40
+local LIST_X2, LIST_Y2 = -25, 15
 
-local ENTREE_H = 30                     -- SkillsEntryTemplate
-local ENTETE_H = 26                     -- SkillsHeaderTemplate
-local MARGE = 10                        -- SetPadding
-local ECART = 3                         -- elementSpacing
-local RETRAIT_ENTETE = 0
-local RETRAIT_AUTRE = 2
+local ENTRY_H = 30                     -- SkillsEntryTemplate
+local HEADER_H = 26                     -- SkillsHeaderTemplate
+local MARGIN = 10                        -- SetPadding
+local GAP = 3                         -- elementSpacing
+local HEADER_INDENT = 0
+local OTHER_INDENT = 2
 
-local BARRE_L, BARRE_H = 160, 29
-local BARRE_X = -3
-local REMPLISSAGE_H = 15
-local NOM_H = 15
-local NOM_X = 2                         -- SkillsEntryTemplate
-local NOM_ECART = -10
-local ENTETE_NOM_X = 10
-local FLECHE_X, FLECHE_Y = -8, -1
-local FLECHE_PLACE = 16
-local COTE = 6
+local BAR_W, BAR_H = 160, 29
+local BAR_X = -3
+local FILL_H = 15
+local NAME_H = 15
+local NAME_X = 2                         -- SkillsEntryTemplate
+local NAME_GAP = -10
+local HEADER_NAME_X = 10
+local ARROW_X, ARROW_Y = -8, -1
+local ARROW_SPACE = 16
+local SIDE = 6
 
-local PLAQUE_COIN = 12                  -- le meme que la reputation
-local JAUGE_COIN = 10
+local PLATE_CORNER = 12                  -- same as the reputation tab
+local GAUGE_CORNER = 10
 
-local ATLAS_BARRE_FOND = "common-stat-bar-bg"
-local ATLAS_ENTETE = "common-button-list-collapseexpand"
+local ATLAS_BAR_BACKGROUND = "common-stat-bar-bg"
+local ATLAS_HEADER = "common-button-list-collapseexpand"
 local ATLAS_PLUS = "common-button-list-plus"
-local ATLAS_MOINS = "common-button-list-minus"
-local ATLAS_TRAIT = "ui-character-info-scrollline-long"
-local ATLAS_SURVOL_COTE = "charactercreate-customize-dropdown-linemouseover-side"
-local ATLAS_SURVOL_MILIEU = "charactercreate-customize-dropdown-linemouseover-middle"
-local ATLAS_SEPARATEUR = "ui-character-info-scrollline"
+local ATLAS_MINUS = "common-button-list-minus"
+local ATLAS_LINE = "ui-character-info-scrollline-long"
+local ATLAS_HOVER_SIDE = "charactercreate-customize-dropdown-linemouseover-side"
+local ATLAS_HOVER_MIDDLE = "charactercreate-customize-dropdown-linemouseover-middle"
+local ATLAS_SEPARATOR = "ui-character-info-scrollline"
 
--- LE REMPLISSAGE BLEU, cuit au masque comme le blanc de la reputation :
--- meme decoupe que le fond, pour que les contours se superposent.
-local CHEMIN_REMPLISSAGE = "Interface\\ForeverUI\\Bars\\statbarfillblue"
+-- Blue fill, baked with the mask like the reputation's white one: same slicing as the
+-- background, so the outlines overlap.
+local FILL_PATH = "Interface\\ForeverUI\\Bars\\statbarfillblue"
 
--- Le volet droit, CharacterFrameSidePaneTemplate.
-local VOLET_DROIT_X, VOLET_DROIT_Y = 16, -14
-local VOLET_DROIT_X2, VOLET_DROIT_Y2 = -12, 14
-local TITRE_L = 195
-local SOUS_TITRE_Y = -3
-local SEPARATEUR_Y = -4
-local RANG_L, RANG_H = 180, 29
-local RANG_Y = -6
-local DESCRIPTION_Y = -8                -- et non -6 : SkillDetailFrameMixin
+-- Right pane: CharacterFrameSidePaneTemplate.
+local RIGHT_PANE_X, RIGHT_PANE_Y = 16, -14
+local RIGHT_PANE_X2, RIGHT_PANE_Y2 = -12, 14
+local TITLE_W = 195
+local SUBTITLE_Y = -3
+local SEPARATOR_Y = -4
+local RANK_W, RANK_H = 180, 29
+local RANK_Y = -6
+local DESCRIPTION_Y = -8                -- not -6: SkillDetailFrameMixin
 local DESCRIPTION_X2 = -14
 local DESCRIPTION_Y2 = 6
 
--- La taille du volet, par construction.
-local VOLET_L, VOLET_H = 398, 464
+-- Pane size, used while the host has no size yet.
+local PANE_W, PANE_H = 398, 464
 
-local lignes = {}
-local panneau, decalage = nil, 0
-local visibles = 0
-local choisie                            -- le NOM, seule cle stable
-local detail, dernieresDonnees
+local rows = {}
+local panel, offset = nil, 0
+local visibleCount = 0
+local selectedItem                            -- the NAME, the only stable key
+local detail, lastData
 
--- --------------------------------------------------------------- les donnees
+-- --------------------------------------------------------------- Data
 
--- GetSkillLineInfo, dans l'ordre : nom, en-tete, deplie, rang, points
--- temporaires, bonus, rang maximal, abandonnable, cout d'un pas, cout d'un
--- rang, niveau minimal, type de cout, description.
-local function lireCompetence(rang)
-	local nom, entete, deplie, valeur, temporaires, bonus, maximum, _, _, _,
-		_, _, description = GetSkillLineInfo(rang)
-	if not nom or nom == "" then
+-- GetSkillLineInfo returns, in order: name, header, expanded, rank, temporary points, bonus,
+-- max rank, abandonable, step cost, rank cost, min level, cost type, description.
+local function readSkill(rank)
+	local name, header, expanded, value, temporary, bonus, maximum, _, _, _,
+		_, _, description = GetSkillLineInfo(rank)
+	if not name or name == "" then
 		return nil
 	end
 
-	valeur = (valeur or 0) + (temporaires or 0)
+	value = (value or 0) + (temporary or 0)
 	bonus = bonus or 0
 	maximum = maximum or 0
 
-	-- InitializeBarForStandardSkill : "rang / maximum", ou "rang (+bonus) /
-	-- maximum" quand il y a un bonus, celui-ci en vert.
-	local texte
+	-- InitializeBarForStandardSkill: "rank / max", or "rank (+bonus) / max" with the bonus
+	-- in green.
+	local text
 	if bonus == 0 then
-		texte = tostring(valeur) .. " / " .. tostring(maximum)
+		text = tostring(value) .. " / " .. tostring(maximum)
 	else
-		texte = tostring(valeur) .. " |cff00ff00(+" .. tostring(bonus)
+		text = tostring(value) .. " |cff00ff00(+" .. tostring(bonus)
 			.. ")|r / " .. tostring(maximum)
 	end
 
 	return {
-		index = rang,
-		nom = nom,
-		entete = entete,
-		replie = (entete and not deplie) or false,
-		valeur = valeur,
+		index = rank,
+		name = name,
+		header = header,
+		collapsed = (header and not expanded) or false,
+		value = value,
 		maximum = maximum,
-		texte = texte,
+		text = text,
 		description = description or "",
 	}
 end
 
-local function indiceDe(nom)
-	if not nom then
+-- Skill line index of a skill name, or nil
+local function indexOf(name)
+	if not name then
 		return nil
 	end
-	for rang = 1, (GetNumSkillLines and GetNumSkillLines()) or 0 do
-		if GetSkillLineInfo(rang) == nom then
-			return rang
+	for rank = 1, (GetNumSkillLines and GetNumSkillLines()) or 0 do
+		if GetSkillLineInfo(rank) == name then
+			return rank
 		end
 	end
 	return nil
 end
 
--- --------------------------------------------------------------- une ligne
+-- --------------------------------------------------------------- Row
 
-local function creerLigne(index, largeur)
-	local ligne = CreateFrame("Button", "ForeverUISkillRow" .. index, panneau)
-	ligne:SetWidth(largeur)
-	ligne:SetHeight(ENTREE_H)
+local function createRow(index, width)
+	local row = CreateFrame("Button", "ForeverUISkillRow" .. index, panel)
+	row:SetWidth(width)
+	row:SetHeight(ENTRY_H)
 
-	ligne.plaque = ForeverUI.CreateNineSlice(ligne, ATLAS_ENTETE, PLAQUE_COIN,
+	row.plate = ForeverUI.CreateNineSlice(row, ATLAS_HEADER, PLATE_CORNER,
 		{ 0, 0, 0, 0 }, "BACKGROUND") or {}
-	for _, tranche in ipairs(ligne.plaque) do
-		tranche:Hide()
+	for _, slice in ipairs(row.plate) do
+		slice:Hide()
 	end
 
-	local survol = CreateFrame("Frame", nil, ligne)
-	survol:SetAllPoints(ligne)
-	survol:SetAlpha(0)
-	ligne.survol = survol
+	local hover = CreateFrame("Frame", nil, row)
+	hover:SetAllPoints(row)
+	hover:SetAlpha(0)
+	row.hover = hover
 
-	local gauche = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(gauche, ATLAS_SURVOL_COTE, true)
-	gauche:SetWidth(COTE)
-	gauche:SetPoint("TOPLEFT", survol, "TOPLEFT", 0, 0)
-	gauche:SetPoint("BOTTOMLEFT", survol, "BOTTOMLEFT", 0, 0)
+	local left = hover:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(left, ATLAS_HOVER_SIDE, true)
+	left:SetWidth(SIDE)
+	left:SetPoint("TOPLEFT", hover, "TOPLEFT", 0, 0)
+	left:SetPoint("BOTTOMLEFT", hover, "BOTTOMLEFT", 0, 0)
 
-	local droite = survol:CreateTexture(nil, "BACKGROUND")
-	if ForeverUI.SetAtlas(droite, ATLAS_SURVOL_COTE, true) then
-		local e = ForeverUI.AtlasEntry(ATLAS_SURVOL_COTE)
-		droite:SetTexCoord(e[3], e[2], e[4], e[5])
+	local right = hover:CreateTexture(nil, "BACKGROUND")
+	if ForeverUI.SetAtlas(right, ATLAS_HOVER_SIDE, true) then
+		local e = ForeverUI.AtlasEntry(ATLAS_HOVER_SIDE)
+		right:SetTexCoord(e[3], e[2], e[4], e[5])
 	end
-	droite:SetWidth(COTE)
-	droite:SetPoint("TOPRIGHT", survol, "TOPRIGHT", 0, 0)
-	droite:SetPoint("BOTTOMRIGHT", survol, "BOTTOMRIGHT", 0, 0)
+	right:SetWidth(SIDE)
+	right:SetPoint("TOPRIGHT", hover, "TOPRIGHT", 0, 0)
+	right:SetPoint("BOTTOMRIGHT", hover, "BOTTOMRIGHT", 0, 0)
 
-	local milieu = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(milieu, ATLAS_SURVOL_MILIEU, true)
-	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT", 0, 0)
-	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT", 0, 0)
+	local middle = hover:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(middle, ATLAS_HOVER_MIDDLE, true)
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
 
-	local barre = CreateFrame("Frame", nil, ligne)
-	barre:SetWidth(BARRE_L)
-	barre:SetHeight(BARRE_H)
-	barre:SetPoint("RIGHT", ligne, "RIGHT", BARRE_X, 0)
-	ligne.barre = barre
+	local bar = CreateFrame("Frame", nil, row)
+	bar:SetWidth(BAR_W)
+	bar:SetHeight(BAR_H)
+	bar:SetPoint("RIGHT", row, "RIGHT", BAR_X, 0)
+	row.bar = bar
 
-	ForeverUI.CreateNineSlice(barre, ATLAS_BARRE_FOND, JAUGE_COIN,
+	ForeverUI.CreateNineSlice(bar, ATLAS_BAR_BACKGROUND, GAUGE_CORNER,
 		{ 0, 0, 0, 0 }, "BACKGROUND")
 
-	barre.remplissage = barre:CreateTexture(nil, "BORDER")
-	barre.remplissage:SetPoint("LEFT", barre, "LEFT", 0, 0)
+	bar.fill = bar:CreateTexture(nil, "BORDER")
+	bar.fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
 
-	barre.texte = barre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	barre.texte:SetPoint("LEFT", barre, "LEFT", 0, 0)
-	barre.texte:SetPoint("RIGHT", barre, "RIGHT", 0, 0)
-	barre.texte:SetJustifyH("CENTER")
+	bar.text = bar:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	bar.text:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	bar.text:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+	bar.text:SetJustifyH("CENTER")
 
-	local nom = ligne:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	nom:SetHeight(NOM_H)
-	nom:SetJustifyH("LEFT")
-	ligne.nom = nom
+	local name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	name:SetHeight(NAME_H)
+	name:SetJustifyH("LEFT")
+	row.name = name
 
-	local fleche = ligne:CreateTexture(nil, "OVERLAY")
-	fleche:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X, FLECHE_Y)
-	fleche:Hide()
-	ligne.fleche = fleche
+	local arrow = row:CreateTexture(nil, "OVERLAY")
+	arrow:SetPoint("RIGHT", row, "RIGHT", ARROW_X, ARROW_Y)
+	arrow:Hide()
+	row.arrow = arrow
 
-	ligne:RegisterForClicks("LeftButtonUp")
-	return ligne
+	row:RegisterForClicks("LeftButtonUp")
+	return row
 end
 
--- ----------------------------------------------------------- le remplissage
+-- ----------------------------------------------------------- Fill
 
--- SetFillPercent : largeur = fraction x largeur de barre, et la texture
--- rognee d'autant.
-local function poserBarreDans(barre, donnees, largeur)
+-- SetFillPercent: width = fraction x bar width, texture cropped the same.
+local function placeBarIn(bar, data, width)
 	local fraction = 0
-	if donnees.maximum and donnees.maximum > 0 then
-		fraction = donnees.valeur / donnees.maximum
+	if data.maximum and data.maximum > 0 then
+		fraction = data.value / data.maximum
 	end
 	if fraction < 0 then
 		fraction = 0
@@ -270,306 +201,284 @@ local function poserBarreDans(barre, donnees, largeur)
 		fraction = 1
 	end
 
-	if fraction * largeur < 1 then
-		barre.remplissage:Hide()
+	if fraction * width < 1 then
+		bar.fill:Hide()
 	else
-		barre.remplissage:SetTexture(CHEMIN_REMPLISSAGE)
-		barre.remplissage:SetTexCoord(0, fraction, 0, 1)
-		barre.remplissage:SetWidth(largeur * fraction)
-		barre.remplissage:SetHeight(REMPLISSAGE_H)
-		barre.remplissage:Show()
+		bar.fill:SetTexture(FILL_PATH)
+		bar.fill:SetTexCoord(0, fraction, 0, 1)
+		bar.fill:SetWidth(width * fraction)
+		bar.fill:SetHeight(FILL_H)
+		bar.fill:Show()
 	end
 
-	barre.texte:SetText(donnees.texte or "")
+	bar.text:SetText(data.text or "")
 end
 
--- RefreshBackgroundHighlightOpacity : ici sans le cas "en guerre", et la
--- teinte est toujours blanche.
-local function poserSurvol(ligne)
-	if ligne.entete then
-		ligne.survol:SetAlpha(0)
+-- RefreshBackgroundHighlightOpacity, without the "at war" case; the tint is always white.
+local function placeHover(row)
+	if row.header then
+		row.hover:SetAlpha(0)
 		return
 	end
 
-	local dessus = ligne:IsMouseOver()
-	ligne.survol:SetAlpha((ligne.choisie and 0.20) or (dessus and 0.10) or 0)
+	local hovered = row:IsMouseOver()
+	row.hover:SetAlpha((row.selectedItem and 0.20) or (hovered and 0.10) or 0)
 end
 
--- SetFontObject EFFACE LA JUSTIFICATION, ET IL FAUT LA REPOSER.
---
--- Un objet de police porte la SIENNE : GameFontNormalLeft est a gauche,
--- GameFontHighlight n'a aucun justifyH -- donc CENTRE, releve dans le
--- FontStyles.xml du client. SetJustifyH pose a la creation ne survit donc
--- pas au premier SetFontObject, et le nom se retrouvait centre dans sa
--- boite. Comme la boite change de largeur d'un gabarit a l'autre, le nom
--- se deplacait horizontalement au fil du defilement, selon le role que la
--- ligne reprenait.
---
--- camelot le fait exactement ainsi, et c'est ce qui le trahit :
---   <FontString parentKey="Name" inherits="GameFontHighlight" justifyH="LEFT">
--- La justification est posee PAR-DESSUS l'objet de police.
-local function remplirLigne(ligne, donnees)
-	ligne.skillIndex = donnees.index
-	ligne.skillNom = donnees.nom
-	ligne.entete = donnees.entete
-	ligne.replie = donnees.replie
+-- SetFontObject resets the justification to the font's own (GameFontHighlight is centered
+-- in the client's FontStyles.xml), so SetJustifyH must come after it, as camelot sets
+-- justifyH="LEFT" on top of the font object.
+local function populateRow(row, data)
+	row.skillIndex = data.index
+	row.skillName = data.name
+	row.header = data.header
+	row.collapsed = data.collapsed
 
-	ligne.nom:SetText(donnees.nom or "")
-	ligne.nom:ClearAllPoints()
+	row.name:SetText(data.name or "")
+	row.name:ClearAllPoints()
 
-	for _, tranche in ipairs(ligne.plaque) do
-		if donnees.entete then tranche:Show() else tranche:Hide() end
+	for _, slice in ipairs(row.plate) do
+		if data.header then slice:Show() else slice:Hide() end
 	end
 
-	if donnees.entete then
-		ligne:SetHeight(ENTETE_H)
-		ligne.barre:Hide()
-		ligne.nom:SetFontObject(GameFontNormalLeft or GameFontNormal)
-		ligne.nom:SetJustifyH("LEFT")
-		ligne.nom:SetPoint("LEFT", ligne, "LEFT", ENTETE_NOM_X, 0)
-		ligne.nom:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X - FLECHE_PLACE, 0)
+	if data.header then
+		row:SetHeight(HEADER_H)
+		row.bar:Hide()
+		row.name:SetFontObject(GameFontNormalLeft or GameFontNormal)
+		row.name:SetJustifyH("LEFT")
+		row.name:SetPoint("LEFT", row, "LEFT", HEADER_NAME_X, 0)
+		row.name:SetPoint("RIGHT", row, "RIGHT", ARROW_X - ARROW_SPACE, 0)
 
-		ForeverUI.SetAtlas(ligne.fleche, donnees.replie and ATLAS_PLUS or ATLAS_MOINS)
-		ligne.fleche:Show()
+		ForeverUI.SetAtlas(row.arrow, data.collapsed and ATLAS_PLUS or ATLAS_MINUS)
+		row.arrow:Show()
 	else
-		ligne:SetHeight(ENTREE_H)
-		ligne.barre:Show()
-		ligne.fleche:Hide()
-		ligne.nom:SetFontObject(GameFontHighlight or GameFontNormal)
-		ligne.nom:SetJustifyH("LEFT")
-		ligne.nom:SetPoint("LEFT", ligne, "LEFT", NOM_X, 0)
-		ligne.nom:SetPoint("RIGHT", ligne.barre, "LEFT", NOM_ECART, 0)
-		poserBarreDans(ligne.barre, donnees, BARRE_L)
+		row:SetHeight(ENTRY_H)
+		row.bar:Show()
+		row.arrow:Hide()
+		row.name:SetFontObject(GameFontHighlight or GameFontNormal)
+		row.name:SetJustifyH("LEFT")
+		row.name:SetPoint("LEFT", row, "LEFT", NAME_X, 0)
+		row.name:SetPoint("RIGHT", row.bar, "LEFT", NAME_GAP, 0)
+		placeBarIn(row.bar, data, BAR_W)
 	end
 
-	ligne.choisie = (choisie ~= nil and choisie == donnees.nom)
-	poserSurvol(ligne)
-	ligne:Show()
+	row.selectedItem = (selectedItem ~= nil and selectedItem == data.name)
+	placeHover(row)
+	row:Show()
 end
 
--- ------------------------------------------------------------- la mise en place
+-- ------------------------------------------------------------- Layout
 
-local function retraitDe(donnees)
-	return donnees.entete and RETRAIT_ENTETE or RETRAIT_AUTRE
+local function indentOf(data)
+	return data.header and HEADER_INDENT or OTHER_INDENT
 end
 
-local function hauteurDe(donnees)
-	return donnees.entete and ENTETE_H or ENTREE_H
+local function heightOf(data)
+	return data.header and HEADER_H or ENTRY_H
 end
 
--- L'ECRAN DU CLIENT SE TAIT EN ENTIER, A CHAQUE PASSAGE.
---
--- Il ne s'agit pas que de ses lignes. SkillFrame declare aussi un bouton de
--- tri, un bouton "tout replier", son cadre de depliage et ses trois tuiles,
--- deux boutons accepter / annuler, sa liste a ascenseur, et tout un cadre de
--- detail -- ScrollFrame, ScrollChildFrame, StatusBar. Les enumerer serait
--- une liste a tenir a jour et a oublier.
---
--- On masque donc TOUT ce que ce cadre porte et qui n'est pas a nous : ses
--- regions, et ses cadres fils sauf notre panneau. GetRegions ne rend que les
--- premieres, GetChildren que les seconds -- il faut les deux.
---
--- Et a chaque passage, parce que SkillFrame_UpdateSkills remontre les
--- siennes : les masquer une fois ne tient pas.
-local function etoufferEcranDuClient()
-	local cadre = _G["SkillFrame"]
-	if not cadre then
+-- Hides everything the client's SkillFrame holds except our panel: its regions
+-- (GetRegions) and child frames (GetChildren). Runs on every pass, since
+-- SkillFrame_UpdateSkills shows them again.
+local function suppressClientScreen()
+	local frame = _G["SkillFrame"]
+	if not frame then
 		return
 	end
 
-	for _, region in ipairs({ cadre:GetRegions() }) do
+	for _, region in ipairs({ frame:GetRegions() }) do
 		if region.Hide then
 			region:Hide()
 		end
 	end
 
-	if cadre.GetChildren then
-		for _, fils in ipairs({ cadre:GetChildren() }) do
-			if fils ~= panneau and fils.Hide then
-				fils:Hide()
+	if frame.GetChildren then
+		for _, childFrame in ipairs({ frame:GetChildren() }) do
+			if childFrame ~= panel and childFrame.Hide then
+				childFrame:Hide()
 			end
 		end
 	end
 end
 
-local function disposer()
+local function layout()
 	local total = (GetNumSkillLines and GetNumSkillLines()) or 0
 
-	local hauteurUtile = (panneau:GetHeight() or 0)
-	if hauteurUtile < 50 then
-		hauteurUtile = VOLET_H + LISTE_Y - LISTE_Y2
+	local usableHeight = (panel:GetHeight() or 0)
+	if usableHeight < 50 then
+		usableHeight = PANE_H + LIST_Y - LIST_Y2
 	end
-	local largeurUtile = (panneau:GetWidth() or 0)
-	if largeurUtile < 50 then
-		largeurUtile = VOLET_L + LISTE_X2 - LISTE_X
+	local usableWidth = (panel:GetWidth() or 0)
+	if usableWidth < 50 then
+		usableWidth = PANE_W + LIST_X2 - LIST_X
 	end
 
-	local y = MARGE
-	local posees = 0
-	for rang, ligne in ipairs(lignes) do
-		local index = decalage + rang
-		local donnees = (index <= total) and lireCompetence(index) or nil
-		local hauteur = donnees and hauteurDe(donnees) or 0
-		if donnees and y + hauteur <= hauteurUtile - MARGE then
-			local retrait = retraitDe(donnees)
-			ligne:SetWidth(largeurUtile - 2 * MARGE - retrait)
-			remplirLigne(ligne, donnees)
-			ligne:ClearAllPoints()
-			ligne:SetPoint("TOPLEFT", panneau, "TOPLEFT", MARGE + retrait, -y)
-			y = y + hauteur + ECART
-			posees = posees + 1
+	local y = MARGIN
+	local placedCount = 0
+	for rank, row in ipairs(rows) do
+		local index = offset + rank
+		local data = (index <= total) and readSkill(index) or nil
+		local height = data and heightOf(data) or 0
+		if data and y + height <= usableHeight - MARGIN then
+			local indent = indentOf(data)
+			row:SetWidth(usableWidth - 2 * MARGIN - indent)
+			populateRow(row, data)
+			row:ClearAllPoints()
+			row:SetPoint("TOPLEFT", panel, "TOPLEFT", MARGIN + indent, -y)
+			y = y + height + GAP
+			placedCount = placedCount + 1
 		else
-			ligne:Hide()
+			row:Hide()
 		end
 	end
-	return posees
+	return placedCount
 end
 
-local function poserListe()
-	if not panneau then
+local function layoutList()
+	if not panel then
 		return
 	end
 
-	etoufferEcranDuClient()
+	suppressClientScreen()
 
 	local total = (GetNumSkillLines and GetNumSkillLines()) or 0
-	local posees = disposer()
+	local placedCount = layout()
 
-	if decalage > 0 and decalage + posees > total then
-		decalage = math.max(0, total - posees)
-		posees = disposer()
+	if offset > 0 and offset + placedCount > total then
+		offset = math.max(0, total - placedCount)
+		placedCount = layout()
 	end
 
-	visibles = posees
+	visibleCount = placedCount
 
-	if panneau.barre then
-		panneau.barre:Regler(total, posees, decalage)
+	if panel.bar then
+		panel.bar:Configure(total, placedCount, offset)
 	end
 
 	if ForeverUI.SkillsDetail then
 		ForeverUI.SkillsDetail()
 	end
 end
-ForeverUI.SkillsLayout = poserListe
+ForeverUI.SkillsLayout = layoutList
 
--- --------------------------------------------------------------- le detail
+-- --------------------------------------------------------------- Detail
 
-local function viderDetail()
-	detail.titre:SetText("")
-	detail.sousTitre:SetText("")
-	-- SKILL_DETAIL_SELECT_PROMPT n'existe pas en 3.3.5 : on laisse vide.
+local function clearDetail()
+	detail.title:SetText("")
+	detail.subtitle:SetText("")
+	-- SKILL_DETAIL_SELECT_PROMPT does not exist in 3.3.5: left empty.
 	detail.description:SetText("")
-	detail.separateur:Hide()
-	detail.jauge:Hide()
+	detail.separator:Hide()
+	detail.gauge:Hide()
 end
 
-local function majDetail()
+local function updateDetail()
 	if not detail then
 		return
 	end
 
-	if not choisie then
-		dernieresDonnees = nil
-		viderDetail()
+	if not selectedItem then
+		lastData = nil
+		clearDetail()
 		return
 	end
 
-	local index = indiceDe(choisie)
-	local donnees
+	local index = indexOf(selectedItem)
+	local data
 	if index then
 		if SetSelectedSkill and GetSelectedSkill and GetSelectedSkill() ~= index then
 			SetSelectedSkill(index)
 		end
-		donnees = lireCompetence(index)
-		dernieresDonnees = donnees
+		data = readSkill(index)
+		lastData = data
 	else
-		donnees = dernieresDonnees
+		data = lastData
 	end
 
-	if not donnees or donnees.entete then
-		viderDetail()
+	if not data or data.header then
+		clearDetail()
 		return
 	end
 
-	detail.titre:SetText(donnees.nom or "")
-	detail.sousTitre:SetText("")
-	detail.separateur:Show()
-	detail.jauge:Show()
-	poserBarreDans(detail.jauge, donnees, RANG_L)
-	detail.description:SetText(donnees.description or "")
+	detail.title:SetText(data.name or "")
+	detail.subtitle:SetText("")
+	detail.separator:Show()
+	detail.gauge:Show()
+	placeBarIn(detail.gauge, data, RANK_W)
+	detail.description:SetText(data.description or "")
 end
-ForeverUI.SkillsDetail = majDetail
+ForeverUI.SkillsDetail = updateDetail
 
-local function choisir(nom)
-	choisie = nom
-	local index = indiceDe(nom)
+local function choose(name)
+	selectedItem = name
+	local index = indexOf(name)
 	if index and SetSelectedSkill then
 		SetSelectedSkill(index)
 	end
-	poserListe()
+	layoutList()
 end
-ForeverUI.SkillsSelect = choisir
+ForeverUI.SkillsSelect = choose
 
--- SelectFirstSkillIfNoneSelected : a l'ouverture, la premiere competence qui
--- n'est pas un en-tete est choisie -- un volet droit vide "reads as broken",
--- dit la source.
-local function choisirLaPremiere()
-	if choisie then
+-- SelectFirstSkillIfNoneSelected: on opening, select the first non-header skill so the
+-- right pane is not empty.
+local function selectFirst()
+	if selectedItem then
 		return
 	end
-	for rang = 1, (GetNumSkillLines and GetNumSkillLines()) or 0 do
-		local donnees = lireCompetence(rang)
-		if donnees and not donnees.entete then
-			choisir(donnees.nom)
+	for rank = 1, (GetNumSkillLines and GetNumSkillLines()) or 0 do
+		local data = readSkill(rank)
+		if data and not data.header then
+			choose(data.name)
 			return
 		end
 	end
 end
 
-local function monterDetail(hote)
+-- Builds the right pane (skill detail) in host
+local function buildDetail(host)
 	if detail then
 		return detail, {}
 	end
 
-	local cadre = CreateFrame("Frame", "ForeverUISkillDetail", hote)
-	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", VOLET_DROIT_X, VOLET_DROIT_Y)
-	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", VOLET_DROIT_X2, VOLET_DROIT_Y2)
-	detail = cadre
+	local frame = CreateFrame("Frame", "ForeverUISkillDetail", host)
+	frame:SetPoint("TOPLEFT", host, "TOPLEFT", RIGHT_PANE_X, RIGHT_PANE_Y)
+	frame:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", RIGHT_PANE_X2, RIGHT_PANE_Y2)
+	detail = frame
 
-	detail.titre = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-	detail.titre:SetWidth(TITRE_L)
-	detail.titre:SetJustifyH("CENTER")
-	detail.titre:SetPoint("TOP", cadre, "TOP", 0, 0)
+	detail.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	detail.title:SetWidth(TITLE_W)
+	detail.title:SetJustifyH("CENTER")
+	detail.title:SetPoint("TOP", frame, "TOP", 0, 0)
 
-	detail.sousTitre = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	detail.sousTitre:SetWidth(TITRE_L)
-	detail.sousTitre:SetJustifyH("CENTER")
-	detail.sousTitre:SetPoint("TOP", detail.titre, "BOTTOM", 0, SOUS_TITRE_Y)
+	detail.subtitle = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	detail.subtitle:SetWidth(TITLE_W)
+	detail.subtitle:SetJustifyH("CENTER")
+	detail.subtitle:SetPoint("TOP", detail.title, "BOTTOM", 0, SUBTITLE_Y)
 
-	detail.separateur = cadre:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(detail.separateur, ATLAS_SEPARATEUR)
-	detail.separateur:SetPoint("TOP", detail.sousTitre, "BOTTOM", 0, SEPARATEUR_Y)
+	detail.separator = frame:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(detail.separator, ATLAS_SEPARATOR)
+	detail.separator:SetPoint("TOP", detail.subtitle, "BOTTOM", 0, SEPARATOR_Y)
 
-	local jauge = CreateFrame("Frame", "ForeverUISkillRank", cadre)
-	jauge:SetWidth(RANG_L)
-	jauge:SetHeight(RANG_H)
-	jauge:SetPoint("TOP", detail.separateur, "BOTTOM", 0, RANG_Y)
-	ForeverUI.CreateNineSlice(jauge, ATLAS_BARRE_FOND, JAUGE_COIN,
+	local gauge = CreateFrame("Frame", "ForeverUISkillRank", frame)
+	gauge:SetWidth(RANK_W)
+	gauge:SetHeight(RANK_H)
+	gauge:SetPoint("TOP", detail.separator, "BOTTOM", 0, RANK_Y)
+	ForeverUI.CreateNineSlice(gauge, ATLAS_BAR_BACKGROUND, GAUGE_CORNER,
 		{ 0, 0, 0, 0 }, "BACKGROUND")
-	jauge.remplissage = jauge:CreateTexture(nil, "BORDER")
-	jauge.remplissage:SetPoint("LEFT", jauge, "LEFT", 0, 0)
-	jauge.texte = jauge:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	jauge.texte:SetPoint("LEFT", jauge, "LEFT", 0, 0)
-	jauge.texte:SetPoint("RIGHT", jauge, "RIGHT", 0, 0)
-	jauge.texte:SetJustifyH("CENTER")
-	detail.jauge = jauge
+	gauge.fill = gauge:CreateTexture(nil, "BORDER")
+	gauge.fill:SetPoint("LEFT", gauge, "LEFT", 0, 0)
+	gauge.text = gauge:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	gauge.text:SetPoint("LEFT", gauge, "LEFT", 0, 0)
+	gauge.text:SetPoint("RIGHT", gauge, "RIGHT", 0, 0)
+	gauge.text:SetJustifyH("CENTER")
+	detail.gauge = gauge
 
-	-- La description, dans une boite : sans bas, un texte long disparait.
-	detail.description = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	detail.description:SetPoint("TOPLEFT", jauge, "BOTTOMLEFT", 0, DESCRIPTION_Y)
-	detail.description:SetPoint("TOPRIGHT", jauge, "BOTTOMRIGHT", 0, DESCRIPTION_Y)
-	detail.description:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT", 0, DESCRIPTION_Y2)
-	detail.description:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
+	-- Description in a box: without a bottom anchor, a long text disappears.
+	detail.description = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	detail.description:SetPoint("TOPLEFT", gauge, "BOTTOMLEFT", 0, DESCRIPTION_Y)
+	detail.description:SetPoint("TOPRIGHT", gauge, "BOTTOMRIGHT", 0, DESCRIPTION_Y)
+	detail.description:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, DESCRIPTION_Y2)
+	detail.description:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT",
 		DESCRIPTION_X2, DESCRIPTION_Y2)
 	detail.description:SetJustifyH("LEFT")
 	detail.description:SetJustifyV("TOP")
@@ -577,143 +486,142 @@ local function monterDetail(hote)
 		detail.description:SetWordWrap(true)
 	end
 
-	majDetail()
-	return cadre, {}
+	updateDetail()
+	return frame, {}
 end
 
--- --------------------------------------------------------- la construction
+-- --------------------------------------------------------- Build
 
-local function suivreSurvol()
-	for _, ligne in ipairs(lignes) do
-		if ligne:IsShown() and not ligne.entete then
-			poserSurvol(ligne)
+local function trackHover()
+	for _, row in ipairs(rows) do
+		if row:IsShown() and not row.header then
+			placeHover(row)
 		end
 	end
 end
 
-local function monter(hote)
-	local cadre = _G["SkillFrame"]
-	if not cadre or not hote then
+-- Builds the skill list in host over the client's SkillFrame
+local function build(host)
+	local frame = _G["SkillFrame"]
+	if not frame or not host then
 		return nil, {}
 	end
 
-	cadre:ClearAllPoints()
-	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
-	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", 0, 0)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+	frame:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
 
-	if panneau then
-		choisirLaPremiere()
-		return nil, { cadre }
+	if panel then
+		selectFirst()
+		return nil, { frame }
 	end
 
-	-- L'art et les lignes de 3.3.5 s'en vont : on ne garde que le cadre.
-	if cadre.SetBackdrop then
-		cadre:SetBackdrop(nil)
+	-- The 3.3.5 art and rows go away; only the frame is kept.
+	if frame.SetBackdrop then
+		frame:SetBackdrop(nil)
 	end
 
-	local hauteur = hote:GetHeight() or 0
-	if hauteur < 100 then
-		hauteur = VOLET_H
+	local height = host:GetHeight() or 0
+	if height < 100 then
+		height = PANE_H
 	end
-	local largeur = hote:GetWidth() or 0
-	if largeur < 100 then
-		largeur = VOLET_L
+	local width = host:GetWidth() or 0
+	if width < 100 then
+		width = PANE_W
 	end
-	largeur = largeur + LISTE_X2 - LISTE_X
+	width = width + LIST_X2 - LIST_X
 
-	panneau = CreateFrame("Frame", "ForeverUISkillList", cadre)
-	panneau:SetPoint("TOPLEFT", hote, "TOPLEFT", LISTE_X, LISTE_Y)
-	panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", LISTE_X2, LISTE_Y2)
-	panneau:SetWidth(largeur)
+	panel = CreateFrame("Frame", "ForeverUISkillList", frame)
+	panel:SetPoint("TOPLEFT", host, "TOPLEFT", LIST_X, LIST_Y)
+	panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", LIST_X2, LIST_Y2)
+	panel:SetWidth(width)
 
-	local place = math.floor((hauteur + LISTE_Y - LISTE_Y2) / (ENTETE_H + ECART))
-	if place < 1 then
-		place = 1
+	local position = math.floor((height + LIST_Y - LIST_Y2) / (HEADER_H + GAP))
+	if position < 1 then
+		position = 1
 	end
-	for index = 1, place do
-		local ligne = creerLigne(index, largeur)
-		ligne:SetScript("OnClick", function(self)
+	for index = 1, position do
+		local row = createRow(index, width)
+		row:SetScript("OnClick", function(self)
 			if not self.skillIndex then
 				return
 			end
-			if self.entete then
-				if self.replie then
+			if self.header then
+				if self.collapsed then
 					ExpandSkillHeader(self.skillIndex)
 				else
 					CollapseSkillHeader(self.skillIndex)
 				end
-				poserListe()
+				layoutList()
 			else
-				ForeverUI.SkillsSelect(self.skillNom)
+				ForeverUI.SkillsSelect(self.skillName)
 			end
 		end)
-		lignes[index] = ligne
+		rows[index] = row
 	end
 
-	-- LES DEUX TRAITS VIVENT SUR NOTRE PANNEAU, et non sur le cadre du
-	-- client : celui-ci voit toutes ses regions masquees a chaque passage,
-	-- sans condition, et les notres y auraient disparu avec.
-	local haut = panneau:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
-	haut:SetPoint("CENTER", panneau, "TOP", 0, 0)
+	-- Both lines live on our panel, not on the client's frame: its regions are all hidden
+	-- on every pass.
+	local top = panel:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(top, ATLAS_LINE)
+	top:SetPoint("CENTER", panel, "TOP", 0, 0)
 
-	local bas = panneau:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
-	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
+	local down = panel:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(down, ATLAS_LINE)
+	down:SetPoint("CENTER", panel, "BOTTOM", 0, 0)
 
-	-- LA BARRE DE DEFILEMENT de camelot, a droite de la liste. La meme que
-	-- la reputation : elle ne connait pas la liste, on lui donne trois
-	-- nombres et elle rend le nouveau decalage.
-	panneau.barre = ForeverUI.CreateScrollBar("ForeverUISkillsScrollBar",
-		cadre, panneau)
-	panneau.barre.surDefilement = function(nouveau)
-		decalage = nouveau
-		poserListe()
+	-- Camelot's scroll bar, right of the list, as in the reputation tab. It does not know the
+	-- list: it gets three numbers and returns the new offset.
+	panel.bar = ForeverUI.CreateScrollBar("ForeverUISkillsScrollBar",
+		frame, panel)
+	panel.bar.onScroll = function(new)
+		offset = new
+		layoutList()
 	end
-	-- SANS BARRE, LA LISTE PREND SA PLACE (regle du 28/09), comme la
-	-- reputation : bord droit de -25 a -10, lignes reposees.
-	panneau.barre.surVisibilite = function(avec)
-		local x2 = avec and LISTE_X2 or -LISTE_X
-		panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", x2, LISTE_Y2)
-		panneau:SetWidth(largeur + x2 - LISTE_X2)
-		disposer()
+	-- Without a bar the list takes its place, as in the reputation tab: right edge from -25
+	-- to -10, rows laid out again.
+	panel.bar.onVisibility = function(hasBar)
+		local x2 = hasBar and LIST_X2 or -LIST_X
+		panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", x2, LIST_Y2)
+		panel:SetWidth(width + x2 - LIST_X2)
+		layout()
 	end
 
-	panneau:SetScript("OnUpdate", suivreSurvol)
-	panneau:EnableMouseWheel(true)
-	panneau:SetScript("OnMouseWheel", function(self, sens)
+	panel:SetScript("OnUpdate", trackHover)
+	panel:EnableMouseWheel(true)
+	panel:SetScript("OnMouseWheel", function(self, direction)
 		local total = (GetNumSkillLines and GetNumSkillLines()) or 0
-		decalage = math.max(0, math.min(decalage - sens, total - visibles))
-		poserListe()
+		offset = math.max(0, math.min(offset - direction, total - visibleCount))
+		layoutList()
 	end)
 
-	poserListe()
-	choisirLaPremiere()
-	return nil, { cadre }
+	layoutList()
+	selectFirst()
+	return nil, { frame }
 end
 
-ForeverUI.SkillsTab = { Build = monter, BuildRight = monterDetail, Rows = lignes }
+ForeverUI.SkillsTab = { Build = build, BuildRight = buildDetail, Rows = rows }
 
--- TEMOIN -- /fui skills.
+-- Debug output: /fui skills.
 function ForeverUI.SkillsDebug()
-	local dire = function(texte)
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	local say = function(text)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. text)
 	end
 
 	local total = (GetNumSkillLines and GetNumSkillLines()) or 0
-	dire(string.format(L.SKILLSTAB_DEBUG_SUMMARY,
-		total, decalage, visibles, tostring(choisie)))
-	for rang = 1, total do
-		local d = lireCompetence(rang)
+	say(string.format(L.SKILLSTAB_DEBUG_SUMMARY,
+		total, offset, visibleCount, tostring(selectedItem)))
+	for rank = 1, total do
+		local d = readSkill(rank)
 		if d then
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				L.SKILLSTAB_DEBUG_ROW,
-				rang, d.nom, tostring(d.entete), tostring(d.replie), d.texte))
+				rank, d.name, tostring(d.header), tostring(d.collapsed), d.text))
 		end
 	end
 end
 
--- Le client refait sa liste dans SkillFrame_UpdateSkills : on passe apres.
+-- The client rebuilds its list in SkillFrame_UpdateSkills: run after it.
 if hooksecurefunc and type(_G["SkillFrame_UpdateSkills"]) == "function" then
-	hooksecurefunc("SkillFrame_UpdateSkills", poserListe)
+	hooksecurefunc("SkillFrame_UpdateSkills", layoutList)
 end

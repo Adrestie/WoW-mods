@@ -1,172 +1,102 @@
--- ForeverUI : le courrier (MailFrame : boite de reception et envoi ;
--- OpenMailFrame : la lettre ouverte), a la DA de camelot (demande de
--- l'utilisateur, 2026-09-28 : « fait le reste du commerce »).
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (MailFrame.xml / .lua de 3.3.5,
--- FrameXML) :
---   MailFrame 384 x 512 a TOPLEFT (0, -104) : Mail-Icon (sans nom, 58 x 58 a
---     (10, -8)), MailFrameTopLeft / TopRight / BotLeft / BotRight (art
---     change par MailFrameTab_OnClick) ; InboxCloseButton ; MailFrameTab1 /
---     Tab2 (FriendsFrameTabTemplate) BOTTOMLEFT (24, 44) ;
---   InboxFrame : InboxTitleText, MailItem1 (28, -80) et six dessous (305 x
---     45), InboxCurrentPage BOTTOM (-14, 96), Prev / Next CENTER sur
---     BOTTOMLEFT (50 / 314, 104), InboxTooMuchMail TOP (0, -38) ;
---   SendMailFrame : SendMailTitleText, les barres UI-ClassTrainer-
---     HorizontalBar (15, -350) et -Left2 (reposee), SendMailScrollFrame
---     (UIPanelScrollFrameTemplate 296 x 257 a (21, -97), fond de barre
---     UI-Character-ScrollBar), SendMailNameEditBox (105, -46) 109 x 20, le
---     sujet dessous (0, -3), SendMailCostMoneyFrame TOPRIGHT (-36, -48),
---     SendMailMoneyButton BOTTOMLEFT (30, 110), le choix envoi / contre
---     remboursement a (0, 12) de l'argent, SendMailMoneyFrame BOTTOMRIGHT sur
---     BOTTOMLEFT (183, 84), Cancel BOTTOMRIGHT (-39, 80) et Send a sa gauche ;
---     les pieces jointes placees par SendMailFrame_Update (marges 31 / 46,
---     hauteur 156) ;
---   OpenMailFrame 384 x 512 sur InboxFrame (-10, 0) : son art, son titre
---     OPENMAIL, expediteur (114, -45) et sujet (114, -65), Report Spam
---     TOPRIGHT (-45, -45), OpenMailScrollFrame (21, -97), les pieces jointes,
---     la barre et le texte des pieces placees par OpenMail_Update (marges
---     27 / 47, hauteur 103 ; barre a (15, 114 + hauteur)), Close / Delete /
---     Reply BOTTOMRIGHT (-39, 80).
---
--- RELEVE -- CAMELOT (blizzard_mailframe/mailframe.xml / .lua, mainline) :
---   MailFrame : ButtonFrameTemplate (338 x 424), portrait Mail-Icon
---     (SetPortraitToAsset), titre INBOX / SENDMAIL selon l'onglet ; l'encart
---     de (4, -58) sans barre de boutons a la reception, de (4, -80) avec a
---     l'envoi (MailFrameTab_OnClick) ; onglets PanelTabButtonTemplate, le
---     premier BOTTOMLEFT (14, -30), le suivant a +3 ;
---   InboxFrame : InboxFrameBg (UI-MailFrameBG 512 x 512 a (7, -62)),
---     MailItem1 (13, -70), InboxCurrentPage BOTTOM (0, 8) 192 de large, Prev
---     BOTTOMLEFT (14, 10), Next BOTTOMRIGHT (-14, 10), InboxTooMuchMail TOP
---     (0, -25), OpenAllMail (UIPanelButtonTemplate 120 x 24 CENTER sur
---     BOTTOM (0, 26)) ; le contour de qualite de la premiere piece jointe,
---     grise a 0,5 une fois la lettre lue (InboxFrame_Update) ;
---   SendMailFrame : barres (2, -337) et -Left2 (2, 96 + hauteur),
---     SendMailScrollFrame (8, -83) et sa barre MinimalScrollBar (10, -4 /
---     3), le nom (90, -30) 109 x 25 (bord gauche a -2), le sujet dessous
---     (0, 0), le cout TOPRIGHT (-4, -34), SendMailMoneyButton BOTTOMLEFT
---     (15, 37), le choix a (20, 12) de l'argent, l'argent dans son encart
---     (4, 4 / 170, 27) et son bord dore (7, 6 / 166, 25), la bourse
---     BOTTOMRIGHT sur BOTTOMLEFT (175, 8), Cancel BOTTOMRIGHT (-7, 4) ;
---     pieces jointes : fond UI-Slot-Background a (-1, 1), contour de qualite,
---     placees par SendMailFrame_Update (marges 14 / 0, hauteur 82, pas en x
---     moins 2) ;
---   OpenMailFrame : ButtonFrameTemplate a TOPLEFT sur MailFrame TOPRIGHT
---     (46, 0), titre OPENMAIL, portrait = la papeterie de la lettre ;
---     encart (4, -80) ; expediteur (105, -33) jusqu'a Report Spam (-5) ou
---     jusqu'au bord (-12) sans lui ; sujet (105, -55) ; Report Spam TOPRIGHT
---     (-12, -32) ; OpenMailScrollFrame (8, -84), barre (10, -3 / 5) ;
---     placement par OpenMail_Update (marges 14 / 47, hauteur 28, pas en x
---     plus 6 ; barre a (2, 39 + hauteur)) ; Close BOTTOMRIGHT (-6, 4).
---
--- CE QUI DIFFERE, ET POURQUOI. « 3.3.5 rhabillee » : les cadres et la
--- logique du client restent ; les placements que le client refait a chaque
--- mise a jour (pieces jointes, barres, hauteur du texte) sont refaits
--- apres lui avec les nombres de camelot. Le portrait suit la regle VALIDEE
--- (48, centre sur le trou de l'anneau). « Tout ouvrir » est porte avec les
--- fonctions de 3.3.5 (TakeInboxMoney, TakeInboxItem, delai de 0,15 s) :
--- 3.3.5 ne dit pas quel objet a echoue (MAIL_FAILED sans argument) ni si
--- une commande est en cours, le suivi des echecs de camelot manque donc. La
--- facture d'une vente garde la disposition de 3.3.5. Le choix de papeterie
--- de 3.3.5 (StationeryPopupFrame) n'est pas repris.
+-- ForeverUI: the mail windows (MailFrame inbox and send, OpenMailFrame) with Camelot's layout.
+-- The client's frames and logic stay; the layouts it redoes on every update (attachments, bars,
+-- text height) are redone after it with Camelot's numbers. Auction invoices keep the 3.3.5
+-- layout; the 3.3.5 stationery picker (StationeryPopupFrame) is not used.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 local L = ForeverUI.L
 
 local C = {}
-ForeverUI.Courrier = C
+ForeverUI.Mail = C
 
 local SEP = string.char(92)
 
 local N = {
-	fenetre = { 338, 424 },
-	portrait = { cote = 48, x = 1, y = 1.5 },
-	encart = { reception = { 4, -58, -6, 4 }, envoi = { 4, -80, -6, 26 } },
-	onglet = { x = 14, y = -30, ecart = 3 },
-	reception = { fond = { 512, 7, -62 }, premier = { 13, -70 }, page = { 0, 8, 192 },
-		precedent = { 14, 10 }, suivant = { -14, 10 }, tropDeCourrier = { 0, -25 },
-		toutOuvrir = { 120, 24, 0, 26 }, luGris = 0.5 },
-	envoi = { barre1 = { 2, -337 }, defile = { 8, -83 }, barre = { 10, -4, 3 },
-		nom = { 90, -30, 109, 25, bord = -2 }, cout = { -4, -34 }, argentBouton = { 15, 37 },
-		choix = { 20, 12 }, encartArgent = { 4, 4, 170, 27 }, bordArgent = { 7, 6, 166, 25 },
-		bourse = { 175, 8 }, annuler = { -7, 4 }, fondPiece = { -1, 1 } },
-	pieces = { envoi = { gauche = 14, droite = 0, haut = 82, pasX = -2, barreX = 2, barreY = 96 },
-		lecture = { gauche = 14, droite = 47, haut = 28, pasX = 6, barreX = 2, barreY = 39 } },
-	lecture = { place = { 46, 0 }, encart = { 4, -80, -6, 26 }, expediteur = { 105, -33 },
-		sujet = { 105, -55 }, spam = { -12, -32 }, finExpediteur = { -5, -12 },
-		defile = { 8, -84 }, barre = { 10, -3, 5 }, fermer = { -6, 4 } },
-	delaiOuverture = 0.15,
-	-- la page de la lettre : Stationery*1 pose a 252 de large, le bord dechire
-	-- de Stationery*2 opaque jusqu'a sa colonne 49 -- la page finit a 302 de
-	-- la fenetre a defilement, 310 de la fenetre. Sans barre, elle va a 4 du
-	-- bord droit de l'encart (332), comme elle est a 4 de son bord gauche :
-	-- 18 de plus, pris sur la partie gauche, etiree. Sans barre, la fenetre a
-	-- defilement et son enfant vont au bout de la page (320), et le texte
-	-- jusqu'a y laisser a droite la marge qu'il a a gauche : l'envoi (a 20 de
-	-- la page) 280, la lettre (a 10) 300
-	papeterie = { gauche = 252, sansBarre = 18, defile = 320, envoi = 280, lecture = 300 },
+	window = { 338, 424 },
+	portrait = { side = 48, x = 1, y = 1.5 },
+	inset = { inbox = { 4, -58, -6, 4 }, sending = { 4, -80, -6, 26 } },
+	tab = { x = 14, y = -30, gap = 3 },
+	inbox = { background = { 512, 7, -62 }, first = { 13, -70 }, page = { 0, 8, 192 },
+		previous = { 14, 10 }, following = { -14, 10 }, tooMuchMail = { 0, -25 },
+		openAll = { 120, 24, 0, 26 }, readGray = 0.5 },
+	sending = { bar1 = { 2, -337 }, scroll = { 8, -83 }, bar = { 10, -4, 3 },
+		name = { 90, -30, 109, 25, edge = -2 }, cost = { -4, -34 }, moneyButton = { 15, 37 },
+		choice = { 20, 12 }, moneyInset = { 4, 4, 170, 27 }, moneyBorder = { 7, 6, 166, 25 },
+		purse = { 175, 8 }, cancel = { -7, 4 }, attachmentBackground = { -1, 1 } },
+	pieces = { sending = { left = 14, right = 0, top = 82, stepX = -2, barX = 2, barY = 96 },
+		reading = { left = 14, right = 47, top = 28, stepX = 6, barX = 2, barY = 39 } },
+	reading = { position = { 46, 0 }, inset = { 4, -80, -6, 26 }, sender = { 105, -33 },
+		subject = { 105, -55 }, spam = { -12, -32 }, senderEnd = { -5, -12 },
+		scroll = { 8, -84 }, bar = { 10, -3, 5 }, close = { -6, 4 } },
+	openDelay = 0.15,
+	-- Letter page: Stationery*1 is 252 wide and Stationery*2's torn edge is opaque up to its
+	-- column 49, so the page ends at 302 in the scroll frame, 310 in the window. Without a bar,
+	-- its left part stretches by 18 to end 4 from the inset's right edge (332), as on the left;
+	-- the scroll frame and its child reach the page end (320), and the text keeps the same margin
+	-- on both sides: send (20 from the page) 280, letter (10) 300.
+	stationery = { left = 252, noBar = 18, scroll = 320, sending = 280, reading = 300 },
 }
 
 local ART = {
-	icone = "Interface" .. SEP .. "MailFrame" .. SEP .. "Mail-Icon",
-	fondReception = "Interface" .. SEP .. "ForeverUI" .. SEP .. "mailframe" .. SEP .. "ui-mailframebg",
-	marbre = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble",
-	argent = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "moneyframe",
-	papeterie = "Interface" .. SEP .. "Stationery" .. SEP .. "StationeryTest",
+	icon = "Interface" .. SEP .. "MailFrame" .. SEP .. "Mail-Icon",
+	inboxBackground = "Interface" .. SEP .. "ForeverUI" .. SEP .. "mailframe" .. SEP .. "ui-mailframebg",
+	marble = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble",
+	money = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "moneyframe",
+	stationery = "Interface" .. SEP .. "Stationery" .. SEP .. "StationeryTest",
 }
 
-local function poser(r, ...)
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
--- InsetFrameTemplate : marbre et lisere, en regions de la fenetre, cales
--- sur un repere qu'on reancre
-local function encart(f)
+-- InsetFrameTemplate: marble and trim as regions of f, anchored to a helper frame
+-- that callers re-anchor
+local function inset(f)
 	local rect = CreateFrame("Frame", nil, f)
 	rect:EnableMouse(false)
-	local marbre = f:CreateTexture(nil, "BACKGROUND")
-	marbre:SetTexture(ART.marbre, true)
-	if marbre.SetHorizTile then marbre:SetHorizTile(true) marbre:SetVertTile(true) end
-	marbre:SetAllPoints(rect)
-	rect.marbre = marbre
-	rect.lisere = Gb.NeufTranches(f, "InsetFrameTemplate", rect)
+	local marble = f:CreateTexture(nil, "BACKGROUND")
+	marble:SetTexture(ART.marble, true)
+	if marble.SetHorizTile then marble:SetHorizTile(true) marble:SetVertTile(true) end
+	marble:SetAllPoints(rect)
+	rect.marble = marble
+	rect.trim = Tpl.NineSlice(f, "InsetFrameTemplate", rect)
 	return rect
 end
 
-local function placerEncart(rect, f, e)
+local function placeInset(rect, f, e)
 	rect:ClearAllPoints()
 	rect:SetPoint("TOPLEFT", f, "TOPLEFT", e[1], e[2])
 	rect:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", e[3], e[4])
 end
 
 -- ThinGoldEdgeTemplate
-local function bordDore(f, rect)
-	local function morceau(u1, u2, v1, v2)
+local function goldBorder(f, rect)
+	local function piece(u1, u2, v1, v2)
 		local t = f:CreateTexture(nil, "ARTWORK")
-		t:SetTexture(ART.argent)
+		t:SetTexture(ART.money)
 		t:SetTexCoord(u1, u2, v1, v2)
 		return t
 	end
-	local g = morceau(0.953125, 0.9921875, 0, 0.296875)
+	local g = piece(0.953125, 0.9921875, 0, 0.296875)
 	g:SetWidth(7)
 	g:SetPoint("TOPLEFT", rect, "TOPLEFT")
 	g:SetPoint("BOTTOMLEFT", rect, "BOTTOMLEFT")
-	local d = morceau(0, 0.0546875, 0, 0.296875)
+	local d = piece(0, 0.0546875, 0, 0.296875)
 	d:SetWidth(7)
 	d:SetPoint("TOPRIGHT", rect, "TOPRIGHT")
 	d:SetPoint("BOTTOMRIGHT", rect, "BOTTOMRIGHT")
-	local m = morceau(0, 0.9921875, 0.3125, 0.609375)
+	local m = piece(0, 0.9921875, 0.3125, 0.609375)
 	m:SetPoint("TOPLEFT", g, "TOPRIGHT")
 	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT")
 	return { g, m, d }
 end
 
--- le fond de barre UI-Character-ScrollBar d'une fenetre a defilement (ses
--- deux textures, l'une nommee, l'autre non) s'eteint
-local function eteindreFondBarre(sf)
+-- Hides the UI-Character-ScrollBar background of a scroll frame (two textures, one unnamed)
+local function blankBarBackground(sf)
 	for _, r in ipairs({ sf:GetRegions() }) do
 		if r:GetObjectType() == "Texture" then
 			local t = r:GetTexture()
@@ -177,442 +107,446 @@ local function eteindreFondBarre(sf)
 	end
 end
 
--- ------------------------------------------------------------ l'onglet
+-- ------------------------------------------------------------ tabs
 
--- APRES MailFrameTab_OnClick : titre, encart, onglets
-function C.ApresOnglet()
+-- After MailFrameTab_OnClick: title, inset, tabs
+function C.AfterTab()
 	local f = MailFrame
-	local h = f.foreverHabit
+	local h = f.foreverSkin
 	if not h then return end
-	local envoi = f.selectedTab == 2
-	h.titre:SetText(envoi and SENDMAIL or INBOX)
-	placerEncart(h.encart, f, envoi and N.encart.envoi or N.encart.reception)
+	local sending = f.selectedTab == 2
+	h.title:SetText(sending and SENDMAIL or INBOX)
+	placeInset(h.inset, f, sending and N.inset.sending or N.inset.inbox)
 	local S = ForeverUI.Social
-	for i, o in ipairs(C.onglets or {}) do
-		S.choisirOnglet(o, f.selectedTab == i, true)
-		o:SetWidth(S.largeurOnglet(o))
+	for i, o in ipairs(C.tabs or {}) do
+		S.selectTab(o, f.selectedTab == i, true)
+		o:SetWidth(S.tabWidth(o))
 	end
 end
 
--- ------------------------------------------------------------ la reception
+-- ------------------------------------------------------------ inbox
 
--- APRES InboxFrame_Update : le contour de la premiere piece jointe
-function C.ApresReception()
+-- After InboxFrame_Update: quality outline of each letter's first attachment, grayed once read
+function C.AfterInbox()
 	local page = InboxFrame.pageNum or 1
 	for i = 1, INBOXITEMS_TO_DISPLAY do
 		local index = (page - 1) * INBOXITEMS_TO_DISPLAY + i
 		local b = _G["MailItem" .. i .. "Button"]
-		local lu, piece
+		local isRead, piece
 		if index <= GetInboxNumItems() then
-			local _, _, _, _, _, _, _, avecObjet, dejaLu = GetInboxHeaderInfo(index)
-			lu = dejaLu
-			if avecObjet then
+			local _, _, _, _, _, _, _, hasItem, wasRead = GetInboxHeaderInfo(index)
+			isRead = wasRead
+			if hasItem then
 				for p = 1, ATTACHMENTS_MAX_RECEIVE do
-					local nom, _, _, q = GetInboxItem(index, p)
-					if nom then piece = q break end
+					local name, _, _, q = GetInboxItem(index, p)
+					if name then piece = q break end
 				end
 			end
 		end
-		Gb.ContourQualite(b, piece)
-		if lu and piece then
-			local g = N.reception.luGris
-			b.foreverContour:SetVertexColor(g, g, g)
+		Tpl.QualityOutline(b, piece)
+		if isRead and piece then
+			local g = N.inbox.readGray
+			b.foreverOutline:SetVertexColor(g, g, g)
 		end
 	end
 end
 
--- « TOUT OUVRIR » (OpenAllMailMixin de camelot, sur les fonctions de 3.3.5)
-local ouvrir = { courrier = 1, piece = ATTACHMENTS_MAX, attente = nil }
+-- Open All (camelot OpenAllMailMixin) on 3.3.5 functions: TakeInboxMoney, TakeInboxItem, 0.15 s
+-- apart. 3.3.5 does not say which item failed (MAIL_FAILED has no argument), so Camelot's
+-- failure tracking is missing.
+local open = { mail = 1, piece = ATTACHMENTS_MAX, pending = nil }
 
-local function placesLibres()
+local function freeSlots()
 	local n = 0
-	for sac = 0, NUM_BAG_SLOTS do
-		n = n + (GetContainerNumFreeSlots(sac) or 0)
+	for bag = 0, NUM_BAG_SLOTS do
+		n = n + (GetContainerNumFreeSlots(bag) or 0)
 	end
 	return n
 end
 
-local function arreter()
-	local b = C.toutOuvrir
-	ouvrir.courrier, ouvrir.piece, ouvrir.attente = 1, ATTACHMENTS_MAX, nil
+local function stop()
+	local b = C.openAll
+	open.mail, open.piece, open.pending = 1, ATTACHMENTS_MAX, nil
 	b:Enable()
 	b:SetText(L.MAIL_OPEN_ALL)
 	b:UnregisterEvent("MAIL_INBOX_UPDATE")
 end
 
--- les lettres d'un MJ et les contre remboursements s'ouvrent a la main
-local function sauterLettre(i)
-	local _, _, _, _, _, contre, _, _, _, _, _, _, mj = GetInboxHeaderInfo(i)
-	return mj or (contre and contre > 0)
+-- GM letters and COD letters are opened by hand
+local function skipLetter(i)
+	local _, _, _, _, _, cod, _, _, _, _, _, _, isGM = GetInboxHeaderInfo(i)
+	return isGM or (cod and cod > 0)
 end
 
-local function sauterPiece(i, p)
-	local _, _, _, _, argent = GetInboxHeaderInfo(i)
-	if argent and argent > 0 then return false end
+-- Skips empty slot p of letter i, unless the letter carries money
+local function skipAttachment(i, p)
+	local _, _, _, _, money = GetInboxHeaderInfo(i)
+	if money and money > 0 then return false end
 	return GetInboxItem(i, p) == nil
 end
 
-local function lettreSuivante()
-	ouvrir.courrier = ouvrir.courrier + 1
-	ouvrir.piece = ATTACHMENTS_MAX
-	return ouvrir.courrier <= GetInboxNumItems()
+local function nextLetter()
+	open.mail = open.mail + 1
+	open.piece = ATTACHMENTS_MAX
+	return open.mail <= GetInboxNumItems()
 end
 
-local function pieceSuivante()
+-- Moves to the next letter and slot to take; false when none is left
+local function nextAttachment()
 	while true do
-		if ouvrir.courrier > GetInboxNumItems() then return false end
-		if sauterLettre(ouvrir.courrier) then
-			if not lettreSuivante() then return false end
+		if open.mail > GetInboxNumItems() then return false end
+		if skipLetter(open.mail) then
+			if not nextLetter() then return false end
 		else
-			while ouvrir.piece > 0 and sauterPiece(ouvrir.courrier, ouvrir.piece) do
-				ouvrir.piece = ouvrir.piece - 1
+			while open.piece > 0 and skipAttachment(open.mail, open.piece) do
+				open.piece = open.piece - 1
 			end
-			if ouvrir.piece > 0 then return true end
-			if not lettreSuivante() then return false end
+			if open.piece > 0 then return true end
+			if not nextLetter() then return false end
 		end
 	end
 end
 
-local function traiter()
-	if placesLibres() == 0 or not pieceSuivante() then
-		arreter()
+-- Takes the next money or item, then waits openDelay before the next one
+local function process()
+	if freeSlots() == 0 or not nextAttachment() then
+		stop()
 		return
 	end
-	local _, _, _, _, argent, _, _, nombre = GetInboxHeaderInfo(ouvrir.courrier)
-	if argent and argent > 0 then
-		TakeInboxMoney(ouvrir.courrier)
-		ouvrir.attente = N.delaiOuverture
-	elseif nombre and nombre > 0 then
-		TakeInboxItem(ouvrir.courrier, ouvrir.piece)
-		ouvrir.attente = N.delaiOuverture
+	local _, _, _, _, money, _, _, count = GetInboxHeaderInfo(open.mail)
+	if money and money > 0 then
+		TakeInboxMoney(open.mail)
+		open.pending = N.openDelay
+	elseif count and count > 0 then
+		TakeInboxItem(open.mail, open.piece)
+		open.pending = N.openDelay
 	else
-		traiter()
+		process()
 	end
 end
 
-function C.ToutOuvrir()
-	local b = C.toutOuvrir
-	ouvrir.courrier, ouvrir.piece, ouvrir.attente = 1, ATTACHMENTS_MAX, nil
-	ouvrir.nombre = GetInboxNumItems()
+function C.OpenAll()
+	local b = C.openAll
+	open.mail, open.piece, open.pending = 1, ATTACHMENTS_MAX, nil
+	open.count = GetInboxNumItems()
 	b:Disable()
 	b:SetText(L.MAIL_OPEN_ALL_OPENING)
 	b:RegisterEvent("MAIL_INBOX_UPDATE")
-	traiter()
+	process()
 end
 
-local function boutonToutOuvrir()
-	local T = N.reception.toutOuvrir
+local function buildOpenAllButton()
+	local T = N.inbox.openAll
 	local b = CreateFrame("Button", "ForeverUIOpenAllMail", InboxFrame, "UIPanelButtonTemplate")
 	b:SetWidth(T[1])
 	b:SetHeight(T[2])
 	b:SetPoint("CENTER", InboxFrame, "BOTTOM", T[3], T[4])
 	b:SetText(L.MAIL_OPEN_ALL)
-	Gb.BoutonPanneau(b)
-	b:SetScript("OnClick", C.ToutOuvrir)
-	b:SetScript("OnHide", arreter)
+	Tpl.PanelButton(b)
+	b:SetScript("OnClick", C.OpenAll)
+	b:SetScript("OnHide", stop)
 	b:SetScript("OnEvent", function()
-		-- une lettre est partie : on reprend au debut
-		if ouvrir.nombre ~= GetInboxNumItems() then
-			ouvrir.courrier, ouvrir.piece = 1, ATTACHMENTS_MAX
-			ouvrir.nombre = GetInboxNumItems()
+		-- A letter is gone: restart from the first
+		if open.count ~= GetInboxNumItems() then
+			open.mail, open.piece = 1, ATTACHMENTS_MAX
+			open.count = GetInboxNumItems()
 		end
 	end)
 	b:SetScript("OnUpdate", function(_, e)
-		if ouvrir.attente then
-			ouvrir.attente = ouvrir.attente - e
-			if ouvrir.attente <= 0 then
-				ouvrir.attente = nil
-				traiter()
+		if open.pending then
+			open.pending = open.pending - e
+			if open.pending <= 0 then
+				open.pending = nil
+				process()
 			end
 		end
 	end)
-	C.toutOuvrir = b
+	C.openAll = b
 end
 
-local function reception()
-	local R = N.reception
-	local fond = InboxFrame:CreateTexture(nil, "BACKGROUND")
-	fond:SetTexture(ART.fondReception)
-	fond:SetWidth(R.fond[1])
-	fond:SetHeight(R.fond[1])
-	fond:SetPoint("TOPLEFT", InboxFrame, "TOPLEFT", R.fond[2], R.fond[3])
-	C.fondReception = fond
+local function inbox()
+	local R = N.inbox
+	local background = InboxFrame:CreateTexture(nil, "BACKGROUND")
+	background:SetTexture(ART.inboxBackground)
+	background:SetWidth(R.background[1])
+	background:SetHeight(R.background[1])
+	background:SetPoint("TOPLEFT", InboxFrame, "TOPLEFT", R.background[2], R.background[3])
+	C.inboxBackground = background
 	InboxTitleText:SetAlpha(0)
-	poser(MailItem1, "TOPLEFT", InboxFrame, "TOPLEFT", R.premier[1], R.premier[2])
+	place(MailItem1, "TOPLEFT", InboxFrame, "TOPLEFT", R.first[1], R.first[2])
 	InboxCurrentPage:SetWidth(R.page[3])
-	poser(InboxCurrentPage, "BOTTOM", InboxFrame, "BOTTOM", R.page[1], R.page[2])
-	poser(InboxPrevPageButton, "BOTTOMLEFT", InboxFrame, "BOTTOMLEFT", R.precedent[1], R.precedent[2])
-	poser(InboxNextPageButton, "BOTTOMRIGHT", InboxFrame, "BOTTOMRIGHT", R.suivant[1], R.suivant[2])
-	poser(InboxTooMuchMail, "TOP", InboxFrame, "TOP", R.tropDeCourrier[1], R.tropDeCourrier[2])
-	boutonToutOuvrir()
-	hooksecurefunc("InboxFrame_Update", C.ApresReception)
+	place(InboxCurrentPage, "BOTTOM", InboxFrame, "BOTTOM", R.page[1], R.page[2])
+	place(InboxPrevPageButton, "BOTTOMLEFT", InboxFrame, "BOTTOMLEFT", R.previous[1], R.previous[2])
+	place(InboxNextPageButton, "BOTTOMRIGHT", InboxFrame, "BOTTOMRIGHT", R.following[1], R.following[2])
+	place(InboxTooMuchMail, "TOP", InboxFrame, "TOP", R.tooMuchMail[1], R.tooMuchMail[2])
+	buildOpenAllButton()
+	hooksecurefunc("InboxFrame_Update", C.AfterInbox)
 end
 
--- ------------------------------------------------------------ l'envoi
+-- ------------------------------------------------------------ send
 
--- APRES SendMailFrame_Update : pieces jointes, barre, hauteur du texte,
--- avec les nombres de camelot ; le contour de qualite des pieces
-function C.ApresEnvoi()
-	local P = N.pieces.envoi
-	local rangs = SendMailFrame.maxRowsShown or 1
-	local premier = SendMailAttachment1
-	local largeur = SendMailFrame:GetWidth() - P.gauche - P.droite
-	local iconeX, iconeY = premier:GetWidth() + 2, premier:GetHeight() + 2
-	local ecartX1 = math.floor((largeur - iconeX * ATTACHMENTS_PER_ROW_SEND) / (ATTACHMENTS_PER_ROW_SEND - 1))
-	local ecartX2 = math.floor((largeur - iconeX * ATTACHMENTS_PER_ROW_SEND - ecartX1 * (ATTACHMENTS_PER_ROW_SEND - 1)) / 2)
-	local ecartY1, ecartY2 = 5, 6
-	local hauteur = ecartY2 * 2 + ecartY1 * (rangs - 1) + iconeY * rangs
-	local retraitX = P.gauche + ecartX2
-	local retraitY = P.haut + ecartY2 + iconeY
-	local pasX = iconeX + ecartX1 + P.pasX
-	local pasY = iconeY + ecartY1
-	local defile = 249 - hauteur
-	SendMailScrollFrame:SetHeight(defile)
-	SendMailScrollChildFrame:SetHeight(defile)
-	poser(SendMailHorizontalBarLeft2, "TOPLEFT", SendMailFrame, "BOTTOMLEFT", P.barreX, P.barreY + hauteur)
-	-- la papeterie de camelot, toujours la meme
-	SendStationeryBackgroundLeft:SetTexture(ART.papeterie .. "1")
-	SendStationeryBackgroundRight:SetTexture(ART.papeterie .. "2")
-	local cx, cy = 0, rangs - 1
+-- After SendMailFrame_Update: attachments, bar and text height with Camelot's numbers;
+-- the attachments' quality outline
+function C.AfterSend()
+	local P = N.pieces.sending
+	local ranks = SendMailFrame.maxRowsShown or 1
+	local first = SendMailAttachment1
+	local width = SendMailFrame:GetWidth() - P.left - P.right
+	local iconX, iconY = first:GetWidth() + 2, first:GetHeight() + 2
+	local gapX1 = math.floor((width - iconX * ATTACHMENTS_PER_ROW_SEND) / (ATTACHMENTS_PER_ROW_SEND - 1))
+	local gapX2 = math.floor((width - iconX * ATTACHMENTS_PER_ROW_SEND - gapX1 * (ATTACHMENTS_PER_ROW_SEND - 1)) / 2)
+	local gapY1, gapY2 = 5, 6
+	local height = gapY2 * 2 + gapY1 * (ranks - 1) + iconY * ranks
+	local indentX = P.left + gapX2
+	local indentY = P.top + gapY2 + iconY
+	local stepX = iconX + gapX1 + P.stepX
+	local stepY = iconY + gapY1
+	local scroll = 249 - height
+	SendMailScrollFrame:SetHeight(scroll)
+	SendMailScrollChildFrame:SetHeight(scroll)
+	place(SendMailHorizontalBarLeft2, "TOPLEFT", SendMailFrame, "BOTTOMLEFT", P.barX, P.barY + height)
+	-- Camelot's stationery, always the same
+	SendStationeryBackgroundLeft:SetTexture(ART.stationery .. "1")
+	SendStationeryBackgroundRight:SetTexture(ART.stationery .. "2")
+	local cx, cy = 0, ranks - 1
 	for i = 1, ATTACHMENTS_MAX_SEND do
 		local b = _G["SendMailAttachment" .. i]
 		if cy >= 0 then
-			poser(b, "TOPLEFT", SendMailFrame, "BOTTOMLEFT", retraitX + pasX * cx, retraitY + pasY * cy)
+			place(b, "TOPLEFT", SendMailFrame, "BOTTOMLEFT", indentX + stepX * cx, indentY + stepY * cy)
 			cx = cx + 1
 			if cx >= ATTACHMENTS_PER_ROW_SEND then
 				cy, cx = cy - 1, 0
 			end
 		end
-		local nom, _, _, q = GetSendMailItem(i)
-		Gb.ContourQualite(b, nom and q or nil)
+		local name, _, _, q = GetSendMailItem(i)
+		Tpl.QualityOutline(b, name and q or nil)
 	end
 end
 
-local function envoi(f)
-	local E = N.envoi
+local function sending(f)
+	local E = N.sending
 	local s = SendMailFrame
 	SendMailTitleText:SetAlpha(0)
-	poser(SendMailHorizontalBarLeft, "TOPLEFT", s, "TOPLEFT", E.barre1[1], E.barre1[2])
-	poser(SendMailScrollFrame, "TOPLEFT", s, "TOPLEFT", E.defile[1], E.defile[2])
-	eteindreFondBarre(SendMailScrollFrame)
-	Gb.BarreA(SendMailScrollFrameScrollBar, SendMailScrollFrame, E.barre[1], E.barre[2], E.barre[3])
-	-- la barre seulement si elle sert, le texte ET LA PAGE prennent sa place
-	-- (regle du 28/09, Gb.BarreSelonContenu) : 296 / 300 / 270 du modele 3.3.5
-	local Pp = N.papeterie
-	Gb.BarreSelonContenu(SendMailScrollFrame, function(avec)
-		SendMailScrollFrame:SetWidth(avec and 296 or Pp.defile)
-		SendMailScrollChildFrame:SetWidth(avec and 300 or Pp.defile)
-		SendMailBodyEditBox:SetWidth(avec and 270 or Pp.envoi)
-		SendStationeryBackgroundLeft:SetWidth(Pp.gauche + (avec and 0 or Pp.sansBarre))
+	place(SendMailHorizontalBarLeft, "TOPLEFT", s, "TOPLEFT", E.bar1[1], E.bar1[2])
+	place(SendMailScrollFrame, "TOPLEFT", s, "TOPLEFT", E.scroll[1], E.scroll[2])
+	blankBarBackground(SendMailScrollFrame)
+	Tpl.BarAt(SendMailScrollFrameScrollBar, SendMailScrollFrame, E.bar[1], E.bar[2], E.bar[3])
+	-- The bar shows only when needed; the text and the page take its room
+	-- (296 / 300 / 270 from the 3.3.5 template)
+	local Pp = N.stationery
+	Tpl.BarByContent(SendMailScrollFrame, function(hasBar)
+		SendMailScrollFrame:SetWidth(hasBar and 296 or Pp.scroll)
+		SendMailScrollChildFrame:SetWidth(hasBar and 300 or Pp.scroll)
+		SendMailBodyEditBox:SetWidth(hasBar and 270 or Pp.sending)
+		SendStationeryBackgroundLeft:SetWidth(Pp.left + (hasBar and 0 or Pp.noBar))
 	end)
-	local nom = SendMailNameEditBox
-	nom:SetWidth(E.nom[3])
-	nom:SetHeight(E.nom[4])
-	poser(nom, "TOPLEFT", s, "TOPLEFT", E.nom[1], E.nom[2])
-	poser(SendMailNameEditBoxLeft, "TOPLEFT", nom, "TOPLEFT", -8, E.nom.bord)
-	poser(SendMailSubjectEditBox, "TOPLEFT", nom, "BOTTOMLEFT", 0, 0)
-	poser(SendMailCostMoneyFrame, "TOPRIGHT", s, "TOPRIGHT", E.cout[1], E.cout[2])
-	poser(SendMailMoneyButton, "BOTTOMLEFT", s, "BOTTOMLEFT", E.argentBouton[1], E.argentBouton[2])
-	poser(SendMailSendMoneyButton, "TOPLEFT", SendMailMoney, "TOPRIGHT", E.choix[1], E.choix[2])
-	-- l'argent : encart et bord dore, en regions de la fenetre d'envoi
-	local ea = encart(s)
-	ea:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", E.encartArgent[1], E.encartArgent[2])
-	ea:SetPoint("TOPRIGHT", s, "BOTTOMLEFT", E.encartArgent[3], E.encartArgent[4])
-	C.encartArgent = ea
-	local bord = CreateFrame("Frame", nil, s)
-	bord:EnableMouse(false)
-	bord:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", E.bordArgent[1], E.bordArgent[2])
-	bord:SetPoint("TOPRIGHT", s, "BOTTOMLEFT", E.bordArgent[3], E.bordArgent[4])
-	C.bordArgent = bord
-	C.bordDore = bordDore(s, bord)
-	poser(SendMailMoneyFrame, "BOTTOMRIGHT", s, "BOTTOMLEFT", E.bourse[1], E.bourse[2])
-	poser(SendMailCancelButton, "BOTTOMRIGHT", s, "BOTTOMRIGHT", E.annuler[1], E.annuler[2])
-	-- le fond de chaque piece jointe : UI-Slot-Background a (-1, 1)
+	local name = SendMailNameEditBox
+	name:SetWidth(E.name[3])
+	name:SetHeight(E.name[4])
+	place(name, "TOPLEFT", s, "TOPLEFT", E.name[1], E.name[2])
+	place(SendMailNameEditBoxLeft, "TOPLEFT", name, "TOPLEFT", -8, E.name.edge)
+	place(SendMailSubjectEditBox, "TOPLEFT", name, "BOTTOMLEFT", 0, 0)
+	place(SendMailCostMoneyFrame, "TOPRIGHT", s, "TOPRIGHT", E.cost[1], E.cost[2])
+	place(SendMailMoneyButton, "BOTTOMLEFT", s, "BOTTOMLEFT", E.moneyButton[1], E.moneyButton[2])
+	place(SendMailSendMoneyButton, "TOPLEFT", SendMailMoney, "TOPRIGHT", E.choice[1], E.choice[2])
+	-- Money: inset and gold border, as regions of the send frame
+	local ea = inset(s)
+	ea:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", E.moneyInset[1], E.moneyInset[2])
+	ea:SetPoint("TOPRIGHT", s, "BOTTOMLEFT", E.moneyInset[3], E.moneyInset[4])
+	C.moneyInset = ea
+	local edge = CreateFrame("Frame", nil, s)
+	edge:EnableMouse(false)
+	edge:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", E.moneyBorder[1], E.moneyBorder[2])
+	edge:SetPoint("TOPRIGHT", s, "BOTTOMLEFT", E.moneyBorder[3], E.moneyBorder[4])
+	C.moneyBorder = edge
+	C.goldBorder = goldBorder(s, edge)
+	place(SendMailMoneyFrame, "BOTTOMRIGHT", s, "BOTTOMLEFT", E.purse[1], E.purse[2])
+	place(SendMailCancelButton, "BOTTOMRIGHT", s, "BOTTOMRIGHT", E.cancel[1], E.cancel[2])
+	-- Each attachment's background: UI-Slot-Background at (-1, 1)
 	for i = 1, ATTACHMENTS_MAX do
 		local b = _G["SendMailAttachment" .. i]
 		for _, r in ipairs({ b:GetRegions() }) do
 			if r:GetObjectType() == "Texture" and r:GetDrawLayer() == "BACKGROUND" then
-				poser(r, "TOPLEFT", b, "TOPLEFT", E.fondPiece[1], E.fondPiece[2])
+				place(r, "TOPLEFT", b, "TOPLEFT", E.attachmentBackground[1], E.attachmentBackground[2])
 			end
 		end
 	end
-	hooksecurefunc("SendMailFrame_Update", C.ApresEnvoi)
+	hooksecurefunc("SendMailFrame_Update", C.AfterSend)
 end
 
--- ------------------------------------------------------------ la lettre ouverte
+-- ------------------------------------------------------------ open letter
 
--- APRES OpenMail_Update : portrait, expediteur, pieces jointes et barre avec
--- les nombres de camelot, contour de qualite
-function C.ApresLecture()
+-- After OpenMail_Update: portrait, sender, attachments and bar with Camelot's numbers,
+-- quality outline
+function C.AfterRead()
 	local o = OpenMailFrame
-	local h = o.foreverHabit
+	local h = o.foreverSkin
 	local id = InboxFrame.openMailID
 	if not h or not id or id == 0 then return end
-	local _, papeterie = GetInboxHeaderInfo(id)
-	h.portrait:SetTexture(papeterie or ART.icone)
-	local Lc = N.lecture
+	local _, stationery = GetInboxHeaderInfo(id)
+	h.portrait:SetTexture(stationery or ART.icon)
+	local Lc = N.reading
 	local fs = OpenMailSender
 	fs:ClearAllPoints()
 	fs:SetPoint("LEFT", OpenMailSenderLabel, "RIGHT", 5, 0)
 	if OpenMailReportSpamButton:IsShown() then
-		fs:SetPoint("RIGHT", OpenMailReportSpamButton, "LEFT", Lc.finExpediteur[1], 0)
+		fs:SetPoint("RIGHT", OpenMailReportSpamButton, "LEFT", Lc.senderEnd[1], 0)
 	else
-		fs:SetPoint("RIGHT", o, "RIGHT", Lc.finExpediteur[2], 0)
+		fs:SetPoint("RIGHT", o, "RIGHT", Lc.senderEnd[2], 0)
 	end
 
-	local P = N.pieces.lecture
-	local rangs = o.activeAttachmentRowPositions and #o.activeAttachmentRowPositions or 0
-	local premier = OpenMailAttachmentButton1
-	local largeur = o:GetWidth() - P.gauche - P.droite
-	local iconeX, iconeY = premier:GetWidth() + 2, premier:GetHeight() + 2
-	local ecartX1 = math.floor((largeur - iconeX * ATTACHMENTS_PER_ROW_RECEIVE) / (ATTACHMENTS_PER_ROW_RECEIVE - 1))
-	local ecartX2 = math.floor((largeur - iconeX * ATTACHMENTS_PER_ROW_RECEIVE - ecartX1 * (ATTACHMENTS_PER_ROW_RECEIVE - 1)) / 2)
-	local ecartY1, ecartY2 = 3, 3
-	local texte = OpenMailAttachmentText
-	local hauteur = ecartY2 + texte:GetHeight() + ecartY2 + iconeY * rangs + ecartY1 * (rangs - 1) + ecartY2
-	local retraitX = P.gauche + ecartX2
-	local retraitY = P.haut + ecartY2
-	local pasX = iconeX + ecartX1 + P.pasX
-	local pasY = iconeY + ecartY1
-	local defile = 305 - hauteur
-	if defile > 256 then
-		defile = 256
-		hauteur = 305 - defile
+	local P = N.pieces.reading
+	local ranks = o.activeAttachmentRowPositions and #o.activeAttachmentRowPositions or 0
+	local first = OpenMailAttachmentButton1
+	local width = o:GetWidth() - P.left - P.right
+	local iconX, iconY = first:GetWidth() + 2, first:GetHeight() + 2
+	local gapX1 = math.floor((width - iconX * ATTACHMENTS_PER_ROW_RECEIVE) / (ATTACHMENTS_PER_ROW_RECEIVE - 1))
+	local gapX2 = math.floor((width - iconX * ATTACHMENTS_PER_ROW_RECEIVE - gapX1 * (ATTACHMENTS_PER_ROW_RECEIVE - 1)) / 2)
+	local gapY1, gapY2 = 3, 3
+	local text = OpenMailAttachmentText
+	local height = gapY2 + text:GetHeight() + gapY2 + iconY * ranks + gapY1 * (ranks - 1) + gapY2
+	local indentX = P.left + gapX2
+	local indentY = P.top + gapY2
+	local stepX = iconX + gapX1 + P.stepX
+	local stepY = iconY + gapY1
+	local scroll = 305 - height
+	if scroll > 256 then
+		scroll = 256
+		height = 305 - scroll
 	end
-	OpenMailScrollFrame:SetHeight(defile)
-	OpenMailScrollChildFrame:SetHeight(defile)
-	poser(OpenMailHorizontalBarLeft, "TOPLEFT", o, "BOTTOMLEFT", P.barreX, P.barreY + hauteur)
+	OpenMailScrollFrame:SetHeight(scroll)
+	OpenMailScrollChildFrame:SetHeight(scroll)
+	place(OpenMailHorizontalBarLeft, "TOPLEFT", o, "BOTTOMLEFT", P.barX, P.barY + height)
 	if (o.itemButtonCount or 0) > 0 then
-		poser(texte, "TOPLEFT", o, "BOTTOMLEFT", retraitX,
-			retraitY + iconeY * rangs + ecartY1 * (rangs - 1) + ecartY2 + texte:GetHeight())
+		place(text, "TOPLEFT", o, "BOTTOMLEFT", indentX,
+			indentY + iconY * ranks + gapY1 * (ranks - 1) + gapY2 + text:GetHeight())
 	else
-		poser(texte, "TOPLEFT", o, "BOTTOMLEFT", P.gauche + (largeur - texte:GetWidth()) / 2,
-			retraitY + (hauteur - texte:GetHeight()) / 2 + texte:GetHeight())
+		place(text, "TOPLEFT", o, "BOTTOMLEFT", P.left + (width - text:GetWidth()) / 2,
+			indentY + (height - text:GetHeight()) / 2 + text:GetHeight())
 	end
-	if rangs > 0 and o.activeAttachmentButtons then
-		local rang = 1
+	if ranks > 0 and o.activeAttachmentButtons then
+		local rank = 1
 		local cx = o.activeAttachmentRowPositions[1].cursorxstart
-		local cxFin = o.activeAttachmentRowPositions[1].cursorxend
-		local cy = rangs - 1
+		local cxEnd = o.activeAttachmentRowPositions[1].cursorxend
+		local cy = ranks - 1
 		for _, b in pairs(o.activeAttachmentButtons) do
-			poser(b, "TOPLEFT", o, "BOTTOMLEFT", retraitX + pasX * cx, retraitY + iconeY + pasY * cy)
+			place(b, "TOPLEFT", o, "BOTTOMLEFT", indentX + stepX * cx, indentY + iconY + stepY * cy)
 			if b ~= OpenMailLetterButton and b ~= OpenMailMoneyButton then
 				local _, _, _, q = GetInboxItem(id, b:GetID())
-				Gb.ContourQualite(b, q)
+				Tpl.QualityOutline(b, q)
 			else
-				Gb.ContourQualite(b, nil)
+				Tpl.QualityOutline(b, nil)
 			end
 			cx = cx + 1
-			if cx > cxFin then
-				rang = rang + 1
+			if cx > cxEnd then
+				rank = rank + 1
 				cy = cy - 1
-				if rang <= rangs then
-					cx = o.activeAttachmentRowPositions[rang].cursorxstart
-					cxFin = o.activeAttachmentRowPositions[rang].cursorxend
+				if rank <= ranks then
+					cx = o.activeAttachmentRowPositions[rank].cursorxstart
+					cxEnd = o.activeAttachmentRowPositions[rank].cursorxend
 				end
 			end
 		end
 	end
 end
 
-local function lecture()
+local function reading()
 	local o = OpenMailFrame
-	local Lc = N.lecture
+	local Lc = N.reading
 	for _, r in ipairs({ OpenMailFrameIcon, OpenMailFrameTopLeft, OpenMailFrameTopRight, OpenMailFrameBotLeft,
 		OpenMailFrameBotRight, OpenMailTitleText }) do
 		r:SetAlpha(0)
 	end
-	o:SetWidth(N.fenetre[1])
-	o:SetHeight(N.fenetre[2])
+	o:SetWidth(N.window[1])
+	o:SetHeight(N.window[2])
 	o:SetHitRectInsets(0, 0, 0, 0)
-	poser(o, "TOPLEFT", MailFrame, "TOPRIGHT", Lc.place[1], Lc.place[2])
-	local habit = Gb.FenetrePortrait(o, {
-		portrait = ART.icone, portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = OPENMAIL,
+	place(o, "TOPLEFT", MailFrame, "TOPRIGHT", Lc.position[1], Lc.position[2])
+	local skin = Tpl.PortraitWindow(o, {
+		portrait = ART.icon, portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = OPENMAIL,
 	})
-	o.foreverHabit = habit
-	habit.encart = encart(o)
-	placerEncart(habit.encart, o, Lc.encart)
-	poser(OpenMailSenderLabel, "TOPRIGHT", o, "TOPLEFT", Lc.expediteur[1], Lc.expediteur[2])
-	poser(OpenMailSubjectLabel, "TOPRIGHT", o, "TOPLEFT", Lc.sujet[1], Lc.sujet[2])
+	o.foreverSkin = skin
+	skin.inset = inset(o)
+	placeInset(skin.inset, o, Lc.inset)
+	place(OpenMailSenderLabel, "TOPRIGHT", o, "TOPLEFT", Lc.sender[1], Lc.sender[2])
+	place(OpenMailSubjectLabel, "TOPRIGHT", o, "TOPLEFT", Lc.subject[1], Lc.subject[2])
 	OpenMailSender:SetJustifyH("LEFT")
-	poser(OpenMailReportSpamButton, "TOPRIGHT", o, "TOPRIGHT", Lc.spam[1], Lc.spam[2])
-	poser(OpenMailScrollFrame, "TOPLEFT", o, "TOPLEFT", Lc.defile[1], Lc.defile[2])
-	eteindreFondBarre(OpenMailScrollFrame)
-	Gb.BarreA(OpenMailScrollFrameScrollBar, OpenMailScrollFrame, Lc.barre[1], Lc.barre[2], Lc.barre[3])
-	-- la barre seulement si elle sert, le texte ET LA PAGE prennent sa place
-	-- (296 / 276)
-	local Pp = N.papeterie
-	Gb.BarreSelonContenu(OpenMailScrollFrame, function(avec)
-		OpenMailScrollFrame:SetWidth(avec and 296 or Pp.defile)
-		OpenMailScrollChildFrame:SetWidth(avec and 296 or Pp.defile)
-		OpenMailBodyText:SetWidth(avec and 276 or Pp.lecture)
-		OpenStationeryBackgroundLeft:SetWidth(Pp.gauche + (avec and 0 or Pp.sansBarre))
+	place(OpenMailReportSpamButton, "TOPRIGHT", o, "TOPRIGHT", Lc.spam[1], Lc.spam[2])
+	place(OpenMailScrollFrame, "TOPLEFT", o, "TOPLEFT", Lc.scroll[1], Lc.scroll[2])
+	blankBarBackground(OpenMailScrollFrame)
+	Tpl.BarAt(OpenMailScrollFrameScrollBar, OpenMailScrollFrame, Lc.bar[1], Lc.bar[2], Lc.bar[3])
+	-- The bar shows only when needed; the text and the page take its room (296 / 276)
+	local Pp = N.stationery
+	Tpl.BarByContent(OpenMailScrollFrame, function(hasBar)
+		OpenMailScrollFrame:SetWidth(hasBar and 296 or Pp.scroll)
+		OpenMailScrollChildFrame:SetWidth(hasBar and 296 or Pp.scroll)
+		OpenMailBodyText:SetWidth(hasBar and 276 or Pp.reading)
+		OpenStationeryBackgroundLeft:SetWidth(Pp.left + (hasBar and 0 or Pp.noBar))
 	end)
-	poser(OpenMailCancelButton, "BOTTOMRIGHT", o, "BOTTOMRIGHT", Lc.fermer[1], Lc.fermer[2])
-	Gb.Croix(OpenMailCloseButton, o)
+	place(OpenMailCancelButton, "BOTTOMRIGHT", o, "BOTTOMRIGHT", Lc.close[1], Lc.close[2])
+	Tpl.CloseButton(OpenMailCloseButton, o)
 	OpenMailCloseButton:SetFrameLevel(o:GetFrameLevel() + 22)
-	hooksecurefunc("OpenMail_Update", C.ApresLecture)
+	hooksecurefunc("OpenMail_Update", C.AfterRead)
 end
 
--- ------------------------------------------------------------ la fenetre
+-- ------------------------------------------------------------ window
 
-local function onglets(f)
+local function tabs(f)
 	local S = ForeverUI.Social
-	local O = N.onglet
-	C.onglets = {}
-	for i, texte in ipairs({ INBOX, SENDMAIL }) do
-		local o = S.creerOnglet(f, "ForeverUIMailTab" .. i, false)
-		o:SetText(texte)
+	local O = N.tab
+	C.tabs = {}
+	for i, text in ipairs({ INBOX, SENDMAIL }) do
+		local o = S.createTab(f, "ForeverUIMailTab" .. i, false)
+		o:SetText(text)
 		if i == 1 then
 			o:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", O.x, O.y)
 		else
-			o:SetPoint("TOPLEFT", C.onglets[i - 1], "TOPRIGHT", O.ecart, 0)
+			o:SetPoint("TOPLEFT", C.tabs[i - 1], "TOPRIGHT", O.gap, 0)
 		end
-		-- ce que fait l'onglet du client
+		-- Does what the client's tab does
 		o:SetScript("OnClick", function()
 			MailFrameTab_OnClick(_G["MailFrameTab" .. i], i)
 		end)
-		C.onglets[i] = o
+		C.tabs[i] = o
 		ForeverUI.Suppress(_G["MailFrameTab" .. i])
 	end
 end
 
-function C.Habiller()
+function C.Skin()
 	local f = MailFrame
-	if not f or f.foreverHabit then return end
-	-- l'art de 3.3.5 : l'icone sans nom et les quatre morceaux
+	if not f or f.foreverSkin then return end
+	-- 3.3.5 art: the unnamed icon and the four corner pieces
 	for _, r in ipairs({ f:GetRegions() }) do
 		if r:GetObjectType() == "Texture" then
 			r:SetAlpha(0)
 		end
 	end
-	f:SetWidth(N.fenetre[1])
-	f:SetHeight(N.fenetre[2])
+	f:SetWidth(N.window[1])
+	f:SetHeight(N.window[2])
 	f:SetHitRectInsets(0, 0, 0, 0)
-	local habit = Gb.FenetrePortrait(f, {
-		portrait = ART.icone, portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = INBOX,
+	local skin = Tpl.PortraitWindow(f, {
+		portrait = ART.icon, portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = INBOX,
 	})
-	f.foreverHabit = habit
-	habit.encart = encart(f)
-	-- la reception et l'envoi remplissent la fenetre (TOPLEFT / BOTTOMRIGHT)
+	f.foreverSkin = skin
+	skin.inset = inset(f)
+	-- Inbox and send frames fill the window (TOPLEFT / BOTTOMRIGHT)
 	for _, c in ipairs({ InboxFrame, SendMailFrame }) do
 		c:ClearAllPoints()
 		c:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
 		c:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
-		-- (la taille suit les ancres ; posee aussi, pour qui la lit tout de suite)
-		c:SetWidth(N.fenetre[1])
-		c:SetHeight(N.fenetre[2])
+		-- (the size follows the anchors; also set for code that reads it right away)
+		c:SetWidth(N.window[1])
+		c:SetHeight(N.window[2])
 	end
-	Gb.Croix(InboxCloseButton, f)
+	Tpl.CloseButton(InboxCloseButton, f)
 	InboxCloseButton:SetFrameLevel(f:GetFrameLevel() + 22)
-	reception()
-	envoi(f)
-	lecture()
-	onglets(f)
-	hooksecurefunc("MailFrameTab_OnClick", C.ApresOnglet)
-	C.ApresOnglet()
+	inbox()
+	sending(f)
+	reading()
+	tabs(f)
+	hooksecurefunc("MailFrameTab_OnClick", C.AfterTab)
+	C.AfterTab()
 end
 
-C.Habiller()
+C.Skin()

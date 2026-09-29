@@ -1,42 +1,7 @@
--- ForeverUI : le cadre de cible.
---
--- RELEVE DES SOURCES -- tout ce qui suit vient du code extrait, pas d'une
--- mesure ni d'une estimation.
---
--- mainline/TargetFrame.xml
---   cadre 232 x 100, portrait 58 x 58 ancre TOPRIGHT (-26, -19), art du cadre
---   centre, bandeau de reputation UI-HUD-UnitFrame-Target-PortraitOn-Type
---   ancre TOPRIGHT (-75, -25), cercle de niveau BOTTOMRIGHT (-13, 7).
---
--- mainline/TargetFrame.lua, TargetFrameMixin:CheckClassification
---   C'est le code, et non le XML, qui pose les barres -- il les replace a
---   chaque changement de cible :
---     ordinaire et rare : barre de vie 126 x 20, BOTTOMRIGHT sur le point
---       LEFT du conteneur en (149, -10) ; le point LEFT vaut (0, 50) dans un
---       cadre de 232 x 100, donc le coin bas droit tombe en (149, 40) et le
---       haut de la barre a 40 du haut : TOPLEFT (23, -40).
---     negligeable (minus) : barre 125 x 12 en (148, -1), soit TOPLEFT
---       (23, -39), et la barre de ressource est MASQUEE.
---   La barre de ressource suit le XML : TOPRIGHT sur le BOTTOMRIGHT de la
---   barre de vie en (8, -1), soit TOPLEFT (23, -61) pour 134 x 10.
---   Art du cadre : MinusMob si negligeable, Rare si rare ou rare elite,
---   PortraitOn sinon. Lueur de menace : la variante MinusMob ou la normale.
---
--- camelot/TargetFrameUtils.lua, GetBossPortraitFrameData
---   boss        : Boss-Gold-Winged, ancre TOPRIGHT/TOPRIGHT (11, -4)
---   rare/rare elite : Boss-Rare-Silver-Winged (8, -7)
---   elite       : Boss-Gold (0, 1)
---   et ShouldShowStar rend toujours faux : pas d'etoile sur camelot.
---   NOTE : la variante ailee argentee n'existe pas dans la table d'atlas de ce
---   build du client (seulement en c60) ; on prend donc l'argente simple aux
---   memes decalages, faute de mieux.
---
--- camelot/TargetFrame.lua, TargetFrameMixin:OnLoad et CheckFaction
---   nom : largeur 117, TOPLEFT sur le TOPRIGHT du bandeau en (-133, -1),
---   soit (24, -26) dans le cadre ; niveau centre sur son cercle a (0, -0.5).
---   LA COULEUR DE REACTION VA SUR LE BANDEAU, pas sur la barre de vie :
---   ReputationColor prend UnitSelectionColor, et passe en gris (0.5) avec le
---   portrait quand la cible est verrouillee par quelqu'un d'autre.
+-- Target frame and target-of-target frame, rebuilt from camelot.
+-- Sizes and anchors: mainline/TargetFrame.xml; bars and art: CheckClassification in
+-- mainline/TargetFrame.lua; name, level and reaction color: camelot/TargetFrame.lua
+-- (TargetFrameMixin:OnLoad, CheckFaction).
 
 local FRAME_WIDTH, FRAME_HEIGHT = 232, 100
 local L = ForeverUI.L
@@ -55,7 +20,9 @@ local HEALTH_FILL = {
 	minus = "ui-hud-unitframe-target-minusmob-portraiton-bar-health",
 }
 
--- Geometrie posee par CheckClassification, reprise telle quelle.
+-- Bar geometry set by CheckClassification (in code, not XML, on every target change):
+-- health 126 x 20 at TOPLEFT (23, -40), power 134 x 10 at (23, -61); minus mobs: health
+-- 125 x 12 at (23, -39) and no power bar.
 local BAR_LAYOUT = {
 	normal = { health = { 23, -40, 126, 20 }, power = { 23, -61, 134, 10 }, showPower = true },
 	minus = { health = { 23, -39, 125, 12 }, power = nil, showPower = false },
@@ -77,33 +44,16 @@ local POWER_FILL = {
 	},
 }
 
--- Les couleurs de reaction du client 3.3.5 : rouge, orange, jaune, vert.
--- L'elite ne change pas le cadre mais l'anneau du portrait : un dragon dore,
--- argente pour un rare elite, aile pour un boss de monde. C'est la meme
--- logique que BossPortraitFrameTexture dans la source. Feuille :
--- interface/hud/uiunitframeboss.blp.
--- CE SONT LES VARIANTES c60 QU'IL FAUT PRENDRE. Le code camelot demande
--- Boss-Rare-Silver-Winged, un nom qui n'existe QUE sous la forme c60 dans la
--- table d'atlas du client : c'est donc ce jeu-la que camelot utilise. Les
--- variantes de base sont plus petites (80x79 contre 100x100), et comme
--- l'ancrage se fait par le coin haut droit, chacune tombait a cote d'une
--- distance differente -- exactement le defaut constate.
+-- Portrait ring by classification (camelot GetBossPortraitFrameData): gold for elite,
+-- silver winged for rare and rare elite, gold winged for world boss, anchored TOPRIGHT with
+-- these offsets; no star (ShouldShowStar is always false). Sheet: interface/hud/uiunitframeboss.blp.
+-- Boss-Rare-Silver-Winged exists only as c60, so camelot uses the c60 set. The base
+-- variants are smaller (80x79 vs 100x100) and, anchored by their top-right, land off.
 local CLASS_RING = {
 	worldboss = { "ui-hud-unitframe-target-portraiton-boss-gold-winged-c60", 11, -4 },
 	rareelite = { "ui-hud-unitframe-target-portraiton-boss-rare-silver-winged-c60", 8, -7 },
 	rare = { "ui-hud-unitframe-target-portraiton-boss-rare-silver-winged-c60", 8, -7 },
 	elite = { "ui-hud-unitframe-target-portraiton-boss-gold-c60", 0, 1 },
-}
-
-local REACTION_COLOR = {
-	[1] = { 1.0, 0.0, 0.0 },   -- hostile
-	[2] = { 1.0, 0.0, 0.0 },
-	[3] = { 1.0, 0.5, 0.0 },   -- prudent
-	[4] = { 1.0, 1.0, 0.0 },   -- neutre
-	[5] = { 0.0, 1.0, 0.0 },   -- amical
-	[6] = { 0.0, 1.0, 0.0 },
-	[7] = { 0.0, 1.0, 0.0 },
-	[8] = { 0.0, 1.0, 0.0 },
 }
 
 local frame = CreateFrame("Button", "ForeverUITargetFrame", UIParent, "SecureUnitButtonTemplate")
@@ -118,7 +68,7 @@ frame:SetAttribute("*type1", "target")
 frame:SetAttribute("*type2", "menu")
 frame:RegisterForClicks("AnyUp")
 frame.menu = function(self)
-	ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, TargetFrameDropDown, self, 120, 10)
+	ForeverUI.UnitMenu.open(ToggleDropDownMenu, 1, nil, TargetFrameDropDown, self, 120, 10)
 end
 
 local portrait = frame:CreateTexture(nil, "BACKGROUND")
@@ -136,13 +86,13 @@ local art = frame:CreateTexture(nil, "ARTWORK")
 art:SetPoint("CENTER", 0, 0)
 ForeverUI.SetAtlas(art, ART.normal)
 
--- Le bandeau de reputation : c'est LUI qui porte la couleur de reaction.
+-- Reputation band: it carries the reaction color, not the health bar.
 local reputation = frame:CreateTexture(nil, "BACKGROUND")
 reputation:SetPoint("TOPRIGHT", -75, -25)
 ForeverUI.SetAtlas(reputation, "ui-hud-unitframe-target-portraiton-type")
 
--- Comme pour le cadre joueur : tout ce qui doit rester au-dessus de l'art vit
--- dans un cadre fils, jamais dans le meme calque.
+-- As on the player frame: whatever must stay above the art lives in a child frame, never
+-- in the same layer.
 local overlayHolder = CreateFrame("Frame", nil, frame)
 overlayHolder:SetAllPoints(frame)
 overlayHolder:SetFrameLevel(frame:GetFrameLevel() + 1)
@@ -152,13 +102,10 @@ threatGlow:SetPoint("CENTER", frame, "CENTER", 1.5, 1)
 ForeverUI.SetAtlas(threatGlow, THREAT_GLOW.normal)
 threatGlow:Hide()
 
--- L'anneau : GetBossPortraitFrameData l'ancre TOPRIGHT sur le TOPRIGHT du
--- conteneur, avec ses propres decalages. Calque : la source le met en
--- ARTWORK sous-niveau 2 du conteneur, donc au-dessus de l'art du cadre et de
--- la lueur de menace, mais SOUS le contenu -- barres, nom et cercle de
--- niveau, qui vivent dans un cadre frere pose par-dessus. Ici : BORDER du
--- porteur, donc au-dessus de la lueur (BACKGROUND) et sous le cercle de
--- niveau (ARTWORK) et le texte (OVERLAY).
+-- Ring: GetBossPortraitFrameData anchors it TOPRIGHT on the container. The source puts it
+-- in ARTWORK sublevel 2, above the frame art and threat glow but below the bars, name and
+-- level circle. Here: BORDER of the holder, above the glow (BACKGROUND) and below the level
+-- circle (ARTWORK) and the text (OVERLAY).
 local classRing = overlayHolder:CreateTexture(nil, "BORDER")
 classRing:Hide()
 
@@ -196,9 +143,8 @@ frame.healthText = healthText
 frame.powerText = powerText
 frame.overlayHolder = overlayHolder
 
--- Quelle famille d'art pour cette cible : negligeable, rare, ou ordinaire.
--- Deux choses distinctes : la famille d'art du cadre (ordinaire, rare,
--- negligeable) et l'anneau porte par le portrait (elite, rare, boss).
+-- Target classification. It picks two separate things: the frame art family (normal, rare,
+-- minus) and the portrait ring (elite, rare, boss).
 local function classification()
 	return (UnitClassification and UnitClassification("target")) or "normal"
 end
@@ -213,14 +159,9 @@ local function artKindFor(class)
 	return "normal"
 end
 
--- Eclaircir sans deteindre : on multiplie jusqu'a ce que la composante la
--- plus forte atteigne 1, sans depasser ce que l'image grise retire. Un simple
--- facteur commun ecreterait les couleurs claires -- le brun du guerrier
--- virerait au jaune pale.
--- CheckFaction de camelot : le bandeau prend la couleur de selection, et le
--- bandeau comme le portrait passent au gris quand la cible est verrouillee
--- par quelqu'un d'autre. En 3.3.5 "verrouillee" se lit avec UnitIsTapped et
--- UnitIsTappedByPlayer, la fonction UnitIsTapDenied n'existant pas.
+-- camelot CheckFaction: the band takes the selection color; band and portrait turn grey
+-- when the target is tapped by someone else. 3.3.5 has no UnitIsTapDenied, so this uses
+-- UnitIsTapped and UnitIsTappedByPlayer.
 local function updateFaction()
 	local tapDenied = UnitIsTapped and UnitIsTapped("target")
 		and not UnitIsTappedByPlayer("target") and not UnitPlayerControlled("target")
@@ -236,8 +177,8 @@ local function updateFaction()
 	end
 end
 
--- Recopie de TargetFrameMixin:CheckClassification : l'art, la lueur, mais
--- aussi la taille ET la position des barres, que le code repose a chaque fois.
+-- Copy of TargetFrameMixin:CheckClassification: art, glow, and the bars' size and
+-- position, which it sets again every time.
 local function updateArt()
 	local class = classification()
 	local artKind = artKindFor(class)
@@ -302,6 +243,7 @@ local function updatePower()
 	ForeverUI.SetAtlasFill(powerFill, atlas, fraction, layout.power[3])
 end
 
+-- Health and power texts: shown with the targetStatusText CVar or on hover.
 local function updateTexts()
 	local always = GetCVar and GetCVar("targetStatusText") == "1"
 	if not (always or frame.hovered) then
@@ -344,8 +286,8 @@ local function updatePortrait()
 	SetPortraitTexture(portrait, "target")
 end
 
--- Menace : la cible tient-elle l'aggro sur quelqu'un. Meme lecture de secours
--- que sur le cadre joueur, les donnees de menace n'etant pas garanties.
+-- Threat: whether the target holds aggro on someone. Falls back on UnitAffectingCombat,
+-- like the player frame, since threat data is not guaranteed.
 local function updateThreat()
 	if not UnitExists("target") then
 		threatGlow:Hide()
@@ -468,18 +410,17 @@ frame:RegisterEvent("UNIT_MAXFOCUS")
 frame:RegisterEvent("UNIT_MAXENERGY")
 frame:RegisterEvent("UNIT_MAXRUNIC_POWER")
 
--- Le cadre n'existe que quand une cible existe : c'est le client qui le
--- montre et le cache, comme pour n'importe quel cadre d'unite securise.
+-- The frame exists only with a target: the client shows and hides it, like any secure
+-- unit frame.
 if RegisterUnitWatch then
 	RegisterUnitWatch(frame)
 end
 
 
--- ------------------------------------------------- cible de la cible
--- RELEVE : mainline/TargetFrame.xml TargetofTargetFrameTemplate -- 120 x 49,
--- ancre TOPRIGHT sur le BOTTOMRIGHT du cadre de cible en (12, 10), portrait
--- 37 x 37 en (5, -5), nom a droite du portrait, barre de vie 70 x 10 ancree
--- BOTTOMRIGHT sur le point RIGHT du cadre en (-6, -2.5), soit TOPLEFT (44, -17).
+-- ------------------------------------------------- Target of target
+-- mainline/TargetFrame.xml TargetofTargetFrameTemplate: 120 x 49, TOPRIGHT on the target
+-- frame's BOTTOMRIGHT at (12, 10), portrait 37 x 37 at (5, -5), name right of the portrait,
+-- health bar 70 x 10 BOTTOMRIGHT on the RIGHT point at (-6, -2.5), i.e. TOPLEFT (44, -17).
 
 local tot = CreateFrame("Button", "ForeverUITargetOfTarget", frame, "SecureUnitButtonTemplate")
 tot:SetWidth(120)
@@ -563,8 +504,6 @@ tot.healthFill = totHealth
 tot.powerFill = totPower
 tot.art = totArt
 tot.nameText = totName
-ForeverUI.TargetOfTarget = tot
-ForeverUI.TargetOfTargetUpdate = updateTargetOfTarget
 
 ForeverUI.TargetFrame = frame
 ForeverUI.Layout.Register(frame, "targetframe", L.TARGETFRAME_EDIT_LABEL, "TOPLEFT", "TOPLEFT", 250, -10)

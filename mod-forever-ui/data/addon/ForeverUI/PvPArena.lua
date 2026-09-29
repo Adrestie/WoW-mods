@@ -1,76 +1,7 @@
--- ForeverUI : les equipes d'arene, dans le volet gauche de l'onglet PvP.
---
--- DEMANDE du 2026-09-25 : mettre dans le volet gauche l'interface des equipes
--- d'arene et lui appliquer le theme de camelot. Choix de l'utilisateur :
--- trois CARTES portant la banniere de WotLK, et le detail d'une equipe dans
--- une FENETRE A PART, a cote de la feuille.
---
--- camelot N'A PAS D'EQUIPES D'ARENE : aucun fichier de camelot/ ni de shared/
--- n'appelle GetArenaTeam ni ArenaTeamRoster (seul cata/pvpframe le fait, une
--- autre famille). L'ecran se reprend donc de WotLK, habille de l'art de
--- camelot deja employe ailleurs.
---
--- RELEVE -- Interface\FrameXML\PVPFrame.lua, PVPFrame.xml et
--- PVPFrameTemplates.xml du client, lus dans l'archive :
---
---   PVPTeam_Update     les trois emplacements sont TRIES PAR TAILLE, 2, 3
---                      puis 5 ; une equipe absente laisse un emplacement
---                      grise (bouton 0,4, etendard 0,1, sans bord ni
---                      embleme) qui porte PVP_TEAMSIZE "(2v2)" en
---                      GameFontDisableLarge
---   une equipe         nom, ARENA_TEAM_RATING et la cote ; ARENA_THIS_WEEK,
---                      puis GAMES, WIN_LOSS et PLAYED : "joues (pct%)", en
---                      ROUGE sous 10 %
---   l'etendard         PVPTeamStandardTemplate : la hampe (Elements, 50 x 13
---                      en (-8, 6)), la banniere PVP-Banner-<taille> 45 x 90
---                      TOP sur la hampe (5, -2) et teintee, le bord
---                      PVP-Banner-<taille>-Border-<n> centre, l'embleme
---                      Icons\PVP-Banner-Emblem-<n> 24 x 24 en (-5, 17) ;
---                      -1 = pas de bord, pas d'embleme
---   l'infobulle        GameTooltip_AddNewbieTip : ARENA_TEAM, puis
---                      CLICK_FOR_DETAILS, ou ARENA_TEAM_LEAD_IN sans equipe
---   le clic            PVPTeam_OnClick : ouvre le detail de l'equipe, ou le
---                      referme si c'est deja elle
---   hors saison        GetCurrentArenaSeason() == 0 : les trois cartes s'en
---                      vont, ARENA_OFF_SEASON_TEXT les remplace
---   points d'arene     PVP_LABEL_ARENA "ARENA:" en GameFontHighlightSmall,
---                      GetArenaCurrency en GameFontNormal a +15, l'icone
---                      PVP-ArenaPoints-Icon 17 x 15 a +5 ; infobulle
---                      ARENA_POINTS / TOOLTIP_ARENA_POINTS
---
--- LA BASCULE SEMAINE / SAISON N'EST PAS SUR LES CARTES, ET C'EST WotLK.
--- PVPTeam_Update compte ses trois emplacements -- vides compris -- et cache
--- PVPFrameToggleButton quand le compte vaut trois : il le vaut toujours. Les
--- cartes montrent donc la semaine ; la saison se lit dans la fenetre de
--- detail, qui a sa propre bascule.
---
--- LA FENETRE DE DETAIL -- PVPTeamDetails, 400 x 355 :
---   en-tete    nom et taille ; ARENA_THIS_WEEK / _SEASON en capitales ;
---              GAMES, WIN_LOSS, RANK et ARENA_TEAM_RATING, colonnes
---              centrees a 170, 222, 274 et 326
---   colonnes   NAME 110, CLASS 80, PLAYED 55, WIN_LOSS 75, RATING 59,
---              chevauchees de 2, WhoFrame-ColumnTabs ; clic =
---              SortArenaTeamRoster(name, class, played|seasonplayed,
---              won|seasonwon, rating)
---   membres    dix lignes de 16, ecart 3, a (15, -115) : nom 104, classe 73,
---              joues 45 (infobulle : le pourcentage), victoires-defaites 72,
---              cote 54 ; blanc en ligne, OR pour le capitaine (rang 0), gris
---              hors ligne ; joues en rouge sous 10 % ; clic gauche =
---              SetArenaTeamRosterSelection, droit = PVPFrame_ShowDropdown
---   boutons    ADDMEMBER_TEAM 100 x 22 (StaticPopup ADD_TEAMMEMBER) ; la
---              fleche UI-SpellbookIcon-NextPage 32 x 32 a (-17, 17) et son
---              texte ARENA_THIS_SEASON_TOGGLE / _WEEK_TOGGLE a sa gauche
---   ouverture  ArenaTeamRoster(id) ; fermeture CloseArenaTeamRoster()
---
--- CE QUE LE CLIENT GARDE POUR LUI, ET CE QU'ON LUI PRETE.
--- Le menu d'un membre (UnitPopup "TEAM") et la fenetre d'ajout
--- (ADD_TEAMMEMBER) lisent PVPTeamDetails.team, et le menu ne propose
--- TEAM_PROMOTE / KICK / LEAVE que si PVPTeamDetails:IsShown(). On TIENT
--- donc ce cadre du client a jour : son equipe est la notre, et il est
--- "montre" -- son drapeau, pas son affichage : il vit sous PVPFrame, que
--- l'onglet eteint, et IsShown ne regarde que le cadre lui-meme. Il reste
--- invisible, et PVPFrame_OnEvent continue de lui redemander la liste quand
--- le serveur l'annonce.
+-- ForeverUI: arena teams in the left pane of the PvP tab, and a team detail window beside it.
+-- camelot has no arena teams, so the screen follows the 3.3.5 PVPFrame (PVPTeam_Update,
+-- PVPTeamDetails) in camelot art. As in 3.3.5, cards show this week only (PVPTeam_Update
+-- always hides the toggle); the detail window has its own week / season toggle.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -82,117 +13,107 @@ ForeverUI.PvPArena = A
 local SEP = string.char(92)
 local PVP = "Interface" .. SEP .. "PVPFrame" .. SEP
 local ELEMENTS = PVP .. "UI-Character-PVP-Elements"
-local ICONE_POINTS = PVP .. "PVP-ArenaPoints-Icon"
-local ONGLETS_COLONNE = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "WhoFrame-ColumnTabs"
-local SURBRILLANCE_COLONNE = "Interface" .. SEP .. "PaperDollInfoFrame" .. SEP .. "UI-Character-Tab-Highlight"
-local FLECHE = "Interface" .. SEP .. "Buttons" .. SEP .. "UI-SpellbookIcon-NextPage-"
-local SURVOL_CARRE = "Interface" .. SEP .. "Buttons" .. SEP .. "UI-Common-MouseHilight"
+local POINTS_ICON = PVP .. "PVP-ArenaPoints-Icon"
+local COLUMN_TABS = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "WhoFrame-ColumnTabs"
+local COLUMN_HIGHLIGHT = "Interface" .. SEP .. "PaperDollInfoFrame" .. SEP .. "UI-Character-Tab-Highlight"
+local ARROW = "Interface" .. SEP .. "Buttons" .. SEP .. "UI-SpellbookIcon-NextPage-"
+local SQUARE_HOVER = "Interface" .. SEP .. "Buttons" .. SEP .. "UI-Common-MouseHilight"
 
-local TAILLES = { 2, 3, 5 }
-local MAX_EQUIPES = 3
-local MAX_MEMBRES = 10
+local SIZES = { 2, 3, 5 }
+local MAX_TEAMS = 3
+local MAX_MEMBERS = 10
 
--- L'ORDRE DU VOLET, du haut vers le bas (demande du 2026-09-25) : le titre
--- du rang, la jauge, le compteur de victoires, UN SEPARATEUR, le nombre de
--- points d'arene, puis la liste des equipes. Chaque morceau s'accroche au
--- precedent : le compteur au cadran (PvPTab.lua), le separateur au
--- compteur, les points au separateur ; les cartes, elles, se serrent
--- contre le bas du volet (voir CARTES_BAS).
---
--- L'HONNEUR ET SON SEPARATEUR ont pris place au-dessus de la jauge
--- (2026-09-26) : tout descend d'environ 45. Compte fait -- titre jusqu'a
--- -29, son trait jusqu'a -39, honneur -41 a -72, separateur -76 a -84,
--- cadran -84 a -238, compteur -239 a -251, separateur -255 a -263, points
--- -267 a -282 -- les cartes de 56 finissaient a -464, au ras du volet.
--- ELLES PASSENT A 52, ecart 3 : de -287 a -449.
-local VOLET_L = 398
-local CARTES_X = 16
-local CARTE_L = VOLET_L - 2 * CARTES_X
-local CARTE_H, CARTE_ECART = 52, 0     -- jointives (2026-09-26, "encore plus")
-local ATLAS_SEPARATEUR = "ui-character-info-scrollline-long"
-local SEPARATEUR_SOUS_COMPTEUR = -4
--- LES EQUIPES SONT SERREES CONTRE LE BAS DU VOLET (demande du 2026-09-26) :
--- la derniere a CARTES_BAS du bas, chacune au-dessus de la suivante ; la
--- place libre reste entre les points d'arene et la premiere.
-local CARTES_BAS = 4
-local HORS_SAISON_SOUS_POINTS = -10
-local NIVEAU = 6                        -- au-dessus du cadran (sa lueur deborde)
+-- Pane order, top to bottom: rank title, gauge, win counter, separator, arena points, teams.
+-- Each piece hangs on the previous one (the counter on the dial, PvPTab.lua); the cards sit
+-- against the pane bottom, 52 high to fit below the arena points.
+local PANE_W = 398
+local CARDS_X = 16
+local CARD_W = PANE_W - 2 * CARDS_X
+local CARD_H, CARD_GAP = 52, 0     -- no gap between cards
+local ATLAS_SEPARATOR = "ui-character-info-scrollline-long"
+local SEPARATOR_BELOW_COUNTER = -4
+-- Teams sit against the pane bottom, the last one CARDS_BOTTOM above it; the free space
+-- stays between the arena points and the first card.
+local CARDS_BOTTOM = 4
+local OFF_SEASON_BELOW_POINTS = -10
+local CARD_LEVEL = 6                        -- above the dial (its glow overflows)
 
--- L'ETENDARD, ramene de 90 a 48 de haut pour tenir dans une carte.
-local ECHELLE = 48 / 90
-local HAMPE_X, HAMPE_Y = 8, -2
-local HAMPE_L, HAMPE_H = 50 * ECHELLE, 13 * ECHELLE
-local BANNIERE_L, BANNIERE_H = 45 * ECHELLE, 90 * ECHELLE
-local BANNIERE_X, BANNIERE_Y = 5 * ECHELLE, -2 * ECHELLE
-local EMBLEME = 24 * ECHELLE
-local EMBLEME_X, EMBLEME_Y = -5 * ECHELLE, 17 * ECHELLE
+-- Banner: PVPTeamStandardTemplate scaled from 90 to 48 high to fit a card.
+local SCALE = 48 / 90
+local POLE_X, POLE_Y = 8, -2
+local POLE_W, POLE_H = 50 * SCALE, 13 * SCALE
+local BANNER_W, BANNER_H = 45 * SCALE, 90 * SCALE
+local BANNER_X, BANNER_Y = 5 * SCALE, -2 * SCALE
+local EMBLEM_SIZE = 24 * SCALE
+local EMBLEM_X, EMBLEM_Y = -5 * SCALE, 17 * SCALE
 
--- CE QUE LA CARTE ECRIT.
-local TEXTE_X = 50
-local NOM_Y, NOM_L = -7, 190
-local COTE_X, COTE_Y = -14, -8
+-- Card text
+local TEXT_X = 50
+local NAME_Y, NAME_W = -7, 190
+local RATING_X, RATING_Y = -14, -8
 local TYPE_Y = -30
-local ETIQUETTES_Y = -24
-local VALEUR_ECART = -2
-local COLONNES_CARTE = { jeux = 170, bilan = 245, joues = 320 }
-local POINTS_ECART, ICONE_ECART = 15, 5
-local ICONE_L, ICONE_H = 17, 15
+local TAGS_Y = -24
+local VALUE_GAP = -2
+local CARD_COLUMNS = { games = 170, winLoss = 245, played = 320 }
+local POINTS_GAP, ICON_GAP = 15, 5
+local ICON_W, ICON_H = 17, 15
 
--- La plaque de camelot et son survol, comme les lignes de la reputation.
-local ATLAS_PLAQUE = "common-button-list-collapseexpand"
-local PLAQUE_COIN = 12
-local ATLAS_SURVOL_COTE = "charactercreate-customize-dropdown-linemouseover-side"
-local ATLAS_SURVOL_MILIEU = "charactercreate-customize-dropdown-linemouseover-middle"
-local SURVOL_COTE = 6
-local SURVOL_ALPHA, CHOISIE_ALPHA = 0.10, 0.20
+-- camelot plate and hover, as on the reputation rows.
+local ATLAS_PLATE = "common-button-list-collapseexpand"
+local PLATE_CORNER = 12
+local ATLAS_HOVER_SIDE = "charactercreate-customize-dropdown-linemouseover-side"
+local ATLAS_HOVER_MIDDLE = "charactercreate-customize-dropdown-linemouseover-middle"
+local HOVER_SIDE = 6
+local HOVER_ALPHA, SELECTED_ALPHA = 0.10, 0.20
 
--- LA FENETRE DE DETAIL, a cote de la feuille : au-dela de ses onglets
--- lateraux (55 de large, poses a +1 de son bord) et du debord de son metal.
-local FENETRE_L, FENETRE_H = 400, 372
-local FENETRE_X, FENETRE_Y = 76, 0
-local FENETRE_NIVEAU = 10
-local COIN_HAUT_GAUCHE = "ui-frame-metal-cornertopleft"
-local FERMETURE = 24
-local FERMETURE_X, FERMETURE_Y = 1, 0
-local TITRE_Y, TITRE_L = -6, 300
+-- Detail window, beside the character sheet: past its side tabs (55 wide, at +1 from its
+-- edge) and the overhang of its metal.
+local WINDOW_W, WINDOW_H = 400, 372
+local WINDOW_X, WINDOW_Y = 76, 0
+local WINDOW_LEVEL = 10
+local TOP_LEFT_CORNER = "ui-frame-metal-cornertopleft"
+local CLOSE_SIZE = 24
+local CLOSE_X, CLOSE_Y = 1, 0
+local TITLE_Y, TITLE_W = -6, 300
 local STATS_X, STATS_Y = 20, -40
-local COLONNES_STATS = { 170, 222, 274, 326 }
-local STATS_VALEUR_ECART = -6
-local SEPARATEUR_Y = -76
-local ENTETES_X, ENTETES_Y = 15, -86
-local ENTETE_H = 24
-local ENTETES = {
-	{ texte = "NAME", largeur = 110, tri = "name" },
-	{ texte = "CLASS", largeur = 80, tri = "class" },
-	{ texte = "PLAYED", largeur = 55, tri = "played", triSaison = "seasonplayed" },
-	{ texte = "WIN_LOSS", largeur = 75, tri = "won", triSaison = "seasonwon" },
-	{ texte = "RATING", largeur = 59, tri = "rating" },
+local STATS_COLUMNS = { 170, 222, 274, 326 }
+local STATS_VALUE_GAP = -6
+local SEPARATOR_Y = -76
+local HEADERS_X, HEADERS_Y = 15, -86
+local HEADER_H = 24
+local HEADERS = {
+	{ text = "NAME", width = 110, sort = "name" },
+	{ text = "CLASS", width = 80, sort = "class" },
+	{ text = "PLAYED", width = 55, sort = "played", seasonSort = "seasonplayed" },
+	{ text = "WIN_LOSS", width = 75, sort = "won", seasonSort = "seasonwon" },
+	{ text = "RATING", width = 59, sort = "rating" },
 }
-local LIGNES_X, LIGNES_Y = 15, -115
-local LIGNE_L, LIGNE_H, LIGNE_ECART = 380, 16, 3
-local AJOUTER_L, AJOUTER_H = 100, 22
-local AJOUTER_X, AJOUTER_Y = 20, 16
-local BASCULE = 32
-local BASCULE_X, BASCULE_Y = -17, 17
+local ROWS_X, ROWS_Y = 15, -115
+local ROW_W, ROW_H, ROW_GAP = 380, 16, 3
+local ADD_W, ADD_H = 100, 22
+local ADD_X, ADD_Y = 20, 16
+local TOGGLE_SIZE = 32
+local TOGGLE_X, TOGGLE_Y = -17, 17
 
-local cartes, points, horsSaison, fenetre
-local hote
+local maps, points, offSeason, window
+local host
 
--- --------------------------------------------------------------- les donnees
+-- --------------------------------------------------------------- data
 
-local function txt(cle, defaut)
-	return _G[cle] or defaut
+-- Client global string named key, or default.
+local function txt(key, default)
+	return _G[key] or default
 end
 
--- L'emplacement de chaque taille : l'indice de GetArenaTeam, ou nil.
-local function indicesParTaille()
+-- Slot of each team size (2, 3, 5): its GetArenaTeam index, or nil.
+local function indicesBySize()
 	local indices = {}
-	for i = 1, MAX_EQUIPES do
-		local nom, taille = GetArenaTeam(i)
-		if nom then
-			for rang, t in ipairs(TAILLES) do
-				if t == taille then
-					indices[rang] = i
+	for i = 1, MAX_TEAMS do
+		local name, size = GetArenaTeam(i)
+		if name then
+			for rank, t in ipairs(SIZES) do
+				if t == size then
+					indices[rank] = i
 				end
 			end
 		end
@@ -200,276 +121,281 @@ local function indicesParTaille()
 	return indices
 end
 
-local function lireEquipe(id)
+-- All GetArenaTeam fields of team id, by name.
+local function readTeam(id)
 	local e = {}
-	local fond, embleme, bord = {}, {}, {}
-	e.nom, e.taille, e.cote, e.joues, e.victoires, e.jouesSaison,
-		e.victoiresSaison, e.mesJoues, e.mesJouesSaison, e.rang, e.maCote,
-		fond.r, fond.g, fond.b, e.embleme, embleme.r, embleme.g, embleme.b,
-		e.bord, bord.r, bord.g, bord.b = GetArenaTeam(id)
-	e.couleurFond, e.couleurEmbleme, e.couleurBord = fond, embleme, bord
+	local background, emblem, edge = {}, {}, {}
+	e.name, e.size, e.side, e.played, e.wins, e.seasonPlayed,
+		e.seasonWins, e.playerPlayed, e.seasonPlayerPlayed, e.rank, e.playerRating,
+		background.r, background.g, background.b, e.emblem, emblem.r, emblem.g, emblem.b,
+		e.edge, edge.r, edge.g, edge.b = GetArenaTeam(id)
+	e.backgroundColor, e.emblemColor, e.borderColor = background, emblem, edge
 	return e
 end
 
-local function pourcentage(part, total)
+local function percentage(part, total)
 	if total and total ~= 0 then
 		return math.floor((part / total) * 100)
 	end
 	return math.floor((part or 0) * 100)
 end
 
--- ----------------------------------------------------------- les petites pieces
+-- ----------------------------------------------------------- small pieces
 
-local function survolSur(parent)
-	local survol = CreateFrame("Frame", nil, parent)
-	survol:SetAllPoints(parent)
-	survol:SetAlpha(0)
+-- Row hover highlight (camelot dropdown line mouseover), shown by alpha.
+local function createHover(parent)
+	local hover = CreateFrame("Frame", nil, parent)
+	hover:SetAllPoints(parent)
+	hover:SetAlpha(0)
 
-	local gauche = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(gauche, ATLAS_SURVOL_COTE, true)
-	gauche:SetWidth(SURVOL_COTE)
-	gauche:SetPoint("TOPLEFT", survol, "TOPLEFT", 0, 0)
-	gauche:SetPoint("BOTTOMLEFT", survol, "BOTTOMLEFT", 0, 0)
+	local left = hover:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(left, ATLAS_HOVER_SIDE, true)
+	left:SetWidth(HOVER_SIDE)
+	left:SetPoint("TOPLEFT", hover, "TOPLEFT", 0, 0)
+	left:SetPoint("BOTTOMLEFT", hover, "BOTTOMLEFT", 0, 0)
 
-	local droite = survol:CreateTexture(nil, "BACKGROUND")
-	if ForeverUI.SetAtlas(droite, ATLAS_SURVOL_COTE, true) then
-		local e = ForeverUI.AtlasEntry(ATLAS_SURVOL_COTE)
-		droite:SetTexCoord(e[3], e[2], e[4], e[5])
+	local right = hover:CreateTexture(nil, "BACKGROUND")
+	if ForeverUI.SetAtlas(right, ATLAS_HOVER_SIDE, true) then
+		local e = ForeverUI.AtlasEntry(ATLAS_HOVER_SIDE)
+		right:SetTexCoord(e[3], e[2], e[4], e[5])
 	end
-	droite:SetWidth(SURVOL_COTE)
-	droite:SetPoint("TOPRIGHT", survol, "TOPRIGHT", 0, 0)
-	droite:SetPoint("BOTTOMRIGHT", survol, "BOTTOMRIGHT", 0, 0)
+	right:SetWidth(HOVER_SIDE)
+	right:SetPoint("TOPRIGHT", hover, "TOPRIGHT", 0, 0)
+	right:SetPoint("BOTTOMRIGHT", hover, "BOTTOMRIGHT", 0, 0)
 
-	local milieu = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(milieu, ATLAS_SURVOL_MILIEU, true)
-	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT", 0, 0)
-	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT", 0, 0)
-	return survol
+	local middle = hover:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(middle, ATLAS_HOVER_MIDDLE, true)
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
+	return hover
 end
 
-local function texte(parent, gabarit, justif)
-	local fs = parent:CreateFontString(nil, "ARTWORK", gabarit)
-	if justif then
-		fs:SetJustifyH(justif)
+local function text(parent, template, justify)
+	local fs = parent:CreateFontString(nil, "ARTWORK", template)
+	if justify then
+		fs:SetJustifyH(justify)
 	end
 	return fs
 end
 
--- Une etiquette et sa valeur dessous, centrees sur une colonne.
-local function colonne(parent, x, y, etiquette, gabaritValeur, ecart)
-	local e = texte(parent, "GameFontDisableSmall", "CENTER")
+-- Label with its value below, centred on column x.
+-- tag: label text; valueTemplate: value font; gap: space between label and value
+local function column(parent, x, y, tag, valueTemplate, gap)
+	local e = text(parent, "GameFontDisableSmall", "CENTER")
 	e:SetPoint("TOP", parent, "TOPLEFT", x, y)
-	e:SetText(etiquette)
-	local v = texte(parent, gabaritValeur or "GameFontHighlightSmall", "CENTER")
-	v:SetPoint("TOP", e, "BOTTOM", 0, ecart or VALEUR_ECART)
+	e:SetText(tag)
+	local v = text(parent, valueTemplate or "GameFontHighlightSmall", "CENTER")
+	v:SetPoint("TOP", e, "BOTTOM", 0, gap or VALUE_GAP)
 	return e, v
 end
 
--- UIPanelButtonTemplate de camelot : ForeverUI.CreatePanelButton (AtlasUtil).
-local function boutonPanneau(parent, texteBouton, largeur, hauteur)
-	return ForeverUI.CreatePanelButton(parent, texteBouton, largeur, hauteur)
+-- camelot UIPanelButtonTemplate: ForeverUI.CreatePanelButton (AtlasUtil).
+local function panelButton(parent, buttonText, width, height)
+	return ForeverUI.CreatePanelButton(parent, buttonText, width, height)
 end
 
--- Pretees au volet droit (PvPBattlegrounds.lua) : le meme survol et le meme
--- bouton de camelot.
-A.survolSur = survolSur
-A.boutonPanneau = boutonPanneau
+-- Shared with the right pane (PvPBattlegrounds.lua): same hover and same camelot button.
+A.createHover = createHover
+A.panelButton = panelButton
 
--- ------------------------------------------------------------------ les cartes
+-- ------------------------------------------------------------------ cards
 
-local function creerCarte(bloc, rang)
-	local c = CreateFrame("Button", "ForeverUIArenaTeam" .. rang, bloc)
-	c:SetWidth(CARTE_L)
-	c:SetHeight(CARTE_H)
-	c:SetFrameLevel(bloc:GetFrameLevel() + NIVEAU)
+-- Team card; rank: 1, 2, 3 for the 2v2, 3v3, 5v5 slot.
+local function createCard(block, rank)
+	local c = CreateFrame("Button", "ForeverUIArenaTeam" .. rank, block)
+	c:SetWidth(CARD_W)
+	c:SetHeight(CARD_H)
+	c:SetFrameLevel(block:GetFrameLevel() + CARD_LEVEL)
 	c:RegisterForClicks("LeftButtonUp")
-	c.taille = TAILLES[rang]
+	c.size = SIZES[rank]
 
-	c.plaque = ForeverUI.CreateNineSlice(c, ATLAS_PLAQUE, PLAQUE_COIN,
+	c.plate = ForeverUI.CreateNineSlice(c, ATLAS_PLATE, PLATE_CORNER,
 		{ 0, 0, 0, 0 }, "BACKGROUND") or {}
-	c.survol = survolSur(c)
+	c.hover = createHover(c)
 
-	-- L'ETENDARD : la hampe, la banniere teintee, son bord et l'embleme.
-	local etendard = CreateFrame("Frame", nil, c)
-	etendard:SetAllPoints(c)
-	c.etendard = etendard
-	local hampe = etendard:CreateTexture(nil, "BACKGROUND")
-	hampe:SetTexture(ELEMENTS)
-	hampe:SetTexCoord(0, 0.099609375, 0.91015625, 0.935546875)
-	hampe:SetWidth(HAMPE_L)
-	hampe:SetHeight(HAMPE_H)
-	hampe:SetPoint("TOPLEFT", c, "TOPLEFT", HAMPE_X, HAMPE_Y)
-	local banniere = etendard:CreateTexture(nil, "BORDER")
-	banniere:SetWidth(BANNIERE_L)
-	banniere:SetHeight(BANNIERE_H)
-	banniere:SetPoint("TOP", hampe, "TOP", BANNIERE_X, BANNIERE_Y)
-	local bord = etendard:CreateTexture(nil, "ARTWORK")
-	bord:SetWidth(BANNIERE_L)
-	bord:SetHeight(BANNIERE_H)
-	bord:SetPoint("CENTER", banniere, "CENTER", 0, 0)
-	local embleme = etendard:CreateTexture(nil, "OVERLAY")
-	embleme:SetWidth(EMBLEME)
-	embleme:SetHeight(EMBLEME)
-	embleme:SetPoint("CENTER", bord, "CENTER", EMBLEME_X, EMBLEME_Y)
-	c.banniere, c.bord, c.embleme = banniere, bord, embleme
+	-- Banner: pole, tinted banner, its border and the emblem.
+	local bannerFrame = CreateFrame("Frame", nil, c)
+	bannerFrame:SetAllPoints(c)
+	c.bannerFrame = bannerFrame
+	local pole = bannerFrame:CreateTexture(nil, "BACKGROUND")
+	pole:SetTexture(ELEMENTS)
+	pole:SetTexCoord(0, 0.099609375, 0.91015625, 0.935546875)
+	pole:SetWidth(POLE_W)
+	pole:SetHeight(POLE_H)
+	pole:SetPoint("TOPLEFT", c, "TOPLEFT", POLE_X, POLE_Y)
+	local bannerTexture = bannerFrame:CreateTexture(nil, "BORDER")
+	bannerTexture:SetWidth(BANNER_W)
+	bannerTexture:SetHeight(BANNER_H)
+	bannerTexture:SetPoint("TOP", pole, "TOP", BANNER_X, BANNER_Y)
+	local edge = bannerFrame:CreateTexture(nil, "ARTWORK")
+	edge:SetWidth(BANNER_W)
+	edge:SetHeight(BANNER_H)
+	edge:SetPoint("CENTER", bannerTexture, "CENTER", 0, 0)
+	local emblem = bannerFrame:CreateTexture(nil, "OVERLAY")
+	emblem:SetWidth(EMBLEM_SIZE)
+	emblem:SetHeight(EMBLEM_SIZE)
+	emblem:SetPoint("CENTER", edge, "CENTER", EMBLEM_X, EMBLEM_Y)
+	c.bannerTexture, c.edge, c.emblem = bannerTexture, edge, emblem
 
-	-- LES DONNEES, dans un cadre a part : l'emplacement vide les cache d'un
-	-- geste, comme PVPTeam<n>Data.
+	-- Team data in its own frame, so an empty slot hides it at once, like PVPTeam<n>Data.
 	local d = CreateFrame("Frame", nil, c)
 	d:SetAllPoints(c)
-	c.donnees = d
-	d.nom = texte(d, "GameFontNormal", "LEFT")
-	d.nom:SetWidth(NOM_L)
-	d.nom:SetPoint("TOPLEFT", c, "TOPLEFT", TEXTE_X, NOM_Y)
-	d.cote = texte(d, "GameFontNormalSmall", "RIGHT")
-	d.cote:SetPoint("TOPRIGHT", c, "TOPRIGHT", COTE_X, COTE_Y)
-	d.coteEtiquette = texte(d, "GameFontDisableSmall", "RIGHT")
-	d.coteEtiquette:SetPoint("RIGHT", d.cote, "LEFT", -4, 0)
-	d.coteEtiquette:SetText(ARENA_TEAM_RATING)
-	d.type = texte(d, "GameFontHighlightSmall", "LEFT")
-	d.type:SetPoint("TOPLEFT", c, "TOPLEFT", TEXTE_X, TYPE_Y)
-	d.jeuxEtiquette, d.jeux = colonne(d, COLONNES_CARTE.jeux, ETIQUETTES_Y, GAMES)
-	d.bilanEtiquette, d.bilan = colonne(d, COLONNES_CARTE.bilan, ETIQUETTES_Y, WIN_LOSS)
-	d.jouesEtiquette, d.joues = colonne(d, COLONNES_CARTE.joues, ETIQUETTES_Y, PLAYED)
+	c.data = d
+	d.name = text(d, "GameFontNormal", "LEFT")
+	d.name:SetWidth(NAME_W)
+	d.name:SetPoint("TOPLEFT", c, "TOPLEFT", TEXT_X, NAME_Y)
+	d.side = text(d, "GameFontNormalSmall", "RIGHT")
+	d.side:SetPoint("TOPRIGHT", c, "TOPRIGHT", RATING_X, RATING_Y)
+	d.ratingLabel = text(d, "GameFontDisableSmall", "RIGHT")
+	d.ratingLabel:SetPoint("RIGHT", d.side, "LEFT", -4, 0)
+	d.ratingLabel:SetText(ARENA_TEAM_RATING)
+	d.type = text(d, "GameFontHighlightSmall", "LEFT")
+	d.type:SetPoint("TOPLEFT", c, "TOPLEFT", TEXT_X, TYPE_Y)
+	d.gamesTag, d.games = column(d, CARD_COLUMNS.games, TAGS_Y, GAMES)
+	d.recordTag, d.winLoss = column(d, CARD_COLUMNS.winLoss, TAGS_Y, WIN_LOSS)
+	d.playedTag, d.played = column(d, CARD_COLUMNS.played, TAGS_Y, PLAYED)
 
-	-- L'emplacement vide : "(2v2)", en GameFontDisableLarge.
-	c.vide = c:CreateFontString(nil, "ARTWORK", "GameFontDisableLarge")
-	c.vide:SetPoint("CENTER", c, "CENTER", 0, 0)
-	c.vide:Hide()
+	-- Empty slot: "(2v2)" in GameFontDisableLarge.
+	c.empty = c:CreateFontString(nil, "ARTWORK", "GameFontDisableLarge")
+	c.empty:SetPoint("CENTER", c, "CENTER", 0, 0)
+	c.empty:Hide()
 
 	c:SetScript("OnEnter", function(self)
-		if not self.choisie then
-			self.survol:SetAlpha(self.equipe and SURVOL_ALPHA or 0)
+		if not self.selectedItem then
+			self.hover:SetAlpha(self.team and HOVER_ALPHA or 0)
 		end
 		if GameTooltip_AddNewbieTip then
 			GameTooltip_AddNewbieTip(self, ARENA_TEAM, 1.0, 1.0, 1.0,
-				self.equipe and CLICK_FOR_DETAILS or ARENA_TEAM_LEAD_IN, 1)
+				self.team and CLICK_FOR_DETAILS or ARENA_TEAM_LEAD_IN, 1)
 		end
 	end)
 	c:SetScript("OnLeave", function(self)
-		if not self.choisie then
-			self.survol:SetAlpha(0)
+		if not self.selectedItem then
+			self.hover:SetAlpha(0)
 		end
 		if GameTooltip then
 			GameTooltip:Hide()
 		end
 	end)
 	c:SetScript("OnClick", function(self)
-		A.basculer(self.equipe)
+		A.toggleDetail(self.team)
 	end)
 	return c
 end
 
-local function remplirCarte(c, id)
-	c.equipe = id
-	local d = c.donnees
+-- Fills a card from team id, or shows the greyed empty slot when id is nil.
+local function populateCard(c, id)
+	c.team = id
+	local d = c.data
 	if not id then
 		c:SetID(0)
 		c:SetAlpha(0.4)
-		c.banniere:SetTexture(PVP .. "PVP-Banner-" .. c.taille)
-		c.banniere:SetVertexColor(1, 1, 1)
-		c.etendard:SetAlpha(0.1)
-		c.bord:Hide()
-		c.embleme:Hide()
+		c.bannerTexture:SetTexture(PVP .. "PVP-Banner-" .. c.size)
+		c.bannerTexture:SetVertexColor(1, 1, 1)
+		c.bannerFrame:SetAlpha(0.1)
+		c.edge:Hide()
+		c.emblem:Hide()
 		d:Hide()
-		c.vide:SetText(string.format(PVP_TEAMSIZE, c.taille, c.taille))
-		c.vide:Show()
+		c.empty:SetText(string.format(PVP_TEAMSIZE, c.size, c.size))
+		c.empty:Show()
 		return
 	end
 
-	local e = lireEquipe(id)
+	local e = readTeam(id)
 	c:SetID(id)
 	c:SetAlpha(1)
-	c.etendard:SetAlpha(1)
+	c.bannerFrame:SetAlpha(1)
 
-	-- PVPTeam_Update : la semaine seulement (voir l'en-tete).
-	local joues, victoires, mesJoues = e.joues or 0, e.victoires or 0, e.mesJoues or 0
-	local pct = pourcentage(mesJoues, joues)
-	d.nom:SetText(e.nom)
-	d.cote:SetText(e.cote)
+	-- PVPTeam_Update: this week only (see the file header).
+	local played, wins, playerPlayed = e.played or 0, e.wins or 0, e.playerPlayed or 0
+	local pct = percentage(playerPlayed, played)
+	d.name:SetText(e.name)
+	d.side:SetText(e.side)
 	d.type:SetText(ARENA_THIS_WEEK)
-	d.jeux:SetText(joues)
-	d.bilan:SetText(tostring(victoires) .. " - " .. tostring(joues - victoires))
-	d.joues:SetText(tostring(mesJoues) .. " (" .. string.format("%d", pct) .. "%)")
+	d.games:SetText(played)
+	d.winLoss:SetText(tostring(wins) .. " - " .. tostring(played - wins))
+	d.played:SetText(tostring(playerPlayed) .. " (" .. string.format("%d", pct) .. "%)")
 	if pct < 10 then
-		d.joues:SetVertexColor(1.0, 0, 0)
+		d.played:SetVertexColor(1.0, 0, 0)
 	else
-		d.joues:SetVertexColor(1.0, 1.0, 1.0)
+		d.played:SetVertexColor(1.0, 1.0, 1.0)
 	end
 
-	c.banniere:SetTexture(PVP .. "PVP-Banner-" .. tostring(e.taille))
-	c.banniere:SetVertexColor(e.couleurFond.r or 1, e.couleurFond.g or 1, e.couleurFond.b or 1)
-	c.bord:SetVertexColor(e.couleurBord.r or 1, e.couleurBord.g or 1, e.couleurBord.b or 1)
-	c.embleme:SetVertexColor(e.couleurEmbleme.r or 1, e.couleurEmbleme.g or 1, e.couleurEmbleme.b or 1)
-	if e.bord and e.bord ~= -1 then
-		c.bord:SetTexture(PVP .. "PVP-Banner-" .. tostring(e.taille) .. "-Border-" .. tostring(e.bord))
+	c.bannerTexture:SetTexture(PVP .. "PVP-Banner-" .. tostring(e.size))
+	c.bannerTexture:SetVertexColor(e.backgroundColor.r or 1, e.backgroundColor.g or 1, e.backgroundColor.b or 1)
+	c.edge:SetVertexColor(e.borderColor.r or 1, e.borderColor.g or 1, e.borderColor.b or 1)
+	c.emblem:SetVertexColor(e.emblemColor.r or 1, e.emblemColor.g or 1, e.emblemColor.b or 1)
+	if e.edge and e.edge ~= -1 then
+		c.edge:SetTexture(PVP .. "PVP-Banner-" .. tostring(e.size) .. "-Border-" .. tostring(e.edge))
 	end
-	if e.embleme and e.embleme ~= -1 then
-		c.embleme:SetTexture(PVP .. "Icons" .. SEP .. "PVP-Banner-Emblem-" .. tostring(e.embleme))
+	if e.emblem and e.emblem ~= -1 then
+		c.emblem:SetTexture(PVP .. "Icons" .. SEP .. "PVP-Banner-Emblem-" .. tostring(e.emblem))
 	end
-	c.bord:Show()
-	c.embleme:Show()
+	c.edge:Show()
+	c.emblem:Show()
 	d:Show()
-	c.vide:Hide()
+	c.empty:Hide()
 end
 
-local function marquerCartes()
-	if not cartes then
+-- Highlights the card whose team is open in the detail window.
+local function markCards()
+	if not maps then
 		return
 	end
-	local ouverte = fenetre and fenetre:IsShown() and fenetre.equipe
-	for _, c in ipairs(cartes) do
-		local avant = c.choisie
-		c.choisie = (c.equipe ~= nil and c.equipe == ouverte) or nil
-		if c.choisie then
-			c.survol:SetAlpha(CHOISIE_ALPHA)
-		elseif avant then
-			c.survol:SetAlpha(0)
+	local openTeam = window and window:IsShown() and window.team
+	for _, c in ipairs(maps) do
+		local before = c.selectedItem
+		c.selectedItem = (c.team ~= nil and c.team == openTeam) or nil
+		if c.selectedItem then
+			c.hover:SetAlpha(SELECTED_ALPHA)
+		elseif before then
+			c.hover:SetAlpha(0)
 		end
 	end
 end
 
-local function majPoints()
+local function updatePoints()
 	if not points then
 		return
 	end
-	points.valeur:SetText(GetArenaCurrency and GetArenaCurrency() or 0)
-	-- La ligne se centre sur le volet : sa largeur est celle de ce qu'elle
-	-- porte.
-	local largeur = points.etiquette:GetStringWidth() + POINTS_ECART
-		+ points.valeur:GetStringWidth() + ICONE_ECART + ICONE_L
-	points:SetWidth(math.max(1, largeur))
+	points.value:SetText(GetArenaCurrency and GetArenaCurrency() or 0)
+	-- The row is centred on the pane, so its width is the width of its contents.
+	local width = points.tag:GetStringWidth() + POINTS_GAP
+		+ points.value:GetStringWidth() + ICON_GAP + ICON_W
+	points:SetWidth(math.max(1, width))
 end
 
-function A.maj()
-	if not cartes then
+function A.update()
+	if not maps then
 		return
 	end
-	local saison = GetCurrentArenaSeason and GetCurrentArenaSeason() or 0
-	if saison == 0 then
-		for _, c in ipairs(cartes) do
+	local season = GetCurrentArenaSeason and GetCurrentArenaSeason() or 0
+	if season == 0 then
+		for _, c in ipairs(maps) do
 			c:Hide()
 		end
-		local precedente = GetPreviousArenaSeason and GetPreviousArenaSeason() or 0
-		horsSaison:SetText(string.format(ARENA_OFF_SEASON_TEXT,
-			precedente, precedente + 1))
-		horsSaison:Show()
+		local prev = GetPreviousArenaSeason and GetPreviousArenaSeason() or 0
+		offSeason:SetText(string.format(ARENA_OFF_SEASON_TEXT,
+			prev, prev + 1))
+		offSeason:Show()
 	else
-		horsSaison:Hide()
-		local indices = indicesParTaille()
-		for rang, c in ipairs(cartes) do
-			remplirCarte(c, indices[rang])
+		offSeason:Hide()
+		local indices = indicesBySize()
+		for rank, c in ipairs(maps) do
+			populateCard(c, indices[rank])
 			c:Show()
 		end
 	end
-	majPoints()
-	marquerCartes()
+	updatePoints()
+	markCards()
 end
 
--- -------------------------------------------------------- la fenetre de detail
+-- -------------------------------------------------------- detail window
 
--- Le cadre du client, tenu a jour pour UnitPopup et ADD_TEAMMEMBER.
-local function preter(id)
+-- UnitPopup "TEAM" and ADD_TEAMMEMBER read PVPTeamDetails.team, and the menu offers
+-- promote / kick / leave only if PVPTeamDetails:IsShown(). So the client frame gets our team
+-- and its shown flag; it stays invisible under the hidden PVPFrame.
+local function syncClientFrame(id)
 	local client = _G["PVPTeamDetails"]
 	if not client then
 		return
@@ -482,23 +408,23 @@ local function preter(id)
 	end
 end
 
-local function croixRouge(parent)
+local function redCloseButton(parent)
 	local b = CreateFrame("Button", nil, parent)
-	b:SetWidth(FERMETURE)
-	b:SetHeight(FERMETURE)
-	for _, etat in ipairs({
+	b:SetWidth(CLOSE_SIZE)
+	b:SetHeight(CLOSE_SIZE)
+	for _, state in ipairs({
 		{ "SetNormalTexture", "GetNormalTexture", "redbutton-exit" },
 		{ "SetPushedTexture", "GetPushedTexture", "redbutton-exit-pressed" },
 		{ "SetHighlightTexture", "GetHighlightTexture", "redbutton-highlight" },
 	}) do
-		local e = ForeverUI.AtlasEntry(etat[3])
-		b[etat[1]](b, e and e[1] or "")
-		local t = b[etat[2]](b)
+		local e = ForeverUI.AtlasEntry(state[3])
+		b[state[1]](b, e and e[1] or "")
+		local t = b[state[2]](b)
 		if t then
-			ForeverUI.SetAtlas(t, etat[3], true)
+			ForeverUI.SetAtlas(t, state[3], true)
 			t:ClearAllPoints()
 			t:SetAllPoints(b)
-			if etat[3] == "redbutton-highlight" then
+			if state[3] == "redbutton-highlight" then
 				t:SetBlendMode("ADD")
 			end
 		end
@@ -507,40 +433,41 @@ local function croixRouge(parent)
 	return b
 end
 
-local function creerEntete(f, n, precedent)
-	local def = ENTETES[n]
+-- Roster column header n (HEADERS); previous: header on its left. A click sorts the roster.
+local function createHeader(f, n, previous)
+	local def = HEADERS[n]
 	local b = CreateFrame("Button", "ForeverUIArenaTeamDetailsHeader" .. n, f)
-	b:SetHeight(ENTETE_H)
-	b:SetWidth(def.largeur)
-	if precedent then
-		b:SetPoint("LEFT", precedent, "RIGHT", -2, 0)
+	b:SetHeight(HEADER_H)
+	b:SetWidth(def.width)
+	if previous then
+		b:SetPoint("LEFT", previous, "RIGHT", -2, 0)
 	else
-		b:SetPoint("TOPLEFT", f, "TOPLEFT", ENTETES_X, ENTETES_Y)
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", HEADERS_X, HEADERS_Y)
 	end
-	-- WhoFrameColumn_SetWidth : le milieu prend la largeur moins les bouts.
+	-- WhoFrameColumn_SetWidth: the middle takes the width minus both ends.
 	local g = b:CreateTexture(nil, "BACKGROUND")
-	g:SetTexture(ONGLETS_COLONNE)
+	g:SetTexture(COLUMN_TABS)
 	g:SetTexCoord(0, 0.078125, 0, 0.75)
 	g:SetWidth(5)
-	g:SetHeight(ENTETE_H)
+	g:SetHeight(HEADER_H)
 	g:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
 	local m = b:CreateTexture(nil, "BACKGROUND")
-	m:SetTexture(ONGLETS_COLONNE)
+	m:SetTexture(COLUMN_TABS)
 	m:SetTexCoord(0.078125, 0.90625, 0, 0.75)
-	m:SetWidth(def.largeur - 9)
-	m:SetHeight(ENTETE_H)
+	m:SetWidth(def.width - 9)
+	m:SetHeight(HEADER_H)
 	m:SetPoint("LEFT", g, "RIGHT", 0, 0)
 	local d = b:CreateTexture(nil, "BACKGROUND")
-	d:SetTexture(ONGLETS_COLONNE)
+	d:SetTexture(COLUMN_TABS)
 	d:SetTexCoord(0.90625, 0.96875, 0, 0.75)
 	d:SetWidth(4)
-	d:SetHeight(ENTETE_H)
+	d:SetHeight(HEADER_H)
 	d:SetPoint("LEFT", m, "RIGHT", 0, 0)
 	local fs = b:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	fs:SetPoint("CENTER", m, "CENTER", 0, 0)
 	b:SetFontString(fs)
-	b:SetText(txt(def.texte))
-	b:SetHighlightTexture(SURBRILLANCE_COLONNE)
+	b:SetText(txt(def.text))
+	b:SetHighlightTexture(COLUMN_HIGHLIGHT)
 	local s = b:GetHighlightTexture()
 	if s then
 		s:SetBlendMode("ADD")
@@ -550,326 +477,323 @@ local function creerEntete(f, n, precedent)
 	end
 	b.def = def
 	b:SetScript("OnClick", function(self)
-		local tri = (fenetre.saison and self.def.triSaison) or self.def.tri
-		if tri and SortArenaTeamRoster then
-			SortArenaTeamRoster(tri)
+		local sort = (window.season and self.def.seasonSort) or self.def.sort
+		if sort and SortArenaTeamRoster then
+			SortArenaTeamRoster(sort)
 		end
 		PlaySound("igMainMenuOptionCheckBoxOn")
 	end)
 	return b
 end
 
--- Une cellule de la ligne : une FontString posee a sa place. La cellule
--- "joues" est un cadre, pour porter son infobulle.
-local function creerLigne(f, n)
+-- Roster row n. Cells are FontStrings; "played" is a frame so it can carry its tooltip.
+local function createRow(f, n)
 	local l = CreateFrame("Button", "ForeverUIArenaTeamDetailsRow" .. n, f)
-	l:SetWidth(LIGNE_L)
-	l:SetHeight(LIGNE_H)
-	l:SetPoint("TOPLEFT", f, "TOPLEFT", LIGNES_X, LIGNES_Y - (n - 1) * (LIGNE_H + LIGNE_ECART))
+	l:SetWidth(ROW_W)
+	l:SetHeight(ROW_H)
+	l:SetPoint("TOPLEFT", f, "TOPLEFT", ROWS_X, ROWS_Y - (n - 1) * (ROW_H + ROW_GAP))
 	l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	l.survol = survolSur(l)
+	l.hover = createHover(l)
 
-	local function cellule(x, largeur, gabarit, justif)
-		local fs = texte(l, gabarit, justif)
-		fs:SetWidth(largeur)
+	local function cell(x, width, template, justify)
+		local fs = text(l, template, justify)
+		fs:SetWidth(width)
 		fs:SetHeight(14)
 		fs:SetPoint("TOPLEFT", l, "TOPLEFT", x, -1)
 		return fs
 	end
-	-- nom 104 a 10 ; classe 73 a +4 ; joues 45 a +4 ; bilan 72 a +0 ;
-	-- cote 54 a +4 (PVPTeamMemberButtonTemplate)
-	l.nom = cellule(10, 104, "GameFontNormalSmall", "LEFT")
-	l.classe = cellule(118, 70, "GameFontNormalSmall", "LEFT")
-	local joues = CreateFrame("Frame", nil, l)
-	joues:SetWidth(45)
-	joues:SetHeight(14)
-	joues:SetPoint("TOPLEFT", l, "TOPLEFT", 195, -1)
-	joues:EnableMouse(true)
-	l.jouesCadre = joues
-	l.joues = texte(joues, "GameFontNormalSmall", "CENTER")
-	l.joues:SetAllPoints(joues)
-	l.victoires = cellule(240, 30, "GameFontHighlightSmall", "RIGHT")
-	l.tiret = cellule(269, 12, "GameFontHighlightSmall", "LEFT")
-	l.tiret:SetText(" - ")
-	l.defaites = cellule(281, 30, "GameFontHighlightSmall", "LEFT")
-	l.cote = cellule(316, 54, "GameFontNormalSmall", "CENTER")
+	-- name 104 at 10; class 73 at +4; played 45 at +4; wins-losses 72 at +0;
+	-- rating 54 at +4 (PVPTeamMemberButtonTemplate)
+	l.name = cell(10, 104, "GameFontNormalSmall", "LEFT")
+	l.className = cell(118, 70, "GameFontNormalSmall", "LEFT")
+	local played = CreateFrame("Frame", nil, l)
+	played:SetWidth(45)
+	played:SetHeight(14)
+	played:SetPoint("TOPLEFT", l, "TOPLEFT", 195, -1)
+	played:EnableMouse(true)
+	l.played = text(played, "GameFontNormalSmall", "CENTER")
+	l.played:SetAllPoints(played)
+	l.wins = cell(240, 30, "GameFontHighlightSmall", "RIGHT")
+	l.dash = cell(269, 12, "GameFontHighlightSmall", "LEFT")
+	l.dash:SetText(" - ")
+	l.losses = cell(281, 30, "GameFontHighlightSmall", "LEFT")
+	l.side = cell(316, 54, "GameFontNormalSmall", "CENTER")
 
-	local function allumer(self)
-		if not l.choisie then
-			l.survol:SetAlpha(SURVOL_ALPHA)
+	local function lightUp(self)
+		if not l.selectedItem then
+			l.hover:SetAlpha(HOVER_ALPHA)
 		end
 	end
-	local function eteindre(self)
-		if not l.choisie then
-			l.survol:SetAlpha(0)
+	local function turnOff(self)
+		if not l.selectedItem then
+			l.hover:SetAlpha(0)
 		end
 	end
-	l:SetScript("OnEnter", allumer)
-	l:SetScript("OnLeave", eteindre)
-	joues:SetScript("OnEnter", function(self)
-		allumer()
+	l:SetScript("OnEnter", lightUp)
+	l:SetScript("OnLeave", turnOff)
+	played:SetScript("OnEnter", function(self)
+		lightUp()
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		if l.pct then
 			GameTooltip:SetText(l.pct)
 		end
 	end)
-	joues:SetScript("OnLeave", function()
-		eteindre()
+	played:SetScript("OnLeave", function()
+		turnOff()
 		GameTooltip:Hide()
 	end)
 
 	-- PVPTeamDetailsButton_OnClick
-	l:SetScript("OnClick", function(self, bouton)
-		if bouton == "RightButton" then
-			local nom, _, _, _, enLigne = GetArenaTeamRosterInfo(fenetre.equipe, self.membre)
+	l:SetScript("OnClick", function(self, button)
+		if button == "RightButton" then
+			local name, _, _, _, online = GetArenaTeamRosterInfo(window.team, self.member)
 			if PVPFrame_ShowDropdown then
-				PVPFrame_ShowDropdown(nom, enLigne)
+				PVPFrame_ShowDropdown(name, online)
 			end
 		else
-			SetArenaTeamRosterSelection(fenetre.equipe, self.membre)
-			A.majDetail()
+			SetArenaTeamRosterSelection(window.team, self.member)
+			A.updateDetail()
 		end
 		PlaySound("igMainMenuOptionCheckBoxOn")
 	end)
 	return l
 end
 
-local function creerFenetre(bloc)
-	local f = CreateFrame("Frame", "ForeverUIArenaTeamDetails", bloc)
-	f:SetWidth(FENETRE_L)
-	f:SetHeight(FENETRE_H)
-	f:SetPoint("TOPLEFT", _G["CharacterFrame"] or hote, "TOPRIGHT", FENETRE_X, FENETRE_Y)
-	f:SetFrameLevel(bloc:GetFrameLevel() + FENETRE_NIVEAU)
+local function createWindow(block)
+	local f = CreateFrame("Frame", "ForeverUIArenaTeamDetails", block)
+	f:SetWidth(WINDOW_W)
+	f:SetHeight(WINDOW_H)
+	f:SetPoint("TOPLEFT", _G["CharacterFrame"] or host, "TOPRIGHT", WINDOW_X, WINDOW_Y)
+	f:SetFrameLevel(block:GetFrameLevel() + WINDOW_LEVEL)
 	f:EnableMouse(true)
 	f:Hide()
-	ForeverUI.SetPanelArt(f, { coinHautGauche = COIN_HAUT_GAUCHE, niveau = 5 })
-	local metal = f.foreverHabillage or f
+	ForeverUI.SetPanelArt(f, { topLeftCorner = TOP_LEFT_CORNER, level = 5 })
+	local metal = f.foreverSkinLayer or f
 
-	-- le titre dans la barre de metal : le nom, puis la taille
-	local bandeau = CreateFrame("Frame", nil, f)
-	bandeau:SetAllPoints(f)
-	bandeau:SetFrameLevel(metal:GetFrameLevel() + 1)
-	f.titre = bandeau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	f.titre:SetPoint("TOP", f, "TOP", 0, TITRE_Y)
-	f.titre:SetWidth(TITRE_L)
+	-- title in the metal bar: name, then size
+	local banner = CreateFrame("Frame", nil, f)
+	banner:SetAllPoints(f)
+	banner:SetFrameLevel(metal:GetFrameLevel() + 1)
+	f.title = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.title:SetPoint("TOP", f, "TOP", 0, TITLE_Y)
+	f.title:SetWidth(TITLE_W)
 
-	f.fermer = croixRouge(f)
-	f.fermer:SetFrameLevel(metal:GetFrameLevel() + 2)
-	f.fermer:SetPoint("TOPRIGHT", f, "TOPRIGHT", FERMETURE_X, FERMETURE_Y)
+	f.close = redCloseButton(f)
+	f.close:SetFrameLevel(metal:GetFrameLevel() + 2)
+	f.close:SetPoint("TOPRIGHT", f, "TOPRIGHT", CLOSE_X, CLOSE_Y)
 
-	-- l'en-tete des statistiques
-	f.type = texte(f, "GameFontHighlightSmall", "LEFT")
+	-- stats header
+	f.type = text(f, "GameFontHighlightSmall", "LEFT")
 	f.type:SetPoint("TOPLEFT", f, "TOPLEFT", STATS_X, STATS_Y - 8)
 	local _
-	_, f.jeux = colonne(f, COLONNES_STATS[1], STATS_Y, GAMES, nil, STATS_VALEUR_ECART)
-	_, f.bilan = colonne(f, COLONNES_STATS[2], STATS_Y, WIN_LOSS, nil, STATS_VALEUR_ECART)
-	_, f.rang = colonne(f, COLONNES_STATS[3], STATS_Y, RANK, nil, STATS_VALEUR_ECART)
-	_, f.cote = colonne(f, COLONNES_STATS[4], STATS_Y, ARENA_TEAM_RATING,
-		"GameFontNormalSmall", STATS_VALEUR_ECART)
+	_, f.games = column(f, STATS_COLUMNS[1], STATS_Y, GAMES, nil, STATS_VALUE_GAP)
+	_, f.winLoss = column(f, STATS_COLUMNS[2], STATS_Y, WIN_LOSS, nil, STATS_VALUE_GAP)
+	_, f.rank = column(f, STATS_COLUMNS[3], STATS_Y, RANK, nil, STATS_VALUE_GAP)
+	_, f.side = column(f, STATS_COLUMNS[4], STATS_Y, ARENA_TEAM_RATING,
+		"GameFontNormalSmall", STATS_VALUE_GAP)
 
-	local trait = f:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(trait, "ui-character-info-scrollline-long")
-	trait:SetHeight(3)
-	trait:SetPoint("TOPLEFT", f, "TOPLEFT", ENTETES_X, SEPARATEUR_Y)
-	trait:SetPoint("TOPRIGHT", f, "TOPRIGHT", -ENTETES_X, SEPARATEUR_Y)
+	local line = f:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(line, "ui-character-info-scrollline-long")
+	line:SetHeight(3)
+	line:SetPoint("TOPLEFT", f, "TOPLEFT", HEADERS_X, SEPARATOR_Y)
+	line:SetPoint("TOPRIGHT", f, "TOPRIGHT", -HEADERS_X, SEPARATOR_Y)
 
-	f.entetes = {}
-	local precedent
-	for n = 1, #ENTETES do
-		precedent = creerEntete(f, n, precedent)
-		f.entetes[n] = precedent
+	f.headers = {}
+	local previous
+	for n = 1, #HEADERS do
+		previous = createHeader(f, n, previous)
+		f.headers[n] = previous
 	end
-	f.lignes = {}
-	for n = 1, MAX_MEMBRES do
-		f.lignes[n] = creerLigne(f, n)
+	f.rows = {}
+	for n = 1, MAX_MEMBERS do
+		f.rows[n] = createRow(f, n)
 	end
 
-	f.ajouter = boutonPanneau(f, ADDMEMBER_TEAM, AJOUTER_L, AJOUTER_H)
-	f.ajouter:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", AJOUTER_X, AJOUTER_Y)
-	f.ajouter:SetScript("OnClick", function()
+	f.add = panelButton(f, ADDMEMBER_TEAM, ADD_W, ADD_H)
+	f.add:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", ADD_X, ADD_Y)
+	f.add:SetScript("OnClick", function()
 		StaticPopup_Show("ADD_TEAMMEMBER")
 	end)
-	f.ajouter:SetScript("OnEnter", function(self)
+	f.add:SetScript("OnEnter", function(self)
 		if GameTooltip_AddNewbieTip then
 			GameTooltip_AddNewbieTip(self, ADDMEMBER, 1.0, 1.0, 1.0,
 				NEWBIE_TOOLTIP_ADDTEAMMEMBER, 1)
 		end
 	end)
-	f.ajouter:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	f.add:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-	-- la bascule semaine / saison : la fleche du grimoire, son texte a gauche
-	local bascule = CreateFrame("Button", "ForeverUIArenaTeamDetailsToggle", f)
-	bascule:SetWidth(BASCULE)
-	bascule:SetHeight(BASCULE)
-	bascule:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", BASCULE_X, BASCULE_Y)
-	bascule:SetNormalTexture(FLECHE .. "Up")
-	bascule:SetPushedTexture(FLECHE .. "Down")
-	bascule:SetHighlightTexture(SURVOL_CARRE)
-	local s = bascule:GetHighlightTexture()
+	-- week / season toggle: the spellbook arrow, its text on the left
+	local toggle = CreateFrame("Button", "ForeverUIArenaTeamDetailsToggle", f)
+	toggle:SetWidth(TOGGLE_SIZE)
+	toggle:SetHeight(TOGGLE_SIZE)
+	toggle:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", TOGGLE_X, TOGGLE_Y)
+	toggle:SetNormalTexture(ARROW .. "Up")
+	toggle:SetPushedTexture(ARROW .. "Down")
+	toggle:SetHighlightTexture(SQUARE_HOVER)
+	local s = toggle:GetHighlightTexture()
 	if s then
 		s:SetBlendMode("ADD")
 	end
-	bascule.texte = texte(bascule, "GameFontNormalSmall", "RIGHT")
-	bascule.texte:SetWidth(180)
-	bascule.texte:SetPoint("RIGHT", bascule, "LEFT", 0, 0)
-	bascule:SetScript("OnClick", function()
-		f.saison = not f.saison or nil
-		A.majDetail()
+	toggle.text = text(toggle, "GameFontNormalSmall", "RIGHT")
+	toggle.text:SetWidth(180)
+	toggle.text:SetPoint("RIGHT", toggle, "LEFT", 0, 0)
+	toggle:SetScript("OnClick", function()
+		f.season = not f.season or nil
+		A.updateDetail()
 		PlaySound("igMainMenuOptionCheckBoxOn")
 	end)
-	f.bascule = bascule
+	f.toggle = toggle
 
 	f:SetScript("OnShow", function()
 		PlaySound("igSpellBookOpen")
 	end)
-	-- PVPTeamDetails_OnHide, et PVPFrame_OnHide : quitter l'onglet referme
-	-- le detail -- il ne revient pas tout seul au retour.
+	-- PVPTeamDetails_OnHide and PVPFrame_OnHide: leaving the tab closes the detail, which does
+	-- not come back on return.
 	f:SetScript("OnHide", function(self)
-		if self.equipe then
-			self.equipe = nil
+		if self.team then
+			self.team = nil
 			CloseArenaTeamRoster()
-			preter(nil)
+			syncClientFrame(nil)
 			PlaySound("igSpellBookClose")
 		end
 		if self:IsShown() then
 			self:Hide()
 		end
-		marquerCartes()
+		markCards()
 	end)
 	return f
 end
 
 -- PVPTeamDetails_Update
-function A.majDetail()
-	local f = fenetre
-	if not f or not f.equipe then
+function A.updateDetail()
+	local f = window
+	if not f or not f.team then
 		return
 	end
-	local id = f.equipe
-	local e = lireEquipe(id)
-	if not e.nom then
+	local id = f.team
+	local e = readTeam(id)
+	if not e.name then
 		f:Hide()
 		return
 	end
 
-	f.titre:SetText(tostring(e.nom) .. " |cffffffff"
-		.. string.format(PVP_TEAMSIZE, e.taille, e.taille) .. "|r")
-	f.rang:SetText(e.rang)
-	f.cote:SetText(e.cote)
+	f.title:SetText(tostring(e.name) .. " |cffffffff"
+		.. string.format(PVP_TEAMSIZE, e.size, e.size) .. "|r")
+	f.rank:SetText(e.rank)
+	f.side:SetText(e.side)
 
-	local jouesEquipe, victoires
-	if f.saison then
-		jouesEquipe, victoires = e.jouesSaison or 0, e.victoiresSaison or 0
+	local teamPlayed, wins
+	if f.season then
+		teamPlayed, wins = e.seasonPlayed or 0, e.seasonWins or 0
 		f.type:SetText(string.upper(ARENA_THIS_SEASON))
-		f.bascule.texte:SetText(ARENA_THIS_WEEK_TOGGLE)
+		f.toggle.text:SetText(ARENA_THIS_WEEK_TOGGLE)
 	else
-		jouesEquipe, victoires = e.joues or 0, e.victoires or 0
+		teamPlayed, wins = e.played or 0, e.wins or 0
 		f.type:SetText(string.upper(ARENA_THIS_WEEK))
-		f.bascule.texte:SetText(ARENA_THIS_SEASON_TOGGLE)
+		f.toggle.text:SetText(ARENA_THIS_SEASON_TOGGLE)
 	end
-	f.jeux:SetText(jouesEquipe)
-	f.bilan:SetText(tostring(victoires) .. " - " .. tostring(jouesEquipe - victoires))
+	f.games:SetText(teamPlayed)
+	f.winLoss:SetText(tostring(wins) .. " - " .. tostring(teamPlayed - wins))
 
-	local nombre = GetNumArenaTeamMembers(id, 1) or 0
-	local choisi = GetArenaTeamRosterSelection and GetArenaTeamRosterSelection(id)
-	for n, l in ipairs(f.lignes) do
-		if n > nombre then
+	local count = GetNumArenaTeamMembers(id, 1) or 0
+	local selected = GetArenaTeamRosterSelection and GetArenaTeamRosterSelection(id)
+	for n, l in ipairs(f.rows) do
+		if n > count then
 			l:Hide()
 		else
-			local nom, rang, niveau, classe, enLigne, joues, gagnes, jouesSaison,
-				gagnesSaison, cote = GetArenaTeamRosterInfo(id, n)
-			local valeurJoues, valeurGagnes = joues or 0, gagnes or 0
-			if f.saison then
-				valeurJoues, valeurGagnes = jouesSaison or 0, gagnesSaison or 0
+			local name, rank, level, className, online, played, won, seasonPlayed,
+				seasonWon, side = GetArenaTeamRosterInfo(id, n)
+			local playedValue, wonValue = played or 0, won or 0
+			if f.season then
+				playedValue, wonValue = seasonPlayed or 0, seasonWon or 0
 			end
-			local pct = pourcentage(valeurJoues, jouesEquipe)
-			l.membre = n
+			local pct = percentage(playedValue, teamPlayed)
+			l.member = n
 			l.pct = string.format("%d", pct) .. "%"
-			l.nom:SetText(nom)
-			l.classe:SetText(classe)
-			l.joues:SetText(valeurJoues)
-			l.victoires:SetText(valeurGagnes)
-			l.defaites:SetText(valeurJoues - valeurGagnes)
-			l.cote:SetText(cote)
+			l.name:SetText(name)
+			l.className:SetText(className)
+			l.played:SetText(playedValue)
+			l.wins:SetText(wonValue)
+			l.losses:SetText(playedValue - wonValue)
+			l.side:SetText(side)
 
-			-- blanc en ligne, or pour le capitaine, gris hors ligne
+			-- white online, gold for the captain, gray offline
 			local r, v, b = 0.5, 0.5, 0.5
-			if enLigne then
-				if rang and rang > 0 then
+			if online then
+				if rank and rank > 0 then
 					r, v, b = 1.0, 1.0, 1.0
 				else
 					r, v, b = 1.0, 0.82, 0.0
 				end
 			end
-			for _, fs in ipairs({ l.nom, l.classe, l.joues, l.victoires, l.tiret, l.defaites, l.cote }) do
+			for _, fs in ipairs({ l.name, l.className, l.played, l.wins, l.dash, l.losses, l.side }) do
 				fs:SetTextColor(r, v, b)
 			end
-			-- PVPTeamDetails_Update pose le rouge PAR-DESSUS, en teinte
+			-- PVPTeamDetails_Update tints the red over the text color
 			if pct < 10 then
-				l.joues:SetVertexColor(1.0, 0, 0)
+				l.played:SetVertexColor(1.0, 0, 0)
 			else
-				l.joues:SetVertexColor(1.0, 1.0, 1.0)
+				l.played:SetVertexColor(1.0, 1.0, 1.0)
 			end
 
-			l.choisie = (choisi == n) or nil
-			l.survol:SetAlpha(l.choisie and CHOISIE_ALPHA or 0)
+			l.selectedItem = (selected == n) or nil
+			l.hover:SetAlpha(l.selectedItem and SELECTED_ALPHA or 0)
 			l:Show()
 		end
 	end
 end
 
--- PVPTeam_OnClick : ouvrir le detail d'une equipe, ou le refermer si c'est
--- deja elle.
-function A.basculer(id)
-	if not id or not fenetre or not GetArenaTeam(id) then
+-- PVPTeam_OnClick: opens a team's detail, or closes it if it is already open.
+function A.toggleDetail(id)
+	if not id or not window or not GetArenaTeam(id) then
 		return
 	end
-	if fenetre:IsShown() and fenetre.equipe == id then
-		fenetre:Hide()
+	if window:IsShown() and window.team == id then
+		window:Hide()
 		return
 	end
-	if fenetre.equipe and fenetre.equipe ~= id then
+	if window.team and window.team ~= id then
 		CloseArenaTeamRoster()
 	end
-	fenetre.equipe = id
-	preter(id)
+	window.team = id
+	syncClientFrame(id)
 	ArenaTeamRoster(id)
-	fenetre:Show()
-	A.majDetail()
-	marquerCartes()
+	window:Show()
+	A.updateDetail()
+	markCards()
 end
 
--- ------------------------------------------------------------ la construction
+-- ------------------------------------------------------------ build
 
-function A.monter(bloc, volet)
-	if cartes or not bloc or not volet then
+-- block: rank block of PvPTab.lua (win counter in block.progress); pane: the left pane
+function A.build(block, pane)
+	if maps or not block or not pane then
 		return
 	end
-	hote = volet
+	host = pane
 
-	-- LE SEPARATEUR, sous le compteur de victoires, A LA TAILLE DE SON
-	-- ELEMENT (384 x 8). Pose avec keepSize, il n'en avait aucune et prenait
-	-- celle de la feuille d'atlas entiere : une texture immense.
-	local separateur = bloc:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(separateur, ATLAS_SEPARATEUR)
-	separateur:SetPoint("TOP", bloc.progres, "BOTTOM", 0, SEPARATEUR_SOUS_COMPTEUR)
-	A.separateur = separateur
+	-- Separator below the win counter, at its element size (384 x 8). With keepSize it had no
+	-- size and took the whole atlas sheet.
+	local separator = block:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(separator, ATLAS_SEPARATOR)
+	separator:SetPoint("TOP", block.progress, "BOTTOM", 0, SEPARATOR_BELOW_COUNTER)
+	A.separator = separator
 
-	-- LES POINTS D'ARENE, centres sous le separateur.
-	points = CreateFrame("Frame", "ForeverUIArenaPoints", bloc)
-	points:SetHeight(ICONE_H)
-	points:SetFrameLevel(bloc:GetFrameLevel() + NIVEAU)
+	-- Arena points, centred below the separator.
+	points = CreateFrame("Frame", "ForeverUIArenaPoints", block)
+	points:SetHeight(ICON_H)
+	points:SetFrameLevel(block:GetFrameLevel() + CARD_LEVEL)
 	points:EnableMouse(true)
-	points.etiquette = texte(points, "GameFontHighlightSmall", "LEFT")
-	points.etiquette:SetPoint("LEFT", points, "LEFT", 0, 0)
-	points.etiquette:SetText(PVP_LABEL_ARENA)
-	points.valeur = texte(points, "GameFontNormal", "RIGHT")
-	points.valeur:SetPoint("LEFT", points.etiquette, "RIGHT", POINTS_ECART, 0)
-	points.icone = points:CreateTexture(nil, "ARTWORK")
-	points.icone:SetTexture(ICONE_POINTS)
-	points.icone:SetWidth(ICONE_L)
-	points.icone:SetHeight(ICONE_H)
-	points.icone:SetPoint("LEFT", points.valeur, "RIGHT", ICONE_ECART, 0)
+	points.tag = text(points, "GameFontHighlightSmall", "LEFT")
+	points.tag:SetPoint("LEFT", points, "LEFT", 0, 0)
+	points.tag:SetText(PVP_LABEL_ARENA)
+	points.value = text(points, "GameFontNormal", "RIGHT")
+	points.value:SetPoint("LEFT", points.tag, "RIGHT", POINTS_GAP, 0)
+	points.icon = points:CreateTexture(nil, "ARTWORK")
+	points.icon:SetTexture(POINTS_ICON)
+	points.icon:SetWidth(ICON_W)
+	points.icon:SetHeight(ICON_H)
+	points.icon:SetPoint("LEFT", points.value, "RIGHT", ICON_GAP, 0)
 	points:SetScript("OnEnter", function(self)
 		GameTooltip_SetDefaultAnchor(GameTooltip, self)
 		GameTooltip:SetText(ARENA_POINTS, 1.0, 1.0, 1.0)
@@ -878,96 +802,93 @@ function A.monter(bloc, volet)
 	end)
 	points:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-	-- LA LISTE DES EQUIPES, sous les points.
-	cartes = {}
-	for rang = 1, MAX_EQUIPES do
-		cartes[rang] = creerCarte(bloc, rang)
+	-- Team cards, below the points.
+	maps = {}
+	for rank = 1, MAX_TEAMS do
+		maps[rank] = createCard(block, rank)
 	end
-	-- empilees depuis le bas du volet, centrees
-	for rang = MAX_EQUIPES, 1, -1 do
-		if rang == MAX_EQUIPES then
-			cartes[rang]:SetPoint("BOTTOM", hote, "BOTTOM", 0, CARTES_BAS)
+	-- stacked up from the pane bottom, centred
+	for rank = MAX_TEAMS, 1, -1 do
+		if rank == MAX_TEAMS then
+			maps[rank]:SetPoint("BOTTOM", host, "BOTTOM", 0, CARDS_BOTTOM)
 		else
-			cartes[rang]:SetPoint("BOTTOM", cartes[rang + 1], "TOP", 0, CARTE_ECART)
+			maps[rank]:SetPoint("BOTTOM", maps[rank + 1], "TOP", 0, CARD_GAP)
 		end
 	end
 
-	-- LES POINTS D'ARENE, CENTRES ENTRE LE SEPARATEUR ET LA PREMIERE CARTE
-	-- (demande du 2026-09-26). Une zone sans souris couvre l'intervalle ; la
-	-- ligne se centre sur elle, et garde sa petite surface pour l'infobulle.
-	local zone = CreateFrame("Frame", "ForeverUIArenaPointsZone", bloc)
-	zone:SetPoint("TOP", separateur, "BOTTOM", 0, 0)
-	zone:SetPoint("BOTTOM", cartes[1], "TOP", 0, 0)
-	zone:SetWidth(CARTE_L)
+	-- Arena points centred between the separator and the first card: a mouse-less zone spans
+	-- the gap and the row centres on it, keeping its own small area for the tooltip.
+	local zone = CreateFrame("Frame", "ForeverUIArenaPointsZone", block)
+	zone:SetPoint("TOP", separator, "BOTTOM", 0, 0)
+	zone:SetPoint("BOTTOM", maps[1], "TOP", 0, 0)
+	zone:SetWidth(CARD_W)
 	points:SetPoint("CENTER", zone, "CENTER", 0, 0)
 
-	horsSaison = bloc:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-	horsSaison:SetJustifyH("LEFT")
-	horsSaison:SetWidth(CARTE_L - 16)
-	horsSaison:SetPoint("TOP", points, "BOTTOM", 0, HORS_SAISON_SOUS_POINTS)
-	horsSaison:Hide()
+	offSeason = block:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	offSeason:SetJustifyH("LEFT")
+	offSeason:SetWidth(CARD_W - 16)
+	offSeason:SetPoint("TOP", points, "BOTTOM", 0, OFF_SEASON_BELOW_POINTS)
+	offSeason:Hide()
 
-	fenetre = creerFenetre(bloc)
-	A.maj()
+	window = createWindow(block)
+	A.update()
 end
 
--- CE QUI FAIT BOUGER LES EQUIPES. PVPFrame_OnEvent, relu : ARENA_TEAM_UPDATE
--- refait les cartes et le detail (ou le ferme si l'equipe n'est plus) ;
--- ARENA_TEAM_ROSTER_UPDATE avec un argument redemande la liste, sans
--- argument la liste est la. PVPFrame, qui ecoute toujours, redemande deja
--- pour PVPTeamDetails ; on ne le fait nous-memes que s'il manque.
-local veilleur = CreateFrame("Frame")
-veilleur:RegisterEvent("ARENA_TEAM_UPDATE")
-veilleur:RegisterEvent("ARENA_TEAM_ROSTER_UPDATE")
-veilleur:RegisterEvent("HONOR_CURRENCY_UPDATE")
-veilleur:SetScript("OnEvent", function(self, evenement, arg1)
-	if not cartes then
+-- PVPFrame_OnEvent: ARENA_TEAM_UPDATE refreshes cards and detail (or closes it if the team
+-- is gone); ARENA_TEAM_ROSTER_UPDATE with an argument asks for the roster again, without one
+-- the roster is ready. PVPFrame already asks for PVPTeamDetails; we ask only if it is missing.
+local listener = CreateFrame("Frame")
+listener:RegisterEvent("ARENA_TEAM_UPDATE")
+listener:RegisterEvent("ARENA_TEAM_ROSTER_UPDATE")
+listener:RegisterEvent("HONOR_CURRENCY_UPDATE")
+listener:SetScript("OnEvent", function(self, event, arg1)
+	if not maps then
 		return
 	end
-	if evenement == "ARENA_TEAM_ROSTER_UPDATE" then
+	if event == "ARENA_TEAM_ROSTER_UPDATE" then
 		if arg1 then
-			if fenetre:IsShown() and fenetre.equipe and not _G["PVPTeamDetails"] then
-				ArenaTeamRoster(fenetre.equipe)
+			if window:IsShown() and window.team and not _G["PVPTeamDetails"] then
+				ArenaTeamRoster(window.team)
 			end
 		else
-			A.majDetail()
-			A.maj()
+			A.updateDetail()
+			A.update()
 		end
 		return
 	end
-	A.maj()
-	if evenement == "ARENA_TEAM_UPDATE" and fenetre:IsShown() then
-		if fenetre.equipe and not GetArenaTeam(fenetre.equipe) then
-			fenetre:Hide()
+	A.update()
+	if event == "ARENA_TEAM_UPDATE" and window:IsShown() then
+		if window.team and not GetArenaTeam(window.team) then
+			window:Hide()
 		else
-			A.majDetail()
+			A.updateDetail()
 		end
 	end
 end)
 
--- TEMOIN -- /fui arene. Ce que le client rend pour les trois emplacements.
+-- /fui arena: what the client returns for the three team slots.
 function ForeverUI.PvPArenaDebug()
-	local dire = function(t)
+	local say = function(t)
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t)
 	end
-	dire(string.format(L.PVPARENA_DEBUG_SEASON,
+	say(string.format(L.PVPARENA_DEBUG_SEASON,
 		tostring(GetCurrentArenaSeason and GetCurrentArenaSeason()),
 		tostring(GetPreviousArenaSeason and GetPreviousArenaSeason()),
 		tostring(GetArenaCurrency and GetArenaCurrency())))
-	for i = 1, MAX_EQUIPES do
-		local e = lireEquipe(i)
-		if e.nom then
-			dire(string.format(L.PVPARENA_DEBUG_TEAM,
-				i, e.nom, e.taille or 0, e.taille or 0, tostring(e.cote),
-				tostring(e.victoires), tostring(e.joues), tostring(e.mesJoues),
-				tostring(e.victoiresSaison), tostring(e.jouesSaison),
-				tostring(e.bord), tostring(e.embleme)))
+	for i = 1, MAX_TEAMS do
+		local e = readTeam(i)
+		if e.name then
+			say(string.format(L.PVPARENA_DEBUG_TEAM,
+				i, e.name, e.size or 0, e.size or 0, tostring(e.side),
+				tostring(e.wins), tostring(e.played), tostring(e.playerPlayed),
+				tostring(e.seasonWins), tostring(e.seasonPlayed),
+				tostring(e.edge), tostring(e.emblem)))
 		else
-			dire(string.format(L.PVPARENA_DEBUG_NO_TEAM, i))
+			say(string.format(L.PVPARENA_DEBUG_NO_TEAM, i))
 		end
 	end
-	if fenetre then
-		dire(string.format(L.PVPARENA_DEBUG_DETAIL,
-			tostring(fenetre:IsShown()), tostring(fenetre.equipe), tostring(fenetre.saison)))
+	if window then
+		say(string.format(L.PVPARENA_DEBUG_DETAIL,
+			tostring(window:IsShown()), tostring(window.team), tostring(window.season)))
 	end
 end

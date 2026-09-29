@@ -1,22 +1,13 @@
--- ForeverUI : positions modifiables.
---
--- POURQUOI CE FICHIER EXISTE AVANT LES CADRES. Sur camelot, aucun element
--- d'interface n'a de position figee : chacun est un "systeme" que le joueur
--- deplace, et sa position est retenue. On reprend le principe ici : tout ce que
--- ForeverUI construit s'enregistre avec une position par defaut, et c'est cette
--- table qui decide ou le cadre se pose au chargement. Un cadre qui poserait
--- lui-meme son SetPoint definitif serait le seul a ne pas etre deplacable.
---
--- Tout est ancre a UIParent, jamais a un autre cadre de ForeverUI : sinon
--- deplacer un element en entrainerait un autre, et le joueur ne pourrait plus
--- defaire l'enchainement.
+-- ForeverUI: movable positions.
+-- Every frame ForeverUI builds registers here with a default position; this table places it
+-- on load and remembers where the player moves it. Everything is anchored to UIParent, never
+-- to another ForeverUI frame, so moving one element never drags another.
 
 ForeverUI = ForeverUI or {}
 
--- Neutraliser un cadre du client. Le masquer ne suffit pas : son propre code
--- le reaffiche a la premiere occasion (changement de page, sortie de vehicule,
--- mise a jour de runes). On coupe donc ses evenements, on le masque, et on
--- accroche son OnShow pour qu'il se remasque si quelque chose insiste.
+-- Disable a client frame. Hiding is not enough: its own code shows it again (page change,
+-- vehicle exit, rune update). So we unregister its events, hide it, and hide it again on
+-- OnShow.
 function ForeverUI.Suppress(frame)
 	if not frame or frame.foreverSuppressed then
 		return
@@ -40,7 +31,7 @@ local Layout = {}
 ForeverUI.Layout = Layout
 
 Layout.systems = {}   -- id -> { frame, label, defaults }
-Layout.order = {}     -- ids, dans l'ordre d'enregistrement
+Layout.order = {}     -- ids, in registration order
 Layout.editing = false
 
 local PREFIX = "|cff66ccffForeverUI|r : "
@@ -56,7 +47,7 @@ local function positions()
 	return ForeverUIDB.positions
 end
 
--- Pose le cadre a sa position retenue, ou a sa position par defaut.
+-- Place the frame at its saved position, or at its default position.
 function Layout.Apply(id)
 	local system = Layout.systems[id]
 	if not system then
@@ -77,7 +68,7 @@ function Layout.Save(id)
 		return false
 	end
 
-	local point, _relativeTo, relativePoint, x, y = system.frame:GetPoint(1)
+	local point, _, relativePoint, x, y = system.frame:GetPoint(1)
 	if not point then
 		return false
 	end
@@ -108,8 +99,8 @@ function Layout.Reset(id)
 	return true
 end
 
--- L'enregistrement fait tout : rendre le cadre deplacable, le poser, et le
--- rendre visible en mode edition.
+-- Make the frame movable, place it, and show its overlay in edit mode.
+-- id: saved-position key; label: overlay text; point..y: default anchor on UIParent
 function Layout.Register(frame, id, label, point, relativePoint, x, y)
 	Layout.systems[id] = {
 		frame = frame,
@@ -128,10 +119,9 @@ function Layout.Register(frame, id, label, point, relativePoint, x, y)
 	return frame
 end
 
--- Corriger la position par defaut d'un element deja enregistre. Le bas de
--- l'ecran est une chaine : la barre d'action et les sacs se posent de part et
--- d'autre du micro-menu, dont la largeur n'est connue qu'une fois ses boutons
--- comptes. Un element que le joueur a deja deplace garde sa position.
+-- Change the default position of a registered element. The bottom of the screen is a chain:
+-- the action bar and the bags sit on each side of the micro menu, whose width is known only
+-- once its buttons are counted. An element the player has moved keeps its position.
 function Layout.SetDefaults(id, point, relativePoint, x, y)
 	local system = Layout.systems[id]
 	if not system then
@@ -218,9 +208,8 @@ function Layout.SetEditMode(enabled)
 	return true
 end
 
--- Le mode edition se coupe tout seul a l'entree en combat : un cadre securise
--- ne peut plus etre deplace a ce moment, et laisser les surfaces bleues
--- affichees ferait croire le contraire.
+-- Edit mode turns itself off on entering combat: secure frames can no longer be moved, and
+-- the blue overlays would suggest otherwise.
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_LOGIN")
 watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -234,29 +223,27 @@ watcher:SetScript("OnEvent", function(_self, event)
 	end
 end)
 
--- /fui souris : tant qu'il est actif, chaque clic dit dans le chat quel cadre
--- est sous la souris (GetMouseFocus), ses parents et ses images -- pour
--- trouver d'ou vient un element de l'ecran (2026-09-25 : les portails de la
--- carte du monde, qui ne sont pas des reperes du client)
-local espion = CreateFrame("Frame")
-espion:Hide()
-local function decrire(cadre)
-	if not cadre then return L.LAYOUT_SPY_NOTHING end
-	local nom = cadre.GetName and cadre:GetName() or nil
-	local type_ = cadre.GetObjectType and cadre:GetObjectType() or "?"
-	return (nom or L.LAYOUT_SPY_UNNAMED) .. " [" .. type_ .. "]"
+-- /fui mouse: while active, each click prints the frame under the mouse (GetMouseFocus), its
+-- parents and its regions, to find where a screen element comes from.
+local spy = CreateFrame("Frame")
+spy:Hide()
+local function describe(frame)
+	if not frame then return L.LAYOUT_SPY_NOTHING end
+	local name = frame.GetName and frame:GetName() or nil
+	local type_ = frame.GetObjectType and frame:GetObjectType() or "?"
+	return (name or L.LAYOUT_SPY_UNNAMED) .. " [" .. type_ .. "]"
 end
-espion:SetScript("OnUpdate", function(self)
-	local bas = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
-	if bas and not self.enfonce then
+spy:SetScript("OnUpdate", function(self)
+	local down = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
+	if down and not self.pressed then
 		local f = GetMouseFocus and GetMouseFocus()
-		say(L.LAYOUT_SPY_UNDER_MOUSE .. decrire(f))
-		local p, chemin = f and f:GetParent(), {}
-		while p and #chemin < 8 do
-			table.insert(chemin, decrire(p))
+		say(L.LAYOUT_SPY_UNDER_MOUSE .. describe(f))
+		local p, path = f and f:GetParent(), {}
+		while p and #path < 8 do
+			table.insert(path, describe(p))
 			p = p:GetParent()
 		end
-		DEFAULT_CHAT_FRAME:AddMessage("   " .. L.LAYOUT_SPY_PARENTS .. table.concat(chemin, " < "))
+		DEFAULT_CHAT_FRAME:AddMessage("   " .. L.LAYOUT_SPY_PARENTS .. table.concat(path, " < "))
 		if f and f.GetRegions then
 			for _, r in ipairs({ f:GetRegions() }) do
 				if r.GetTexture and r:GetTexture() then
@@ -272,16 +259,16 @@ espion:SetScript("OnUpdate", function(self)
 			end
 		end
 	end
-	self.enfonce = bas and true or false
+	self.pressed = down and true or false
 end)
-ForeverUI.SourisEspion = espion
-ForeverUI.SourisDebug = function()
-	if espion:IsShown() then
-		espion:Hide()
+ForeverUI.MouseSpy = spy
+ForeverUI.MouseDebug = function()
+	if spy:IsShown() then
+		spy:Hide()
 		say(L.LAYOUT_SPY_STOPPED)
 	else
-		espion.enfonce = true
-		espion:Show()
+		spy.pressed = true
+		spy:Show()
 		say(L.LAYOUT_SPY_STARTED)
 	end
 end
@@ -307,52 +294,52 @@ SlashCmdList["FOREVERUI"] = function(message)
 			Layout.Reset()
 			say(L.LAYOUT_RESET_ALL)
 		end
-	elseif command == "bar" or command == "barre" then
+	elseif command == "bar" then
 		if ForeverUI.ActionBarDebug then
 			ForeverUI.ActionBarDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_ACTIONBAR)
 		end
-	elseif command == "bas" then
+	elseif command == "bottom" then
 		if ForeverUI.BottomBarDebug then
 			ForeverUI.BottomBarDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_BOTTOM)
 		end
-	elseif command == "barres" then
+	elseif command == "statusbars" then
 		if ForeverUI.StatusBarsDebug then
 			ForeverUI.StatusBarsDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_STATUSBARS)
 		end
-	elseif command == "sacs" then
-		local cle, valeur = string.match(argument, "^(%S+)%s+(%S+)$")
-		if cle and ForeverUI.BagsSet then
-			ForeverUI.BagsSet(cle, valeur)
+	elseif command == "bags" then
+		local key, value = string.match(argument, "^(%S+)%s+(%S+)$")
+		if key and ForeverUI.BagsSet then
+			ForeverUI.BagsSet(key, value)
 		elseif ForeverUI.BagsDebug then
 			ForeverUI.BagsDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_BAGS)
 		end
-	elseif command == "modele" then
+	elseif command == "model" then
 		if ForeverUI.CharacterModelTune then
 			ForeverUI.CharacterModelTune(argument)
 		else
 			say(L.LAYOUT_NO_MODEL_TUNE)
 		end
-	elseif command == "onglets" then
+	elseif command == "tabs" then
 		if ForeverUI.CharacterTabsDebug then
 			ForeverUI.CharacterTabsDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_TABS)
 		end
-	elseif command == "perso" then
+	elseif command == "character" then
 		if ForeverUI.CharacterSheetDebug then
 			ForeverUI.CharacterSheetDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_SHEET)
 		end
-	elseif command == "croix" then
+	elseif command == "close" then
 		if ForeverUI.CharacterCloseDebug then
 			ForeverUI.CharacterCloseDebug()
 		else
@@ -364,27 +351,27 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_MINIMAP)
 		end
-	elseif command == "souris" then
-		ForeverUI.SourisDebug()
-	elseif command == "carte" then
+	elseif command == "mouse" then
+		ForeverUI.MouseDebug()
+	elseif command == "map" then
 		if ForeverUI.WorldMapDebug then
 			ForeverUI.WorldMapDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_WORLDMAP)
 		end
-	elseif command == "journal" then
+	elseif command == "questlog" then
 		if ForeverUI.QuestLogDebug then
 			ForeverUI.QuestLogDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_QUESTLOG)
 		end
-	elseif command == "suivi" then
+	elseif command == "tracking" then
 		if ForeverUI.ObjectiveTrackerDebug then
 			ForeverUI.ObjectiveTrackerDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_TRACKER)
 		end
-	elseif command == "grimoire" then
+	elseif command == "spellbook" then
 		if ForeverUI.SpellBookDebug then
 			ForeverUI.SpellBookDebug()
 		else
@@ -396,7 +383,7 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_MICROMENU)
 		end
-	elseif command == "titres" or command == "titles" then
+	elseif command == "titles" then
 		if ForeverUI.TitlesDebug then
 			ForeverUI.TitlesDebug()
 		else
@@ -404,13 +391,12 @@ SlashCmdList["FOREVERUI"] = function(message)
 		end
 	elseif command == "pvp" then
 		if ForeverUI.PvPDebug then
-			-- /fui pvp 0.35 : la jauge circulaire se pose a 35 %, pour la
-			-- voir sans avoir a gagner de l'honneur.
+			-- /fui pvp 0.35: sets the circular gauge to 35 % without earning honor.
 			ForeverUI.PvPDebug(tonumber(argument))
 		else
 			say(L.LAYOUT_NO_DIAG_PVP)
 		end
-	elseif command == "arene" or command == "arena" then
+	elseif command == "arena" then
 		if ForeverUI.PvPArenaDebug then
 			ForeverUI.PvPArenaDebug()
 		else
@@ -426,9 +412,9 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_CHAT)
 		end
-	elseif command == "chatlignes" then
-		if ForeverUI.ChatReleveLignes then
-			ForeverUI.ChatReleveLignes()
+	elseif command == "chatlines" then
+		if ForeverUI.ChatRecordLines then
+			ForeverUI.ChatRecordLines()
 		else
 			say(L.LAYOUT_NO_CHAT_LINES)
 		end
@@ -438,7 +424,7 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_BUFFS)
 		end
-	elseif command == "chercheur" then
+	elseif command == "finder" then
 		if ForeverUI.GroupFinderDebug then
 			ForeverUI.GroupFinderDebug()
 		else
@@ -456,13 +442,13 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_BATTLEGROUNDS)
 		end
-	elseif command == "familier" then
+	elseif command == "pet" then
 		if ForeverUI.PetDebug then
 			ForeverUI.PetDebug()
 		else
 			say(L.LAYOUT_NO_DIAG_PET)
 		end
-	elseif command == "monnaie" or command == "monnaies" then
+	elseif command == "currency" or command == "currencies" then
 		if ForeverUI.TokensDebug then
 			ForeverUI.TokensDebug()
 		else
@@ -474,9 +460,9 @@ SlashCmdList["FOREVERUI"] = function(message)
 		else
 			say(L.LAYOUT_NO_DIAG_SKILLS)
 		end
-	elseif command == "reput" then
+	elseif command == "rep" then
 		if ForeverUI.ReputationDebug then
-			-- /fui reput Alliance : ne garde que cette faction-la.
+			-- /fui rep Alliance: keeps only that faction.
 			ForeverUI.ReputationDebug(argument ~= "" and argument or nil)
 		else
 			say(L.LAYOUT_NO_DIAG_REPUTATION)

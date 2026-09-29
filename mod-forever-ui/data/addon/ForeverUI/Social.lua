@@ -1,67 +1,7 @@
--- ForeverUI : la fenetre Social, habillee comme camelot (docs : memoire
--- foreverui-social). Ce fichier porte la fenetre, ses onglets et la page
--- Contacts (amis et ignores) ; les pages Qui, Guilde, Canaux et Raid sont
--- dans SocialWho.lua, SocialGuild.lua, SocialChat.lua et SocialRaid.lua, qui
--- s'inscrivent par S.inscrirePage.
---
--- DECISIONS DE L'UTILISATEUR (2026-09-26) : la structure de camelot plus les
--- onglets de WotLK qui lui manquent ; la guilde en onglet ; les ignores en
--- SOUS-ONGLET "Ignore" a cote de "Friends" ; rien de Battle.net (le serveur
--- ne l'a pas).
---
--- RELEVE -- camelot/friendsframe.xml et .lua, shareduipaneltemplates
--- (camelot et mainline), nineslicelayouts (+ les corrections camelot),
--- tabsystemtemplates :
---   fenetre      ButtonFrameTemplate 385 x 424 ; fond UI-Background-Rock en
---                mosaique (2,-21 / -2,2) ; _UI-Frame-TopTileStreaks 43 de haut
---                (6,-21 / -2,-21) ; metal PortraitFrameTemplate : coin
---                portrait (-13, 16), haut droit (2, 16), bas gauche (-13, -8),
---                bas droit (2, -8) ; portrait Battlenet-Portrait 60 x 60 a
---                (-5, 7) ; titre GameFontNormal TOP (0, -5) dans une bande de
---                20 (58,-1 / -24,-1) ; croix 24 x 24 a TOPRIGHT (-2, 1)
---   encadre      InsetFrameTemplate, 4,-83 / -6,26 (ButtonFrameTemplate_
---                ShowButtonBar)
---   onglets bas  PanelTabButtonTemplate, 32 de haut, texte + 20 (au moins
---                gauche + droite), le premier TOPLEFT sur le BOTTOMLEFT (5, 2),
---                les suivants a +3 ; actif uiframe-activetab-* (42), inactif
---                uiframe-tab-*-c60 (36) ; texte CENTER (0, 2), (0, -3) choisi ;
---                GameFontNormalSmall, GameFontHighlightSmall choisi
---   sous-onglets FriendsTabHeader : TabSystem a (18, -60), onglets de 24 de
---                haut, largeur bornee a 100..150, espacement 1, meme art
---                RETOURNE (isTabOnTop), texte (0, 0) choisi, (0, -3) sinon
---   liste        de (8, -87) au BOTTOMRIGHT de l'encadre (-22, 2) ; barre
---                MinimalScrollBar a droite ; ligne d'ami 34 : fond de couleur
---                (0,-1 / 0,1), etat 16 x 16 a (4, -3), nom FriendsFont_Normal
---                a (20, -4), info FriendsFont_Small dessous (0, -3) ;
---                surbrillance UI-QuestLogTitleHighlight en ADD ; la selection
---                verrouille la surbrillance ; separateur
---                UI-FriendsFrame-OnlineDivider de 16
---   boutons      UIPanelButtonTemplate 134 x 21, BOTTOMLEFT (4, 4) et
---                BOTTOMRIGHT (-6, 4)
---
--- CE QUI VIENT DE WotLK (FriendsFrame.lua du client) : les donnees
--- (GetFriendInfo, GetIgnoreName...), l'ordre des lignes -- en ligne, un
--- separateur, hors ligne --, le texte "Nom, Level 80 Warrior", les couleurs
--- FRIENDS_*, le menu du clic droit (FriendsFrame_ShowDropdown), l'infobulle
--- (FriendsFrameTooltip_Show), et ce que font les boutons
--- (FriendsFrameAddFriendButton_OnClick, FriendsFrameSendMessageButton_OnClick,
--- FriendsFrameUnsquelchButton_OnClick). La liste des ignores reprend son
--- en-tete IGNORED.
---
--- RETIRES (2026-09-26, demande de l'utilisateur) : tout ce qui touche au
--- parrainage (le bouton d'invocation) et au chat vocal (les muets, leur
--- en-tete MUTED et le bouton Mute Player).
---
--- ECARTS : camelot titre "Contacts" (CONTACTS_TAB_TITLE, CONTACTS_LIST_TITLE)
--- et 3.3.5 n'a pas ces chaines ; l'onglet et le titre prennent FRIENDS et
--- FRIENDS_LIST / IGNORE_LIST, dans la langue du client.
---
--- COMMENT ELLE VIT. FriendsFrame reste le panneau du client -- ToggleFriends
--- Frame, le micro-bouton, Echap, la place a gauche, et l'onglet choisi
--- (FriendsFrame.selectedTab). Notre fenetre est sa fille. L'ecran de WotLK se
--- tait en entier, le panneau cesse d'attraper la souris, et notre fenetre
--- montre la page de l'onglet choisi. Ce que les sous-cadres du client font en
--- s'affichant (SetWhoToUI, GuildRoster...), la page le refait.
+-- Social window skinned like camelot: the frame, its tabs and the Contacts page (friends
+-- and ignores). The Who, Guild, Chat and Raid pages are in SocialWho.lua, SocialGuild.lua,
+-- SocialChat.lua and SocialRaid.lua and register with S.registerPage. Data, row order,
+-- colors, menu, tooltip and button actions follow the client's FriendsFrame.lua.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -72,198 +12,201 @@ ForeverUI.Social = S
 local SEP = string.char(92)
 local L = ForeverUI.L
 
--- une table : Lua 5.1 limite a 60 les valeurs capturees par une fonction
+-- Layout values from camelot friendsframe.xml, shareduipaneltemplates, nineslicelayouts
+-- and tabsystemtemplates. A table, because Lua 5.1 limits a function to 60 upvalues.
 local G = {
-	largeur = 385, hauteur = 424,
-	roche = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-rock",
-	-- battlenet-portrait affine (tools/affiner_portrait.py) : 128, mipmaps,
-	-- non compresse ; l'original 64 en DXT5 paraissait pixelise
+	width = 385, height = 424,
+	rock = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-rock",
+	-- battlenet-portrait refined by tools/refine_portrait.py: 128 px, mipmaps, uncompressed;
+	-- the original 64 px DXT5 looks pixelated
 	portrait = "Interface" .. SEP .. "ForeverUI" .. SEP .. "friendsframe" .. SEP .. "battlenet-portrait-hd",
-	portraitCote = 60, portraitX = -5, portraitY = 7,
-	titreX1 = 58, titreX2 = -24, titreY = -1, titreH = 20, titreTexteY = -5,
-	croix = 24, croixX = -2, croixY = 1,
-	encadreX1 = 4, encadreY1 = -83, encadreX2 = -6, encadreY2 = 26,
-	listeX = 8, listeY = -87, listeX2 = -22, listeY2 = 2, listeX2Seule = -4,
-	boutonL = 134, boutonH = 21, boutonBas = 4, boutonGauche = 4, boutonDroite = -6,
-	ongletH = 32, ongletPremierX = 5, ongletPremierY = 2, ongletEcart = 3, ongletMarge = 20,
-	sousX = 18, sousY = -60, sousH = 24, sousMin = 100, sousMax = 150, sousEcart = 1,
-	ligneAmi = 34, ligneCourte = 16,
-	etatCote = 16, etatX = 4, etatY = -3, nomX = 20, nomY = -4, infoY = -3,
-	surbrillance = "Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestLogTitleHighlight",
-	surbrillanceIgnore = "Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestTitleHighlight",
-	teinteSurbrillance = { 0.243, 0.570, 1 },
-	separateur = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "UI-FriendsFrame-OnlineDivider",
-	etat = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "StatusIcon-",
+	portraitSide = 60, portraitX = -5, portraitY = 7,
+	titleX1 = 58, titleX2 = -24, titleY = -1, titleH = 20, titleTextY = -5,
+	closeButton = 24, closeButtonX = -2, closeButtonY = 1,
+	frameBoxX1 = 4, frameBoxY1 = -83, frameBoxX2 = -6, frameBoxY2 = 26,
+	listX = 8, listY = -87, listX2 = -22, listY2 = 2, listX2NoBar = -4,
+	buttonW = 134, buttonH = 21, buttonBottom = 4, buttonLeft = 4, buttonRight = -6,
+	tabH = 32, firstTabX = 5, firstTabY = 2, tabGap = 3, tabMargin = 20,
+	subTabX = 18, subTabY = -60, subTabH = 24, subTabMin = 100, subTabMax = 150, subTabGap = 1,
+	friendRowH = 34, shortRowH = 16,
+	stateSide = 16, stateX = 4, stateY = -3, nameX = 20, nameY = -4, infoY = -3,
+	highlight = "Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestLogTitleHighlight",
+	ignoreHighlight = "Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestTitleHighlight",
+	highlightTint = { 0.243, 0.570, 1 },
+	separator = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "UI-FriendsFrame-OnlineDivider",
+	state = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "StatusIcon-",
 }
 
--- LE METAL de PortraitFrameTemplate, avec les corrections de camelot
--- (nineslicelayoutoverrides.lua) : les coins de droite a x = 2, ceux du bas a
--- y = -8.
+-- PortraitFrameTemplate metal with camelot's fixes (nineslicelayoutoverrides.lua): right
+-- corners at x = 2, bottom corners at y = -8.
 local METAL = {
-	{ cle = "hg", nom = "ui-frame-portraitmetal-cornertopleft", point = "TOPLEFT", x = -13, y = 16 },
-	{ cle = "hd", nom = "ui-frame-metal-cornertopright", point = "TOPRIGHT", x = 2, y = 16 },
-	{ cle = "bg", nom = "ui-frame-metal-cornerbottomleft", point = "BOTTOMLEFT", x = -13, y = -8 },
-	{ cle = "bd", nom = "ui-frame-metal-cornerbottomright", point = "BOTTOMRIGHT", x = 2, y = -8 },
+	{ key = "topLeft", name = "ui-frame-portraitmetal-cornertopleft", point = "TOPLEFT", x = -13, y = 16 },
+	{ key = "topRight", name = "ui-frame-metal-cornertopright", point = "TOPRIGHT", x = 2, y = 16 },
+	{ key = "bottomLeft", name = "ui-frame-metal-cornerbottomleft", point = "BOTTOMLEFT", x = -13, y = -8 },
+	{ key = "bottomRight", name = "ui-frame-metal-cornerbottomright", point = "BOTTOMRIGHT", x = 2, y = -8 },
 }
 
--- LES ONGLETS. Actifs dans la feuille de base (camelot n'en a pas de c60),
--- inactifs dans la c60.
-local ONGLET_ART = {
-	actifG = "uiframe-activetab-left", actifM = "_uiframe-activetab-center", actifD = "uiframe-activetab-right",
-	inactifG = "uiframe-tab-left-c60", inactifM = "_uiframe-tab-center-c60", inactifD = "uiframe-tab-right-c60",
+-- Tab art: active pieces from the base sheet (camelot has no c60 ones), inactive from c60.
+local TAB_ART = {
+	activeLeft = "uiframe-activetab-left", activeMiddle = "_uiframe-activetab-center", activeRight = "uiframe-activetab-right",
+	inactiveLeft = "uiframe-tab-left-c60", inactiveMiddle = "_uiframe-tab-center-c60", inactiveRight = "uiframe-tab-right-c60",
 }
 
--- LES ONGLETS DU BAS : celui des contacts, puis ceux de WotLK. L'identifiant
--- est celui de l'onglet du client, FriendsFrameTab<id>.
-local ONGLETS = {
-	{ id = 1, texte = "FRIENDS" },
-	{ id = 2, texte = "WHO" },
-	{ id = 3, texte = "GUILD" },
-	{ id = 4, texte = "CHAT" },
-	{ id = 5, texte = "RAID" },
+-- Bottom tabs: Contacts, then the WotLK ones. id is the client tab's, FriendsFrameTab<id>.
+-- 3.3.5 lacks camelot's CONTACTS_* strings, so tabs and titles use FRIENDS, FRIENDS_LIST
+-- and IGNORE_LIST.
+local TABS = {
+	{ id = 1, text = "FRIENDS" },
+	{ id = 2, text = "WHO" },
+	{ id = 3, text = "GUILD" },
+	{ id = 4, text = "CHAT" },
+	{ id = 5, text = "RAID" },
 }
-local SOUS_ONGLETS = {
-	{ id = 1, texte = "FRIENDS", titre = "FRIENDS_LIST" },
-	{ id = 2, texte = "IGNORE", titre = "IGNORE_LIST" },
+local SUB_TABS = {
+	{ id = 1, text = "FRIENDS", title = "FRIENDS_LIST" },
+	{ id = 2, text = "IGNORE", title = "IGNORE_LIST" },
 }
 
-local function txt(cle)
-	return _G[cle] or cle
+-- Client global string, or the key itself when missing.
+local function txt(key)
+	return _G[key] or key
 end
 
-local function couleur(nom, defaut)
-	local c = _G[nom]
+-- r, g, b, a of the client color global name, or of default when missing
+local function color(name, default)
+	local c = _G[name]
 	if type(c) == "table" and c.r then
 		return c.r, c.g, c.b, c.a
 	end
-	return defaut[1], defaut[2], defaut[3], defaut[4]
+	return default[1], default[2], default[3], default[4]
 end
 
--- ------------------------------------------------------------------ le cadre
+-- ------------------------------------------------------------------ Frame
 
-local function construireCadre(f)
-	local roche = f:CreateTexture(nil, "BACKGROUND")
-	roche:SetTexture(G.roche, true)
-	if roche.SetHorizTile then roche:SetHorizTile(true) roche:SetVertTile(true) end
-	roche:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -21)
-	roche:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
+-- Builds the window art: rock background, top streaks, metal border, portrait, title
+-- and close button.
+local function buildFrame(f)
+	local rock = f:CreateTexture(nil, "BACKGROUND")
+	rock:SetTexture(G.rock, true)
+	if rock.SetHorizTile then rock:SetHorizTile(true) rock:SetVertTile(true) end
+	rock:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -21)
+	rock:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
 
-	local stries = f:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(stries, "_ui-frame-toptilestreaks", true)
-	stries:SetHeight(43)
-	stries:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -21)
-	stries:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -21)
+	local stripes = f:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(stripes, "_ui-frame-toptilestreaks", true)
+	stripes:SetHeight(43)
+	stripes:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -21)
+	stripes:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -21)
 
 	local metal = CreateFrame("Frame", nil, f)
 	metal:SetAllPoints(f)
 	metal:SetFrameLevel(f:GetFrameLevel() + 20)
 	local p = {}
-	for _, coin in ipairs(METAL) do
+	for _, corner in ipairs(METAL) do
 		local t = metal:CreateTexture(nil, "OVERLAY")
-		ForeverUI.SetAtlas(t, coin.nom)
-		t:SetPoint(coin.point, metal, coin.point, coin.x, coin.y)
-		p[coin.cle] = t
+		ForeverUI.SetAtlas(t, corner.name)
+		t:SetPoint(corner.point, metal, corner.point, corner.x, corner.y)
+		p[corner.key] = t
 	end
-	local function bord(nom, a1, c1, r1, a2, c2, r2)
+	local function edge(name, a1, c1, r1, a2, c2, r2)
 		local t = metal:CreateTexture(nil, "OVERLAY")
-		ForeverUI.SetAtlas(t, nom)
+		ForeverUI.SetAtlas(t, name)
 		t:SetPoint(a1, c1, r1)
 		t:SetPoint(a2, c2, r2)
 	end
-	bord("_ui-frame-metal-edgetop", "TOPLEFT", p.hg, "TOPRIGHT", "TOPRIGHT", p.hd, "TOPLEFT")
-	bord("_ui-frame-metal-edgebottom", "BOTTOMLEFT", p.bg, "BOTTOMRIGHT", "BOTTOMRIGHT", p.bd, "BOTTOMLEFT")
-	bord("!ui-frame-metal-edgeleft", "TOPLEFT", p.hg, "BOTTOMLEFT", "BOTTOMLEFT", p.bg, "TOPLEFT")
-	bord("!ui-frame-metal-edgeright", "TOPRIGHT", p.hd, "BOTTOMRIGHT", "BOTTOMRIGHT", p.bd, "TOPRIGHT")
+	edge("_ui-frame-metal-edgetop", "TOPLEFT", p.topLeft, "TOPRIGHT", "TOPRIGHT", p.topRight, "TOPLEFT")
+	edge("_ui-frame-metal-edgebottom", "BOTTOMLEFT", p.bottomLeft, "BOTTOMRIGHT", "BOTTOMRIGHT", p.bottomRight, "BOTTOMLEFT")
+	edge("!ui-frame-metal-edgeleft", "TOPLEFT", p.topLeft, "BOTTOMLEFT", "BOTTOMLEFT", p.bottomLeft, "TOPLEFT")
+	edge("!ui-frame-metal-edgeright", "TOPRIGHT", p.topRight, "BOTTOMRIGHT", "BOTTOMRIGHT", p.bottomRight, "TOPRIGHT")
 
-	local cadrePortrait = CreateFrame("Frame", nil, f)
-	cadrePortrait:SetAllPoints(f)
-	cadrePortrait:SetFrameLevel(f:GetFrameLevel() + 19)
-	local portrait = cadrePortrait:CreateTexture(nil, "OVERLAY")
-	portrait:SetWidth(G.portraitCote)
-	portrait:SetHeight(G.portraitCote)
+	local portraitFrame = CreateFrame("Frame", nil, f)
+	portraitFrame:SetAllPoints(f)
+	portraitFrame:SetFrameLevel(f:GetFrameLevel() + 19)
+	local portrait = portraitFrame:CreateTexture(nil, "OVERLAY")
+	portrait:SetWidth(G.portraitSide)
+	portrait:SetHeight(G.portraitSide)
 	portrait:SetPoint("TOPLEFT", f, "TOPLEFT", G.portraitX, G.portraitY)
 	portrait:SetTexture(G.portrait)
 	f.portrait = portrait
 
-	local bandeau = CreateFrame("Frame", nil, f)
-	bandeau:SetFrameLevel(f:GetFrameLevel() + 21)
-	bandeau:SetHeight(G.titreH)
-	bandeau:SetPoint("TOPLEFT", f, "TOPLEFT", G.titreX1, G.titreY)
-	bandeau:SetPoint("TOPRIGHT", f, "TOPRIGHT", G.titreX2, G.titreY)
-	f.titre = bandeau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	f.titre:SetPoint("TOP", bandeau, "TOP", 0, G.titreTexteY)
-	f.bandeau = bandeau
+	local banner = CreateFrame("Frame", nil, f)
+	banner:SetFrameLevel(f:GetFrameLevel() + 21)
+	banner:SetHeight(G.titleH)
+	banner:SetPoint("TOPLEFT", f, "TOPLEFT", G.titleX1, G.titleY)
+	banner:SetPoint("TOPRIGHT", f, "TOPRIGHT", G.titleX2, G.titleY)
+	f.title = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.title:SetPoint("TOP", banner, "TOP", 0, G.titleTextY)
+	f.banner = banner
 
-	-- LA CROIX : elle ferme le panneau du client, comme la sienne.
-	local croix = CreateFrame("Button", "ForeverUISocialCloseButton", f)
-	croix:SetWidth(G.croix)
-	croix:SetHeight(G.croix)
-	croix:SetFrameLevel(f:GetFrameLevel() + 22)
-	croix:SetPoint("TOPRIGHT", f, "TOPRIGHT", G.croixX, G.croixY)
-	for _, etat in ipairs({
+	-- Close button: hides the client panel, like the client's own.
+	local closeButton = CreateFrame("Button", "ForeverUISocialCloseButton", f)
+	closeButton:SetWidth(G.closeButton)
+	closeButton:SetHeight(G.closeButton)
+	closeButton:SetFrameLevel(f:GetFrameLevel() + 22)
+	closeButton:SetPoint("TOPRIGHT", f, "TOPRIGHT", G.closeButtonX, G.closeButtonY)
+	for _, state in ipairs({
 		{ "SetNormalTexture", "GetNormalTexture", "redbutton-exit" },
 		{ "SetPushedTexture", "GetPushedTexture", "redbutton-exit-pressed" },
 		{ "SetHighlightTexture", "GetHighlightTexture", "redbutton-highlight" },
 	}) do
-		local e = ForeverUI.AtlasEntry(etat[3])
-		croix[etat[1]](croix, e and e[1] or "")
-		local t = croix[etat[2]](croix)
+		local e = ForeverUI.AtlasEntry(state[3])
+		closeButton[state[1]](closeButton, e and e[1] or "")
+		local t = closeButton[state[2]](closeButton)
 		if t then
-			ForeverUI.SetAtlas(t, etat[3], true)
+			ForeverUI.SetAtlas(t, state[3], true)
 			t:ClearAllPoints()
-			t:SetAllPoints(croix)
-			if etat[3] == "redbutton-highlight" then t:SetBlendMode("ADD") end
+			t:SetAllPoints(closeButton)
+			if state[3] == "redbutton-highlight" then t:SetBlendMode("ADD") end
 		end
 	end
-	croix:SetScript("OnClick", function() HideUIPanel(FriendsFrame) end)
-	f.croix = croix
+	closeButton:SetScript("OnClick", function() HideUIPanel(FriendsFrame) end)
+	f.closeButton = closeButton
 end
 
--- --------------------------------------------------------------- les onglets
+-- --------------------------------------------------------------- Tabs
 
--- Une texture d'onglet : son element, et pour les onglets du haut le meme
--- RETOURNE -- une rotation d'un demi-tour, c'est echanger les deux bords en
--- largeur et en hauteur (SetRotation effacerait le rectangle d'atlas).
-local function morceauOnglet(b, couche, atlas, retourne)
-	local t = b:CreateTexture(nil, couche)
+-- One tab texture. Top tabs use it flipped: a half turn swaps both edges in width and
+-- height (SetRotation would drop the atlas rectangle).
+local function tabPiece(b, layer, atlas, flipped)
+	local t = b:CreateTexture(nil, layer)
 	ForeverUI.SetAtlas(t, atlas)
-	if retourne then
+	if flipped then
 		local e = ForeverUI.AtlasEntry(atlas)
 		if e then t:SetTexCoord(e[3], e[2], e[5], e[4]) end
 	end
 	return t
 end
 
--- PanelTabButtonTemplate (bas) ou TabSystemButtonArtTemplate + isTabOnTop
--- (haut). Les deux jeux de trois morceaux : actifs et inactifs, et la
--- surbrillance, l'inactif en ADD a 0,4.
-local function creerOnglet(parent, nom, enHaut)
-	local b = CreateFrame("Button", nom, parent)
-	b:SetHeight(enHaut and G.sousH or G.ongletH)
+-- PanelTabButtonTemplate (bottom) or TabSystemButtonArtTemplate + isTabOnTop (top).
+-- Two sets of three pieces, active and inactive, plus the highlight: inactive art in ADD
+-- at 0.4. atTop: sub-tab above the list
+local function createTab(parent, name, atTop)
+	local b = CreateFrame("Button", name, parent)
+	b:SetHeight(atTop and G.subTabH or G.tabH)
 	local a = {}
-	a.actifG = morceauOnglet(b, "BACKGROUND", ONGLET_ART.actifG, enHaut)
-	a.actifD = morceauOnglet(b, "BACKGROUND", ONGLET_ART.actifD, enHaut)
-	a.actifM = morceauOnglet(b, "BACKGROUND", ONGLET_ART.actifM, enHaut)
-	a.g = morceauOnglet(b, "BACKGROUND", ONGLET_ART.inactifG, enHaut)
-	a.d = morceauOnglet(b, "BACKGROUND", ONGLET_ART.inactifD, enHaut)
-	a.m = morceauOnglet(b, "BACKGROUND", ONGLET_ART.inactifM, enHaut)
-	a.sg = morceauOnglet(b, "HIGHLIGHT", ONGLET_ART.inactifG, enHaut)
-	a.sd = morceauOnglet(b, "HIGHLIGHT", ONGLET_ART.inactifD, enHaut)
-	a.sm = morceauOnglet(b, "HIGHLIGHT", ONGLET_ART.inactifM, enHaut)
+	a.activeLeft = tabPiece(b, "BACKGROUND", TAB_ART.activeLeft, atTop)
+	a.activeRight = tabPiece(b, "BACKGROUND", TAB_ART.activeRight, atTop)
+	a.activeMiddle = tabPiece(b, "BACKGROUND", TAB_ART.activeMiddle, atTop)
+	a.g = tabPiece(b, "BACKGROUND", TAB_ART.inactiveLeft, atTop)
+	a.d = tabPiece(b, "BACKGROUND", TAB_ART.inactiveRight, atTop)
+	a.m = tabPiece(b, "BACKGROUND", TAB_ART.inactiveMiddle, atTop)
+	a.sg = tabPiece(b, "HIGHLIGHT", TAB_ART.inactiveLeft, atTop)
+	a.sd = tabPiece(b, "HIGHLIGHT", TAB_ART.inactiveRight, atTop)
+	a.sm = tabPiece(b, "HIGHLIGHT", TAB_ART.inactiveMiddle, atTop)
 	for _, t in ipairs({ a.sg, a.sd, a.sm }) do
 		t:SetBlendMode("ADD")
 		t:SetAlpha(0.4)
 	end
-	if enHaut then
-		-- HandleRotation : le morceau "droit" retourne passe a gauche ;
-		-- SetTabHeight(24) pose toutes les hauteurs
-		for _, t in pairs(a) do t:SetHeight(G.sousH) end
-		a.actifD:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", -7, 0)
-		a.actifG:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
+	if atTop then
+		-- HandleRotation: the flipped right piece moves to the left; SetTabHeight(24) sets all
+		-- heights
+		for _, t in pairs(a) do t:SetHeight(G.subTabH) end
+		a.activeRight:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", -7, 0)
+		a.activeLeft:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
 		a.d:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", -6, 0)
 		a.g:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
-		a.actifM:SetPoint("TOPLEFT", a.actifD, "TOPRIGHT", 0, 0)
-		a.actifM:SetPoint("BOTTOMRIGHT", a.actifG, "BOTTOMLEFT", 0, 0)
+		a.activeMiddle:SetPoint("TOPLEFT", a.activeRight, "TOPRIGHT", 0, 0)
+		a.activeMiddle:SetPoint("BOTTOMRIGHT", a.activeLeft, "BOTTOMLEFT", 0, 0)
 		a.m:SetPoint("TOPLEFT", a.d, "TOPRIGHT", 0, 0)
 		a.m:SetPoint("BOTTOMRIGHT", a.g, "BOTTOMLEFT", 0, 0)
 		a.sg:SetPoint("TOPRIGHT", a.g, "TOPRIGHT", 0, 0)
@@ -271,12 +214,12 @@ local function creerOnglet(parent, nom, enHaut)
 		a.sm:SetPoint("TOPLEFT", a.m, "TOPLEFT", 0, 0)
 		a.sm:SetPoint("BOTTOMRIGHT", a.m, "BOTTOMRIGHT", 0, 0)
 	else
-		a.actifG:SetPoint("TOPLEFT", b, "TOPLEFT", -1, 0)
-		a.actifD:SetPoint("TOPRIGHT", b, "TOPRIGHT", 8, 0)
+		a.activeLeft:SetPoint("TOPLEFT", b, "TOPLEFT", -1, 0)
+		a.activeRight:SetPoint("TOPRIGHT", b, "TOPRIGHT", 8, 0)
 		a.g:SetPoint("TOPLEFT", b, "TOPLEFT", -3, 0)
 		a.d:SetPoint("TOPRIGHT", b, "TOPRIGHT", 7, 0)
-		a.actifM:SetPoint("TOPLEFT", a.actifG, "TOPRIGHT", 0, 0)
-		a.actifM:SetPoint("BOTTOMRIGHT", a.actifD, "BOTTOMLEFT", 0, 0)
+		a.activeMiddle:SetPoint("TOPLEFT", a.activeLeft, "TOPRIGHT", 0, 0)
+		a.activeMiddle:SetPoint("BOTTOMRIGHT", a.activeRight, "BOTTOMLEFT", 0, 0)
 		a.m:SetPoint("TOPLEFT", a.g, "TOPRIGHT", 0, 0)
 		a.m:SetPoint("BOTTOMRIGHT", a.d, "BOTTOMLEFT", 0, 0)
 		a.sg:SetPoint("TOPLEFT", a.g, "TOPLEFT", 0, 0)
@@ -285,83 +228,85 @@ local function creerOnglet(parent, nom, enHaut)
 		a.sm:SetPoint("BOTTOMRIGHT", a.m, "BOTTOMRIGHT", 0, 0)
 	end
 	b.art = a
-	b.enHaut = enHaut
+	b.atTop = atTop
 	local fs = b:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	fs:SetHeight(10)
 	b:SetFontString(fs)
-	b.texte = fs
+	b.text = fs
 	return b
 end
 
--- SetTabSelected / PanelTemplates_SelectTab : l'art actif, la police claire,
--- le texte qui descend (bas) ou remonte (haut), l'onglet choisi desactive.
-local function choisirOnglet(b, choisi, actif)
+-- SetTabSelected / PanelTemplates_SelectTab: active art, highlight font, text lowered
+-- (bottom) or raised (top), selected tab disabled.
+-- selected: this tab is chosen; active: the tab can be clicked
+local function selectTab(b, selected, active)
 	local a = b.art
-	for _, t in ipairs({ a.actifG, a.actifM, a.actifD }) do
-		if choisi then t:Show() else t:Hide() end
+	for _, t in ipairs({ a.activeLeft, a.activeMiddle, a.activeRight }) do
+		if selected then t:Show() else t:Hide() end
 	end
 	for _, t in ipairs({ a.g, a.m, a.d }) do
-		if choisi then t:Hide() else t:Show() end
+		if selected then t:Hide() else t:Show() end
 	end
-	local police = choisi and GameFontHighlightSmall or (actif and GameFontNormalSmall or GameFontDisableSmall)
-	b.texte:SetFontObject(police)
-	b:SetNormalFontObject(police)
+	local font = selected and GameFontHighlightSmall or (active and GameFontNormalSmall or GameFontDisableSmall)
+	b.text:SetFontObject(font)
+	b:SetNormalFontObject(font)
 	local y
-	if b.enHaut then
-		y = choisi and 0 or -3
+	if b.atTop then
+		y = selected and 0 or -3
 	else
-		y = choisi and -3 or 2
+		y = selected and -3 or 2
 	end
-	b.texte:ClearAllPoints()
-	b.texte:SetPoint("CENTER", b, "CENTER", 0, y)
-	if choisi or not actif then b:Disable() else b:Enable() end
+	b.text:ClearAllPoints()
+	b.text:SetPoint("CENTER", b, "CENTER", 0, y)
+	if selected or not active then b:Disable() else b:Enable() end
 end
 
 -- PanelTemplates_TabResize / TabSystemButtonMixin:UpdateTabWidth
-local function largeurOnglet(b)
-	local texte = b.texte:GetStringWidth() or 0
-	local g = ForeverUI.AtlasEntry(ONGLET_ART.inactifG)
-	local d = ForeverUI.AtlasEntry(ONGLET_ART.inactifD)
-	local cotes = (g and g[6] or 35) + (d and d[6] or 37)
-	if b.enHaut then
-		local l = cotes + 20
-		if l < texte then l = texte + 10 end
-		return math.max(G.sousMin, math.min(G.sousMax, l))
+local function tabWidth(b)
+	local text = b.text:GetStringWidth() or 0
+	local g = ForeverUI.AtlasEntry(TAB_ART.inactiveLeft)
+	local d = ForeverUI.AtlasEntry(TAB_ART.inactiveRight)
+	local sides = (g and g[6] or 35) + (d and d[6] or 37)
+	if b.atTop then
+		local l = sides + 20
+		if l < text then l = text + 10 end
+		return math.max(G.subTabMin, math.min(G.subTabMax, l))
 	end
-	return math.max(cotes, texte + G.ongletMarge)
+	return math.max(sides, text + G.tabMargin)
 end
 
--- les onglets du bas, pour les autres fenetres (le navigateur de raid)
-S.creerOnglet, S.choisirOnglet, S.largeurOnglet = creerOnglet, choisirOnglet, largeurOnglet
+-- bottom tabs, shared with other windows (raid browser)
+S.createTab, S.selectTab, S.tabWidth = createTab, selectTab, tabWidth
 
--- ------------------------------------------------------------------ la liste
+-- ------------------------------------------------------------------ List
 
-local LIGNE = {}                        -- les lignes creees, reutilisees
+local ROWS = {}                        -- rows created once, then reused
 
-local function creerLigne(n)
-	local l = CreateFrame("Button", "ForeverUISocialRow" .. n, S.liste)
+-- Creates list row n, holding the parts of every row kind.
+local function createRow(n)
+	local l = CreateFrame("Button", "ForeverUISocialRow" .. n, S.list)
 	l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	l.fond = l:CreateTexture(nil, "BACKGROUND")
-	l.fond:SetPoint("TOPLEFT", l, "TOPLEFT", 0, -1)
-	l.fond:SetPoint("BOTTOMRIGHT", l, "BOTTOMRIGHT", 0, 1)
-	l.etat = l:CreateTexture(nil, "ARTWORK")
-	l.etat:SetWidth(G.etatCote)
-	l.etat:SetHeight(G.etatCote)
-	l.etat:SetPoint("TOPLEFT", l, "TOPLEFT", G.etatX, G.etatY)
-	l.nom = l:CreateFontString(nil, "ARTWORK", "FriendsFont_Normal")
-	l.nom:SetJustifyH("LEFT")
-	l.nom:SetHeight(12)
+	l.background = l:CreateTexture(nil, "BACKGROUND")
+	l.background:SetPoint("TOPLEFT", l, "TOPLEFT", 0, -1)
+	l.background:SetPoint("BOTTOMRIGHT", l, "BOTTOMRIGHT", 0, 1)
+	l.state = l:CreateTexture(nil, "ARTWORK")
+	l.state:SetWidth(G.stateSide)
+	l.state:SetHeight(G.stateSide)
+	l.state:SetPoint("TOPLEFT", l, "TOPLEFT", G.stateX, G.stateY)
+	l.name = l:CreateFontString(nil, "ARTWORK", "FriendsFont_Normal")
+	l.name:SetJustifyH("LEFT")
+	l.name:SetHeight(12)
 	l.info = l:CreateFontString(nil, "ARTWORK", "FriendsFont_Small")
 	l.info:SetJustifyH("LEFT")
 	l.info:SetHeight(10)
-	l.info:SetPoint("TOPLEFT", l.nom, "BOTTOMLEFT", 0, G.infoY)
-	l.info:SetPoint("TOPRIGHT", l.nom, "BOTTOMRIGHT", 0, G.infoY)
-	l.trait = l:CreateTexture(nil, "ARTWORK")
-	l.trait:SetTexture(G.separateur)
-	l.trait:SetAllPoints(l)
-	l.titre = l:CreateFontString(nil, "ARTWORK", "GameFontHighlightLeft")
-	l.titre:SetPoint("LEFT", l, "LEFT", 5, 1)
-	l:SetHighlightTexture(G.surbrillance)
+	l.info:SetPoint("TOPLEFT", l.name, "BOTTOMLEFT", 0, G.infoY)
+	l.info:SetPoint("TOPRIGHT", l.name, "BOTTOMRIGHT", 0, G.infoY)
+	l.line = l:CreateTexture(nil, "ARTWORK")
+	l.line:SetTexture(G.separator)
+	l.line:SetAllPoints(l)
+	l.title = l:CreateFontString(nil, "ARTWORK", "GameFontHighlightLeft")
+	l.title:SetPoint("LEFT", l, "LEFT", 5, 1)
+	l:SetHighlightTexture(G.highlight)
 	local s = l:GetHighlightTexture()
 	if s then
 		s:SetBlendMode("ADD")
@@ -369,9 +314,9 @@ local function creerLigne(n)
 		s:SetPoint("TOPLEFT", l, "TOPLEFT", 0, -1)
 		s:SetPoint("BOTTOMRIGHT", l, "BOTTOMRIGHT", 0, 1)
 	end
-	l:SetScript("OnClick", function(self, bouton) S.cliquer(self, bouton) end)
+	l:SetScript("OnClick", function(self, button) S.click(self, button) end)
 	l:SetScript("OnEnter", function(self)
-		if self.sorte == "ami" and FriendsFrameTooltip_Show then
+		if self.kind == "friend" and FriendsFrameTooltip_Show then
 			FriendsFrameTooltip_Show(self)
 		end
 	end)
@@ -384,194 +329,197 @@ local function creerLigne(n)
 	return l
 end
 
--- Poser une ligne selon ce qu'elle porte : "ami", "trait", "entete",
--- "ignore". Les elements des autres sortes s'effacent.
-local function poserLigne(l, e)
-	l.sorte = e.sorte
-	local ami, trait, entete = e.sorte == "ami", e.sorte == "trait", e.sorte == "entete"
-	local ignore = e.sorte == "ignore"
-	l:SetHeight(ami and G.ligneAmi or G.ligneCourte)
-	if ami then l.fond:Show() else l.fond:Hide() end
-	if ami then l.etat:Show() else l.etat:Hide() end
-	if ami or ignore then l.nom:Show() else l.nom:Hide() end
-	if ami then l.info:Show() else l.info:Hide() end
-	if trait then l.trait:Show() else l.trait:Hide() end
-	if entete then l.titre:Show() else l.titre:Hide() end
-	l:EnableMouse(ami or ignore)
+-- Lays out a row for its entry kind: friend, line, header or ignore. Parts of the other
+-- kinds are hidden. l: row; e: entry from entries()
+local function layoutRow(l, e)
+	l.kind = e.kind
+	local isFriend, line, header = e.kind == "friend", e.kind == "line", e.kind == "header"
+	local ignore = e.kind == "ignore"
+	l:SetHeight(isFriend and G.friendRowH or G.shortRowH)
+	if isFriend then l.background:Show() else l.background:Hide() end
+	if isFriend then l.state:Show() else l.state:Hide() end
+	if isFriend or ignore then l.name:Show() else l.name:Hide() end
+	if isFriend then l.info:Show() else l.info:Hide() end
+	if line then l.line:Show() else l.line:Hide() end
+	if header then l.title:Show() else l.title:Hide() end
+	l:EnableMouse(isFriend or ignore)
 	l:UnlockHighlight()
 
 	local s = l:GetHighlightTexture()
-	l.nom:ClearAllPoints()
-	if ami then
-		l.nom:SetFontObject(FriendsFont_Normal)
-		l.nom:SetPoint("TOPLEFT", l, "TOPLEFT", G.nomX, G.nomY)
-		l.nom:SetPoint("TOPRIGHT", l, "TOPRIGHT", -4, G.nomY)
+	l.name:ClearAllPoints()
+	if isFriend then
+		l.name:SetFontObject(FriendsFont_Normal)
+		l.name:SetPoint("TOPLEFT", l, "TOPLEFT", G.nameX, G.nameY)
+		l.name:SetPoint("TOPRIGHT", l, "TOPRIGHT", -4, G.nameY)
 		if s then
-			s:SetTexture(G.surbrillance)
-			s:SetVertexColor(G.teinteSurbrillance[1], G.teinteSurbrillance[2], G.teinteSurbrillance[3])
+			s:SetTexture(G.highlight)
+			s:SetVertexColor(G.highlightTint[1], G.highlightTint[2], G.highlightTint[3])
 		end
 	elseif ignore then
-		-- FriendsFrameIgnoreButtonTemplate : GameFontNormal a (10, 1)
-		l.nom:SetFontObject(GameFontNormal)
-		l.nom:SetPoint("LEFT", l, "LEFT", 10, 1)
-		l.nom:SetPoint("RIGHT", l, "RIGHT", -4, 1)
+		-- FriendsFrameIgnoreButtonTemplate: GameFontNormal at (10, 1)
+		l.name:SetFontObject(GameFontNormal)
+		l.name:SetPoint("LEFT", l, "LEFT", 10, 1)
+		l.name:SetPoint("RIGHT", l, "RIGHT", -4, 1)
 		if s then
-			s:SetTexture(G.surbrillanceIgnore)
+			s:SetTexture(G.ignoreHighlight)
 			s:SetVertexColor(1, 1, 1)
 		end
 	end
 
 	l.id = e.index
 	l.squelch = e.squelch
-	l.buttonType = ami and FRIENDS_BUTTON_TYPE_WOW or nil
-	if ami then
-		-- FriendsFrame_SetButton, pour un ami du jeu
-		local nom, niveau, classe, zone, connecte, statut = GetFriendInfo(e.index)
-		l.nomAmi, l.connecte = nom, connecte
-		if connecte then
-			l.fond:SetTexture(couleur("FRIENDS_WOW_BACKGROUND_COLOR", { 1.0, 0.824, 0.0, 0.05 }))
-			if statut == CHAT_FLAG_AFK then
-				l.etat:SetTexture(G.etat .. "Away")
-			elseif statut == CHAT_FLAG_DND then
-				l.etat:SetTexture(G.etat .. "DnD")
+	l.buttonType = isFriend and FRIENDS_BUTTON_TYPE_WOW or nil
+	if isFriend then
+		-- FriendsFrame_SetButton, for a game friend
+		local name, level, className, zone, connected, status = GetFriendInfo(e.index)
+		l.friendName, l.connected = name, connected
+		if connected then
+			l.background:SetTexture(color("FRIENDS_WOW_BACKGROUND_COLOR", { 1.0, 0.824, 0.0, 0.05 }))
+			if status == CHAT_FLAG_AFK then
+				l.state:SetTexture(G.state .. "Away")
+			elseif status == CHAT_FLAG_DND then
+				l.state:SetTexture(G.state .. "DnD")
 			else
-				l.etat:SetTexture(G.etat .. "Online")
+				l.state:SetTexture(G.state .. "Online")
 			end
-			l.nom:SetText((nom or "") .. ", " .. string.format(txt("FRIENDS_LEVEL_TEMPLATE"), niveau or 0, classe or ""))
-			l.nom:SetTextColor(couleur("FRIENDS_WOW_NAME_COLOR", { 0.996, 0.882, 0.361 }))
+			l.name:SetText((name or "") .. ", " .. string.format(txt("FRIENDS_LEVEL_TEMPLATE"), level or 0, className or ""))
+			l.name:SetTextColor(color("FRIENDS_WOW_NAME_COLOR", { 0.996, 0.882, 0.361 }))
 		else
-			l.fond:SetTexture(couleur("FRIENDS_OFFLINE_BACKGROUND_COLOR", { 0.588, 0.588, 0.588, 0.05 }))
-			l.etat:SetTexture(G.etat .. "Offline")
-			l.nom:SetText(nom or "")
-			l.nom:SetTextColor(couleur("FRIENDS_GRAY_COLOR", { 0.486, 0.518, 0.541 }))
+			l.background:SetTexture(color("FRIENDS_OFFLINE_BACKGROUND_COLOR", { 0.588, 0.588, 0.588, 0.05 }))
+			l.state:SetTexture(G.state .. "Offline")
+			l.name:SetText(name or "")
+			l.name:SetTextColor(color("FRIENDS_GRAY_COLOR", { 0.486, 0.518, 0.541 }))
 		end
 		l.info:SetText(zone or "")
-		l.info:SetTextColor(couleur("FRIENDS_GRAY_COLOR", { 0.486, 0.518, 0.541 }))
+		l.info:SetTextColor(color("FRIENDS_GRAY_COLOR", { 0.486, 0.518, 0.541 }))
 		if GetSelectedFriend() == e.index then l:LockHighlight() end
 	elseif ignore then
-		local nom = GetIgnoreName(e.index)
+		local name = GetIgnoreName(e.index)
 		if FriendsFrame.selectedSquelchType == SQUELCH_TYPE_IGNORE and GetSelectedIgnore() == e.index then
 			l:LockHighlight()
 		end
-		l.nom:SetText(nom or txt("UNKNOWN"))
-		l.nom:SetTextColor(couleur("NORMAL_FONT_COLOR", { 1, 0.82, 0 }))
-	elseif entete then
-		l.titre:SetText(e.texte)
+		l.name:SetText(name or txt("UNKNOWN"))
+		l.name:SetTextColor(color("NORMAL_FONT_COLOR", { 1, 0.82, 0 }))
+	elseif header then
+		l.title:SetText(e.text)
 	end
 end
 
--- CE QUE LA LISTE MONTRE, dans l'ordre de WotLK.
-local function entrees()
-	local liste = {}
-	if S.sousOnglet() == 2 then
-		-- IgnoreList_Update : les ignores
+-- What the list shows, in WotLK order.
+local function entries()
+	local list = {}
+	if S.subTab() == 2 then
+		-- IgnoreList_Update: ignored players
 		local ignores = GetNumIgnores() or 0
 		if ignores > 0 then
-			liste[#liste + 1] = { sorte = "entete", texte = txt("IGNORED") }
+			list[#list + 1] = { kind = "header", text = txt("IGNORED") }
 			for i = 1, ignores do
-				liste[#liste + 1] = { sorte = "ignore", index = i, squelch = SQUELCH_TYPE_IGNORE }
+				list[#list + 1] = { kind = "ignore", index = i, squelch = SQUELCH_TYPE_IGNORE }
 			end
 		end
 	else
-		-- FriendsList_Update : en ligne, un separateur, hors ligne
-		local total, enLigne = GetNumFriends()
-		total, enLigne = total or 0, enLigne or 0
-		for i = 1, enLigne do
-			liste[#liste + 1] = { sorte = "ami", index = i }
+		-- FriendsList_Update: online, a divider, offline
+		local total, online = GetNumFriends()
+		total, online = total or 0, online or 0
+		for i = 1, online do
+			list[#list + 1] = { kind = "friend", index = i }
 		end
-		if enLigne > 0 and total > enLigne then
-			liste[#liste + 1] = { sorte = "trait" }
+		if online > 0 and total > online then
+			list[#list + 1] = { kind = "line" }
 		end
-		for i = enLigne + 1, total do
-			liste[#liste + 1] = { sorte = "ami", index = i }
+		for i = online + 1, total do
+			list[#list + 1] = { kind = "friend", index = i }
 		end
 	end
-	return liste
+	return list
 end
 
-local function hauteurDe(e)
-	return e.sorte == "ami" and G.ligneAmi or G.ligneCourte
+local function heightOf(e)
+	return e.kind == "friend" and G.friendRowH or G.shortRowH
 end
 
-function S.poserListe()
-	local liste = S.contenu or {}
-	local place = S.liste:GetHeight() or 0
-	if place <= 0 then
-		place = G.hauteur + G.listeY - (G.encadreY2 + G.listeY2)
+-- Fills the rows that fit, from S.offset (friend rows are taller).
+function S.layoutList()
+	local list = S.content or {}
+	local position = S.list:GetHeight() or 0
+	if position <= 0 then
+		position = G.height + G.listY - (G.frameBoxY2 + G.listY2)
 	end
-	local total = #liste
-	S.decalage = math.max(0, math.min(S.decalage or 0, total - 1))
-	local y, rang, n = 0, 0, S.decalage + 1
+	local total = #list
+	S.offset = math.max(0, math.min(S.offset or 0, total - 1))
+	local y, rank, n = 0, 0, S.offset + 1
 	while n <= total do
-		local h = hauteurDe(liste[n])
-		if y + h > place then break end
-		rang = rang + 1
-		local l = LIGNE[rang]
+		local h = heightOf(list[n])
+		if y + h > position then break end
+		rank = rank + 1
+		local l = ROWS[rank]
 		if not l then
-			l = creerLigne(rang)
-			LIGNE[rang] = l
+			l = createRow(rank)
+			ROWS[rank] = l
 		end
 		l:ClearAllPoints()
-		l:SetPoint("TOPLEFT", S.liste, "TOPLEFT", 0, -y)
-		l:SetPoint("TOPRIGHT", S.liste, "TOPRIGHT", 0, -y)
-		poserLigne(l, liste[n])
+		l:SetPoint("TOPLEFT", S.list, "TOPLEFT", 0, -y)
+		l:SetPoint("TOPRIGHT", S.list, "TOPRIGHT", 0, -y)
+		layoutRow(l, list[n])
 		l:Show()
 		y = y + h
 		n = n + 1
 	end
-	for i = rang + 1, #LIGNE do
-		LIGNE[i]:Hide()
+	for i = rank + 1, #ROWS do
+		ROWS[i]:Hide()
 	end
-	S.visibles = rang
-	S.barre:Regler(total, rang, S.decalage)
+	S.visibleCount = rank
+	S.bar:Configure(total, rank, S.offset)
 end
 
--- ---------------------------------------------------------------- les boutons
+-- ---------------------------------------------------------------- Buttons
 
--- 3.3.5 n'a pas SetShown
-local function montrer(x, oui)
-	if oui then x:Show() else x:Hide() end
+-- 3.3.5 has no SetShown
+local function showRegion(x, yes)
+	if yes then x:Show() else x:Hide() end
 end
 
-local function actif(b, oui)
-	if b.Activer then b:Activer(oui) elseif oui then b:Enable() else b:Disable() end
+-- Enables or disables a button (Activate on ForeverUI panel buttons).
+local function active(b, yes)
+	if b.Activate then b:Activate(yes) elseif yes then b:Enable() else b:Disable() end
 end
 
-local function majBoutons()
-	local b = S.boutons
-	local ignore = S.sousOnglet() == 2
-	montrer(b.ajouter, not ignore)
-	montrer(b.message, not ignore)
-	montrer(b.ignorer, ignore)
-	montrer(b.retirer, ignore)
+local function updateButtons()
+	local b = S.buttons
+	local ignore = S.subTab() == 2
+	showRegion(b.add, not ignore)
+	showRegion(b.message, not ignore)
+	showRegion(b.ignoreButton, ignore)
+	showRegion(b.remove, ignore)
 	if not ignore then
-		-- FriendsList_Update : Send Message, seulement vers un ami en ligne
-		local choisi = GetSelectedFriend() or 0
-		local connecte = false
-		if choisi > 0 then
-			connecte = select(5, GetFriendInfo(choisi)) and true or false
+		-- FriendsList_Update: Send Message only to an online friend
+		local selected = GetSelectedFriend() or 0
+		local connected = false
+		if selected > 0 then
+			connected = select(5, GetFriendInfo(selected)) and true or false
 		end
-		actif(b.message, connecte)
+		active(b.message, connected)
 	else
 		local index = 0
 		if FriendsFrame.selectedSquelchType == SQUELCH_TYPE_IGNORE then
 			index = GetSelectedIgnore() or 0
 		end
-		actif(b.retirer, index > 0)
+		active(b.remove, index > 0)
 	end
 end
 
--- ------------------------------------------------------------ la mise a jour
+-- ------------------------------------------------------------ Update
 
-function S.sousOnglet()
+-- Selected Contacts sub-tab: 1 friends, 2 ignore.
+function S.subTab()
 	local n = FriendsTabHeader and FriendsTabHeader.selectedTab or 1
 	if n ~= 2 then n = 1 end
 	return n
 end
 
--- Premiere selection, comme le client : le premier ami, le premier ignore.
-local function selectionParDefaut()
-	if S.sousOnglet() == 2 then
+-- Default selection, like the client: first friend, first ignored player.
+local function selectDefault()
+	if S.subTab() == 2 then
 		local ok = FriendsFrame.selectedSquelchType == SQUELCH_TYPE_IGNORE and (GetSelectedIgnore() or 0) > 0
 		if not ok and (GetNumIgnores() or 0) > 0 then
 			FriendsFrame_SelectSquelched(SQUELCH_TYPE_IGNORE, 1)
@@ -586,93 +534,93 @@ local function selectionParDefaut()
 	end
 end
 
--- LES ONGLETS DU BAS : celui du client qui est choisi, la guilde eteinte
--- hors guilde comme le sien (InGuildCheck).
-function S.majOnglets()
-	local choisi = FriendsFrame.selectedTab or 1
-	for _, o in ipairs(S.onglets) do
+-- Bottom tabs follow the client's selected tab; Guild is disabled outside a guild, like
+-- the client's (InGuildCheck).
+function S.updateTabs()
+	local selected = FriendsFrame.selectedTab or 1
+	for _, o in ipairs(S.tabs) do
 		local client = _G["FriendsFrameTab" .. o.id]
-		local ouvert = true
-		if client and client.IsEnabled and o.id ~= choisi then
+		local isOpen = true
+		if client and client.IsEnabled and o.id ~= selected then
 			local e = client:IsEnabled()
-			ouvert = (e ~= nil and e ~= false and e ~= 0)
+			isOpen = (e ~= nil and e ~= false and e ~= 0)
 		end
-		o.bouton:SetText(txt(o.texte))
-		choisirOnglet(o.bouton, o.id == choisi, ouvert)
-		o.bouton:SetWidth(largeurOnglet(o.bouton))
+		o.button:SetText(txt(o.text))
+		selectTab(o.button, o.id == selected, isOpen)
+		o.button:SetWidth(tabWidth(o.button))
 	end
 end
 
-function S.majContacts()
-	local f = S.cadre
+function S.updateContacts()
+	local f = S.frame
 	if not f then return end
-	local sous = S.sousOnglet()
-	f.titre:SetText(txt(SOUS_ONGLETS[sous].titre))
+	local sub = S.subTab()
+	f.title:SetText(txt(SUB_TABS[sub].title))
 
-	-- les sous-onglets
-	for _, o in ipairs(S.sousOnglets) do
-		o.bouton:SetText(txt(o.texte))
-		choisirOnglet(o.bouton, o.id == sous, true)
-		o.bouton:SetWidth(largeurOnglet(o.bouton))
+	-- sub-tabs
+	for _, o in ipairs(S.subTabs) do
+		o.button:SetText(txt(o.text))
+		selectTab(o.button, o.id == sub, true)
+		o.button:SetWidth(tabWidth(o.button))
 	end
 
-	selectionParDefaut()
-	S.contenu = entrees()
-	S.poserListe()
-	majBoutons()
+	selectDefault()
+	S.content = entries()
+	S.layoutList()
+	updateButtons()
 end
 
--- ------------------------------------------------------------ les clics
+-- ------------------------------------------------------------ Clicks
 
-function S.cliquer(l, bouton)
-	if l.sorte == "ami" then
-		if bouton == "RightButton" then
-			local nom, _, _, _, connecte = GetFriendInfo(l.id)
-			ForeverUI.MenuUnite.ouvrir(FriendsFrame_ShowDropdown, nom, connecte, nil, nil, nil, 1)
+function S.click(l, button)
+	if l.kind == "friend" then
+		if button == "RightButton" then
+			local name, _, _, _, connected = GetFriendInfo(l.id)
+			ForeverUI.UnitMenu.open(FriendsFrame_ShowDropdown, name, connected, nil, nil, nil, 1)
 		else
 			PlaySound("igMainMenuOptionCheckBoxOn")
 			FriendsFrame_SelectFriend(FRIENDS_BUTTON_TYPE_WOW, l.id)
 			FriendsFrame.selectedFriend = l.id
 		end
-	elseif l.sorte == "ignore" then
+	elseif l.kind == "ignore" then
 		PlaySound("igMainMenuOptionCheckBoxOn")
 		FriendsFrame_SelectSquelched(l.squelch, l.id)
 	end
-	S.maj()
+	S.update()
 end
 
--- ------------------------------------------------------ WotLK ou camelot
+-- ------------------------------------------------------ WotLK or camelot
 
--- Ce que notre fenetre laisse au client : le menu du clic droit et
--- l'infobulle, qu'elle emprunte.
-local GARDES = { "FriendsDropDown", "FriendsTooltip" }
+-- Client frames our window keeps and borrows: the right-click menu and the tooltip.
+local KEPT_FRAMES = { "FriendsDropDown", "FriendsTooltip" }
 
--- Une page peut garder un cadre du client (le raid de Blizzard_RaidUI...).
-function S.garder(nom)
-	GARDES[#GARDES + 1] = nom
+-- A page can keep a client frame (the raid frame of Blizzard_RaidUI...).
+function S.keep(name)
+	KEPT_FRAMES[#KEPT_FRAMES + 1] = name
 end
 
-local function etoufferWotLK()
+-- Hides the client panel's own content, except kept frames, and stops it taking the
+-- mouse.
+local function suppressWotLK()
 	local ff = FriendsFrame
-	S.regionsTues = S.regionsTues or {}
+	S.killedRegions = S.killedRegions or {}
 	for _, r in ipairs({ ff:GetRegions() }) do
 		if r:IsShown() then
-			S.regionsTues[r] = true
+			S.killedRegions[r] = true
 			r:Hide()
 		end
 	end
-	local garde = { [S.cadre] = true }
-	for _, n in ipairs(GARDES) do
+	local keep = { [S.frame] = true }
+	for _, n in ipairs(KEPT_FRAMES) do
 		local c = type(n) == "string" and _G[n] or n
-		if c then garde[c] = true end
+		if c then keep[c] = true end
 	end
-	-- UN CADRE PROTEGE NE SE CACHE PAS EN COMBAT : en raid, RaidFrame porte
-	-- les boutons securises de Blizzard_RaidUI. On l'efface alors par
-	-- l'alpha, que le combat n'interdit pas, et on le cache au passage
-	-- suivant hors combat.
+	-- A protected frame cannot be hidden in combat: in a raid, RaidFrame holds the secure
+	-- buttons of Blizzard_RaidUI. It is faded with alpha, which combat allows, and hidden on
+	-- the next pass out of combat.
 	local combat = InCombatLockdown and InCombatLockdown()
 	for _, c in ipairs({ ff:GetChildren() }) do
-		if not garde[c] and c:IsShown() then
+		if not keep[c] and c:IsShown() then
 			if combat and c.IsProtected and c:IsProtected() then
 				c:SetAlpha(0)
 			else
@@ -685,116 +633,119 @@ local function etoufferWotLK()
 	end
 end
 
--- LES PAGES. Une par onglet du client ; chacune s'inscrit avec ce qu'elle
--- sait faire : construire(cadre), maj(), montrer(), cacher(), titre().
+-- Pages: one per client tab. Each registers build(frame), update(), showRegion(firstShow),
+-- hide() and title().
 S.pages = {}
-local inscrites = {}
+local registeredPages = {}
 
-function S.inscrirePage(id, def)
-	inscrites[id] = def
+function S.registerPage(id, def)
+	registeredPages[id] = def
 end
 
+-- Returns the page of tab id, building it on first use.
 local function page(id)
 	local pg = S.pages[id]
 	if pg then return pg end
-	local def = inscrites[id]
+	local def = registeredPages[id]
 	if not def then return nil end
-	local cadre = CreateFrame("Frame", "ForeverUISocialPage" .. id, S.cadre)
-	cadre:SetAllPoints(S.cadre)
-	cadre:Hide()
-	pg = { id = id, cadre = cadre, def = def }
+	local frame = CreateFrame("Frame", "ForeverUISocialPage" .. id, S.frame)
+	frame:SetAllPoints(S.frame)
+	frame:Hide()
+	pg = { id = id, frame = frame, def = def }
 	S.pages[id] = pg
-	def.construire(cadre)
+	def.build(frame)
 	return pg
 end
 
--- Batir une page d'avance (le raid, hors combat).
-function S.preparer(id)
-	if S.cadre then page(id) end
+-- Builds a page ahead of time (the raid page, out of combat).
+function S.prepare(id)
+	if S.frame then page(id) end
 end
 
--- Tout ce qui change dans la page choisie, et les onglets.
-function S.maj()
-	S.majOnglets()
+-- Refreshes the selected page and the tabs.
+function S.update()
+	S.updateTabs()
 	local pg = S.pages[FriendsFrame.selectedTab or 1]
-	if pg and pg.cadre:IsShown() then
-		if pg.def.titre then S.cadre.titre:SetText(pg.def.titre() or "") end
-		if pg.def.maj then pg.def.maj() end
+	if pg and pg.frame:IsShown() then
+		if pg.def.title then S.frame.title:SetText(pg.def.title() or "") end
+		if pg.def.update then pg.def.update() end
 	end
 end
 
--- Le passage : apres FriendsFrame_Update, qui a deja pose l'ecran du client.
-function S.appliquer()
-	if not S.cadre or not FriendsFrame:IsShown() then return end
-	local choisi = FriendsFrame.selectedTab or 1
-	-- la page d'abord : en se batissant, elle peut garder un cadre du client
-	page(choisi)
-	etoufferWotLK()
-	S.cadre:Show()
+-- Runs after FriendsFrame_Update, which has already set up the client screen.
+-- FriendsFrame stays the client panel (ToggleFriendsFrame, micro button, Esc, panel slot,
+-- selectedTab); our window, its child, hides the WotLK content and shows the page of the
+-- selected tab. The page redoes what the client subframe does on show (SetWhoToUI,
+-- GuildRoster...).
+function S.apply()
+	if not S.frame or not FriendsFrame:IsShown() then return end
+	local selected = FriendsFrame.selectedTab or 1
+	-- page first: while building, it can keep a client frame
+	page(selected)
+	suppressWotLK()
+	S.frame:Show()
 	for id, pg in pairs(S.pages) do
-		if id ~= choisi and pg.cadre:IsShown() then
-			pg.cadre:Hide()
-			if pg.def.cacher then pg.def.cacher() end
+		if id ~= selected and pg.frame:IsShown() then
+			pg.frame:Hide()
+			if pg.def.hide then pg.def.hide() end
 		end
 	end
-	local pg = page(choisi)
+	local pg = page(selected)
 	if pg then
-		local etait = pg.cadre:IsShown()
-		pg.cadre:Show()
-		if pg.def.montrer then pg.def.montrer(not etait) end
+		local wasShown = pg.frame:IsShown()
+		pg.frame:Show()
+		if pg.def.showRegion then pg.def.showRegion(not wasShown) end
 	end
-	S.maj()
+	S.update()
 end
 
--- LA FERMETURE : la page ouverte fait ce que le sous-cadre du client ferait
--- en se cachant (SetWhoToUI(0)...).
-local function fermer()
+-- On close, the open page does what the client subframe does on hide (SetWhoToUI(0)...).
+local function close()
 	for _, pg in pairs(S.pages) do
-		if pg.cadre:IsShown() then
-			pg.cadre:Hide()
-			if pg.def.cacher then pg.def.cacher() end
+		if pg.frame:IsShown() then
+			pg.frame:Hide()
+			if pg.def.hide then pg.def.hide() end
 		end
 	end
-	if S.annexe then S.annexe:Hide() end
+	if S.popup then S.popup:Hide() end
 end
 
--- ------------------------------------------------------ les pieces communes
+-- ------------------------------------------------------ Shared parts
 
 S.txt = txt
-S.couleur = couleur
+S.color = color
 S.G = G
 
--- Un bouton de panneau, la police des boutons de la fenetre (GameFontNormal).
-function S.bouton(parent, texte, largeur, nom)
-	return ForeverUI.CreatePanelButton(parent, texte, largeur, G.boutonH, nom, "GameFontNormal")
+-- A panel button with the window's button font (GameFontNormal).
+function S.button(parent, text, width, name)
+	return ForeverUI.CreatePanelButton(parent, text, width, G.buttonH, name, "GameFontNormal")
 end
 
--- Une ligne d'en-tete de colonne : WhoFrameColumnHeaderTemplate, dont camelot
--- (mainline, qu'il charge) garde l'art de WotLK -- WhoFrame-ColumnTabs en
--- trois morceaux, la surbrillance UI-Character-Tab-Highlight en ADD.
-local ONGLETS_COLONNE = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "WhoFrame-ColumnTabs"
-local SURBRILLANCE_COLONNE = "Interface" .. SEP .. "PaperDollInfoFrame" .. SEP .. "UI-Character-Tab-Highlight"
-S.COLONNE_H = 24
+-- Column header: WhoFrameColumnHeaderTemplate, whose WotLK art camelot keeps (mainline):
+-- WhoFrame-ColumnTabs in three pieces, UI-Character-Tab-Highlight in ADD.
+local COLUMN_TABS = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "WhoFrame-ColumnTabs"
+local COLUMN_HIGHLIGHT = "Interface" .. SEP .. "PaperDollInfoFrame" .. SEP .. "UI-Character-Tab-Highlight"
+S.COLUMN_H = 24
 
-function S.creerEntete(parent, nom, largeur, texte, clic)
-	local b = CreateFrame("Button", nom, parent)
-	b:SetHeight(S.COLONNE_H)
+function S.createHeader(parent, name, width, text, onClick)
+	local b = CreateFrame("Button", name, parent)
+	b:SetHeight(S.COLUMN_H)
 	local g = b:CreateTexture(nil, "BACKGROUND")
-	g:SetTexture(ONGLETS_COLONNE)
+	g:SetTexture(COLUMN_TABS)
 	g:SetTexCoord(0, 0.078125, 0, 0.75)
 	g:SetWidth(5)
-	g:SetHeight(S.COLONNE_H)
+	g:SetHeight(S.COLUMN_H)
 	g:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
 	local d = b:CreateTexture(nil, "BACKGROUND")
-	d:SetTexture(ONGLETS_COLONNE)
+	d:SetTexture(COLUMN_TABS)
 	d:SetTexCoord(0.90625, 0.96875, 0, 0.75)
 	d:SetWidth(4)
-	d:SetHeight(S.COLONNE_H)
+	d:SetHeight(S.COLUMN_H)
 	d:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
 	local m = b:CreateTexture(nil, "BACKGROUND")
-	m:SetTexture(ONGLETS_COLONNE)
+	m:SetTexture(COLUMN_TABS)
 	m:SetTexCoord(0.078125, 0.90625, 0, 0.75)
-	m:SetHeight(S.COLONNE_H)
+	m:SetHeight(S.COLUMN_H)
 	m:SetPoint("LEFT", g, "RIGHT", 0, 0)
 	m:SetPoint("RIGHT", d, "LEFT", 0, 0)
 	local fs = b:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -802,9 +753,9 @@ function S.creerEntete(parent, nom, largeur, texte, clic)
 	fs:SetPoint("RIGHT", b, "RIGHT", -8, 0)
 	fs:SetJustifyH("LEFT")
 	b:SetFontString(fs)
-	b.texte = fs
-	b:SetText(texte or "")
-	b:SetHighlightTexture(SURBRILLANCE_COLONNE)
+	b.text = fs
+	b:SetText(text or "")
+	b:SetHighlightTexture(COLUMN_HIGHLIGHT)
 	local s = b:GetHighlightTexture()
 	if s then
 		s:SetBlendMode("ADD")
@@ -812,117 +763,100 @@ function S.creerEntete(parent, nom, largeur, texte, clic)
 		s:SetPoint("TOPLEFT", g, "TOPLEFT", -2, 5)
 		s:SetPoint("BOTTOMRIGHT", d, "BOTTOMRIGHT", 2, -7)
 	end
-	b:SetWidth(largeur)
-	if clic then
+	b:SetWidth(width)
+	if onClick then
 		b:SetScript("OnClick", function(self)
-			clic(self)
+			onClick(self)
 			PlaySound("igMainMenuOptionCheckBoxOn")
 		end)
 	end
 	return b
 end
 
--- UNE LISTE A LIGNES FIXES, qui defile : la zone, ses lignes, la barre de
--- camelot et la molette. L'appelant donne creer(ligne, n) et remplir(ligne,
--- index) ; liste:Maj(total) repose tout.
-function S.creerListe(parent, nom, hauteurLigne, creer, remplir)
-	local zone = CreateFrame("Frame", nom, parent)
-	zone.lignes = {}
-	zone.decalage = 0
+-- Scrolling list with fixed-height rows: area, rows, camelot scroll bar and mouse wheel.
+-- create(row, n) builds a row; populate(row, index) fills it; list:Update(total) redraws.
+function S.createList(parent, name, lineHeight, create, populate)
+	local zone = CreateFrame("Frame", name, parent)
+	zone.rows = {}
+	zone.offset = 0
 	zone.total = 0
-	zone.hauteurLigne = hauteurLigne
-	zone.barre = ForeverUI.CreateScrollBar(nom .. "ScrollBar", parent, zone)
-	function zone:Visibles()
+	zone.lineHeight = lineHeight
+	zone.bar = ForeverUI.CreateScrollBar(name .. "ScrollBar", parent, zone)
+	function zone:VisibleCount()
 		local h = self:GetHeight() or 0
-		if h <= 0 then h = self.hauteurDefaut or (hauteurLigne * 10) end
-		return math.max(1, math.floor(h / hauteurLigne))
+		if h <= 0 then h = self.defaultHeight or (lineHeight * 10) end
+		return math.max(1, math.floor(h / lineHeight))
 	end
-	function zone:Maj(total)
+	function zone:Update(total)
 		self.total = total or self.total
-		local visibles = self:Visibles()
-		self.decalage = math.max(0, math.min(self.decalage, self.total - visibles))
-		for n = 1, visibles do
-			local l = self.lignes[n]
+		local visibleCount = self:VisibleCount()
+		self.offset = math.max(0, math.min(self.offset, self.total - visibleCount))
+		for n = 1, visibleCount do
+			local l = self.rows[n]
 			if not l then
-				l = CreateFrame("Button", nom .. "Row" .. n, self)
-				l:SetHeight(hauteurLigne)
-				l:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(n - 1) * hauteurLigne)
-				l:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, -(n - 1) * hauteurLigne)
-				creer(l, n)
-				self.lignes[n] = l
+				l = CreateFrame("Button", name .. "Row" .. n, self)
+				l:SetHeight(lineHeight)
+				l:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(n - 1) * lineHeight)
+				l:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, -(n - 1) * lineHeight)
+				create(l, n)
+				self.rows[n] = l
 			end
-			local index = self.decalage + n
+			local index = self.offset + n
 			if index <= self.total then
 				l.index = index
-				remplir(l, index)
+				populate(l, index)
 				l:Show()
 			else
 				l.index = nil
 				l:Hide()
 			end
 		end
-		for n = visibles + 1, #self.lignes do
-			self.lignes[n]:Hide()
+		for n = visibleCount + 1, #self.rows do
+			self.rows[n]:Hide()
 		end
-		self.barre:Regler(self.total, visibles, self.decalage)
-		-- la barre vient ou s'en va : le bord droit suit
-		local avec = self.total > visibles
-		if avec ~= self.avecBarre then
-			self.avecBarre = avec
-			self:PoserAncres()
+		self.bar:Configure(self.total, visibleCount, self.offset)
+		-- the bar appears or goes: the right edge follows
+		local hasBar = self.total > visibleCount
+		if hasBar ~= self.hasBar then
+			self.hasBar = hasBar
+			self:PlaceAnchors()
 		end
 	end
-	-- LE BORD DROIT SELON LA BARRE (2026-09-26). Avec la barre, la liste lui
-	-- laisse sa place ; sans elle, la liste -- et ce qui s'y ancre, lignes et
-	-- en-tetes -- va jusqu'au bord, sans trou. hautGauche et basDroite sont
-	-- { point, relatif, point relatif, x, y } ; sansBarre remplace le x du
-	-- bas-droit quand la barre est cachee.
-	function zone:SuivreBarre(hautGauche, basDroite, sansBarre)
-		self.ancres = { hautGauche = hautGauche, basDroite = basDroite, sansBarre = sansBarre }
-		self:PoserAncres()
+	-- Right edge follows the bar: with it, the list leaves room for it; without it, the list
+	-- (and the rows and headers anchored to it) reaches the edge. topLeft and
+	-- bottomRightPoint are { point, relativeTo, relativePoint, x, y }; noBar replaces the
+	-- bottom-right x when the bar is hidden.
+	function zone:FollowBar(topLeft, bottomRightPoint, noBar)
+		self.anchors = { topLeft = topLeft, bottomRightPoint = bottomRightPoint, noBar = noBar }
+		self:PlaceAnchors()
 	end
-	function zone:PoserAncres()
-		local a = self.ancres
+	function zone:PlaceAnchors()
+		local a = self.anchors
 		if not a then return end
-		local h, b = a.hautGauche, a.basDroite
+		local h, b = a.topLeft, a.bottomRightPoint
 		self:ClearAllPoints()
 		self:SetPoint(h[1], h[2], h[3], h[4], h[5])
-		self:SetPoint(b[1], b[2], b[3], self.avecBarre and b[4] or a.sansBarre, b[5])
+		self:SetPoint(b[1], b[2], b[3], self.hasBar and b[4] or a.noBar, b[5])
 	end
-	zone.barre.surDefilement = function(nouveau)
-		zone.decalage = nouveau
-		zone:Maj()
+	zone.bar.onScroll = function(new)
+		zone.offset = new
+		zone:Update()
 	end
 	zone:EnableMouseWheel(true)
-	zone:SetScript("OnMouseWheel", function(self, sens)
-		self.decalage = math.max(0, math.min(self.decalage - sens, self.total - self:Visibles()))
-		self:Maj()
+	zone:SetScript("OnMouseWheel", function(self, direction)
+		self.offset = math.max(0, math.min(self.offset - direction, self.total - self:VisibleCount()))
+		self:Update()
 	end)
 	return zone
 end
 
--- UN CHAMP DE SAISIE : le champ de camelot (InputBoxVisualTemplate, bords
--- common-search-border-*), comme la recherche du grimoire.
-function S.creerSaisie(parent, nom, lettres)
-	local b = CreateFrame("EditBox", nom, parent)
-	b:SetAutoFocus(false)
-	b:SetHeight(20)
-	if lettres then b:SetMaxLetters(lettres) end
-	b:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
-	b:SetTextInsets(6, 6, 0, 0)
-	S.habillerSaisie(b)
-	b:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-	return b
-end
-
--- Le bord de camelot sur un champ, le notre ou celui du client
--- (InputBoxTemplate : ses trois morceaux <nom>Left / Middle / Right se
--- taisent).
-function S.habillerSaisie(b)
-	local nom = b.GetName and b:GetName()
-	if nom then
-		for _, cote in ipairs({ "Left", "Middle", "Right" }) do
-			local t = _G[nom .. cote]
+-- Camelot border on an edit box, ours or the client's (InputBoxTemplate: its <name>Left,
+-- Middle and Right pieces are hidden).
+function S.skinInput(b)
+	local name = b.GetName and b:GetName()
+	if name then
+		for _, side in ipairs({ "Left", "Middle", "Right" }) do
+			local t = _G[name .. side]
 			if t then t:SetAlpha(0) t:Hide() end
 		end
 	end
@@ -939,29 +873,28 @@ function S.habillerSaisie(b)
 	m:SetHeight(20)
 	m:SetPoint("LEFT", g, "RIGHT", 0, 0)
 	m:SetPoint("RIGHT", d, "LEFT", 0, 0)
-	b.bordCamelot = { g, m, d }
+	b.camelotBorder = { g, m, d }
 end
 
--- UNE CASE A COCHER : checkbox-minimal et checkmark-minimal, 26 x 26, comme
--- les cases de l'onglet Monnaies.
-function S.creerCase(parent, nom, texte)
-	local c = CreateFrame("CheckButton", nom, parent)
+-- Checkbox: checkbox-minimal and checkmark-minimal, 26 x 26, like the Currency tab boxes.
+function S.createCheckbox(parent, name, text)
+	local c = CreateFrame("CheckButton", name, parent)
 	c:SetWidth(26)
 	c:SetHeight(26)
-	S.habillerCase(c)
-	c.texte = c:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	c.texte:SetPoint("LEFT", c, "RIGHT", 2, 1)
-	c.texte:SetText(texte or "")
+	S.skinCell(c)
+	c.text = c:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	c.text:SetPoint("LEFT", c, "RIGHT", 2, 1)
+	c.text:SetText(text or "")
 	return c
 end
 
--- L'art de camelot sur une case, la notre ou celle du client : la case vide,
--- la coche, et plus d'etat enfonce ni de surbrillance de WotLK.
-function S.habillerCase(c)
-	local function poser(methodeSet, methodeGet, atlas)
+-- Camelot art on a checkbox, ours or the client's: empty box and check, without the WotLK
+-- pushed and highlight states.
+function S.skinCell(c)
+	local function place(setMethod, getMethod, atlas)
 		local e = ForeverUI.AtlasEntry(atlas)
-		if c[methodeSet] then c[methodeSet](c, e and e[1] or "") end
-		local t = c[methodeGet] and c[methodeGet](c)
+		if c[setMethod] then c[setMethod](c, e and e[1] or "") end
+		local t = c[getMethod] and c[getMethod](c)
 		if t then
 			ForeverUI.SetAtlas(t, atlas, true)
 			t:ClearAllPoints()
@@ -969,66 +902,64 @@ function S.habillerCase(c)
 		end
 		return t
 	end
-	poser("SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
-	poser("SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
-	local d = poser("SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal")
+	place("SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
+	place("SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
+	local d = place("SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal")
 	if d then d:SetDesaturated(true) end
-	-- ENFONCEE, la case montre son image enfoncee A LA PLACE de la normale :
-	-- vide, le contour disparaissait le temps du clic (2026-09-26). Elle
-	-- porte donc le meme contour ; seule la coche va et vient.
-	poser("SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
+	-- The pushed texture replaces the normal one, so it carries the same box, or the outline
+	-- vanishes during the click. Only the check comes and goes.
+	place("SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
 	if c.SetHighlightTexture then c:SetHighlightTexture("") end
 end
 
--- LA FENETRE ANNEXE : le detail d'un membre, l'information de guilde, le
--- journal, les instances sauvegardees. Une seule a la fois, a droite de la
--- fenetre, comme GuildFramePopup_Show. Le meme cadre sans portrait que le
--- detail d'une equipe d'arene.
-function S.creerAnnexe(nom, largeur, hauteur)
-	local a = CreateFrame("Frame", nom, S.cadre)
-	a:SetWidth(largeur)
-	a:SetHeight(hauteur)
-	a:SetPoint("TOPLEFT", S.cadre, "TOPRIGHT", 12, 0)
-	a:SetFrameLevel(S.cadre:GetFrameLevel() + 30)
+-- Side popup: member details, guild info, log, saved instances. One at a time, right of
+-- the window, like GuildFramePopup_Show; the same portrait-less frame as arena team
+-- details.
+function S.createPopup(name, width, height)
+	local a = CreateFrame("Frame", name, S.frame)
+	a:SetWidth(width)
+	a:SetHeight(height)
+	a:SetPoint("TOPLEFT", S.frame, "TOPRIGHT", 12, 0)
+	a:SetFrameLevel(S.frame:GetFrameLevel() + 30)
 	a:EnableMouse(true)
 	a:Hide()
-	ForeverUI.SetPanelArt(a, { coinHautGauche = "ui-frame-metal-cornertopleft", niveau = 5 })
-	local metal = a.foreverHabillage or a
-	local bandeau = CreateFrame("Frame", nil, a)
-	bandeau:SetAllPoints(a)
-	bandeau:SetFrameLevel(metal:GetFrameLevel() + 1)
-	a.titre = bandeau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	a.titre:SetPoint("TOP", a, "TOP", 0, -6)
-	a.titre:SetWidth(largeur - 60)
-	local croix = CreateFrame("Button", nil, a)
-	croix:SetWidth(G.croix)
-	croix:SetHeight(G.croix)
-	croix:SetFrameLevel(metal:GetFrameLevel() + 2)
-	croix:SetPoint("TOPRIGHT", a, "TOPRIGHT", 1, 0)
-	for _, etat in ipairs({
+	ForeverUI.SetPanelArt(a, { topLeftCorner = "ui-frame-metal-cornertopleft", level = 5 })
+	local metal = a.foreverSkinLayer or a
+	local banner = CreateFrame("Frame", nil, a)
+	banner:SetAllPoints(a)
+	banner:SetFrameLevel(metal:GetFrameLevel() + 1)
+	a.title = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	a.title:SetPoint("TOP", a, "TOP", 0, -6)
+	a.title:SetWidth(width - 60)
+	local closeButton = CreateFrame("Button", nil, a)
+	closeButton:SetWidth(G.closeButton)
+	closeButton:SetHeight(G.closeButton)
+	closeButton:SetFrameLevel(metal:GetFrameLevel() + 2)
+	closeButton:SetPoint("TOPRIGHT", a, "TOPRIGHT", 1, 0)
+	for _, state in ipairs({
 		{ "SetNormalTexture", "GetNormalTexture", "redbutton-exit" },
 		{ "SetPushedTexture", "GetPushedTexture", "redbutton-exit-pressed" },
 		{ "SetHighlightTexture", "GetHighlightTexture", "redbutton-highlight" },
 	}) do
-		local e = ForeverUI.AtlasEntry(etat[3])
-		croix[etat[1]](croix, e and e[1] or "")
-		local t = croix[etat[2]](croix)
+		local e = ForeverUI.AtlasEntry(state[3])
+		closeButton[state[1]](closeButton, e and e[1] or "")
+		local t = closeButton[state[2]](closeButton)
 		if t then
-			ForeverUI.SetAtlas(t, etat[3], true)
+			ForeverUI.SetAtlas(t, state[3], true)
 			t:ClearAllPoints()
-			t:SetAllPoints(croix)
-			if etat[3] == "redbutton-highlight" then t:SetBlendMode("ADD") end
+			t:SetAllPoints(closeButton)
+			if state[3] == "redbutton-highlight" then t:SetBlendMode("ADD") end
 		end
 	end
-	croix:SetScript("OnClick", function() a:Hide() end)
-	a.croix = croix
+	closeButton:SetScript("OnClick", function() a:Hide() end)
+	a.closeButton = closeButton
 	a:HookScript("OnShow", function(self)
-		if S.annexe and S.annexe ~= self then S.annexe:Hide() end
-		S.annexe = self
+		if S.popup and S.popup ~= self then S.popup:Hide() end
+		S.popup = self
 		PlaySound("igSpellBookOpen")
 	end)
 	a:HookScript("OnHide", function(self)
-		if S.annexe == self then S.annexe = nil end
+		if S.popup == self then S.popup = nil end
 		PlaySound("igSpellBookClose")
 	end)
 	S.annexes = S.annexes or {}
@@ -1036,67 +967,65 @@ function S.creerAnnexe(nom, largeur, hauteur)
 	return a
 end
 
--- ------------------------------------------------------------ l'assemblage
+-- ------------------------------------------------------------ Assembly
 
-local function construire()
-	if S.cadre or not FriendsFrame then return end
+local function build()
+	if S.frame or not FriendsFrame then return end
 	local f = CreateFrame("Frame", "ForeverUISocialFrame", FriendsFrame)
-	f:SetWidth(G.largeur)
-	f:SetHeight(G.hauteur)
+	f:SetWidth(G.width)
+	f:SetHeight(G.height)
 	f:SetPoint("TOPLEFT", FriendsFrame, "TOPLEFT", 0, 0)
 	f:SetFrameLevel(FriendsFrame:GetFrameLevel() + 1)
 	f:EnableMouse(true)
-	S.cadre = f
-	construireCadre(f)
+	S.frame = f
+	buildFrame(f)
 
-	-- LA PAGE CONTACTS : ses sous-onglets, son encadre, sa liste, ses
-	-- boutons.
-	S.inscrirePage(1, {
-		construire = function() end,
-		titre = function() return txt(SOUS_ONGLETS[S.sousOnglet()].titre) end,
-		maj = function() S.majContacts() end,
+	-- Contacts page: sub-tabs, inset, list and buttons.
+	S.registerPage(1, {
+		build = function() end,
+		title = function() return txt(SUB_TABS[S.subTab()].title) end,
+		update = function() S.updateContacts() end,
 	})
 	local p1 = page(1)
-	local contacts = p1.cadre
+	local contacts = p1.frame
 
-	local encadre = ForeverUI.CreateInset(contacts, "ForeverUISocialInset")
-	encadre:SetPoint("TOPLEFT", f, "TOPLEFT", G.encadreX1, G.encadreY1)
-	encadre:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.encadreX2, G.encadreY2)
-	S.encadre = encadre
-	local liste = CreateFrame("Frame", "ForeverUISocialList", contacts)
-	liste:SetPoint("TOPLEFT", f, "TOPLEFT", G.listeX, G.listeY)
-	liste:SetPoint("BOTTOMRIGHT", encadre, "BOTTOMRIGHT", G.listeX2, G.listeY2)
-	liste:EnableMouseWheel(true)
-	liste:SetScript("OnMouseWheel", function(_, sens)
-		S.decalage = math.max(0, math.min((S.decalage or 0) - sens, #(S.contenu or {}) - (S.visibles or 0)))
-		S.poserListe()
+	local frameBox = ForeverUI.CreateInset(contacts, "ForeverUISocialInset")
+	frameBox:SetPoint("TOPLEFT", f, "TOPLEFT", G.frameBoxX1, G.frameBoxY1)
+	frameBox:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.frameBoxX2, G.frameBoxY2)
+	S.frameBox = frameBox
+	local list = CreateFrame("Frame", "ForeverUISocialList", contacts)
+	list:SetPoint("TOPLEFT", f, "TOPLEFT", G.listX, G.listY)
+	list:SetPoint("BOTTOMRIGHT", frameBox, "BOTTOMRIGHT", G.listX2, G.listY2)
+	list:EnableMouseWheel(true)
+	list:SetScript("OnMouseWheel", function(_, direction)
+		S.offset = math.max(0, math.min((S.offset or 0) - direction, #(S.content or {}) - (S.visibleCount or 0)))
+		S.layoutList()
 	end)
-	S.liste = liste
-	S.barre = ForeverUI.CreateScrollBar("ForeverUISocialScrollBar", contacts, liste)
-	S.barre.surDefilement = function(nouveau)
-		S.decalage = nouveau
-		S.poserListe()
+	S.list = list
+	S.bar = ForeverUI.CreateScrollBar("ForeverUISocialScrollBar", contacts, list)
+	S.bar.onScroll = function(new)
+		S.offset = new
+		S.layoutList()
 	end
-	-- sans barre, la liste va jusqu'au bord de l'encadre, comme celles de Qui
-	-- et de la guilde (regle du 28/09) ; les lignes, ancrees des deux cotes,
-	-- suivent
-	S.barre.surVisibilite = function(avec)
-		liste:SetPoint("BOTTOMRIGHT", encadre, "BOTTOMRIGHT", avec and G.listeX2 or G.listeX2Seule, G.listeY2)
+	-- without the bar the list reaches the inset edge, like the Who and Guild lists; rows,
+	-- anchored on both sides, follow
+	S.bar.onVisibility = function(hasBar)
+		list:SetPoint("BOTTOMRIGHT", frameBox, "BOTTOMRIGHT", hasBar and G.listX2 or G.listX2NoBar, G.listY2)
 	end
 
-	-- les onglets du bas, sur la fenetre
-	S.onglets = {}
-	local precedent
-	for i, def in ipairs(ONGLETS) do
-		local b = creerOnglet(f, "ForeverUISocialTab" .. i, false)
-		if precedent then
-			b:SetPoint("TOPLEFT", precedent, "TOPRIGHT", G.ongletEcart, 0)
+	-- bottom tabs, on the window
+	S.tabs = {}
+	local previous
+	for i, def in ipairs(TABS) do
+		local b = createTab(f, "ForeverUISocialTab" .. i, false)
+		if previous then
+			b:SetPoint("TOPLEFT", previous, "TOPRIGHT", G.tabGap, 0)
 		else
-			b:SetPoint("TOPLEFT", f, "BOTTOMLEFT", G.ongletPremierX, G.ongletPremierY)
+			b:SetPoint("TOPLEFT", f, "BOTTOMLEFT", G.firstTabX, G.firstTabY)
 		end
 		b:SetScript("OnClick", function()
-			-- l'onglet du client fait le reste : PanelTemplates_Tab_OnClick,
-			-- FriendsFrame_OnShow, et la guilde qu'il referme
+			-- the client tab does the rest: PanelTemplates_Tab_OnClick, FriendsFrame_OnShow, and
+			-- closing the guild frame
 			local client = _G["FriendsFrameTab" .. def.id]
 			if client and client:GetScript("OnClick") then
 				client:GetScript("OnClick")(client, "LeftButton")
@@ -1106,97 +1035,97 @@ local function construire()
 			end
 			PlaySound("igCharacterInfoTab")
 		end)
-		S.onglets[i] = { id = def.id, texte = def.texte, bouton = b }
-		precedent = b
+		S.tabs[i] = { id = def.id, text = def.text, button = b }
+		previous = b
 	end
 
-	-- les sous-onglets : Friends et Ignore, l'etat du client
-	S.sousOnglets = {}
-	precedent = nil
-	for i, def in ipairs(SOUS_ONGLETS) do
-		local b = creerOnglet(contacts, "ForeverUISocialSubTab" .. i, true)
+	-- sub-tabs: Friends and Ignore, state kept by the client
+	S.subTabs = {}
+	previous = nil
+	for i, def in ipairs(SUB_TABS) do
+		local b = createTab(contacts, "ForeverUISocialSubTab" .. i, true)
 		b:SetFrameLevel(f:GetFrameLevel() + 2)
-		if precedent then
-			b:SetPoint("TOPLEFT", precedent, "TOPRIGHT", G.sousEcart, 0)
+		if previous then
+			b:SetPoint("TOPLEFT", previous, "TOPRIGHT", G.subTabGap, 0)
 		else
-			b:SetPoint("TOPLEFT", f, "TOPLEFT", G.sousX, G.sousY)
+			b:SetPoint("TOPLEFT", f, "TOPLEFT", G.subTabX, G.subTabY)
 		end
 		b:SetScript("OnClick", function()
 			PanelTemplates_SetTab(FriendsTabHeader, def.id)
 			PlaySound("igMainMenuOptionCheckBoxOn")
-			S.decalage = 0
+			S.offset = 0
 			FriendsFrame_Update()
 		end)
-		S.sousOnglets[i] = { id = def.id, texte = def.texte, bouton = b }
-		precedent = b
+		S.subTabs[i] = { id = def.id, text = def.text, button = b }
+		previous = b
 	end
 
-	-- les boutons, ceux du client pour ce qu'ils font
+	-- buttons, using the client's handlers
 	local b = {}
-	local function bouton(texte, largeur)
-		return ForeverUI.CreatePanelButton(contacts, texte, largeur, G.boutonH, nil, "GameFontNormal")
+	local function button(text, width)
+		return ForeverUI.CreatePanelButton(contacts, text, width, G.buttonH, nil, "GameFontNormal")
 	end
-	b.ajouter = bouton(txt("ADD_FRIEND"), G.boutonL)
-	b.ajouter:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.boutonGauche, G.boutonBas)
-	b.ajouter:SetScript("OnClick", function(self) FriendsFrameAddFriendButton_OnClick(self) end)
-	b.message = bouton(txt("SEND_MESSAGE"), G.boutonL)
-	b.message:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.boutonDroite, G.boutonBas)
+	b.add = button(txt("ADD_FRIEND"), G.buttonW)
+	b.add:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.buttonLeft, G.buttonBottom)
+	b.add:SetScript("OnClick", function(self) FriendsFrameAddFriendButton_OnClick(self) end)
+	b.message = button(txt("SEND_MESSAGE"), G.buttonW)
+	b.message:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.buttonRight, G.buttonBottom)
 	b.message:SetScript("OnClick", function(self) FriendsFrameSendMessageButton_OnClick(self) end)
-	b.ignorer = bouton(txt("IGNORE_PLAYER"), G.boutonL)
-	b.ignorer:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.boutonGauche, G.boutonBas)
-	b.ignorer:SetScript("OnClick", function()
-		-- l'OnClick de FriendsFrameIgnorePlayerButton, dans le XML du client
+	b.ignoreButton = button(txt("IGNORE_PLAYER"), G.buttonW)
+	b.ignoreButton:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.buttonLeft, G.buttonBottom)
+	b.ignoreButton:SetScript("OnClick", function()
+		-- OnClick of FriendsFrameIgnorePlayerButton, from the client XML
 		if UnitCanCooperate("player", "target") then
 			AddIgnore(UnitName("target"))
 		else
 			StaticPopup_Show("ADD_IGNORE")
 		end
 	end)
-	b.retirer = bouton(txt("REMOVE_PLAYER"), G.boutonL)
-	b.retirer:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.boutonDroite, G.boutonBas)
-	b.retirer:SetScript("OnClick", function(self) FriendsFrameUnsquelchButton_OnClick(self) end)
-	S.boutons = b
+	b.remove = button(txt("REMOVE_PLAYER"), G.buttonW)
+	b.remove:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", G.buttonRight, G.buttonBottom)
+	b.remove:SetScript("OnClick", function(self) FriendsFrameUnsquelchButton_OnClick(self) end)
+	S.buttons = b
 
 	f:Hide()
 end
 
-construire()
+build()
 
-if S.cadre then
-	hooksecurefunc("FriendsFrame_Update", S.appliquer)
-	FriendsFrame:HookScript("OnShow", S.appliquer)
-	FriendsFrame:HookScript("OnHide", fermer)
-	-- deplacable par son titre ; devant quand on l'ouvre ou qu'on la clique
-	ForeverUI.Superposition.deplacable(S.cadre, S.cadre.bandeau, "social")
-	ForeverUI.Superposition.inscrire("social", FriendsFrame, function()
-		local z = { S.cadre }
+if S.frame then
+	hooksecurefunc("FriendsFrame_Update", S.apply)
+	FriendsFrame:HookScript("OnShow", S.apply)
+	FriendsFrame:HookScript("OnHide", close)
+	-- movable by its title; raised when opened or clicked
+	ForeverUI.WindowStack.makeMovable(S.frame, S.frame.banner, "social")
+	ForeverUI.WindowStack.register("social", FriendsFrame, function()
+		local z = { S.frame }
 		for _, a in ipairs(S.annexes or {}) do z[#z + 1] = a end
 		return z
 	end)
-	local veilleur = CreateFrame("Frame")
+	local listener = CreateFrame("Frame")
 	for _, ev in ipairs({ "FRIENDLIST_UPDATE", "IGNORELIST_UPDATE",
 		"PARTY_MEMBERS_CHANGED", "PLAYER_GUILD_UPDATE" }) do
-		veilleur:RegisterEvent(ev)
+		listener:RegisterEvent(ev)
 	end
-	veilleur:SetScript("OnEvent", function()
-		if S.cadre:IsVisible() and (FriendsFrame.selectedTab or 1) == 1 then S.maj() end
+	listener:SetScript("OnEvent", function()
+		if S.frame:IsVisible() and (FriendsFrame.selectedTab or 1) == 1 then S.update() end
 	end)
 end
 
--- TEMOIN -- /fui social
+-- Debug: /fui social
 function ForeverUI.SocialDebug()
-	local dire = function(t) DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t) end
-	if not S.cadre then
-		dire(L.SOCIAL_DEBUG_NOT_BUILT)
+	local say = function(t) DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t) end
+	if not S.frame then
+		say(L.SOCIAL_DEBUG_NOT_BUILT)
 		return
 	end
-	local total, enLigne = GetNumFriends()
-	dire(string.format(L.SOCIAL_DEBUG_STATE,
+	local total, online = GetNumFriends()
+	say(string.format(L.SOCIAL_DEBUG_STATE,
 		tostring(FriendsFrame.selectedTab), tostring(FriendsTabHeader and FriendsTabHeader.selectedTab),
-		tostring(S.cadre:IsShown()), tostring(FriendsFrame:IsMouseEnabled())))
-	dire(string.format(L.SOCIAL_DEBUG_FRIENDS,
-		tostring(total), tostring(enLigne), tostring(GetSelectedFriend()), tostring(GetNumIgnores()),
+		tostring(S.frame:IsShown()), tostring(FriendsFrame:IsMouseEnabled())))
+	say(string.format(L.SOCIAL_DEBUG_FRIENDS,
+		tostring(total), tostring(online), tostring(GetSelectedFriend()), tostring(GetNumIgnores()),
 		tostring(GetSelectedIgnore())))
-	dire(string.format(L.SOCIAL_DEBUG_LIST,
-		#(S.contenu or {}), S.visibles or 0, S.decalage or 0))
+	say(string.format(L.SOCIAL_DEBUG_LIST,
+		#(S.content or {}), S.visibleCount or 0, S.offset or 0))
 end

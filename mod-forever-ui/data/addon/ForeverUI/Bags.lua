@@ -1,390 +1,238 @@
--- ForeverUI : l'interface des sacs.
---
--- RELEVE DES SOURCES -- tout vient du code extrait de camelot, qui pour les
--- sacs se sert du fichier commun (camelot/ContainerFrame.lua ne fait qu'une
--- chose : recadrer le masque rond du portrait).
---
--- mainline/ContainerFrame.lua -- LA GEOMETRIE, chiffre par chiffre
---   CONTAINER_WIDTH = 178, ITEM_SPACING_X = ITEM_SPACING_Y = 5, quatre
---   colonnes, boutons de 37.
---   ContainerFrameMixin:GetFirstButtonOffsetY = 9
---   ContainerFrameMixin:GetPaddingHeight = 9 + 48, et +30 pour le sac a dos
---   (la bande du champ de recherche)
---   ContainerFrameMixin:CalculateHeight = hauteur des rangees + ce
---   remplissage + CalculateExtraHeight, qui vaut la hauteur de la bourse pour
---   le sac a dos.
---   sac ordinaire : premier bouton BOTTOMRIGHT (-7, 9) du cadre.
---   sac a dos     : bourse BOTTOMLEFT (8, 8) et BOTTOMRIGHT (-8, 8), haute de
---                   13 ; premier bouton BOTTOMRIGHT sur le TOPRIGHT de la
---                   bourse, decale de (0, 4).
---   bourse        : ContainerFrameCurrencyBorderTemplate, haut de 17, bouts
---                   de 8 x 17 (common-coinbox-left et -right) et milieu tendu.
---
--- mainline/ContainerFrame.xml
---   cadre           ContainerFrameTemplate herite de PortraitFrameFlatTemplate :
---                   fond plat + encadrement de metal en neuf tranches, jeu
---                   HeldBagLayout. Monte par ForeverUI.SetPanelArt.
---   emplacement     ContainerFrameItemButtonTemplate, 37 x 37, fond d'un
---                   emplacement vide = bags-item-slot64.
---
--- shared/ItemButtonTemplate.lua : SetItemButtonQuality_Base
---   Le contour d'un objet, c'est IconBorder : Interface\Common\WhiteIconFrame
---   teinte par la couleur de qualite de l'objet. Une case vide n'en a pas ;
---   c'est son fond qui se voit.
---   champ           BagItemSearchBox, 96 x 18, 15 lettres, TOPLEFT (42, -37)
---                   du sac principal (ContainerFrameMixin:SetSearchBoxPoint).
---   bouton de tri   BagItemAutoSortButton, 28 x 26, TOPRIGHT (-9, -34),
---                   images bags-button-autosort-up et -down, survol
---                   Interface\Buttons\ButtonHilight-Square en ADD, 24 x 23
---                   centre. Au clic : un son, puis C_Container.SortBags().
---   les deux ne se montrent QUE sur le sac principal
---                   (ContainerFrameMixin:UpdateSearchBox).
---
--- mainline/SharedUIPanelTemplates.xml
---   titre           TitleContainer de TOPLEFT (58, -1) a TOPRIGHT (-24, -1),
---                   haut de 20 ; le texte centre dedans, 5 px sous son haut.
---   portrait        62 x 62, dans l'anneau du coin haut gauche.
---
--- shared/UIPanelTemplatesShared.lua
---   BagSearch_OnTextChanged pousse le texte dans toutes les barres de
---   recherche puis appelle C_Container.SetItemSearch ; BagSearch_OnChar rend
---   la main des que les quatre derniers caracteres sont identiques ;
---   BagSearch_OnHide efface la recherche quand plus aucune barre n'est
---   visible. Ces trois comportements sont repris tels quels.
---
--- CE QUE 3.3.5 N'A PAS, ET COMMENT C'EST FAIT ICI.
---   C_Container.SetItemSearch n'existe pas : le client moderne marque
---   lui-meme chaque objet et le code ne fait que lire `isFiltered`. Ici le
---   tri des correspondances est fait en Lua, sur le nom, le type et le
---   sous-type de l'objet, et l'objet qui ne correspond pas recoit le meme
---   voile que la source (ItemButton : searchOverlay, noir a 80 %).
---   C_Container.SortBags n'existe pas non plus, et son ordre est decide dans
---   le client : il n'est pas lisible. Le rangement est donc refait ici, en
---   deplacant les objets un par un ; l'ordre suit celui que le jeu lui-meme
---   emploie pour ses categories (GetAuctionItemClasses), puis la qualite, le
---   nom et la taille de la pile. CHOIX ASSUME, faute de source.
+-- ForeverUI: bag windows in the Camelot style (mainline ContainerFrameMixin geometry).
+-- 3.3.5 has no C_Container.SetItemSearch: search matches name, type and subtype in Lua and
+-- veils the rest (searchOverlay, black at 80 %). Nor C_Container.SortBags: items move one by
+-- one, ordered by GetAuctionItemClasses, then quality, name and stack size.
 
--- =====================================================================
--- REGLAGES DE L'INTERFACE DES SACS
---
--- RELEVE -- blizzard_uipanels_game/mainline/containerframe.lua, ContainerFrameMixin.
--- Tout ce bloc est recopie de la source ; rien n'y est mesure ni estime.
---
---   CalculateWidth()        = CONTAINER_WIDTH, une CONSTANTE (178) -- la
---                             largeur ne se deduit PAS de la grille
---   CalculateHeight()       = rangees x 37 + (rangees - 1) x 5
---                             + GetPaddingHeight() + CalculateExtraHeight()
---   GetPaddingHeight()      = GetFirstButtonOffsetY() (9) + 48
---                             + 30 sur le sac a dos (ContainerFrameBackpackMixin,
---                             "Account for the search box in the backpack")
---   CalculateExtraHeight()  = 0 ; + la hauteur de la bourse sur le sac a dos
---   GetInitialItemAnchor()  = sac porte : BOTTOMRIGHT du cadre, (-7, 9)
---                             sac a dos : BOTTOMRIGHT de la BOURSE, TOPRIGHT (0, 4)
---   UpdateCurrencyFrames()  = bourse BOTTOMLEFT (8, 8) / BOTTOMRIGHT (-8, 8)
---   SetSearchBoxPoint()     = champ TOPLEFT (42, -37), 96 de large
---   UpdateSearchBox()       = tri TOPRIGHT (-9, -34)
---   ContainerFrameItemButtonTemplate (containerframe.xml, ligne 82) : 37 x 37
---   ITEM_SPACING_X = ITEM_SPACING_Y = 5 ; colonnes = 4
---
--- CE QUI FAIT QUE LA FENETRE SUIT SON CONTENU : la hauteur est un CALCUL a
--- partir du nombre de rangees, pas une somme d'ancrages. Le comble (titre,
--- champ de recherche) est une hauteur fixe ancree en HAUT, exactement comme
--- dans la source -- c'est la formule qui s'adapte, pas les ancrages.
---   sac a dos, 16 cases : 163 + (9 + 48 + 30) + 13 = 263
---   sac porte, 16 cases : 163 + (9 + 48)           = 220
---
--- En jeu, pour essayer sans rien reinstaller :
---     /fui sacs                    la hauteur calculee, celle du cadre, le detail
---     /fui sacs emplacement 44     change une valeur et refait la fenetre
--- Quand le reglage convient, il se fige dans ce bloc.
+-- Bag window settings, from ContainerFrameMixin (mainline/containerframe.lua).
+-- Height = rows x slot + (rows - 1) x cellGap + GetPaddingHeight() + CalculateExtraHeight(),
+-- so the window follows its contents; the width is the constant CONTAINER_WIDTH.
+-- /fui bags prints computed and actual sizes; /fui bags <key> <value> tries a value.
 local R = {
-	-- LA GRILLE
-	emplacement = 37,       -- ContainerFrameItemButtonTemplate
-	ecartCases = 5,         -- ITEM_SPACING_X et ITEM_SPACING_Y
-	colonnes = 4,           -- GetColumns()
-	largeur = 178,          -- CONTAINER_WIDTH
+	-- Grid
+	slot = 37,       -- ContainerFrameItemButtonTemplate
+	cellGap = 5,         -- ITEM_SPACING_X and ITEM_SPACING_Y
+	columns = 4,           -- GetColumns()
+	width = 178,          -- CONTAINER_WIDTH
 
-	-- LE CALCUL DE LA HAUTEUR
-	-- ECART ASSUME. camelot donne 9 a GetFirstButtonOffsetY(), mais avec son
-	-- art de metal pose ici, le bord interieur du bas remonte a 7,5 du bord
-	-- du cadre : il ne restait que 1,5 sous la derniere rangee, contre 7,5 a
-	-- gauche et 6 a droite (mesure en jeu, echelle 4/3). Les 6 de plus
-	-- egalisent l'espace des quatre cotes ; la fenetre grandit d'autant,
-	-- puisque la formule de la hauteur compte ce nombre.
-	premierBoutonY = 15,    -- camelot 9
-	premierBoutonX = -7,    -- GetInitialItemAnchor()
-	entete = 48,            -- GetPaddingHeight() : "titlebar and attic"
-	bandeRecherche = 30,    -- le meme, + 30 sur le sac a dos
+	-- Height
+	-- camelot uses 9 for GetFirstButtonOffsetY(); with its metal border drawn here that leaves
+	-- only 1.5 below the last row (7.5 left, 6 right). 6 more evens out the four sides.
+	firstButtonY = 15,    -- camelot 9
+	firstButtonX = -7,    -- GetInitialItemAnchor()
+	header = 48,            -- GetPaddingHeight(): "titlebar and attic"
+	searchStrip = 30,    -- same, + 30 on the backpack
 
-	-- LA BOURSE, et la grille qui s'y accroche sur le sac a dos
-	bourseHauteur = 13,     -- UpdateMoneyFrame()
-	bourseCote = 8,         -- UpdateCurrencyFrames()
-	bourseBas = 14,         -- camelot 8, remonte des memes 6
-	ecartBourseGrille = 4,  -- ContainerFrameBackpackMixin:GetInitialItemAnchor()
-	bourseCadre = 17,       -- l'encadre de camelot deborde de la bourse
+	-- Purse, and the backpack grid anchored to it
+	purseHeight = 13,     -- UpdateMoneyFrame()
+	purseSide = 8,         -- UpdateCurrencyFrames()
+	purseBottom = 14,         -- camelot 8, raised by the same 6
+	purseGridGap = 4,  -- ContainerFrameBackpackMixin:GetInitialItemAnchor()
+	purseFrame = 17,       -- camelot's border overhangs the purse
 
-	-- LE SEGMENT DES MONNAIES SUIVIES, sous la bourse.
-	--
-	-- RELEVE -- ContainerFrameTokenWatcherMixin:UpdateCurrencyFrames : le
-	-- segment se pose au BAS de la fenetre, BOTTOMLEFT (8, 8) et
-	-- BOTTOMRIGHT (-8, 8), et c'est LA BOURSE QUI MONTE -- son BOTTOMLEFT
-	-- et son BOTTOMRIGHT sur le TOP du segment, (0, 3). Sans monnaie
-	-- suivie, la bourse reprend le bas, et rien ne change.
-	-- CalculateExtraHeight ajoute alors la hauteur du segment.
-	--
-	-- BackpackTokenFrameTemplate : 17 de haut, encadre par
-	-- ContainerFrameCurrencyBorderTemplate -- deux bouts de 8 x 17 et un
-	-- milieu tendu. BackpackTokenTemplate : 50 x 12, icone de 12 ancree
-	-- RIGHT (4, 1), compte cale a droite jusqu'au bord gauche de l'icone.
-	-- GetInitialTokenAnchor : RIGHT du segment (-17, -1), et les jetons
-	-- s'enchainent vers la GAUCHE.
-	jetonHauteur = 17,      -- BackpackTokenFrameTemplate
-	jetonCote = 8,          -- UpdateCurrencyFrames()
-	jetonEcart = 3,         -- ce que la bourse laisse au-dessus du segment
-	jetonLargeur = 50,      -- BackpackTokenTemplate
-	jetonPiece = 12,        -- sa hauteur, et celle de l'icone
-	jetonIconeX = 4,
-	jetonIconeY = 1,
-	jetonDepartX = -17,     -- GetInitialTokenAnchor()
-	jetonDepartY = -1,
+	-- Watched currencies strip, below the purse
+	-- ContainerFrameTokenWatcherMixin:UpdateCurrencyFrames: the strip takes the bottom
+	-- (BOTTOMLEFT (8, 8), BOTTOMRIGHT (-8, 8)) and the purse sits on its TOP, (0, 3).
+	-- CalculateExtraHeight adds the strip height. Tokens chain leftwards from GetInitialTokenAnchor.
+	tokenHeight = 17,      -- BackpackTokenFrameTemplate
+	tokenSide = 8,          -- UpdateCurrencyFrames()
+	tokenGap = 3,         -- gap between the strip and the purse above it
+	tokenWidth = 50,      -- BackpackTokenTemplate
+	tokenPiece = 12,        -- its height, and the icon's
+	tokenIconX = 4,
+	tokenIconY = 1,
+	tokenOriginX = -17,     -- GetInitialTokenAnchor()
+	tokenOriginY = -1,
 
-	-- LE COMBLE
-	-- Le champ et le tri redescendent des 6 dont la grille est remontee :
-	-- ancres en haut, ils suivaient sinon le bord superieur, qui s'est
-	-- eloigne d'autant.
-	champLargeur = 96,      -- SetSearchBoxPoint()
-	champHauteur = 18,
-	champX = 42,
-	champY = -43,           -- camelot -37
-	triLargeur = 28,
-	triHauteur = 26,
-	triX = -9,              -- UpdateSearchBox()
-	triY = -40,             -- camelot -34
+	-- Attic
+	-- Top-anchored, so the box and the sort button move down by the 6 the window grew.
+	fieldWidth = 96,      -- SetSearchBoxPoint()
+	fieldHeight = 18,
+	fieldX = 42,
+	fieldY = -43,           -- camelot -37
+	sortWidth = 28,
+	sortHeight = 26,
+	sortX = -9,              -- UpdateSearchBox()
+	sortY = -40,             -- camelot -34
 
-	-- LES DECORS DU CADRE
-	titreGauche = 35,       -- SetTitleOffsets(35) : le bord gauche du titre
-	titreDroite = -24,      -- la valeur par defaut de SetTitleOffsets
-	titreConteneur = -1,    -- TitleContainer : TOPLEFT / TOPRIGHT a -1
-	titreBande = 20,        -- sa hauteur
-	titreTexte = -5,        -- TitleText : TOP (0, -5) dans le conteneur
-	fermeture = 24,
-	fermetureX = 1,
-	fermetureY = 0,
-	-- LE PORTRAIT, a la maniere du client 3.3.5. Celui-ci ne masque JAMAIS
-	-- une icone : pour ses boutons de minimap il pose un anneau par-dessus
-	-- (MiniMap-TrackingBorder, une couronne opaque a trou transparent),
-	-- dessine l'icone assez petite pour tenir dans le trou, et la ROGNE de
-	-- sa bordure. C'est l'anneau qui fait le rond.
-	--
-	-- Ici l'anneau est celui de camelot, mesure au pixel a la taille ou il
-	-- est dessine : trou net jusqu'a 10,3 du centre, degrade jusqu'a 14,3,
-	-- metal OPAQUE de 14,3 a 20,4. Pour qu'un carre disparaisse, ses bords
-	-- doivent couvrir le degrade et ses coins tomber dans le metal :
-	--     cote / 2 >= 14,3               -> cote >= 28,6
-	--     (cote / 2) x racine(2) <= 20,4 -> cote <= 28,8
-	-- 28 est la seule taille qui tienne, et ses coins finissent SOUS le
-	-- metal -- mieux que les boutons de minimap, dont les coins flottent
-	-- dans le trou.
+	-- Frame decorations
+	titleLeft = 35,       -- SetTitleOffsets(35): left edge of the title
+	titleRight = -24,      -- SetTitleOffsets default
+	titleContainer = -1,    -- TitleContainer: TOPLEFT / TOPRIGHT at -1
+	titleStripHeight = 20,        -- its height
+	titleText = -5,        -- TitleText: TOP (0, -5) in the container
+	closeSize = 24,
+	closeX = 1,
+	closeY = 0,
+	-- Portrait: 3.3.5 does not mask icons; as for its minimap buttons, the ring's opaque metal
+	-- hides the corners of a square icon. camelot's ring is clear up to 10.3 px from the centre,
+	-- fades up to 14.3 and is opaque up to 20.4, so the side must be >= 28.6 (edges cover the
+	-- fade) and <= 28.8 (corners stay under the metal): 28.
 	portrait = 28,
-	portraitX = 14,         -- le centre de l'anneau, mesure sur son art
-	portraitY = -17,        -- et le centre du portrait de la source
+	portraitX = 14,         -- centre of the ring, measured on its art
+	portraitY = -17,        -- and centre of the source portrait
 
-	-- L'EMPILEMENT DES SACS -- UpdateContainerFrameAnchors, lignes 1372-1401
-	ecartSacs = 8,          -- CONTAINER_SPACING
-	ecartColonnes = -11,    -- le saut de colonne
-	bordDroit = 10,         -- GetInitialContainerFrameOffsetX, hors barres
-	bordBas = 85,           -- CONTAINER_OFFSET_Y
-	margeHaute = 8,         -- ECART (2026-09-28) : garde sous le haut de l'ecran
+	-- Bag stacking (UpdateContainerFrameAnchors)
+	bagGap = 8,          -- CONTAINER_SPACING
+	columnGap = -11,    -- column step
+	rightEdge = 10,         -- GetInitialContainerFrameOffsetX, bars excluded
+	bottomEdge = 85,           -- CONTAINER_OFFSET_Y
+	topMargin = 8,         -- margin below the top of the screen (not in the source)
 
-	-- L'ENSEMBLE
-	echelle = 1,            -- 1 = taille de camelot ; 1.25 = un quart de plus
+	-- Overall
+	scale = 1,            -- 1 = camelot size; 1.25 = a quarter larger
 }
 ForeverUI = ForeverUI or {}
-ForeverUI.BagsSettings = R
--- =====================================================================
 
-local NB_CADRES = NUM_CONTAINER_FRAMES or 13
-local SACS = { 0, 1, 2, 3, 4 }          -- sac a dos et les quatre sacs portes
+local FRAME_COUNT = NUM_CONTAINER_FRAMES or 13
+local BAGS = { 0, 1, 2, 3, 4 }          -- backpack and the four equipped bags
 
--- Lua 5.1 lit les antislashs comme des echappements : on pose le separateur
--- en clair.
+-- Lua 5.1 reads backslashes as escapes: the separator is built from its char code.
 local SEP = string.char(92)
-local SURVOL_CARRE = "Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square"
-local CADRE_QUALITE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
+local SQUARE_HOVER = "Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square"
+local QUALITY_FRAME = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "whiteiconframe"
 
--- RELEVE -- ContainerFrameMixin:UpdateMiscellaneousFrames : le sac a dos
--- porte Inv_misc_bag_08, le trousseau une icone a lui, et un sac porte
--- montre l'icone de l'objet qu'il est.
--- RELEVE -- le rognage que le client applique a toute icone posee dans un
--- anneau : une icone fait 64 px et porte 4 px de bordure sombre.
-local BORDURE_ICONE = 4 / 64
+-- UpdateMiscellaneousFrames: the backpack shows INV_Misc_Bag_08, the keyring its own icon,
+-- an equipped bag its item icon. Icons are 64 px with a 4 px dark border.
+local ICON_BORDER = 4 / 64
 
-local PORTRAIT_SAC_A_DOS = "Interface" .. SEP .. "Icons" .. SEP .. "INV_Misc_Bag_08"
--- ECART : camelot demande "Interface/Icons/ui-hud-actionbar-keyring", qui
--- n'existe pas en 3.3.5 ; le client y range son trousseau ici.
-local PORTRAIT_TROUSSEAU = "Interface" .. SEP .. "ContainerFrame" .. SEP .. "KeyRing-Bag-Icon"
+local BACKPACK_PORTRAIT = "Interface" .. SEP .. "Icons" .. SEP .. "INV_Misc_Bag_08"
+-- camelot's "Interface/Icons/ui-hud-actionbar-keyring" does not exist in 3.3.5; this is the
+-- client's keyring icon.
+local KEYRING_PORTRAIT = "Interface" .. SEP .. "ContainerFrame" .. SEP .. "KeyRing-Bag-Icon"
 
--- MESURE SUR LA CAPTURE. camelot pose un cadre sur CHAQUE case, pleine ou
--- vide : gris sombre, bords entre 25 et 49, coins vers 100. L'image porte ces
--- memes valeurs a 255 et 140 : la teinte vaut donc 0,39. La couleur de
--- qualite ne prend le relais qu'a partir de peu commun.
-local CADRE_GRIS = 0.39
-local QUALITE_TEINTEE = 2
+-- camelot frames every slot, full or empty, in dark gray (0.39, measured on a screenshot).
+-- The quality color takes over from uncommon.
+local FRAME_GRAY = 0.39
+local TINTED_QUALITY = 2
 
 local L = ForeverUI.L
-local RANGER = L.BAGS_CLEANUP
-local RANGER_AIDE = L.BAGS_CLEANUP_TOOLTIP
+local CLEANUP_TEXT = L.BAGS_CLEANUP
+local CLEANUP_TOOLTIP = L.BAGS_CLEANUP_TOOLTIP
 
 ForeverUI = ForeverUI or {}
 
--- ------------------------------------------------------------ les cadres
-local cadres = {}
+-- ------------------------------------------------------------ frames
+local frames = {}
 
-local function habillerBouton(bouton)
-	if not bouton or bouton.foreverSkinned then
+local function skinButton(button)
+	if not button or button.foreverSkinned then
 		return
 	end
 
-	local nom = bouton:GetName()
+	local name = button:GetName()
 
-	-- RELEVE -- SetItemButtonTexture_Base (itembuttontemplate.lua) : quand la
-	-- case est vide, emptyBackgroundAtlas est pose SUR L'ICONE elle-meme, et
-	-- non derriere. Il n'y a jamais deux textures superposees. L'art dore de
-	-- 3.3.5, lui, s'efface : camelot n'a pas de cadre autour d'une case.
-	local normale = bouton:GetNormalTexture()
-	if normale then
-		normale:SetAlpha(0)
+	-- SetItemButtonTexture_Base: an empty slot shows emptyBackgroundAtlas on the icon itself,
+	-- never as a second texture. The 3.3.5 slot art is hidden.
+	local normalFont = button:GetNormalTexture()
+	if normalFont then
+		normalFont:SetAlpha(0)
 	end
 
-	local survol = bouton:GetHighlightTexture()
-	if survol then
-		survol:SetTexture(SURVOL_CARRE)
-		survol:SetBlendMode("ADD")
-		survol:ClearAllPoints()
-		survol:SetAllPoints(bouton)
+	local hover = button:GetHighlightTexture()
+	if hover then
+		hover:SetTexture(SQUARE_HOVER)
+		hover:SetBlendMode("ADD")
+		hover:ClearAllPoints()
+		hover:SetAllPoints(button)
 	end
 
-	local icone = _G[nom .. "IconTexture"]
-	if icone then
-		icone:ClearAllPoints()
-		icone:SetAllPoints(bouton)
-		icone:SetTexCoord(0, 1, 0, 1)
-		icone:SetDrawLayer("BORDER")
+	local icon = _G[name .. "IconTexture"]
+	if icon then
+		icon:ClearAllPoints()
+		icon:SetAllPoints(button)
+		icon:SetTexCoord(0, 1, 0, 1)
+		icon:SetDrawLayer("BORDER")
 	end
 
-	-- Le contour d'un objet : WhiteIconFrame teinte par sa qualite, comme
-	-- SetItemButtonQuality_Base le fait. Une case vide n'en a pas.
-	local contour = bouton:CreateTexture(nil, "OVERLAY")
-	contour:SetTexture(CADRE_QUALITE)
-	contour:SetAllPoints(bouton)
-	contour:SetVertexColor(CADRE_GRIS, CADRE_GRIS, CADRE_GRIS)
-	bouton.foreverContour = contour
+	-- Item outline: WhiteIconFrame tinted by quality, as in SetItemButtonQuality_Base.
+	local outline = button:CreateTexture(nil, "OVERLAY")
+	outline:SetTexture(QUALITY_FRAME)
+	outline:SetAllPoints(button)
+	outline:SetVertexColor(FRAME_GRAY, FRAME_GRAY, FRAME_GRAY)
+	button.foreverOutline = outline
 
-	-- Le voile de recherche : la source le declare sur le bouton d'objet
-	-- lui-meme, noir a 80 %, sur toute la surface.
-	local voile = bouton:CreateTexture(nil, "OVERLAY")
-	voile:SetTexture(0, 0, 0, 0.8)
-	voile:SetAllPoints(bouton)
-	voile:Hide()
-	bouton.foreverVoile = voile
+	-- Search veil: black at 80 % over the whole button, as on the source ItemButton.
+	local veil = button:CreateTexture(nil, "OVERLAY")
+	veil:SetTexture(0, 0, 0, 0.8)
+	veil:SetAllPoints(button)
+	veil:Hide()
+	button.foreverVeil = veil
 
-	bouton.foreverSkinned = true
+	button.foreverSkinned = true
 end
 
-local function habillerCadre(cadre)
-	if not cadre or cadre.foreverSkinned then
+local function skinFrame(frame)
+	if not frame or frame.foreverSkinned then
 		return
 	end
 
-	local nom = cadre:GetName()
+	local name = frame:GetName()
 
-	-- L'habillage d'epoque : quatre morceaux empiles, plus la version a un
-	-- seul emplacement. ContainerFrame_GenerateFrame les reaffiche et leur
-	-- change de texture a chaque ouverture, mais ne touche pas leur alpha.
-	for _, suffixe in ipairs({ "BackgroundTop", "BackgroundMiddle1", "BackgroundMiddle2",
+	-- 3.3.5 background art: four stacked pieces plus the one-slot version.
+	-- ContainerFrame_GenerateFrame re-shows and retextures them on each open but keeps their alpha.
+	for _, suffix in ipairs({ "BackgroundTop", "BackgroundMiddle1", "BackgroundMiddle2",
 		"BackgroundBottom", "Background1Slot" }) do
-		local texture = _G[nom .. suffixe]
+		local texture = _G[name .. suffix]
 		if texture then
 			texture:SetAlpha(0)
 		end
 	end
 
-	ForeverUI.SetPanelArt(cadre)
+	ForeverUI.SetPanelArt(frame)
 
-	-- L'ICONE SE GLISSE ENTRE LE FOND ET LE CONTOUR. Elle est donc creee
-	-- APRES l'art du panneau, dans le meme calque que son fond -- deux
-	-- regions d'un meme calque ne sont ordonnees que par leur ordre de
-	-- creation, celle-ci passe donc au-dessus -- et le metal, en OVERLAY,
-	-- reste au-dessus d'elle.
-	--
-	-- L'ordre compte : sous le fond, qui est OPAQUE, l'icone ne se verrait
-	-- meme pas par le trou de l'anneau. C'est le contour seul qui la
-	-- decoupe, exactement comme le cadre de sac de 3.3.5 decoupe la sienne
-	-- (UI-Bag-4x4.blp porte un trou circulaire de 32 px, rien n'y est
-	-- masque). Taille et place sont celles de la source :
-	-- SetPortraitTextureSizeAndOffset(36, -4, 1).
-	local ancien = _G[nom .. "Portrait"]
-	if ancien then
-		ancien:SetAlpha(0)
+	-- The client portrait is replaced by an icon cut round by the ring, not masked.
+	local old = _G[name .. "Portrait"]
+	if old then
+		old:SetAlpha(0)
 	end
 
-	-- LE CALQUE DECIDE, PAS L'ORDRE DE CREATION. Le fond du panneau est en
-	-- BACKGROUND et le metal en OVERLAY : entre les deux, BORDER est libre.
-	-- Une texture posee la est TOUJOURS au-dessus du fond et TOUJOURS sous
-	-- le metal, quel que soit l'ordre dans lequel les morceaux ont ete
-	-- crees. C'est ce qui manquait : le fond du panneau (corps, ancre a 20
-	-- px du haut) coupait l'anneau en deux et passait devant l'icone.
-	local portrait = cadre:CreateTexture(nil, "BORDER")
+	-- BORDER layer: always above the panel background (BACKGROUND) and below the metal
+	-- (OVERLAY), whatever the creation order.
+	local portrait = frame:CreateTexture(nil, "BORDER")
 	portrait:SetWidth(R.portrait)
 	portrait:SetHeight(R.portrait)
-	portrait:SetPoint("CENTER", cadre, "TOPLEFT", R.portraitX, R.portraitY)
-	cadre.foreverPortrait = portrait
+	portrait:SetPoint("CENTER", frame, "TOPLEFT", R.portraitX, R.portraitY)
+	frame.foreverPortrait = portrait
 
-	-- RELEVE -- TitledPanelMixin:SetTitleOffsets, que ContainerFrame appelle
-	-- avec 35, et le modele TitleContainer : un CADRE de 20 de haut allant de
-	-- 35 a la largeur moins 24, pose a -1, contenant un TitleText ancre TOP
-	-- (0, -5), LEFT et RIGHT. Le titre n'est donc PAS centre sur la fenetre :
-	-- il l'est entre le portrait et le bouton de fermeture, dont la largeur
-	-- est ainsi prise en compte.
-	--
-	-- C'est un cadre FILS, et il le faut : le metal de HeldBagLayout est en
-	-- OVERLAY et couvrirait une simple region du cadre. Le titre du client,
-	-- qui en est une, s'efface.
-	local ancienTitre = _G[nom .. "Name"]
-	if ancienTitre then
-		ancienTitre:SetAlpha(0)
+	-- TitledPanelMixin:SetTitleOffsets(35) and TitleContainer: a 20 px frame from 35 to
+	-- width - 24, text at TOP (0, -5), so the title centres between portrait and close button.
+	-- A child frame, because the HeldBagLayout metal (OVERLAY) would cover a region of the bag
+	-- frame. The client title is hidden.
+	local oldTitle = _G[name .. "Name"]
+	if oldTitle then
+		oldTitle:SetAlpha(0)
 	end
 
-	local bandeTitre = CreateFrame("Frame", nil, cadre)
-	bandeTitre:SetFrameLevel(cadre:GetFrameLevel() + 2)
-	bandeTitre:SetHeight(R.titreBande)
-	bandeTitre:SetPoint("TOPLEFT", cadre, "TOPLEFT", R.titreGauche, R.titreConteneur)
-	bandeTitre:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", R.titreDroite, R.titreConteneur)
-	local titre = bandeTitre:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	titre:SetPoint("TOP", bandeTitre, "TOP", 0, R.titreTexte)
-	titre:SetPoint("LEFT", bandeTitre, "LEFT")
-	titre:SetPoint("RIGHT", bandeTitre, "RIGHT")
-	titre:SetJustifyH("CENTER")
-	cadre.foreverBandeTitre = bandeTitre
-	cadre.foreverTitre = titre
+	local titleStrip = CreateFrame("Frame", nil, frame)
+	titleStrip:SetFrameLevel(frame:GetFrameLevel() + 2)
+	titleStrip:SetHeight(R.titleStripHeight)
+	titleStrip:SetPoint("TOPLEFT", frame, "TOPLEFT", R.titleLeft, R.titleContainer)
+	titleStrip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", R.titleRight, R.titleContainer)
+	local title = titleStrip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	title:SetPoint("TOP", titleStrip, "TOP", 0, R.titleText)
+	title:SetPoint("LEFT", titleStrip, "LEFT")
+	title:SetPoint("RIGHT", titleStrip, "RIGHT")
+	title:SetJustifyH("CENTER")
+	frame.foreverTitleStrip = titleStrip
+	frame.foreverTitle = title
 
-	-- Le bouton de fermeture : 24 x 24, TOPRIGHT (1, 0), le X rouge des
-	-- panneaux modernes (UIPanelCloseButtonNoScripts, atlas RedButton-Exit).
-	local fermer = _G[nom .. "CloseButton"]
-	if fermer then
-		fermer:SetWidth(R.fermeture)
-		fermer:SetHeight(R.fermeture)
-		fermer:ClearAllPoints()
-		fermer:SetPoint("TOPRIGHT", cadre, "TOPRIGHT", R.fermetureX, R.fermetureY)
-		for atlas, methode in pairs({ ["redbutton-exit"] = "GetNormalTexture",
+	-- Close button: 24 x 24, TOPRIGHT (1, 0), the red X of modern panels
+	-- (UIPanelCloseButtonNoScripts, atlas RedButton-Exit).
+	local close = _G[name .. "CloseButton"]
+	if close then
+		close:SetWidth(R.closeSize)
+		close:SetHeight(R.closeSize)
+		close:ClearAllPoints()
+		close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", R.closeX, R.closeY)
+		for atlas, method in pairs({ ["redbutton-exit"] = "GetNormalTexture",
 			["redbutton-exit-pressed"] = "GetPushedTexture",
 			["redbutton-exit-disabled"] = "GetDisabledTexture",
 			["redbutton-highlight"] = "GetHighlightTexture" }) do
-			local texture = fermer[methode] and fermer[methode](fermer)
+			local texture = close[method] and close[method](close)
 			if texture then
 				ForeverUI.SetAtlas(texture, atlas, true)
 				texture:ClearAllPoints()
-				texture:SetAllPoints(fermer)
+				texture:SetAllPoints(close)
 				if atlas == "redbutton-highlight" then
 					texture:SetBlendMode("ADD")
 				end
@@ -393,430 +241,419 @@ local function habillerCadre(cadre)
 	end
 
 	for index = 1, MAX_CONTAINER_ITEMS do
-		habillerBouton(_G[nom .. "Item" .. index])
+		skinButton(_G[name .. "Item" .. index])
 	end
 
-	cadre.foreverSkinned = true
-	table.insert(cadres, cadre)
+	frame.foreverSkinned = true
+	table.insert(frames, frame)
 end
 
--- ---------------------------------------------------------- la recherche
-local Recherche = { texte = "" }
-ForeverUI.BagSearch = Recherche
+-- ---------------------------------------------------------- search
+local Search = { text = "" }
+ForeverUI.BagSearch = Search
 
--- Le nom d'un objet, meme quand le client ne l'a pas encore en cache : le
--- lien porte toujours le nom entre crochets.
-local function nomDeLObjet(lien)
-	if not lien then
+-- Item name, type and subtype. An uncached item still has its name in the link.
+local function itemInfoOf(link)
+	if not link then
 		return nil
 	end
-	local nom, _, _, _, _, type_, sousType = GetItemInfo(lien)
-	if nom then
-		return nom, type_, sousType
+	local name, _, _, _, _, type_, subType = GetItemInfo(link)
+	if name then
+		return name, type_, subType
 	end
-	return string.match(lien, "%[(.+)%]")
+	return string.match(link, "%[(.+)%]")
 end
 
-function Recherche.Correspond(lien)
-	if Recherche.texte == "" then
+function Search.Matches(link)
+	if Search.text == "" then
 		return true
 	end
-	if not lien then
+	if not link then
 		return false
 	end
 
-	local nom, type_, sousType = nomDeLObjet(lien)
-	for _, champ in ipairs({ nom, type_, sousType }) do
-		if champ and string.find(string.lower(champ), Recherche.texte, 1, true) then
+	local name, type_, subType = itemInfoOf(link)
+	for _, field in ipairs({ name, type_, subType }) do
+		if field and string.find(string.lower(field), Search.text, 1, true) then
 			return true
 		end
 	end
 	return false
 end
 
--- Le voile de recherche ET le contour de qualite se decident au meme moment :
--- les deux dependent de ce que la case contient.
--- RELEVE -- SetItemButtonTexture_Base : une seule texture porte soit l'objet,
--- soit le fond de case vide. 3.3.5 masque l'icone d'une case vide ; on la
--- remontre avec l'element d'atlas, et on rend ses coordonnees pleines des
--- qu'un objet revient.
-local function poserIcone(bouton, texture)
-	local icone = _G[bouton:GetName() .. "IconTexture"]
-	if not icone then
+-- SetItemButtonTexture_Base: one texture holds either the item or the empty-slot background.
+-- 3.3.5 hides the icon of an empty slot, so it is shown again with the atlas.
+-- texture: item icon, or nil for an empty slot.
+local function placeIcon(button, texture)
+	local icon = _G[button:GetName() .. "IconTexture"]
+	if not icon then
 		return
 	end
 
 	if texture then
-		icone:SetTexture(texture)
-		icone:SetTexCoord(0, 1, 0, 1)
+		icon:SetTexture(texture)
+		icon:SetTexCoord(0, 1, 0, 1)
 	else
-		ForeverUI.SetAtlas(icone, "bags-item-slot64", true)
+		ForeverUI.SetAtlas(icon, "bags-item-slot64", true)
 	end
-	icone:Show()
+	icon:Show()
 end
 
-function Recherche.Appliquer(cadre)
-	local nom = cadre:GetName()
-	local sac = cadre:GetID()
-	for index = 1, cadre.size or 0 do
-		local bouton = _G[nom .. "Item" .. index]
-		if bouton and bouton.foreverVoile then
-			local emplacement = bouton:GetID()
-			local lien = GetContainerItemLink(sac, emplacement)
-			poserIcone(bouton, GetContainerItemInfo(sac, emplacement))
+function Search.Apply(frame)
+	local name = frame:GetName()
+	local bag = frame:GetID()
+	for index = 1, frame.size or 0 do
+		local button = _G[name .. "Item" .. index]
+		if button and button.foreverVeil then
+			local slot = button:GetID()
+			local link = GetContainerItemLink(bag, slot)
+			placeIcon(button, GetContainerItemInfo(bag, slot))
 
-			if lien and not Recherche.Correspond(lien) then
-				bouton.foreverVoile:Show()
+			if link and not Search.Matches(link) then
+				button.foreverVeil:Show()
 			else
-				bouton.foreverVoile:Hide()
+				button.foreverVeil:Hide()
 			end
 
-			-- Le cadre est toujours la ; seule sa teinte change, et seulement
-			-- a partir de peu commun.
-			local contour = bouton.foreverContour
-			if contour then
-				local qualite = select(4, GetContainerItemInfo(sac, emplacement))
-				local couleur = lien and qualite and qualite >= QUALITE_TEINTEE
-					and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[qualite]
-				if couleur then
-					contour:SetVertexColor(couleur.r, couleur.g, couleur.b)
+			-- The outline is always shown; it takes the quality color from uncommon up.
+			local outline = button.foreverOutline
+			if outline then
+				local quality = select(4, GetContainerItemInfo(bag, slot))
+				local color = link and quality and quality >= TINTED_QUALITY
+					and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+				if color then
+					outline:SetVertexColor(color.r, color.g, color.b)
 				else
-					contour:SetVertexColor(CADRE_GRIS, CADRE_GRIS, CADRE_GRIS)
+					outline:SetVertexColor(FRAME_GRAY, FRAME_GRAY, FRAME_GRAY)
 				end
-				contour:Show()
+				outline:Show()
 			end
 		end
 	end
 end
 
--- LE BOUTON DU TROUSSEAU S'ASSOMBRIT quand la recherche ne trouve rien
--- dedans (demande du 2026-09-28) : BaseBagSlotButtonMixin:UpdateBagMatchesSearch
--- de camelot -- SetMatchesSearch(not C_Container.IsContainerFiltered(sac)),
--- c'est-a-dire le voile searchOverlay de l'ItemButton, noir a 80 % sur tout
--- le bouton, quand aucun objet du trousseau ne correspond. Sans recherche,
--- pas de voile.
-function Recherche.Trousseau()
+-- Veils the keyring button when no keyring item matches the search
+-- (camelot BaseBagSlotButtonMixin:UpdateBagMatchesSearch). No search, no veil.
+function Search.Keyring()
 	local b = KeyRingButton
 	if not b then
 		return
 	end
-	if not b.foreverVoile then
-		local voile = b:CreateTexture(nil, "OVERLAY")
-		voile:SetTexture(0, 0, 0, 0.8)
-		voile:SetAllPoints(b)
-		voile:Hide()
-		b.foreverVoile = voile
+	if not b.foreverVeil then
+		local veil = b:CreateTexture(nil, "OVERLAY")
+		veil:SetTexture(0, 0, 0, 0.8)
+		veil:SetAllPoints(b)
+		veil:Hide()
+		b.foreverVeil = veil
 	end
-	local trouve = Recherche.texte == ""
-	if not trouve then
-		local sac = KEYRING_CONTAINER or -2
-		for emplacement = 1, GetContainerNumSlots(sac) or 0 do
-			local lien = GetContainerItemLink(sac, emplacement)
-			if lien and Recherche.Correspond(lien) then
-				trouve = true
+	local match = Search.text == ""
+	if not match then
+		local bag = KEYRING_CONTAINER or -2
+		for slot = 1, GetContainerNumSlots(bag) or 0 do
+			local link = GetContainerItemLink(bag, slot)
+			if link and Search.Matches(link) then
+				match = true
 				break
 			end
 		end
 	end
-	if trouve then b.foreverVoile:Hide() else b.foreverVoile:Show() end
+	if match then b.foreverVeil:Hide() else b.foreverVeil:Show() end
 end
 
-function Recherche.Tout()
-	for _, cadre in ipairs(cadres) do
-		if cadre:IsShown() then
-			Recherche.Appliquer(cadre)
+function Search.All()
+	for _, frame in ipairs(frames) do
+		if frame:IsShown() then
+			Search.Apply(frame)
 		end
 	end
-	Recherche.Trousseau()
+	Search.Keyring()
 end
 
-function Recherche.Set(texte)
-	Recherche.texte = string.lower(texte or "")
-	Recherche.Tout()
+function Search.Set(text)
+	Search.text = string.lower(text or "")
+	Search.All()
 end
 
--- -------------------------------------------------------------- le tri
---
--- L'ordre des categories est celui du jeu lui-meme : GetAuctionItemClasses
--- rend les classes d'objets dans l'ordre ou le client les presente.
-local Tri = { file = {}, actif = false }
-ForeverUI.BagSort = Tri
+-- -------------------------------------------------------------- sort
+-- Categories keep the game's order, as listed by GetAuctionItemClasses.
+local Sort = { queue = {}, active = false }
+ForeverUI.BagSort = Sort
 
-local rangClasse
+local classRank
 
-local function construireRangs()
-	if rangClasse then
+-- classRank: item class name -> its rank in GetAuctionItemClasses.
+local function buildRanks()
+	if classRank then
 		return
 	end
-	rangClasse = {}
+	classRank = {}
 	if GetAuctionItemClasses then
 		local classes = { GetAuctionItemClasses() }
-		for index, nom in ipairs(classes) do
-			rangClasse[nom] = index
+		for index, name in ipairs(classes) do
+			classRank[name] = index
 		end
 	end
 end
 
-local function lireCase(sac, emplacement)
-	local lien = GetContainerItemLink(sac, emplacement)
-	if not lien then
+-- Item in a bag slot with its sort keys; nil when the slot is empty.
+local function readCell(bag, slot)
+	local link = GetContainerItemLink(bag, slot)
+	if not link then
 		return nil
 	end
-	local _, nombre, verrouille = GetContainerItemInfo(sac, emplacement)
-	local nom, _, qualite, _, _, type_, sousType, pileMax = GetItemInfo(lien)
+	local _, count, locked = GetContainerItemInfo(bag, slot)
+	local name, _, quality, _, _, type_, subType, maxStack = GetItemInfo(link)
 	return {
-		lien = lien,
-		nombre = nombre or 1,
-		verrouille = verrouille,
-		nom = nom or string.match(lien, "%[(.+)%]") or lien,
-		qualite = qualite or 0,
-		classe = rangClasse[type_ or ""] or 99,
-		sousType = sousType or "",
-		pileMax = pileMax or 1,
+		link = link,
+		count = count or 1,
+		locked = locked,
+		name = name or string.match(link, "%[(.+)%]") or link,
+		quality = quality or 0,
+		className = classRank[type_ or ""] or 99,
+		subType = subType or "",
+		maxStack = maxStack or 1,
 	}
 end
 
-local function avant(a, b)
-	if a.classe ~= b.classe then
-		return a.classe < b.classe
+-- Sort order: class, subtype, quality (best first), name, then larger stacks first.
+local function before(a, b)
+	if a.className ~= b.className then
+		return a.className < b.className
 	end
-	if a.sousType ~= b.sousType then
-		return a.sousType < b.sousType
+	if a.subType ~= b.subType then
+		return a.subType < b.subType
 	end
-	if a.qualite ~= b.qualite then
-		return a.qualite > b.qualite
+	if a.quality ~= b.quality then
+		return a.quality > b.quality
 	end
-	if a.nom ~= b.nom then
-		return a.nom < b.nom
+	if a.name ~= b.name then
+		return a.name < b.name
 	end
-	return a.nombre > b.nombre
+	return a.count > b.count
 end
 
--- L'etat courant des sacs : une case par emplacement, dans l'ordre.
-local function relever()
-	local cases = {}
-	for _, sac in ipairs(Tri.sacs or SACS) do
-		for emplacement = 1, (GetContainerNumSlots(sac) or 0) do
-			table.insert(cases, {
-				sac = sac,
-				emplacement = emplacement,
-				objet = lireCase(sac, emplacement),
+-- Current bag state: one cell per slot, in order.
+local function collect()
+	local cells = {}
+	for _, bag in ipairs(Sort.bags or BAGS) do
+		for slot = 1, (GetContainerNumSlots(bag) or 0) do
+			table.insert(cells, {
+				bag = bag,
+				slot = slot,
+				object = readCell(bag, slot),
 			})
 		end
 	end
-	return cases
+	return cells
 end
 
-local function verrouille(case)
-	local _, _, estVerrouille = GetContainerItemInfo(case.sac, case.emplacement)
-	return estVerrouille
+local function locked(cell)
+	local _, _, isLocked = GetContainerItemInfo(cell.bag, cell.slot)
+	return isLocked
 end
 
--- Une seule action par passage : le serveur doit confirmer chaque
--- deplacement avant le suivant, sinon la case est encore verrouillee.
-local function uneEtape()
-	local cases = relever()
+-- Makes one move per call; returns true while work remains. The server must confirm each
+-- move before the next, otherwise the slot is still locked.
+local function doStep()
+	local cells = collect()
 
-	-- 1. reunir les piles entamees du meme objet
-	for i = 1, #cases do
-		local a = cases[i].objet
-		if a and a.nombre < a.pileMax then
-			for j = i + 1, #cases do
-				local b = cases[j].objet
-				if b and b.lien == a.lien and b.nombre < b.pileMax then
-					if verrouille(cases[i]) or verrouille(cases[j]) then
+	-- 1. merge partial stacks of the same item
+	for i = 1, #cells do
+		local a = cells[i].object
+		if a and a.count < a.maxStack then
+			for j = i + 1, #cells do
+				local b = cells[j].object
+				if b and b.link == a.link and b.count < b.maxStack then
+					if locked(cells[i]) or locked(cells[j]) then
 						return true
 					end
-					PickupContainerItem(cases[j].sac, cases[j].emplacement)
-					PickupContainerItem(cases[i].sac, cases[i].emplacement)
+					PickupContainerItem(cells[j].bag, cells[j].slot)
+					PickupContainerItem(cells[i].bag, cells[i].slot)
 					return true
 				end
 			end
 		end
 	end
 
-    -- 2. mettre en ordre : la case i doit porter le i-eme objet trie
-	local objets = {}
-	for _, case in ipairs(cases) do
-		if case.objet then
-			table.insert(objets, case.objet)
+    -- 2. order: cell i must hold the i-th sorted item
+	local objects = {}
+	for _, cell in ipairs(cells) do
+		if cell.object then
+			table.insert(objects, cell.object)
 		end
 	end
-	table.sort(objets, avant)
+	table.sort(objects, before)
 
-	for i = 1, #cases do
-		local voulu = objets[i]
-		local present = cases[i].objet
-		local memeObjet = (voulu == nil and present == nil)
-			or (voulu and present and voulu.lien == present.lien and voulu.nombre == present.nombre)
-		if not memeObjet then
-			if voulu == nil then
-				return false        -- plus rien a placer
+	for i = 1, #cells do
+		local wanted = objects[i]
+		local present = cells[i].object
+		local sameItem = (wanted == nil and present == nil)
+			or (wanted and present and wanted.link == present.link and wanted.count == present.count)
+		if not sameItem then
+			if wanted == nil then
+				return false        -- nothing left to place
 			end
-			-- trouver la case qui porte l'objet voulu
-			for j = i + 1, #cases do
-				local candidat = cases[j].objet
-				if candidat and candidat.lien == voulu.lien and candidat.nombre == voulu.nombre then
-					if verrouille(cases[i]) or verrouille(cases[j]) then
+			-- find the cell holding the wanted item
+			for j = i + 1, #cells do
+				local candidate = cells[j].object
+				if candidate and candidate.link == wanted.link and candidate.count == wanted.count then
+					if locked(cells[i]) or locked(cells[j]) then
 						return true
 					end
-					PickupContainerItem(cases[j].sac, cases[j].emplacement)
-					PickupContainerItem(cases[i].sac, cases[i].emplacement)
+					PickupContainerItem(cells[j].bag, cells[j].slot)
+					PickupContainerItem(cells[i].bag, cells[i].slot)
 					return true
 				end
 			end
-			return false            -- introuvable : on s'arrete plutot que tourner
+			return false            -- not found: stop rather than loop
 		end
 	end
 
-	return false                    -- tout est en place
+	return false                    -- everything in place
 end
 
-local MAX_ETAPES = 400
-local tempsDepuisEtape = 0
+local MAX_STEPS = 400
+local timeSinceStep = 0
 
-local horloge = CreateFrame("Frame", "ForeverUIBagSortTicker")
-horloge:Hide()
-horloge:SetScript("OnUpdate", function(self, elapsed)
-	tempsDepuisEtape = tempsDepuisEtape + elapsed
-	if tempsDepuisEtape < 0.1 then
+local clock = CreateFrame("Frame", "ForeverUIBagSortTicker")
+clock:Hide()
+clock:SetScript("OnUpdate", function(self, elapsed)
+	timeSinceStep = timeSinceStep + elapsed
+	if timeSinceStep < 0.1 then
 		return
 	end
-	tempsDepuisEtape = 0
+	timeSinceStep = 0
 
-	Tri.etapes = (Tri.etapes or 0) + 1
-	if Tri.etapes > MAX_ETAPES or not uneEtape() then
-		Tri.actif = false
+	Sort.steps = (Sort.steps or 0) + 1
+	if Sort.steps > MAX_STEPS or not doStep() then
+		Sort.active = false
 		self:Hide()
-		Recherche.Tout()
+		Search.All()
 	end
 end)
 
--- sacs : les sacs a ranger (la banque, Bank.lua) ; sans eux, ceux du
--- joueur, comme avant
-function Tri.Lancer(sacs)
-	if Tri.actif then
+-- bags: bag ids to sort (the bank, Bank.lua); defaults to the player's bags
+function Sort.Start(bags)
+	if Sort.active then
 		return
 	end
-	Tri.sacs = sacs
+	Sort.bags = bags
 	if CursorHasItem() then
 		ClearCursor()
 	end
-	construireRangs()
-	Tri.actif = true
-	Tri.etapes = 0
-	tempsDepuisEtape = 0
-	horloge:Show()
+	buildRanks()
+	Sort.active = true
+	Sort.steps = 0
+	timeSinceStep = 0
+	clock:Show()
 end
 
--- ------------------------------------------- le champ et le bouton de tri
-local champ = CreateFrame("EditBox", "ForeverUIBagSearchBox", UIParent, "InputBoxTemplate")
-champ:SetWidth(R.champLargeur)
-champ:SetHeight(R.champHauteur)
-champ:SetAutoFocus(false)
-champ:SetMaxLetters(15)
-champ:SetTextInsets(16, 20, 0, 0)
-champ:Hide()
+-- ------------------------------------------- search box and sort button
+local field = CreateFrame("EditBox", "ForeverUIBagSearchBox", UIParent, "InputBoxTemplate")
+field:SetWidth(R.fieldWidth)
+field:SetHeight(R.fieldHeight)
+field:SetAutoFocus(false)
+field:SetMaxLetters(15)
+field:SetTextInsets(16, 20, 0, 0)
+field:Hide()
 
-local loupe = champ:CreateTexture(nil, "OVERLAY")
-ForeverUI.SetAtlas(loupe, "common-search-magnifyingglass", true)
-loupe:SetWidth(10)
-loupe:SetHeight(10)
-loupe:SetPoint("LEFT", champ, "LEFT", 1, -1)
+local magnifier = field:CreateTexture(nil, "OVERLAY")
+ForeverUI.SetAtlas(magnifier, "common-search-magnifyingglass", true)
+magnifier:SetWidth(10)
+magnifier:SetHeight(10)
+magnifier:SetPoint("LEFT", field, "LEFT", 1, -1)
 
-local invite = champ:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-invite:SetPoint("LEFT", champ, "LEFT", 16, 0)
-invite:SetText(SEARCH)
+local placeholder = field:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+placeholder:SetPoint("LEFT", field, "LEFT", 16, 0)
+placeholder:SetText(SEARCH)
 
-local effacer = CreateFrame("Button", nil, champ)
-effacer:SetWidth(17)
-effacer:SetHeight(17)
-effacer:SetPoint("RIGHT", champ, "RIGHT", -3, 0)
-effacer:Hide()
-local croix = effacer:CreateTexture(nil, "ARTWORK")
-ForeverUI.SetAtlas(croix, "common-search-clearbutton", true)
-croix:SetWidth(10)
-croix:SetHeight(10)
-croix:SetPoint("TOPLEFT", effacer, "TOPLEFT", 3, -3)
-croix:SetAlpha(0.5)
-effacer:SetScript("OnEnter", function() croix:SetAlpha(1) end)
-effacer:SetScript("OnLeave", function() croix:SetAlpha(0.5) end)
-effacer:SetScript("OnClick", function()
-	champ:SetText("")
-	champ:ClearFocus()
+local clear = CreateFrame("Button", nil, field)
+clear:SetWidth(17)
+clear:SetHeight(17)
+clear:SetPoint("RIGHT", field, "RIGHT", -3, 0)
+clear:Hide()
+local closeButton = clear:CreateTexture(nil, "ARTWORK")
+ForeverUI.SetAtlas(closeButton, "common-search-clearbutton", true)
+closeButton:SetWidth(10)
+closeButton:SetHeight(10)
+closeButton:SetPoint("TOPLEFT", clear, "TOPLEFT", 3, -3)
+closeButton:SetAlpha(0.5)
+clear:SetScript("OnEnter", function() closeButton:SetAlpha(1) end)
+clear:SetScript("OnLeave", function() closeButton:SetAlpha(0.5) end)
+clear:SetScript("OnClick", function()
+	field:SetText("")
+	field:ClearFocus()
 end)
 
-local function majChamp()
-	local texte = champ:GetText() or ""
-	if texte == "" and not champ:HasFocus() then
-		invite:Show()
+local function updateField()
+	local text = field:GetText() or ""
+	if text == "" and not field:HasFocus() then
+		placeholder:Show()
 	else
-		invite:Hide()
+		placeholder:Hide()
 	end
-	if texte == "" then
-		effacer:Hide()
+	if text == "" then
+		clear:Hide()
 	else
-		effacer:Show()
+		clear:Show()
 	end
 end
 
-champ:SetScript("OnTextChanged", function(self)
-	majChamp()
-	Recherche.Set(self:GetText())
+field:SetScript("OnTextChanged", function(self)
+	updateField()
+	Search.Set(self:GetText())
 end)
-champ:SetScript("OnEditFocusGained", majChamp)
-champ:SetScript("OnEditFocusLost", majChamp)
-champ:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-champ:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+field:SetScript("OnEditFocusGained", updateField)
+field:SetScript("OnEditFocusLost", updateField)
+field:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+field:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
--- RELEVE -- BagSearch_OnChar : quatre caracteres identiques a la suite et le
--- champ rend la main, pour ne pas bloquer un joueur qui martele une touche.
-champ:SetScript("OnChar", function(self)
-	local texte = self:GetText() or ""
-	if string.len(texte) >= 4 then
-		local repete = true
+-- BagSearch_OnChar: four identical characters in a row release the focus, so a held key
+-- does not trap the player in the box.
+field:SetScript("OnChar", function(self)
+	local text = self:GetText() or ""
+	if string.len(text) >= 4 then
+		local repeated = true
 		for i = 1, 3 do
-			if string.sub(texte, -i, -i) ~= string.sub(texte, -1 - i, -1 - i) then
-				repete = false
+			if string.sub(text, -i, -i) ~= string.sub(text, -1 - i, -1 - i) then
+				repeated = false
 				break
 			end
 		end
-		if repete then
+		if repeated then
 			self:ClearFocus()
 		end
 	end
 end)
 
-local boutonTri = CreateFrame("Button", "ForeverUIBagSortButton", UIParent)
-boutonTri:SetWidth(R.triLargeur)
-boutonTri:SetHeight(R.triHauteur)
-boutonTri:Hide()
+local sortButton = CreateFrame("Button", "ForeverUIBagSortButton", UIParent)
+sortButton:SetWidth(R.sortWidth)
+sortButton:SetHeight(R.sortHeight)
+sortButton:Hide()
 
--- PIEGE 3.3.5. SetNormalTexture et ses soeurs ne prennent qu'un CHEMIN de
--- fichier ; leur passer un objet texture, comme le fait le client moderne,
--- leve une erreur -- et une erreur au premier niveau d'un fichier abandonne
--- TOUT ce qui suit. On pose donc le chemin de la feuille, puis on regle
--- l'atlas sur la texture que le bouton vient de creer.
-local function poserEtat(bouton, poser, obtenir, atlas, largeur, hauteur, add)
+-- 3.3.5: SetNormalTexture and the like take only a file path; a texture object raises an
+-- error. So the sheet path is set first, then the atlas is applied to the created texture.
+-- place, getter: setter and getter names; width, height: optional centred size; add: ADD blend
+local function applyState(button, place, getter, atlas, width, height, add)
 	local e = ForeverUI.AtlasEntry(atlas)
 	if not e then
 		return nil
 	end
 
-	bouton[poser](bouton, e[1])
-	local texture = bouton[obtenir](bouton)
+	button[place](button, e[1])
+	local texture = button[getter](button)
 	if not texture then
 		return nil
 	end
 
 	ForeverUI.SetAtlas(texture, atlas, true)
 	texture:ClearAllPoints()
-	if largeur then
-		texture:SetWidth(largeur)
-		texture:SetHeight(hauteur)
+	if width then
+		texture:SetWidth(width)
+		texture:SetHeight(height)
 		texture:SetPoint("CENTER")
 	else
-		texture:SetAllPoints(bouton)
+		texture:SetAllPoints(button)
 	end
 	if add then
 		texture:SetBlendMode("ADD")
@@ -824,772 +661,707 @@ local function poserEtat(bouton, poser, obtenir, atlas, largeur, hauteur, add)
 	return texture
 end
 
-poserEtat(boutonTri, "SetNormalTexture", "GetNormalTexture", "bags-button-autosort-up")
-poserEtat(boutonTri, "SetPushedTexture", "GetPushedTexture", "bags-button-autosort-down")
+applyState(sortButton, "SetNormalTexture", "GetNormalTexture", "bags-button-autosort-up")
+applyState(sortButton, "SetPushedTexture", "GetPushedTexture", "bags-button-autosort-down")
 
--- Le survol est un fichier du client, pas un element d'atlas : 24 x 23 centre.
-boutonTri:SetHighlightTexture(SURVOL_CARRE)
-local triSurvol = boutonTri:GetHighlightTexture()
-if triSurvol then
-	triSurvol:SetBlendMode("ADD")
-	triSurvol:ClearAllPoints()
-	triSurvol:SetWidth(24)
-	triSurvol:SetHeight(23)
-	triSurvol:SetPoint("CENTER")
+-- The highlight is a client file, not an atlas entry: 24 x 23, centred.
+sortButton:SetHighlightTexture(SQUARE_HOVER)
+local sortHighlight = sortButton:GetHighlightTexture()
+if sortHighlight then
+	sortHighlight:SetBlendMode("ADD")
+	sortHighlight:ClearAllPoints()
+	sortHighlight:SetWidth(24)
+	sortHighlight:SetHeight(23)
+	sortHighlight:SetPoint("CENTER")
 end
 
-boutonTri:SetScript("OnClick", function()
-	Tri.Lancer()
+sortButton:SetScript("OnClick", function()
+	Sort.Start()
 end)
-boutonTri:SetScript("OnEnter", function(self)
+sortButton:SetScript("OnEnter", function(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-	GameTooltip:SetText(RANGER, 1, 1, 1)
-	GameTooltip:AddLine(RANGER_AIDE, nil, nil, nil, true)
+	GameTooltip:SetText(CLEANUP_TEXT, 1, 1, 1)
+	GameTooltip:AddLine(CLEANUP_TOOLTIP, nil, nil, nil, true)
 	GameTooltip:Show()
 end)
-boutonTri:SetScript("OnLeave", function()
+sortButton:SetScript("OnLeave", function()
 	GameTooltip:Hide()
 end)
 
--- ------------------------------------------------------------ les mesures
--- RELEVE -- ContainerFrameMixin:GetRows, CalculateWidth, CalculateHeight,
--- GetPaddingHeight, CalculateExtraHeight, et leurs surcharges du sac a dos.
--- C'est LE calcul qui fait suivre la fenetre a son contenu : la hauteur se
--- deduit du nombre de rangees, jamais d'une somme d'ancrages.
-local function mesures(cadre)
-	local taille = cadre.size or 0
-	local m = { sacADos = cadre:GetID() == 0 }
+-- ------------------------------------------------------------ measures
+-- ContainerFrameMixin:GetRows, CalculateWidth, CalculateHeight, GetPaddingHeight,
+-- CalculateExtraHeight and their backpack overrides. The height derives from the row count,
+-- never from a chain of anchors.
+local function measure(frame)
+	local size = frame.size or 0
+	local m = { isBackpack = frame:GetID() == 0 }
 
-	m.rangees = math.ceil(taille / R.colonnes)                      -- GetRows()
-	m.grille = m.rangees * R.emplacement + (m.rangees - 1) * R.ecartCases
+	m.rowLines = math.ceil(size / R.columns)                      -- GetRows()
+	m.grid = m.rowLines * R.slot + (m.rowLines - 1) * R.cellGap
 
-	-- GetPaddingHeight() : le bas du premier bouton, plus le titre et le
-	-- comble ; le sac a dos ajoute la bande du champ de recherche.
-	m.comble = R.premierBoutonY + R.entete
-	if m.sacADos then
-		m.comble = m.comble + R.bandeRecherche
+	-- GetPaddingHeight(): bottom of the first button plus title and attic; the backpack adds the
+	-- search box strip.
+	m.overhead = R.firstButtonY + R.header
+	if m.isBackpack then
+		m.overhead = m.overhead + R.searchStrip
 	end
 
-	-- CalculateExtraHeight() : la bourse, sur le sac a dos seulement, plus
-	-- le segment des monnaies suivies quand il y en a.
-	m.jetons = m.sacADos and ForeverUI.BagsWatchedCount() or 0
-	m.extra = m.sacADos and R.bourseHauteur or 0
-	if m.jetons > 0 then
-		m.extra = m.extra + R.jetonHauteur + R.jetonEcart
+	-- CalculateExtraHeight(): the purse, on the backpack only, plus the watched currencies strip
+	-- when there is one.
+	m.tokens = m.isBackpack and ForeverUI.BagsWatchedCount() or 0
+	m.extra = m.isBackpack and R.purseHeight or 0
+	if m.tokens > 0 then
+		m.extra = m.extra + R.tokenHeight + R.tokenGap
 	end
 
-	m.hauteur = m.grille + m.comble + m.extra                       -- CalculateHeight()
-	m.largeur = R.largeur                                           -- CalculateWidth()
+	m.height = m.grid + m.overhead + m.extra                       -- CalculateHeight()
+	m.width = R.width                                           -- CalculateWidth()
 	return m
 end
 
--- RELEVE -- ContainerFrameMixin:UpdateSearchBox : les deux ne se montrent que-- RELEVE -- ContainerFrameMixin:UpdateSearchBox : les deux ne se montrent que
--- sur le sac principal, le champ en TOPLEFT (42, -37) et le bouton en
--- TOPRIGHT (-9, -34).
-local function poserOutils()
-	local hote
-	for _, cadre in ipairs(cadres) do
-		if cadre:IsShown() and cadre:GetID() == 0 then
-			hote = cadre
+-- ContainerFrameMixin:UpdateSearchBox: the search box and sort button show only on the
+-- backpack.
+local function layoutTools()
+	local host
+	for _, frame in ipairs(frames) do
+		if frame:IsShown() and frame:GetID() == 0 then
+			host = frame
 			break
 		end
 	end
 
-	if not hote then
-		champ:Hide()
-		boutonTri:Hide()
-		-- BagSearch_OnHide : plus de barre visible, la recherche s'efface.
-		if champ:GetText() ~= "" then
-			champ:SetText("")
+	if not host then
+		field:Hide()
+		sortButton:Hide()
+		-- BagSearch_OnHide: no search box visible, so the search is cleared.
+		if field:GetText() ~= "" then
+			field:SetText("")
 		end
 		return
 	end
 
-	-- Les deux sont ancres en HAUT, comme dans la source : ils occupent le
-	-- comble, dont la hauteur est fixe. C'est la formule de CalculateHeight
-	-- qui adapte la fenetre, pas ces deux ancrages.
-	champ:SetParent(hote)
-	champ:ClearAllPoints()
-	champ:SetWidth(R.champLargeur)
-	champ:SetHeight(R.champHauteur)
-	champ:SetPoint("TOPLEFT", hote, "TOPLEFT", R.champX, R.champY)
-	champ:Show()
+	-- Both are anchored to the top, as in the source: the attic has a fixed height.
+	field:SetParent(host)
+	field:ClearAllPoints()
+	field:SetWidth(R.fieldWidth)
+	field:SetHeight(R.fieldHeight)
+	field:SetPoint("TOPLEFT", host, "TOPLEFT", R.fieldX, R.fieldY)
+	field:Show()
 
-	boutonTri:SetParent(hote)
-	boutonTri:ClearAllPoints()
-	boutonTri:SetWidth(R.triLargeur)
-	boutonTri:SetHeight(R.triHauteur)
-	boutonTri:SetPoint("TOPRIGHT", hote, "TOPRIGHT", R.triX, R.triY)
-	boutonTri:Show()
+	sortButton:SetParent(host)
+	sortButton:ClearAllPoints()
+	sortButton:SetWidth(R.sortWidth)
+	sortButton:SetHeight(R.sortHeight)
+	sortButton:SetPoint("TOPRIGHT", host, "TOPRIGHT", R.sortX, R.sortY)
+	sortButton:Show()
 end
 
--- L'encadre de la bourse : deux bouts et un milieu tendu, 17 de haut.
-local function habillerBourse(bourse)
-	if not bourse or bourse.foreverBorde then
+-- Purse border: two ends and a stretched middle, 17 high.
+local function skinPurse(purse)
+	if not purse or purse.foreverBordered then
 		return
 	end
 
-	bourse:SetHeight(R.bourseHauteur)
+	purse:SetHeight(R.purseHeight)
 
-	local gauche = bourse:CreateTexture(nil, "BACKGROUND")
-	if not ForeverUI.SetAtlas(gauche, "common-coinbox-left", true) then
-		gauche:Hide()
+	local left = purse:CreateTexture(nil, "BACKGROUND")
+	if not ForeverUI.SetAtlas(left, "common-coinbox-left", true) then
+		left:Hide()
 		return
 	end
-	gauche:SetWidth(R.bourseCadre / 2)
-	gauche:SetHeight(R.bourseCadre)
-	gauche:SetPoint("LEFT", bourse, "LEFT", 0, 0)
+	left:SetWidth(R.purseFrame / 2)
+	left:SetHeight(R.purseFrame)
+	left:SetPoint("LEFT", purse, "LEFT", 0, 0)
 
-	local droite = bourse:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(droite, "common-coinbox-right", true)
-	droite:SetWidth(R.bourseCadre / 2)
-	droite:SetHeight(R.bourseCadre)
-	droite:SetPoint("RIGHT", bourse, "RIGHT", 0, 0)
+	local right = purse:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(right, "common-coinbox-right", true)
+	right:SetWidth(R.purseFrame / 2)
+	right:SetHeight(R.purseFrame)
+	right:SetPoint("RIGHT", purse, "RIGHT", 0, 0)
 
-	local milieu = bourse:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(milieu, "_common-coinbox-center", true)
-	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT")
-	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT")
+	local middle = purse:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(middle, "_common-coinbox-center", true)
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT")
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
 
-	bourse.foreverBorde = true
+	purse.foreverBordered = true
 end
 
--- ------------------------------------------- les monnaies suivies, sous la bourse
---
--- CE QUE 3.3.5 DONNE. GetBackpackCurrencyInfo(i) rend nom, compte,
--- typeSpecial, icone et identifiant d'objet, pour i de 1 a
--- MAX_WATCHED_TOKENS -- trois. Le client s'en sert lui-meme dans
--- BackpackTokenFrame_Update.
---
--- DEUX MONNAIES ONT UNE ICONE A PART, la meme regle que l'onglet des
--- monnaies : typeSpecial 1 les points d'arene, 2 les points d'honneur, ceux-
--- ci suivant la faction et rognes a 0,03125 .. 0,59375.
---
--- LE SEGMENT DU CLIENT SE TAIT. BackpackTokenFrame a son propre art et, pire,
--- ManageBackpackTokenFrame REPOSE LA HAUTEUR du sac -- BACKPACK_HEIGHT plus
--- 22 -- ce qui defait la notre. On le masque, et on se greffe sur cette
--- fonction pour repasser derriere elle.
-local JETON_ARENE = "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
-local JETON_HONNEUR = "Interface\\TargetingFrame\\UI-PVP-%s"
-local JETON_COIN, JETON_COTE = 0.03125, 0.59375
+-- ------------------------------------------- watched currencies, below the purse
+-- GetBackpackCurrencyInfo(i) gives name, count, typeSpecial, icon and item id, i up to
+-- MAX_WATCHED_TOKENS (3). As in the currency tab, typeSpecial 1 (arena points) and 2 (honor,
+-- per faction, cropped to 0.03125 .. 0.59375) have their own icons.
+local ARENA_TOKEN = "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
+local HONOR_TOKEN = "Interface\\TargetingFrame\\UI-PVP-%s"
+local TOKEN_CORNER, TOKEN_SIDE = 0.03125, 0.59375
 
--- LA TAILLE DES CHIFFRES DU SEGMENT.
---
--- A LA DEMANDE, et non d'apres la source : camelot ecrit son compte en
--- GameFontHighlightSmall. Ici c'est GameFontHighlight, d'un cran au-dessus.
--- Celui de la BOURSE ne bouge pas : il appartient au cadre d'argent du
--- client, que nous ne touchons pas.
---
--- ET LE COMPTE SE CENTRE. camelot l'ancre par son TOPLEFT, ce qui convient a
--- une police plus petite que le jeton ; avec celle-ci, le texte depassait
--- vers le bas et ne s'alignait plus sur l'icone. Deux ancres horizontales --
--- LEFT et RIGHT -- le bornent comme avant ET le centrent en hauteur.
-local JETON_POLICE = "GameFontHighlight"
+-- Token count font: GameFontHighlight, one size larger than camelot's GameFontHighlightSmall.
+-- The count is anchored LEFT and RIGHT (not TOPLEFT) so it stays centred on the icon.
+local TOKEN_FONT = "GameFontHighlight"
 
-local function lireJetons()
-	local liste = {}
+local function readTokens()
+	local list = {}
 	local maximum = MAX_WATCHED_TOKENS or 3
-	for rang = 1, maximum do
-		local nom, compte, special, icone = nil, nil, nil, nil
+	for rank = 1, maximum do
+		local name, count, special, icon = nil, nil, nil, nil
         if GetBackpackCurrencyInfo then
-            nom, compte, special, icone = GetBackpackCurrencyInfo(rang)
+            name, count, special, icon = GetBackpackCurrencyInfo(rank)
         end
-		if nom then
-			liste[#liste + 1] = {
-				nom = nom, compte = compte or 0,
-				special = special, icone = icone,
+		if name then
+			list[#list + 1] = {
+				name = name, count = count or 0,
+				special = special, icon = icon,
 			}
 		end
 	end
-	return liste
+	return list
 end
 
--- COMBIEN DE MONNAIES SUIVIES. La hauteur de la fenetre en depend : elle se
--- calcule AVANT que le segment ne soit pose, donc depuis les donnees et non
--- depuis ce qui est a l'ecran.
+-- Number of watched currencies. Read from the data, not the screen: the window height is
+-- computed before the strip is laid out.
 function ForeverUI.BagsWatchedCount()
-	return #lireJetons()
+	return #readTokens()
 end
 
-local function poserIconeJeton(texture, donnees)
-	if donnees.special == 1 then
-		texture:SetTexture(JETON_ARENE)
+local function placeTokenIcon(texture, data)
+	if data.special == 1 then
+		texture:SetTexture(ARENA_TOKEN)
 		texture:SetTexCoord(0, 1, 0, 1)
-	elseif donnees.special == 2 then
+	elseif data.special == 2 then
 		local faction = UnitFactionGroup and UnitFactionGroup("player")
 		if faction then
-			texture:SetTexture(string.format(JETON_HONNEUR, faction))
-			texture:SetTexCoord(JETON_COIN, JETON_COTE, JETON_COIN, JETON_COTE)
+			texture:SetTexture(string.format(HONOR_TOKEN, faction))
+			texture:SetTexCoord(TOKEN_CORNER, TOKEN_SIDE, TOKEN_CORNER, TOKEN_SIDE)
 		else
 			texture:SetTexture("")
 			texture:SetTexCoord(0, 1, 0, 1)
 		end
 	else
-		texture:SetTexture(donnees.icone or "")
+		texture:SetTexture(data.icon or "")
 		texture:SetTexCoord(0, 1, 0, 1)
 	end
 end
 
-local function monterSegment(cadre)
-	if cadre.foreverSegment then
-		return cadre.foreverSegment
+-- Creates the backpack's currency strip once.
+local function setupSegment(frame)
+	if frame.foreverSegment then
+		return frame.foreverSegment
 	end
 
-	local segment = CreateFrame("Frame", "ForeverUIBagTokens", cadre)
-	segment:SetHeight(R.jetonHauteur)
+	local segment = CreateFrame("Frame", "ForeverUIBagTokens", frame)
+	segment:SetHeight(R.tokenHeight)
 
-	-- L'ENCADRE : deux bouts de 8 x 17 et un milieu tendu, le meme
-	-- decoupage que la bourse.
-	local gauche = segment:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(gauche, "common-currencybox-left", true)
-	gauche:SetWidth(R.jetonCote)
-	gauche:SetHeight(R.jetonHauteur)
-	gauche:SetPoint("LEFT", segment, "LEFT", 0, 0)
+	-- Border: two 8 x 17 ends and a stretched middle, cut like the purse.
+	local left = segment:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(left, "common-currencybox-left", true)
+	left:SetWidth(R.tokenSide)
+	left:SetHeight(R.tokenHeight)
+	left:SetPoint("LEFT", segment, "LEFT", 0, 0)
 
-	local droite = segment:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(droite, "common-currencybox-right", true)
-	droite:SetWidth(R.jetonCote)
-	droite:SetHeight(R.jetonHauteur)
-	droite:SetPoint("RIGHT", segment, "RIGHT", 0, 0)
+	local right = segment:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(right, "common-currencybox-right", true)
+	right:SetWidth(R.tokenSide)
+	right:SetHeight(R.tokenHeight)
+	right:SetPoint("RIGHT", segment, "RIGHT", 0, 0)
 
-	local milieu = segment:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(milieu, "_common-currencybox-center", true)
-	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT")
-	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT")
+	local middle = segment:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(middle, "_common-currencybox-center", true)
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT")
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
 
-	segment.jetons = {}
-	for rang = 1, (MAX_WATCHED_TOKENS or 3) do
-		local jeton = CreateFrame("Button", "ForeverUIBagToken" .. rang, segment)
-		jeton:SetWidth(R.jetonLargeur)
-		jeton:SetHeight(R.jetonPiece)
+	segment.tokens = {}
+	for rank = 1, (MAX_WATCHED_TOKENS or 3) do
+		local token = CreateFrame("Button", "ForeverUIBagToken" .. rank, segment)
+		token:SetWidth(R.tokenWidth)
+		token:SetHeight(R.tokenPiece)
 
-		local icone = jeton:CreateTexture(nil, "ARTWORK")
-		icone:SetWidth(R.jetonPiece)
-		icone:SetHeight(R.jetonPiece)
-		icone:SetPoint("RIGHT", jeton, "RIGHT", R.jetonIconeX, R.jetonIconeY)
-		jeton.icone = icone
+		local icon = token:CreateTexture(nil, "ARTWORK")
+		icon:SetWidth(R.tokenPiece)
+		icon:SetHeight(R.tokenPiece)
+		icon:SetPoint("RIGHT", token, "RIGHT", R.tokenIconX, R.tokenIconY)
+		token.icon = icon
 
-		local compte = jeton:CreateFontString(nil, "ARTWORK", JETON_POLICE)
-		compte:SetJustifyH("RIGHT")
-		compte:SetPoint("LEFT", jeton, "LEFT", 0, 0)
-		compte:SetPoint("RIGHT", icone, "LEFT", 0, 0)
-		jeton.compte = compte
+		local count = token:CreateFontString(nil, "ARTWORK", TOKEN_FONT)
+		count:SetJustifyH("RIGHT")
+		count:SetPoint("LEFT", token, "LEFT", 0, 0)
+		count:SetPoint("RIGHT", icon, "LEFT", 0, 0)
+		token.count = count
 
-		-- Les jetons s'enchainent vers la GAUCHE depuis le bord droit.
-		if rang == 1 then
-			jeton:SetPoint("RIGHT", segment, "RIGHT", R.jetonDepartX, R.jetonDepartY)
+		-- Tokens chain leftwards from the right edge.
+		if rank == 1 then
+			token:SetPoint("RIGHT", segment, "RIGHT", R.tokenOriginX, R.tokenOriginY)
 		else
-			jeton:SetPoint("RIGHT", segment.jetons[rang - 1], "LEFT", 0, 0)
+			token:SetPoint("RIGHT", segment.tokens[rank - 1], "LEFT", 0, 0)
 		end
 
-		jeton:Hide()
-		segment.jetons[rang] = jeton
+		token:Hide()
+		segment.tokens[rank] = token
 	end
 
-	cadre.foreverSegment = segment
+	frame.foreverSegment = segment
 	return segment
 end
 
--- LE SEGMENT SUIT LES DONNEES : rend le nombre de monnaies posees.
-local function majSegment(cadre)
-	local segment = monterSegment(cadre)
-	local liste = lireJetons()
+-- Fills the strip from the data; returns the number of currencies shown.
+local function updateSegment(frame)
+	local segment = setupSegment(frame)
+	local list = readTokens()
 
-	for rang, jeton in ipairs(segment.jetons) do
-		local donnees = liste[rang]
-		if donnees then
-			poserIconeJeton(jeton.icone, donnees)
-			jeton.compte:SetText(donnees.compte)
-			jeton:Show()
+	for rank, token in ipairs(segment.tokens) do
+		local data = list[rank]
+		if data then
+			placeTokenIcon(token.icon, data)
+			token.count:SetText(data.count)
+			token:Show()
 		else
-			jeton:Hide()
+			token:Hide()
 		end
 	end
 
-	if #liste > 0 then
+	if #list > 0 then
 		segment:Show()
 	else
 		segment:Hide()
 	end
-	return #liste
+	return #list
 end
 
--- RELEVE -- 3.3.5 ContainerFrame_GenerateFrame : le premier bouton porte le
--- coin BAS DROIT de la grille, les suivants s'enchainent vers la gauche puis
--- vers le haut, avec 4 px entre deux rangees. camelot en met 5 : on repose
--- donc aussi le premier bouton de chaque rangee.
--- RELEVE -- ContainerFrameMixin:UpdateFrameSize, GetInitialItemAnchor,
--- GetAnchorLayout (grille BottomRightToTopLeft) et, pour le sac a dos,
--- ContainerFrameBackpackMixin:GetInitialItemAnchor + UpdateCurrencyFrames.
--- RELEVE -- ContainerFrameMixin:UpdateName et UpdateMiscellaneousFrames.
-local function majEntete(cadre)
-	-- UpdateName : le nom vient du SAC, il n'est jamais ecrit ici. Le
-	-- trousseau n'en a pas -- GetBagName(-2) ne rend rien -- et on reprend
-	-- alors celui que le client a pose sur son propre titre.
-	local titre = cadre.foreverTitre
-	if titre then
-		local nomDuSac = GetBagName and GetBagName(cadre:GetID())
-		if not nomDuSac or nomDuSac == "" then
-			local ancienTitre = _G[cadre:GetName() .. "Name"]
-			nomDuSac = ancienTitre and ancienTitre:GetText() or ""
+-- Title and portrait (ContainerFrameMixin:UpdateName, UpdateMiscellaneousFrames).
+local function updateHeader(frame)
+	-- UpdateName: the name comes from the bag. The keyring has none (GetBagName(-2) returns
+	-- nothing), so the client's own title text is used.
+	local title = frame.foreverTitle
+	if title then
+		local bagName = GetBagName and GetBagName(frame:GetID())
+		if not bagName or bagName == "" then
+			local oldTitle = _G[frame:GetName() .. "Name"]
+			bagName = oldTitle and oldTitle:GetText() or ""
 		end
-		titre:SetText(nomDuSac)
+		title:SetText(bagName)
 	end
 
-	-- UpdateMiscellaneousFrames : sac a dos, trousseau, ou l'icone de l'objet
-	-- que le sac est.
-	local portrait = cadre.foreverPortrait
+	-- UpdateMiscellaneousFrames: backpack, keyring, or the bag's own item icon.
+	local portrait = frame.foreverPortrait
 	if portrait then
-		local id = cadre:GetID()
+		local id = frame:GetID()
 		local texture
 		if id == 0 then
-			texture = PORTRAIT_SAC_A_DOS
+			texture = BACKPACK_PORTRAIT
 		elseif id == (KEYRING_CONTAINER or -2) then
-			texture = PORTRAIT_TROUSSEAU
+			texture = KEYRING_PORTRAIT
 		elseif ContainerIDToInventoryID then
 			texture = GetInventoryItemTexture("player", ContainerIDToInventoryID(id))
 		end
 		portrait:SetTexture(texture)
-		-- LE ROGNAGE DU CLIENT. Une icone de WoW est un carre de 64 px
-		-- borde de 4 px sombres ; 4 / 64 = 0,0625. Le client retire cette
-		-- bordure partout ou il pose une icone dans un anneau, ce qui fait
-		-- remplir le disque par le dessin au lieu de son cadre.
-		portrait:SetTexCoord(BORDURE_ICONE, 1 - BORDURE_ICONE,
-			BORDURE_ICONE, 1 - BORDURE_ICONE)
+		-- Crop the 4 px dark border of the 64 px icon, as the client does for icons in a ring.
+		portrait:SetTexCoord(ICON_BORDER, 1 - ICON_BORDER,
+			ICON_BORDER, 1 - ICON_BORDER)
 	end
 end
 
-local function poserGrille(cadre)
-	majEntete(cadre)
+-- Sizes the window, places purse and currency strip, and re-anchors the whole grid
+-- (ContainerFrameMixin:UpdateFrameSize, GetInitialItemAnchor, GetAnchorLayout).
+local function layoutGrid(frame)
+	updateHeader(frame)
 
-	local taille = cadre.size or 0
-	if taille <= 1 then
-		return                      -- le cadeau a un seul emplacement garde sa forme
+	local size = frame.size or 0
+	if size <= 1 then
+		return                      -- the one-slot gift bag keeps its shape
 	end
 
-	local nom = cadre:GetName()
-	local m = mesures(cadre)
-	local bourse = _G[nom .. "MoneyFrame"]
+	local name = frame:GetName()
+	local m = measure(frame)
+	local purse = _G[name .. "MoneyFrame"]
 
-	-- UpdateFrameSize() : la fenetre prend la mesure calculee.
-	cadre:SetScale(R.echelle)
-	cadre:SetWidth(m.largeur)
-	cadre:SetHeight(m.hauteur)
+	-- UpdateFrameSize(): the window takes the computed size.
+	frame:SetScale(R.scale)
+	frame:SetWidth(m.width)
+	frame:SetHeight(m.height)
 
-	-- UpdateFrameSize appelle NineSliceUtil.UpdateCornerCropping juste apres
-	-- SetSize : sur une fenetre courte, les coins se chevauchent sinon.
+	-- UpdateFrameSize calls NineSliceUtil.UpdateCornerCropping right after SetSize; otherwise
+	-- the corners overlap on a short window.
 	if ForeverUI.UpdatePanelCorners then
-		ForeverUI.UpdatePanelCorners(cadre)
+		ForeverUI.UpdatePanelCorners(frame)
 	end
 
-	-- TEMOIN. On relit la hauteur DANS LA FOULEE. Deux cas se distinguent
-	-- ainsi, et un seul chiffre les separe :
-	--   la relecture ne rend pas ce qu'on vient de poser -> ce sont les
-	--     ancrages du cadre qui decident de sa hauteur, SetHeight est ignore
-	--   la relecture est bonne mais /fui sacs montre autre chose plus tard
-	--     -> quelqu'un repose la taille apres nous
-	cadre.foreverDemande = m.hauteur
-	cadre.foreverRelue = cadre:GetHeight()
-	cadre.foreverAncrages = cadre:GetNumPoints()
+	-- Read the height back at once, for /fui bags: a wrong read-back means the frame's anchors
+	-- set its height; a right one that later differs means something resizes it after us.
+	frame.foreverRequested = m.height
+	frame.foreverReadBack = frame:GetHeight()
 
-	-- UpdateCurrencyFrames() : le segment des monnaies prend le bas, la
-	-- bourse monte au-dessus de lui, et la grille s'accroche a la bourse.
-	-- Sans monnaie suivie, la bourse reprend le bas et rien ne change.
-	if m.sacADos and bourse then
-		habillerBourse(bourse)
-		local poses = majSegment(cadre)
-		local segment = cadre.foreverSegment
+	-- UpdateCurrencyFrames(): the currency strip takes the bottom, the purse sits on it and the
+	-- grid hangs on the purse. Without watched currencies the purse takes the bottom.
+	if m.isBackpack and purse then
+		skinPurse(purse)
+		local placed = updateSegment(frame)
+		local segment = frame.foreverSegment
 
-		bourse:ClearAllPoints()
-		if poses > 0 and segment then
+		purse:ClearAllPoints()
+		if placed > 0 and segment then
 			segment:ClearAllPoints()
-			segment:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT",
-				R.jetonCote, R.bourseBas)
-			segment:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
-				-R.jetonCote, R.bourseBas)
-			bourse:SetPoint("BOTTOMLEFT", segment, "TOPLEFT", 0, R.jetonEcart)
-			bourse:SetPoint("BOTTOMRIGHT", segment, "TOPRIGHT", 0, R.jetonEcart)
+			segment:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT",
+				R.tokenSide, R.purseBottom)
+			segment:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT",
+				-R.tokenSide, R.purseBottom)
+			purse:SetPoint("BOTTOMLEFT", segment, "TOPLEFT", 0, R.tokenGap)
+			purse:SetPoint("BOTTOMRIGHT", segment, "TOPRIGHT", 0, R.tokenGap)
 		else
-			bourse:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT",
-				R.bourseCote, R.bourseBas)
-			bourse:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
-				-R.bourseCote, R.bourseBas)
+			purse:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT",
+				R.purseSide, R.purseBottom)
+			purse:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT",
+				-R.purseSide, R.purseBottom)
 		end
-		bourse:Show()
+		purse:Show()
 	end
 
-	-- GetAnchorLayout() : BottomRightToTopLeft, 4 colonnes, 5 d'ecart. Toute
-	-- la grille est reposee, 3.3.5 employant ses propres ecarts.
-	for index = 1, taille do
-		local bouton = _G[nom .. "Item" .. index]
-		if bouton then
-			bouton:SetWidth(R.emplacement)
-			bouton:SetHeight(R.emplacement)
-			bouton:ClearAllPoints()
+	-- GetAnchorLayout(): BottomRightToTopLeft, 4 columns, gap 5. The whole grid is re-anchored
+	-- because 3.3.5 uses its own gaps (4 px between rows).
+	for index = 1, size do
+		local button = _G[name .. "Item" .. index]
+		if button then
+			button:SetWidth(R.slot)
+			button:SetHeight(R.slot)
+			button:ClearAllPoints()
 			if index == 1 then
-				if m.sacADos and bourse then
+				if m.isBackpack and purse then
 					-- ContainerFrameBackpackMixin:GetInitialItemAnchor()
-					bouton:SetPoint("BOTTOMRIGHT", bourse, "TOPRIGHT",
-						0, R.ecartBourseGrille)
+					button:SetPoint("BOTTOMRIGHT", purse, "TOPRIGHT",
+						0, R.purseGridGap)
 				else
 					-- ContainerFrameMixin:GetInitialItemAnchor()
-					bouton:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT",
-						R.premierBoutonX, R.premierBoutonY)
+					button:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT",
+						R.firstButtonX, R.firstButtonY)
 				end
-			elseif math.fmod(index - 1, R.colonnes) == 0 then
-				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - R.colonnes)],
-					"TOPRIGHT", 0, R.ecartCases)
+			elseif math.fmod(index - 1, R.columns) == 0 then
+				button:SetPoint("BOTTOMRIGHT", _G[name .. "Item" .. (index - R.columns)],
+					"TOPRIGHT", 0, R.cellGap)
 			else
-				bouton:SetPoint("BOTTOMRIGHT", _G[nom .. "Item" .. (index - 1)],
-					"BOTTOMLEFT", -R.ecartCases, 0)
+				button:SetPoint("BOTTOMRIGHT", _G[name .. "Item" .. (index - 1)],
+					"BOTTOMLEFT", -R.cellGap, 0)
 			end
 		end
 	end
 end
 
--- RELEVE -- UpdateContainerFrameAnchors (containerframe.lua, 1372-1401).
--- Les sacs s'empilent du bas vers le haut, CONTAINER_SPACING entre deux, et
--- passent en colonne a gauche quand l'ecran est plein.
-local function largeurBarresDroite()
-	-- EditModeUtil:GetRightActionBarWidth() n'existe pas en 3.3.5 : ses
-	-- barres de droite sont MultiBarRight et MultiBarLeft.
-	local largeur = 0
-	for _, nomBarre in ipairs({ "MultiBarRight", "MultiBarLeft" }) do
-		local barre = _G[nomBarre]
-		if barre and barre:IsShown() then
-			largeur = largeur + barre:GetWidth()
+-- Width taken by the visible right action bars.
+local function rightBarsWidth()
+	-- EditModeUtil:GetRightActionBarWidth() does not exist in 3.3.5; its right bars are
+	-- MultiBarRight and MultiBarLeft.
+	local width = 0
+	for _, barName in ipairs({ "MultiBarRight", "MultiBarLeft" }) do
+		local bar = _G[barName]
+		if bar and bar:IsShown() then
+			width = width + bar:GetWidth()
 		end
 	end
-	return largeur
+	return width
 end
 
-local function sacsOuverts()
-	-- Le client tient l'ordre d'empilement dans ContainerFrame1.bags, ce que
-	-- la source lit avec GetBagsShown.
-	local liste = {}
+local function openBags()
+	-- The client keeps the stacking order in ContainerFrame1.bags (GetBagsShown in the source).
+	local list = {}
 	if ContainerFrame1 and ContainerFrame1.bags then
-		for _, nomCadre in ipairs(ContainerFrame1.bags) do
-			local cadre = _G[nomCadre]
-			if cadre and cadre:IsShown() then
-				table.insert(liste, cadre)
+		for _, frameName in ipairs(ContainerFrame1.bags) do
+			local frame = _G[frameName]
+			if frame and frame:IsShown() then
+				table.insert(list, frame)
 			end
 		end
 	end
-	if #liste == 0 then
-		for _, cadre in ipairs(cadres) do
-			if cadre:IsShown() and (cadre.size or 0) > 0 then
-				table.insert(liste, cadre)
+	if #list == 0 then
+		for _, frame in ipairs(frames) do
+			if frame:IsShown() and (frame.size or 0) > 0 then
+				table.insert(list, frame)
 			end
 		end
 	end
-	return liste
+	return list
 end
 
--- ECART ASSUME (AMELIORATIONS, 2026-09-28 : « selon la taille des sacs, les
--- ouvrir peut faire que l'un d'eux sorte en haut de l'ecran »). La source
--- ne retranche de la place libre que la HAUTEUR de chaque sac : les ecarts
--- de 8 empiles entre eux ne sont jamais comptes, et rien n'est garde en
--- haut -- le dernier sac d'une colonne pouvait donc depasser le bord. Ici un
--- sac empile coute sa hauteur ET l'ecart qui le separe du precedent, et la
--- colonne s'arrete a margeHaute sous le haut de l'ecran.
-local function poserSacs()
-	local hauteurEcran = GetScreenHeight() / R.echelle
-	local decalageX = (largeurBarresDroite() + R.bordDroit) / R.echelle
-	local decalageY = R.bordBas / R.echelle
-	local disponible = hauteurEcran - decalageY - R.margeHaute / R.echelle
-	local libre = disponible
-	local precedent, premierDeColonne
+-- UpdateContainerFrameAnchors: bags stack bottom to top, CONTAINER_SPACING apart, and start
+-- a new column to the left when the screen is full. Unlike the source, a stacked bag costs
+-- its height plus the gap, and topMargin is kept below the screen top, so no bag goes past
+-- the top edge.
+local function layoutBags()
+	local screenHeight = GetScreenHeight() / R.scale
+	local offsetX = (rightBarsWidth() + R.rightEdge) / R.scale
+	local offsetY = R.bottomEdge / R.scale
+	local available = screenHeight - offsetY - R.topMargin / R.scale
+	local free = available
+	local previous, firstInColumn
 
-	for index, cadre in ipairs(sacsOuverts()) do
-		cadre:SetScale(R.echelle)
-		cadre:ClearAllPoints()
-		local hauteur = cadre:GetHeight()
+	for index, frame in ipairs(openBags()) do
+		frame:SetScale(R.scale)
+		frame:ClearAllPoints()
+		local height = frame:GetHeight()
 		if index == 1 then
-			cadre:SetPoint("BOTTOMRIGHT", cadre:GetParent(), "BOTTOMRIGHT",
-				-decalageX, decalageY)
-			premierDeColonne = cadre
-			libre = libre - hauteur
-		elseif libre < hauteur + R.ecartSacs then
-			cadre:SetPoint("BOTTOMRIGHT", premierDeColonne, "BOTTOMLEFT",
-				R.ecartColonnes, 0)
-			premierDeColonne = cadre
-			libre = disponible - hauteur
+			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT",
+				-offsetX, offsetY)
+			firstInColumn = frame
+			free = free - height
+		elseif free < height + R.bagGap then
+			frame:SetPoint("BOTTOMRIGHT", firstInColumn, "BOTTOMLEFT",
+				R.columnGap, 0)
+			firstInColumn = frame
+			free = available - height
 		else
-			cadre:SetPoint("BOTTOMRIGHT", precedent, "TOPRIGHT", 0, R.ecartSacs)
-			libre = libre - hauteur - R.ecartSacs
+			frame:SetPoint("BOTTOMRIGHT", previous, "TOPRIGHT", 0, R.bagGap)
+			free = free - height - R.bagGap
 		end
-		precedent = cadre
+		previous = frame
 	end
 end
-ForeverUI.BagsStack = poserSacs
+ForeverUI.BagsStack = layoutBags
 
--- LE RATTRAPAGE. 3.3.5 repose la taille de ses cadres de sac a des moments
--- que les accroches ne couvrent pas toutes (le client ouvre, ferme et
--- reagence ses treize cadres entre eux). Un seul passage a l'image suivante
--- relit la mesure et la repose si elle a bouge ; il ne se redemande que
--- depuis les accroches, jamais depuis lui-meme, donc il ne tourne pas en
--- boucle contre le client.
-local rattrapage = CreateFrame("Frame", "ForeverUIBagsRecheck")
-rattrapage:Hide()
-rattrapage:SetScript("OnUpdate", function(self)
+-- 3.3.5 resizes its bag frames at times the hooks do not all cover. One pass on the next
+-- frame re-measures and re-applies the size if it moved. Only hooks request it, never
+-- itself, so it cannot loop against the client.
+local recheck = CreateFrame("Frame", "ForeverUIBagsRecheck")
+recheck:Hide()
+recheck:SetScript("OnUpdate", function(self)
 	self:Hide()
-	local refaire = false
-	for _, cadre in ipairs(cadres) do
-		if cadre:IsShown() and (cadre.size or 0) > 1 then
-			local m = mesures(cadre)
-			if math.abs(cadre:GetHeight() - m.hauteur) > 0.5
-				or math.abs(cadre:GetWidth() - m.largeur) > 0.5 then
-				cadre.foreverDefaite = (cadre.foreverDefaite or 0) + 1
-				poserGrille(cadre)
-				refaire = true
+	local needsRedo = false
+	for _, frame in ipairs(frames) do
+		if frame:IsShown() and (frame.size or 0) > 1 then
+			local m = measure(frame)
+			if math.abs(frame:GetHeight() - m.height) > 0.5
+				or math.abs(frame:GetWidth() - m.width) > 0.5 then
+				frame.foreverUndoCount = (frame.foreverUndoCount or 0) + 1
+				layoutGrid(frame)
+				needsRedo = true
 			end
 		end
 	end
-	if refaire then
-		-- Une hauteur a change : l'empilement en depend.
-		poserSacs()
+	if needsRedo then
+		-- A height changed: the stacking depends on it.
+		layoutBags()
 	end
 end)
 
-local function demanderRattrapage()
-	rattrapage:Show()
+local function requestRecheck()
+	recheck:Show()
 end
-ForeverUI.BagsRecheck = demanderRattrapage
 
-ForeverUI.BagsLayout = poserOutils
+ForeverUI.BagsLayout = layoutTools
 
--- ------------------------------------------------------------- accroches
-local function habillerTout()
-	for index = 1, NB_CADRES do
-		habillerCadre(_G["ContainerFrame" .. index])
+-- ------------------------------------------------------------- hooks
+local function skinAll()
+	for index = 1, FRAME_COUNT do
+		skinFrame(_G["ContainerFrame" .. index])
 	end
 end
 
-habillerTout()
-majChamp()
+skinAll()
+updateField()
 
 if hooksecurefunc then
-	-- Le client repose ses propres morceaux a chaque ouverture de sac.
-	hooksecurefunc("ContainerFrame_GenerateFrame", function(cadre)
-		habillerCadre(cadre)
-		poserGrille(cadre)
-		poserOutils()
-		-- L'EMPILEMENT, UNE FOIS LE SAC MONTRE (2026-09-28). GenerateFrame
-		-- inscrit le sac, appelle updateContainerFrameAnchors -- donc notre
-		-- empilement --, et ne le montre QU'APRES : l'empilement, qui ne
-		-- prend que les sacs montres, le sautait, et le nouveau sac gardait
-		-- la place du client (colle au bord de l'ecran, ou au sac du dessous)
-		-- jusqu'a l'ouverture suivante. Ici il est montre, a sa taille.
-		poserSacs()
-		Recherche.Tout()
-		demanderRattrapage()
+	-- The client resets its own pieces each time a bag opens.
+	hooksecurefunc("ContainerFrame_GenerateFrame", function(frame)
+		skinFrame(frame)
+		layoutGrid(frame)
+		layoutTools()
+		-- GenerateFrame runs updateContainerFrameAnchors (our stacking) before it shows the bag,
+		-- so the new bag was skipped; stack again now that it is shown.
+		layoutBags()
+		Search.All()
+		requestRecheck()
 	end)
 
-	-- ContainerFrame_Update est rappele a chaque mise a jour de sac. Le
-	-- client y repose ses propres morceaux : la grille est reposee ensuite,
-	-- sinon la taille d'origine revient des le premier objet ramasse.
-	hooksecurefunc("ContainerFrame_Update", function(cadre)
-		poserGrille(cadre)
-		Recherche.Appliquer(cadre)
-		demanderRattrapage()
+	-- ContainerFrame_Update runs on every bag update and resets the client's pieces; the grid
+	-- is re-applied after it, or the original size comes back.
+	hooksecurefunc("ContainerFrame_Update", function(frame)
+		layoutGrid(frame)
+		Search.Apply(frame)
+		requestRecheck()
 	end)
 
 	hooksecurefunc("ContainerFrame_OnHide", function()
-		poserOutils()
+		layoutTools()
 	end)
 
-	-- Le client remet son echelle et repose les cadres a chaque
-	-- reagencement : on repasse derriere lui, taille comprise.
+	-- The client resets scale and anchors on each re-layout: re-apply ours, size included.
 	hooksecurefunc("updateContainerFrameAnchors", function()
-		for _, cadre in ipairs(cadres) do
-			if cadre:GetScale() ~= R.echelle then
-				cadre:SetScale(R.echelle)
+		for _, frame in ipairs(frames) do
+			if frame:GetScale() ~= R.scale then
+				frame:SetScale(R.scale)
 			end
-			if cadre:IsShown() then
-				poserGrille(cadre)
+			if frame:IsShown() then
+				layoutGrid(frame)
 			end
 		end
-		-- Le client vient d'empiler ses sacs avec SES ecarts ; on repose
-		-- ceux de camelot par-dessus.
-		poserSacs()
-		demanderRattrapage()
+		-- The client just stacked the bags with its own gaps; re-stack with camelot's.
+		layoutBags()
+		requestRecheck()
 	end)
 end
 
--- LE SEGMENT DU CLIENT SE TAIT, ET SA FONCTION DE TAILLE AUSSI.
---
--- ManageBackpackTokenFrame reparente BackpackTokenFrame dans le sac et
--- REPOSE LA HAUTEUR de celui-ci -- BACKPACK_HEIGHT plus 22 -- ce qui defait
--- la notre. On masque son segment et on repasse derriere elle.
-local function etoufferSegmentDuClient()
-	local ancien = _G["BackpackTokenFrame"]
-	if ancien then
-		ancien:Hide()
-		if ancien.EnableMouse then
-			ancien:EnableMouse(false)
+-- ManageBackpackTokenFrame reparents BackpackTokenFrame into the backpack and resets its
+-- height (BACKPACK_HEIGHT + 22), undoing ours: the client strip stays hidden and the
+-- backpack is re-laid out after it.
+local function silenceClientSegment()
+	local old = _G["BackpackTokenFrame"]
+	if old then
+		old:Hide()
+		if old.EnableMouse then
+			old:EnableMouse(false)
 		end
 	end
 end
 
 if hooksecurefunc and type(_G["ManageBackpackTokenFrame"]) == "function" then
 	hooksecurefunc("ManageBackpackTokenFrame", function()
-		etoufferSegmentDuClient()
-		for _, cadre in ipairs(cadres) do
-			if cadre:IsShown() and cadre:GetID() == 0 then
-				poserGrille(cadre)
+		silenceClientSegment()
+		for _, frame in ipairs(frames) do
+			if frame:IsShown() and frame:GetID() == 0 then
+				layoutGrid(frame)
 			end
 		end
 	end)
 end
 
--- COCHER "Show on Backpack" PASSE PAR SetCurrencyBackpack, et par rien
--- d'autre : c'est ce que font les deux cases du volet droit de l'onglet des
--- monnaies, et le clic modifie de la liste du client. On s'y greffe pour
--- que le sac suive dans la foulee.
+-- "Show on Backpack" always goes through SetCurrencyBackpack (currency tab boxes and the
+-- client's modified click), so the backpack is re-laid out after it.
 if hooksecurefunc and type(_G["SetCurrencyBackpack"]) == "function" then
 	hooksecurefunc("SetCurrencyBackpack", function()
-		for _, cadre in ipairs(cadres) do
-			if cadre:IsShown() and cadre:GetID() == 0 then
-				poserGrille(cadre)
+		for _, frame in ipairs(frames) do
+			if frame:IsShown() and frame:GetID() == 0 then
+				layoutGrid(frame)
 			end
 		end
 	end)
 end
 
-local veilleur = CreateFrame("Frame", "ForeverUIBagsWatcher")
-veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
-veilleur:RegisterEvent("BAG_UPDATE")
--- La quantite d'une monnaie suivie change : le segment la montre.
-veilleur:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
-veilleur:SetScript("OnEvent", function()
-	habillerTout()
-	etoufferSegmentDuClient()
-	for _, cadre in ipairs(cadres) do
-		if cadre:IsShown() then
-			poserGrille(cadre)
+local listener = CreateFrame("Frame", "ForeverUIBagsWatcher")
+listener:RegisterEvent("PLAYER_ENTERING_WORLD")
+listener:RegisterEvent("BAG_UPDATE")
+-- A watched currency amount changed.
+listener:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+listener:SetScript("OnEvent", function()
+	skinAll()
+	silenceClientSegment()
+	for _, frame in ipairs(frames) do
+		if frame:IsShown() then
+			layoutGrid(frame)
 		end
 	end
-	poserOutils()
-	Recherche.Tout()
-	demanderRattrapage()
+	layoutTools()
+	Search.All()
+	requestRecheck()
 end)
 
--- Refaire toute la mise en page apres un changement de reglage.
+-- Re-applies the whole layout after a setting changes.
 function ForeverUI.BagsApply()
-	for _, cadre in ipairs(cadres) do
-		poserGrille(cadre)
+	for _, frame in ipairs(frames) do
+		layoutGrid(frame)
 	end
-	poserOutils()
-	Recherche.Tout()
+	layoutTools()
+	Search.All()
 end
 
--- Le diagnostic ne dit que ce que le JEU montre : pour CHAQUE sac ouvert, la
--- hauteur que la formule donne et celle que le cadre porte vraiment. Si les
--- deux different, quelque chose repose la taille apres nous, et la ligne le
--- dit au lieu de le laisser deviner.
+-- /fui bags: for each open bag, the computed size and the frame's actual size. A mismatch
+-- means something resizes the frame after us.
 ForeverUI.BagsDebug = function()
-	local ouverts = 0
-	for _, cadre in ipairs(cadres) do
-		if cadre:IsShown() and (cadre.size or 0) > 0 then
-			ouverts = ouverts + 1
-			local nom = cadre:GetName()
-			local m = mesures(cadre)
-			local reelleL, reelleH = cadre:GetWidth(), cadre:GetHeight()
-			local accord = (math.abs(reelleH - m.hauteur) < 0.5)
-				and (math.abs(reelleL - m.largeur) < 0.5)
+	local openCount = 0
+	for _, frame in ipairs(frames) do
+		if frame:IsShown() and (frame.size or 0) > 0 then
+			openCount = openCount + 1
+			local name = frame:GetName()
+			local m = measure(frame)
+			local actualW, actualH = frame:GetWidth(), frame:GetHeight()
+			local sizeMatch = (math.abs(actualH - m.height) < 0.5)
+				and (math.abs(actualW - m.width) < 0.5)
 
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				"|cff66ccffForeverUI|r " .. L.BAGS_DEBUG_FRAME,
-				nom, cadre:GetID(), cadre.size or 0, m.rangees))
+				name, frame:GetID(), frame.size or 0, m.rowLines))
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				"   " .. L.BAGS_DEBUG_SIZE,
-				m.largeur, m.hauteur, m.grille, m.comble, m.extra, reelleL, reelleH,
-				accord and ("|cff44ff44" .. L.BAGS_DEBUG_MATCH .. "|r") or ("|cffff4444" .. L.BAGS_DEBUG_MISMATCH .. "|r")))
+				m.width, m.height, m.grid, m.overhead, m.extra, actualW, actualH,
+				sizeMatch and ("|cff44ff44" .. L.BAGS_DEBUG_MATCH .. "|r") or ("|cffff4444" .. L.BAGS_DEBUG_MISMATCH .. "|r")))
 
-			if not accord then
-				-- Le temoin dit LEQUEL des deux cas on tient.
+			if not sizeMatch then
+				-- The read-back tells which of the two cases it is.
 				DEFAULT_CHAT_FRAME:AddMessage(string.format(
 					"   " .. L.BAGS_DEBUG_WITNESS,
-					tostring(cadre.foreverDemande), tostring(cadre.foreverRelue),
-					tostring(cadre.foreverDefaite or 0),
-					(cadre.foreverRelue and cadre.foreverDemande
-						and math.abs(cadre.foreverRelue - cadre.foreverDemande) < 0.5)
+					tostring(frame.foreverRequested), tostring(frame.foreverReadBack),
+					tostring(frame.foreverUndoCount or 0),
+					(frame.foreverReadBack and frame.foreverRequested
+						and math.abs(frame.foreverReadBack - frame.foreverRequested) < 0.5)
 						and ("|cffff4444" .. L.BAGS_DEBUG_RESIZED_AFTER .. "|r")
 						or ("|cffff4444" .. L.BAGS_DEBUG_ANCHORS_FORCE .. "|r")))
 
-				local lignes = string.format("   " .. L.BAGS_DEBUG_ANCHORS, cadre:GetNumPoints())
-				for index = 1, cadre:GetNumPoints() do
-					local point, cible, pointCible, x, y = cadre:GetPoint(index)
-					lignes = lignes .. string.format(L.BAGS_DEBUG_ANCHOR,
-						tostring(point), tostring(pointCible),
-						cible and (cible.GetName and cible:GetName() or "?") or L.BAGS_DEBUG_SCREEN,
+				local rows = string.format("   " .. L.BAGS_DEBUG_ANCHORS, frame:GetNumPoints())
+				for index = 1, frame:GetNumPoints() do
+					local point, target, targetPoint, x, y = frame:GetPoint(index)
+					rows = rows .. string.format(L.BAGS_DEBUG_ANCHOR,
+						tostring(point), tostring(targetPoint),
+						target and (target.GetName and target:GetName() or "?") or L.BAGS_DEBUG_SCREEN,
 						x or 0, y or 0)
 				end
-				DEFAULT_CHAT_FRAME:AddMessage(lignes)
+				DEFAULT_CHAT_FRAME:AddMessage(rows)
 			end
 		end
 	end
 
-	if ouverts == 0 then
+	if openCount == 0 then
 		DEFAULT_CHAT_FRAME:AddMessage(
 			"|cff66ccffForeverUI|r " .. L.BAGS_DEBUG_NO_BAG_OPEN)
 	end
 
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"   " .. L.BAGS_DEBUG_SKINNED,
-		#cadres, R.emplacement, tostring(champ:IsShown())))
+		#frames, R.slot, tostring(field:IsShown())))
 
-	-- LE SEGMENT DES MONNAIES SUIVIES : ce que le client donne, et ce qu'on
-	-- en pose. Le segment du CLIENT doit etre muet.
-	local suivies = lireJetons()
-	local noms = {}
-	for _, jeton in ipairs(suivies) do
-		noms[#noms + 1] = string.format("%s=%s", jeton.nom, tostring(jeton.compte))
+	-- Watched currencies: what the client gives and what is shown. The client strip must be hidden.
+	local tracked = readTokens()
+	local names = {}
+	for _, token in ipairs(tracked) do
+		names[#names + 1] = string.format("%s=%s", token.name, tostring(token.count))
 	end
 	local segment = _G["ForeverUIBagTokens"]
-	local ancien = _G["BackpackTokenFrame"]
+	local old = _G["BackpackTokenFrame"]
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"   " .. L.BAGS_DEBUG_TOKENS, #suivies, MAX_WATCHED_TOKENS or 3,
-		(#noms > 0) and table.concat(noms, ", ") or L.BAGS_DEBUG_NONE))
+		"   " .. L.BAGS_DEBUG_TOKENS, #tracked, MAX_WATCHED_TOKENS or 3,
+		(#names > 0) and table.concat(names, ", ") or L.BAGS_DEBUG_NONE))
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"   " .. L.BAGS_DEBUG_SEGMENT,
 		tostring(segment and segment:IsShown()),
-		tostring(ancien and ancien:IsShown())))
+		tostring(old and old:IsShown())))
 
-	-- Tous les reglages, par ordre alphabetique : la liste ne peut pas se
-	-- demoder quand un reglage apparait ou disparait.
-	local cles = {}
-	for cle in pairs(R) do
-		table.insert(cles, cle)
+	-- All settings, sorted by name, so the list stays complete when settings change.
+	local keys = {}
+	for key in pairs(R) do
+		table.insert(keys, key)
 	end
-	table.sort(cles)
-	local ligne = ""
-	for _, cle in ipairs(cles) do
-		ligne = ligne .. string.format("%s=%s  ", cle, tostring(R[cle]))
-		if string.len(ligne) > 80 then
-			DEFAULT_CHAT_FRAME:AddMessage("   " .. ligne)
-			ligne = ""
+	table.sort(keys)
+	local row = ""
+	for _, key in ipairs(keys) do
+		row = row .. string.format("%s=%s  ", key, tostring(R[key]))
+		if string.len(row) > 80 then
+			DEFAULT_CHAT_FRAME:AddMessage("   " .. row)
+			row = ""
 		end
 	end
-	if ligne ~= "" then
-		DEFAULT_CHAT_FRAME:AddMessage("   " .. ligne)
+	if row ~= "" then
+		DEFAULT_CHAT_FRAME:AddMessage("   " .. row)
 	end
 end
 
--- Changer un reglage en jeu, pour essayer avant de le figer dans le fichier.
-function ForeverUI.BagsSet(cle, valeur)
-	if R[cle] == nil then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.BAGS_UNKNOWN_SETTING .. tostring(cle))
+-- Changes a setting in game, to try it before fixing it in R.
+-- key: name in R; value: new number
+function ForeverUI.BagsSet(key, value)
+	if R[key] == nil then
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.BAGS_UNKNOWN_SETTING .. tostring(key))
 		return false
 	end
-	local nombre = tonumber(valeur)
-	if not nombre then
+	local count = tonumber(value)
+	if not count then
 		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. L.BAGS_NUMBER_EXPECTED)
 		return false
 	end
-	R[cle] = nombre
+	R[key] = count
 	ForeverUI.BagsApply()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
-		"|cff66ccffForeverUI|r " .. L.BAGS_SET, cle, tostring(nombre)))
+		"|cff66ccffForeverUI|r " .. L.BAGS_SET, key, tostring(count)))
 	return true
 end

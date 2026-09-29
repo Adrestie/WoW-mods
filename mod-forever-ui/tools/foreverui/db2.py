@@ -14,110 +14,110 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-"""Lecteur minimal des tables .db2 du client moderne (format WDC5).
+"""Minimal reader for the modern client's .db2 tables (WDC5 format).
 
-Rend, pour chaque ligne, son identifiant et la liste brute de ses champs ;
-un champ texte rend sa chaine. Formats de stockage geres : brut, compacte,
-compacte signe, donnee commune, palette, palette en tableau. Les tables
-chiffrees ou eparses (drapeau 1) ne sont pas gerees.
+Returns each row's id and the raw list of its fields; a text field returns its string.
+Storage kinds handled: none, bitpacked, bitpacked signed, common data, pallet, pallet array.
+Encrypted or sparse tables (flag 1) are not handled.
 """
 import io
 import struct
 
 
-def _bits(donnees, debut_octets, decalage_bits, nombre_bits):
-    octet = debut_octets + decalage_bits // 8
-    n = (decalage_bits % 8 + nombre_bits + 7) // 8
-    brut = int.from_bytes(donnees[octet:octet + n], "little")
-    return (brut >> (decalage_bits % 8)) & ((1 << nombre_bits) - 1)
+def _bits(data, start_byte, bit_offset, bit_count):
+    byte = start_byte + bit_offset // 8
+    n = (bit_offset % 8 + bit_count + 7) // 8
+    raw = int.from_bytes(data[byte:byte + n], "little")
+    return (raw >> (bit_offset % 8)) & ((1 << bit_count) - 1)
 
 
-def lire(chemin, champs_texte=()):
-    d = io.open(chemin, "rb").read()
+# text_fields: indexes of the fields that hold a string offset
+def read(path, text_fields=()):
+    d = io.open(path, "rb").read()
     if d[:4] != b"WDC5":
-        raise ValueError("pas un WDC5 : %s" % chemin)
+        raise ValueError("pas un WDC5 : %s" % path)
     o = 4 + 4 + 128
-    (nb, nb_champs, taille_ligne, taille_textes, _, _, _, _, _) = struct.unpack_from("<9I", d, o)
+    (count, field_count, row_size, strings_size, _, _, _, _, _) = struct.unpack_from("<9I", d, o)
     o += 36
-    drapeaux, index_id = struct.unpack_from("<HH", d, o)
+    flags, id_index = struct.unpack_from("<HH", d, o)
     o += 4
-    (total_champs, _, _, taille_stockage, taille_communs, taille_palette, nb_sections) = struct.unpack_from("<7I", d, o)
+    (total_fields, _, _, storage_size, common_size, palette_size, section_count) = struct.unpack_from("<7I", d, o)
     o += 28
-    if drapeaux & 1:
+    if flags & 1:
         raise ValueError("table eparse non geree")
     sections = []
-    for _ in range(nb_sections):
+    for _ in range(section_count):
         sections.append(struct.unpack_from("<QIIIIIIII", d, o))
         o += 40
-    o += 4 * nb_champs
-    stockage = [struct.unpack_from("<HHIIIII", d, o + 24 * i) for i in range(total_champs)]
-    o += taille_stockage
-    palette = d[o:o + taille_palette]
-    o += taille_palette
-    communs_brut = d[o:o + taille_communs]
-    o += taille_communs
+    o += 4 * field_count
+    storage = [struct.unpack_from("<HHIIIII", d, o + 24 * i) for i in range(total_fields)]
+    o += storage_size
+    palette = d[o:o + palette_size]
+    o += palette_size
+    raw_common = d[o:o + common_size]
+    o += common_size
 
-    # decoupe palette et donnees communes champ par champ
+    # Split the pallet and common data per field.
     pal, com = [], []
     p = c = 0
-    for (_, _, extra, genre, v1, v2, v3) in stockage:
-        if genre in (3, 4):
+    for (_, _, extra, kind, v1, v2, v3) in storage:
+        if kind in (3, 4):
             pal.append(p)
             p += extra
         else:
             pal.append(None)
-        if genre == 2:
+        if kind == 2:
             table = {}
             for k in range(extra // 8):
-                ident, val = struct.unpack_from("<II", communs_brut, c + 8 * k)
+                ident, val = struct.unpack_from("<II", raw_common, c + 8 * k)
                 table[ident] = val
             com.append(table)
             c += extra
         else:
             com.append(None)
 
-    lignes = []
-    for (_, debut, n, _, _, taille_ids, _, _, nb_copies) in sections:
+    rows = []
+    for (_, start, n, _, _, ids_size, _, _, copy_count) in sections:
         ids = []
-        fin_lignes = debut + n * taille_ligne
-        fin_textes = fin_lignes + taille_textes
-        if taille_ids:
-            ids = list(struct.unpack_from("<%dI" % (taille_ids // 4), d, fin_textes))
-        copies_debut = fin_textes + taille_ids
+        rows_end = start + n * row_size
+        strings_end = rows_end + strings_size
+        if ids_size:
+            ids = list(struct.unpack_from("<%dI" % (ids_size // 4), d, strings_end))
+        copies_start = strings_end + ids_size
         for i in range(n):
-            base = debut + i * taille_ligne
-            valeurs = []
-            for k, (bits, nbits, extra, genre, v1, v2, v3) in enumerate(stockage):
-                if genre == 0:
-                    octet = bits // 8
-                    v = int.from_bytes(d[base + octet: base + octet + nbits // 8], "little")
-                    if k in champs_texte:
-                        pos = base + octet + v
+            base = start + i * row_size
+            values = []
+            for k, (bits, nbits, extra, kind, v1, v2, v3) in enumerate(storage):
+                if kind == 0:
+                    byte = bits // 8
+                    v = int.from_bytes(d[base + byte: base + byte + nbits // 8], "little")
+                    if k in text_fields:
+                        pos = base + byte + v
                         v = d[pos:d.index(b"\x00", pos)].decode("utf-8", "replace")
-                elif genre in (1, 5):
+                elif kind in (1, 5):
                     v = _bits(d, base, bits, nbits)
-                    if genre == 5 and v & (1 << (nbits - 1)):
+                    if kind == 5 and v & (1 << (nbits - 1)):
                         v -= 1 << nbits
-                elif genre == 2:
-                    v = None  # rempli apres, par identifiant
-                elif genre == 3:
+                elif kind == 2:
+                    v = None  # filled below, by record id
+                elif kind == 3:
                     idx = _bits(d, base, bits, nbits)
                     v = struct.unpack_from("<I", palette, pal[k] + 4 * idx)[0]
-                elif genre == 4:
+                elif kind == 4:
                     idx = _bits(d, base, bits, nbits)
                     v = list(struct.unpack_from("<%dI" % v3, palette, pal[k] + 4 * idx * v3))
                 else:
-                    raise ValueError("stockage %d non gere" % genre)
-                valeurs.append(v)
-            ident = ids[i] if ids else valeurs[index_id]
-            for k, (bits, nbits, extra, genre, v1, v2, v3) in enumerate(stockage):
-                if genre == 2:
-                    valeurs[k] = com[k].get(ident, v1)
-            lignes.append((ident, valeurs))
-        # copies : (nouvel id, id copie)
-        par_id = dict(lignes)
-        for j in range(nb_copies):
-            nouveau, ancien = struct.unpack_from("<II", d, copies_debut + 8 * j)
-            if ancien in par_id:
-                lignes.append((nouveau, list(par_id[ancien])))
-    return lignes
+                    raise ValueError("stockage %d non gere" % kind)
+                values.append(v)
+            ident = ids[i] if ids else values[id_index]
+            for k, (bits, nbits, extra, kind, v1, v2, v3) in enumerate(storage):
+                if kind == 2:
+                    values[k] = com[k].get(ident, v1)
+            rows.append((ident, values))
+        # Copy table: (new id, copied id)
+        by_id = dict(rows)
+        for j in range(copy_count):
+            new, old = struct.unpack_from("<II", d, copies_start + 8 * j)
+            if old in by_id:
+                rows.append((new, list(by_id[old])))
+    return rows

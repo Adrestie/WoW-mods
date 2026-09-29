@@ -1,0 +1,287 @@
+# Atlas sheets the addon reads outside the five inventoried screens, one per line, named
+# as the modern client names them. tools/add_sheets.py imports them into data/art and
+# regenerates data/addon/ForeverUI/UIAtlas_06_extras.lua.
+
+# player and target frames
+interface/hud/uiunitframerestingflipbook.blp
+interface/hud/uiunitframehorizontal.blp
+interface/hud/uiunitframeboss.blp
+interface/hud/uiunitframebossc60.blp
+
+# death knight runes
+interface/playerframe/classoverlaydeathknightrunes.blp
+interface/playerframe/classoverlaydeathknightrunesfill.blp
+interface/hud/uideathknightrunes.blp
+
+# casting bar
+interface/castingbar/uicastingbar.blp
+interface/castingbar/uicastingbarfx.blp
+
+# experience and reputation bars
+interface/hud/uiexperiencebarcamelot.blp
+
+# micro menu and the vertical separator of the bottom row
+interface/hud/uimicromenu2x.blp
+interface/hud/uimicromenuc602x.blp
+interface/hud/uiactionbarverticalc60.blp
+
+# panels: nine-slice metal border and flat background
+interface/framegeneral/uiframemetal2xc60.blp
+interface/framegeneral/uiframemetalvertical2xc60.blp
+interface/framegeneral/uiframemetalhorizontal2xc60.blp
+interface/framegeneral/uiframebackground.blp
+
+# bags: slot, sort button, highlight, arrow and glow
+interface/containerframe/bags.blp
+interface/containerframe/bagsitemslot2xc60.blp
+
+# search box: magnifying glass and clear button
+interface/common/commonsearch.blp
+
+# money box
+interface/common/commoncoinbox.blp
+
+# red close button of panels
+interface/buttons/redbuttonsc60.blp
+
+# character sheet side tabs (55 x 60; the Camelot variant is wider than the modern one)
+interface/common/commonsidetabc60.blp
+
+# dropdown lists: Camelot background (c60 variant) and, from the base sheet that has no
+# c60 variant, the checkbox and its yellow check mark
+interface/common/commondropdownc60.blp
+interface/common/commondropdown.blp
+
+# equipment set icon picker: Camelot border (SelectionFrameTemplate, macropopup-* atlases)
+# and its scroll bar (MinimalScrollBar)
+interface/macroframe/macropopupc60.blp
+interface/macroframe/macropopupverticalc60.blp
+interface/buttons/minimalscrollbarproportionalc60.blp
+interface/buttons/minimalscrollbarverticalc60.blp
+
+# Reputation tab: Camelot colored bar (ColoredProgressBarTemplate) and the
+# expand/collapse button of its list headers
+interface/common/commonstatbarc60.blp
+interface/common/commonbuttonlistc60.blp
+
+# PvP tab: the whole Camelot sheet (ring, glow, faction backgrounds, reward ring and the
+# fourteen rank icons, which match the fourteen 3.3.5 ranks). Not named in the listfile:
+# imported by FileDataID.
+fdid:8198433.blp => interface/pvpframe/uicharacterinfohonorc60.blp
+
+# Tracked currencies segment under the backpack money box.
+# ContainerFrameCurrencyBorderTemplate: common-currencybox-left, -right and
+# _common-currencybox-center, three 16 x 34 pieces in the sheet (8 x 17 on screen).
+interface/common/commoncurrencybox.blp
+
+# Minimap. Camelot keeps the mainline Minimap.xml and reskins it in camelot/Skin.lua: the
+# frame, its background and its compass texture take the atlas size, 253 x 253 in the c60
+# variant (mainline: 215 x 226).
+#   uiminimapc60      fixed frame, arrow frame, circle underneath, day/night ring and
+#                     its sun and moon
+#   uiminimap         buttons (tracking, mail, zoom) and the nine-slice of the zone name bar
+interface/hud/uiminimapc60.blp
+interface/hud/uiminimap.blp
+interface/hud/uiminimapbackground.blp
+
+# Vertical edges of the zone name bar nine-slice. UniqueCornersLayout reads them from a
+# separate sheet: corners and horizontal edges are in uiminimap, the center in
+# uiminimapbackground, left and right here.
+interface/hud/uiminimapvertical.blp
+
+# Calendar button, right of the zone name bar (mainline/GameTime.xml).
+# GameTimeFrame_SetDate picks the day of the month: ui-hud-calendar-<day>-up, -down and
+# -mouseover, 21 x 19.
+fdid:4618663.blp => interface/hud/uicalendar.blp
+
+# World map and quest log (docs/CARTE_ET_JOURNAL.md).
+#   questmaplogatlas      panel toggle (QuestCollapse-*), corner shadow, detail
+#                         background, reward item frame
+#   questlogbackground    list background, empty list
+#   gamepadmap*           tiled background and vignettes behind the map
+#                         (OverscrollBG in blizzard_worldmap.xml)
+#   uiframehorizontal / uiframevertical / uiframe
+#                         inner border under the header and around the navigation bar,
+#                         button separators
+#   minimalscrollbarsmallproportionalc60
+#                         thumb of the panel scroll bar
+interface/questframe/questmaplogatlas.blp
+interface/questframe/questlogbackground.blp
+interface/gamepad/gamepadmapbackgroundtile.blp
+interface/gamepad/gamepadmapframe.blp
+interface/framegeneral/uiframehorizontal.blp
+interface/framegeneral/uiframevertical.blp
+# The listfile files it under interface/interface/framegeneral/: imported by FileDataID.
+fdid:1723831.blp => interface/framegeneral/uiframe.blp
+interface/buttons/minimalscrollbarsmallproportionalc60.blp
+
+# Quest log list background at double density. At 3840 x 1600 and UI scale 0.64 one UI
+# unit is 1.33 pixels, and the 1x variant of this large smooth background looks
+# pixelated. Camelot shows the 2x variant on such screens; add_sheets.py scales it back
+# to its logical size (307 x 510).
+interface/questframe/questlogbackground2x.blp
+
+# Quest tracker (docs/SUIVI_DES_QUETES.md): headers, collapse / expand / filter buttons,
+# completed objective check, glows, quest item frame. c60 variant, the one Camelot shows.
+interface/questframe/questtrackerc60.blp
+
+# Spellbook (docs/GRIMOIRE.md): the two open book pages at double density (not named in
+# the listfile: imported by FileDataID), the elements (spell frames, headers, separators,
+# hovers) and their c60 variants, the category icon tabs, and the talents sheet for the
+# passive spell circle (talents-node-circle-gray).
+fdid:8116706.blp => interface/spellbook/spellbookbackgroundpageleft2xc60.blp
+fdid:8116704.blp => interface/spellbook/spellbookbackgroundpageright2xc60.blp
+interface/spellbook/spellbookelements.blp
+interface/spellbook/spellbookelementsc60.blp
+interface/spellbook/spellbooktabsc60.blp
+interface/talentframe/talents.blp
+
+# Spellbook search: preview rows (SpellSearchPreviewResultTemplate): _search-rowbg,
+# search-highlight
+interface/common/search.blp
+
+# Talents (docs/TALENTS.md): the frame and its pieces (c60), arrow lines and each class
+# background (talent-background-<class>); nodes, gates and tips are in talents.blp above.
+# Camelot has no death knight, so its three specs use the modern backgrounds
+# (talents-background-deathknight-blood / -frost / -unholy).
+interface/talentframe/talentsc60.blp
+interface/talentframe/talentsarrowline.blp
+interface/talentframe/talentbackgrounddruid.blp
+interface/talentframe/talentbackgroundhunter.blp
+interface/talentframe/talentbackgroundmage.blp
+interface/talentframe/talentbackgroundpaladin.blp
+interface/talentframe/talentbackgroundpriest.blp
+interface/talentframe/talentbackgroundrogue.blp
+interface/talentframes/talentbackgroundshaman.blp
+interface/talentframe/talentbackgroundwarlock.blp
+interface/talentframe/talentbackgroundwarrior.blp
+interface/talentframe/talentsclassbackgrounddeathknight1.blp
+interface/talentframe/talentsclassbackgrounddeathknight2.blp
+
+# Talents: yellow glow of the Apply button while changes are pending
+# (newplayertutorial-yellowGlow-redbutton-left / -middle / -right)
+interface/helpframe/newplayerexperienceparts.blp
+
+# Social window: Camelot tabs (PanelTabButtonTemplate and TabSystemButtonArtTemplate).
+# Active tabs are in the base sheet, inactive ones in the c60 sheet.
+interface/framegeneral/uiframetabs.blp
+interface/framegeneral/uiframetabsc60.blp
+
+# party frames: Camelot PartyMemberFrame (mainline/partyframetemplates.xml): art, glows,
+# resource bars, vehicle; and the tiny role icons (roleicon-tiny-*)
+interface/hud/uipartyframe.blp
+interface/lfgframe/roleicons.blp
+
+# compact raid frames: dispel overlay fill (CompactUnitFrameDispelOverlayTemplate,
+# RaidFrame-Dispel-Fill)
+interface/raidframe/raidframedispelfill.blp
+# and the debuff border (AuraButtonArtTemplate: ui-debuff-border-<type>-noicon)
+interface/hud/uidebuffframes.blp
+
+# chat window: Camelot friends button
+# (QuickJoinToastButton: quickjoin-button-friendslist-up / -down)
+interface/friendsframe/socialqueuingtoast.blp
+
+# glue screens: login edit boxes (AccountLoginBackdropTemplate -> TooltipMixedLayout:
+# Tooltip-Glues-NineSlice and Tooltip-NineSlice-Center) and the menu header
+# (DialogHeaderTemplate: UI-Frame-DiamondMetal-Header). The red button (128redbutton,
+# 512 x 2048) goes through tools/cut_elements.py.
+interface/glues/common/uiframetooltipgluesc60.blp
+interface/glues/common/uiframetooltipgluesverticalc60.blp
+interface/tooltips/uiframetooltipbackgroundc60.blp
+interface/framegeneral/uiframediamondmetalheader2xc60.blp
+# glue screen dialog (blizzard_staticpopup_glue: GlueDialog,
+# BG.Top = GlueDialogBackgroundTop = UI-DiamondDialogBox-Border)
+interface/dialogframe/uiframediamondmetalborder2xc60.blp
+# options slider (MinimalSliderTemplate: Minimal_SliderBar_*)
+interface/buttons/minimalsliderbarc60.blp
+# options tooltip (SettingsTooltip, SharedTooltipTemplate: TooltipDefaultLayout,
+# Tooltip-NineSlice-*)
+interface/tooltips/uiframetooltipc60.blp
+interface/tooltips/uiframetooltipverticalc60.blp
+# cinematics menu (blizzard_gluexml/mainline/cinematicsmenu.xml): StreamCinematic-*-Large
+# cards, play button and glow
+interface/glues/common/cinematicbuttonslargeatlas.blp
+interface/glues/common/cinematicbuttonsatlas.blp
+# credits backgrounds, one per 3.3.5 expansion (CreditsScreen-Background-n)
+interface/credits/creditsscreenbackground0wowc60.blp
+interface/credits/creditsscreenbackground1bc.blp
+interface/credits/creditsscreenbackground2wotlk.blp
+# character list background: heavybronze-frame-background-c60 (1024 x 1024; the
+# inventoried screens table uses the 2048 version, which 3.3.5 does not display)
+fdid:8216846 => interface/glues/characterselect/heavybronzeframebackgroundc60.blp
+# character creation: c60 sheet of rings and icons (character-create-icon-*,
+# charactercreate-gendericon-*-c60); already in the workspace, listed here to get its
+# -c60 names in the table
+fdid:8203433 => interface/unknown/8203433.blp
+# character select: minimal scroll bar (thin thumb, pressed arrows), visibility (eye)
+# buttons from the part2 sheet
+interface/buttons/minimalscrollbarsmallverticalc60.blp
+interface/buttons/minimalscrollbarproportional.blp
+interface/buttons/128redbuttonpart2c60.blp
+interface/buttons/128redbuttonpart2.blp
+# creation, customization: gray name box (common-gray-button-entrybox-left / -right /
+# -center, c60 sheet 1024 x 1024)
+fdid:8117690 => interface/common/commongraybuttonentryboxc60.blp
+# keyring: double-density icon (ui-hud-actionbar-keyring-small-c60-2x, 54 x 80); the
+# 1x one (27 x 40) is enlarged and looks pixelated
+interface/hud/uiactionbar2xc60.blp
+# tooltips: comparison tooltip header (tooltip-compare-label, CompareHeader of
+# ShoppingTooltipTemplate)
+interface/tooltip/tooltiplabel.blp
+# settings: category expand button (common-button-dropdown-open / -closed,
+# SettingsCategoryListButtonTemplate)
+interface/common/commonbuttonsdropdown.blp
+# color picker: checkerboard behind the opacity column
+# (colorpicker-checkerboard, mainline/colorpickerframe.xml)
+interface/dialogframe/colorpicker.blp
+# zone map: BattlefieldMapFrame border (battlefieldminimap-border-*,
+# mainline/blizzard_battlefieldmap.xml)
+interface/battlefieldframe/battlefieldminimap.blp
+# merchant: bottom background and repair icons
+# (UI-Merchant-BotFrame, SpellIcon-256x256-Repair*, mainline/merchantframe.xml)
+interface/merchantframe/merchant.blp
+# bank: background, slots, bags, padlock, divider, shadows (camelot/bankframe.xml,
+# mainline/bankframetemplates.xml); bank slot (bags-item-bankslot64)
+interface/bankframe/bankframepanelc60.blp
+interface/bankframe/bankframebackgroundc60.blp
+interface/bankframe/bankframe.blp
+interface/bankframe/bankframevertical.blp
+interface/containerframe/bagsitembankslot2xc60.blp
+# auction house: category buttons, rows, sort arrow, icon frames (auctionhouse-nav-button*,
+# auctionhouse-ui-row-*, auctionhouse-rowstripe-*, auctionhouse-ui-sortarrow,
+# auctionhouse-itemicon-*; blizzard_auctionhouseui/mainline and shared)
+interface/auctionframe/auctionhouse.blp
+# gossip and quest: parchment background (QuestBG-Parchment,
+# mainline/gossipframe.lua and questframetemplates.xml)
+interface/questframe/questbackgroundparchment.blp
+# socketing: socket backgrounds and brackets per color (socket-<kit>-background / -closed
+# / -open, blizzard_itemsocketingui.lua)
+interface/itemsocketingframe/sockets.blp
+# professions (blizzard_professions, Camelot variant): window background
+# (Profession-Background-Overview, unnamed sheet), crafting page background
+# (Profession-Background-Template2), per-profession recipe card backgrounds
+# (Profession-background-card-<profession>, for the 3.3.5 professions Camelot draws),
+# fallback card (Professions-Recipe-Background), recipe frame (common-insideframe)
+fdid:8164399.blp => interface/professions/professionoverviewbackgroundc60.blp
+interface/professions/professiontrainerbackgroundc60.blp
+interface/professions/professioncardbackgroundalchemyc60.blp
+interface/professions/professioncardbackgroundblacksmithingc60.blp
+interface/professions/professioncardbackgroundcookingc60.blp
+interface/professions/professioncardbackgroundenchantingc60.blp
+interface/professions/professioncardbackgroundengineeringc60.blp
+interface/professions/professioncardbackgroundfirstaidc60.blp
+interface/professions/professioncardbackgroundleatherworkingc60.blp
+interface/professions/professioncardbackgroundminingc60.blp
+interface/professions/professioncardbackgroundtailoringc60.blp
+interface/professions/professionbackgroundart.blp
+interface/common/commoninsideframec60.blp
+# professions book (blizzard_professionsbook, Camelot variant): card pieces
+# (Profession-ProgressBar-BG / -frame, Profession-button-red-crossmark,
+# Profession-square-frame; unnamed sheet), the generic and secondary cards
+# (Profession-overview-Card, -card-generic-cooking / -fishing / -firstaid), and the
+# gathering cards missing from the sheets above (herbalism, skinning)
+fdid:8164391.blp => interface/professions/professionsbookc60.blp
+interface/professions/professioncardbackgroundgenericc60.blp
+interface/professions/professioncardbackgroundherbalismc60.blp
+interface/professions/professioncardbackgroundskinningc60.blp

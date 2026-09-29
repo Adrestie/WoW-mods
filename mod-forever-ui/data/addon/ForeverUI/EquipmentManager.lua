@@ -1,422 +1,275 @@
--- ForeverUI : le gestionnaire d'equipement, dans le volet droit.
---
--- RELEVE -- camelot/PaperDollFrame.xml, PaperDollFrame.EquipmentManagerPane :
---   ancre       TOPLEFT sur le BOTTOMLEFT de la bande de pierre du volet,
---               BOTTOMRIGHT sur le volet lui-meme.
---   bordure     common-insideframe, TOPLEFT (1, 1) et BOTTOMRIGHT (-4, 2).
---   liste       TOPLEFT (5, -8), BOTTOMRIGHT (-20, 105).
---   trait       UI-Character-Info-ScrollLine, au TOP du BOTTOM de la liste.
---   Equip       99 x 28, BOTTOM (-50, 20), intitule EQUIPSET_EQUIP.
---   Save        99 x 28, BOTTOM (50, 20), intitule SAVE.
---   New Set     180 x 34, BOTTOM (0, 50), avec UI-Character-Info-Icon-Add
---               a LEFT (13).
---
--- RELEVE -- camelot, GearSetButtonTemplate, la carte d'un ensemble :
---   cadre       169 x 44
---   fond        UI-Character-Info-OutfitCard, 152 x 49, TOPLEFT x = 42
---   survol      UI-Character-Info-OutfitCard-Hover, meme place
---   choisi      UI-Character-Info-OutfitCard-Selected, meme place
---   coche       UI-Character-Info-Icon-Tick, RIGHT (-23, 0), montree quand
---               l'ensemble est PORTE (PaperDollEquipmentManagerPane_InitButton)
---   intitule    GameFontNormalLeft, 98 x 38, LEFT (55)
---   icone       36 x 36, LEFT (4), cerclee de
---               UI-Character-Info-OutfitIcon-Frame, centree dessus
---
--- CE QUE LE CLIENT PORTE. GearManagerDialog, une fenetre de 261 x 155 sur
--- UIPanelDialogTemplate, avec GearSetButton1..MAX_EQUIPMENT_SETS_PER_PLAYER
--- poses EN GRILLE de cinq, et trois boutons : Delete, Equip, Save. Une carte
--- y est un CheckButton de 36 sur PopupButtonTemplate -- son icone est sa
--- NormalTexture, son intitule le $parentName sous elle, et un fond
--- UI-EmptySlot-Disabled derriere.
---
--- Rien n'est recree : la fenetre du client passe dans le volet, ses cartes
--- se reposent en colonne et se rhabillent, ses boutons gardent leur clic.
--- C'est lui qui tient la liste, la selection et les infobulles.
---
--- CE QUI DIFFERE, ET POURQUOI.
---   3.3.5 n'a pas de bouton "New Set" : on y cree un ensemble par Save, qui
---   ouvre la fenetre de nom. Le notre fait la meme chose apres avoir vide la
---   selection, ce qui est exactement "enregistrer sous un nouveau nom".
---   Le bouton Delete du client n'a pas d'equivalent chez camelot, qui efface
---   un ensemble par le menu de sa carte -- menu que 3.3.5 n'a pas. Il est
---   donc GARDE, a droite de Save, plutot que de retirer la seule facon
---   d'effacer un ensemble.
---   GetEquipmentSetInfo ne dit pas si un ensemble est porte. La coche se
---   calcule donc depuis GetEquipmentSetLocations : l'ensemble est porte
---   quand chacune de ses pieces est sur le joueur et hors des sacs.
---   La barre de defilement de camelot (MinimalScrollBar) n'est pas portee :
---   la liste defile a la molette, et le trait de camelot marque son bas.
+-- Equipment manager page of the character sheet's right pane (camelot EquipmentManagerPane).
+-- The client's GearManagerDialog is moved into the pane and its set buttons are reskinned as
+-- cards; the client keeps the list, the selection, the tooltips and the clicks.
+-- Sizes and anchors: camelot PaperDollFrame.xml and GearSetButtonTemplate.
 
 ForeverUI = ForeverUI or {}
 local L = ForeverUI.L
 
--- ECARTS ASSUMES, sur demande. camelot donne une carte de 169 x 44 dont le
--- fond fait 152 x 49 pose a x = 42. Ici :
---
---   * la liste glisse de 4 vers la droite (LISTE_X de 5 a 9) ;
---   * la carte est moins haute -- 40 au lieu de 44, le fond suivant a 45,
---     l'image gardant les 5 de debord de la source ;
---   * le fond est plus large, pour que l'ecart entre le separateur des
---     volets et le bord gauche d'une icone soit CELUI du bord droit de la
---     fenetre au bord droit de la carte.
---
--- Le calcul de cette largeur, en abscisses du volet (233 de large) :
---   le separateur est pose a -6 et fait 11 -> son bord droit tombe a 5
---   l'icone commence a LISTE_X + 4            -> 13, donc 8 d'ecart
---   la carte finit a LISTE_X + 42 + largeur   -> il faut 233 - 8 = 225
---   d'ou largeur = 225 - 9 - 42 = 174
--- Le bouton, lui, couvre toute la carte : 42 + 174.
-local CARTE_FOND_L, CARTE_FOND_H = 174, 45
-local CARTE_FOND_X = 42
-local CARTE_L, CARTE_H = CARTE_FOND_X + CARTE_FOND_L, 40
-local CARTE_ICONE, CARTE_ICONE_X = 36, 4
-local CARTE_TEXTE_X = 55
-local CARTE_TEXTE_L, CARTE_TEXTE_H = 98, 38
--- ECART ASSUME, sur demande. camelot ancre sa coche a RIGHT (-23) du
--- BOUTON, qui chez lui s'arrete 25 px avant le bord de la carte : la coche
--- tombe donc bien a l'interieur. Ici le bouton couvre toute la carte, si
--- bien que le meme -23 la ramenait trop vers la gauche. Elle est donc posee
--- par rapport au bord DROIT de la carte, qu'elle longe a 12.
-local COCHE_X = -12
+-- Card layout differs from camelot's GearSetButtonTemplate (card 169 x 44, background 152 x 49
+-- at x = 42): list at x = 9, card 40 high, background 174 x 45 (the art keeps its 5 px overhang).
+-- Width 174 makes the gap from the pane separator to the icon (8 px) equal the gap from the card
+-- to the pane's right edge: 233 - 8 - LIST_X - 42 = 174. The button covers the whole card.
+local CARD_BACKGROUND_W, CARD_BACKGROUND_H = 174, 45
+local CARD_BACKGROUND_X = 42
+local CARD_W, CARD_H = CARD_BACKGROUND_X + CARD_BACKGROUND_W, 40
+local CARD_ICON, CARD_ICON_X = 36, 4
+local CARD_TEXT_X = 55
+local CARD_TEXT_W, CARD_TEXT_H = 98, 38
+-- camelot anchors the checkmark at RIGHT -23 of a button that ends 25 px before the card edge.
+-- Here the button covers the whole card, so the checkmark sits 12 px from the card's right edge.
+local CHECKMARK_X = -12
 
-local LISTE_X, LISTE_Y = 9, -8
-local LISTE_X2, LISTE_Y2 = -20, 105
-local BOUTON_L, BOUTON_H = 99, 28
-local BOUTON_Y, BOUTON_ECART = 20, 50
-local NOUVEAU_L, NOUVEAU_H = 180, 34
-local NOUVEAU_Y, NOUVEAU_ICONE_X = 50, 13
--- LA BORDURE SE DECOUPE, ELLE NE S'ETIRE PAS. common-insideframe fait
--- 107 x 107 et porte un MOTIF dans chaque angle : tendue sur les 233 x 379
--- du panneau, elle est multipliee par deux en largeur et par trois et demi
--- en hauteur, et tout se brouille.
---
--- Mesure sur l'art : le filet occupe 2..12 et 94..104 sur les deux axes, et
--- le motif d'angle s'arrete a 19 -- des x = 20 le profil n'est plus que le
--- filet. Le coin vaut donc 20, ce qui laisse une bande centrale de 67.
---
--- Les marges viennent de camelot, qui ancre sa bordure en TOPLEFT (1, 1) et
--- BOTTOMRIGHT (-4, 2) : converties dans la convention du decoupage -- de
--- combien l'image deborde du cadre -- cela donne -1, 1, -4, -2.
---
--- ECART ASSUME, sur demande : toute la bordure est decalee de 3 px vers la
--- droite. Les deux bords bougent ensemble -- le gauche de -1 a -4, le droit
--- de -4 a -1 -- sinon elle s'elargirait au lieu de glisser.
-local BORDURE_COIN = 20
-local BORDURE_MARGES = { -4, 1, -1, -2 }
+local LIST_X, LIST_Y = 9, -8
+local LIST_Y2 = 105
+local BUTTON_W, BUTTON_H = 99, 28
+local BUTTON_Y, BUTTON_GAP = 20, 50
+local NEW_BUTTON_W, NEW_BUTTON_H = 180, 34
+local NEW_BUTTON_Y, NEW_BUTTON_ICON_X = 50, 13
+-- common-insideframe (107 x 107) has a pattern in each corner: nine-sliced, not stretched.
+-- Corner 20: the corner pattern ends at 19 px.
+-- Margins from camelot's TOPLEFT (1, 1) / BOTTOMRIGHT (-4, 2), shifted 3 px to the right.
+local BORDER_CORNER = 20
+local BORDER_MARGINS = { -4, 1, -1, -2 }
 
-local ATLAS_FOND = "ui-character-info-outfitcard"
-local ATLAS_SURVOL = "ui-character-info-outfitcard-hover"
-local ATLAS_CHOISI = "ui-character-info-outfitcard-selected"
-local ATLAS_COCHE = "ui-character-info-icon-tick"
-local ATLAS_CERCLE = "ui-character-info-outfiticon-frame"
+local ATLAS_BACKGROUND = "ui-character-info-outfitcard"
+local ATLAS_HOVER = "ui-character-info-outfitcard-hover"
+local ATLAS_SELECTED = "ui-character-info-outfitcard-selected"
+local ATLAS_CHECKMARK = "ui-character-info-icon-tick"
+local ATLAS_CIRCLE = "ui-character-info-outfiticon-frame"
 local ATLAS_PLUS = "ui-character-info-icon-add"
-local ATLAS_BORDURE = "common-insideframe"
-local ATLAS_TRAIT = "ui-character-info-scrollline"
+local ATLAS_BORDER = "common-insideframe"
+local ATLAS_LINE = "ui-character-info-scrollline"
 
--- RELEVE -- camelot, GearSetButtonTemplate, les deux boutons de survol :
---
---   $parentDeleteButton  14 x 14, BOTTOMRIGHT (-21, 2)
---                        Interface\\Buttons\\UI-GroupLoot-Pass-Up, alpha 0,5
---                        au repos et 1 au survol ; enfonce, la texture
---                        glisse de (1, -1). Infobulle DELETE. Au clic :
---                        StaticPopup_Show("CONFIRM_DELETE_EQUIPMENT_SET").
---   $parentEditButton    16 x 16, RIGHT sur le LEFT du precedent, x = -1
---                        Interface\\WorldMap\\GEAR_64GREY, memes alphas.
---
--- Les deux ne paraissent QUE sur la carte survolee -- camelot le decide
--- dans PaperDollEquipmentManagerPane_OnUpdate, en interrogeant IsMouseOver
--- a chaque image. On fait de meme : un OnEnter ne suffirait pas, il part
--- des qu'on entre sur l'un de ces deux boutons, qui sont des cadres fils.
---
--- CE QUI DIFFERE. L'engrenage de camelot ouvre un menu d'assignation de
--- SPECIALISATION (C_EquipmentSet.AssignSpecToEquipmentSet), qui n'existe
--- pas en 3.3.5. A la demande, il rouvre ici la fenetre de creation sur
--- l'ensemble choisi : le client la remplit alors de son nom et de son
--- icone (RecalculateGearManagerDialogPopup), et son Okay voit que le nom
--- existe deja -- il demande confirmation puis ECRASE l'ensemble au lieu
--- d'en creer un.
--- EQUIPMENT_SET_SETTINGS, l'infobulle de camelot, n'existe pas ici :
--- SETTINGS est la plus proche que ce client porte.
-local SUPPRIMER = 14
-local SUPPRIMER_X, SUPPRIMER_Y = -21, 2
-local EDITER = 16
-local EDITER_X = -1
-local ICONE_SUPPRIMER = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
-local ICONE_EDITER = "Interface\\WorldMap\\GEAR_64GREY"
-local REPOS, SURVOL = 0.5, 1.0
+-- camelot GearSetButtonTemplate hover buttons: Delete 14 x 14 at BOTTOMRIGHT (-21, 2), Edit
+-- 16 x 16 left of it (-1); alpha 0.5 idle, 1 on hover; the texture shifts (1, -1) when pressed.
+-- camelot's gear assigns a specialization, which 3.3.5 lacks: here it reopens the save popup on
+-- the set to rename it or change its icon. SETTINGS replaces the missing EQUIPMENT_SET_SETTINGS.
+local DELETE_SIZE = 14
+local DELETE_X, DELETE_Y = -21, 2
+local EDIT_SIZE = 16
+local EDIT_X = -1
+local DELETE_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+local EDIT_ICON = "Interface\\WorldMap\\GEAR_64GREY"
+local IDLE, HOVER = 0.5, 1.0
 
-local panneau, decalage = nil, 0
+local panel, offset = nil, 0
 
--- MODIFIER UN ENSEMBLE : CE QUE 3.3.5 PERMET, ET COMMENT.
---
--- Ce client n'a PAS de ModifyEquipmentSet -- verifie dans Wow.exe. Il n'a
--- que SaveEquipmentSet(nom, icone), qui enregistre L'EQUIPEMENT PORTE sous
--- ce nom, et DeleteEquipmentSet(nom). Changer le nom ou l'icone sans
--- toucher a la liste d'objets est donc impossible directement.
---
--- LE CHEMIN RETENU, sur decision : equiper l'ancien ensemble -- l'equipement
--- porte DEVIENT alors sa liste -- l'enregistrer sous le nouveau nom et la
--- nouvelle icone, effacer l'ancien, et remettre le nouveau a la place de
--- l'ancien dans la liste. Les objets sont ainsi conserves a l'identique.
---
--- Deux consequences assumees :
---   * le personnage change reellement d'equipement le temps de l'operation ;
---   * elle est ASYNCHRONE -- UseEquipmentSet rend la main avant la fin, et
---     c'est EQUIPMENT_SWAP_FINISHED(termine, nom) qui l'annonce. Si
---     l'ensemble est deja porte, rien n'est a equiper et on enchaine.
---
--- L'ORDRE D'AFFICHAGE est tenu par nous : 3.3.5 n'a aucun moyen de replacer
--- un ensemble dans sa liste, l'ordre du client etant celui de creation. Le
--- notre vit dans ForeverUIDB, et c'est lui qui pose les cartes.
-local edition
-local fermetureVoulue                   -- on ferme la fenetre nous-memes
-local EDITION_DELAI = 10                -- secondes avant d'abandonner
+-- Editing a set. 3.3.5 has no ModifyEquipmentSet: SaveEquipmentSet(name, icon) saves the worn
+-- gear. So an edit equips the old set, saves it under the new name and icon, deletes the old one
+-- and gives the new name the old one's rank. The swap is asynchronous (EQUIPMENT_SWAP_FINISHED).
+-- 3.3.5 lists sets in creation order; the display order is kept in ForeverUIDB.setOrder.
+local editSession
+local intendedClose                   -- set while the addon hides the popup itself
+local EDIT_TIMEOUT = 10                -- seconds before an edit is abandoned
 
-local function ordreRetenu()
+local function savedOrder()
 	ForeverUIDB = ForeverUIDB or {}
-	ForeverUIDB.ordreEnsembles = ForeverUIDB.ordreEnsembles or {}
-	return ForeverUIDB.ordreEnsembles
+	ForeverUIDB.setOrder = ForeverUIDB.setOrder or {}
+	return ForeverUIDB.setOrder
 end
 
-local function rangDe(nom)
-	for rang, connu in ipairs(ordreRetenu()) do
-		if connu == nom then
-			return rang
-		end
-	end
-	return nil
-end
-
--- Les ensembles du client, dans NOTRE ordre ; ceux qu'on ne connait pas
--- encore prennent la fin de la liste.
-local function ensemblesOrdonnes()
+-- Client set indices in the saved order; sets not yet known go last.
+local function orderedSets()
 	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
-	local parNom, dans = {}, {}
+	local byName, inside = {}, {}
 	for index = 1, total do
-		local nom = GetEquipmentSetInfo(index)
-		if nom then
-			parNom[nom] = index
+		local name = GetEquipmentSetInfo(index)
+		if name then
+			byName[name] = index
 		end
 	end
 
-	-- L'ORDRE RETENU NE GARDE QU'UNE FOIS CHAQUE NOM.
-	--
-	-- Il finissait par en tenir plusieurs copies : un nom que le client ne
-	-- publie pas a cet instant est saute par la premiere boucle, et la
-	-- seconde le rajoute des qu'il reparait. Quelques operations suffisaient
-	-- a obtenir "aab, aab, aze, aab, azq, zzzaq, aab". Chaque copie prenait
-	-- un rang, l'ensemble se posait quatre fois, et la carte finissait a un
-	-- rang au-dela du nombre d'ensembles -- donc masquee, liste vide.
-	--
-	-- ET IL SE NETTOIE, mais SEULEMENT quand le client publie quelque chose.
-	-- L'elaguer sans condition etait la faute d'avant : entre un
-	-- enregistrement et son evenement, le client ne rend AUCUN ensemble, et
-	-- la table se vidait pour de bon. A zero ensemble publie, on ne touche
-	-- a rien.
-	local ordre = ordreRetenu()
+	-- Each name is kept once: duplicates take several ranks and push the card past the last rank.
+	-- The saved order is pruned only when the client lists at least one set: between a save and
+	-- its event the client lists none, and pruning would empty it.
+	local order = savedOrder()
 
-	local liste, retenu = {}, {}
-	for _, nom in ipairs(ordre) do
-		if parNom[nom] and not dans[nom] then
-			liste[#liste + 1] = parNom[nom]
-			dans[nom] = true
-			retenu[#retenu + 1] = nom
+	local list, kept = {}, {}
+	for _, name in ipairs(order) do
+		if byName[name] and not inside[name] then
+			list[#list + 1] = byName[name]
+			inside[name] = true
+			kept[#kept + 1] = name
 		end
 	end
 	for index = 1, total do
-		local nom = GetEquipmentSetInfo(index)
-		if nom and not dans[nom] then
-			liste[#liste + 1] = index
-			dans[nom] = true
-			retenu[#retenu + 1] = nom
+		local name = GetEquipmentSetInfo(index)
+		if name and not inside[name] then
+			list[#list + 1] = index
+			inside[name] = true
+			kept[#kept + 1] = name
 		end
 	end
 
 	if total > 0 then
-		for rang = #ordre, 1, -1 do
-			ordre[rang] = nil
+		for rank = #order, 1, -1 do
+			order[rank] = nil
 		end
-		for rang, nom in ipairs(retenu) do
-			ordre[rang] = nom
+		for rank, name in ipairs(kept) do
+			order[rank] = name
 		end
 	end
-	return liste
+	return list
 end
-ForeverUI.EquipmentSetsOrder = ensemblesOrdonnes
+ForeverUI.EquipmentSetsOrder = orderedSets
 
--- QUEL ENSEMBLE EST PORTE. Deux questions, et je n'en avais traite
--- qu'une, mal.
---
--- 1. LA PIECE EST-ELLE DANS LE BON EMPLACEMENT ? GetEquipmentSetLocations
---    rend une table indexee par EMPLACEMENT d'equipement, et
---    EquipmentManager_UnpackLocation rend "joueur, banque, sacs, SLOT".
---    Je ne lisais que les deux premiers drapeaux : une piece portee dans un
---    AUTRE emplacement passait pour bonne, d'ou des coches sur des
---    ensembles sans rapport. Il faut comparer le slot rendu a la CLE.
---
--- 2. DEUX ENSEMBLES AUX MEMES PIECES. Si deux ensembles decrivent le meme
---    equipement, la geometrie ne peut pas les departager : tous deux sont
---    "portes". 3.3.5 n'a AUCUNE notion d'ensemble actif -- son propre
---    gestionnaire n'affiche d'ailleurs rien de tel. On retient donc le
---    dernier ensemble equipe, en se greffant sur UseEquipmentSet, et la
---    coche va a celui-la -- a condition qu'il soit encore porte, sinon
---    elle disparait des que le joueur change une piece a la main.
-local function piecesEnPlace(nom)
-	if not nom or not GetEquipmentSetLocations or not EquipmentManager_UnpackLocation then
+-- A set is worn when each piece is in its own slot (the unpacked slot must match the key).
+-- 3.3.5 has no active set and two sets can hold the same pieces, so the checkmark goes to the
+-- last set equipped (UseEquipmentSet hook), only while it is still worn.
+local function piecesInPlace(name)
+	if not name or not GetEquipmentSetLocations or not EquipmentManager_UnpackLocation then
 		return false
 	end
 
-	local places = GetEquipmentSetLocations(nom)
-	if not places then
+	local locations = GetEquipmentSetLocations(name)
+	if not locations then
 		return false
 	end
 
-	local vu = false
-	for emplacement, place in pairs(places) do
-		if type(place) == "number" and place > 1 then
-			local joueur, _, sacs, slot = EquipmentManager_UnpackLocation(place)
-			if not joueur or sacs or slot ~= emplacement then
+	local found = false
+	for slotId, location in pairs(locations) do
+		if type(location) == "number" and location > 1 then
+			local player, _, bags, slot = EquipmentManager_UnpackLocation(location)
+			if not player or bags or slot ~= slotId then
 				return false
 			end
-			vu = true
+			found = true
 		end
 	end
-	return vu
+	return found
 end
 
-local function ensembleActif()
+-- Name of the last set equipped.
+local function activeSet()
 	ForeverUIDB = ForeverUIDB or {}
-	return ForeverUIDB.ensembleEquipe
+	return ForeverUIDB.equippedSet
 end
 
-local function ensemblePorte(nom)
-	return nom ~= nil and nom == ensembleActif() and piecesEnPlace(nom)
+local function isSetWorn(name)
+	return name ~= nil and name == activeSet() and piecesInPlace(name)
 end
-ForeverUI.EquipmentSetWorn = ensemblePorte
 
--- Le dernier ensemble equipe, retenu d'une session a l'autre.
+-- Remember the last set equipped, across sessions.
 if hooksecurefunc and type(UseEquipmentSet) == "function" then
-	hooksecurefunc("UseEquipmentSet", function(nom)
+	hooksecurefunc("UseEquipmentSet", function(name)
 		ForeverUIDB = ForeverUIDB or {}
-		ForeverUIDB.ensembleEquipe = nom
+		ForeverUIDB.equippedSet = name
 		if ForeverUI.EquipmentSetsLayout then
 			ForeverUI.EquipmentSetsLayout()
 		end
 	end)
 end
 
--- Combien de cartes tiennent dans la liste, et ou elle commence.
-local function hauteurListe()
-	if not panneau then
+-- Height of the card list, and how many cards fit in it.
+local function listHeight()
+	if not panel then
 		return 0
 	end
-	return panneau:GetHeight() - (-LISTE_Y) - LISTE_Y2
+	return panel:GetHeight() - (-LIST_Y) - LIST_Y2
 end
 
-local function cartesVisibles()
-	local place = math.floor(hauteurListe() / CARTE_H)
-	if place < 1 then
-		place = 1
+local function visibleCards()
+	local location = math.floor(listHeight() / CARD_H)
+	if location < 1 then
+		location = 1
 	end
-	return place
+	return location
 end
 
--- La carte : le cadre du client, rhabille une seule fois.
-local function habillerCarte(bouton)
-	if bouton.foreverCarte then
+-- Reskins a client set button as a card, once.
+local function skinCard(button)
+	if button.foreverCard then
 		return
 	end
 
-	bouton:SetWidth(CARTE_L)
-	bouton:SetHeight(CARTE_H)
+	button:SetWidth(CARD_W)
+	button:SetHeight(CARD_H)
 
-	-- Le fond d'emplacement vide de 3.3.5 s'en va ; l'icone, elle, est la
-	-- NormalTexture du bouton et doit rester.
-	local icone = bouton:GetNormalTexture()
-	local regions = { bouton:GetRegions() }
+	-- Hide the 3.3.5 empty-slot background; the icon is the button's NormalTexture and stays.
+	local icon = button:GetNormalTexture()
+	local regions = { button:GetRegions() }
 	for _, region in ipairs(regions) do
-		if region ~= icone and region.GetObjectType and region:GetObjectType() == "Texture" then
-			local chemin = region.GetTexture and region:GetTexture()
-			if type(chemin) == "string" and string.find(string.lower(chemin), "emptyslot") then
+		if region ~= icon and region.GetObjectType and region:GetObjectType() == "Texture" then
+			local path = region.GetTexture and region:GetTexture()
+			if type(path) == "string" and string.find(string.lower(path), "emptyslot") then
 				region:SetAlpha(0)
 			end
 		end
 	end
-	if bouton:GetHighlightTexture() then
-		bouton:GetHighlightTexture():SetAlpha(0)
+	if button:GetHighlightTexture() then
+		button:GetHighlightTexture():SetAlpha(0)
 	end
-	if bouton.GetCheckedTexture and bouton:GetCheckedTexture() then
-		bouton:GetCheckedTexture():SetAlpha(0)
+	if button.GetCheckedTexture and button:GetCheckedTexture() then
+		button:GetCheckedTexture():SetAlpha(0)
 	end
 
-	local function carte(atlas, couche)
-		local t = bouton:CreateTexture(nil, couche)
+	local function map(atlas, layer)
+		local t = button:CreateTexture(nil, layer)
 		ForeverUI.SetAtlas(t, atlas, true)
-		t:SetWidth(CARTE_FOND_L)
-		t:SetHeight(CARTE_FOND_H)
-		t:SetPoint("TOPLEFT", bouton, "TOPLEFT", CARTE_FOND_X, 0)
+		t:SetWidth(CARD_BACKGROUND_W)
+		t:SetHeight(CARD_BACKGROUND_H)
+		t:SetPoint("TOPLEFT", button, "TOPLEFT", CARD_BACKGROUND_X, 0)
 		return t
 	end
 
-	-- LE CHOIX PASSE AU-DESSUS DU SURVOL. Ils etaient sur le meme calque,
-	-- ou seul l'ordre de creation departage -- trop fragile pour une regle
-	-- d'affichage. Le survol reste en BORDER, le choix monte en ARTWORK :
-	-- l'ordre ne depend plus de rien.
-	bouton.foreverFond = carte(ATLAS_FOND, "BACKGROUND")
-	bouton.foreverSurvol = carte(ATLAS_SURVOL, "BORDER")
-	bouton.foreverSurvol:Hide()
-	bouton.foreverChoisi = carte(ATLAS_CHOISI, "ARTWORK")
-	bouton.foreverChoisi:Hide()
+	-- Selected (ARTWORK) draws above hover (BORDER), whatever the creation order.
+	button.foreverBackground = map(ATLAS_BACKGROUND, "BACKGROUND")
+	button.foreverHover = map(ATLAS_HOVER, "BORDER")
+	button.foreverHover:Hide()
+	button.foreverSelected = map(ATLAS_SELECTED, "ARTWORK")
+	button.foreverSelected:Hide()
 
-	if icone then
-		icone:ClearAllPoints()
-		icone:SetWidth(CARTE_ICONE)
-		icone:SetHeight(CARTE_ICONE)
-		icone:SetPoint("LEFT", bouton, "LEFT", CARTE_ICONE_X, 0)
-		icone:SetDrawLayer("ARTWORK")
+	if icon then
+		icon:ClearAllPoints()
+		icon:SetWidth(CARD_ICON)
+		icon:SetHeight(CARD_ICON)
+		icon:SetPoint("LEFT", button, "LEFT", CARD_ICON_X, 0)
+		icon:SetDrawLayer("ARTWORK")
 	end
 
-	local cercle = bouton:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(cercle, ATLAS_CERCLE)
-	cercle:SetPoint("CENTER", icone or bouton, "CENTER", 0, 0)
+	local circle = button:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(circle, ATLAS_CIRCLE)
+	circle:SetPoint("CENTER", icon or button, "CENTER", 0, 0)
 
-	local coche = bouton:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(coche, ATLAS_COCHE)
-	coche:SetPoint("RIGHT", bouton, "RIGHT", COCHE_X, 0)
-	coche:Hide()
-	bouton.foreverCoche = coche
+	local checkMark = button:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(checkMark, ATLAS_CHECKMARK)
+	checkMark:SetPoint("RIGHT", button, "RIGHT", CHECKMARK_X, 0)
+	checkMark:Hide()
+	button.foreverCheck = checkMark
 
-	local texte = _G[bouton:GetName() .. "Name"]
-	if texte then
-		texte:ClearAllPoints()
-		texte:SetFontObject(GameFontNormalLeft or GameFontNormal)
-		texte:SetWidth(CARTE_TEXTE_L)
-		texte:SetHeight(CARTE_TEXTE_H)
-		texte:SetJustifyH("LEFT")
-		texte:SetPoint("LEFT", bouton, "LEFT", CARTE_TEXTE_X, 0)
+	local text = _G[button:GetName() .. "Name"]
+	if text then
+		text:ClearAllPoints()
+		text:SetFontObject(GameFontNormalLeft or GameFontNormal)
+		text:SetWidth(CARD_TEXT_W)
+		text:SetHeight(CARD_TEXT_H)
+		text:SetJustifyH("LEFT")
+		text:SetPoint("LEFT", button, "LEFT", CARD_TEXT_X, 0)
 	end
 
-	-- LES DEUX BOUTONS DE SURVOL.
-	local function petitBouton(nom, cote, icone, infobulle, clic)
-		local b = CreateFrame("Button", bouton:GetName() .. nom, bouton)
-		b:SetWidth(cote)
-		b:SetHeight(cote)
-		b:SetFrameLevel(bouton:GetFrameLevel() + 2)
+	-- Delete and edit buttons, shown on the hovered card.
+	-- name: frame name suffix; side: size; icon: texture path; tooltip: tooltip text
+	local function smallButton(name, side, icon, tooltip, onClick)
+		local b = CreateFrame("Button", button:GetName() .. name, button)
+		b:SetWidth(side)
+		b:SetHeight(side)
+		b:SetFrameLevel(button:GetFrameLevel() + 2)
 
 		local t = b:CreateTexture(nil, "ARTWORK")
-		t:SetTexture(icone)
+		t:SetTexture(icon)
 		t:SetAllPoints(b)
-		t:SetAlpha(REPOS)
+		t:SetAlpha(IDLE)
 		b.texture = t
 
 		b:SetScript("OnEnter", function(self)
-			self.texture:SetAlpha(SURVOL)
+			self.texture:SetAlpha(HOVER)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetText(infobulle)
+			GameTooltip:SetText(tooltip)
 			GameTooltip:Show()
 		end)
 		b:SetScript("OnLeave", function(self)
-			self.texture:SetAlpha(REPOS)
+			self.texture:SetAlpha(IDLE)
 			GameTooltip:Hide()
 		end)
 		b:SetScript("OnMouseDown", function(self)
@@ -428,518 +281,463 @@ local function habillerCarte(bouton)
 			self.texture:ClearAllPoints()
 			self.texture:SetAllPoints(self)
 		end)
-		b:SetScript("OnClick", clic)
+		b:SetScript("OnClick", onClick)
 		b:Hide()
 		return b
 	end
 
-	bouton.foreverSupprimer = petitBouton("ForeverUIDelete", SUPPRIMER,
-		ICONE_SUPPRIMER, DELETE, function(self)
-			local carte = self:GetParent()
-			if not carte.name or carte.name == "" then
+	button.foreverDelete = smallButton("ForeverUIDelete", DELETE_SIZE,
+		DELETE_ICON, DELETE, function(self)
+			local map = self:GetParent()
+			if not map.name or map.name == "" then
 				return
 			end
-			local fenetre = StaticPopup_Show("CONFIRM_DELETE_EQUIPMENT_SET", carte.name)
-			if fenetre then
-				fenetre.data = carte.name
+			local window = StaticPopup_Show("CONFIRM_DELETE_EQUIPMENT_SET", map.name)
+			if window then
+				window.data = map.name
 			elseif UIErrorsFrame then
 				UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
 			end
 		end)
-	bouton.foreverSupprimer:SetPoint("BOTTOMRIGHT", bouton, "BOTTOMRIGHT",
-		SUPPRIMER_X, SUPPRIMER_Y)
+	button.foreverDelete:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT",
+		DELETE_X, DELETE_Y)
 
-	bouton.foreverEditer = petitBouton("ForeverUIEdit", EDITER,
-		ICONE_EDITER, SETTINGS, function(self)
-			local carte = self:GetParent()
-			if not carte.name or carte.name == "" then
+	button.foreverEdit = smallButton("ForeverUIEdit", EDIT_SIZE,
+		EDIT_ICON, SETTINGS, function(self)
+			local map = self:GetParent()
+			if not map.name or map.name == "" then
 				return
 			end
 			if ForeverUI.EquipmentSetEdit then
-				ForeverUI.EquipmentSetEdit(carte.name)
+				ForeverUI.EquipmentSetEdit(map.name)
 			end
 		end)
-	bouton.foreverEditer:SetPoint("RIGHT", bouton.foreverSupprimer, "LEFT",
-		EDITER_X, 0)
+	button.foreverEdit:SetPoint("RIGHT", button.foreverDelete, "LEFT",
+		EDIT_X, 0)
 
-	bouton.foreverCarte = true
+	button.foreverCard = true
 end
 
--- LA LISTE SE SURVEILLE, ELLE NE S'ATTEND PAS.
---
--- On ne sait pas QUAND le client aura refait sa liste : ni au retour de
--- SaveEquipmentSet, ni a l'instant de EQUIPMENT_SETS_CHANGED, ni meme a
--- l'image suivante -- les ensembles vivent cote serveur. Toute hypothese de
--- delai s'est revelee fausse, et une liste posee trop tot restait vide
--- jusqu'a l'operation d'apres.
---
--- On ne parie donc plus : on compare ce que le client rend -- le nombre
--- d'ensembles et leurs noms -- a ce qui est affiche, et on repose des que
--- cela differe. La comparaison coute une poignee de chaines, et elle ne se
--- fait qu'un cinquieme de seconde et seulement panneau ouvert.
-local SURVEILLANCE = 0.2
-local dernierEtat, depuisControle = nil, 0
+-- The set list is polled: sets live on the server, and no return, event or frame delay tells
+-- when the client list is ready. Every 0.2 s while the pane is shown, the count, names and icons
+-- are compared with the last layout, and the cards are laid out again when they differ.
+local WATCH_INTERVAL = 0.2
+local lastState, sinceCheck = nil, 0
 
-local function etatDeLaListe()
+local function listState()
 	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
-	local bouts = { tostring(total) }
+	local parts = { tostring(total) }
 	for index = 1, total do
-		local nom, icone = GetEquipmentSetInfo(index)
-		bouts[#bouts + 1] = tostring(nom) .. "=" .. tostring(icone)
+		local name, icon = GetEquipmentSetInfo(index)
+		parts[#parts + 1] = tostring(name) .. "=" .. tostring(icon)
 	end
-	return table.concat(bouts, "|")
+	return table.concat(parts, "|")
 end
 
-local function surveillerListe(ecoule)
-	depuisControle = depuisControle + (ecoule or 0)
-	if depuisControle < SURVEILLANCE then
+local function watchList(elapsed)
+	sinceCheck = sinceCheck + (elapsed or 0)
+	if sinceCheck < WATCH_INTERVAL then
 		return
 	end
-	depuisControle = 0
+	sinceCheck = 0
 
-	local etat = etatDeLaListe()
-	if etat ~= dernierEtat then
-		dernierEtat = etat
+	local state = listState()
+	if state ~= lastState then
+		lastState = state
 		if GearManagerDialog_Update then
 			GearManagerDialog_Update()
 		end
-		-- poserCartes est defini plus bas : on passe par le point publie.
+		-- layoutCards is defined below: call it through the published function.
 		ForeverUI.EquipmentSetsLayout()
 	end
 end
-ForeverUI.EquipmentSetsWatch = surveillerListe
 
+-- Makes the next poll lay out the list again.
 function ForeverUI.EquipmentSetsForget()
-	dernierEtat = nil
-	depuisControle = SURVEILLANCE
+	lastState = nil
+	sinceCheck = WATCH_INTERVAL
 end
 
--- LE SURVOL SE SUIT A CHAQUE IMAGE, PAS PAR OnEnter. Les deux boutons sont
--- des cadres fils de la carte : y entrer declencherait le OnLeave de la
--- carte, qui les masquerait aussitot. camelot interroge IsMouseOver dans
--- PaperDollEquipmentManagerPane_OnUpdate, on fait pareil.
-local function suivreSurvol(self, ecoule)
-	surveillerListe(ecoule)
-	local dialogue = _G["GearManagerDialog"]
-	if not dialogue or not dialogue.buttons then
+-- Hover is polled each frame, as in camelot's PaperDollEquipmentManagerPane_OnUpdate: the
+-- delete and edit buttons are children of the card, so entering them fires the card's OnLeave.
+local function trackHover(self, elapsed)
+	watchList(elapsed)
+	local dialog = _G["GearManagerDialog"]
+	if not dialog or not dialog.buttons then
 		return
 	end
 
-	for _, bouton in ipairs(dialogue.buttons) do
-		if bouton.foreverCarte and bouton:IsShown() then
-			local dessus = bouton:IsMouseOver() and bouton.name and bouton.name ~= ""
-			if dessus then
-				bouton.foreverSurvol:Show()
-				bouton.foreverSupprimer:Show()
-				bouton.foreverEditer:Show()
+	for _, button in ipairs(dialog.buttons) do
+		if button.foreverCard and button:IsShown() then
+			local hovered = button:IsMouseOver() and button.name and button.name ~= ""
+			if hovered then
+				button.foreverHover:Show()
+				button.foreverDelete:Show()
+				button.foreverEdit:Show()
 			else
-				bouton.foreverSurvol:Hide()
-				bouton.foreverSupprimer:Hide()
-				bouton.foreverEditer:Hide()
+				button.foreverHover:Hide()
+				button.foreverDelete:Hide()
+				button.foreverEdit:Hide()
 			end
 		end
 	end
 end
-ForeverUI.EquipmentSetsHover = suivreSurvol
+ForeverUI.EquipmentSetsHover = trackHover
 
--- La liste : les ensembles existants, en colonne, a partir du decalage.
-local function poserCartes()
-	local dialogue = _G["GearManagerDialog"]
-	if not dialogue or not dialogue.buttons or not panneau then
+-- Lays out the existing sets in a column, from the scroll offset.
+local function layoutCards()
+	local dialog = _G["GearManagerDialog"]
+	if not dialog or not dialog.buttons or not panel then
 		return
 	end
 
 	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
-	local place = cartesVisibles()
-	if decalage > total - place then
-		decalage = math.max(0, total - place)
+	local location = visibleCards()
+	if offset > total - location then
+		offset = math.max(0, total - location)
 	end
 
-	-- NOTRE ORDRE, pas celui du client : le bouton d'indice i porte
-	-- l'ensemble i, mais c'est nous qui decidons ou il se pose.
-	local ordre = ensemblesOrdonnes()
-	local rangDuBouton = {}
-	for position, index in ipairs(ordre) do
-		rangDuBouton[index] = position
+	-- Button i holds client set i; the saved order decides where it goes.
+	local order = orderedSets()
+	local buttonRank = {}
+	for position, index in ipairs(order) do
+		buttonRank[index] = position
 	end
 
-	local precedent
-	local parRang = {}
-	for index, bouton in ipairs(dialogue.buttons) do
-		habillerCarte(bouton)
-		if rangDuBouton[index] then
-			parRang[rangDuBouton[index]] = bouton
+	local previous
+	local byRank = {}
+	for index, button in ipairs(dialog.buttons) do
+		skinCard(button)
+		if buttonRank[index] then
+			byRank[buttonRank[index]] = button
 		end
 	end
 
-	for position = 1, #dialogue.buttons do
-		local bouton = parRang[position]
-		-- Le rang n'est PAS l'indice du client : c'est ordre[position] qui
-		-- le donne. Confondre les deux masquait toute carte posee a un rang
-		-- superieur au nombre d'ensembles.
-		local index = ordre[position]
-		local rang = position - decalage
-		if bouton and index and index <= total and rang >= 1 and rang <= place then
-			bouton:ClearAllPoints()
-			if precedent then
-				bouton:SetPoint("TOPLEFT", precedent, "BOTTOMLEFT", 0, 0)
+	for position = 1, #dialog.buttons do
+		local button = byRank[position]
+		-- The client index is order[position], not the position itself.
+		local index = order[position]
+		local rank = position - offset
+		if button and index and index <= total and rank >= 1 and rank <= location then
+			button:ClearAllPoints()
+			if previous then
+				button:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, 0)
 			else
-				bouton:SetPoint("TOPLEFT", panneau, "TOPLEFT", LISTE_X, LISTE_Y)
+				button:SetPoint("TOPLEFT", panel, "TOPLEFT", LIST_X, LIST_Y)
 			end
-			precedent = bouton
-			bouton:Show()
+			previous = button
+			button:Show()
 
-			if bouton.foreverChoisi then
-				if bouton:GetChecked() then
-					bouton.foreverChoisi:Show()
+			if button.foreverSelected then
+				if button:GetChecked() then
+					button.foreverSelected:Show()
 				else
-					bouton.foreverChoisi:Hide()
+					button.foreverSelected:Hide()
 				end
 			end
-			if bouton.foreverCoche then
-				if ensemblePorte(bouton.name) then
-					bouton.foreverCoche:Show()
+			if button.foreverCheck then
+				if isSetWorn(button.name) then
+					button.foreverCheck:Show()
 				else
-					bouton.foreverCoche:Hide()
+					button.foreverCheck:Hide()
 				end
 			end
-		elseif bouton then
-			bouton:Hide()
+		elseif button then
+			button:Hide()
 		end
 	end
 
-	-- Les cartes sans ensemble ne s'affichent pas.
-	for index, bouton in ipairs(dialogue.buttons) do
-		if not rangDuBouton[index] then
-			bouton:Hide()
+	-- Buttons without a set stay hidden.
+	for index, button in ipairs(dialog.buttons) do
+		if not buttonRank[index] then
+			button:Hide()
 		end
 	end
 end
-ForeverUI.EquipmentSetsLayout = poserCartes
+ForeverUI.EquipmentSetsLayout = layoutCards
 
-local function monter(volet)
-	panneau = CreateFrame("Frame", "ForeverUIEquipmentPane", volet)
-	panneau:SetPoint("TOPLEFT", volet.pierre, "BOTTOMLEFT", 0, 0)
-	panneau:SetPoint("BOTTOMRIGHT", volet, "BOTTOMRIGHT", 0, 0)
-	panneau:SetFrameLevel(volet:GetFrameLevel() + 3)
+local function build(pane)
+	panel = CreateFrame("Frame", "ForeverUIEquipmentPane", pane)
+	panel:SetPoint("TOPLEFT", pane.stone, "BOTTOMLEFT", 0, 0)
+	panel:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 0)
+	panel:SetFrameLevel(pane:GetFrameLevel() + 3)
 
-	panneau.bordure = ForeverUI.CreateNineSlice(panneau, ATLAS_BORDURE,
-		BORDURE_COIN, BORDURE_MARGES, "BORDER")
+	panel.border = ForeverUI.CreateNineSlice(panel, ATLAS_BORDER,
+		BORDER_CORNER, BORDER_MARGINS, "BORDER")
 
-	local trait = panneau:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(trait, ATLAS_TRAIT)
-	trait:SetPoint("TOP", panneau, "BOTTOM", 0, LISTE_Y2)
+	local line = panel:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(line, ATLAS_LINE)
+	line:SetPoint("TOP", panel, "BOTTOM", 0, LIST_Y2)
 
-	-- La molette fait defiler : camelot a une barre, que nous n'avons pas.
-	panneau:SetScript("OnUpdate", suivreSurvol)
-	panneau:EnableMouseWheel(true)
-	panneau:SetScript("OnMouseWheel", function(self, sens)
+	-- Mouse wheel scrolling: camelot's scroll bar is not reproduced.
+	panel:SetScript("OnUpdate", trackHover)
+	panel:EnableMouseWheel(true)
+	panel:SetScript("OnMouseWheel", function(self, direction)
 		local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
-		decalage = math.max(0, math.min(decalage - sens, total - cartesVisibles()))
-		poserCartes()
+		offset = math.max(0, math.min(offset - direction, total - visibleCards()))
+		layoutCards()
 	end)
 
-	return panneau
+	return panel
 end
 
--- Les trois boutons du bas, plus celui que le client garde pour effacer.
-local function poserBoutons()
-	local equiper = _G["GearManagerDialogEquipSet"]
-	local enregistrer = _G["GearManagerDialogSaveSet"]
-	local effacer = _G["GearManagerDialogDeleteSet"]
+-- Equip and Save stay the client's. New Set clears the selection then runs Save (3.3.5 has no
+-- New Set button). The client's Delete is hidden: each card has its own.
+local function placeButtons()
+	local equipButton = _G["GearManagerDialogEquipSet"]
+	local saveButton = _G["GearManagerDialogSaveSet"]
+	local clear = _G["GearManagerDialogDeleteSet"]
 
-	if equiper then
-		equiper:SetWidth(BOUTON_L)
-		equiper:SetHeight(BOUTON_H)
-		equiper:ClearAllPoints()
-		equiper:SetPoint("BOTTOM", panneau, "BOTTOM", -BOUTON_ECART, BOUTON_Y)
+	if equipButton then
+		equipButton:SetWidth(BUTTON_W)
+		equipButton:SetHeight(BUTTON_H)
+		equipButton:ClearAllPoints()
+		equipButton:SetPoint("BOTTOM", panel, "BOTTOM", -BUTTON_GAP, BUTTON_Y)
 	end
-	if enregistrer then
-		enregistrer:SetWidth(BOUTON_L)
-		enregistrer:SetHeight(BOUTON_H)
-		enregistrer:ClearAllPoints()
-		enregistrer:SetPoint("BOTTOM", panneau, "BOTTOM", BOUTON_ECART, BOUTON_Y)
+	if saveButton then
+		saveButton:SetWidth(BUTTON_W)
+		saveButton:SetHeight(BUTTON_H)
+		saveButton:ClearAllPoints()
+		saveButton:SetPoint("BOTTOM", panel, "BOTTOM", BUTTON_GAP, BUTTON_Y)
 	end
-	if effacer then
-		effacer:SetWidth(BOUTON_L)
-		effacer:SetHeight(BOUTON_H)
-		effacer:ClearAllPoints()
-		effacer:SetPoint("BOTTOM", enregistrer or panneau, "TOP", 0, 0)
-		effacer:Hide()
+	if clear then
+		clear:SetWidth(BUTTON_W)
+		clear:SetHeight(BUTTON_H)
+		clear:ClearAllPoints()
+		clear:SetPoint("BOTTOM", saveButton or panel, "TOP", 0, 0)
+		clear:Hide()
 	end
 
-	if not panneau.nouveau then
-		local nouveau = CreateFrame("Button", "ForeverUIEquipmentNewSet", panneau,
+	if not panel.new then
+		local new = CreateFrame("Button", "ForeverUIEquipmentNewSet", panel,
 			"UIPanelButtonTemplate")
-		nouveau:SetWidth(NOUVEAU_L)
-		nouveau:SetHeight(NOUVEAU_H)
-		nouveau:SetPoint("BOTTOM", panneau, "BOTTOM", 0, NOUVEAU_Y)
+		new:SetWidth(NEW_BUTTON_W)
+		new:SetHeight(NEW_BUTTON_H)
+		new:SetPoint("BOTTOM", panel, "BOTTOM", 0, NEW_BUTTON_Y)
 
-		-- DANS LA TABLE DES TEXTES : camelot ecrit
-		-- PAPERDOLL_NEWEQUIPMENTSET, et ce client ne porte aucune chaine
-		-- equivalente -- ni celle-la, ni "New Set" sous un autre nom.
-		nouveau:SetText(L.EQUIPMENTMANAGER_NEW_SET)
+		-- No client string matches camelot's PAPERDOLL_NEWEQUIPMENTSET.
+		new:SetText(L.EQUIPMENTMANAGER_NEW_SET)
 
-		-- Le meme visuel que les selecteurs de statistiques : le bouton
-		-- tertiaire, presse tant qu'on le tient.
-		ForeverUI.SkinTertiaryButton(nouveau, true)
+		-- Same look as the stat selectors: tertiary button, pressed while held.
+		ForeverUI.SkinTertiaryButton(new, true)
 
-		local plus = nouveau:CreateTexture(nil, "OVERLAY")
+		local plus = new:CreateTexture(nil, "OVERLAY")
 		ForeverUI.SetAtlas(plus, ATLAS_PLUS)
-		plus:SetPoint("LEFT", nouveau, "LEFT", NOUVEAU_ICONE_X, 0)
+		plus:SetPoint("LEFT", new, "LEFT", NEW_BUTTON_ICON_X, 0)
 
-		nouveau:SetScript("OnClick", function()
-			local dialogue = _G["GearManagerDialog"]
-			if dialogue then
-				dialogue.selectedSetName = nil
-				dialogue.selectedSet = nil
+		new:SetScript("OnClick", function()
+			local dialog = _G["GearManagerDialog"]
+			if dialog then
+				dialog.selectedSetName = nil
+				dialog.selectedSet = nil
 			end
 			if GearManagerDialogSaveSet_OnClick then
 				GearManagerDialogSaveSet_OnClick(_G["GearManagerDialogSaveSet"])
 			end
 		end)
-		panneau.nouveau = nouveau
+		panel.new = new
 	end
 
-	-- AU-DESSUS DE LA FENETRE DU CLIENT, ET A CHAQUE PASSAGE. Elle est
-	-- etalee sur tout le panneau et elle prend la souris ; un bouton fils du
-	-- PANNEAU passe dessous et ne recoit plus rien. Ceux du client -- Equip,
-	-- Save -- sont ses enfants a elle, donc epargnes.
-	--
-	-- Le niveau se calcule depuis LE SIEN, releve maintenant : elle se hisse
-	-- toute seule a chaque ouverture, et cette fonction tourne justement
-	-- apres son OnShow.
-	local dialogue = _G["GearManagerDialog"]
-	if panneau.nouveau and dialogue then
-		panneau.nouveau:SetFrameLevel(dialogue:GetFrameLevel() + 5)
+	-- New Set must stay above the client dialog, which covers the pane and takes the mouse.
+	-- The dialog raises itself on each OnShow and this runs after it, so the level is recomputed
+	-- from the dialog's current level every time.
+	local dialog = _G["GearManagerDialog"]
+	if panel.new and dialog then
+		panel.new:SetFrameLevel(dialog:GetFrameLevel() + 5)
 	end
 end
 
--- LA FENETRE DU CLIENT PASSE DANS LE VOLET. On la vide de son art de
--- fenetre -- UIPanelDialogTemplate porte un fond, une bordure et une barre
--- de titre -- et on l'etale sur le panneau : elle n'est plus qu'un support
--- pour ses cartes et ses boutons.
-local function accueillirDialogue()
-	local dialogue = _G["GearManagerDialog"]
-	if not dialogue or dialogue.foreverAccueilli then
+-- Moves the client dialog into the pane: its window art is hidden and it covers the pane,
+-- holding only its cards and buttons.
+local function hostDialog()
+	local dialog = _G["GearManagerDialog"]
+	if not dialog or dialog.foreverHosted then
 		return
 	end
 
-	dialogue:SetParent(panneau)
-	dialogue:ClearAllPoints()
-	dialogue:SetAllPoints(panneau)
-	dialogue:SetFrameLevel(panneau:GetFrameLevel() + 1)
+	dialog:SetParent(panel)
+	dialog:ClearAllPoints()
+	dialog:SetAllPoints(panel)
+	dialog:SetFrameLevel(panel:GetFrameLevel() + 1)
 
-	-- ELLE N'EST PLUS UNE FENETRE, ELLE NE DOIT PLUS SE HISSER.
-	-- GearManagerDialog est declaree toplevel dans le FrameXML, et son
-	-- OnShow finit par GearManagerDialog:Raise() : a chaque ouverture elle
-	-- repasse au sommet de sa strate, donc au-dessus de tout ce que le
-	-- panneau porte. Un niveau pose une fois pour toutes ne tenait pas.
-	if dialogue.SetToplevel then
-		dialogue:SetToplevel(false)
+	-- GearManagerDialog is toplevel and its OnShow calls Raise(), which would put it above
+	-- everything in the pane on each opening.
+	if dialog.SetToplevel then
+		dialog:SetToplevel(false)
 	end
 
-	local regions = { dialogue:GetRegions() }
+	local regions = { dialog:GetRegions() }
 	for _, region in ipairs(regions) do
 		if region.GetObjectType and region:GetObjectType() == "Texture" then
 			region:SetAlpha(0)
 		end
 	end
-	if dialogue.title then
-		dialogue.title:Hide()
+	if dialog.title then
+		dialog.title:Hide()
 	end
 
-	dialogue.foreverAccueilli = true
+	dialog.foreverHosted = true
 end
 
--- LA CROIX ROUGE S'EN VA. UIPanelDialogTemplate nomme son bouton
--- $parentClose -- GearManagerDialogClose -- et non $parentCloseButton : le
--- masquer sous le mauvais nom ne faisait rien. Le panneau n'est plus une
--- fenetre, il se ferme par son onglet.
---
--- A refaire a chaque passage : le client remontre ses morceaux quand il
--- rouvre sa fenetre.
-local function masquerFermeture()
-	for _, nom in ipairs({ "GearManagerDialogClose", "GearManagerDialogCloseButton" }) do
-		local bouton = _G[nom]
-		if bouton then
-			bouton:Hide()
+-- Hides the red close button, every time: the client shows it again when it reopens.
+-- UIPanelDialogTemplate names it $parentClose (GearManagerDialogClose), not $parentCloseButton.
+local function hideCloseButton()
+	for _, name in ipairs({ "GearManagerDialogClose", "GearManagerDialogCloseButton" }) do
+		local button = _G[name]
+		if button then
+			button:Hide()
 		end
 	end
 end
 
-local function habiller()
+local function applySkin()
 	local panes = ForeverUI.CharacterPanes
-	local volet = panes and panes.droit
-	if not volet or not volet.pierre or InCombatLockdown() then
+	local pane = panes and panes.right
+	if not pane or not pane.stone or InCombatLockdown() then
 		return
 	end
 
-	if not panneau then
-		monter(volet)
+	if not panel then
+		build(pane)
 	end
 
-	-- LE PANNEAU NE DECIDE PLUS S'IL PARAIT. Il est une PAGE de l'hote
-	-- droit, et ForeverUI.Panes le montre ou le masque -- avec la fenetre
-	-- du client, qui est desormais son enfant. C'est ce qui l'empeche de
-	-- survivre a un changement d'onglet lateral : il appartient a notre
-	-- volet, que le PaperDollFrame du client ne masque pas.
-	accueillirDialogue()
-	masquerFermeture()
-	poserBoutons()
-	poserCartes()
+	-- The pane is a page of the right host: ForeverUI.Panes shows and hides it with the client
+	-- dialog, now its child, so it does not survive a side tab change.
+	hostDialog()
+	hideCloseButton()
+	placeButtons()
+	layoutCards()
 end
 
-ForeverUI.EquipmentPane = { Apply = habiller, Frame = function() return panneau end }
+ForeverUI.EquipmentPane = { Apply = applySkin, Frame = function() return panel end }
 
 if hooksecurefunc then
-	for _, nom in ipairs({ "GearManagerDialog_Update", "GearManagerDialog_OnShow" }) do
-		if type(_G[nom]) == "function" then
-			hooksecurefunc(nom, function() habiller() end)
+	for _, name in ipairs({ "GearManagerDialog_Update", "GearManagerDialog_OnShow" }) do
+		if type(_G[name]) == "function" then
+			hooksecurefunc(name, function() applySkin() end)
 		end
 	end
 end
 
--- ============================================== modifier un ensemble
---
--- Le flux, dans l'ordre : equiper l'ancien, enregistrer sous le nouveau nom
--- et la nouvelle icone, effacer l'ancien, le remplacer a sa place dans la
--- liste. Voir le releve en tete de fichier pour le pourquoi.
-local attenteEdition = CreateFrame("Frame", "ForeverUIEquipmentEdit")
-attenteEdition:Hide()
+-- ========== Edit a set
+local pendingEdit = CreateFrame("Frame", "ForeverUIEquipmentEdit")
+pendingEdit:Hide()
 
-local function remplacerDansOrdre(ancien, nouveau)
-    local ordre = ordreRetenu()
-    local place
-    for rang, connu in ipairs(ordre) do
-        if connu == ancien then
-            ordre[rang] = nouveau
-            place = rang
+-- Gives new the rank of old in the saved order (appended if old is not there).
+local function replaceInOrder(old, new)
+    local order = savedOrder()
+    local location
+    for rank, known in ipairs(order) do
+        if known == old then
+            order[rank] = new
+            location = rank
             break
         end
     end
-    if not place then
-        place = #ordre + 1
-        ordre[place] = nouveau
+    if not location then
+        location = #order + 1
+        order[location] = new
     end
-    -- Le nouveau nom pouvait deja figurer ailleurs -- un ancien renommage,
-    -- un ensemble efface puis recree. Deux copies, et il prendrait deux
-    -- rangs. On n'en garde que celle qu'on vient de poser.
-    for rang = #ordre, 1, -1 do
-        if rang ~= place and ordre[rang] == nouveau then
-            table.remove(ordre, rang)
-            if rang < place then
-                place = place - 1
+    -- The new name may already be elsewhere in the order: keep only this copy.
+    for rank = #order, 1, -1 do
+        if rank ~= location and order[rank] == new then
+            table.remove(order, rank)
+            if rank < location then
+                location = location - 1
             end
         end
     end
 end
 
-local function terminerEdition()
-    local e = edition
-    edition = nil
-    attenteEdition:Hide()
+-- Saves the worn gear under the new name and icon, then deletes the old set.
+local function finishEdit()
+    local e = editSession
+    editSession = nil
+    pendingEdit:Hide()
     if not e then
         return
     end
 
-    -- Le nom est indispensable : SaveEquipmentSet le refuse vide.
-    if not e.nom or e.nom == "" or not SaveEquipmentSet then
+    -- SaveEquipmentSet refuses an empty name.
+    if not e.name or e.name == "" or not SaveEquipmentSet then
         return
     end
 
-    -- L'INDICE D'ICONE PEUT MANQUER. La fenetre retient l'icone choisie de
-    -- deux facons : selectedIcon quand le joueur en clique une,
-    -- selectedTexture quand elle est seulement PRESELECTIONNEE a
-    -- l'ouverture. Le passage de l'une a l'autre se fait dans
-    -- GearManagerDialogPopup_Update, et seulement pour les icones de la
-    -- page VISIBLE : si celle de l'ensemble est ailleurs dans la liste,
-    -- selectedIcon reste vide et SaveEquipmentSet refuse. On abandonne
-    -- alors, plutot que d'effacer l'ancien sans avoir cree le nouveau.
-    if type(e.icone) ~= "number" then
+    -- GearManagerDialogPopup_Update sets selectedIcon only for icons on the visible page: when the
+    -- set's icon is on another page it stays nil and SaveEquipmentSet fails, so the edit stops
+    -- before anything is deleted.
+    if type(e.icon) ~= "number" then
         if UIErrorsFrame then
             UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
         end
         return
     end
 
-    local renomme = e.nom ~= e.ancien
+    local renamed = e.name ~= e.old
 
-    -- MAX_EQUIPMENT_SETS_PER_PLAYER. Un renommage cree avant d'effacer, ce
-    -- qui demande une place de plus ; au plafond, il n'y en a pas et
-    -- l'enregistrement echouerait en silence. L'ancien part donc d'abord --
-    -- c'est sans risque, son equipement est PORTE a cet instant, c'est
-    -- justement ce qu'on vient d'equiper.
-    local plafond = MAX_EQUIPMENT_SETS_PER_PLAYER or 10
-    local avant = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
-    if renomme and avant >= plafond and DeleteEquipmentSet then
-        DeleteEquipmentSet(e.ancien)
-        remplacerDansOrdre(e.ancien, e.nom)
-        renomme = false
+    -- At MAX_EQUIPMENT_SETS_PER_PLAYER a rename has no free slot to save before deleting, so the
+    -- old set is deleted first. Its gear is worn at this point, so nothing is lost.
+    local cap = MAX_EQUIPMENT_SETS_PER_PLAYER or 10
+    local before = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
+    if renamed and before >= cap and DeleteEquipmentSet then
+        DeleteEquipmentSet(e.old)
+        replaceInOrder(e.old, e.name)
+        renamed = false
     end
 
-    SaveEquipmentSet(e.nom, e.icone)
+    SaveEquipmentSet(e.name, e.icon)
 
-    -- ON N'EFFACE QUE SI LE NOUVEAU EXISTE. C'est le garde-fou : tout echec
-    -- de l'enregistrement -- plafond atteint, icone refusee -- laissait
-    -- sinon l'ancien efface et rien a la place.
-    if renomme and DeleteEquipmentSet then
-        if GetEquipmentSetInfoByName and GetEquipmentSetInfoByName(e.nom) then
-            DeleteEquipmentSet(e.ancien)
-            remplacerDansOrdre(e.ancien, e.nom)
+    -- Delete the old set only if the new one exists, so a failed save loses nothing.
+    if renamed and DeleteEquipmentSet then
+        if GetEquipmentSetInfoByName and GetEquipmentSetInfoByName(e.name) then
+            DeleteEquipmentSet(e.old)
+            replaceInOrder(e.old, e.name)
         elseif UIErrorsFrame then
             UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
         end
     end
 
     ForeverUIDB = ForeverUIDB or {}
-    if ForeverUIDB.ensembleEquipe == e.ancien then
-        ForeverUIDB.ensembleEquipe = e.nom
+    if ForeverUIDB.equippedSet == e.old then
+        ForeverUIDB.equippedSet = e.name
     end
 
-    local dialogue = _G["GearManagerDialog"]
-    if dialogue then
-        dialogue.selectedSetName = e.nom
+    local dialog = _G["GearManagerDialog"]
+    if dialog then
+        dialog.selectedSetName = e.name
     end
     if ForeverUI.EquipmentSetsRefresh then
         ForeverUI.EquipmentSetsRefresh()
     end
 end
-ForeverUI.EquipmentSetEditFinish = terminerEdition
 
--- LA LISTE DU CLIENT SE MET A JOUR APRES COUP. SaveEquipmentSet et
--- DeleteEquipmentSet rendent la main avant que GetNumEquipmentSets ait
--- change : reposer les cartes dans la foulee montrait donc l'etat d'AVANT,
--- et un ensemble renomme n'apparaissait qu'a la prochaine secousse de la
--- liste -- la creation d'un autre ensemble, par exemple. C'est
--- EQUIPMENT_SETS_CHANGED qui l'annonce ; on s'y abonne nous-memes plutot
--- que de compter sur celui du client, qu'il n'ecoute que fenetre ouverte.
-attenteEdition:RegisterEvent("EQUIPMENT_SETS_CHANGED")
-attenteEdition:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
-attenteEdition:SetScript("OnEvent", function(self, evenement, termine, nom)
-    if evenement == "EQUIPMENT_SETS_CHANGED" then
-        -- A l'image suivante : le client n'a pas forcement fini de refaire
-        -- sa liste quand il annonce qu'elle a change.
+-- SaveEquipmentSet and DeleteEquipmentSet return before the client list changes; the list is
+-- refreshed on EQUIPMENT_SETS_CHANGED, registered here because the client listens to it only
+-- while its dialog is shown.
+pendingEdit:RegisterEvent("EQUIPMENT_SETS_CHANGED")
+pendingEdit:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
+pendingEdit:SetScript("OnEvent", function(self, event, completed, name)
+    if event == "EQUIPMENT_SETS_CHANGED" then
+        -- On the next frame: the client may not have rebuilt its list yet.
         if ForeverUI.EquipmentSetsRefresh then
             ForeverUI.EquipmentSetsRefresh()
         end
         return
     end
-    if edition and termine and nom == edition.ancien then
-        terminerEdition()
+    if editSession and completed and name == editSession.old then
+        finishEdit()
     end
 end)
 
--- Si le remplacement n'aboutit pas -- combat, piece verrouillee -- on
--- abandonne plutot que de laisser une edition en suspens.
-attenteEdition:SetScript("OnUpdate", function(self, ecoule)
-    if not edition then
+-- Abandon an edit whose gear swap does not finish in time (combat, locked item).
+pendingEdit:SetScript("OnUpdate", function(self, elapsed)
+    if not editSession then
         self:Hide()
         return
     end
-    edition.reste = (edition.reste or EDITION_DELAI) - (ecoule or 0)
-    if edition.reste <= 0 then
-        edition = nil
+    editSession.rest = (editSession.rest or EDIT_TIMEOUT) - (elapsed or 0)
+    if editSession.rest <= 0 then
+        editSession = nil
         self:Hide()
         if UIErrorsFrame then
             UIErrorsFrame:AddMessage(ERR_CLIENT_LOCKED_OUT, 1.0, 0.1, 0.1, 1.0)
@@ -947,123 +745,109 @@ attenteEdition:SetScript("OnUpdate", function(self, ecoule)
     end
 end)
 
-local function lancerEdition(nom, icone)
-    if not edition or not nom or nom == "" then
-        edition = nil
+-- Starts an edit: equips the old set; finishEdit runs on EQUIPMENT_SWAP_FINISHED.
+-- name: new set name; icon: icon index from the popup
+local function startEdit(name, icon)
+    if not editSession or not name or name == "" then
+        editSession = nil
         return
     end
-    edition.nom = nom
-    edition.icone = icone
+    editSession.name = name
+    editSession.icon = icon
 
-    -- Deja porte : rien a equiper, on enchaine.
-    if piecesEnPlace(edition.ancien) then
-        terminerEdition()
+    -- Already worn: nothing to equip.
+    if piecesInPlace(editSession.old) then
+        finishEdit()
         return
     end
 
     if UseEquipmentSet then
-        UseEquipmentSet(edition.ancien)
+        UseEquipmentSet(editSession.old)
     end
-    edition.reste = EDITION_DELAI
-    attenteEdition:Show()
+    editSession.rest = EDIT_TIMEOUT
+    pendingEdit:Show()
 end
 
--- LE OKAY DE LA FENETRE EST REPRIS, pas greffe. Un greffon passerait APRES
--- le client, qui aurait deja enregistre l'equipement porte sous ce nom --
--- c'est-a-dire tout sauf ce qu'on veut. Hors edition, on lui rend la main
--- telle quelle.
-local function reprendreOkay()
+-- The popup's Okay is replaced, not hooked: a hook would run after the client has already saved
+-- the worn gear under that name. Outside an edit the client's handler runs unchanged.
+local function reclaimOkay()
     local okay = _G["GearManagerDialogPopupOkay"]
     if not okay or okay.foreverOkay then
         return
     end
 
-    okay:SetScript("OnClick", function(self, bouton, enfonce)
+    okay:SetScript("OnClick", function(self, button, pressed)
         local popup = _G["GearManagerDialogPopup"]
-        if edition and popup and popup.name and popup.name ~= "" then
-            -- LIRE AVANT DE FERMER. GearManagerDialogPopup_OnHide remet
-            -- popup.name a nil : lire le nom apres l'avoir cachee le rendait
-            -- vide, et SaveEquipmentSet refusait. Le meme OnHide abandonne
-            -- l'edition, d'ou le drapeau qui dit que la fermeture vient de
-            -- nous.
-            local nom = popup.name
-            -- sans icone choisie, pas d'indice : GetEquipmentSetIconInfo(nil)
-            -- du client compare nil a un nombre et s'arrete sur une erreur
-            local indiceIcone
+        if editSession and popup and popup.name and popup.name ~= "" then
+            -- Read the name before hiding: GearManagerDialogPopup_OnHide clears popup.name and abandons
+            -- the edit, hence the intendedClose flag.
+            local name = popup.name
+            -- No icon chosen, no index: the client's GetEquipmentSetIconInfo(nil) raises an error.
+            local iconIndex
             if popup.selectedIcon then
-                indiceIcone = select(2, GetEquipmentSetIconInfo(popup.selectedIcon))
+                iconIndex = select(2, GetEquipmentSetIconInfo(popup.selectedIcon))
             end
-            local enCours = edition
+            local inProgress = editSession
 
-            fermetureVoulue = true
+            intendedClose = true
             popup:Hide()
-            fermetureVoulue = nil
+            intendedClose = nil
 
-            edition = enCours
-            lancerEdition(nom, indiceIcone)
+            editSession = inProgress
+            startEdit(name, iconIndex)
             return
         end
         if GearManagerDialogPopupOkay_OnClick then
-            GearManagerDialogPopupOkay_OnClick(self, bouton, enfonce)
+            GearManagerDialogPopupOkay_OnClick(self, button, pressed)
         end
     end)
     okay.foreverOkay = true
 end
-ForeverUI.EquipmentSetEditReclaim = reprendreOkay
 
--- Ouvrir la fenetre sur un ensemble : c'est l'engrenage qui appelle.
-function ForeverUI.EquipmentSetEdit(nom)
-    if not nom or nom == "" then
+-- Opens the save popup on an existing set (called by the gear button).
+function ForeverUI.EquipmentSetEdit(name)
+    if not name or name == "" then
         return
     end
 
-    local dialogue = _G["GearManagerDialog"]
-    if dialogue then
-        dialogue.selectedSetName = nom
+    local dialog = _G["GearManagerDialog"]
+    if dialog then
+        dialog.selectedSetName = name
         if GearManagerDialog_Update then
             GearManagerDialog_Update()
         end
     end
 
-    edition = { ancien = nom }
-    reprendreOkay()
+    editSession = { old = name }
+    reclaimOkay()
 
     if GearManagerDialogSaveSet_OnClick then
         GearManagerDialogSaveSet_OnClick(_G["GearManagerDialogSaveSet"])
     end
 
-    -- Le nom est pose explicitement : le client ne remplit son champ que
-    -- dans RecalculateGearManagerDialogPopup, appele par le seul OnShow.
-    local champ = _G["GearManagerDialogPopupEditBox"]
-    if champ then
-        champ:SetText(nom)
+    -- Set the name here: the client fills the field only in RecalculateGearManagerDialogPopup,
+    -- which only OnShow calls.
+    local field = _G["GearManagerDialogPopupEditBox"]
+    if field then
+        field:SetText(name)
     end
 end
 
--- Fermee autrement -- Annuler, Echap -- l'edition est abandonnee.
+-- Popup closed another way (Cancel, Escape): the edit is abandoned.
 if hooksecurefunc and type(GearManagerDialogPopup_OnHide) == "function" then
     hooksecurefunc("GearManagerDialogPopup_OnHide", function()
-        if edition and not fermetureVoulue and not attenteEdition:IsShown() then
-            edition = nil
+        if editSession and not intendedClose and not pendingEdit:IsShown() then
+            editSession = nil
         end
     end)
 end
 
--- LE RATTRAPAGE D'UNE IMAGE.
---
--- GetNumEquipmentSets et GetEquipmentSetInfo ne rendent pas le nouvel etat
--- dans la foulee d'un enregistrement ou d'un effacement : reposer les cartes
--- au meme instant les calculait sur l'etat d'AVANT, et la liste restait en
--- retard d'une operation -- renommer AAA en AAB ne montrait plus rien, creer
--- AZE faisait apparaitre AAB, et ainsi de suite.
---
--- On repose donc a l'IMAGE SUIVANTE, comme pour la hauteur des sacs : c'est
--- le seul moment ou l'on est sur que le client a fini. La demande vient des
--- evenements et de la fin d'une modification ; le rattrapage se rendort tout
--- seul et ne se redemande jamais lui-meme.
-local rattrapageListe = CreateFrame("Frame", "ForeverUIEquipmentRecheck")
-rattrapageListe:Hide()
-rattrapageListe:SetScript("OnUpdate", function(self)
+-- Lays the list out again on the next frame: right after a save or delete,
+-- GetNumEquipmentSets and GetEquipmentSetInfo still return the old state.
+-- Requested by events and by the end of an edit; it hides itself after one run.
+local listRecheck = CreateFrame("Frame", "ForeverUIEquipmentRecheck")
+listRecheck:Hide()
+listRecheck:SetScript("OnUpdate", function(self)
     self:Hide()
     if GearManagerDialog_Update then
         GearManagerDialog_Update()
@@ -1071,56 +855,53 @@ rattrapageListe:SetScript("OnUpdate", function(self)
     ForeverUI.EquipmentSetsLayout()
 end)
 
--- TEMOIN -- /fui sets. La liste des ensembles se decide en trois endroits :
--- ce que le client publie, l'ordre que nous retenons, et ce que les cartes
--- affichent. Quand les trois ne disent pas la meme chose, c'est ce rapport
--- qui le montre, au lieu d'avoir a le deviner.
+-- /fui sets: prints the client's sets, the saved order and the displayed cards, to show where
+-- they disagree.
 function ForeverUI.EquipmentSetsDebug()
-	local dire = function(texte)
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	local say = function(text)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. text)
 	end
 
 	local total = (GetNumEquipmentSets and GetNumEquipmentSets()) or 0
-	local noms = {}
+	local names = {}
 	for index = 1, total do
-		local nom, icone = GetEquipmentSetInfo(index)
-		noms[#noms + 1] = string.format("%d=%s(%s)", index, tostring(nom), tostring(icone))
+		local name, icon = GetEquipmentSetInfo(index)
+		names[#names + 1] = string.format("%d=%s(%s)", index, tostring(name), tostring(icon))
 	end
-	dire(string.format(L.EQUIPMENTMANAGER_DEBUG_SETS, total,
-		table.concat(noms, ", ")))
+	say(string.format(L.EQUIPMENTMANAGER_DEBUG_SETS, total,
+		table.concat(names, ", ")))
 
-	dire(L.EQUIPMENTMANAGER_DEBUG_KEPT_ORDER .. table.concat(ordreRetenu(), ", "))
+	say(L.EQUIPMENTMANAGER_DEBUG_KEPT_ORDER .. table.concat(savedOrder(), ", "))
 
-	local rangs = {}
-	for position, index in ipairs(ensemblesOrdonnes()) do
-		rangs[#rangs + 1] = string.format("%d<-%d", position, index)
+	local ranks = {}
+	for position, index in ipairs(orderedSets()) do
+		ranks[#ranks + 1] = string.format("%d<-%d", position, index)
 	end
-	dire(L.EQUIPMENTMANAGER_DEBUG_PLACED_ORDER .. table.concat(rangs, ", "))
-	dire(string.format(L.EQUIPMENTMANAGER_DEBUG_SCROLL,
-		decalage, cartesVisibles(), (panneau and panneau:IsShown()) and L.EQUIPMENTMANAGER_DEBUG_OPEN or L.EQUIPMENTMANAGER_DEBUG_CLOSED))
-	dire(string.format(L.EQUIPMENTMANAGER_DEBUG_WORN,
-		tostring(ForeverUIDB and ForeverUIDB.ensembleEquipe), tostring(edition and edition.ancien)))
+	say(L.EQUIPMENTMANAGER_DEBUG_PLACED_ORDER .. table.concat(ranks, ", "))
+	say(string.format(L.EQUIPMENTMANAGER_DEBUG_SCROLL,
+		offset, visibleCards(), (panel and panel:IsShown()) and L.EQUIPMENTMANAGER_DEBUG_OPEN or L.EQUIPMENTMANAGER_DEBUG_CLOSED))
+	say(string.format(L.EQUIPMENTMANAGER_DEBUG_WORN,
+		tostring(ForeverUIDB and ForeverUIDB.equippedSet), tostring(editSession and editSession.old)))
 
-	local dialogue = _G["GearManagerDialog"]
-	if not dialogue or not dialogue.buttons then
-		dire(L.EQUIPMENTMANAGER_DEBUG_NO_DIALOG)
+	local dialog = _G["GearManagerDialog"]
+	if not dialog or not dialog.buttons then
+		say(L.EQUIPMENTMANAGER_DEBUG_NO_DIALOG)
 		return
 	end
-	for index, bouton in ipairs(dialogue.buttons) do
-		if bouton.name and bouton.name ~= "" or bouton:IsShown() then
-			local ancre = bouton:GetPoint(1)
+	for index, button in ipairs(dialog.buttons) do
+		if button.name and button.name ~= "" or button:IsShown() then
+			local anchor = button:GetPoint(1)
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				L.EQUIPMENTMANAGER_DEBUG_CARD,
-				index, tostring(bouton.name), tostring(bouton:IsShown()),
-				tostring(ancre),
-				tostring(bouton.foreverCoche and bouton.foreverCoche:IsShown())))
+				index, tostring(button.name), tostring(button:IsShown()),
+				tostring(anchor),
+				tostring(button.foreverCheck and button.foreverCheck:IsShown())))
 		end
 	end
 end
 
 function ForeverUI.EquipmentSetsRefresh()
-    -- On oublie l'etat connu : le prochain controle reposera la liste, quel
-    -- que soit le moment ou le client aura fini.
+    -- Forget the known state so the next poll lays out the list, whenever the client is done.
     ForeverUI.EquipmentSetsForget()
-    rattrapageListe:Show()
+    listRecheck:Show()
 end

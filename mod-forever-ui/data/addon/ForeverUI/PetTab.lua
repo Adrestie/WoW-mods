@@ -1,254 +1,191 @@
--- ForeverUI : l'onglet du familier.
---
--- A LA DEMANDE, et non d'apres la source. camelot ne fait pas du familier un
--- onglet de la colonne : son PAPERDOLL_SIDEBARS le met en TROISIEME ONGLET
--- DU VOLET DROIT, a cote des statistiques et du gestionnaire, et son volet
--- gauche garde la silhouette du joueur. 3.3.5, lui, en fait un ecran a part
--- entiere -- PetPaperDollFrame, deuxieme de CHARACTERFRAME_SUBFRAMES -- et
--- c'est celui-la que la colonne ouvre.
---
--- CE QUI EST DEMANDE :
---   volet gauche   l'apercu en trois dimensions du familier
---   volet droit    la meme interface que les statistiques du personnage --
---                  "Niveau X <nom>", puis la categorie "General" avec
---                  Sante, Armure, Degats, Puissance d'attaque et Score
---                  critique, puis la categorie "Resistances"
---
--- CE QUE 3.3.5 DONNE, ET OU.
---
---   PetModelFrame              l'apercu, un PlayerModel que le client cale
---                              sur "pet" dans PetPaperDollFrame_Update
---   UnitHealthMax("pet")       la sante
---   PaperDollFrame_SetArmor(PetArmorFrame, "Pet")
---   PaperDollFrame_SetDamage(PetDamageFrame, "Pet")
---   PaperDollFrame_SetAttackPower(PetAttackPowerFrame, "Pet")
---                              les trois ecrivent dans <cadre>StatText, et
---                              c'est de la QU'ON LIT : le calcul et la mise
---                              en forme restent au client -- les degats
---                              s'ecrivent "45 - 62", teintes s'il y a lieu
---   UnitResistance("pet", ecole)  les resistances, l'ecole venant du
---                              GetID() de PetMagicResFrame<i>
---   NUM_PET_RESISTANCE_TYPES   combien il y en a : cinq
---
--- CE QUI DIFFERE, ET POURQUOI.
---
---   * LE SCORE CRITIQUE EST CELUI DE L'AGILITE, et rien d'autre. 3.3.5
---     n'expose pas le critique d'un familier : son ecran ne le montre pas,
---     et aucune fonction ne le rend. GetCritChanceFromAgility("pet") est ce
---     que le client porte de plus proche -- c'est meme ce dont il se sert
---     pour l'infobulle de l'agilite du familier. La valeur affichee est
---     donc la PART VENANT DE L'AGILITE, pas le total. C'est un manque,
---     signale, pas un choix.
---   * LES CINQ CARACTERISTIQUES ne sont pas montrees : la demande porte sur
---     cinq lignes nommees, et celles-la n'en font pas partie.
+-- ForeverUI: the pet tab, built on 3.3.5's PetPaperDollFrame (camelot shows the pet as a
+-- right-pane sidebar instead). Left pane: the client's pet model. Right pane: the level, then
+-- General (health, armor, damage, attack power, crit) and Resistances, laid out like the
+-- character stats. Values are read from the client's own frames, which keep their formatting.
+-- 3.3.5 has no pet crit API: the crit shown is only GetCritChanceFromAgility("pet").
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 local L = ForeverUI.L
 
--- Les memes mesures que les statistiques du personnage, dans
--- CharacterFrame.lua : une page du meme volet doit avoir le meme bord.
-local MARGE = 20                        -- STAT_MARGE
-local PAS = 13                          -- STAT_PAS, la hauteur d'une ligne
-local ENTETE_H = 34                     -- STAT_ENTETE
-local ENTETE_DEBORD = 5                 -- STAT_ENTETE_DEBORD
-local ENTRE_GROUPES = 16                -- STAT_ENTRE_GROUPES
-local HAUT = 14                         -- sous le haut du volet
-local NIVEAU_H = 20
-local NIVEAU_ECART = -8
+-- Same measures as the character stats (CharacterFrame.lua), so both pages share one edge.
+local MARGIN = 20                        -- STAT_MARGIN
+local STEP = 13                          -- STAT_STEP, one row's height
+local HEADER_H = 34                     -- STAT_HEADER
+local HEADER_OVERHANG = 5                 -- STAT_HEADER_OVERHANG
+local GROUP_GAP = 16                -- STAT_GROUP_GAP
+local TOP = 14                         -- below the pane's top
+local LEVEL_H = 20
+local LEVEL_GAP = -8
 
--- LES FLECHES DE ROTATION, A LA MEME PLACE QUE CELLES DU PERSONNAGE.
---
--- A LA DEMANDE. Les memes mesures que poserModele, dans CharacterFrame.lua :
--- centrees sur le HAUT du volet, cote a cote, et un cran au-dessus du
--- modele pour recevoir le clic. Les deux boutons font 35 x 35 dans les deux
--- ecrans -- releve dans les XML du client -- il n'y a donc que la place qui
--- differait.
+-- Rotation arrows, placed like the character's (placeModel in CharacterFrame.lua): centered
+-- on the pane's top, side by side, above the model so they get the click. Both screens use
+-- 35 x 35 buttons (client XML), so only the position changes.
 local ROTATION_Y = -12
-local ROTATION_ECART = 4
+local ROTATION_GAP = 4
 
-local ATLAS_ENTETE = "ui-character-info-title"
-local ATLAS_NIVEAU = "ui-character-info-itemlevel-bounce"
-local ATLAS_FOND_SOMBRE = "ui-character-info-itemlevel-bounce"
-local ATLAS_FOND_CLAIR = "ui-character-info-line-bounce"
+local ATLAS_HEADER = "ui-character-info-title"
+local ATLAS_LEVEL = "ui-character-info-itemlevel-bounce"
+local ATLAS_DARK_BACKGROUND = "ui-character-info-itemlevel-bounce"
+local ATLAS_LIGHT_BACKGROUND = "ui-character-info-line-bounce"
 
--- La taille du volet, par construction : un contenu se batit a sa premiere
--- ouverture, qui peut preceder la pose de la fenetre.
-local VOLET_L, VOLET_H = 233, 464
-local VOLET_GAUCHE_L, VOLET_GAUCHE_H = 398, 464
+-- Default pane sizes: a content may be built on first open, before the window is laid out.
+local PANE_W = 233
+local LEFT_PANE_W, LEFT_PANE_H = 398, 464
 
-local panneau, detail
+local panel, detail
 
--- ---------------------------------------------------------------- les donnees
+-- ---------------------------------------------------------------- Data
 
-local function aUnFamilier()
+local function hasPet()
     return (HasPetUI and HasPetUI()) and UnitExists and UnitExists("pet")
 end
 
--- LE TEXTE D'UNE LIGNE. Trois valeurs se lisent dans les cadres du client,
--- apres l'avoir fait calculer : c'est lui qui les met en forme.
-local function lireDuClient(nomCadre, poser)
-    local cadre = _G[nomCadre]
-    if not cadre then
+-- Reads a stat's text from the client's frame after letting the client compute it,
+-- so the client keeps its formatting. place: the client's PaperDollFrame_Set* function.
+local function readFromClient(frameName, place)
+    local frame = _G[frameName]
+    if not frame then
         return nil
     end
-    if poser then
-        poser(cadre, "Pet")
+    if place then
+        place(frame, "Pet")
     end
-    local texte = _G[nomCadre .. "StatText"]
-    return texte and texte:GetText()
+    local text = _G[frameName .. "StatText"]
+    return text and text:GetText()
 end
 
-local function lireGeneral()
-    local lignes = {}
+-- Rows of the General category: { name, value }.
+local function readGeneral()
+    local rows = {}
 
-    lignes[#lignes + 1] = {
-        nom = HEALTH,
-        valeur = tostring((UnitHealthMax and UnitHealthMax("pet")) or 0),
+    rows[#rows + 1] = {
+        name = HEALTH,
+        value = tostring((UnitHealthMax and UnitHealthMax("pet")) or 0),
     }
-    lignes[#lignes + 1] = {
-        nom = ARMOR,
-        valeur = lireDuClient("PetArmorFrame", PaperDollFrame_SetArmor) or "",
+    rows[#rows + 1] = {
+        name = ARMOR,
+        value = readFromClient("PetArmorFrame", PaperDollFrame_SetArmor) or "",
     }
-    lignes[#lignes + 1] = {
-        nom = DAMAGE,
-        valeur = lireDuClient("PetDamageFrame", PaperDollFrame_SetDamage) or "",
+    rows[#rows + 1] = {
+        name = DAMAGE,
+        value = readFromClient("PetDamageFrame", PaperDollFrame_SetDamage) or "",
     }
-    -- LE NOM DE LA LIGNE : "Attack Power", et non "Power".
-    --
-    -- ATTACK_POWER vaut "Power" dans ce client -- releve dans ses
-    -- GlobalStrings. La seule chaine qui porte exactement "Attack Power"
-    -- est ATTACK_POWER_TOOLTIP, celle de l'infobulle ; c'est donc elle
-    -- qu'on prend, et ATTACK_POWER ne sert plus que de dernier recours.
-    lignes[#lignes + 1] = {
-        nom = ATTACK_POWER_TOOLTIP or ATTACK_POWER,
-        valeur = lireDuClient("PetAttackPowerFrame",
+    -- ATTACK_POWER is "Power" in this client; ATTACK_POWER_TOOLTIP is "Attack Power".
+    rows[#rows + 1] = {
+        name = ATTACK_POWER_TOOLTIP or ATTACK_POWER,
+        value = readFromClient("PetAttackPowerFrame",
             PaperDollFrame_SetAttackPower) or "",
     }
 
-    -- ECART ASSUME : la part venant de l'agilite, faute de mieux. Voir
-    -- l'entete.
-    local critique = (GetCritChanceFromAgility and GetCritChanceFromAgility("pet")) or 0
-    lignes[#lignes + 1] = {
-        nom = MELEE_CRIT_CHANCE,
-        valeur = string.format("%.2f%%", critique),
+    -- Only the agility part of crit: 3.3.5 has no pet crit API.
+    local critChance = (GetCritChanceFromAgility and GetCritChanceFromAgility("pet")) or 0
+    rows[#rows + 1] = {
+        name = MELEE_CRIT_CHANCE,
+        value = string.format("%.2f%%", critChance),
     }
 
-    return lignes
+    return rows
 end
 
-local function lireResistances()
-    local lignes = {}
-    local combien = NUM_PET_RESISTANCE_TYPES or 5
-    for rang = 1, combien do
-        local cadre = _G["PetMagicResFrame" .. rang]
-        local ecole = cadre and cadre.GetID and cadre:GetID()
-        if ecole then
-            local _, valeur = UnitResistance("pet", ecole)
-            lignes[#lignes + 1] = {
-                nom = _G["RESISTANCE" .. ecole .. "_NAME"] or tostring(ecole),
-                valeur = tostring(valeur or 0),
+-- Resistance rows { name, value }, for the debug report.
+local function readResistances()
+    local rows = {}
+    local numResistances = NUM_PET_RESISTANCE_TYPES or 5
+    for rank = 1, numResistances do
+        local frame = _G["PetMagicResFrame" .. rank]
+        local school = frame and frame.GetID and frame:GetID()
+        if school then
+            local _, value = UnitResistance("pet", school)
+            rows[#rows + 1] = {
+                name = _G["RESISTANCE" .. school .. "_NAME"] or tostring(school),
+                value = tostring(value or 0),
             }
         end
     end
-    return lignes
+    return rows
 end
 
--- --------------------------------------------------------------- le volet droit
+-- --------------------------------------------------------------- Right pane
 
-local groupes = {}
-local rangees = {}
+local groups = {}
+local rowLines = {}
 
--- UNE LIGNE : le meme gabarit que StatFrameTemplate -- intitule a gauche,
--- valeur calee a droite -- et le meme fond alterne que les statistiques du
--- personnage.
-local function creerLigne(rang, largeur)
-    local ligne = CreateFrame("Frame", "ForeverUIPetStat" .. rang, detail)
-    ligne:SetWidth(largeur)
-    ligne:SetHeight(PAS)
+-- One stat row like StatFrameTemplate: label left, value right, alternating background.
+local function createRow(rank, width)
+    local row = CreateFrame("Frame", "ForeverUIPetStat" .. rank, detail)
+    row:SetWidth(width)
+    row:SetHeight(STEP)
 
-    local fond = ligne:CreateTexture(nil, "BACKGROUND")
-    fond:SetPoint("TOPLEFT", ligne, "TOPLEFT", 0, 0)
-    fond:SetPoint("BOTTOMRIGHT", ligne, "BOTTOMRIGHT", 0, 0)
-    ligne.fond = fond
+    local background = row:CreateTexture(nil, "BACKGROUND")
+    background:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    background:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+    row.background = background
 
-    local intitule = ligne:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    intitule:SetJustifyH("LEFT")
-    intitule:SetPoint("LEFT", ligne, "LEFT", 0, 0)
-    ligne.intitule = intitule
+    local label = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    label:SetJustifyH("LEFT")
+    label:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.label = label
 
-    local valeur = ligne:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    valeur:SetJustifyH("RIGHT")
-    valeur:SetPoint("RIGHT", ligne, "RIGHT", 0, 0)
-    valeur:SetPoint("LEFT", intitule, "RIGHT", 4, 0)
-    ligne.valeur = valeur
+    local value = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    value:SetJustifyH("RIGHT")
+    value:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    value:SetPoint("LEFT", label, "RIGHT", 4, 0)
+    row.value = value
 
-    rangees[rang] = ligne
-    return ligne
+    rowLines[rank] = row
+    return row
 end
 
-local function creerEntete(rang, largeur)
-    local entete = CreateFrame("Frame", "ForeverUIPetCategory" .. rang, detail)
-    entete:SetWidth(largeur + 2 * ENTETE_DEBORD)
-    entete:SetHeight(ENTETE_H)
+local function createHeader(rank, width)
+    local header = CreateFrame("Frame", "ForeverUIPetCategory" .. rank, detail)
+    header:SetWidth(width + 2 * HEADER_OVERHANG)
+    header:SetHeight(HEADER_H)
 
-    -- L'encadre de camelot, tendu : le meme que les selecteurs de categorie
-    -- des statistiques du personnage.
-    local fond = entete:CreateTexture(nil, "BACKGROUND")
-    ForeverUI.SetAtlas(fond, ATLAS_ENTETE, true)
-    fond:SetAllPoints(entete)
+    -- camelot's header frame, stretched, as on the character stat category selectors.
+    local background = header:CreateTexture(nil, "BACKGROUND")
+    ForeverUI.SetAtlas(background, ATLAS_HEADER, true)
+    background:SetAllPoints(header)
 
-    local intitule = entete:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    intitule:SetPoint("CENTER", entete, "CENTER", 0, 1)
-    entete.intitule = intitule
+    local label = header:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    label:SetPoint("CENTER", header, "CENTER", 0, 1)
+    header.label = label
 
-    groupes[rang] = entete
-    return entete
+    groups[rank] = header
+    return header
 end
 
--- LES RESISTANCES SONT DES ICONES, POSEES A L'HORIZONTAL.
---
--- A LA DEMANDE, et non en lignes de texte. Ce sont les CADRES DU CLIENT --
--- PetMagicResFrame1 a 5, MagicResistanceFrameTemplate, 32 x 29 -- qui
--- portent deja l'icone d'ecole, decoupee dans
--- Interface/PaperDollInfoFrame/UI-Character-ResistanceIcons, la valeur au
--- BOTTOM (0, 3) et l'infobulle que PetPaperDollFrame_SetResistances
--- compose. On les reprend donc entiers plutot que de les refaire : le
--- client garde le calcul, la teinte et l'infobulle.
---
--- Ils sont fils de l'ecran du client, que le balayage masque : on les
--- REPARENTE dans le volet droit. Ils n'y perdent rien -- ils ne portent
--- aucun de nos reglages de niveau.
---
--- Rend la hauteur occupee.
-local RES_L, RES_H = 32, 29             -- MagicResistanceFrameTemplate
+-- Resistances are the client's own icons (PetMagicResFrame1-5), placed in a row, so the
+-- client keeps their value, color and tooltip. They are reparented to the right pane
+-- because the sweep hides their parent screen. placeResistances returns the height used.
+local RES_W, RES_H = 32, 29             -- MagicResistanceFrameTemplate
 
-local function poserResistances(largeur, y)
+local function placeResistances(width, y)
     if PetPaperDollFrame_SetResistances then
         PetPaperDollFrame_SetResistances()
     end
 
-    local combien = NUM_PET_RESISTANCE_TYPES or 5
-    -- Ils s'etalent sur toute la largeur des lignes, a pas egaux.
-    local ecart = 0
-    if combien > 1 then
-        ecart = (largeur - combien * RES_L) / (combien - 1)
-        if ecart < 0 then
-            ecart = 0
+    local numResistances = NUM_PET_RESISTANCE_TYPES or 5
+    -- Spread evenly over the row width.
+    local gap = 0
+    if numResistances > 1 then
+        gap = (width - numResistances * RES_W) / (numResistances - 1)
+        if gap < 0 then
+            gap = 0
         end
     end
 
-    for rang = 1, combien do
-        local cadre = _G["PetMagicResFrame" .. rang]
-        if cadre then
-            cadre:SetParent(detail)
-            cadre:SetWidth(RES_L)
-            cadre:SetHeight(RES_H)
-            cadre:ClearAllPoints()
-            cadre:SetPoint("TOPLEFT", detail, "TOPLEFT",
-                MARGE + (rang - 1) * (RES_L + ecart), -y)
-            cadre:Show()
-            for _, region in ipairs({ cadre:GetRegions() }) do
+    for rank = 1, numResistances do
+        local frame = _G["PetMagicResFrame" .. rank]
+        if frame then
+            frame:SetParent(detail)
+            frame:SetWidth(RES_W)
+            frame:SetHeight(RES_H)
+            frame:ClearAllPoints()
+            frame:SetPoint("TOPLEFT", detail, "TOPLEFT",
+                MARGIN + (rank - 1) * (RES_W + gap), -y)
+            frame:Show()
+            for _, region in ipairs({ frame:GetRegions() }) do
                 if region.Show then
                     region:Show()
                 end
@@ -259,331 +196,319 @@ local function poserResistances(largeur, y)
     return RES_H
 end
 
--- UN PASSAGE : empiler l'entete de chaque categorie et ses lignes.
-local function disposer()
+-- Stacks each category header and its rows.
+local function layout()
     if not detail then
         return
     end
 
-    local largeur = detail:GetWidth() or 0
-    if largeur < 50 then
-        largeur = VOLET_L
+    local width = detail:GetWidth() or 0
+    if width < 50 then
+        width = PANE_W
     end
-    largeur = largeur - 2 * MARGE
+    width = width - 2 * MARGIN
 
-    local blocs = {
-        { nom = GENERAL, lignes = lireGeneral() },
-        { nom = L.PETTAB_RESISTANCES, icones = true },
+    local blocks = {
+        { name = GENERAL, rows = readGeneral() },
+        { name = L.PETTAB_RESISTANCES, icons = true },
     }
 
-    local y = HAUT
+    local y = TOP
 
-    -- "Niveau X <nom>", en tete du volet.
-    local niveau = (UnitLevel and UnitLevel("pet")) or 0
-    local nom = (UnitName and UnitName("pet")) or ""
-    detail.niveau:SetWidth(largeur)
-    detail.niveau:ClearAllPoints()
-    detail.niveau:SetPoint("TOP", detail, "TOP", 0, -y)
-    detail.niveau:SetText(string.format("%s %s",
-        string.format(UNIT_LEVEL_TEMPLATE, niveau), nom))
-    y = y + NIVEAU_H - NIVEAU_ECART
+    -- "Level X <name>" at the top of the pane.
+    local level = (UnitLevel and UnitLevel("pet")) or 0
+    local name = (UnitName and UnitName("pet")) or ""
+    detail.level:SetWidth(width)
+    detail.level:ClearAllPoints()
+    detail.level:SetPoint("TOP", detail, "TOP", 0, -y)
+    detail.level:SetText(string.format("%s %s",
+        string.format(UNIT_LEVEL_TEMPLATE, level), name))
+    y = y + LEVEL_H - LEVEL_GAP
 
-    local rangEntete, rangLigne = 0, 0
-    for _, bloc in ipairs(blocs) do
-        rangEntete = rangEntete + 1
-        local entete = groupes[rangEntete] or creerEntete(rangEntete, largeur)
-        entete:SetWidth(largeur + 2 * ENTETE_DEBORD)
-        entete:ClearAllPoints()
-        entete:SetPoint("TOPLEFT", detail, "TOPLEFT", MARGE - ENTETE_DEBORD, -y)
-        entete.intitule:SetText(bloc.nom)
-        entete:Show()
-        y = y + ENTETE_H
+    local headerIndex, rowIndex = 0, 0
+    for _, block in ipairs(blocks) do
+        headerIndex = headerIndex + 1
+        local header = groups[headerIndex] or createHeader(headerIndex, width)
+        header:SetWidth(width + 2 * HEADER_OVERHANG)
+        header:ClearAllPoints()
+        header:SetPoint("TOPLEFT", detail, "TOPLEFT", MARGIN - HEADER_OVERHANG, -y)
+        header.label:SetText(block.name)
+        header:Show()
+        y = y + HEADER_H
 
-        if bloc.icones then
-            y = y + poserResistances(largeur, y)
+        if block.icons then
+            y = y + placeResistances(width, y)
         else
-            for numero, donnees in ipairs(bloc.lignes) do
-                rangLigne = rangLigne + 1
-                local ligne = rangees[rangLigne] or creerLigne(rangLigne, largeur)
-                ligne:SetWidth(largeur)
-                ligne:ClearAllPoints()
-                ligne:SetPoint("TOPLEFT", detail, "TOPLEFT", MARGE, -y)
-                ligne.intitule:SetText(string.format(STAT_FORMAT, donnees.nom))
-                ligne.valeur:SetText(donnees.valeur)
-                -- La sombre en premier, et le compte repart a chaque
-                -- categorie : la meme regle que les statistiques du
-                -- personnage.
-                ForeverUI.SetAtlas(ligne.fond,
-                    (numero % 2 == 1) and ATLAS_FOND_SOMBRE or ATLAS_FOND_CLAIR,
+            for number, data in ipairs(block.rows) do
+                rowIndex = rowIndex + 1
+                local row = rowLines[rowIndex] or createRow(rowIndex, width)
+                row:SetWidth(width)
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", detail, "TOPLEFT", MARGIN, -y)
+                row.label:SetText(string.format(STAT_FORMAT, data.name))
+                row.value:SetText(data.value)
+                -- Dark first, restarting at each category, as in the character stats.
+                ForeverUI.SetAtlas(row.background,
+                    (number % 2 == 1) and ATLAS_DARK_BACKGROUND or ATLAS_LIGHT_BACKGROUND,
                     true)
-                ligne:Show()
-                y = y + PAS
+                row:Show()
+                y = y + STEP
             end
         end
 
-        y = y + ENTRE_GROUPES
+        y = y + GROUP_GAP
     end
 
-    for rang = rangEntete + 1, #groupes do
-        groupes[rang]:Hide()
+    for rank = headerIndex + 1, #groups do
+        groups[rank]:Hide()
     end
-    for rang = rangLigne + 1, #rangees do
-        rangees[rang]:Hide()
+    for rank = rowIndex + 1, #rowLines do
+        rowLines[rank]:Hide()
     end
 end
 
-local function majDetail()
+-- Fills the right pane, or empties it when there is no pet.
+local function updateDetail()
     if not detail then
         return
     end
-    if not aUnFamilier() then
-        detail.niveau:SetText("")
-        for _, entete in ipairs(groupes) do
-            entete:Hide()
+    if not hasPet() then
+        detail.level:SetText("")
+        for _, header in ipairs(groups) do
+            header:Hide()
         end
-        for _, ligne in ipairs(rangees) do
-            ligne:Hide()
+        for _, row in ipairs(rowLines) do
+            row:Hide()
         end
-        for rang = 1, (NUM_PET_RESISTANCE_TYPES or 5) do
-            local cadre = _G["PetMagicResFrame" .. rang]
-            if cadre then
-                cadre:Hide()
+        for rank = 1, (NUM_PET_RESISTANCE_TYPES or 5) do
+            local frame = _G["PetMagicResFrame" .. rank]
+            if frame then
+                frame:Hide()
             end
         end
         return
     end
-    disposer()
+    layout()
 end
-ForeverUI.PetDetail = majDetail
+ForeverUI.PetDetail = updateDetail
 
--- ------------------------------------------------------------- le volet gauche
+-- ------------------------------------------------------------- Left pane
 
--- LE BALAYAGE. L'ecran du client s'efface -- son art, ses onglets, sa barre
--- d'experience, ses cinq caracteristiques -- mais PAS l'apercu, ni le cadre
--- qui le porte.
---
--- L'APERCU N'EST PAS FILS DE L'ECRAN, IL EST PETIT-FILS.
---
--- Releve dans le PetPaperDollFrame.xml du client : PetModelFrame, ligne
--- 208, vit dans PetPaperDollFramePetFrame, ligne 128, qui est setAllPoints
--- sur l'ecran. Un balayage qui ne regarde que les fils DIRECTS et n'epargne
--- que le modele masquait donc son PARENT -- et l'apercu avec lui, sans
--- qu'aucune ligne ne l'ait demande. C'est exactement ce qui se voyait :
--- aucun rendu en trois dimensions.
---
--- On balaie donc les deux niveaux, en epargnant a chacun ce qui porte la
--- suite.
-local function balayer(cadre, epargnes)
-    if not cadre then
+-- Hides a client frame's art, text and children, except the spared ones.
+-- PetModelFrame is a grandchild of PetPaperDollFrame (inside PetPaperDollFramePetFrame),
+-- so both levels are swept, each sparing what holds the model.
+-- spared: set of child frames to leave shown.
+local function sweep(frame, spared)
+    if not frame then
         return
     end
 
-    if cadre.SetBackdrop then
-        cadre:SetBackdrop(nil)
+    if frame.SetBackdrop then
+        frame:SetBackdrop(nil)
     end
-    for _, region in ipairs({ cadre:GetRegions() }) do
-        local nature = region.GetObjectType and region:GetObjectType()
-        if nature == "Texture" then
+    for _, region in ipairs({ frame:GetRegions() }) do
+        local objectType = region.GetObjectType and region:GetObjectType()
+        if objectType == "Texture" then
             region:SetAlpha(0)
-        elseif nature == "FontString" and region.Hide then
+        elseif objectType == "FontString" and region.Hide then
             region:Hide()
         end
     end
-    if cadre.GetChildren then
-        for _, fils in ipairs({ cadre:GetChildren() }) do
-            if not epargnes[fils] and fils.Hide then
-                fils:Hide()
+    if frame.GetChildren then
+        for _, childFrame in ipairs({ frame:GetChildren() }) do
+            if not spared[childFrame] and childFrame.Hide then
+                childFrame:Hide()
             end
         end
     end
 end
 
-local function etoufferEcranDuClient()
-    local ecran = _G["PetPaperDollFrame"]
-    local porteur = _G["PetPaperDollFramePetFrame"]
-    local modele = _G["PetModelFrame"]
-    if not ecran then
+-- Hides the client pet screen, except the model and its carrier.
+local function suppressClientScreen()
+    local screen = _G["PetPaperDollFrame"]
+    local carrier = _G["PetPaperDollFramePetFrame"]
+    local model = _G["PetModelFrame"]
+    if not screen then
         return
     end
 
-    balayer(ecran, { [panneau or false] = true, [porteur or false] = true,
-        [modele or false] = true })
-    balayer(porteur, { [modele or false] = true })
+    sweep(screen, { [panel or false] = true, [carrier or false] = true,
+        [model or false] = true })
+    sweep(carrier, { [model or false] = true })
 
-    -- PetPaperDollFrame_SetTab le masque des qu'un autre onglet du client
-    -- est choisi : on le remontre, c'est lui qui porte l'apercu.
-    if porteur then
-        porteur:Show()
+    -- PetPaperDollFrame_SetTab hides it when another client tab is chosen; it holds the model.
+    if carrier then
+        carrier:Show()
     end
 end
 
-local function majApercu()
-    local modele = _G["PetModelFrame"]
-    if not modele or not panneau then
+-- Puts the pet model and its rotation arrows in the left pane.
+local function updatePreview()
+    local model = _G["PetModelFrame"]
+    if not model or not panel then
         return
     end
 
-    etoufferEcranDuClient()
+    suppressClientScreen()
 
-    modele:ClearAllPoints()
-    modele:SetPoint("TOPLEFT", panneau, "TOPLEFT", 0, 0)
-    modele:SetPoint("BOTTOMRIGHT", panneau, "BOTTOMRIGHT", 0, 0)
+    model:ClearAllPoints()
+    model:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+    model:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
-    -- LES FLECHES sont filles du MODELE -- releve dans le
-    -- PetPaperDollFrame.xml, ligne 230 -- le balayage ne les atteint donc
-    -- pas. Il ne reste qu'a les poser la ou sont celles du personnage.
-    local gauche = _G["PetModelFrameRotateLeftButton"]
-    local droite = _G["PetModelFrameRotateRightButton"]
-    if gauche and droite then
-        local demi = (gauche:GetWidth() or 0) / 2 + ROTATION_ECART / 2
-        local niveau = (modele:GetFrameLevel() or 0) + 2
+    -- The arrows are children of the model (PetPaperDollFrame.xml), so the sweep misses them;
+    -- they only need to move where the character's are.
+    local left = _G["PetModelFrameRotateLeftButton"]
+    local right = _G["PetModelFrameRotateRightButton"]
+    if left and right then
+        local half = (left:GetWidth() or 0) / 2 + ROTATION_GAP / 2
+        local level = (model:GetFrameLevel() or 0) + 2
 
-        gauche:ClearAllPoints()
-        gauche:SetPoint("TOP", panneau, "TOP", -demi, ROTATION_Y)
-        gauche:SetFrameLevel(niveau)
+        left:ClearAllPoints()
+        left:SetPoint("TOP", panel, "TOP", -half, ROTATION_Y)
+        left:SetFrameLevel(level)
 
-        droite:ClearAllPoints()
-        droite:SetPoint("TOP", panneau, "TOP", demi, ROTATION_Y)
-        droite:SetFrameLevel(niveau)
+        right:ClearAllPoints()
+        right:SetPoint("TOP", panel, "TOP", half, ROTATION_Y)
+        right:SetFrameLevel(level)
     end
 
-    if aUnFamilier() then
-        if modele.SetUnit then
-            modele:SetUnit("pet")
+    if hasPet() then
+        if model.SetUnit then
+            model:SetUnit("pet")
         end
-        modele:Show()
-        if gauche then gauche:Show() end
-        if droite then droite:Show() end
+        model:Show()
+        if left then left:Show() end
+        if right then right:Show() end
     else
-        modele:Hide()
-        if gauche then gauche:Hide() end
-        if droite then droite:Hide() end
+        model:Hide()
+        if left then left:Hide() end
+        if right then right:Hide() end
     end
 end
-ForeverUI.PetPreview = majApercu
+ForeverUI.PetPreview = updatePreview
 
--- ---------------------------------------------------------- la construction
+-- ---------------------------------------------------------- Build
 
-local function monter(hote)
-    local cadre = _G["PetPaperDollFrame"]
-    if not cadre or not hote then
+-- Left pane content; host: the left pane frame.
+-- Returns no root and the client frames it owns (see Panes.Register).
+local function build(host)
+    local frame = _G["PetPaperDollFrame"]
+    if not frame or not host then
         return nil, {}
     end
 
-    cadre:ClearAllPoints()
-    cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
-    cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", 0, 0)
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    frame:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
 
-    if panneau then
-        majApercu()
-        majDetail()
-        return nil, { cadre }
+    if panel then
+        updatePreview()
+        updateDetail()
+        return nil, { frame }
     end
 
-    panneau = CreateFrame("Frame", "ForeverUIPetPane", cadre)
-    panneau:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
-    panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", 0, 0)
-    local largeur = hote:GetWidth() or 0
-    if largeur < 100 then
-        largeur = VOLET_GAUCHE_L
+    panel = CreateFrame("Frame", "ForeverUIPetPane", frame)
+    panel:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    local width = host:GetWidth() or 0
+    if width < 100 then
+        width = LEFT_PANE_W
     end
-    panneau:SetWidth(largeur)
-    local hauteur = hote:GetHeight() or 0
-    if hauteur < 100 then
-        hauteur = VOLET_GAUCHE_H
+    panel:SetWidth(width)
+    local height = host:GetHeight() or 0
+    if height < 100 then
+        height = LEFT_PANE_H
     end
-    panneau:SetHeight(hauteur)
+    panel:SetHeight(height)
 
-    majApercu()
-    majDetail()
-    return nil, { cadre }
+    updatePreview()
+    updateDetail()
+    return nil, { frame }
 end
 
-local function monterDetail(hote)
+-- Right pane content; host: the right pane frame. Returns its root (see Panes.Register).
+local function buildDetail(host)
     if detail then
-        majDetail()
+        updateDetail()
         return detail, {}
     end
-    if not hote then
+    if not host then
         return nil, {}
     end
 
-    detail = CreateFrame("Frame", "ForeverUIPetStats", hote)
-    detail:SetPoint("TOPLEFT", hote, "TOPLEFT", 0, 0)
-    detail:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", 0, 0)
-    local largeur = hote:GetWidth() or 0
-    if largeur < 50 then
-        largeur = VOLET_L
+    detail = CreateFrame("Frame", "ForeverUIPetStats", host)
+    detail:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    detail:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    local width = host:GetWidth() or 0
+    if width < 50 then
+        width = PANE_W
     end
-    detail:SetWidth(largeur)
+    detail:SetWidth(width)
 
-    -- "Niveau X <nom>", sur le meme fond que la ligne de niveau du
-    -- personnage.
-    local fond = detail:CreateTexture(nil, "BACKGROUND")
-    ForeverUI.SetAtlas(fond, ATLAS_NIVEAU, true)
+    -- "Level X <name>", on the same background as the character's level line.
+    local background = detail:CreateTexture(nil, "BACKGROUND")
+    ForeverUI.SetAtlas(background, ATLAS_LEVEL, true)
 
-    local niveau = detail:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    niveau:SetHeight(NIVEAU_H)
-    niveau:SetJustifyH("CENTER")
-    niveau:SetJustifyV("MIDDLE")
-    detail.niveau = niveau
+    local level = detail:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    level:SetHeight(LEVEL_H)
+    level:SetJustifyH("CENTER")
+    level:SetJustifyV("MIDDLE")
+    detail.level = level
 
-    fond:SetPoint("TOP", niveau, "TOP", 0, 0)
-    fond:SetPoint("BOTTOM", niveau, "BOTTOM", 0, 0)
-    fond:SetPoint("LEFT", niveau, "LEFT", 0, 0)
-    fond:SetPoint("RIGHT", niveau, "RIGHT", 0, 0)
+    background:SetPoint("TOP", level, "TOP", 0, 0)
+    background:SetPoint("BOTTOM", level, "BOTTOM", 0, 0)
+    background:SetPoint("LEFT", level, "LEFT", 0, 0)
+    background:SetPoint("RIGHT", level, "RIGHT", 0, 0)
 
-    majDetail()
+    updateDetail()
     return detail, {}
 end
 
-ForeverUI.PetTab = { Build = monter, BuildRight = monterDetail }
+ForeverUI.PetTab = { Build = build, BuildRight = buildDetail }
 
--- Le client refait son ecran dans PetPaperDollFrame_Update : on passe apres,
--- et on reprend l'apercu comme le detail.
+-- The client redraws its screen in PetPaperDollFrame_Update: re-apply both panes after it.
 if hooksecurefunc and type(_G["PetPaperDollFrame_Update"]) == "function" then
     hooksecurefunc("PetPaperDollFrame_Update", function()
-        majApercu()
-        majDetail()
+        updatePreview()
+        updateDetail()
     end)
 end
 
--- CE QUI FAIT BOUGER LE FAMILIER. UNIT_PET dit qu'il change ; les trois
--- autres, que ses chiffres bougent.
-local veilleur = CreateFrame("Frame")
-veilleur:RegisterEvent("UNIT_PET")
-veilleur:RegisterEvent("UNIT_STATS")
-veilleur:RegisterEvent("UNIT_ATTACK_POWER")
-veilleur:RegisterEvent("UNIT_RESISTANCES")
-veilleur:SetScript("OnEvent", function()
-    majApercu()
-    majDetail()
+-- UNIT_PET: the pet changes; the other three: its numbers change.
+local listener = CreateFrame("Frame")
+listener:RegisterEvent("UNIT_PET")
+listener:RegisterEvent("UNIT_STATS")
+listener:RegisterEvent("UNIT_ATTACK_POWER")
+listener:RegisterEvent("UNIT_RESISTANCES")
+listener:SetScript("OnEvent", function()
+    updatePreview()
+    updateDetail()
 end)
 
--- TEMOIN -- /fui familier.
+-- Debug report: /fui pet.
 function ForeverUI.PetDebug()
-    local dire = function(texte)
-        DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+    local say = function(text)
+        DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. text)
     end
 
-    dire(string.format(L.PETTAB_DEBUG_PET,
+    say(string.format(L.PETTAB_DEBUG_PET,
         tostring(HasPetUI and HasPetUI()),
         tostring(UnitExists and UnitExists("pet")),
         tostring(UnitLevel and UnitLevel("pet")),
         tostring(UnitName and UnitName("pet")),
         tostring(UnitCreatureFamily and UnitCreatureFamily("pet"))))
 
-    for _, donnees in ipairs(lireGeneral()) do
+    for _, data in ipairs(readGeneral()) do
         DEFAULT_CHAT_FRAME:AddMessage(string.format("   %-18s %s",
-            donnees.nom, tostring(donnees.valeur)))
+            data.name, tostring(data.value)))
     end
-    for _, donnees in ipairs(lireResistances()) do
+    for _, data in ipairs(readResistances()) do
         DEFAULT_CHAT_FRAME:AddMessage(string.format("   %-18s %s",
-            donnees.nom, tostring(donnees.valeur)))
+            data.name, tostring(data.value)))
     end
 
-    local modele = _G["PetModelFrame"]
-    dire(string.format(L.PETTAB_DEBUG_PREVIEW,
-        tostring(modele and modele:IsShown()),
+    local model = _G["PetModelFrame"]
+    say(string.format(L.PETTAB_DEBUG_PREVIEW,
+        tostring(model and model:IsShown()),
         tostring(detail and detail:IsShown())))
 end

@@ -1,101 +1,12 @@
--- ForeverUI : la page "Guild" de la fenetre Social (onglet 3 du client).
---
--- DECISION DE L'UTILISATEUR (2026-09-26) : la guilde en onglet, comme WotLK
--- (camelot la met dans Communities, une fenetre a part). La page reprend
--- GuildFrame (FriendsFrame.lua et .xml du client), ses volets -- detail d'un
--- membre, information, journal -- et garde la fenetre de controle du client.
---
--- RELEVE WotLK :
---   titre     format(GUILD_TITLE_TEMPLATE, rang, guilde) -- GetGuildInfo
---   totaux    GUILD_TOTAL (GetNumGuildMembers) et GUILD_TOTALONLINE (les
---             membres en ligne)
---   vues      FriendsFrame.playerStatusFrame : "Player Status" (NAME, ZONE,
---             LEVEL_ABBR, CLASS) ou "Guild Status" (NAME, RANK, LABEL_NOTE,
---             LASTONLINE) ; la bascule nomme la vue courante ; tri par
---             SortGuildRoster(name, zone, level, class, rank, note, online)
---   lignes    name, rank, rankIndex, level, class, zone, note, officernote,
---             online, status, classFileName = GetGuildRosterInfo(i) ; hors
---             ligne tout en gris 0,5 ; en ligne le nom en NORMAL, la classe
---             (ou le statut) teinte de sa classe ; dernier passage
---             RecentTimeDate(GetGuildRosterLastOnline(i)) ; GUILD_ONLINE_LABEL
---             ou le statut (<Away>) pour un membre en ligne
---   clics     gauche : SetGuildRosterSelection, le detail (un second clic sur
---             le meme le referme) ; droit : FriendsFrame_ShowDropdown(nom,
---             en ligne) -- rien pour un membre hors ligne
---   MOTD      GUILD_MOTD_LABEL, CURRENT_GUILD_MOTD ; blanc et cliquable
---             (SET_GUILDMOTD) si CanEditMOTD, gris 0,65 sinon
---   boutons   GUILDCONTROL (IsGuildLeader) : GuildControlPopupFrame du
---             client ; ADDMEMBER (CanGuildInvite) : ADD_GUILDMEMBER ;
---             GUILD_INFORMATION : le volet d'information
---   detail    nom, FRIENDS_LEVEL_TEMPLATE, ZONE_COLON, RANK_COLON (+ fleches
---             promouvoir / retrograder), LAST_ONLINE_COLON, NOTE_COLON
---             (SET_GUILDPLAYERNOTE si CanEditPublicNote, sinon gris),
---             OFFICER_NOTE_COLON (si CanViewOfficerNote ; SET_GUILDOFFICERNOTE
---             si CanEditOfficerNote), REMOVE (REMOVE_GUILDMEMBER), GROUP_INVITE
---   info      GetGuildInfoText / SetGuildInfoText, CanEditGuildInfo, le texte
---             retenu en attendant le GUILD_ROSTER_UPDATE ; ACCEPT, CLOSE,
---             GUILD_EVENT_LOG
---   journal   QueryGuildEventLog ; GetGuildEventInfo(i) : type, joueur1,
---             joueur2, rang, annee, mois, jour, heure ; GUILDEVENT_TYPE_* et
---             GUILD_BANK_LOG_TIME, le plus recent d'abord
---
--- LA LISTE DES MEMBRES est celle de camelot (2026-09-26, demande de
--- l'utilisateur) : Communities, vue Roster (communitiesmemberlist.xml et
--- .lua, pour une guilde). DECISION (2026-09-26) : la fenetre garde ses 385 --
--- l'elargir a 560 genait -- et la colonne Note s'en va ; Rank prend le reste
--- de la largeur. La note reste dans le detail du membre et dans l'infobulle,
--- qui s'ouvre donc aussi pour un membre qui a une note.
---   colonnes  GUILD_COLUMN_INFO : Level 40, Class 45, Name 100, Zone 100,
---             Rank 85, Note (le reste) -- ici sans Note, Rank au reste ; en-tetes ColumnDisplayButtonTemplate
---             (WhoFrame-ColumnTabs, 24), le premier a (2, 1) du bandeau, les
---             suivants a -2, le dernier jusqu'a -28 du bandeau (-6 de la
---             liste) ; un clic trie (SortGuildRoster : level, class, name,
---             zone, rank, note)
---   ligne     CommunitiesMemberListEntryTemplate, 20 de haut : bande
---             GuildFrame (0.3623-0.3818 / 0.9590-0.9980), surbrillance
---             UI-FriendsFrame-HighlightBar en ADD ; niveau (4, 40 de large),
---             icone de classe 16 (+8, CLASS_ICON_TCOORDS), le nom (+18, 95 de
---             large : presence 16, nom, icone de rang 12 -- UpdateNameFrame),
---             la zone (+8, 90), le rang (+7, 75), la note (+8 jusqu'a -4) ;
---             GameFontHighlightSmall
---   etat      en ligne : nom teinte de sa classe, le reste en blanc ; absent
---             ou occupe : FRIENDS_TEXTURE_AFK / _DND devant le nom ; hors
---             ligne : tout en gris, et la zone dit le dernier passage
---             (GetRecentTimeDate)
---   infobulle seulement si le nom, le rang, la note ou la zone sont coupes :
---             nom, rang, niveau et classe, zone, "Note: ..."
---   case      ShowOfflineButton (COMMUNITIES_MEMBER_LIST_SHOW_OFFLINE), au-
---             dessus de la liste en vue Roster
--- ECARTS : 3.3.5 n'a ni la race dans GetGuildRosterInfo (l'infobulle dit
--- FRIENDS_LEVEL_TEMPLATE, niveau et classe), ni les roles de communaute :
--- l'icone de rang ne marque que le chef de guilde (rang 0), les officiers ne
--- se reconnaissent pas. La colonne supplementaire de camelot (hauts faits,
--- metiers, score de donjon) n'a pas de donnees en 3.3.5 : la note va au bord.
--- La case prend SHOW_OFFLINE_MEMBERS, et Set/GetGuildRosterShowOffline, que
--- WotLK declare sans jamais la montrer (GuildFrameLFGButton virtuel). La
--- bascule des deux vues de WotLK s'en va : toutes les colonnes tiennent.
---
--- LE CADRE DE GUILDE DU CLIENT RESTE "MONTRE", HORS DE L'ECRAN. UnitPopup ne
--- propose "Promote to Guildmaster" et "Leave Guild" que si GuildFrame est
--- affiche, et le client ne rafraichit la liste (GuildRoster sur
--- GUILD_ROSTER_UPDATE, GuildControlPopupFrame_Initialize) que dans ce cas.
--- GuildFrame est donc garde par la fenetre, deplace loin de l'ecran,
--- transparent : ses fonctions tournent, rien ne se voit ni ne prend la
--- souris. Les popups du client s'appuient sur GuildFrame.selectedName et
--- GetGuildRosterSelection : on les tient a jour.
---
--- LA FENETRE DE CONTROLE (rangs, droits, banque) reste celle du client --
--- ses fonctions pilotent le serveur -- recollee a droite de la fenetre et
--- HABILLEE (2026-09-26) : le fond MacroPopup se tait, le metal et le fond de
--- camelot le remplacent, un titre et une croix dans la barre ; les cases
--- prennent checkbox-minimal, les champs le bord de camelot, le cadre des
--- droits de banque l'encadre de camelot. Les onglets de banque (1 a 6) et
--- les boutons +/- de rang gardent l'art du client.
+-- ForeverUI: the Guild page of the Social window (client tab 3), after WotLK GuildFrame,
+-- with its member detail, guild information and event log panes.
+-- The member list follows camelot's Communities Roster view without the Note column;
+-- the note shows in the member detail and in the tooltip.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 local S = ForeverUI.Social
-if not S or not S.inscrirePage then
+if not S or not S.registerPage then
 	return
 end
 
@@ -106,122 +17,121 @@ local SEP = string.char(92)
 local txt = S.txt
 
 local P = {
-	encadreY1 = -60, encadreBas = 88, enteteX = 4, enteteY = -4, ecart = -2,
-	ligneH = 20, texteH = 12,
-	colonnes = { { "LEVEL", 40, "level" }, { "CLASS", 45, "class" }, { "NAME", 100, "name" },
+	frameBoxY1 = -60, frameBoxBottom = 88, headerX = 4, headerY = -4, gap = -2,
+	rowH = 20, textH = 12,
+	columns = { { "LEVEL", 40, "level" }, { "CLASS", 45, "class" }, { "NAME", 100, "name" },
 		{ "ZONE", 100, "zone" }, { "RANK", 0, "rank" } },
-	-- la derniere colonne va jusqu'au bord de la liste ; remplirL : sa
-	-- largeur avant ancrage. Sans barre, la liste (a 5 de l'encadre) et les
-	-- en-tetes (a 4) gardent a droite leur marge de gauche : liste a -5,
-	-- derniere colonne a +1 du bord de la liste
-	noteDroite = -6, noteDroiteSeule = 1, remplirL = 60, listeX2 = -22, listeX2Seule = -5,
-	bande = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildframe",
-	bandeCoords = { 0.36230469, 0.38183594, 0.95898438, 0.99804688 },
-	barre = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "UI-FriendsFrame-HighlightBar",
+	-- The last column reaches the list edge; fillW: its width before anchoring.
+	-- Without a scroll bar, list and headers keep their left margin on the right:
+	-- list at -5, last column at +1 from the list edge.
+	noteRight = -6, noteRightAlone = 1, fillW = 60, listX2 = -22, listX2NoBar = -5,
+	strip = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildframe",
+	stripCoords = { 0.36230469, 0.38183594, 0.95898438, 0.99804688 },
+	bar = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "UI-FriendsFrame-HighlightBar",
 	classes = "Interface" .. SEP .. "Glues" .. SEP .. "CharacterCreate" .. SEP .. "UI-CharacterCreate-Classes",
-	chef = "Interface" .. SEP .. "GroupFrame" .. SEP .. "UI-Group-LeaderIcon",
+	leader = "Interface" .. SEP .. "GroupFrame" .. SEP .. "UI-Group-LeaderIcon",
 	absent = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "StatusIcon-Away",
-	occupe = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "StatusIcon-DnD",
-	nomL = 95,
-	totauxX = 64, totauxY = -40, horsDroite = -12, horsY = -33,
-	motdX = 14, motdBas = 32, motdH = 36,
-	boutonBas = 4, boutonDroite = -6,
-	gris = 0.5, grisTexte = 0.65,
+	busy = "Interface" .. SEP .. "FriendsFrame" .. SEP .. "StatusIcon-DnD",
+	nameW = 95,
+	totalsX = 64, totalsY = -40, offlineRight = -12, offlineY = -33,
+	motdX = 14, motdBottom = 32, motdH = 36,
+	buttonBottom = 4, buttonRight = -6,
+	gray = 0.5, grayText = 0.65,
 }
 
-local function actif(b, oui)
-	if b.Activer then b:Activer(oui) elseif oui then b:Enable() else b:Disable() end
+local function active(b, yes)
+	if b.Activate then b:Activate(yes) elseif yes then b:Enable() else b:Disable() end
 end
 
--- RecentTimeDate du client, s'il est la ; sinon la meme regle.
-local function depuis(annee, mois, jour, heure)
-	if RecentTimeDate then return RecentTimeDate(annee, mois, jour, heure) end
-	if annee and annee > 0 then return string.format(txt("LASTONLINE_YEARS"), annee) end
-	if mois and mois > 0 then return string.format(txt("LASTONLINE_MONTHS"), mois) end
-	if jour and jour > 0 then return string.format(txt("LASTONLINE_DAYS"), jour) end
-	if heure and heure > 0 then return string.format(txt("LASTONLINE_HOURS"), heure) end
+-- The client's RecentTimeDate if present, else the same rule.
+local function fromIndex(year, month, day, hour)
+	if RecentTimeDate then return RecentTimeDate(year, month, day, hour) end
+	if year and year > 0 then return string.format(txt("LASTONLINE_YEARS"), year) end
+	if month and month > 0 then return string.format(txt("LASTONLINE_MONTHS"), month) end
+	if day and day > 0 then return string.format(txt("LASTONLINE_DAYS"), day) end
+	if hour and hour > 0 then return string.format(txt("LASTONLINE_HOURS"), hour) end
 	return txt("LASTONLINE_MINS")
 end
 
--- IsTruncated, que 3.3.5 n'a pas : un champ de largeur fixee trop etroit
-local function tronque(fs)
+-- IsTruncated, missing in 3.3.5: true if a fixed-width font string is too narrow.
+local function isTruncated(fs)
 	local l = fs:GetWidth()
 	return l and l > 0 and fs:GetStringWidth() > l + 0.5
 end
 
-local function couleurClasse(fichier)
-	local c = fichier and RAID_CLASS_COLORS and RAID_CLASS_COLORS[fichier] or NORMAL_FONT_COLOR
+local function classColor(file)
+	local c = file and RAID_CLASS_COLORS and RAID_CLASS_COLORS[file] or NORMAL_FONT_COLOR
 	return c.r, c.g, c.b
 end
 
--- ------------------------------------------------------------------ la liste
+-- ---------- Member list
 
-local function creerLigne(l)
+-- Builds a roster row (CommunitiesMemberListEntryTemplate). l: row button.
+local function createRow(l)
 	l:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	l:SetNormalTexture(P.bande)
+	l:SetNormalTexture(P.strip)
 	local n = l:GetNormalTexture()
-	n:SetTexCoord(P.bandeCoords[1], P.bandeCoords[2], P.bandeCoords[3], P.bandeCoords[4])
+	n:SetTexCoord(P.stripCoords[1], P.stripCoords[2], P.stripCoords[3], P.stripCoords[4])
 	n:ClearAllPoints()
 	n:SetAllPoints(l)
-	l:SetHighlightTexture(P.barre)
+	l:SetHighlightTexture(P.bar)
 	local s = l:GetHighlightTexture()
 	s:SetBlendMode("ADD")
 	s:ClearAllPoints()
 	s:SetAllPoints(l)
-	local function champ(parent, largeur)
+	local function field(parent, width)
 		local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		fs:SetJustifyH("LEFT")
-		fs:SetHeight(P.texteH)
-		if largeur then fs:SetWidth(largeur) end
+		fs:SetHeight(P.textH)
+		if width then fs:SetWidth(width) end
 		return fs
 	end
-	-- le niveau CENTRE sur sa colonne : l'en-tete Level couvre -1 a 39 depuis
-	-- le bord de la liste (2026-09-26, demande de l'utilisateur ; camelot le
-	-- cadre a gauche a 4)
-	l.niveau = champ(l, P.colonnes[1][2])
-	l.niveau:SetPoint("LEFT", l, "LEFT", -1, 0)
-	l.niveau:SetJustifyH("CENTER")
-	-- l'icone de classe a sa place de camelot (4 + 40 + 8), centree sous Class
-	l.classe = l:CreateTexture(nil, "OVERLAY")
-	l.classe:SetTexture(P.classes)
-	l.classe:SetWidth(16)
-	l.classe:SetHeight(16)
-	l.classe:SetPoint("LEFT", l, "LEFT", 52, 0)
-	-- NameFrame : presence, nom, icone de rang
+	-- Level centered on its column: the Level header spans -1 to 39 from the list edge
+	-- (camelot left-aligns it at 4).
+	l.level = field(l, P.columns[1][2])
+	l.level:SetPoint("LEFT", l, "LEFT", -1, 0)
+	l.level:SetJustifyH("CENTER")
+	-- Class icon at its camelot place (4 + 40 + 8), centered under Class.
+	l.className = l:CreateTexture(nil, "OVERLAY")
+	l.className:SetTexture(P.classes)
+	l.className:SetWidth(16)
+	l.className:SetHeight(16)
+	l.className:SetPoint("LEFT", l, "LEFT", 52, 0)
+	-- NameFrame: presence, name, rank icon.
 	local nf = CreateFrame("Frame", nil, l)
 	nf:SetHeight(20)
-	nf:SetWidth(P.nomL)
-	nf:SetPoint("LEFT", l.classe, "RIGHT", 18, 0)
-	l.cadreNom = nf
+	nf:SetWidth(P.nameW)
+	nf:SetPoint("LEFT", l.className, "RIGHT", 18, 0)
+	l.nameFrame = nf
 	l.presence = nf:CreateTexture(nil, "OVERLAY")
 	l.presence:SetWidth(16)
 	l.presence:SetHeight(16)
 	l.presence:SetPoint("LEFT", nf, "LEFT", 0, 0)
-	l.nom = champ(nf)
-	l.rangIcone = nf:CreateTexture(nil, "OVERLAY")
-	l.rangIcone:SetWidth(12)
-	l.rangIcone:SetHeight(12)
-	l.zone = champ(l, 90)
+	l.name = field(nf)
+	l.rankIcon = nf:CreateTexture(nil, "OVERLAY")
+	l.rankIcon:SetWidth(12)
+	l.rankIcon:SetHeight(12)
+	l.zone = field(l, 90)
 	l.zone:SetPoint("LEFT", nf, "RIGHT", 8, 0)
-	-- le rang au reste de la ligne (plus de colonne Note)
-	l.rang = champ(l)
-	l.rang:SetPoint("LEFT", l.zone, "RIGHT", 7, 0)
-	l.rang:SetPoint("RIGHT", l, "RIGHT", -4, 0)
-	l:SetScript("OnClick", function(self, bouton) Gu.cliquer(self, bouton) end)
-	-- CommunitiesMemberListEntryMixin:OnEnter, en vue Roster ; la note n'a
-	-- plus de colonne : un membre qui en a une ouvre aussi l'infobulle
+	-- Rank fills the rest of the row (no Note column).
+	l.rank = field(l)
+	l.rank:SetPoint("LEFT", l.zone, "RIGHT", 7, 0)
+	l.rank:SetPoint("RIGHT", l, "RIGHT", -4, 0)
+	l:SetScript("OnClick", function(self, button) Gu.click(self, button) end)
+	-- CommunitiesMemberListEntryMixin:OnEnter, Roster view. Without a Note column,
+	-- a member with a note also opens the tooltip.
 	l:SetScript("OnEnter", function(self)
-		local nom, rang, _, niveau, classe, zone, note, _, enLigne = GetGuildRosterInfo(self.index)
-		local aNote = note and note ~= ""
-		if not (aNote or tronque(self.nom) or tronque(self.rang) or tronque(self.zone)) then return end
+		local name, rank, _, level, className, zone, note, _, online = GetGuildRosterInfo(self.index)
+		local hasNote = note and note ~= ""
+		if not (hasNote or isTruncated(self.name) or isTruncated(self.rank) or isTruncated(self.zone)) then return end
 		local n = NORMAL_FONT_COLOR or { r = 1, g = 0.82, b = 0 }
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:AddLine(nom)
-		GameTooltip:AddLine(rang or "")
-		if niveau and classe then
-			GameTooltip:AddLine(string.format(txt("FRIENDS_LEVEL_TEMPLATE"), niveau, classe), 1, 1, 1, true)
+		GameTooltip:AddLine(name)
+		GameTooltip:AddLine(rank or "")
+		if level and className then
+			GameTooltip:AddLine(string.format(txt("FRIENDS_LEVEL_TEMPLATE"), level, className), 1, 1, 1, true)
 		end
-		if enLigne and zone and zone ~= "" then
+		if online and zone and zone ~= "" then
 			GameTooltip:AddLine(zone, 1, 1, 1, true)
 		end
 		if note and note ~= "" then
@@ -232,50 +142,51 @@ local function creerLigne(l)
 	l:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
--- UpdateNameFrame : le nom apres la presence, l'icone de rang apres le nom
-local function majCadreNom(l)
-	local icones, decalage = 0, 0
+-- UpdateNameFrame: name after the presence icon, rank icon after the name.
+local function updateNameFrame(l)
+	local icons, offset = 0, 0
 	local presence = l.presence:IsShown()
-	l.nom:ClearAllPoints()
+	l.name:ClearAllPoints()
 	if presence then
-		icones = icones + 20
-		l.nom:SetPoint("LEFT", l.presence, "RIGHT", 0, 0)
-		decalage = l.presence:GetWidth()
+		icons = icons + 20
+		l.name:SetPoint("LEFT", l.presence, "RIGHT", 0, 0)
+		offset = l.presence:GetWidth()
 	else
-		l.nom:SetPoint("LEFT", l.cadreNom, "LEFT", 0, 0)
+		l.name:SetPoint("LEFT", l.nameFrame, "LEFT", 0, 0)
 	end
-	if l.rangIcone:IsShown() then
-		icones = icones + (presence and 20 or 25)
+	if l.rankIcon:IsShown() then
+		icons = icons + (presence and 20 or 25)
 	end
-	local largeurNom = P.nomL - icones
-	l.nom:SetWidth(largeurNom)
-	local texte = l.nom:GetStringWidth()
-	l.rangIcone:ClearAllPoints()
-	l.rangIcone:SetPoint("LEFT", l.cadreNom, "LEFT", math.min(texte, largeurNom) + decalage, 0)
+	local nameWidth = P.nameW - icons
+	l.name:SetWidth(nameWidth)
+	local text = l.name:GetStringWidth()
+	l.rankIcon:ClearAllPoints()
+	l.rankIcon:SetPoint("LEFT", l.nameFrame, "LEFT", math.min(text, nameWidth) + offset, 0)
 end
 
--- CommunitiesMemberListEntryMixin : SetMember, UpdateRank, UpdatePresence,
--- RefreshExpandedColumns
-local function remplirLigne(l, i)
-	local nom, rang, rangIndex, niveau, _, zone, _, _, enLigne, statut, fichier = GetGuildRosterInfo(i)
-	l.nom:SetText(nom)
-	l.niveau:SetText(niveau or "")
-	local tc = fichier and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[fichier]
+-- CommunitiesMemberListEntryMixin: SetMember, UpdateRank, UpdatePresence,
+-- RefreshExpandedColumns. 3.3.5 has no community roles: the rank icon only marks
+-- the guild master.
+local function populateRow(l, i)
+	local name, rank, rankIndex, level, _, zone, _, _, online, status, file = GetGuildRosterInfo(i)
+	l.name:SetText(name)
+	l.level:SetText(level or "")
+	local tc = file and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[file]
 	if tc then
-		l.classe:SetTexCoord(tc[1], tc[2], tc[3], tc[4])
-		l.classe:Show()
+		l.className:SetTexCoord(tc[1], tc[2], tc[3], tc[4])
+		l.className:Show()
 	else
-		l.classe:Hide()
+		l.className:Hide()
 	end
-	local champs = { l.niveau, l.zone, l.rang }
-	if enLigne then
-		l.nom:SetTextColor(couleurClasse(fichier))
-		for _, fs in ipairs(champs) do fs:SetTextColor(1, 1, 1) end
-		if statut == CHAT_FLAG_AFK then
+	local fields = { l.level, l.zone, l.rank }
+	if online then
+		l.name:SetTextColor(classColor(file))
+		for _, fs in ipairs(fields) do fs:SetTextColor(1, 1, 1) end
+		if status == CHAT_FLAG_AFK then
 			l.presence:SetTexture(FRIENDS_TEXTURE_AFK or P.absent)
 			l.presence:Show()
-		elseif statut == CHAT_FLAG_DND then
-			l.presence:SetTexture(FRIENDS_TEXTURE_DND or P.occupe)
+		elseif status == CHAT_FLAG_DND then
+			l.presence:SetTexture(FRIENDS_TEXTURE_DND or P.busy)
 			l.presence:Show()
 		else
 			l.presence:Hide()
@@ -283,29 +194,30 @@ local function remplirLigne(l, i)
 		l.zone:SetText(zone or "")
 	else
 		l.presence:Hide()
-		l.nom:SetTextColor(P.gris, P.gris, P.gris)
-		for _, fs in ipairs(champs) do fs:SetTextColor(P.gris, P.gris, P.gris) end
-		l.zone:SetText(depuis(GetGuildRosterLastOnline(i)))
+		l.name:SetTextColor(P.gray, P.gray, P.gray)
+		for _, fs in ipairs(fields) do fs:SetTextColor(P.gray, P.gray, P.gray) end
+		l.zone:SetText(fromIndex(GetGuildRosterLastOnline(i)))
 	end
-	l.rang:SetText(rang or "")
-	if rangIndex == 0 then
-		l.rangIcone:SetTexture(P.chef)
-		l.rangIcone:Show()
+	l.rank:SetText(rank or "")
+	if rankIndex == 0 then
+		l.rankIcon:SetTexture(P.leader)
+		l.rankIcon:Show()
 	else
-		l.rangIcone:Hide()
+		l.rankIcon:Hide()
 	end
-	majCadreNom(l)
+	updateNameFrame(l)
 	if GetGuildRosterSelection() == i then l:LockHighlight() else l:UnlockHighlight() end
 end
 
--- -------------------------------------------------------------- le detail
+-- ---------- Member detail
 
 local D = {}
 
-local function champDetail(a, libelle, y)
+-- Label and value line of the detail. caption: text key; y: offset from the top.
+local function detailField(a, caption, y)
 	local l = a:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	l:SetPoint("TOPLEFT", a, "TOPLEFT", 18, y)
-	l:SetText(txt(libelle))
+	l:SetText(txt(caption))
 	local v = a:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	v:SetPoint("LEFT", l, "RIGHT", 6, 0)
 	v:SetPoint("RIGHT", a, "RIGHT", -18, 0)
@@ -314,10 +226,11 @@ local function champDetail(a, libelle, y)
 	return l, v
 end
 
--- Une note : un encadre cliquable, son texte gris quand on ne peut l'ecrire.
-local function noteDetail(a, libelle, popup)
+-- A note: clickable inset, text grayed when it cannot be edited.
+-- popup: StaticPopup that edits it.
+local function detailNote(a, caption, popup)
 	local l = a:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	l:SetText(txt(libelle))
+	l:SetText(txt(caption))
 	local e = ForeverUI.CreateInset(a)
 	e:SetHeight(40)
 	e:SetPoint("TOPLEFT", l, "BOTTOMLEFT", -2, -3)
@@ -335,17 +248,17 @@ local function noteDetail(a, libelle, popup)
 	return l, e, t
 end
 
-local function creerDetail()
-	local a = S.creerAnnexe("ForeverUIGuildMemberDetail", 232, 290)
-	D.cadre = a
-	D.niveau = a:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	D.niveau:SetPoint("TOPLEFT", a, "TOPLEFT", 18, -30)
-	D.zoneL, D.zone = champDetail(a, "ZONE_COLON", -48)
-	D.rangL, D.rang = champDetail(a, "RANK_COLON", -64)
-	D.rang:SetPoint("RIGHT", a, "RIGHT", -52, 0)
-	D.vuL, D.vu = champDetail(a, "LAST_ONLINE_COLON", -80)
-	-- promouvoir / retrograder : les fleches de la barre de camelot
-	local function fleche(atlas, survol, clic)
+local function createDetail()
+	local a = S.createPopup("ForeverUIGuildMemberDetail", 232, 290)
+	D.frame = a
+	D.level = a:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	D.level:SetPoint("TOPLEFT", a, "TOPLEFT", 18, -30)
+	D.zoneLabel, D.zone = detailField(a, "ZONE_COLON", -48)
+	D.rankLabel, D.rank = detailField(a, "RANK_COLON", -64)
+	D.rank:SetPoint("RIGHT", a, "RIGHT", -52, 0)
+	D.lastSeenLabel, D.found = detailField(a, "LAST_ONLINE_COLON", -80)
+	-- Promote / demote: camelot scroll bar arrows.
+	local function arrow(atlas, hover, onClick)
 		local f = CreateFrame("Button", nil, a)
 		f:SetWidth(17)
 		f:SetHeight(11)
@@ -355,289 +268,286 @@ local function creerDetail()
 		if n then ForeverUI.SetAtlas(n, atlas, true) n:SetAllPoints(f) end
 		f:SetHighlightTexture(e and e[1] or "")
 		local h = f:GetHighlightTexture()
-		if h then ForeverUI.SetAtlas(h, survol, true) h:SetAllPoints(f) end
-		f:SetScript("OnClick", clic)
+		if h then ForeverUI.SetAtlas(h, hover, true) h:SetAllPoints(f) end
+		f:SetScript("OnClick", onClick)
 		return f
 	end
-	D.promouvoir = fleche("minimal-scrollbar-arrow-top-c60", "minimal-scrollbar-arrow-top-over-c60", function(self)
+	D.promote = arrow("minimal-scrollbar-arrow-top-c60", "minimal-scrollbar-arrow-top-over-c60", function(self)
 		GuildPromote(GuildFrame.selectedName)
 		PlaySound("UChatScrollButton")
 		self:Disable()
 	end)
-	D.promouvoir:SetPoint("LEFT", D.rang, "RIGHT", 4, 6)
-	D.retrograder = fleche("minimal-scrollbar-arrow-bottom-c60", "minimal-scrollbar-arrow-bottom-over-c60", function(self)
+	D.promote:SetPoint("LEFT", D.rank, "RIGHT", 4, 6)
+	D.demote = arrow("minimal-scrollbar-arrow-bottom-c60", "minimal-scrollbar-arrow-bottom-over-c60", function(self)
 		GuildDemote(GuildFrame.selectedName)
 		PlaySound("UChatScrollButton")
 		self:Disable()
 	end)
-	D.retrograder:SetPoint("TOP", D.promouvoir, "BOTTOM", 0, -2)
-	D.noteL, D.note, D.noteTexte = noteDetail(a, "NOTE_COLON", "SET_GUILDPLAYERNOTE")
-	D.noteL:SetPoint("TOPLEFT", a, "TOPLEFT", 18, -102)
-	D.officierL, D.officier, D.officierTexte = noteDetail(a, "OFFICER_NOTE_COLON", "SET_GUILDOFFICERNOTE")
-	D.officierL:SetPoint("TOPLEFT", D.note, "BOTTOMLEFT", 2, -10)
-	D.retirer = S.bouton(a, txt("REMOVE"), 100)
-	D.retirer:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 12, 12)
-	D.retirer:SetScript("OnClick", function() StaticPopup_Show("REMOVE_GUILDMEMBER") end)
-	D.inviter = S.bouton(a, txt("GROUP_INVITE"), 100)
-	D.inviter:SetPoint("LEFT", D.retirer, "RIGHT", 4, 0)
-	D.inviter:SetScript("OnClick", function() InviteUnit(GuildFrame.selectedName) end)
+	D.demote:SetPoint("TOP", D.promote, "BOTTOM", 0, -2)
+	D.noteLabel, D.note, D.noteText = detailNote(a, "NOTE_COLON", "SET_GUILDPLAYERNOTE")
+	D.noteLabel:SetPoint("TOPLEFT", a, "TOPLEFT", 18, -102)
+	D.officerLabel, D.officer, D.officerText = detailNote(a, "OFFICER_NOTE_COLON", "SET_GUILDOFFICERNOTE")
+	D.officerLabel:SetPoint("TOPLEFT", D.note, "BOTTOMLEFT", 2, -10)
+	D.remove = S.button(a, txt("REMOVE"), 100)
+	D.remove:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 12, 12)
+	D.remove:SetScript("OnClick", function() StaticPopup_Show("REMOVE_GUILDMEMBER") end)
+	D.inviteButton = S.button(a, txt("GROUP_INVITE"), 100)
+	D.inviteButton:SetPoint("LEFT", D.remove, "RIGHT", 4, 0)
+	D.inviteButton:SetScript("OnClick", function() InviteUnit(GuildFrame.selectedName) end)
 	a:HookScript("OnHide", function()
-		-- le detail se ferme : plus de selection (le client la remet a 0)
-		if Gu.fermeture then return end
+		-- Closing the detail clears the selection (the client resets it to 0).
+		if Gu.closeSize then return end
 		Gu.selection(0)
 	end)
 end
 
--- GuildStatus_Update, pour le volet de detail
-function Gu.majDetail()
-	local a = D.cadre
+-- GuildStatus_Update, for the detail pane.
+function Gu.updateDetail()
+	local a = D.frame
 	if not a or not a:IsShown() then return end
 	local i = GetGuildRosterSelection()
 	if not i or i == 0 then a:Hide() return end
-	local nom, rang, rangIndex, niveau, classe, zone, note, officier, enLigne = GetGuildRosterInfo(i)
-	local _, _, monRang = GetGuildInfo("player")
-	monRang = monRang or 0
-	local maxRang = (GuildControlGetNumRanks and GuildControlGetNumRanks() or 1) - 1
-	a.titre:SetText(nom or "")
-	D.niveau:SetText(string.format(txt("FRIENDS_LEVEL_TEMPLATE"), niveau or 0, classe or ""))
+	local name, rank, rankIndex, level, className, zone, note, officer, online = GetGuildRosterInfo(i)
+	local _, _, myRank = GetGuildInfo("player")
+	myRank = myRank or 0
+	local maxRank = (GuildControlGetNumRanks and GuildControlGetNumRanks() or 1) - 1
+	a.title:SetText(name or "")
+	D.level:SetText(string.format(txt("FRIENDS_LEVEL_TEMPLATE"), level or 0, className or ""))
 	D.zone:SetText(zone)
-	D.rang:SetText(rang)
-	D.vu:SetText(enLigne and txt("GUILD_ONLINE_LABEL") or depuis(GetGuildRosterLastOnline(i)))
-	-- la note publique
+	D.rank:SetText(rank)
+	D.found:SetText(online and txt("GUILD_ONLINE_LABEL") or fromIndex(GetGuildRosterLastOnline(i)))
+	-- Public note
 	D.note.editable = CanEditPublicNote()
 	if D.note.editable then
 		if not note or note == "" then note = txt("GUILD_NOTE_EDITLABEL") end
-		D.noteTexte:SetTextColor(1, 1, 1)
+		D.noteText:SetTextColor(1, 1, 1)
 	else
-		D.noteTexte:SetTextColor(P.grisTexte, P.grisTexte, P.grisTexte)
+		D.noteText:SetTextColor(P.grayText, P.grayText, P.grayText)
 	end
-	D.noteTexte:SetText(note or "")
-	-- la note d'officier
+	D.noteText:SetText(note or "")
+	-- Officer note
 	if CanViewOfficerNote() then
-		D.officier.editable = CanEditOfficerNote()
-		if D.officier.editable then
-			if not officier or officier == "" then officier = txt("GUILD_OFFICERNOTE_EDITLABEL") end
-			D.officierTexte:SetTextColor(1, 1, 1)
+		D.officer.editable = CanEditOfficerNote()
+		if D.officer.editable then
+			if not officer or officer == "" then officer = txt("GUILD_OFFICERNOTE_EDITLABEL") end
+			D.officerText:SetTextColor(1, 1, 1)
 		else
-			D.officierTexte:SetTextColor(P.grisTexte, P.grisTexte, P.grisTexte)
+			D.officerText:SetTextColor(P.grayText, P.grayText, P.grayText)
 		end
-		D.officierTexte:SetText(officier or "")
-		D.officierL:Show()
-		D.officier:Show()
+		D.officerText:SetText(officer or "")
+		D.officerLabel:Show()
+		D.officer:Show()
 		a:SetHeight(290)
 	else
-		D.officierL:Hide()
-		D.officier:Hide()
+		D.officerLabel:Hide()
+		D.officer:Hide()
 		a:SetHeight(230)
 	end
-	-- promouvoir, retrograder, retirer, inviter
-	local peutMonter = CanGuildPromote() and rangIndex and rangIndex > 1 and rangIndex > (monRang + 1)
-	local peutDescendre = CanGuildDemote() and rangIndex and rangIndex >= 1 and rangIndex > monRang and rangIndex ~= maxRang
-	if peutMonter then D.promouvoir:Enable() else D.promouvoir:Disable() end
-	if peutDescendre then D.retrograder:Enable() else D.retrograder:Disable() end
-	if peutMonter or peutDescendre then
-		D.promouvoir:Show()
-		D.retrograder:Show()
+	-- Promote, demote, remove, invite
+	local canPromote = CanGuildPromote() and rankIndex and rankIndex > 1 and rankIndex > (myRank + 1)
+	local canDemote = CanGuildDemote() and rankIndex and rankIndex >= 1 and rankIndex > myRank and rankIndex ~= maxRank
+	if canPromote then D.promote:Enable() else D.promote:Disable() end
+	if canDemote then D.demote:Enable() else D.demote:Disable() end
+	if canPromote or canDemote then
+		D.promote:Show()
+		D.demote:Show()
 	else
-		D.promouvoir:Hide()
-		D.retrograder:Hide()
+		D.promote:Hide()
+		D.demote:Hide()
 	end
-	actif(D.retirer, CanGuildRemove() and rangIndex and rangIndex >= 1 and rangIndex > monRang)
-	actif(D.inviter, UnitName("player") ~= nom and enLigne and true or false)
+	active(D.remove, CanGuildRemove() and rankIndex and rankIndex >= 1 and rankIndex > myRank)
+	active(D.inviteButton, UnitName("player") ~= name and online and true or false)
 end
 
--- La selection du client, et ce que ses popups lisent.
+-- Sets the client selection and what its popups read (GuildFrame.selectedName).
 function Gu.selection(i)
 	SetGuildRosterSelection(i or 0)
 	if GuildFrame then
 		GuildFrame.selectedGuildMember = i or 0
 		GuildFrame.selectedName = (i and i > 0) and GetGuildRosterInfo(i) or nil
 	end
-	if Gu.liste then Gu.liste:Maj() end
+	if Gu.list then Gu.list:Update() end
 end
 
 -- FriendsFrameGuildStatusButton_OnClick
-function Gu.cliquer(l, bouton)
+function Gu.click(l, button)
 	local i = l.index
-	if bouton == "RightButton" then
-		local nom, _, _, _, _, _, _, _, enLigne = GetGuildRosterInfo(i)
-		ForeverUI.MenuUnite.ouvrir(FriendsFrame_ShowDropdown, nom, enLigne)
+	if button == "RightButton" then
+		local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+		ForeverUI.UnitMenu.open(FriendsFrame_ShowDropdown, name, online)
 		return
 	end
 	PlaySound("igMainMenuOptionCheckBoxOn")
-	if D.cadre:IsShown() and GetGuildRosterSelection() == i then
+	if D.frame:IsShown() and GetGuildRosterSelection() == i then
 		Gu.selection(0)
-		D.cadre:Hide()
+		D.frame:Hide()
 	else
 		Gu.selection(i)
-		D.cadre:Show()
-		Gu.majDetail()
+		D.frame:Show()
+		Gu.updateDetail()
 	end
 end
 
--- ------------------------------------------------------------ l'information
+-- ---------- Guild information
 
 local I = {}
 
-local function creerInfo()
-	local a = S.creerAnnexe("ForeverUIGuildInfoFrame", 300, 300)
-	a.titre:SetText(txt("GUILD_INFORMATION"))
-	I.cadre = a
+local function createInfo()
+	local a = S.createPopup("ForeverUIGuildInfoFrame", 300, 300)
+	a.title:SetText(txt("GUILD_INFORMATION"))
+	I.frame = a
 	local e = ForeverUI.CreateInset(a)
 	e:SetPoint("TOPLEFT", a, "TOPLEFT", 12, -30)
 	e:SetPoint("BOTTOMRIGHT", a, "BOTTOMRIGHT", -12, 44)
-	local defil = CreateFrame("ScrollFrame", "ForeverUIGuildInfoScroll", e)
-	defil:SetPoint("TOPLEFT", e, "TOPLEFT", 6, -6)
-	defil:SetPoint("BOTTOMRIGHT", e, "BOTTOMRIGHT", -6, 6)
-	local b = CreateFrame("EditBox", "ForeverUIGuildInfoEditBox", defil)
+	local scrollFrame = CreateFrame("ScrollFrame", "ForeverUIGuildInfoScroll", e)
+	scrollFrame:SetPoint("TOPLEFT", e, "TOPLEFT", 6, -6)
+	scrollFrame:SetPoint("BOTTOMRIGHT", e, "BOTTOMRIGHT", -6, 6)
+	local b = CreateFrame("EditBox", "ForeverUIGuildInfoEditBox", scrollFrame)
 	b:SetMultiLine(true)
 	b:SetAutoFocus(false)
 	b:SetMaxLetters(500)
-	-- toute la largeur de la fenetre a defilement (300 - 2 x 12 - 2 x 6) : il
-	-- n'y a pas de barre ici, le texte garde 6 de chaque cote de l'encart
-	-- (regle du 28/09 ; 250 laissait 20 a droite)
+	-- Full width of the scroll frame (300 - 2 x 12 - 2 x 6): there is no scroll bar here.
 	b:SetWidth(264)
 	b:SetHeight(200)
 	b:SetFontObject(GameFontHighlightSmall)
 	b:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-	defil:SetScrollChild(b)
-	defil:EnableMouse(true)
-	defil:SetScript("OnMouseUp", function()
+	scrollFrame:SetScrollChild(b)
+	scrollFrame:EnableMouse(true)
+	scrollFrame:SetScript("OnMouseUp", function()
 		if CanEditGuildInfo() then b:SetFocus() else b:ClearFocus() end
 	end)
-	I.saisie = b
-	I.accepter = S.bouton(a, txt("ACCEPT"), 90)
-	-- de gauche a droite : Log, puis Accept et Close contre le bord droit --
-	-- ancres au centre, Accept chevauchait Log (2026-09-26)
-	I.accepter:SetScript("OnClick", function()
+	I.input = b
+	I.accept = S.button(a, txt("ACCEPT"), 90)
+	-- Left to right: Log, then Accept and Close against the right edge.
+	I.accept:SetScript("OnClick", function()
 		SetGuildInfoText(b:GetText())
 		if GuildInfoFrame then GuildInfoFrame.cachedText = b:GetText() end
-		I.texteRetenu = b:GetText()
+		I.savedText = b:GetText()
 		GuildRoster()
 		a:Hide()
 	end)
-	local fermer = S.bouton(a, txt("CLOSE"), 90)
-	fermer:SetPoint("BOTTOMRIGHT", a, "BOTTOMRIGHT", -12, 14)
-	I.accepter:SetPoint("RIGHT", fermer, "LEFT", -4, 0)
-	fermer:SetScript("OnClick", function() a:Hide() end)
-	local journal = S.bouton(a, txt("GUILD_EVENT_LOG"), 70)
-	journal:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 12, 14)
-	journal:SetScript("OnClick", function() Gu.basculerJournal() end)
-	Gu.infoBoutons = { journal = journal, accepter = I.accepter, fermer = fermer }
-	-- l'OnShow de GuildInfoTextBackground
+	local close = S.button(a, txt("CLOSE"), 90)
+	close:SetPoint("BOTTOMRIGHT", a, "BOTTOMRIGHT", -12, 14)
+	I.accept:SetPoint("RIGHT", close, "LEFT", -4, 0)
+	close:SetScript("OnClick", function() a:Hide() end)
+	local questLog = S.button(a, txt("GUILD_EVENT_LOG"), 70)
+	questLog:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 12, 14)
+	questLog:SetScript("OnClick", function() Gu.toggleQuestLog() end)
+	Gu.infoButtons = { questLog = questLog, accept = I.accept, close = close }
+	-- GuildInfoTextBackground's OnShow
 	a:HookScript("OnShow", function()
-		local texte = I.texteRetenu or GetGuildInfoText() or ""
+		local text = I.savedText or GetGuildInfoText() or ""
 		if CanEditGuildInfo() then
-			b:SetText(texte ~= "" and texte or txt("GUILD_INFO_EDITLABEL"))
+			b:SetText(text ~= "" and text or txt("GUILD_INFO_EDITLABEL"))
 			b:SetTextColor(1, 1, 1)
 			b:EnableMouse(true)
-			actif(I.accepter, true)
+			active(I.accept, true)
 		else
-			b:SetText(texte)
-			b:SetTextColor(P.grisTexte, P.grisTexte, P.grisTexte)
+			b:SetText(text)
+			b:SetTextColor(P.grayText, P.grayText, P.grayText)
 			b:EnableMouse(false)
-			actif(I.accepter, false)
+			active(I.accept, false)
 		end
 	end)
 end
 
--- -------------------------------------------------------------- le journal
+-- ---------- Event log
 
 local J = {}
 
-local function ligneJournal(i)
-	local type, j1, j2, rang, annee, mois, jour, heure = GetGuildEventInfo(i)
+-- Text of guild event i, followed by its age.
+local function eventLogLine(i)
+	local type, j1, j2, rank, year, month, day, hour = GetGuildEventInfo(i)
 	j1 = j1 or txt("UNKNOWN")
 	j2 = j2 or txt("UNKNOWN")
 	local msg
 	if type == "invite" then msg = string.format(txt("GUILDEVENT_TYPE_INVITE"), j1, j2)
 	elseif type == "join" then msg = string.format(txt("GUILDEVENT_TYPE_JOIN"), j1)
-	elseif type == "promote" then msg = string.format(txt("GUILDEVENT_TYPE_PROMOTE"), j1, j2, rang)
-	elseif type == "demote" then msg = string.format(txt("GUILDEVENT_TYPE_DEMOTE"), j1, j2, rang)
+	elseif type == "promote" then msg = string.format(txt("GUILDEVENT_TYPE_PROMOTE"), j1, j2, rank)
+	elseif type == "demote" then msg = string.format(txt("GUILDEVENT_TYPE_DEMOTE"), j1, j2, rank)
 	elseif type == "remove" then msg = string.format(txt("GUILDEVENT_TYPE_REMOVE"), j1, j2)
 	elseif type == "quit" then msg = string.format(txt("GUILDEVENT_TYPE_QUIT"), j1)
 	end
 	if not msg then return "" end
-	return msg .. "|cff009999   " .. string.format(txt("GUILD_BANK_LOG_TIME"), depuis(annee, mois, jour, heure)) .. "|r"
+	return msg .. "|cff009999   " .. string.format(txt("GUILD_BANK_LOG_TIME"), fromIndex(year, month, day, hour)) .. "|r"
 end
 
-local function creerJournal()
-	local a = S.creerAnnexe("ForeverUIGuildEventLog", 400, 420)
-	a.titre:SetText(txt("GUILD_EVENT_LOG"))
-	J.cadre = a
+local function createEventLog()
+	local a = S.createPopup("ForeverUIGuildEventLog", 400, 420)
+	a.title:SetText(txt("GUILD_EVENT_LOG"))
+	J.frame = a
 	local e = ForeverUI.CreateInset(a)
 	e:SetPoint("TOPLEFT", a, "TOPLEFT", 12, -30)
 	e:SetPoint("BOTTOMRIGHT", a, "BOTTOMRIGHT", -12, 44)
-	J.liste = S.creerListe(e, "ForeverUIGuildEventList", 14, function(l)
-		l.texte = l:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-		l.texte:SetPoint("LEFT", l, "LEFT", 4, 0)
-		l.texte:SetPoint("RIGHT", l, "RIGHT", -4, 0)
-		l.texte:SetJustifyH("LEFT")
-		l.texte:SetHeight(12)
+	J.list = S.createList(e, "ForeverUIGuildEventList", 14, function(l)
+		l.text = l:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		l.text:SetPoint("LEFT", l, "LEFT", 4, 0)
+		l.text:SetPoint("RIGHT", l, "RIGHT", -4, 0)
+		l.text:SetJustifyH("LEFT")
+		l.text:SetHeight(12)
 	end, function(l, n)
-		-- le plus recent d'abord, comme la boucle du client
-		l.texte:SetText(ligneJournal((GetNumGuildEvents() or 0) - n + 1))
+		-- Most recent first, like the client's loop.
+		l.text:SetText(eventLogLine((GetNumGuildEvents() or 0) - n + 1))
 	end)
-	-- sans barre, la liste va a 4 du bord de l'encadre, comme a gauche (regle
-	-- du 28/09) ; avec elle, elle lui laisse sa place
-	J.liste:SuivreBarre({ "TOPLEFT", e, "TOPLEFT", 4, -4 }, { "BOTTOMRIGHT", e, "BOTTOMRIGHT", -16, 4 }, -4)
-	local fermer = S.bouton(a, txt("CLOSE"), 140)
-	fermer:SetPoint("BOTTOM", a, "BOTTOM", 0, 14)
-	fermer:SetScript("OnClick", function() a:Hide() end)
+	-- Without a scroll bar the list sits 4 from the inset edge, as on the left.
+	J.list:FollowBar({ "TOPLEFT", e, "TOPLEFT", 4, -4 }, { "BOTTOMRIGHT", e, "BOTTOMRIGHT", -16, 4 }, -4)
+	local close = S.button(a, txt("CLOSE"), 140)
+	close:SetPoint("BOTTOM", a, "BOTTOM", 0, 14)
+	close:SetScript("OnClick", function() a:Hide() end)
 	a:HookScript("OnShow", function()
 		QueryGuildEventLog()
-		J.liste:Maj(GetNumGuildEvents() or 0)
+		J.list:Update(GetNumGuildEvents() or 0)
 	end)
 end
 
-function Gu.basculerJournal()
-	if J.cadre:IsShown() then J.cadre:Hide() else J.cadre:Show() end
+function Gu.toggleQuestLog()
+	if J.frame:IsShown() then J.frame:Hide() else J.frame:Show() end
 end
 
--- ------------------------------------------------------------ la mise a jour
+-- ---------- Update
 
-function Gu.maj()
-	if not Gu.liste then return end
-	-- la liste : les membres montres (sans les hors ligne si la case est
-	-- decochee) ; le total : tous les membres
-	local montres = GetNumGuildMembers() or 0
-	local total = GetNumGuildMembers(true) or montres
-	local enLigne = 0
-	for i = 1, montres do
-		if select(9, GetGuildRosterInfo(i)) then enLigne = enLigne + 1 end
+function Gu.update()
+	if not Gu.list then return end
+	-- List: shown members (no offline ones if the box is unchecked); total: all members.
+	local shownItems = GetNumGuildMembers() or 0
+	local total = GetNumGuildMembers(true) or shownItems
+	local online = 0
+	for i = 1, shownItems do
+		if select(9, GetGuildRosterInfo(i)) then online = online + 1 end
 	end
-	Gu.totaux:SetText(string.format(txt("GUILD_TOTAL"), total) .. " " .. string.format(txt("GUILD_TOTALONLINE"), enLigne))
-	Gu.horsLigne:SetChecked(GetGuildRosterShowOffline() and true or false)
-	Gu.liste:Maj(montres)
-	-- le message du jour
+	Gu.totals:SetText(string.format(txt("GUILD_TOTAL"), total) .. " " .. string.format(txt("GUILD_TOTALONLINE"), online))
+	Gu.offlineCheck:SetChecked(GetGuildRosterShowOffline() and true or false)
+	Gu.list:Update(shownItems)
+	-- Message of the day
 	Gu.motd:SetText(CURRENT_GUILD_MOTD or (GetGuildRosterMOTD and GetGuildRosterMOTD()) or "")
 	if CanEditMOTD() then
 		Gu.motd:SetTextColor(1, 1, 1)
 		Gu.motdZone:EnableMouse(true)
 	else
-		Gu.motd:SetTextColor(P.grisTexte, P.grisTexte, P.grisTexte)
+		Gu.motd:SetTextColor(P.grayText, P.grayText, P.grayText)
 		Gu.motdZone:EnableMouse(false)
 	end
-	actif(Gu.controle, IsGuildLeader() and true or false)
-	actif(Gu.ajouter, CanGuildInvite() and true or false)
-	Gu.majDetail()
+	active(Gu.control, IsGuildLeader() and true or false)
+	active(Gu.add, CanGuildInvite() and true or false)
+	Gu.updateDetail()
 end
 
-local function titre()
-	local guilde, rang = GetGuildInfo("player")
-	if guilde then return string.format(txt("GUILD_TITLE_TEMPLATE"), rang or "", guilde) end
+local function title()
+	local guild, rank = GetGuildInfo("player")
+	if guild then return string.format(txt("GUILD_TITLE_TEMPLATE"), rank or "", guild) end
 	return ""
 end
 
--- ------------------------------------------------------ la fenetre de controle
+-- ---------- Guild control window
 
-local CASES_CONTROLE = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17 }
-Gu.CONTROLE_HAUT = 24
+local CONTROL_CHECKBOXES = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17 }
+Gu.CONTROL_TOP = 24
 
-function Gu.habillerControle(gc)
-	if gc.foreverHabille then return end
-	gc.foreverHabille = true
-	-- le fond MacroPopup : six textures sans nom
+-- Reskins the client's GuildControlPopupFrame once. gc: that frame.
+function Gu.skinControl(gc)
+	if gc.foreverSkinApplied then return end
+	gc.foreverSkinApplied = true
+	-- MacroPopup background: six unnamed textures.
 	for _, r in ipairs({ gc:GetRegions() }) do
 		local f = r.GetTexture and r:GetTexture()
 		if type(f) == "string" and string.find(string.lower(f), "macropopup", 1, true) then
@@ -645,64 +555,61 @@ function Gu.habillerControle(gc)
 			r:Hide()
 		end
 	end
-	-- L'HABIT DEPASSE DE 24 VERS LE HAUT. Le contenu du client commence 15
-	-- sous le bord (GUILDCONTROL_SELECTRANK) : la barre de metal passerait
-	-- dessus. L'habit porte la barre au-dessus, et se dessine SOUS le
-	-- contenu (un niveau de moins que la fenetre) ; son metal, lui, passe
-	-- devant. Taille posee a la main : UpdatePanelCorners la lit.
-	local habit = CreateFrame("Frame", nil, gc)
-	habit:SetWidth(gc:GetWidth() > 0 and gc:GetWidth() or 320)
-	habit:SetHeight((gc:GetHeight() > 0 and gc:GetHeight() or 457) + Gu.CONTROLE_HAUT)
-	habit:SetPoint("TOPLEFT", gc, "TOPLEFT", 0, Gu.CONTROLE_HAUT)
-	habit:SetFrameLevel(math.max(0, gc:GetFrameLevel() - 1))
-	ForeverUI.SetPanelArt(habit, { coinHautGauche = "ui-frame-metal-cornertopleft", niveau = 25 })
-	gc.foreverHabit = habit
-	local metal = habit.foreverHabillage or habit
-	local bandeau = CreateFrame("Frame", nil, gc)
-	bandeau:SetAllPoints(habit)
-	bandeau:SetFrameLevel(metal:GetFrameLevel() + 1)
-	local titre = bandeau:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	titre:SetPoint("TOP", habit, "TOP", 0, -6)
-	titre:SetText(txt("GUILDCONTROL"))
-	gc.foreverTitre = titre
-	local croix = CreateFrame("Button", nil, gc)
-	croix:SetWidth(24)
-	croix:SetHeight(24)
-	croix:SetFrameLevel(metal:GetFrameLevel() + 2)
-	croix:SetPoint("TOPRIGHT", habit, "TOPRIGHT", 1, 0)
-	for _, etat in ipairs({
+	-- The skin reaches 24 above the frame: the client content starts 15 below the top
+	-- (GUILDCONTROL_SELECTRANK) and the metal bar would cover it. The skin draws under the
+	-- content, its metal in front. Size set by hand: UpdatePanelCorners reads it.
+	local skin = CreateFrame("Frame", nil, gc)
+	skin:SetWidth(gc:GetWidth() > 0 and gc:GetWidth() or 320)
+	skin:SetHeight((gc:GetHeight() > 0 and gc:GetHeight() or 457) + Gu.CONTROL_TOP)
+	skin:SetPoint("TOPLEFT", gc, "TOPLEFT", 0, Gu.CONTROL_TOP)
+	skin:SetFrameLevel(math.max(0, gc:GetFrameLevel() - 1))
+	ForeverUI.SetPanelArt(skin, { topLeftCorner = "ui-frame-metal-cornertopleft", level = 25 })
+	gc.foreverSkin = skin
+	local metal = skin.foreverSkinLayer or skin
+	local banner = CreateFrame("Frame", nil, gc)
+	banner:SetAllPoints(skin)
+	banner:SetFrameLevel(metal:GetFrameLevel() + 1)
+	local title = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	title:SetPoint("TOP", skin, "TOP", 0, -6)
+	title:SetText(txt("GUILDCONTROL"))
+	gc.foreverTitle = title
+	local closeButton = CreateFrame("Button", nil, gc)
+	closeButton:SetWidth(24)
+	closeButton:SetHeight(24)
+	closeButton:SetFrameLevel(metal:GetFrameLevel() + 2)
+	closeButton:SetPoint("TOPRIGHT", skin, "TOPRIGHT", 1, 0)
+	for _, state in ipairs({
 		{ "SetNormalTexture", "GetNormalTexture", "redbutton-exit" },
 		{ "SetPushedTexture", "GetPushedTexture", "redbutton-exit-pressed" },
 		{ "SetHighlightTexture", "GetHighlightTexture", "redbutton-highlight" },
 	}) do
-		local e = ForeverUI.AtlasEntry(etat[3])
-		croix[etat[1]](croix, e and e[1] or "")
-		local t = croix[etat[2]](croix)
+		local e = ForeverUI.AtlasEntry(state[3])
+		closeButton[state[1]](closeButton, e and e[1] or "")
+		local t = closeButton[state[2]](closeButton)
 		if t then
-			ForeverUI.SetAtlas(t, etat[3], true)
+			ForeverUI.SetAtlas(t, state[3], true)
 			t:ClearAllPoints()
-			t:SetAllPoints(croix)
-			if etat[3] == "redbutton-highlight" then t:SetBlendMode("ADD") end
+			t:SetAllPoints(closeButton)
+			if state[3] == "redbutton-highlight" then t:SetBlendMode("ADD") end
 		end
 	end
-	croix:SetScript("OnClick", function() gc:Hide() end)
-	gc.foreverCroix = croix
-	-- les cases
-	for _, i in ipairs(CASES_CONTROLE) do
+	closeButton:SetScript("OnClick", function() gc:Hide() end)
+	gc.foreverCloseButton = closeButton
+	-- Checkboxes
+	for _, i in ipairs(CONTROL_CHECKBOXES) do
 		local c = _G["GuildControlPopupFrameCheckbox" .. i]
-		if c then S.habillerCase(c) end
+		if c then S.skinCell(c) end
 	end
 	for _, n in ipairs({ "GuildControlTabPermissionsViewTab", "GuildControlTabPermissionsDepositItems",
 		"GuildControlTabPermissionsUpdateText" }) do
-		if _G[n] then S.habillerCase(_G[n]) end
+		if _G[n] then S.skinCell(_G[n]) end
 	end
-	-- les champs
+	-- Edit boxes
 	for _, n in ipairs({ "GuildControlPopupFrameEditBox", "GuildControlWithdrawGoldEditBox",
 		"GuildControlWithdrawItemsEditBox" }) do
-		if _G[n] then S.habillerSaisie(_G[n]) end
+		if _G[n] then S.skinInput(_G[n]) end
 	end
-	-- le cadre des droits de banque : l'encadre de camelot a la place du
-	-- fond d'infobulle
+	-- Bank permissions frame: camelot inset instead of the tooltip backdrop.
 	local tp = _G["GuildControlPopupFrameTabPermissions"]
 	if tp then
 		if tp.SetBackdrop then tp:SetBackdrop(nil) end
@@ -710,52 +617,50 @@ function Gu.habillerControle(gc)
 	end
 end
 
--- ------------------------------------------------------------ la construction
+-- ---------- Build
 
-local function construire(cadre)
-	local encadre = ForeverUI.CreateInset(cadre, "ForeverUIGuildInset")
-	encadre:SetPoint("TOPLEFT", S.cadre, "TOPLEFT", 4, P.encadreY1)
-	encadre:SetPoint("BOTTOMRIGHT", S.cadre, "BOTTOMRIGHT", -6, P.encadreBas)
+-- Builds the Guild page. frame: page frame inside the Social window.
+local function build(frame)
+	local frameBox = ForeverUI.CreateInset(frame, "ForeverUIGuildInset")
+	frameBox:SetPoint("TOPLEFT", S.frame, "TOPLEFT", 4, P.frameBoxY1)
+	frameBox:SetPoint("BOTTOMRIGHT", S.frame, "BOTTOMRIGHT", -6, P.frameBoxBottom)
 
-	-- LES EN-TETES : GUILD_COLUMN_INFO sans la note, Rank jusqu'au bord
-	Gu.entetes = {}
-	local precedent
-	for i, col in ipairs(P.colonnes) do
-		local h = S.creerEntete(encadre, "ForeverUIGuildColumn" .. i, col[2] > 0 and col[2] or P.remplirL, txt(col[1]), function(self)
-			SortGuildRoster(self.tri)
+	-- Headers: GUILD_COLUMN_INFO without Note, Rank up to the edge.
+	Gu.headers = {}
+	local previous
+	for i, col in ipairs(P.columns) do
+		local h = S.createHeader(frameBox, "ForeverUIGuildColumn" .. i, col[2] > 0 and col[2] or P.fillW, txt(col[1]), function(self)
+			SortGuildRoster(self.sort)
 		end)
-		h.tri = col[3]
-		if precedent then
-			h:SetPoint("LEFT", precedent, "RIGHT", P.ecart, 0)
+		h.sort = col[3]
+		if previous then
+			h:SetPoint("LEFT", previous, "RIGHT", P.gap, 0)
 		else
-			h:SetPoint("TOPLEFT", encadre, "TOPLEFT", P.enteteX, P.enteteY)
+			h:SetPoint("TOPLEFT", frameBox, "TOPLEFT", P.headerX, P.headerY)
 		end
-		Gu.entetes[i] = h
-		precedent = h
+		Gu.headers[i] = h
+		previous = h
 	end
-	Gu.liste = S.creerListe(encadre, "ForeverUIGuildList", P.ligneH, creerLigne, remplirLigne)
-	-- sans barre, la liste et la colonne Rank vont jusqu'au bord
-	local poserAncres = Gu.liste.PoserAncres
-	function Gu.liste:PoserAncres()
-		poserAncres(self)
-		Gu.entetes[#P.colonnes]:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT",
-			self.avecBarre and P.noteDroite or P.noteDroiteSeule, 1)
+	Gu.list = S.createList(frameBox, "ForeverUIGuildList", P.rowH, createRow, populateRow)
+	-- Without a scroll bar, the list and the Rank column reach the edge.
+	local placeAnchors = Gu.list.PlaceAnchors
+	function Gu.list:PlaceAnchors()
+		placeAnchors(self)
+		Gu.headers[#P.columns]:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT",
+			self.hasBar and P.noteRight or P.noteRightAlone, 1)
 	end
-	Gu.liste:SuivreBarre({ "TOPLEFT", Gu.entetes[1], "BOTTOMLEFT", 1, -1 },
-		{ "BOTTOMRIGHT", encadre, "BOTTOMRIGHT", P.listeX2, 4 }, P.listeX2Seule)
+	Gu.list:FollowBar({ "TOPLEFT", Gu.headers[1], "BOTTOMLEFT", 1, -1 },
+		{ "BOTTOMRIGHT", frameBox, "BOTTOMRIGHT", P.listX2, 4 }, P.listX2NoBar)
 
-	Gu.totaux = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	Gu.totaux:SetPoint("TOPLEFT", S.cadre, "TOPLEFT", P.totauxX, P.totauxY)
+	Gu.totals = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	Gu.totals:SetPoint("TOPLEFT", S.frame, "TOPLEFT", P.totalsX, P.totalsY)
 
-	-- LA CASE DES HORS LIGNE (ShowOfflineButton), en haut a droite
-	local hors = S.creerCase(cadre, "ForeverUIGuildShowOffline", txt("SHOW_OFFLINE_MEMBERS"))
-	hors:SetPoint("TOPRIGHT", S.cadre, "TOPRIGHT", P.horsDroite - hors.texte:GetStringWidth() - 2, P.horsY)
-	-- l'OnClick de GuildFrameLFGButton : la selection s'efface -- les index
-	-- du roster changent avec le filtre --, le filtre bascule, et la liste se
-	-- refait tout de suite (GuildStatus_Update) ; sans cela elle attendait le
-	-- prochain GUILD_ROSTER_UPDATE, et le detail pouvait montrer un autre
-	-- membre (2026-09-26)
-	hors:SetScript("OnClick", function(self)
+	-- Show offline checkbox (ShowOfflineButton), top right.
+	local outside = S.createCheckbox(frame, "ForeverUIGuildShowOffline", txt("SHOW_OFFLINE_MEMBERS"))
+	outside:SetPoint("TOPRIGHT", S.frame, "TOPRIGHT", P.offlineRight - outside.text:GetStringWidth() - 2, P.offlineY)
+	-- As GuildFrameLFGButton's OnClick: clear the selection (roster indexes change with the
+	-- filter), toggle the filter and redraw now instead of waiting for GUILD_ROSTER_UPDATE.
+	outside:SetScript("OnClick", function(self)
 		Gu.selection(0)
 		if self:GetChecked() then
 			PlaySound("igMainMenuOptionCheckBoxOff")
@@ -763,17 +668,17 @@ local function construire(cadre)
 			PlaySound("igMainMenuOptionCheckBoxOn")
 		end
 		SetGuildRosterShowOffline(self:GetChecked() and true or false)
-		Gu.maj()
+		Gu.update()
 	end)
-	Gu.horsLigne = hors
+	Gu.offlineCheck = outside
 
-	-- le message du jour
-	local lib = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	lib:SetPoint("BOTTOMLEFT", S.cadre, "BOTTOMLEFT", P.motdX, P.motdBas + P.motdH + 2)
-	lib:SetText(txt("GUILD_MOTD_LABEL"))
-	local zone = CreateFrame("Button", "ForeverUIGuildMOTD", cadre)
-	zone:SetPoint("BOTTOMLEFT", S.cadre, "BOTTOMLEFT", P.motdX, P.motdBas)
-	zone:SetPoint("BOTTOMRIGHT", S.cadre, "BOTTOMRIGHT", -P.motdX, P.motdBas)
+	-- Message of the day
+	local motdCaption = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	motdCaption:SetPoint("BOTTOMLEFT", S.frame, "BOTTOMLEFT", P.motdX, P.motdBottom + P.motdH + 2)
+	motdCaption:SetText(txt("GUILD_MOTD_LABEL"))
+	local zone = CreateFrame("Button", "ForeverUIGuildMOTD", frame)
+	zone:SetPoint("BOTTOMLEFT", S.frame, "BOTTOMLEFT", P.motdX, P.motdBottom)
+	zone:SetPoint("BOTTOMRIGHT", S.frame, "BOTTOMRIGHT", -P.motdX, P.motdBottom)
 	zone:SetHeight(P.motdH)
 	local motd = zone:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	motd:SetAllPoints(zone)
@@ -783,24 +688,24 @@ local function construire(cadre)
 	zone:SetScript("OnClick", function() StaticPopup_Show("SET_GUILDMOTD") end)
 	Gu.motd, Gu.motdZone = motd, zone
 
-	-- les trois boutons du bas
-	Gu.info = S.bouton(cadre, txt("GUILD_INFORMATION"), 130)
-	Gu.info:SetPoint("BOTTOMRIGHT", S.cadre, "BOTTOMRIGHT", P.boutonDroite, P.boutonBas)
+	-- The three bottom buttons
+	Gu.info = S.button(frame, txt("GUILD_INFORMATION"), 130)
+	Gu.info:SetPoint("BOTTOMRIGHT", S.frame, "BOTTOMRIGHT", P.buttonRight, P.buttonBottom)
 	Gu.info:SetScript("OnClick", function()
-		if I.cadre:IsShown() then I.cadre:Hide() else I.cadre:Show() end
+		if I.frame:IsShown() then I.frame:Hide() else I.frame:Show() end
 	end)
-	Gu.ajouter = S.bouton(cadre, txt("ADDMEMBER"), 110)
-	Gu.ajouter:SetPoint("RIGHT", Gu.info, "LEFT", -2, 0)
-	Gu.ajouter:SetScript("OnClick", function() StaticPopup_Show("ADD_GUILDMEMBER") end)
-	Gu.controle = S.bouton(cadre, txt("GUILDCONTROL"), 120)
-	Gu.controle:SetPoint("RIGHT", Gu.ajouter, "LEFT", -2, 0)
-	Gu.controle:SetScript("OnClick", function()
+	Gu.add = S.button(frame, txt("ADDMEMBER"), 110)
+	Gu.add:SetPoint("RIGHT", Gu.info, "LEFT", -2, 0)
+	Gu.add:SetScript("OnClick", function() StaticPopup_Show("ADD_GUILDMEMBER") end)
+	Gu.control = S.button(frame, txt("GUILDCONTROL"), 120)
+	Gu.control:SetPoint("RIGHT", Gu.add, "LEFT", -2, 0)
+	Gu.control:SetScript("OnClick", function()
 		local gc = GuildControlPopupFrame
 		if not gc then return end
 		if gc:IsShown() then
 			gc:Hide()
 		else
-			if S.annexe then S.annexe:Hide() end
+			if S.popup then S.popup:Hide() end
 			if GuildControlPopupFrame_Initialize and not gc.initialized then
 				GuildControlPopupFrame_Initialize()
 			end
@@ -808,25 +713,26 @@ local function construire(cadre)
 		end
 	end)
 
-	creerDetail()
-	creerInfo()
-	creerJournal()
+	createDetail()
+	createInfo()
+	createEventLog()
 
-	-- LA FENETRE DE CONTROLE DU CLIENT (parent UIParent), recollee a droite
-	-- de notre fenetre a chaque ouverture ; ancree sur GuildFrame, elle
-	-- partirait hors de l'ecran avec lui.
+	-- The client's guild control window (parent UIParent) is kept: its functions drive the server.
+	-- It is moved to the right of our window on each show; anchored to GuildFrame, it would go
+	-- off screen with it.
 	if GuildControlPopupFrame then
-		Gu.habillerControle(GuildControlPopupFrame)
+		Gu.skinControl(GuildControlPopupFrame)
 		GuildControlPopupFrame:HookScript("OnShow", function(self)
-			if S.annexe then S.annexe:Hide() end
+			if S.popup then S.popup:Hide() end
 			self:ClearAllPoints()
-			self:SetPoint("TOPLEFT", S.cadre, "TOPRIGHT", 12, -Gu.CONTROLE_HAUT)
+			self:SetPoint("TOPLEFT", S.frame, "TOPRIGHT", 12, -Gu.CONTROL_TOP)
 		end)
 	end
 
-	-- LE CADRE DE GUILDE DU CLIENT : garde, loin de l'ecran, transparent.
+	-- The client GuildFrame stays shown, off screen and transparent: UnitPopup offers Promote to
+	-- Guildmaster and Leave Guild, and the client refreshes the roster, only while it is shown.
 	if GuildFrame then
-		S.garder("GuildFrame")
+		S.keep("GuildFrame")
 		GuildFrame:ClearAllPoints()
 		GuildFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -5000, 5000)
 		GuildFrame:SetWidth(384)
@@ -836,32 +742,32 @@ local function construire(cadre)
 	end
 end
 
-S.inscrirePage(3, {
-	construire = construire,
-	titre = titre,
-	maj = Gu.maj,
-	montrer = function(premiere)
-		if premiere then GuildRoster() end
+S.registerPage(3, {
+	build = build,
+	title = title,
+	update = Gu.update,
+	showRegion = function(initial)
+		if initial then GuildRoster() end
 	end,
-	cacher = function()
-		Gu.fermeture = true
-		for _, a in ipairs({ D.cadre, I.cadre, J.cadre }) do
+	hide = function()
+		Gu.closeSize = true
+		for _, a in ipairs({ D.frame, I.frame, J.frame }) do
 			if a then a:Hide() end
 		end
 		if GuildControlPopupFrame then GuildControlPopupFrame:Hide() end
-		Gu.fermeture = nil
+		Gu.closeSize = nil
 	end,
 })
 
-local veilleur = CreateFrame("Frame")
+local listener = CreateFrame("Frame")
 for _, ev in ipairs({ "GUILD_ROSTER_UPDATE", "PLAYER_GUILD_UPDATE", "GUILD_MOTD", "GUILD_EVENT_LOG_UPDATE" }) do
-	veilleur:RegisterEvent(ev)
+	listener:RegisterEvent(ev)
 end
-veilleur:SetScript("OnEvent", function(self, ev)
-	if ev == "GUILD_ROSTER_UPDATE" then I.texteRetenu = nil end
+listener:SetScript("OnEvent", function(self, ev)
+	if ev == "GUILD_ROSTER_UPDATE" then I.savedText = nil end
 	if ev == "GUILD_EVENT_LOG_UPDATE" then
-		if J.cadre and J.cadre:IsShown() then J.liste:Maj(GetNumGuildEvents() or 0) end
+		if J.frame and J.frame:IsShown() then J.list:Update(GetNumGuildEvents() or 0) end
 		return
 	end
-	if Gu.liste and Gu.liste:IsVisible() then Gu.maj() end
+	if Gu.list and Gu.list:IsVisible() then Gu.update() end
 end)

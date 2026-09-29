@@ -6,23 +6,23 @@
 ## SavedVariables: ForeverUIDB
 
 UIAtlas.lua
-UIAtlas_01_selection_perso.lua
-UIAtlas_02_creation_perso.lua
-UIAtlas_03_barre_action.lua
-UIAtlas_04_cadres_unite.lua
-UIAtlas_05_feuille_perso.lua
-UIAtlas_06_complements.lua
-UIAtlas_07_decoupes.lua
+UIAtlas_01_character_select.lua
+UIAtlas_02_character_create.lua
+UIAtlas_03_action_bar.lua
+UIAtlas_04_unit_frames.lua
+UIAtlas_05_character_sheet.lua
+UIAtlas_06_extras.lua
+UIAtlas_07_cutouts.lua
 
-Textes.lua
-Textes_enUS.lua
-Textes_frFR.lua
+Texts.lua
+Texts_enUS.lua
+Texts_frFR.lua
 
 AtlasUtil.lua
 Panes.lua
 ScrollBar.lua
 Layout.lua
-Superposition.lua
+WindowStack.lua
 DropDown.lua
 PlayerFrame.lua
 PlayerFrameExtras.lua
@@ -73,7 +73,7 @@ GroupFinderRaid.lua
 Chat.lua
 Buffs.lua
 Tooltips.lua
-Gabarits.lua
+Templates.lua
 GameMenu.lua
 Settings.lua
 Bindings.lua
@@ -97,7 +97,7 @@ Trainer.lua
 Taxi.lua
 Stable.lua
 Socketing.lua
-Dialogues.lua
+Dialogs.lua
 TradeSkill.lua
 ProfessionsBook.lua
 BarberShopData.lua

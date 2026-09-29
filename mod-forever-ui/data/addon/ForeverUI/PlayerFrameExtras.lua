@@ -1,26 +1,7 @@
--- ForeverUI : les accessoires du cadre joueur.
---
--- Tout ce fichier s'accroche a ForeverUI.PlayerFrame et vit dans son porteur
--- de calques (overlayHolder), donc au-dessus de l'art. Rien n'est ancre ici a
--- UIParent : ces elements appartiennent au cadre et le suivent quand on le
--- deplace, comme dans l'editeur de camelot ou ils font partie du meme systeme.
---
--- RELEVE DES SOURCES (declaration -> ce qui la consomme -> calque) :
---   icone PvP      camelot/PlayerFrame.lua PlayerFrame_ShowPvPIcon : cercle
---                  UI-HUD-UnitFrame-SmallCircle a l'echelle 0.8, ancre TOP sur
---                  le TOPLEFT du cadre en (20, -50), icone de faction centree.
---   groupe         mainline/PlayerFrame.xml GroupIndicator : cadre 10x16 ancre
---                  BOTTOMRIGHT sur TOPLEFT (210, -29), embouts gauche/droite,
---                  piece centrale etiree, texte GameFontHighlightSmall a 0.7.
---                  Contenu : 3.3.5 PlayerFrame_UpdateGroupIndicator, GROUP..
---                  numero de sous-groupe, visible en raid seulement.
---   temps de jeu   mainline/PlayerFrame.xml PlayerPlayTime : 29x29 ancre
---                  TOPLEFT sur TOPRIGHT (-21, -24). Etat : PartialPlayTime()
---                  puis NoPlayTime(), evenement PLAYTIME_CHANGED.
---   degats recus   mainline/PlayerFrame.xml HitIndicator : texte centre sur le
---                  TOPLEFT du cadre en (54, -50), NumberFontNormalHuge. En
---                  3.3.5 c'est CombatFeedback_OnCombatEvent qui l'anime, via
---                  UNIT_COMBAT : on reutilise la fonction du client.
+-- ForeverUI: player frame extras: PvP icon, raid group, play time and damage taken.
+-- They live in ForeverUI.PlayerFrame's overlayHolder (above the art) and move with the frame.
+-- Sizes and offsets: camelot PlayerFrame_ShowPvPIcon (circle at scale 0.8) and mainline
+-- PlayerFrame.xml (GroupIndicator, PlayerPlayTime, HitIndicator).
 
 local frame = ForeverUI.PlayerFrame
 local holder = frame.overlayHolder
@@ -75,7 +56,7 @@ local function updatePvP()
 	pvpIcon:Hide()
 end
 
--- --------------------------------------------------------------- groupe
+-- ------------------------------------------------------------ raid group
 local groupIndicator = CreateFrame("Frame", nil, holder)
 groupIndicator:SetWidth(10)
 groupIndicator:SetHeight(16)
@@ -108,7 +89,7 @@ local function updateGroup()
 
 	local playerName = UnitName("player")
 	for index = 1, members do
-		local name, _rank, subgroup = GetRaidRosterInfo(index)
+		local name, _, subgroup = GetRaidRosterInfo(index)
 		if name == playerName and subgroup then
 			groupText:SetText(GROUP .. " " .. subgroup)
 			groupIndicator:SetWidth(groupText:GetWidth() + 40)
@@ -120,7 +101,7 @@ local function updateGroup()
 	groupIndicator:Hide()
 end
 
--- --------------------------------------------------------- temps de jeu
+-- ------------------------------------------------------------- play time
 local playTime = CreateFrame("Frame", nil, holder)
 playTime:SetWidth(29)
 playTime:SetHeight(29)
@@ -156,7 +137,7 @@ local function updatePlayTime()
 	end
 end
 
--- -------------------------------------------------------- degats recus
+-- ---------------------------------------------------------- damage taken
 local hitText = holder:CreateFontString(nil, "OVERLAY", "NumberFontNormalHuge")
 hitText:SetPoint("CENTER", frame, "TOPLEFT", 54, -50)
 hitText:Hide()
@@ -165,7 +146,7 @@ if CombatFeedback_Initialize then
 	CombatFeedback_Initialize(frame, hitText, 30)
 end
 
--- ------------------------------------------------------------- cablage
+-- ---------------------------------------------------------------- events
 local extras = CreateFrame("Frame")
 extras:RegisterEvent("PLAYER_ENTERING_WORLD")
 extras:RegisterEvent("PLAYER_FLAGS_CHANGED")
@@ -204,8 +185,8 @@ extras:SetScript("OnEvent", function(_self, event, unit, action, descriptor, dam
 	end
 end)
 
--- L'animation des degats recus est celle du client : on lui passe la main a
--- chaque image, comme le fait PlayerFrame_OnUpdate.
+-- The client's CombatFeedback code animates the damage text: UNIT_COMBAT feeds it (above)
+-- and it runs every frame, as in PlayerFrame_OnUpdate.
 extras:SetScript("OnUpdate", function(_self, elapsed)
 	if CombatFeedback_OnUpdate then
 		CombatFeedback_OnUpdate(frame, elapsed)

@@ -1,99 +1,61 @@
--- ForeverUI : l'horloge (TimeManagerFrame), a la DA de camelot (demande de
--- l'utilisateur, 2026-09-28 : « fait le reste des fenetres secondaires »).
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (Blizzard_TimeManager.xml / .lua de
--- 3.3.5, charge a la demande) :
---   TimeManagerFrame 256 x 256 a TOPRIGHT (45, -170) : art de la feuille de
---     personnage (UI-Character-General-*, quatre textures sans nom),
---     TimeManagerGlobe 64 x 64 a (6, -4), TimeManagerFrameTicker au centre
---     du globe (-2, 0), titre sans nom TIMEMANAGER_TITLE (GameFontWhite) a
---     TOP (0, -17) ; TimeManagerCloseButton a TOPRIGHT (-46, -8) ;
---   TimeManagerStopwatchFrame a TOPRIGHT (-40, -24), sur le fond
---     UI-QuestItemNameFrame ;
---   TimeManagerAlarmTimeFrame a (25, -80) : trois UIDropDownMenuTemplate
---     (heure, minutes, AM / PM ; UIDropDownMenu_SetWidth 30 ou 40) ;
---   TimeManagerAlarmMessageFrame sous l'heure, champ InputBoxTemplate
---     160 x 20 ;
---   TimeManagerAlarmEnabledButton : UIPanelButtonTemplate 160 x 20 a CENTER
---     (-20, -50), texte ALARM_ENABLED / ALARM_DISABLED et images reposes par
---     TimeManagerAlarmEnabledButton_Update ;
---   deux UICheckButtonTemplate (24 heures a (171, -203), heure locale
---     dessous) ;
---   TimeManagerAlarmAMPMDropDown_OnShow / _OnHide (langues aux AM / PM
---     longs) reancrent le menu AM / PM et ce qui le suit.
---
--- RELEVE -- CAMELOT (blizzard_timemanager/mainline, le [Family] de camelot) :
---   TimeManagerFrame : ButtonFrameTemplate 220 x 240 a TOPRIGHT (-10, -190),
---     sans barre de boutons (ButtonFrameTemplate_HideButtonBar : encart de
---     (4, -60) a (-6, 4)) ; TimeManagerGlobe 64 x 64 a (-6, 9), a la place
---     du portrait ; titre TIMEMANAGER_TITLE (GameFontWhite) a TOP (15, -5) ;
---   TimeManagerStopwatchFrame a TOPRIGHT (10, -12), sans fond ;
---   AlarmTimeFrame a (12, -65) : trois WowStyle1DropdownTemplate de 60, 60
---     et 65, a 5 l'un de l'autre, sous le libelle (0, -4) ;
---   TimeManagerAlarmMessageFrame sous l'heure (0, -5), champ de 190 x 20 ;
---   TimeManagerAlarmEnabledButton : UICheckButtonTemplate 24 x 24 a LEFT
---     (12, -45), texte TIMEMANAGER_ALARM_ENABLED ;
---   24 heures a (185, -190), heure locale dessous (inchange) ;
---   le chronometre (StopwatchFrame) : le meme XML que 3.3.5, rien a faire.
---
--- CE QUI DIFFERE, ET POURQUOI. « 3.3.5 rhabillee » : les cadres et la
--- logique du client restent. Le bouton de l'alarme devient une case : son
--- art de bouton est efface apres chaque mise a jour du client, une case
--- UI-CheckBox (l'art de UICheckButtonTemplate, identique chez camelot) est
--- dessinee dessus, cochee selon timeMgrAlarmEnabled, et son texte reste
--- TIMEMANAGER_ALARM_ENABLED. Les cases a cocher gardent l'art de 3.3.5,
--- comme chez camelot.
+-- ForeverUI: the clock window (TimeManagerFrame, loaded on demand by Blizzard_TimeManager),
+-- dressed as camelot's blizzard_timemanager: ButtonFrameTemplate, globe portrait, no button bar.
+-- The client's frames and logic stay. The alarm button becomes a check box: its button art is
+-- cleared after each client update and a UI-CheckBox, checked by timeMgrAlarmEnabled, drawn on it.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 
 local H = {}
-ForeverUI.Horloge = H
+ForeverUI.Clock = H
 
+-- backslash, the texture path separator
 local SEP = string.char(92)
 
+-- Sizes and offsets from camelot's blizzard_timemanager/mainline.
 local N = {
-	fenetre = { 220, 240 }, place = { -10, -190 },
-	portrait = { cote = 64, x = -6, y = 9 },
-	titre = { 15, -5 },
-	encart = { 4, -60, -6, 4 },
-	chrono = { 10, -12 },
-	alarme = { 12, -65 },
-	menus = { heure = 60, minute = 60, ampm = 65, ecart = 5, sousLibelle = -4 },
-	message = { y = -5, champ = 190 },
-	activer = { x = 12, y = -45, cote = 24, texte = -2 },
-	militaire = { 185, -190 },
+	window = { 220, 240 }, position = { -10, -190 },
+	portrait = { side = 64, x = -6, y = 9 },
+	title = { 15, -5 },
+	inset = { 4, -60, -6, 4 },
+	stopwatch = { 10, -12 },
+	alarm = { 12, -65 },
+	menus = { hour = 60, minute = 60, ampm = 65, gap = 5, belowLabel = -4 },
+	message = { y = -5, field = 190 },
+	activate = { x = 12, y = -45, side = 24, text = -2 },
+	military = { 185, -190 },
 }
 
-local function poser(r, ...)
+-- Clears r's anchors and sets the given point.
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
--- la place de chaque commande ; reprise apres le client, qui reancre le menu
--- AM / PM et ce qui le suit (TimeManagerAlarmAMPMDropDown_OnShow / _OnHide)
-function H.Placer()
+-- Places each control. Runs again after the client, which re-anchors the AM / PM menu and
+-- what follows it (TimeManagerAlarmAMPMDropDown_OnShow / _OnHide).
+function H.Place()
 	local f = TimeManagerFrame
 	local M = N.menus
-	poser(TimeManagerStopwatchFrame, "TOPRIGHT", f, "TOPRIGHT", N.chrono[1], N.chrono[2])
-	poser(TimeManagerAlarmTimeFrame, "TOPLEFT", f, "TOPLEFT", N.alarme[1], N.alarme[2])
-	poser(TimeManagerAlarmHourDropDown, "TOPLEFT", TimeManagerAlarmTimeLabel, "BOTTOMLEFT", 0, M.sousLibelle)
-	poser(TimeManagerAlarmMinuteDropDown, "LEFT", TimeManagerAlarmHourDropDown, "RIGHT", M.ecart, 0)
-	poser(TimeManagerAlarmAMPMDropDown, "LEFT", TimeManagerAlarmMinuteDropDown, "RIGHT", M.ecart, 0)
-	poser(TimeManagerAlarmMessageFrame, "TOPLEFT", TimeManagerAlarmHourDropDown, "BOTTOMLEFT", 0, N.message.y)
-	poser(TimeManagerAlarmEnabledButton, "LEFT", f, "LEFT", N.activer.x, N.activer.y)
-	poser(TimeManagerMilitaryTimeCheck, "TOPLEFT", f, "TOPLEFT", N.militaire[1], N.militaire[2])
+	place(TimeManagerStopwatchFrame, "TOPRIGHT", f, "TOPRIGHT", N.stopwatch[1], N.stopwatch[2])
+	place(TimeManagerAlarmTimeFrame, "TOPLEFT", f, "TOPLEFT", N.alarm[1], N.alarm[2])
+	place(TimeManagerAlarmHourDropDown, "TOPLEFT", TimeManagerAlarmTimeLabel, "BOTTOMLEFT", 0, M.belowLabel)
+	place(TimeManagerAlarmMinuteDropDown, "LEFT", TimeManagerAlarmHourDropDown, "RIGHT", M.gap, 0)
+	place(TimeManagerAlarmAMPMDropDown, "LEFT", TimeManagerAlarmMinuteDropDown, "RIGHT", M.gap, 0)
+	place(TimeManagerAlarmMessageFrame, "TOPLEFT", TimeManagerAlarmHourDropDown, "BOTTOMLEFT", 0, N.message.y)
+	place(TimeManagerAlarmEnabledButton, "LEFT", f, "LEFT", N.activate.x, N.activate.y)
+	place(TimeManagerMilitaryTimeCheck, "TOPLEFT", f, "TOPLEFT", N.military[1], N.military[2])
 end
 
--- la case de l'alarme, apres TimeManagerAlarmEnabledButton_Update : l'art de
--- bouton que le client vient de poser s'efface, la coche suit le reglage
-function H.PeindreAlarme()
+-- Alarm check box, after TimeManagerAlarmEnabledButton_Update: clears the button art the
+-- client just set; the check mark follows the setting.
+function H.PaintAlarm()
 	local b = TimeManagerAlarmEnabledButton
-	if not b or not b.foreverCase then return end
-	for _, lire in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture" }) do
-		local t = b[lire](b)
+	if not b or not b.foreverCell then return end
+	for _, read in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture" }) do
+		local t = b[read](b)
 		if t then
 			t:SetTexture(nil)
 			t:SetAlpha(0)
@@ -102,103 +64,105 @@ function H.PeindreAlarme()
 	b:SetNormalFontObject(GameFontNormalSmall)
 	b:SetHighlightFontObject(GameFontNormalSmall)
 	b:SetText(TIMEMANAGER_ALARM_ENABLED)
-	Gb.Montrer(b.foreverCoche, GetCVar("timeMgrAlarmEnabled") == "1")
+	Tpl.SetShown(b.foreverCheck, GetCVar("timeMgrAlarmEnabled") == "1")
 end
 
-local function habillerAlarme()
+-- Turns the alarm button into a check box.
+local function skinAlarm()
 	local b = TimeManagerAlarmEnabledButton
-	local A = N.activer
-	b:SetWidth(A.cote)
-	b:SetHeight(A.cote)
-	local case = b:CreateTexture(nil, "ARTWORK")
-	case:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Up")
-	case:SetAllPoints(b)
-	local coche = b:CreateTexture(nil, "OVERLAY")
-	coche:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Check")
-	coche:SetAllPoints(b)
-	b.foreverCase, b.foreverCoche = case, coche
+	local A = N.activate
+	b:SetWidth(A.side)
+	b:SetHeight(A.side)
+	local checkbox = b:CreateTexture(nil, "ARTWORK")
+	checkbox:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Up")
+	checkbox:SetAllPoints(b)
+	local checkMark = b:CreateTexture(nil, "OVERLAY")
+	checkMark:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Check")
+	checkMark:SetAllPoints(b)
+	b.foreverCell, b.foreverCheck = checkbox, checkMark
 	b:SetHighlightTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Highlight")
-	local lueur = b:GetHighlightTexture()
-	lueur:SetTexCoord(0, 1, 0, 1)
-	lueur:ClearAllPoints()
-	lueur:SetAllPoints(b)
-	lueur:SetBlendMode("ADD")
+	local glow = b:GetHighlightTexture()
+	glow:SetTexCoord(0, 1, 0, 1)
+	glow:ClearAllPoints()
+	glow:SetAllPoints(b)
+	glow:SetBlendMode("ADD")
 	b:HookScript("OnMouseDown", function()
-		case:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Down")
+		checkbox:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Down")
 	end)
 	b:HookScript("OnMouseUp", function()
-		case:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Up")
+		checkbox:SetTexture("Interface" .. SEP .. "Buttons" .. SEP .. "UI-CheckBox-Up")
 	end)
-	local texte = b:GetFontString()
-	if texte then
-		poser(texte, "LEFT", b, "RIGHT", A.texte, 0)
+	local text = b:GetFontString()
+	if text then
+		place(text, "LEFT", b, "RIGHT", A.text, 0)
 	end
-	hooksecurefunc("TimeManagerAlarmEnabledButton_Update", H.PeindreAlarme)
-	H.PeindreAlarme()
+	hooksecurefunc("TimeManagerAlarmEnabledButton_Update", H.PaintAlarm)
+	H.PaintAlarm()
 end
 
-function H.Habiller()
+-- Dresses TimeManagerFrame once, when Blizzard_TimeManager is loaded.
+function H.Skin()
 	local f = TimeManagerFrame
-	if not f or f.foreverHabit then return end
-	f:SetWidth(N.fenetre[1])
-	f:SetHeight(N.fenetre[2])
-	poser(f, "TOPRIGHT", UIParent, "TOPRIGHT", N.place[1], N.place[2])
-	-- l'art de 3.3.5 : les quatre morceaux sans nom, le titre sans nom, le
-	-- globe (repris en portrait), le fond du chronometre
+	if not f or f.foreverSkin then return end
+	f:SetWidth(N.window[1])
+	f:SetHeight(N.window[2])
+	place(f, "TOPRIGHT", UIParent, "TOPRIGHT", N.position[1], N.position[2])
+	-- hide the 3.3.5 art: the four unnamed pieces, the unnamed title, the globe (redrawn as the
+	-- portrait), the stopwatch background
 	for _, r in ipairs({ f:GetRegions() }) do
-		local genre = r:GetObjectType()
-		if genre == "Texture" then
+		local kind = r:GetObjectType()
+		if kind == "Texture" then
 			r:SetAlpha(0)
-		elseif genre == "FontString" and r:GetText() == TIMEMANAGER_TITLE then
+		elseif kind == "FontString" and r:GetText() == TIMEMANAGER_TITLE then
 			r:SetAlpha(0)
 		end
 	end
-	poser(TimeManagerGlobe, "TOPLEFT", f, "TOPLEFT", N.portrait.x, N.portrait.y)
+	place(TimeManagerGlobe, "TOPLEFT", f, "TOPLEFT", N.portrait.x, N.portrait.y)
 	TimeManagerStopwatchFrameBackground:SetAlpha(0)
-	local habit = Gb.FenetrePortrait(f, {
+	local skin = Tpl.PortraitWindow(f, {
 		portrait = "Interface" .. SEP .. "TimeManager" .. SEP .. "GlobeIcon",
-		portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = TIMEMANAGER_TITLE,
+		portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = TIMEMANAGER_TITLE,
 	})
-	f.foreverHabit = habit
-	habit.titre:SetFontObject(GameFontWhite)
-	poser(habit.titre, "TOP", f, "TOP", N.titre[1], N.titre[2])
-	-- l'heure, au-dessus du globe et du metal
-	habit.heure = Gb.Recopier(TimeManagerFrameTicker, habit.metal, GameFontHighlightLarge)
-	-- l'encart, sans barre de boutons
-	local E = N.encart
+	f.foreverSkin = skin
+	skin.title:SetFontObject(GameFontWhite)
+	place(skin.title, "TOP", f, "TOP", N.title[1], N.title[2])
+	-- the time, above the globe and the metal
+	skin.hour = Tpl.Mirror(TimeManagerFrameTicker, skin.metal, GameFontHighlightLarge)
+	-- the inset, without a button bar
+	local E = N.inset
 	local rect = CreateFrame("Frame", nil, f)
 	rect:SetPoint("TOPLEFT", f, "TOPLEFT", E[1], E[2])
 	rect:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", E[3], E[4])
-	local marbre = f:CreateTexture(nil, "BACKGROUND")
-	marbre:SetTexture("interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble", true)
-	if marbre.SetHorizTile then marbre:SetHorizTile(true) marbre:SetVertTile(true) end
-	marbre:SetAllPoints(rect)
-	habit.encadre = Gb.NeufTranches(f, "InsetFrameTemplate", rect)
-	habit.marbre = marbre
-	-- la croix, au-dessus du metal
-	Gb.Croix(TimeManagerCloseButton, f)
+	local marble = f:CreateTexture(nil, "BACKGROUND")
+	marble:SetTexture("interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble", true)
+	if marble.SetHorizTile then marble:SetHorizTile(true) marble:SetVertTile(true) end
+	marble:SetAllPoints(rect)
+	skin.frameBox = Tpl.NineSlice(f, "InsetFrameTemplate", rect)
+	skin.marble = marble
+	-- close button, above the metal
+	Tpl.CloseButton(TimeManagerCloseButton, f)
 	TimeManagerCloseButton:SetFrameLevel(f:GetFrameLevel() + 22)
-	-- les trois menus et le champ du message
+	-- the three menus and the message field
 	local M = N.menus
-	Gb.MenuStyle1(TimeManagerAlarmHourDropDown, M.heure)
-	Gb.MenuStyle1(TimeManagerAlarmMinuteDropDown, M.minute)
-	Gb.MenuStyle1(TimeManagerAlarmAMPMDropDown, M.ampm)
-	TimeManagerAlarmMessageEditBox:SetWidth(N.message.champ)
-	ForeverUI.Social.habillerSaisie(TimeManagerAlarmMessageEditBox)
-	habillerAlarme()
-	H.Placer()
-	f:HookScript("OnShow", H.Placer)
-	TimeManagerAlarmAMPMDropDown:HookScript("OnShow", H.Placer)
-	TimeManagerAlarmAMPMDropDown:HookScript("OnHide", H.Placer)
+	Tpl.MenuStyle1(TimeManagerAlarmHourDropDown, M.hour)
+	Tpl.MenuStyle1(TimeManagerAlarmMinuteDropDown, M.minute)
+	Tpl.MenuStyle1(TimeManagerAlarmAMPMDropDown, M.ampm)
+	TimeManagerAlarmMessageEditBox:SetWidth(N.message.field)
+	ForeverUI.Social.skinInput(TimeManagerAlarmMessageEditBox)
+	skinAlarm()
+	H.Place()
+	f:HookScript("OnShow", H.Place)
+	TimeManagerAlarmAMPMDropDown:HookScript("OnShow", H.Place)
+	TimeManagerAlarmAMPMDropDown:HookScript("OnHide", H.Place)
 end
 
-H.Habiller()
+H.Skin()
 
-local veille = CreateFrame("Frame")
-veille:RegisterEvent("ADDON_LOADED")
-veille:SetScript("OnEvent", function(_, _, nom)
-	if nom == "Blizzard_TimeManager" then
-		H.Habiller()
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("ADDON_LOADED")
+watcher:SetScript("OnEvent", function(_, _, name)
+	if name == "Blizzard_TimeManager" then
+		H.Skin()
 	end
 end)

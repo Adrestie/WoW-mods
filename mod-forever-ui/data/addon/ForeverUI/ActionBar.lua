@@ -1,59 +1,17 @@
--- ForeverUI : la barre d'action principale.
---
--- RELEVE DES SOURCES -- tout vient du code extrait de camelot.
---
--- mainline/ActionButtonTemplate.xml (la famille que charge camelot)
---   bouton            45 x 45          <Size x="45" y="45"/>
---   icone             sans ancrage ni taille : elle remplit le bouton, donc
---                     45 x 45. Le moderne l'arrondit avec un masque
---                     (UI-HUD-ActionBar-IconFrame-Mask) ; 3.3.5 n'a pas de
---                     MaskTexture, et ce sont les coins pleins du cadre qui
---                     recouvrent les angles de l'icone.
---   fond d'emplacement UI-HUD-ActionBar-IconFrame-Background, setAllPoints
---   art d'emplacement ui-hud-actionbar-iconframe-slot, setAllPoints
---   cadre normal      UI-HUD-ActionBar-IconFrame, 46 x 45, ancre TOPLEFT
---   enfonce           UI-HUD-ActionBar-IconFrame-Down, 46 x 45, TOPLEFT
---   survol            UI-HUD-ActionBar-IconFrame-Mouseover, 46 x 45, TOPLEFT
---   coche             le meme survol, mais en melange ADD
---   bordure           UI-HUD-ActionBar-IconFrame-Border, taille d'atlas,
---                     TOPLEFT, masquee par defaut
---   raccourci         32 x 10, TOPRIGHT (-5, -5), NumberFontNormalSmallGray,
---                     aligne a droite
---   quantite          NumberFontNormal, BOTTOMRIGHT (-5, 5), aligne a droite
---   nom de macro      36 x 10, BOTTOM (0, 2), GameFontHighlightSmallOutline
---   recharge          ancree sur l'icone avec 3 px de retrait de chaque cote
---
--- shared/ActionBar.lua
---   minButtonPadding = 2 : les boutons sont espaces de 2 px, soit un pas de
---   47 px pour des boutons de 45.
---
--- mainline/MainActionBar.xml
---   douze boutons sur une rangee ; bordure de barre UI-HUD-ActionBar-Frame
---   ancree TOPLEFT (-6, 6) et BOTTOMRIGHT (4, -5) sur la barre. C'est UNE
---   image de 55 x 55, decoupee en neuf par ForeverUI.SetBarFrameArt.
---   Les separateurs se posent entre deux boutons : RIGHT sur le LEFT du
---   bouton decale de 5, sur toute la hauteur -- trois tranches verticales de
---   12 de large (ForeverUI.CreateDivider).
---
--- camelot/MainMenuBarEndCaps.xml
---   embouts : deux cadres de 154 x 95, textures ui-hud-actionbar-gryphon-left
---   et -right qui les remplissent (pas de taille d'atlas).
---
--- CE QUE CE FICHIER NE FAIT PAS. Les boutons d'action du client sont des
--- cadres securises : on les garde et on les rhabille. Les recreer signifierait
--- reecrire sorts, macros et glisser-deposer, et risquer la contamination du
--- code protege. Rien n'est redimensionne ni deplace en combat, ou le client
--- l'interdit.
+-- Main action bar: the client's secure action buttons, kept and reskinned (camelot
+-- ActionButtonTemplate, MainActionBar), with the bar border, page arrows and gryphon end caps.
+-- Recreating the buttons would mean rewriting spells, macros and drag and drop, and risk taint.
+-- Nothing is resized or moved in combat, where the client forbids it.
 
+-- camelot ActionButtonTemplate: 45 x 45; shared/ActionBar.lua minButtonPadding = 2
 local BUTTON_SIZE = 45
 local BUTTON_PADDING = 2
 local BUTTON_PITCH = BUTTON_SIZE + BUTTON_PADDING
-local FRAME_WIDTH, FRAME_HEIGHT = 46, 45      -- taille des quatre etats
+local FRAME_WIDTH, FRAME_HEIGHT = 46, 45      -- size of the four state textures
 local BUTTON_COUNT = 12
 local END_CAP_WIDTH, END_CAP_HEIGHT = 154, 95
-local DESCENTE_EMBOUT = -2      -- releve a l'ecran : le bas de l'image tombe
+local END_CAP_DROP = -2      -- measured on screen: the art bottom drops 2 px below the bar
 local L = ForeverUI.L
-                                -- 2 px sous le bas de la barre
 
 local ATLAS = {
 	normal = "ui-hud-actionbar-iconframe",
@@ -70,11 +28,9 @@ local BARS = {
 	"MultiBarRightButton", "MultiBarLeftButton", "BonusActionButton",
 }
 
--- POURQUOI LE CADRE N'EST PAS LA NormalTexture DU BOUTON. ActionButton_Update
--- appelle SetNormalTexture("Interface\Buttons\UI-Quickslot2") a chaque
--- rafraichissement, et ActionButton_ShowGrid lui remet une couleur : tout
--- habillage pose dessus est efface dans la seconde. On neutralise donc celle
--- du client et on dessine notre propre cadre, que rien ne vient reecrire.
+-- The frame is not the button's NormalTexture: ActionButton_Update sets UI-Quickslot2 on
+-- every refresh and ActionButton_ShowGrid recolors it, erasing any skin. So the client's
+-- texture is silenced and we draw our own frame. add: use the ADD blend mode.
 local function setStateTexture(texture, atlas, add)
 	if not texture then
 		return
@@ -88,7 +44,7 @@ local function setStateTexture(texture, atlas, add)
 	texture:SetBlendMode(add and "ADD" or "BLEND")
 end
 
--- Remet a zero ce que le client vient de reecrire.
+-- Hide again what the client just rewrote.
 local function silenceNormalTexture(button)
 	local normal = button:GetNormalTexture()
 	if normal then
@@ -97,18 +53,11 @@ local function silenceNormalTexture(button)
 	end
 end
 
--- PIEGE 3.3.5. Ce n'est pas le fond de l'emplacement que le client masque,
--- c'est LE BOUTON ENTIER : ActionButton_HideGrid le cache des que le
--- compteur showgrid retombe a zero, et ce compteur ne monte que le temps
--- d'un glisser-deposer (evenements ACTIONBAR_SHOWGRID / _HIDEGRID). Un
--- emplacement vide disparait donc, et notre art avec lui.
---
--- On maintient le compteur a 1 : le client garde alors ses boutons vides
--- affiches de lui-meme. Le Show de secours ne sert que si le bouton etait
--- deja masque, et jamais en combat -- afficher un cadre securise y est
--- interdit. Ce qui aurait ete masque pendant un combat revient a la sortie,
--- PLAYER_REGEN_ENABLED etant deja surveille.
-local function garderGrille(button)
+-- 3.3.5 trap: ActionButton_HideGrid hides the WHOLE button once its showgrid counter drops
+-- to zero, and it only rises during a drag, so empty slots vanish. Keeping the counter at 1
+-- makes the client keep empty buttons shown. The fallback Show never runs in combat (secure
+-- frame); PLAYER_REGEN_ENABLED brings back anything hidden meanwhile.
+local function keepGrid(button)
 	if not button or button:GetAttribute("statehidden") then
 		return
 	end
@@ -141,7 +90,7 @@ local function skinButton(button)
 	button:SetWidth(BUTTON_SIZE)
 	button:SetHeight(BUTTON_SIZE)
 
-	-- L'emplacement vide, sous l'icone.
+	-- Empty slot, under the icon.
 	local background = button:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(background, ATLAS.background, true)
 	background:SetAllPoints(button)
@@ -154,18 +103,18 @@ local function skinButton(button)
 	button.foreverSlot = slot
 
 	if icon then
-		-- L'icone occupe tout le bouton, comme dans la source ; les angles
-		-- sont couverts par les coins pleins du cadre.
+		-- The icon fills the button, as in camelot; 3.3.5 has no MaskTexture, so the frame's
+		-- solid corners cover the icon's corners.
 		icon:ClearAllPoints()
 		icon:SetAllPoints(button)
 		icon:SetTexCoord(0, 1, 0, 1)
 		icon:SetDrawLayer("BORDER")
 	end
 
-	-- Notre cadre, pose au-dessus de l'icone et hors d'atteinte du client.
-	local cadre = button:CreateTexture(nil, "ARTWORK")
-	setStateTexture(cadre, ATLAS.normal)
-	button.foreverFrame = cadre
+	-- Our frame, above the icon and out of the client's reach.
+	local frame = button:CreateTexture(nil, "ARTWORK")
+	setStateTexture(frame, ATLAS.normal)
+	button.foreverFrame = frame
 
 	silenceNormalTexture(button)
 	setStateTexture(button:GetPushedTexture(), ATLAS.pushed)
@@ -179,8 +128,7 @@ local function skinButton(button)
 	end
 
 	if border then
-		-- La bordure d'equipement du client est verte et carree ; la source
-		-- utilise sa propre bordure, masquee par defaut.
+		-- The client's equipped border is green and square; camelot uses its own, hidden by default.
 		ForeverUI.SetAtlas(border, ATLAS.border)
 		border:ClearAllPoints()
 		border:SetPoint("TOPLEFT", 0, 0)
@@ -190,13 +138,8 @@ local function skinButton(button)
 		floatingBG:SetAlpha(0)
 	end
 
-	-- SetFontObject EFFACE LA JUSTIFICATION : elle se repose APRES lui.
-	--
-	-- Un objet de police porte la sienne, et aucune des polices de nombre
-	-- n'a de justifyH -- releve dans le FontStyles.xml du client : elles
-	-- sont donc CENTREES. Le SetJustifyH("RIGHT") ecrit avant le
-	-- SetFontObject ne survivait pas, et les deux textes etaient centres
-	-- dans leur boite au lieu d'etre cales a droite.
+	-- SetFontObject RESETS the justification, so set it AFTER. The number fonts have no
+	-- justifyH (client FontStyles.xml), so they are centered by default.
 	if hotkey then
 		hotkey:SetWidth(32)
 		hotkey:SetHeight(10)
@@ -227,46 +170,44 @@ local function skinButton(button)
 		cooldown:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -3, 3)
 	end
 
-	garderGrille(button)
+	keepGrid(button)
 	button.foreverSkinned = true
 end
 
--- ------------------------------------------------------------ la barre
+-- ---------- Bar
 local holder = CreateFrame("Frame", "ForeverUIActionBarHolder", UIParent)
 holder:SetWidth(BUTTON_COUNT * BUTTON_SIZE + (BUTTON_COUNT - 1) * BUTTON_PADDING)
 holder:SetHeight(BUTTON_SIZE)
 
--- Bordure de barre : la source pose UI-HUD-ActionBar-Frame, une seule image
--- octogonale, entre TOPLEFT (-6, 6) et BOTTOMRIGHT (4, -5). On la decoupe en
--- neuf pour que les biseaux des coins gardent leur taille.
+-- Bar border: camelot's UI-HUD-ActionBar-Frame, one octagonal image, from TOPLEFT (-6, 6)
+-- to BOTTOMRIGHT (4, -5). Nine-sliced so the corner bevels keep their size.
 local border = CreateFrame("Frame", nil, holder)
 border:SetPoint("TOPLEFT", -6, 6)
 border:SetPoint("BOTTOMRIGHT", 4, -5)
 border:SetFrameLevel(holder:GetFrameLevel())
 ForeverUI.SetBarFrameArt(border)
 
--- Le bloc de pagination.
--- RELEVE -- mainline/MainActionBar.xml : ActionBarPageNumber se pose
--- BOTTOMRIGHT sur le BOTTOMLEFT de la barre, decale de (-4, 9). Il contient le
--- numero (17 x 10, centre a -1) et deux fleches de 17 x 14, centrees a +10 et
--- -10. Sa taille suit ses enfants : 17 de large, 34 de haut.
+-- Page block (mainline/MainActionBar.xml ActionBarPageNumber): BOTTOMRIGHT on the bar's
+-- BOTTOMLEFT at (-4, 9); number 17 x 10 centered at -1, two 17 x 14 arrows at +10 and -10;
+-- sized by its children: 17 x 34.
 local page = CreateFrame("Frame", "ForeverUIActionBarPage", holder)
 page:SetWidth(17)
 page:SetHeight(34)
 page:SetPoint("BOTTOMRIGHT", holder, "BOTTOMLEFT", -4, 9)
 page:SetFrameLevel(holder:GetFrameLevel() + 11)
 
--- Separateurs entre boutons : RIGHT sur le LEFT du bouton, decale de 5.
+-- Dividers between buttons: RIGHT on the button's LEFT, offset 5.
 local dividers = {}
 
--- Embouts : deux cadres de 154 x 95 que la texture remplit.
-local function createEndCap(nom, atlas, point, relPoint, decalageX)
-	local cap = CreateFrame("Frame", nom, holder)
+-- End caps: two 154 x 95 frames filled by their texture.
+-- point, relPoint, offsetX: anchor on the bar
+local function createEndCap(name, atlas, point, relPoint, offsetX)
+	local cap = CreateFrame("Frame", name, holder)
 	cap:SetWidth(END_CAP_WIDTH)
 	cap:SetHeight(END_CAP_HEIGHT)
-	cap:SetPoint(point, holder, relPoint, decalageX, DESCENTE_EMBOUT)
-	-- RELEVE -- camelot/MainMenuBarEndCaps.xml : frameLevel 100. L'embout passe
-	-- DEVANT les boutons, dont le niveau est celui du cadre du client.
+	cap:SetPoint(point, holder, relPoint, offsetX, END_CAP_DROP)
+	-- camelot/MainMenuBarEndCaps.xml: frameLevel 100. The end cap is drawn IN FRONT of the
+	-- buttons, whose level is the client frame's.
 	cap:SetFrameLevel(holder:GetFrameLevel() + 10)
 
 	local texture = cap:CreateTexture(nil, "OVERLAY")
@@ -278,106 +219,79 @@ local function createEndCap(nom, atlas, point, relPoint, decalageX)
 	return cap
 end
 
--- RELEVE -- mainline/EditModePresetLayouts.lua : l'embout gauche se pose sur
--- le bord GAUCHE de la barre, l'embout droit sur le bord DROIT de la BARRE DES
--- SACS, chacun rentrant de 30 px. BottomBar.lua reancre le droit sur les sacs
--- des que ceux-ci existent.
---
--- ECART ASSUME SUR LA VERTICALE. La source cale l'embout 20 px SOUS le bas de
--- la barre (mainline : BOTTOMRIGHT (9, -22) pour 98 de haut ; camelot : centre
--- a +5 du milieu d'une barre de 45 pour 95 de haut -- meme resultat). La barre
--- etant a 2 px du bas de l'ecran, ces 20 px tombent hors de l'ecran : les
--- pattes du griffon disparaissent et la barre vient mordre sa tete. On cale
--- donc le BAS de l'image sur le BAS de la barre, comme le jeu le montre --
--- puis 2 px plus bas, valeur relevee a l'ecran.
+-- mainline/EditModePresetLayouts.lua: the left cap sits on the bar's LEFT edge, the right
+-- cap on the bag bar's RIGHT edge, each 30 px inward (BottomBar.lua re-anchors it to the
+-- bags). Camelot drops the cap 20 px below the bar, off screen for a bar 2 px above the
+-- screen bottom, so the art bottom is aligned on the bar bottom, then 2 px lower.
 local leftCap = createEndCap("ForeverUIActionBarLeftCap", "ui-hud-actionbar-gryphon-left", "BOTTOMRIGHT", "BOTTOMLEFT", 30)
 local rightCap = createEndCap("ForeverUIActionBarRightCap", "ui-hud-actionbar-gryphon-right", "BOTTOMLEFT", "BOTTOMRIGHT", -30)
 
--- LA BARRE BONUS PREND LA MEME PLACE. Quand le joueur change de posture,
--- 3.3.5 montre BonusActionBarFrame par-dessus la barre principale, a une
--- position a lui -- d'ou le decalage. Ses douze boutons sont donc poses aux
--- memes places que ceux de la barre de sorts : la barre de remplacement
--- suit alors la position du porteur, y compris celle que le joueur a
--- choisie par /fui.
---
--- On ne reparente rien : un bouton reste enfant de la barre du client, donc
--- il suit sa visibilite (posture, vehicule, possession). Seul son ancrage
--- change.
---
--- LA GLISSIERE. 3.3.5 fait GLISSER cette barre pour la faire paraitre, et
--- il faut garder ce mouvement. Or on ne peut pas deplacer un bouton
--- securise image par image : le client l'interdit en combat, et c'est
--- precisement la qu'on change de posture. Les boutons bonus sont donc
--- ancres UNE FOIS a une glissiere -- un cadre a nous, pose sur le porteur
--- -- et c'est elle qui glisse. Les boutons suivent sans qu'on y touche, et
--- deplacer son propre cadre reste permis en combat.
-local BARRES_POSEES = { "ActionButton", "BonusActionButton" }
+-- The bonus bar takes the same place. On a stance change 3.3.5 shows BonusActionBarFrame
+-- over the main bar at its own position, so its buttons are anchored like the main ones and
+-- follow the holder. Nothing is reparented: buttons follow the client bar's visibility.
+-- 3.3.5 slides this bar in, but secure buttons cannot move every frame in combat, where
+-- stances change: they are anchored ONCE to a track (our frame), and the track slides.
+local PLACED_BARS = { "ActionButton", "BonusActionButton" }
 
--- La glissiere couvre le porteur et se decale en hauteur pendant le
--- mouvement. DUREE et COURSE sont celles du client quand il les declare.
-local glissiere = CreateFrame("Frame", "ForeverUIBonusSlide", holder)
-local GLISSEMENT_DUREE = BONUS_ACTIONBUTTON_SLIDE_TIME or 0.2
-local GLISSEMENT_COURSE = BUTTON_SIZE
+-- The track covers the holder and shifts vertically while sliding. The duration comes from
+-- the client when it declares it.
+local track = CreateFrame("Frame", "ForeverUIBonusSlide", holder)
+local SLIDE_DURATION = BONUS_ACTIONBUTTON_SLIDE_TIME or 0.2
+local SLIDE_DISTANCE = BUTTON_SIZE
 
-local function poserGlissiere(avancement)
-	local decalage = -GLISSEMENT_COURSE * (1 - avancement)
-	glissiere:ClearAllPoints()
-	glissiere:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, decalage)
-	glissiere:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, decalage)
+local function placeTrack(progress)
+	local offset = -SLIDE_DISTANCE * (1 - progress)
+	track:ClearAllPoints()
+	track:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, offset)
+	track:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, offset)
 end
-poserGlissiere(1)
+placeTrack(1)
 
--- Le glissement va dans les DEUX sens. A l'apparition la barre monte ; au
--- retrait elle redescend, et c'est le client qui rend cela possible : comme
--- ses autres barres glissantes, il pose mode = "hide", continue de
--- l'afficher le temps du mouvement, et ne la masque qu'a la fin. On lit
--- donc son mode plutot que sa seule visibilite.
---
--- Si un client ne portait pas ce champ, le retrait resterait instantane :
--- rien ne peut animer des boutons deja masques.
-glissiere.avancement = 1
-glissiere.cible = 1
-glissiere:SetScript("OnUpdate", function(self, elapse)
-	local barre = BonusActionBarFrame
-	local visible = barre and barre:IsShown()
+-- The slide goes both ways. When hiding, the client sets mode = "hide" and keeps the bar
+-- shown until the move ends, so the mode is read rather than the visibility alone. Without
+-- that field the hide is instant: hidden buttons cannot be animated.
+track.progress = 1
+track.target = 1
+track:SetScript("OnUpdate", function(self, elapse)
+	local bar = BonusActionBarFrame
+	local visible = bar and bar:IsShown()
 
 	if visible and not self.visible then
-		self.avancement, self.cible = 0, 1      -- elle parait : elle monte
-	elseif visible and barre.mode == "hide" then
-		self.cible = 0                          -- le client la retire
+		self.progress, self.target = 0, 1      -- shown: slides up
+	elseif visible and bar.mode == "hide" then
+		self.target = 0                          -- the client is hiding it
 	elseif not visible then
-		self.avancement, self.cible = 0, 0      -- prete a remonter
+		self.progress, self.target = 0, 0      -- ready to slide up again
 	end
 	self.visible = visible
 
-	if self.avancement ~= self.cible then
-		local pas = (elapse or 0) / GLISSEMENT_DUREE
-		if self.cible > self.avancement then
-			self.avancement = math.min(self.cible, self.avancement + pas)
+	if self.progress ~= self.target then
+		local step = (elapse or 0) / SLIDE_DURATION
+		if self.target > self.progress then
+			self.progress = math.min(self.target, self.progress + step)
 		else
-			self.avancement = math.max(self.cible, self.avancement - pas)
+			self.progress = math.max(self.target, self.progress - step)
 		end
-		poserGlissiere(self.avancement)
+		placeTrack(self.progress)
 	end
 end)
-ForeverUI.ActionBarSlide = glissiere
+ForeverUI.ActionBarSlide = track
 
 local function layoutButtons()
 	if InCombatLockdown() then
 		return
 	end
 
-	for _, prefixe in ipairs(BARRES_POSEES) do
-		local ancre = (prefixe == "BonusActionButton") and glissiere or holder
+	for _, prefix in ipairs(PLACED_BARS) do
+		local anchor = (prefix == "BonusActionButton") and track or holder
 		for index = 1, BUTTON_COUNT do
-			local button = _G[prefixe .. index]
+			local button = _G[prefix .. index]
 			if button then
 				button:ClearAllPoints()
-				button:SetPoint("LEFT", ancre, "LEFT", (index - 1) * BUTTON_PITCH, 0)
+				button:SetPoint("LEFT", anchor, "LEFT", (index - 1) * BUTTON_PITCH, 0)
 
-				-- Les separateurs appartiennent au porteur : une seule serie
-				-- suffit, posee sur la barre principale.
-				if prefixe == "ActionButton" and index > 1 and not dividers[index] then
+				-- Dividers belong to the holder: one set, placed on the main bar.
+				if prefix == "ActionButton" and index > 1 and not dividers[index] then
 					local divider = ForeverUI.CreateDivider(holder, holder:GetFrameLevel() + 1)
 					divider:SetPoint("TOP", button, "TOP", 0, 0)
 					divider:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
@@ -389,47 +303,29 @@ local function layoutButtons()
 	end
 end
 
--- Le fond de barre du client n'a plus rien a faire la. RELEVE dans
--- 3.3.5 MainMenuBar.xml : l'habillage d'epoque n'est pas une image mais
--- QUATRE series de morceaux, et en oublier une laisse la vieille barre naine
--- derriere la notre --
---   MainMenuBarTexture0..3    le corps de la barre (MainMenuBarArtFrame)
---   MainMenuXPBarTexture0..3  l'encadrement de la barre d'experience
---   MainMenuMaxLevelBar0..3   sa version niveau maximum, affichee a 80
---   MainMenuBarLeftEndCap / RightEndCap  les embouts nains
--- plus le texte d'experience de MainMenuBarOverlayFrame.
+-- Hide the client's bar art. 3.3.5 MainMenuBar.xml has FOUR sets of pieces, and missing one
+-- leaves the old dwarf bar behind ours: MainMenuBarTexture0..3 (bar body),
+-- MainMenuXPBarTexture0..3 (XP bar frame), MainMenuMaxLevelBar0..3 (shown at 80), the
+-- MainMenuBarLeftEndCap / RightEndCap end caps, and MainMenuBarExpText.
 local OLD_ART = {
 	"MainMenuBarTexture%d", "MainMenuXPBarTexture%d", "MainMenuMaxLevelBar%d",
 }
 
--- L'art d'epoque de la barre bonus : deux morceaux glissants. On ne se fie
--- pas a leurs noms -- toutes les regions du cadre lui-meme s'effacent, les
--- boutons etant des cadres fils et non des regions.
---
--- ET LE CADRE CESSE DE PRENDRE LA SOURIS.
---
--- BonusActionBarFrame est declaree 505 x 43, strate HIGH, toplevel, avec
--- enableMouse="true". Effacer son art la rend invisible mais PAS inoffensive :
--- elle reste une dalle au-dessus du bas de l'ecran, et avale les clics de
--- tout ce qu'on y a pose -- le micro-menu le premier, dont le bouton du
--- personnage ne repondait plus. Releve par /fui micro : les dix boutons sont
--- a leur place, et GetMouseFocus rend BonusActionBarFrame.
---
--- C'est le meme piege que CharacterModelFrame sur les emplacements
--- d'equipement, et le meme remede : un cadre qui ne sert que de contenant
--- n'a pas a recevoir de clic. Ses douze boutons gardent le leur, etant des
--- cadres fils.
-local function effacerArtBonus()
-	local barre = BonusActionBarFrame
-	if not barre or not barre.GetRegions then
+-- Bonus bar art: all the frame's own texture regions are hidden (buttons are child frames,
+-- not regions). The frame also stops taking the mouse: BonusActionBarFrame is 505 x 43, HIGH
+-- strata, toplevel, enableMouse; invisible, it would still swallow clicks on the micro-menu
+-- below it. Its buttons keep their own mouse, being child frames.
+local function clearBonusArt()
+	local bar = BonusActionBarFrame
+	if not bar or not bar.GetRegions then
 		return
 	end
 
-	if barre.EnableMouse then
-		barre:EnableMouse(false)
+	if bar.EnableMouse then
+		bar:EnableMouse(false)
 	end
 
-	local regions = { barre:GetRegions() }
+	local regions = { bar:GetRegions() }
 	for _, region in ipairs(regions) do
 		if region and region.GetObjectType and region:GetObjectType() == "Texture" then
 			region:SetAlpha(0)
@@ -438,19 +334,19 @@ local function effacerArtBonus()
 end
 
 local function hideOldBarArt()
-	effacerArtBonus()
+	clearBonusArt()
 
-	for _, modele in ipairs(OLD_ART) do
+	for _, model in ipairs(OLD_ART) do
 		for index = 0, 3 do
-			local texture = _G[string.format(modele, index)]
+			local texture = _G[string.format(model, index)]
 			if texture then
 				texture:SetAlpha(0)
 			end
 		end
 	end
 
-	for _, nom in ipairs({ "MainMenuBarLeftEndCap", "MainMenuBarRightEndCap", "MainMenuBarExpText" }) do
-		local region = _G[nom]
+	for _, name in ipairs({ "MainMenuBarLeftEndCap", "MainMenuBarRightEndCap", "MainMenuBarExpText" }) do
+		local region = _G[name]
 		if region then
 			region:SetAlpha(0)
 		end
@@ -465,26 +361,25 @@ local function hideOldBarArt()
 		MainMenuBarPageNumber:SetPoint("CENTER", page, "CENTER", -1, 0)
 	end
 
-	-- Les fleches de page : le client les habille avec ses propres images,
-	-- camelot a les siennes dans le meme atlas que la barre.
-	local fleches = {
-		{ bouton = ActionBarUpButton, prefixe = "ui-hud-actionbar-pageuparrow", y = 10 },
-		{ bouton = ActionBarDownButton, prefixe = "ui-hud-actionbar-pagedownarrow", y = -10 },
+	-- Page arrows: camelot has its own in the bar atlas.
+	local arrows = {
+		{ button = ActionBarUpButton, prefix = "ui-hud-actionbar-pageuparrow", y = 10 },
+		{ button = ActionBarDownButton, prefix = "ui-hud-actionbar-pagedownarrow", y = -10 },
 	}
-	for _, entree in ipairs(fleches) do
-		local bouton = entree.bouton
-		if bouton and not bouton.foreverSkinned then
-			ForeverUI.SetAtlas(bouton:GetNormalTexture(), entree.prefixe .. "-up")
-			ForeverUI.SetAtlas(bouton:GetPushedTexture(), entree.prefixe .. "-down")
-			ForeverUI.SetAtlas(bouton:GetHighlightTexture(), entree.prefixe .. "-mouseover")
-			if bouton.GetDisabledTexture and bouton:GetDisabledTexture() then
-				ForeverUI.SetAtlas(bouton:GetDisabledTexture(), entree.prefixe .. "-disabled")
+	for _, entry in ipairs(arrows) do
+		local button = entry.button
+		if button and not button.foreverSkinned then
+			ForeverUI.SetAtlas(button:GetNormalTexture(), entry.prefix .. "-up")
+			ForeverUI.SetAtlas(button:GetPushedTexture(), entry.prefix .. "-down")
+			ForeverUI.SetAtlas(button:GetHighlightTexture(), entry.prefix .. "-mouseover")
+			if button.GetDisabledTexture and button:GetDisabledTexture() then
+				ForeverUI.SetAtlas(button:GetDisabledTexture(), entry.prefix .. "-disabled")
 			end
-			bouton:SetWidth(17)
-			bouton:SetHeight(14)
-			bouton:ClearAllPoints()
-			bouton:SetPoint("CENTER", page, "CENTER", 0, entree.y)
-			bouton.foreverSkinned = true
+			button:SetWidth(17)
+			button:SetHeight(14)
+			button:ClearAllPoints()
+			button:SetPoint("CENTER", page, "CENTER", 0, entry.y)
+			button.foreverSkinned = true
 		end
 	end
 end
@@ -494,19 +389,18 @@ local function skinAll()
 		for index = 1, BUTTON_COUNT do
 			local button = _G[prefix .. index]
 			skinButton(button)
-			garderGrille(button)
+			keepGrid(button)
 		end
 	end
 	hideOldBarArt()
 end
 
--- Le client reecrit la texture normale a chaque mise a jour de bouton : on
--- repasse derriere lui plutot que de lutter.
+-- The client rewrites the normal texture on every button update: silence it again after.
 if hooksecurefunc then
 	hooksecurefunc("ActionButton_Update", function(self)
 		if self and self.foreverSkinned then
 			silenceNormalTexture(self)
-			garderGrille(self)
+			keepGrid(self)
 		end
 	end)
 
@@ -516,11 +410,11 @@ if hooksecurefunc then
 		end
 	end)
 
-	-- C'est ici que le bouton vide disparaissait.
+	-- Here the client hides empty buttons.
 	hooksecurefunc("ActionButton_HideGrid", function(self)
 		if self and self.foreverSkinned then
 			silenceNormalTexture(self)
-			garderGrille(self)
+			keepGrid(self)
 		end
 	end)
 end
@@ -545,7 +439,7 @@ ForeverUI.ActionBarDebug = function()
 		return
 	end
 
-	local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
+	local point, relativeTo, _, x, y = button:GetPoint(1)
 	local normal = button:GetNormalTexture()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"|cff66ccffForeverUI|r " .. L.ACTIONBAR_DEBUG,
@@ -559,12 +453,9 @@ end
 
 ForeverUI.ActionBarHolder = holder
 ForeverUI.ActionBarBorder = border
-ForeverUI.ActionBarPage = page
 ForeverUI.ActionBarEndCaps = { left = leftCap, right = rightCap }
-ForeverUI.ActionBarSkin = { skinButton = skinButton, skinAll = skinAll, layoutButtons = layoutButtons }
--- RELEVE -- camelot/EditModePresetLayoutConstants.lua : la barre se pose
--- BOTTOMRIGHT sur le BOTTOMLEFT du micro-menu, decalee de (-4.5, -4). Le
--- micro-menu etant lui-meme a BOTTOM (116.5, 6) et large de 275, cela met le
--- bord droit de la barre a -25.5 du centre de l'ecran, a 2 du bas.
--- BottomBar.lua refait ce calcul avec la largeur reelle du micro-menu.
+-- camelot/EditModePresetLayoutConstants.lua: BOTTOMRIGHT on the micro-menu's BOTTOMLEFT at
+-- (-4.5, -4); the micro-menu at BOTTOM (116.5, 6), 275 wide, puts the bar's right edge at
+-- -25.5 from the screen center, 2 from the bottom. BottomBar.lua redoes this with the real
+-- micro-menu width.
 ForeverUI.Layout.Register(holder, "actionbar", L.ACTIONBAR_EDIT_LABEL, "BOTTOMRIGHT", "BOTTOM", -25.5, 2)

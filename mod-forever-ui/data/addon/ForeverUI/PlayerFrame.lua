@@ -1,36 +1,18 @@
--- ForeverUI : le cadre joueur.
---
--- GEOMETRIE. Reprise telle quelle de Blizzard_UnitFrame/mainline/PlayerFrame.xml
--- (la saveur [Family] que charge camelot) :
---     cadre        232 x 100
---     portrait      60 x 60  ancre TOPLEFT (24, -19)
---     art du cadre 198 x 71  centre
---     barre de vie 124 x 20  ancre TOPLEFT (85, -40)
---     barre de ress.124 x 10 ancre TOPLEFT (85, -61)
---     nom           96 x 12  ancre TOPLEFT (88, -27)
---     cercle niveau 39 x 39  ancre BOTTOMLEFT (13, 7)
---
--- L'art est pose au-dessus du portrait, comme dans l'original : le trou du
--- cadre est rond, le portrait est carre, et c'est l'anneau qui recouvre les
--- coins -- un client 3.3.5 n'a pas de MaskTexture pour faire autrement.
---
--- POSITION. Le cadre ne se pose pas lui-meme : il s'enregistre aupres de
--- ForeverUI.Layout, qui decide et retient. Voir Layout.lua.
+-- Player unit frame. Geometry from Blizzard_UnitFrame/mainline/PlayerFrame.xml (camelot flavor).
+-- The art sits above the square portrait and its ring covers the corners: 3.3.5 has no
+-- MaskTexture to make the portrait round.
+-- Position is decided and saved by ForeverUI.Layout (see Layout.lua).
 
 local FRAME_WIDTH, FRAME_HEIGHT = 232, 100
 local L = ForeverUI.L
 
 local ART_NORMAL = "ui-hud-unitframe-player-portraiton"
--- "-incombat" n'est PAS un art de cadre de rechange : dans les deux clients,
--- cette image est passee a UnitFrame_Initialize en position threatIndicator
--- (FrameFlash cote moderne, PlayerFrameFlash en 3.3.5). C'est la lueur de
--- menace, montree seulement quand le joueur tient l'aggro, et teintee selon le
--- niveau de menace. L'art du cadre, lui, ne change jamais.
+-- Threat glow, not an alternate frame art: both clients pass this image to UnitFrame_Initialize
+-- as threatIndicator (modern FrameFlash, 3.3.5 PlayerFrameFlash).
 local THREAT_GLOW = "ui-hud-unitframe-player-portraiton-incombat"
 local HEALTH_FILL = "ui-hud-unitframe-player-portraiton-bar-health"
 
--- L'atlas porte un remplissage distinct par type de ressource : c'est lui qui
--- donne la couleur, on ne teinte rien a la main.
+-- The atlas has one fill per power type: it gives the color, nothing is tinted by hand.
 local POWER_FILL = {
 	MANA = "ui-hud-unitframe-player-portraiton-bar-mana",
 	RAGE = "ui-hud-unitframe-player-portraiton-bar-rage",
@@ -43,18 +25,18 @@ local frame = CreateFrame("Button", "ForeverUIPlayerFrame", UIParent, "SecureUni
 frame:SetWidth(FRAME_WIDTH)
 frame:SetHeight(FRAME_HEIGHT)
 frame:SetFrameStrata("LOW")
--- La zone cliquable suit l'art, pas le cadre : (232-198)/2 de chaque cote.
+-- The clickable area follows the art, not the frame: (232-198)/2 on each side.
 frame:SetHitRectInsets(17, 17, 14, 15)
 
 frame.unit = "player"
 frame:SetAttribute("unit", "player")
 frame:SetAttribute("*type1", "target")
--- En 3.3.5 l'attribut vaut "menu", pas "togglemenu" comme sur les clients
--- recents : SecureActionButton_OnClick appelle alors self.menu.
+-- 3.3.5 uses "menu", not "togglemenu" as recent clients do:
+-- SecureActionButton_OnClick then calls self.menu.
 frame:SetAttribute("*type2", "menu")
 frame:RegisterForClicks("AnyUp")
 frame.menu = function(self)
-	ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, PlayerFrameDropDown, self, 106, 27)
+	ForeverUI.UnitMenu.open(ToggleDropDownMenu, 1, nil, PlayerFrameDropDown, self, 106, 27)
 end
 
 local portrait = frame:CreateTexture(nil, "BACKGROUND")
@@ -78,12 +60,9 @@ nameText:SetHeight(12)
 nameText:SetJustifyH("LEFT")
 nameText:SetPoint("TOPLEFT", 88, -27)
 
--- Le niveau vit dans un cadre fils d'un niveau au-dessus, pas dans un calque
--- du cadre principal. Deux textures d'un meme calque ne sont ordonnees que par
--- leur ordre de creation, et l'art du cadre est re-affecte en cours de partie
--- (bascule combat) : il repassait alors devant le cercle, et seul un
--- rechargement remettait les choses dans l'ordre. Un cadre fils ne depend pas
--- de cet ordre.
+-- The level lives in a child frame one level up, not in a layer of the main frame. Textures
+-- in one layer are ordered only by creation, and the art is re-set during play, which put it
+-- in front of the circle. A child frame does not depend on that order.
 local overlayHolder = CreateFrame("Frame", nil, frame)
 overlayHolder:SetAllPoints(frame)
 overlayHolder:SetFrameLevel(frame:GetFrameLevel() + 1)
@@ -95,11 +74,10 @@ ForeverUI.SetAtlas(levelCircle, "ui-hud-unitframe-smallcircle")
 local levelText = overlayHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 levelText:SetPoint("CENTER", levelCircle, "CENTER", 0, 0)
 
--- ------------------------------------------------------------- etats du joueur
--- Tout ce qui suit vit dans overlayHolder, donc au-dessus de l'art, et chaque
--- element est range par calque : le voile d'etat en fond, les icones au-dessus,
--- les textes en dernier. Aucune de ces textures n'est reaffectee en jeu (on ne
--- change que couleur et transparence), donc l'ordre ne peut plus glisser.
+-- ------------------------------------------------------------- Player states
+-- Everything below lives in overlayHolder, above the art, sorted by layer: status veil at the
+-- back, icons above, texts last. These textures are never re-set in play (only color and
+-- alpha change), so their order cannot drift.
 
 local STATUS_ATLAS = "ui-hud-unitframe-player-portraiton-status"
 local COMBAT_ICON = "ui-hud-unitframe-player-combaticon"
@@ -107,15 +85,12 @@ local CORNER_ATLAS = "ui-hud-unitframe-player-portraiton-cornerembellishment"
 local LEADER_ICON = "ui-hud-unitframe-player-group-leadericon"
 local REST_ATLAS = "ui-hud-unitframe-player-rest-flipbook"
 
--- Le repos est une planche d'images : 7 rangees de 6 vignettes, 42 en tout,
--- parcourues en 1,5 s. Le client 3.3.5 n'a pas d'animation FlipBook, donc on
--- deplace le rectangle a la main dans un OnUpdate.
+-- Rest sprite sheet: 7 rows of 6 cells, 42 frames played in 1.5 s. 3.3.5 has no FlipBook
+-- animation, so OnUpdate moves the tex coords by hand.
 local REST_COLUMNS, REST_ROWS, REST_FRAMES, REST_DURATION = 6, 7, 42, 1.5
 
--- Le voile est une image claire : melangee normalement, teintee en rouge et
--- posee a demi-transparence, elle delave tout le cadre en rose. Le client
--- 3.3.5 declare son propre voile en alphaMode="ADD" (PlayerStatusTexture), et
--- c'est bien ainsi qu'il faut le poser : la lumiere s'ajoute au lieu de laver.
+-- ADD blend, as the 3.3.5 PlayerStatusTexture: the light adds up. A normal blend with a red
+-- tint at half alpha washes the whole frame pink.
 local statusTexture = overlayHolder:CreateTexture(nil, "BACKGROUND")
 statusTexture:SetPoint("TOPLEFT", 17, -14)
 ForeverUI.SetAtlas(statusTexture, STATUS_ATLAS)
@@ -174,9 +149,8 @@ frame.powerText = powerText
 local VEHICLE_ART = "ui-hud-unitframe-player-portraiton-vehicle"
 local VEHICLE_HEALTH_WIDTH = 118
 
--- En vehicule, le cadre du joueur montre le vehicule : c'est ce que fait
--- PlayerFrame_ToVehicleArt en 3.3.5, et le moderne echange en plus l'art du
--- cadre pour la variante vehicule, plus large de quelques pixels.
+-- Unit shown by the frame: the vehicle while in one, as PlayerFrame_ToVehicleArt in 3.3.5.
+-- The modern client also swaps the art for the vehicle variant, a few pixels wider.
 local function displayedUnit()
 	return frame.displayUnit or "player"
 end
@@ -232,18 +206,14 @@ local function updatePortrait()
 	SetPortraitTexture(portrait, displayedUnit())
 end
 
--- La lueur suit le comportement observe sur camelot, et non la lettre de
--- UnitFrame_UpdateThreatIndicator : le client de reference n'allume la lueur
--- qu'au-dessus de zero et la teinte par GetThreatStatusColor, alors qu'en jeu
--- la lueur est rouge dans les deux cas et ne change que d'intensite --
--- discrete des l'engagement, franche quand un ennemi vous prend pour cible.
--- Les deux niveaux sont ici, a regler d'un chiffre si besoin.
+-- The glow follows camelot's observed behavior, not UnitFrame_UpdateThreatIndicator (lit above
+-- zero, tinted by GetThreatStatusColor): it is always red and only its alpha changes, faint
+-- once engaged, full when an enemy targets you.
 local THREAT_ALPHA_ENGAGED, THREAT_ALPHA_TARGETED = 0.45, 1.0
 
--- Etre pris pour cible ne peut pas reposer sur la seule table de menace : sur
--- un serveur prive, UnitThreatSituation("player") renvoie souvent rien et
--- UNIT_THREAT_SITUATION_UPDATE ne part jamais. On regarde donc aussi, tout
--- simplement, si l'ennemi en face nous vise.
+-- Being targeted cannot rely on the threat table alone: on a private server
+-- UnitThreatSituation("player") often returns nil and UNIT_THREAT_SITUATION_UPDATE never
+-- fires. So also check whether the hostile target targets us.
 local function playerIsTargeted()
 	local status = UnitThreatSituation and UnitThreatSituation("player")
 	if status and status >= 2 then
@@ -278,9 +248,8 @@ updateThreat = function()
 	end
 end
 
--- L'ETAT DU JOUEUR, dans l'ordre que le client 3.3.5 applique lui-meme
--- (PlayerFrame_UpdateStatus) : en vehicule rien ne s'affiche, sinon le repos
--- passe avant le combat.
+-- Player state, in the order of 3.3.5 PlayerFrame_UpdateStatus: nothing in a vehicle,
+-- otherwise rest before combat.
 local restElapsed = 0
 
 local function updateStatus()
@@ -292,14 +261,12 @@ local function updateStatus()
 		return
 	end
 
-	-- Le client distingue deux choses que UnitAffectingCombat confond :
-	--   inCombat   -- PLAYER_ENTER_COMBAT : vous frappez, des le clic droit sur
-	--                 un ennemi. Voile rouge et icone de combat, immediatement.
-	--   onHateList -- PLAYER_REGEN_DISABLED : quelqu'un vous a sur sa liste de
-	--                 haine. L'icone seule.
-	-- Le voile n'est pas touche dans la branche onHateList, exactement comme
-	-- dans les deux clients : il garde sa couleur tant que le combat dure et ne
-	-- s'eteint qu'une fois vraiment sorti.
+	-- The client separates two states that UnitAffectingCombat merges:
+	--   inCombat   -- PLAYER_ENTER_COMBAT: you attack (right-click on an enemy).
+	--                 Red veil and combat icon.
+	--   onHateList -- PLAYER_REGEN_DISABLED: you are on someone's hate list. Icon only.
+	-- The onHateList branch leaves the veil alone, as both clients do: it keeps its color until
+	-- combat really ends.
 	if IsResting() then
 		statusTexture:SetVertexColor(1.0, 0.88, 0.25)
 		statusTexture:Show()
@@ -337,10 +304,8 @@ local function updateLeader()
 	end
 end
 
--- Le texte des barres suit le reglage du jeu plutot qu'un reglage a nous :
--- playerStatusText a "1" veut dire "toujours affiche", et statusTextPercentage
--- decide entre un pourcentage et les valeurs brutes. Au survol, il s'affiche
--- quel que soit le reglage.
+-- Bar texts follow the game settings: playerStatusText "1" means always shown, and
+-- statusTextPercentage picks a percentage or raw values. On hover they always show.
 local function formatValue(value, maximum)
 	if not maximum or maximum <= 0 then
 		return ""
@@ -368,8 +333,8 @@ end
 
 ForeverUI.PlayerFrameUpdateThreat = function() updateThreat() end
 
--- Certaines classes changent l'art du cadre : camelot passe a la variante
--- "ClassResource" quand une ressource de classe s'affiche sous les barres.
+-- Some classes change the frame art: camelot switches to the "ClassResource" variant when a
+-- class resource shows under the bars. normalAtlas: atlas used outside a vehicle.
 ForeverUI.PlayerFrameSetArt = function(normalAtlas)
 	if normalAtlas then
 		ART_NORMAL = normalAtlas
@@ -377,14 +342,13 @@ ForeverUI.PlayerFrameSetArt = function(normalAtlas)
 	end
 end
 
--- /fui debug : ce que le client repond vraiment, pour regler la lueur sur des
--- valeurs constatees plutot que supposees.
+-- /fui debug: prints what the client really returns, to tune the glow on observed values.
 ForeverUI.PlayerFrameDebug = function()
 	local status = UnitThreatSituation and UnitThreatSituation("player")
-	local cible = UnitExists("target") and UnitName("target") or L.PLAYERFRAME_DEBUG_NO_TARGET
+	local target = UnitExists("target") and UnitName("target") or L.PLAYERFRAME_DEBUG_NO_TARGET
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"|cff66ccffForeverUI|r " .. L.PLAYERFRAME_DEBUG,
-		tostring(frame.inCombat), tostring(frame.onHateList), tostring(status), cible,
+		tostring(frame.inCombat), tostring(frame.onHateList), tostring(status), target,
 		tostring(UnitExists("target") and UnitCanAttack("player", "target") or false),
 		tostring(UnitIsUnit("targettarget", "player")),
 		tostring(threatGlow:IsShown()), threatGlow:GetAlpha()))
@@ -400,8 +364,8 @@ frame:SetScript("OnLeave", function(self)
 	updateTexts()
 end)
 
--- Deux animations, un seul OnUpdate : le sommeil parcourt sa planche d'images,
--- et le voile d'etat respire comme le fait celui du cadre d'origine.
+-- One OnUpdate for two animations: the rest sprite sheet, and the status veil that pulses
+-- like the original frame's.
 ForeverUI.SetAtlas(restTexture, REST_ATLAS, true)
 
 frame:SetScript("OnUpdate", function(self, elapsed)
@@ -424,8 +388,8 @@ frame:SetScript("OnUpdate", function(self, elapsed)
 		statusTexture:SetAlpha(pulse)
 	end
 
-	-- La bascule "on me vise" se lit sur la cible, pas sur un evenement :
-	-- on la relit trois fois par seconde tant que le joueur est engage.
+	-- "Targeted" is read from the target, not from an event: re-check it three times per second
+	-- while engaged.
 	self.threatElapsed = (self.threatElapsed or 0) + elapsed
 	if self.threatElapsed > 0.3 then
 		self.threatElapsed = 0
@@ -435,8 +399,8 @@ frame:SetScript("OnUpdate", function(self, elapsed)
 	end
 end)
 
--- Le cadre d'origine est desactive plutot que simplement masque : sans cela
--- ses propres evenements le reafficheraient (montures, vehicules, groupe).
+-- The default frame is disabled, not just hidden: its own events (mounts, vehicles, group)
+-- would show it again.
 local function hideDefaultPlayerFrame()
 	if InCombatLockdown() or not PlayerFrame then
 		return
@@ -550,7 +514,7 @@ frame:RegisterEvent("UNIT_NAME_UPDATE")
 frame:RegisterEvent("UNIT_PORTRAIT_UPDATE")
 frame:RegisterEvent("UNIT_LEVEL")
 frame:RegisterEvent("UNIT_DISPLAYPOWER")
--- 3.3.5 n'a pas UNIT_POWER : chaque ressource a son propre evenement.
+-- 3.3.5 has no UNIT_POWER: each power type has its own event.
 frame:RegisterEvent("UNIT_MANA")
 frame:RegisterEvent("UNIT_RAGE")
 frame:RegisterEvent("UNIT_FOCUS")

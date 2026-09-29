@@ -1,203 +1,172 @@
--- ForeverUI : l'ecran de connexion, copie de celui de camelot.
---
--- RELEVE -- blizzard_gluexml/mainline/accountlogin.xml et .lua ([Family] =
--- mainline pour camelot), camelot/accountloginoverrides.lua,
--- blizzard_gluexmlbase/mainline/gluebuttons.xml et constants.lua. Tous les
--- nombres ci-dessous sont ceux de camelot, en unites de camelot (l'echelle
--- est posee une fois sur GlueParent, ForeverUIGlue.lua) :
---   * logo Blizzard 100 x 100 a BOTTOM (0, 8) ; mention legale
---     GlueFontNormalSmall a BOTTOM (0, 10) ; version GlueFontNormalSmall a
---     BOTTOMLEFT (10, 10) ; logo du jeu 256 x 128 a TOPLEFT (3, -7) ;
---   * compte : champ 320 x 50 au CENTRE (0, -15) (AdjustAnchor de camelot),
---     fond TooltipBackdropTemplate / TooltipMixedLayout, GLUE_BACKDROP_COLOR
---     (0,09) et GLUE_BACKDROP_BORDER_COLOR (0,8) ; texte GlueLoginEditBoxFont,
---     marges (12, 5, 0, 5) ; libelle GlueFontNormalLogin 600 x 64, BOTTOM sur
---     le haut du champ (0, -19) ;
---   * mot de passe : meme champ, TOP sur le bas du compte (0, -43) ; libelle
---     256 x 64 ;
---   * Log In : GlueButtonBigTemplate 250 x 66, rouge, GlueFontNormalLogin /
---     Highlight / Disable, TOP sur le bas du mot de passe (0, -50) ;
---   * « se souvenir » : ResizeCheckButtonTemplate -- case 28 x 28
---     (UI-CheckBox-*), libelle GlueFontNormalLogin a 2 a sa droite -- le bloc
---     pose par son BOTTOM sur le haut de Log In (0, 2) ;
---   * Quit : GlueButtonTemplate (200 x 30, GlueFontNormal) a BOTTOMRIGHT
---     (-24, 56) ; Create Account 10 au-dessus ; Menu 10 au-dessus ;
---   * a l'ouverture, l'interface apparait en 0,75 s (FadeIn) ;
---   * ECART (28/09, a la demande) : Echap quitte le jeu, dans un champ comme
---     sur l'ecran, comme le client 3.3.5 (camelot retire la main au champ,
---     puis ouvre le menu).
--- Les textes suivent la langue du client (chaines de 3.3.5) ; « Menu »
--- (MAINMENU) n'existe pas dans 3.3.5 : G.L.ACCOUNTLOGIN_MENU.
+-- Login screen, copied from Camelot's (mainline accountlogin.xml/.lua,
+-- camelot/accountloginoverrides.lua, gluebuttons.xml, constants.lua). Numbers are Camelot's,
+-- in Camelot units: the scale is set once on GlueParent (ForeverUIGlue.lua).
+-- Texts use the client's 3.3.5 strings; MAINMENU does not exist in 3.3.5: G.L.ACCOUNTLOGIN_MENU.
 
 local G = ForeverUIGlue
 local L = G.L
 local ui = AccountLoginUI
-local compte = AccountLoginAccountEdit
-local motDePasse = AccountLoginPasswordEdit
-local connexion = AccountLoginLoginButton
-local case = AccountLoginSaveAccountName
+local count = AccountLoginAccountEdit
+local password = AccountLoginPasswordEdit
+local loginButton = AccountLoginLoginButton
+local checkbox = AccountLoginSaveAccountName
 
--- ------------------------------------------------------------ le pied de page
+-- ------------------------------------------------------------ Footer
 
 for _, r in ipairs({ ui:GetRegions() }) do
 	if r:GetObjectType() == "FontString" and r:GetText() == BLIZZ_DISCLAIMER then
-		r:SetFontObject(G.Police("GlueFontNormalSmall"))
+		r:SetFontObject(G.Font("GlueFontNormalSmall"))
 		r:ClearAllPoints()
 		r:SetPoint("BOTTOM", ui, "BOTTOM", 0, 10)
 	end
 end
-AccountLoginVersion:SetFontObject(G.Police("GlueFontNormalSmall"))
+AccountLoginVersion:SetFontObject(G.Font("GlueFontNormalSmall"))
 AccountLoginVersion:SetJustifyH("LEFT")
 AccountLoginVersion:ClearAllPoints()
 AccountLoginVersion:SetPoint("BOTTOMLEFT", ui, "BOTTOMLEFT", 10, 10)
 
--- ------------------------------------------------------------ les champs
+-- ------------------------------------------------------------ Fields
 
-local function champ(edit, libelle, largeurLibelle)
+-- Style a login field like Camelot's. caption: its label; captionWidth: label width
+local function field(edit, caption, captionWidth)
 	edit:SetBackdrop(nil)
 	edit:SetWidth(320)
 	edit:SetHeight(50)
-	G.FondInfobulle(edit, "TooltipMixedLayout", G.GLUE_BACKDROP_COLOR, G.GLUE_BACKDROP_BORDER_COLOR)
-	edit:SetFontObject(G.Police("GlueLoginEditBoxFont"))
+	G.TooltipBackground(edit, "TooltipMixedLayout", G.GLUE_BACKDROP_COLOR, G.GLUE_BACKDROP_BORDER_COLOR)
+	edit:SetFontObject(G.Font("GlueLoginEditBoxFont"))
 	edit:SetTextInsets(12, 5, 0, 5)
-	libelle:SetFontObject(G.Police("GlueFontNormalLogin"))
-	libelle:SetJustifyH("CENTER")
-	libelle:SetWidth(largeurLibelle)
-	libelle:SetHeight(64)
-	libelle:ClearAllPoints()
-	libelle:SetPoint("BOTTOM", edit, "TOP", 0, -19)
+	caption:SetFontObject(G.Font("GlueFontNormalLogin"))
+	caption:SetJustifyH("CENTER")
+	caption:SetWidth(captionWidth)
+	caption:SetHeight(64)
+	caption:ClearAllPoints()
+	caption:SetPoint("BOTTOM", edit, "TOP", 0, -19)
 end
 
-local libelleMotDePasse
-for _, r in ipairs({ motDePasse:GetRegions() }) do
+local passwordCaption
+for _, r in ipairs({ password:GetRegions() }) do
 	if r:GetObjectType() == "FontString" and r:GetText() == PASSWORD then
-		libelleMotDePasse = r
+		passwordCaption = r
 	end
 end
-champ(compte, AccountLoginAccountEditLabel, 600)
-champ(motDePasse, libelleMotDePasse, 256)
--- l'invite de 3.3.5 dans le champ vide : camelot n'en a pas (le client la
--- montre et la cache lui-meme : on la rend invisible)
+field(count, AccountLoginAccountEditLabel, 600)
+field(password, passwordCaption, 256)
+-- The 3.3.5 hint in the empty field: Camelot has none. The client shows and hides it
+-- itself, so it is made invisible.
 AccountLoginAccountEditFill:SetAlpha(0)
 
--- ------------------------------------------------------------ les boutons
+-- ------------------------------------------------------------ Buttons
 
-G.BoutonTroisTranches(connexion, "128-RedButton", { "GlueFontNormalLogin", "GlueFontHighlightLogin", "GlueFontDisableLogin" })
-connexion:SetWidth(250)
-connexion:SetHeight(66)
+G.ThreeSliceButton(loginButton, "128-RedButton", { "GlueFontNormalLogin", "GlueFontHighlightLogin", "GlueFontDisableLogin" })
+loginButton:SetWidth(250)
+loginButton:SetHeight(66)
 
-local quitter = AccountLoginExitButton
-G.BoutonTroisTranches(quitter, "128-RedButton", { "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" })
-quitter:SetWidth(200)
-quitter:SetHeight(30)
+local quit = AccountLoginExitButton
+G.ThreeSliceButton(quit, "128-RedButton", { "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" })
+quit:SetWidth(200)
+quit:SetHeight(30)
 
-local creer = G.CreerBoutonTroisTranches("ForeverUIAccountLoginCreateAccountButton", ui, 200, 30, "128-RedButton",
+local create = G.CreateThreeSliceButton("ForeverUIAccountLoginCreateAccountButton", ui, 200, 30, "128-RedButton",
 	{ "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" }, CREATE_ACCOUNT)
-creer:SetScript("OnClick", function()
+create:SetScript("OnClick", function()
 	AccountLoginManageAccountButton:Click()
 end)
 
-local menu = G.CreerBoutonTroisTranches("ForeverUIAccountLoginMenuButton", ui, 200, 30, "128-RedButton",
+local menu = G.CreateThreeSliceButton("ForeverUIAccountLoginMenuButton", ui, 200, 30, "128-RedButton",
 	{ "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" }, L.ACCOUNTLOGIN_MENU)
 menu:SetScript("OnClick", function()
-	G.MontrerMenu()
+	G.ShowMenu()
 end)
 
--- ce que camelot n'a pas sur cet ecran : ses fonctions passent par le menu
-local CACHES = {
+-- Buttons Camelot does not have on this screen: their functions go through the menu
+local HIDDEN = {
 	"AccountLoginTOSButton", "AccountLoginCreditsButton", "AccountLoginCinematicsButton",
 	"OptionsButton", "AccountLoginCommunityButton", "AccountLoginManageAccountButton",
 	"AccountLoginShowLauncher", "AccountLoginUpgradeAccountButton",
 }
 
--- ------------------------------------------------------------ la case
+-- ------------------------------------------------------------ Check box
 
-local libelleCase = AccountLoginSaveAccountNameText
-libelleCase:SetFontObject(G.Police("GlueFontNormalLogin"))
-case:SetWidth(28)
-case:SetHeight(28)
-local bloc = CreateFrame("Frame", nil, ui)
+local checkboxCaption = AccountLoginSaveAccountNameText
+checkboxCaption:SetFontObject(G.Font("GlueFontNormalLogin"))
+checkbox:SetWidth(28)
+checkbox:SetHeight(28)
+local block = CreateFrame("Frame", nil, ui)
 
-local function poserCase()
-	-- ResizeLayoutFrame : la case a TOPLEFT, le libelle a 2 a sa droite ; le
-	-- bloc a la largeur et la hauteur de son contenu
-	local lw, lh = libelleCase:GetStringWidth(), libelleCase:GetStringHeight()
-	bloc:SetWidth(28 + 2 + lw)
-	bloc:SetHeight(math.max(28, lh))
-	bloc:ClearAllPoints()
-	bloc:SetPoint("BOTTOM", connexion, "TOP", 0, 2)
-	case:ClearAllPoints()
-	case:SetPoint("TOPLEFT", bloc, "TOPLEFT")
-	libelleCase:ClearAllPoints()
-	libelleCase:SetPoint("LEFT", case, "RIGHT", 2, 0)
+local function placeCheckbox()
+	-- ResizeLayoutFrame: check box at TOPLEFT, caption 2 to its right; the block is as wide
+	-- and tall as its content
+	local lw, lh = checkboxCaption:GetStringWidth(), checkboxCaption:GetStringHeight()
+	block:SetWidth(28 + 2 + lw)
+	block:SetHeight(math.max(28, lh))
+	block:ClearAllPoints()
+	block:SetPoint("BOTTOM", loginButton, "TOP", 0, 2)
+	checkbox:ClearAllPoints()
+	checkbox:SetPoint("TOPLEFT", block, "TOPLEFT")
+	checkboxCaption:ClearAllPoints()
+	checkboxCaption:SetPoint("LEFT", checkbox, "RIGHT", 2, 0)
 end
 
--- ------------------------------------------------------------ la mise en page
+-- ------------------------------------------------------------ Layout
 
-local function poser()
-	compte:ClearAllPoints()
-	compte:SetPoint("CENTER", ui, "CENTER", 0, -15)
-	motDePasse:ClearAllPoints()
-	motDePasse:SetPoint("TOP", compte, "BOTTOM", 0, -43)
-	connexion:ClearAllPoints()
-	connexion:SetPoint("TOP", motDePasse, "BOTTOM", 0, -50)
-	poserCase()
-	quitter:ClearAllPoints()
-	quitter:SetPoint("BOTTOMRIGHT", ui, "BOTTOMRIGHT", -24, 56)
-	creer:ClearAllPoints()
-	creer:SetPoint("BOTTOM", quitter, "TOP", 0, 10)
+local function place()
+	count:ClearAllPoints()
+	count:SetPoint("CENTER", ui, "CENTER", 0, -15)
+	password:ClearAllPoints()
+	password:SetPoint("TOP", count, "BOTTOM", 0, -43)
+	loginButton:ClearAllPoints()
+	loginButton:SetPoint("TOP", password, "BOTTOM", 0, -50)
+	placeCheckbox()
+	quit:ClearAllPoints()
+	quit:SetPoint("BOTTOMRIGHT", ui, "BOTTOMRIGHT", -24, 56)
+	create:ClearAllPoints()
+	create:SetPoint("BOTTOM", quit, "TOP", 0, 10)
 	menu:ClearAllPoints()
-	menu:SetPoint("BOTTOM", creer, "TOP", 0, 10)
-	for _, nom in ipairs(CACHES) do
-		local f = _G[nom]
+	menu:SetPoint("BOTTOM", create, "TOP", 0, 10)
+	for _, name in ipairs(HIDDEN) do
+		local f = _G[name]
 		if f then f:Hide() end
 	end
-	-- le texte de la case de lancement est une region de l'ecran
+	-- The launcher check box caption is a region of the screen frame
 	for _, r in ipairs({ ui:GetRegions() }) do
 		if r:GetObjectType() == "FontString" and r:GetText() == SHOW_LAUNCHER then
 			r:Hide()
 		end
 	end
 end
-poser()
+place()
 
--- l'apparition en 0,75 s (FadeIn de AccountLoginUI)
-local fondu = CreateFrame("Frame", nil, ui)
-fondu:Hide()
-fondu:SetScript("OnUpdate", function(self, ecoule)
-	self.t = self.t + (ecoule or 0)
+-- Fade in over 0.75 s (AccountLoginUI FadeIn)
+local fade = CreateFrame("Frame", nil, ui)
+fade:Hide()
+fade:SetScript("OnUpdate", function(self, elapsed)
+	self.t = self.t + (elapsed or 0)
 	local k = math.min(1, self.t / 0.75)
 	ui:SetAlpha(k)
 	if k >= 1 then self:Hide() end
 end)
 
--- a chaque ouverture, apres le client : AccountLogin_SetupAccountListDDL
--- ajoute ses propres ancres au mot de passe et au bouton, et le client
--- remontre certains de ses boutons
-G.Accrocher(AccountLogin, "OnShow", function()
-	poser()
+-- On each show, after the client: AccountLogin_SetupAccountListDDL adds its own anchors to
+-- the password field and the button, and the client shows some of its buttons again
+G.Hook(AccountLogin, "OnShow", function()
+	place()
 end)
 
--- a chaque apparition de l'interface, apres le client : son propre fondu
--- (GlueFrameFadeIn de LOGIN_FADE_IN, 1,5 s, dans l'OnShow d'AccountLoginUI)
--- ecrivait l'alpha en meme temps que celui de camelot -- 0, puis 90 %, puis
--- 70 %, puis 100 % au retour sur l'ecran (constate le 28/09). Il est retire
--- de la liste des fondus du client ; seul reste celui de camelot.
-G.Accrocher(ui, "OnShow", function()
+-- On each show, after the client: its own fade (GlueFrameFadeIn with LOGIN_FADE_IN, 1.5 s,
+-- in AccountLoginUI's OnShow) would write the alpha along with Camelot's. It is removed
+-- from the client's fade list, so only Camelot's fade remains.
+G.Hook(ui, "OnShow", function()
 	GlueFrameFadeRemoveFrame(ui)
-	fondu.t = 0
+	fade.t = 0
 	ui:SetAlpha(0)
-	fondu:Show()
+	fade:Show()
 end)
--- le fondu de sortie du client (vers la selection) reste le sien : le notre
--- s'arrete s'il tournait encore
-G.AccrocherFonction("GlueFrameFadeOut", function(cadre)
-	if cadre == ui then
-		fondu:Hide()
+-- The client keeps its own fade-out (to character select); ours stops if still running
+G.HookFunction("GlueFrameFadeOut", function(frame)
+	if frame == ui then
+		fade:Hide()
 	end
 end)
 
--- ECART (28/09, a la demande : « Echap ne permet pas de fermer le jeu ») :
--- Echap garde le sens du client 3.3.5 (AccountLogin_OnKeyDown : quitter le
--- jeu) ; camelot ouvrirait le menu (TOGGLEGAMEMENU). Le clavier de l'ecran
--- reste donc entierement au client.
+-- Escape keeps its 3.3.5 meaning (AccountLogin_OnKeyDown: quit the game), where Camelot
+-- would open the menu (TOGGLEGAMEMENU). The screen's keyboard handling stays with the client.
