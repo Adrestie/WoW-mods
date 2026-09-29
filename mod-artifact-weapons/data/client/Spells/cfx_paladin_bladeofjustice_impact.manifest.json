@@ -1,0 +1,64 @@
+{
+	"fileDataID": 1381358,
+	"textures": [
+		{
+			"fileDataID": 1114591,
+			"file": "weaponimpact_trihit_gold.blp"
+		},
+		{
+			"fileDataID": 1032521,
+			"file": "dissolvemattea.blp"
+		},
+		{
+			"fileDataID": 1127154,
+			"file": "electric_liquid_holy_a3.blp"
+		},
+		{
+			"fileDataID": 1131646,
+			"file": "dissolvematte_glow.blp"
+		},
+		{
+			"fileDataID": 1131647,
+			"file": "sword_1h_bwdraid_d_01red.blp"
+		},
+		{
+			"fileDataID": 984848,
+			"file": "smoke_wispy_mask_blendadd.blp"
+		},
+		{
+			"fileDataID": 1011799,
+			"file": "electric_liquid_solar_a.blp"
+		},
+		{
+			"fileDataID": 1015844,
+			"file": "aw_vfx_sun64.blp"
+		},
+		{
+			"fileDataID": 606564,
+			"file": "t_vfx_flare_long_a.blp"
+		},
+		{
+			"fileDataID": 1109923,
+			"file": "weaponimpact_streak_gold.blp"
+		},
+		{
+			"fileDataID": 942427,
+			"file": "fire_2x2_sharp_mod4x_blurred.blp"
+		},
+		{
+			"fileDataID": 1114592,
+			"file": "fire_holy_mod2x_a.blp"
+		},
+		{
+			"fileDataID": 1114590,
+			"file": "weaponimpact_streak_holy.blp"
+		}
+	],
+	"skins": [
+		{
+			"fileDataID": 1381391,
+			"file": "cfx_paladin_bladeofjustice_impact00.skin"
+		}
+	],
+	"lodSkins": []
+}
