@@ -1,92 +1,42 @@
--- ForeverUI : la banque (BankFrame), a la DA de camelot (demande de
--- l'utilisateur, 2026-09-28 : « fait le reste du commerce »).
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (BankFrame.xml / .lua de 3.3.5,
--- FrameXML) :
---   BankFrame 425 x 512 a TOPLEFT (0, -104) : BankPortraitTexture (7, -6),
---     l'art UI-BankFrame (sans nom), BankFrameTitleText (le nom du
---     banquier), les textes ITEMSLOTTEXT et BAGSLOTTEXT (sans nom),
---     BankCloseButton ; BankFrameItem1..28 (BankItemButtonGenericTemplate)
---     en 7 x 4 depuis (40, -73) ; BankFrameBag1..7 (BankItemButtonBag-
---     Template) : un clic ouvre le sac dans sa propre fenetre ;
---     BankFramePurchaseInfo (texte BANKSLOTPURCHASE_LABEL, BankFrameSlotCost,
---     BankFrameDetailMoneyFrame, BankFramePurchaseButton), cache quand tout
---     est achete (UpdateBagSlotStatus) ; BankFrameMoneyFrame (-30, 103).
---
--- RELEVE -- CAMELOT (blizzard_uipanels_game/camelot/bankframe.xml / .lua,
--- mainline/bankframetemplates.xml / .lua) :
---   BankFrame (BankFrameTemplate : PortraitFrameTemplate) : portrait du
---     banquier, titre BANK ; fond bank-frame-background de (0, -20) a
---     (0, 30) ; le panneau BankPanel 480 de large, son lisere
---     InsetFrameTemplate et ses ombres bank-frame-shadow-* (coins 46 a (2,
---     -22), (2, 2), (-3, -22), (-3, 2)) sur la meme etendue ; la fenetre
---     prend la taille du panneau : 460 de haut, plus 47 par rangee au-dela de
---     six (GenerateItemSlotsForSelectedTab) ;
---   LES CASES : la banque et ses sacs dans UNE grille (ShouldUsePlayerBags-
---     InBank), 8 colonnes, la premiere case a (47, -63), 13 entre deux, 10
---     entre deux rangees, 88 cases par page ; case CamelotBankItemButton-
---     Template : fond bags-item-bankslot64, cadre bank-frame-item-slotframe
---     (vide) ou bank-frame-bag-slotframe (plein), contour de qualite ;
---   les pages : BankPageTabTemplate (LargeSideTabButtonTemplate) a TOPLEFT
---     sur TOPRIGHT (3, -60), les suivantes dessous (0, -2), icones
---     INV_SideTab_Bank_c60, ACHIEVEMENT_GUILDPERK_MOBILEBANKING,
---     TRADE_ARCHAEOLOGY_CHESTOFTINYGLASSANIMALS, Ability_Racial_PackHobgoblin,
---     infobulle PAGE_NUMBER ;
---   les sacs : BagText (BAGSLOTTEXT_COLON) BOTTOMLEFT (43, 80) ; les
---     boutons a l'echelle 0,75 (bank-frame-bag-slotframe, fond
---     bank-frame-bag-slot-bg, cadenas bankslot-icon-lock tant qu'il n'est
---     pas achete), le premier a (20, 5) du haut droit du texte, les suivants
---     a +50 ; un clic prend ou pose le sac, sans ouvrir de fenetre ;
---   BagCost (COSTS_LABEL) BOTTOMLEFT (101, 45), son prix (8, 0) a sa droite,
---     le bouton d'achat 124 x 21 (8, 4) a droite du prix ; le filet
---     bank-divider a l'echelle 0,48, BOTTOM (0, 220) ;
---   BankItemSearchBox 110 x 20 TOPRIGHT (-56, -33), le tri 28 x 26 a sa
---     droite (8, -1) ; l'argent (BankPanelMoneyFrameTemplate, 180 x 25 sans
---     les virements) BOTTOMRIGHT (-3, 3) : bord dore 178 x 19 a gauche, la
---     bourse a sa droite.
---
--- CE QUI DIFFERE, ET POURQUOI. Les 28 cases du client restent les
--- siennes ; les cases des sacs de banque sont des ContainerFrameItemButton-
--- Template (clics, infobulles, partage de pile : ceux du client) dans un
--- porteur par sac. Le portrait suit la regle VALIDEE (48, centre sur le trou
--- de l'anneau). La recherche suit la regle des sacs, VALIDEE (nom, type,
--- sous-type), avec son propre champ ; le tri est celui des sacs
--- (ForeverUI.BagSort), sur la banque et ses sacs. Pas d'onglet de banque de bataillon : 3.3.5 n'en a pas.
+-- ForeverUI: bank window (BankFrame) in the camelot style (bankframe.xml, bankframetemplates.xml).
+-- The bank and its bags share one 8-column grid, 88 cells per page. The 28 client cells stay;
+-- bag cells are ContainerFrameItemButtonTemplate buttons (client clicks, tooltips, stack split).
+-- Search and sort follow the bags (Bags.lua, ForeverUI.BagSort). 3.3.5 has no warband bank.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 local L = ForeverUI.L
 
-local B = { page = 1, porteurs = {} }
-ForeverUI.Banque = B
+local B = { page = 1, carriers = {} }
+ForeverUI.Bank = B
 
 local SEP = string.char(92)
 
 local N = {
-	largeur = 480, hauteurBase = 460, rangee = 47, rangsBase = 6,
-	colonnes = 8, premier = { 47, -63 }, ecartX = 13, ecartY = 10, case = 37, parPage = 88,
-	fond = { 0, -20, 0, 30 },
-	ombres = { hg = { 2, -22 }, bg = { 2, 2 }, hd = { -3, -22 }, bd = { -3, 2 }, epaisseur = 17,
-		tranches = { cote = { 0.015625, 0.28125 }, bas = { 0.015625, 0.28125 }, haut = { 0.3125, 0.578125 } } },
-	onglet = { x = 3, y = -60, ecart = -2, cote = 55, icone = 50, iconeX = -3, rognage = 0.03125 },
-	recherche = { -56, -33, 110, 20 }, tri = { 8, -1, 28, 26 },
-	argent = { boite = { -3, 3, 180, 25 }, bord = { 178, 19 } },
-	sacs = { texte = { 43, 80 }, premier = { 20, 5 }, pas = 50, echelle = 0.75 },
-	cout = { 101, 45, 8, 0 }, achat = { 8, 4, 124, 21 },
-	filet = { echelle = 0.48, y = 220 },
-	portrait = { cote = 48, x = 1, y = 1.5 },
+	width = 480, baseHeight = 460, rowLine = 47, baseRows = 6,
+	columns = 8, first = { 47, -63 }, gapX = 13, gapY = 10, cell = 37, perPage = 88,
+	background = { 0, -20, 0, 30 },
+	shadows = { topLeft = { 2, -22 }, bottomLeft = { 2, 2 }, topRight = { -3, -22 }, bottomRight = { -3, 2 }, thickness = 17,
+		slices = { side = { 0.015625, 0.28125 }, down = { 0.015625, 0.28125 }, top = { 0.3125, 0.578125 } } },
+	tab = { x = 3, y = -60, gap = -2, side = 55, icon = 50, iconX = -3, crop = 0.03125 },
+	search = { -56, -33, 110, 20 }, sort = { 8, -1, 28, 26 },
+	money = { box = { -3, 3, 180, 25 }, edge = { 178, 19 } },
+	bags = { text = { 43, 80 }, first = { 20, 5 }, step = 50, scale = 0.75 },
+	cost = { 101, 45, 8, 0 }, purchase = { 8, 4, 124, 21 },
+	rule = { scale = 0.48, y = 220 },
+	portrait = { side = 48, x = 1, y = 1.5 },
 }
 
 local ART = {
-	fond = "bank-frame-background",
-	caseVide = "bank-frame-item-slotframe", casePleine = "bank-frame-bag-slotframe",
-	fondCase = "bags-item-bankslot64",
-	fondSac = "bank-frame-bag-slot-bg", cadenas = "bankslot-icon-lock",
-	filet = "bank-divider",
-	argent = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "moneyframe",
-	onglet = "common-sidetab", ongletActif = "common-sidetab-selected", ongletSurvol = "common-sidetab-hover",
+	background = "bank-frame-background",
+	emptySlot = "bank-frame-item-slotframe", fullCell = "bank-frame-bag-slotframe",
+	cellBackground = "bags-item-bankslot64",
+	bagBackground = "bank-frame-bag-slot-bg", lock = "bankslot-icon-lock",
+	rule = "bank-divider",
+	money = "Interface" .. SEP .. "ForeverUI" .. SEP .. "common" .. SEP .. "moneyframe",
+	tab = "common-sidetab", tabActive = "common-sidetab-selected", tabHover = "common-sidetab-hover",
 	pages = {
 		"Interface" .. SEP .. "ForeverUI" .. SEP .. "TabIcons" .. SEP .. "Inv_SideTab_Bank_c60",
 		"Interface" .. SEP .. "ForeverUI" .. SEP .. "TabIcons" .. SEP .. "Achievement_GuildPerk_MobileBanking",
@@ -95,211 +45,212 @@ local ART = {
 	},
 }
 
-local function poser(r, ...)
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
--- les sacs de la banque : la banque elle-meme, puis ses sept sacs
-local function sacsDeBanque()
-	local sacs = { BANK_CONTAINER }
-	for sac = NUM_BAG_SLOTS + 1, NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do
-		sacs[#sacs + 1] = sac
+-- Bank containers: the bank itself, then its seven bags.
+local function bankBags()
+	local bags = { BANK_CONTAINER }
+	for bag = NUM_BAG_SLOTS + 1, NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do
+		bags[#bags + 1] = bag
 	end
-	return sacs
+	return bags
 end
 
--- ------------------------------------------------------------ une case
+-- ------------------------------------------------------------ Cell
 
--- CamelotBankItemButtonTemplate : fond bags-item-bankslot64, cadre posee a
--- la taille du bouton, l'art de 3.3.5 retire
-local function habillerCase(b)
-	if b.foreverCase then return end
-	local fond = b:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, ART.fondCase)
-	fond:SetAllPoints(b)
-	local e = ForeverUI.AtlasEntry(ART.caseVide)
+-- CamelotBankItemButtonTemplate: background bags-item-bankslot64, frame at the button size,
+-- 3.3.5 art removed.
+local function skinCell(b)
+	if b.foreverCell then return end
+	local background = b:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, ART.cellBackground)
+	background:SetAllPoints(b)
+	local e = ForeverUI.AtlasEntry(ART.emptySlot)
 	b:SetNormalTexture(e[1])
-	local cadre = b:GetNormalTexture()
-	cadre:ClearAllPoints()
-	cadre:SetAllPoints(b)
-	b.foreverCase = { fond = fond, cadre = cadre }
+	local frame = b:GetNormalTexture()
+	frame:ClearAllPoints()
+	frame:SetAllPoints(b)
+	b.foreverCell = { background = background, frame = frame }
 end
 
--- CamelotBankPanelItemButtonMixin:Refresh : le cadre plein ou vide
-local function cadreCase(b, plein)
-	local c = b.foreverCase and b:GetNormalTexture()
-	if c then ForeverUI.SetAtlas(c, plein and ART.casePleine or ART.caseVide) end
+-- CamelotBankPanelItemButtonMixin:Refresh: full or empty frame
+local function setCellFrame(b, full)
+	local c = b.foreverCell and b:GetNormalTexture()
+	if c then ForeverUI.SetAtlas(c, full and ART.fullCell or ART.emptySlot) end
 end
 
--- une case d'un sac de banque : une ContainerFrameItemButtonTemplate dans le
--- porteur du sac (son ID est celui du sac : les scripts du client le lisent)
-local function caseDeSac(sac, i)
-	local p = B.porteurs[sac]
+-- Cell i of a bank bag: a ContainerFrameItemButtonTemplate in the bag carrier (the carrier ID
+-- is the bag, read by the client scripts).
+local function bagCellOf(bag, i)
+	local p = B.carriers[bag]
 	if not p then
-		p = CreateFrame("Frame", "ForeverUIBankBag" .. sac, BankFrame)
-		p:SetID(sac)
+		p = CreateFrame("Frame", "ForeverUIBankBag" .. bag, BankFrame)
+		p:SetID(bag)
 		p:SetAllPoints(BankFrame)
-		p.cases = {}
-		B.porteurs[sac] = p
+		p.cells = {}
+		B.carriers[bag] = p
 	end
-	local b = p.cases[i]
+	local b = p.cells[i]
 	if not b then
-		b = CreateFrame("Button", "ForeverUIBankBag" .. sac .. "Item" .. i, p, "ContainerFrameItemButtonTemplate")
+		b = CreateFrame("Button", "ForeverUIBankBag" .. bag .. "Item" .. i, p, "ContainerFrameItemButtonTemplate")
 		b:SetID(i)
-		habillerCase(b)
-		p.cases[i] = b
+		skinCell(b)
+		p.cells[i] = b
 	end
 	return b
 end
 
-local function caseDe(sac, i)
-	if sac == BANK_CONTAINER then
+local function cellOf(bag, i)
+	if bag == BANK_CONTAINER then
 		return _G["BankFrameItem" .. i]
 	end
-	return caseDeSac(sac, i)
+	return bagCellOf(bag, i)
 end
 
--- une case de sac : image, nombre, verrou, qualite, recharge
-local function majCase(b, sac, i)
-	local texture, nombre, verrou, qualite = GetContainerItemInfo(sac, i)
+-- Bag cell: icon, count, lock, quality, cooldown
+local function updateCell(b, bag, i)
+	local texture, count, lock, quality = GetContainerItemInfo(bag, i)
 	SetItemButtonTexture(b, texture)
-	SetItemButtonCount(b, nombre)
-	SetItemButtonDesaturated(b, verrou, 0.5, 0.5, 0.5)
+	SetItemButtonCount(b, count)
+	SetItemButtonDesaturated(b, lock, 0.5, 0.5, 0.5)
 	b.hasItem = texture and 1 or nil
-	Gb.ContourQualite(b, texture and qualite or nil)
-	cadreCase(b, texture ~= nil)
-	if ContainerFrame_UpdateCooldown then ContainerFrame_UpdateCooldown(sac, b) end
-	B.marquer(b, GetContainerItemLink(sac, i))
+	Tpl.QualityOutline(b, texture and quality or nil)
+	setCellFrame(b, texture ~= nil)
+	if ContainerFrame_UpdateCooldown then ContainerFrame_UpdateCooldown(bag, b) end
+	B.mark(b, GetContainerItemLink(bag, i))
 end
 
--- la regle de la recherche des sacs (Recherche.Correspond, Bags.lua) : le
--- nom, le type ou le sous-type contient le texte, sans casse ; le nom se lit
--- dans le lien quand le client ne l'a pas en cache
-local function correspond(lien, texte)
-	if texte == "" then return true end
-	if not lien then return false end
-	local nom, _, _, _, _, type_, sousType = GetItemInfo(lien)
-	nom = nom or string.match(lien, "%[(.+)%]")
-	texte = string.lower(texte)
-	for _, c in ipairs({ nom, type_, sousType }) do
-		if c and string.find(string.lower(c), texte, 1, true) then return true end
+-- Bag search rule (Bags.lua): name, type or subtype contains the text, case-insensitive; the
+-- name comes from the link when the item is not in the client cache.
+local function linkMatches(link, text)
+	if text == "" then return true end
+	if not link then return false end
+	local name, _, _, _, _, type_, subType = GetItemInfo(link)
+	name = name or string.match(link, "%[(.+)%]")
+	text = string.lower(text)
+	for _, c in ipairs({ name, type_, subType }) do
+		if c and string.find(string.lower(c), text, 1, true) then return true end
 	end
 	return false
 end
 
--- le voile noir a 80 % sur ce qui ne correspond pas
-function B.marquer(b, lien)
-	local voile = b.foreverVoile
-	if not voile then
-		voile = b:CreateTexture(nil, "OVERLAY")
-		voile:SetTexture(0, 0, 0, 0.8)
-		voile:SetAllPoints(b)
-		voile:Hide()
-		b.foreverVoile = voile
+-- Black veil at 80 % over cells that do not match.
+function B.mark(b, link)
+	local veil = b.foreverVeil
+	if not veil then
+		veil = b:CreateTexture(nil, "OVERLAY")
+		veil:SetTexture(0, 0, 0, 0.8)
+		veil:SetAllPoints(b)
+		veil:Hide()
+		b.foreverVeil = veil
 	end
-	local texte = B.champ and B.champ:GetText() or ""
-	Gb.Montrer(voile, texte ~= "" and lien ~= nil and not correspond(lien, texte))
+	local text = B.field and B.field:GetText() or ""
+	Tpl.SetShown(veil, text ~= "" and link ~= nil and not linkMatches(link, text))
 end
 
--- ------------------------------------------------------------ la grille
+-- ------------------------------------------------------------ Grid
 
--- toutes les cases, dans l'ordre de la grille : la banque, puis ses sacs
-local function toutesLesCases()
-	local cases = {}
-	for _, sac in ipairs(sacsDeBanque()) do
-		local n = (sac == BANK_CONTAINER) and NUM_BANKGENERIC_SLOTS or (GetContainerNumSlots(sac) or 0)
+-- All cells in grid order: the bank, then its bags
+local function allCells()
+	local cells = {}
+	for _, bag in ipairs(bankBags()) do
+		local n = (bag == BANK_CONTAINER) and NUM_BANKGENERIC_SLOTS or (GetContainerNumSlots(bag) or 0)
 		for i = 1, n do
-			cases[#cases + 1] = { sac = sac, i = i }
+			cells[#cells + 1] = { bag = bag, i = i }
 		end
 	end
-	return cases
+	return cells
 end
 
--- GenerateItemSlotsForSelectedTab : la page, la hauteur, les places
-function B.Disposer()
+-- camelot GenerateItemSlotsForSelectedTab: page, window height (460, plus 47 per row beyond
+-- six) and cell positions.
+function B.Layout()
 	local f = BankFrame
-	if not f or not f.foreverHabit then return end
-	local cases = toutesLesCases()
-	local pages = math.max(1, math.ceil(#cases / N.parPage))
+	if not f or not f.foreverSkin then return end
+	local cells = allCells()
+	local pages = math.max(1, math.ceil(#cells / N.perPage))
 	B.pages = pages
 	if B.page > pages then B.page = pages end
 	if B.page < 1 then B.page = 1 end
-	local debut = (B.page - 1) * N.parPage
-	local affichees = math.min(N.parPage, #cases - debut)
-	local rangs = math.ceil(affichees / N.colonnes)
-	f:SetHeight(N.hauteurBase + math.max(0, rangs - N.rangsBase) * N.rangee)
-	-- tout se cache, puis la page se pose
+	local start = (B.page - 1) * N.perPage
+	local displayedCount = math.min(N.perPage, #cells - start)
+	local ranks = math.ceil(displayedCount / N.columns)
+	f:SetHeight(N.baseHeight + math.max(0, ranks - N.baseRows) * N.rowLine)
+	-- Hide everything, then lay out the page
 	for i = 1, NUM_BANKGENERIC_SLOTS do _G["BankFrameItem" .. i]:Hide() end
-	for _, p in pairs(B.porteurs) do
-		for _, b in pairs(p.cases) do b:Hide() end
+	for _, p in pairs(B.carriers) do
+		for _, b in pairs(p.cells) do b:Hide() end
 	end
-	local pasX, pasY = N.case + N.ecartX, N.case + N.ecartY
-	for k = debut + 1, debut + affichees do
-		local c = cases[k]
-		local b = caseDe(c.sac, c.i)
-		local n = k - debut - 1
-		poser(b, "TOPLEFT", f, "TOPLEFT", N.premier[1] + (n % N.colonnes) * pasX,
-			N.premier[2] - math.floor(n / N.colonnes) * pasY)
+	local stepX, stepY = N.cell + N.gapX, N.cell + N.gapY
+	for k = start + 1, start + displayedCount do
+		local c = cells[k]
+		local b = cellOf(c.bag, c.i)
+		local n = k - start - 1
+		place(b, "TOPLEFT", f, "TOPLEFT", N.first[1] + (n % N.columns) * stepX,
+			N.first[2] - math.floor(n / N.columns) * stepY)
 		b:Show()
-		if c.sac ~= BANK_CONTAINER then
-			majCase(b, c.sac, c.i)
+		if c.bag ~= BANK_CONTAINER then
+			updateCell(b, c.bag, c.i)
 		else
-			B.ApresCaseBanque(b)
+			B.AfterBankCell(b)
 		end
 	end
-	B.MajOnglets()
+	B.UpdateTabs()
 end
 
--- APRES BankFrameItemButton_Update : la qualite et le cadre d'une case de
--- la banque (les sacs ont les leurs, plus bas)
-function B.ApresCaseBanque(b)
-	if not b or b.isBag or not b.foreverCase then return end
-	local _, _, _, qualite = GetContainerItemInfo(BANK_CONTAINER, b:GetID())
-	local lien = GetContainerItemLink(BANK_CONTAINER, b:GetID())
-	Gb.ContourQualite(b, lien and qualite or nil)
-	cadreCase(b, lien ~= nil)
-	B.marquer(b, lien)
+-- After BankFrameItemButton_Update: quality and frame of a bank cell (bag cells use
+-- updateCell).
+function B.AfterBankCell(b)
+	if not b or b.isBag or not b.foreverCell then return end
+	local _, _, _, quality = GetContainerItemInfo(BANK_CONTAINER, b:GetID())
+	local link = GetContainerItemLink(BANK_CONTAINER, b:GetID())
+	Tpl.QualityOutline(b, link and quality or nil)
+	setCellFrame(b, link ~= nil)
+	B.mark(b, link)
 end
 
--- ------------------------------------------------------------ les pages
+-- ------------------------------------------------------------ Pages
 
-function B.MajOnglets()
-	for i, o in ipairs(B.onglets or {}) do
-		Gb.Montrer(o, (B.pages or 1) >= i)
-		Gb.Montrer(o.actif, B.page == i)
+function B.UpdateTabs()
+	for i, o in ipairs(B.tabs or {}) do
+		Tpl.SetShown(o, (B.pages or 1) >= i)
+		Tpl.SetShown(o.active, B.page == i)
 	end
 end
 
-local function onglets(f)
-	local O = N.onglet
-	B.onglets = {}
-	for i, icone in ipairs(ART.pages) do
+-- Page tabs (camelot BankPageTabTemplate) down the right side of the window.
+local function tabs(f)
+	local O = N.tab
+	B.tabs = {}
+	for i, icon in ipairs(ART.pages) do
 		local o = CreateFrame("Button", "ForeverUIBankPageTab" .. i, f)
-		o:SetWidth(O.cote)
-		o:SetHeight(O.cote)
+		o:SetWidth(O.side)
+		o:SetHeight(O.side)
 		if i == 1 then
 			o:SetPoint("TOPLEFT", f, "TOPRIGHT", O.x, O.y)
 		else
-			o:SetPoint("TOPLEFT", B.onglets[i - 1], "BOTTOMLEFT", 0, O.ecart)
+			o:SetPoint("TOPLEFT", B.tabs[i - 1], "BOTTOMLEFT", 0, O.gap)
 		end
-		local fond = o:CreateTexture(nil, "BACKGROUND")
-		ForeverUI.SetAtlas(fond, ART.onglet, true)
-		fond:SetAllPoints(o)
+		local background = o:CreateTexture(nil, "BACKGROUND")
+		ForeverUI.SetAtlas(background, ART.tab, true)
+		background:SetAllPoints(o)
 		local image = o:CreateTexture(nil, "ARTWORK")
-		image:SetWidth(O.icone)
-		image:SetHeight(O.icone)
-		image:SetPoint("CENTER", o, "CENTER", O.iconeX, 0)
-		image:SetTexCoord(O.rognage, 1 - O.rognage, O.rognage, 1 - O.rognage)
-		image:SetTexture(icone)
-		local actif = o:CreateTexture(nil, "OVERLAY")
-		ForeverUI.SetAtlas(actif, ART.ongletActif, true)
-		actif:SetAllPoints(o)
-		actif:Hide()
-		local survol = o:CreateTexture(nil, "HIGHLIGHT")
-		ForeverUI.SetAtlas(survol, ART.ongletSurvol, true)
-		survol:SetAllPoints(o)
-		o.icone, o.actif = image, actif
+		image:SetWidth(O.icon)
+		image:SetHeight(O.icon)
+		image:SetPoint("CENTER", o, "CENTER", O.iconX, 0)
+		image:SetTexCoord(O.crop, 1 - O.crop, O.crop, 1 - O.crop)
+		image:SetTexture(icon)
+		local active = o:CreateTexture(nil, "OVERLAY")
+		ForeverUI.SetAtlas(active, ART.tabActive, true)
+		active:SetAllPoints(o)
+		active:Hide()
+		local hover = o:CreateTexture(nil, "HIGHLIGHT")
+		ForeverUI.SetAtlas(hover, ART.tabHover, true)
+		hover:SetAllPoints(o)
+		o.icon, o.active = image, active
 		o:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetText(string.format(PAGE_NUMBER, i))
@@ -309,327 +260,322 @@ local function onglets(f)
 		o:SetScript("OnClick", function()
 			PlaySound("igCharacterInfoTab")
 			B.page = i
-			B.Disposer()
+			B.Layout()
 		end)
 		o:Hide()
-		B.onglets[i] = o
+		B.tabs[i] = o
 	end
 end
 
--- ------------------------------------------------------------ les sacs
+-- ------------------------------------------------------------ Bags
 
--- APRES UpdateBagSlotStatus : le cadenas des sacs non achetes, pas de
--- teinte rouge (camelot montre le cadenas)
-function B.ApresSacs()
-	local achetes = GetNumBankSlots()
+-- After UpdateBagSlotStatus: lock icon on unpurchased bags, no red tint (camelot shows the
+-- lock).
+function B.AfterBags()
+	local purchased = GetNumBankSlots()
 	for i = 1, NUM_BANKBAGSLOTS do
 		local b = _G["BankFrameBag" .. i]
-		if b and b.foreverCadenas then
+		if b and b.foreverLock then
 			SetItemButtonTextureVertexColor(b, 1, 1, 1)
-			Gb.Montrer(b.foreverCadenas, i > achetes)
+			Tpl.SetShown(b.foreverLock, i > purchased)
 		end
 	end
 end
 
--- BankItemButtonBagMixin:OnClick : prendre ou poser le sac, sans fenetre.
--- Camelot fait C_Container.PickupContainerItem, qui pose ce que tient le
--- curseur ; en 3.3.5, poser se fait par PutItemInBag (ce que fait
--- BankFrameItemButtonBag_OnClick), prendre par PickupBagFromSlot -- le
--- clic ne faisait que prendre : un sac tenu ne se posait pas (constate en
--- jeu le 28/09).
-local function clicSac(self)
+-- camelot BankItemButtonBagMixin:OnClick: pick up or put the bag, without opening it. 3.3.5
+-- has no C_Container.PickupContainerItem: put with PutItemInBag (as
+-- BankFrameItemButtonBag_OnClick does), pick up with PickupBagFromSlot.
+local function onBagClick(self)
 	if self:GetID() - NUM_BAG_SLOTS > GetNumBankSlots() then return end
-	local emplacement = self:GetInventorySlot()
+	local slot = self:GetInventorySlot()
 	if CursorHasItem() then
-		PutItemInBag(emplacement)
+		PutItemInBag(slot)
 	else
-		PickupBagFromSlot(emplacement)
+		PickupBagFromSlot(slot)
 	end
 end
 
-local function sacs(f)
-	local S = N.sacs
-	local texte = f:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-	texte:SetText(string.format(L.BANK_COLON, BAGSLOTTEXT))
-	texte:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", S.texte[1], S.texte[2])
-	B.texteSacs = texte
+local function bags(f)
+	local S = N.bags
+	local text = f:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	text:SetText(string.format(L.BANK_COLON, BAGSLOTTEXT))
+	text:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", S.text[1], S.text[2])
+	B.bagsText = text
 	for i = 1, NUM_BANKBAGSLOTS do
 		local b = _G["BankFrameBag" .. i]
-		b:SetScale(S.echelle)
+		b:SetScale(S.scale)
 		if i == 1 then
-			poser(b, "TOPLEFT", texte, "TOPRIGHT", S.premier[1], S.premier[2])
+			place(b, "TOPLEFT", text, "TOPRIGHT", S.first[1], S.first[2])
 		else
-			poser(b, "TOPLEFT", _G["BankFrameBag" .. (i - 1)], "TOPLEFT", S.pas, 0)
+			place(b, "TOPLEFT", _G["BankFrameBag" .. (i - 1)], "TOPLEFT", S.step, 0)
 		end
-		local fond = b:CreateTexture(nil, "BACKGROUND")
-		ForeverUI.SetAtlas(fond, ART.fondSac)
-		fond:SetAllPoints(b)
-		local e = ForeverUI.AtlasEntry(ART.casePleine)
+		local background = b:CreateTexture(nil, "BACKGROUND")
+		ForeverUI.SetAtlas(background, ART.bagBackground)
+		background:SetAllPoints(b)
+		local e = ForeverUI.AtlasEntry(ART.fullCell)
 		b:SetNormalTexture(e[1])
-		local cadre = b:GetNormalTexture()
-		ForeverUI.SetAtlas(cadre, ART.casePleine)
-		cadre:ClearAllPoints()
-		cadre:SetAllPoints(b)
-		local cadenas = b:CreateTexture(nil, "OVERLAY")
-		ForeverUI.SetAtlas(cadenas, ART.cadenas)
-		cadenas:SetAllPoints(b)
-		cadenas:Hide()
-		b.foreverCadenas = cadenas
-		b:SetScript("OnClick", clicSac)
-		-- lacher un sac dessus : le meme geste (le client ouvrirait le sac
-		-- quand le curseur est vide)
-		b:SetScript("OnReceiveDrag", clicSac)
+		local frame = b:GetNormalTexture()
+		ForeverUI.SetAtlas(frame, ART.fullCell)
+		frame:ClearAllPoints()
+		frame:SetAllPoints(b)
+		local lock = b:CreateTexture(nil, "OVERLAY")
+		ForeverUI.SetAtlas(lock, ART.lock)
+		lock:SetAllPoints(b)
+		lock:Hide()
+		b.foreverLock = lock
+		b:SetScript("OnClick", onBagClick)
+		-- Dropping a bag on it: same action (the client would open the bag when the cursor is empty).
+		b:SetScript("OnReceiveDrag", onBagClick)
 	end
-	hooksecurefunc("UpdateBagSlotStatus", B.ApresSacs)
+	hooksecurefunc("UpdateBagSlotStatus", B.AfterBags)
 end
 
--- APRES BankFrameItemButton_Update : un sac vide n'a pas d'icone (le fond de
--- case parle pour lui)
-local function apresBouton(b)
+-- After BankFrameItemButton_Update: an empty bag slot has no icon (the slot background shows).
+local function afterButtonUpdate(b)
 	if not b then return end
 	if b.isBag then
 		if not b.hasItem then _G[b:GetName() .. "IconTexture"]:Hide() end
 	else
-		B.ApresCaseBanque(b)
+		B.AfterBankCell(b)
 	end
 end
 
--- ------------------------------------------------------------ l'achat, l'argent, les outils
+-- ------------------------------------------------------------ Purchase, money, tools
 
--- le prix d'un sac, le bouton d'achat : les pieces du client, a leur place
-local function achat(f)
-	local C, A = N.cout, N.achat
+-- Bag price and purchase button: the client's pieces, moved to camelot's places.
+local function purchase(f)
+	local C, A = N.cost, N.purchase
 	for _, r in ipairs({ BankFramePurchaseInfo:GetRegions() }) do
 		if r:GetObjectType() == "FontString" and r:GetText() == BANKSLOTPURCHASE_LABEL then
 			r:SetAlpha(0)
 		end
 	end
-	poser(BankFrameSlotCost, "BOTTOMLEFT", f, "BOTTOMLEFT", C[1], C[2])
-	poser(BankFrameDetailMoneyFrame, "TOPLEFT", BankFrameSlotCost, "TOPRIGHT", C[3], C[4])
+	place(BankFrameSlotCost, "BOTTOMLEFT", f, "BOTTOMLEFT", C[1], C[2])
+	place(BankFrameDetailMoneyFrame, "TOPLEFT", BankFrameSlotCost, "TOPRIGHT", C[3], C[4])
 	BankFramePurchaseButton:SetWidth(A[3])
 	BankFramePurchaseButton:SetHeight(A[4])
-	poser(BankFramePurchaseButton, "TOPLEFT", BankFrameDetailMoneyFrame, "TOPRIGHT", A[1], A[2])
-	-- le filet, a l'echelle de camelot : sa place aussi
-	local filet = f:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(filet, ART.filet, true)
-	local e = ForeverUI.AtlasEntry(ART.filet)
-	filet:SetWidth(e[6] * N.filet.echelle)
-	filet:SetHeight(e[7] * N.filet.echelle)
-	filet:SetPoint("BOTTOM", f, "BOTTOM", 0, N.filet.y * N.filet.echelle)
-	B.filet = filet
+	place(BankFramePurchaseButton, "TOPLEFT", BankFrameDetailMoneyFrame, "TOPRIGHT", A[1], A[2])
+	-- Divider at camelot's scale, position included.
+	local rule = f:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(rule, ART.rule, true)
+	local e = ForeverUI.AtlasEntry(ART.rule)
+	rule:SetWidth(e[6] * N.rule.scale)
+	rule:SetHeight(e[7] * N.rule.scale)
+	rule:SetPoint("BOTTOM", f, "BOTTOM", 0, N.rule.y * N.rule.scale)
+	B.rule = rule
 end
 
-local function argent(f)
-	local A = N.argent
-	local boite = CreateFrame("Frame", nil, f)
-	boite:EnableMouse(false)
-	boite:SetWidth(A.boite[3])
-	boite:SetHeight(A.boite[4])
-	boite:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", A.boite[1], A.boite[2])
-	local bord = CreateFrame("Frame", nil, boite)
-	bord:SetWidth(A.bord[1])
-	bord:SetHeight(A.bord[2])
-	bord:SetPoint("LEFT", boite, "LEFT", 0, 0)
-	local function morceau(u1, u2, v1, v2)
+-- Money frame with the camelot gold border (BankPanelMoneyFrameTemplate, without transfers).
+local function money(f)
+	local A = N.money
+	local box = CreateFrame("Frame", nil, f)
+	box:EnableMouse(false)
+	box:SetWidth(A.box[3])
+	box:SetHeight(A.box[4])
+	box:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", A.box[1], A.box[2])
+	local edge = CreateFrame("Frame", nil, box)
+	edge:SetWidth(A.edge[1])
+	edge:SetHeight(A.edge[2])
+	edge:SetPoint("LEFT", box, "LEFT", 0, 0)
+	local function piece(u1, u2, v1, v2)
 		local t = f:CreateTexture(nil, "ARTWORK")
-		t:SetTexture(ART.argent)
+		t:SetTexture(ART.money)
 		t:SetTexCoord(u1, u2, v1, v2)
 		return t
 	end
-	local g = morceau(0.953125, 0.9921875, 0, 0.296875)
+	local g = piece(0.953125, 0.9921875, 0, 0.296875)
 	g:SetWidth(7)
-	g:SetPoint("TOPLEFT", bord, "TOPLEFT")
-	g:SetPoint("BOTTOMLEFT", bord, "BOTTOMLEFT")
-	local d = morceau(0, 0.0546875, 0, 0.296875)
+	g:SetPoint("TOPLEFT", edge, "TOPLEFT")
+	g:SetPoint("BOTTOMLEFT", edge, "BOTTOMLEFT")
+	local d = piece(0, 0.0546875, 0, 0.296875)
 	d:SetWidth(7)
-	d:SetPoint("TOPRIGHT", bord, "TOPRIGHT")
-	d:SetPoint("BOTTOMRIGHT", bord, "BOTTOMRIGHT")
-	local m = morceau(0, 0.9921875, 0.3125, 0.609375)
+	d:SetPoint("TOPRIGHT", edge, "TOPRIGHT")
+	d:SetPoint("BOTTOMRIGHT", edge, "BOTTOMRIGHT")
+	local m = piece(0, 0.9921875, 0.3125, 0.609375)
 	m:SetPoint("TOPLEFT", g, "TOPRIGHT")
 	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT")
-	poser(BankFrameMoneyFrame, "RIGHT", bord, "RIGHT", 0, 0)
-	B.boiteArgent, B.bordArgent = boite, bord
+	place(BankFrameMoneyFrame, "RIGHT", edge, "RIGHT", 0, 0)
+	B.moneyBox, B.moneyBorder = box, edge
 end
 
--- BankItemSearchBox (BagSearchBoxTemplate) : le champ des sacs, VALIDE, refait
--- ici ; et le tri a sa droite
-local function outils(f)
-	local R = N.recherche
-	local champ = CreateFrame("EditBox", "ForeverUIBankSearchBox", f, "InputBoxTemplate")
-	champ:SetWidth(R[3])
-	champ:SetHeight(R[4])
-	champ:SetAutoFocus(false)
-	champ:SetMaxLetters(15)
-	champ:SetTextInsets(16, 20, 0, 0)
-	champ:SetPoint("TOPRIGHT", f, "TOPRIGHT", R[1], R[2])
-	local loupe = champ:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(loupe, "common-search-magnifyingglass", true)
-	loupe:SetWidth(10)
-	loupe:SetHeight(10)
-	loupe:SetPoint("LEFT", champ, "LEFT", 1, -1)
-	local invite = champ:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-	invite:SetPoint("LEFT", champ, "LEFT", 16, 0)
-	invite:SetText(SEARCH)
-	local function maj()
-		local texte = champ:GetText() or ""
-		Gb.Montrer(invite, texte == "" and not champ:HasFocus())
-		for _, p in pairs(B.porteurs) do
-			for i, b in pairs(p.cases) do
-				if b:IsShown() then B.marquer(b, GetContainerItemLink(p:GetID(), i)) end
+-- BankItemSearchBox (BagSearchBoxTemplate): the bags search field, rebuilt here, with the sort
+-- button on its right.
+local function tools(f)
+	local R = N.search
+	local field = CreateFrame("EditBox", "ForeverUIBankSearchBox", f, "InputBoxTemplate")
+	field:SetWidth(R[3])
+	field:SetHeight(R[4])
+	field:SetAutoFocus(false)
+	field:SetMaxLetters(15)
+	field:SetTextInsets(16, 20, 0, 0)
+	field:SetPoint("TOPRIGHT", f, "TOPRIGHT", R[1], R[2])
+	local magnifier = field:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(magnifier, "common-search-magnifyingglass", true)
+	magnifier:SetWidth(10)
+	magnifier:SetHeight(10)
+	magnifier:SetPoint("LEFT", field, "LEFT", 1, -1)
+	local placeholder = field:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	placeholder:SetPoint("LEFT", field, "LEFT", 16, 0)
+	placeholder:SetText(SEARCH)
+	local function update()
+		local text = field:GetText() or ""
+		Tpl.SetShown(placeholder, text == "" and not field:HasFocus())
+		for _, p in pairs(B.carriers) do
+			for i, b in pairs(p.cells) do
+				if b:IsShown() then B.mark(b, GetContainerItemLink(p:GetID(), i)) end
 			end
 		end
 		for i = 1, NUM_BANKGENERIC_SLOTS do
-			B.marquer(_G["BankFrameItem" .. i], GetContainerItemLink(BANK_CONTAINER, i))
+			B.mark(_G["BankFrameItem" .. i], GetContainerItemLink(BANK_CONTAINER, i))
 		end
 	end
-	champ:SetScript("OnTextChanged", maj)
-	champ:SetScript("OnEditFocusGained", maj)
-	champ:SetScript("OnEditFocusLost", maj)
-	champ:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-	champ:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-	champ:HookScript("OnHide", function(self) self:SetText("") end)
-	B.champ = champ
+	field:SetScript("OnTextChanged", update)
+	field:SetScript("OnEditFocusGained", update)
+	field:SetScript("OnEditFocusLost", update)
+	field:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	field:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	field:HookScript("OnHide", function(self) self:SetText("") end)
+	B.field = field
 
-	local T = N.tri
-	local tri = CreateFrame("Button", "ForeverUIBankSortButton", f)
-	tri:SetWidth(T[3])
-	tri:SetHeight(T[4])
-	tri:SetPoint("LEFT", champ, "RIGHT", T[1], T[2])
+	local T = N.sort
+	local sort = CreateFrame("Button", "ForeverUIBankSortButton", f)
+	sort:SetWidth(T[3])
+	sort:SetHeight(T[4])
+	sort:SetPoint("LEFT", field, "RIGHT", T[1], T[2])
 	for _, v in ipairs({ { "SetNormalTexture", "GetNormalTexture", "bags-button-autosort-up" },
 		{ "SetPushedTexture", "GetPushedTexture", "bags-button-autosort-down" } }) do
 		local e = ForeverUI.AtlasEntry(v[3])
 		if e then
-			tri[v[1]](tri, e[1])
-			local t = tri[v[2]](tri)
+			sort[v[1]](sort, e[1])
+			local t = sort[v[2]](sort)
 			ForeverUI.SetAtlas(t, v[3])
 			t:ClearAllPoints()
-			t:SetAllPoints(tri)
+			t:SetAllPoints(sort)
 		end
 	end
-	tri:SetHighlightTexture("Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square")
-	tri:GetHighlightTexture():SetBlendMode("ADD")
-	tri:SetScript("OnEnter", function(self)
+	sort:SetHighlightTexture("Interface" .. SEP .. "Buttons" .. SEP .. "ButtonHilight-Square")
+	sort:GetHighlightTexture():SetBlendMode("ADD")
+	sort:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:SetText(L.BAGS_CLEANUP, 1, 1, 1)
 		GameTooltip:Show()
 	end)
-	tri:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	tri:SetScript("OnClick", function()
-		ForeverUI.BagSort.Lancer(sacsDeBanque())
+	sort:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	sort:SetScript("OnClick", function()
+		ForeverUI.BagSort.Start(bankBags())
 	end)
-	B.tri = tri
+	B.sort = sort
 end
 
--- ------------------------------------------------------------ la fenetre
+-- ------------------------------------------------------------ Window
 
--- les evenements des sacs de banque, la fenetre ouverte
-local veille = CreateFrame("Frame")
-veille:SetScript("OnEvent", function(_, evenement, sac, emplacement)
+-- Bank bag events, while the window is open
+local watcher = CreateFrame("Frame")
+watcher:SetScript("OnEvent", function(_, event, bag, slot)
 	if not BankFrame or not BankFrame:IsShown() then return end
-	if evenement == "BAG_UPDATE" and sac and sac > NUM_BAG_SLOTS then
-		local p = B.porteurs[sac]
-		local n = GetContainerNumSlots(sac) or 0
-		if not p or n ~= (p.nombre or 0) then
-			if p then p.nombre = n end
-			B.Disposer()
+	if event == "BAG_UPDATE" and bag and bag > NUM_BAG_SLOTS then
+		local p = B.carriers[bag]
+		local n = GetContainerNumSlots(bag) or 0
+		if not p or n ~= (p.count or 0) then
+			if p then p.count = n end
+			B.Layout()
 		else
-			for i, b in pairs(p.cases) do
-				if b:IsShown() then majCase(b, sac, i) end
+			for i, b in pairs(p.cells) do
+				if b:IsShown() then updateCell(b, bag, i) end
 			end
 		end
-	elseif evenement == "ITEM_LOCK_CHANGED" and sac and sac > NUM_BAG_SLOTS then
-		local p = B.porteurs[sac]
-		local b = p and p.cases[emplacement]
-		if b and b:IsShown() then majCase(b, sac, emplacement) end
-	elseif evenement == "PLAYERBANKBAGSLOTS_CHANGED" or evenement == "BAG_UPDATE_COOLDOWN" then
-		B.Disposer()
+	elseif event == "ITEM_LOCK_CHANGED" and bag and bag > NUM_BAG_SLOTS then
+		local p = B.carriers[bag]
+		local b = p and p.cells[slot]
+		if b and b:IsShown() then updateCell(b, bag, slot) end
+	elseif event == "PLAYERBANKBAGSLOTS_CHANGED" or event == "BAG_UPDATE_COOLDOWN" then
+		B.Layout()
 	end
 end)
 for _, e in ipairs({ "BAG_UPDATE", "ITEM_LOCK_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED", "BAG_UPDATE_COOLDOWN" }) do
-	veille:RegisterEvent(e)
+	watcher:RegisterEvent(e)
 end
 
-function B.Habiller()
+function B.Skin()
 	local f = BankFrame
-	if not f or f.foreverHabit then return end
-	-- l'art de 3.3.5 : l'art et les textes sans nom, le portrait, le titre
+	if not f or f.foreverSkin then return end
+	-- 3.3.5 art: unnamed textures and texts, portrait, title
 	for _, r in ipairs({ f:GetRegions() }) do
 		if not r:GetName() then r:SetAlpha(0) end
 	end
 	BankPortraitTexture:SetAlpha(0)
 	BankFrameTitleText:SetAlpha(0)
-	f:SetWidth(N.largeur)
-	f:SetHeight(N.hauteurBase)
+	f:SetWidth(N.width)
+	f:SetHeight(N.baseHeight)
 	f:SetHitRectInsets(0, 0, 0, 0)
-	local habit = Gb.FenetrePortrait(f, {
-		portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y, titre = L.BANK_TITLE,
+	local skin = Tpl.PortraitWindow(f, {
+		portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y, title = L.BANK_TITLE,
 	})
-	f.foreverHabit = habit
-	-- le fond, le lisere du panneau et ses ombres, sur la meme etendue
-	local F = N.fond
+	f.foreverSkin = skin
+	-- Background, panel trim and shadows, on the same area
+	local F = N.background
 	local rect = CreateFrame("Frame", nil, f)
 	rect:EnableMouse(false)
 	rect:SetPoint("TOPLEFT", f, "TOPLEFT", F[1], F[2])
 	rect:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", F[3], F[4])
-	local fond = f:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, ART.fond)
-	fond:SetAllPoints(rect)
-	habit.fondBanque, habit.panneau = fond, rect
-	habit.lisere = Gb.NeufTranches(f, "InsetFrameTemplate", rect)
-	-- les ombres : coins a la taille de l'atlas (useAtlasSize), bords de 17
-	-- dans une tranche de leur atlas (TexCoords de camelot, relatifs a
-	-- l'atlas) -- sans taille, le client 3.3.5 dessine une texture a la
-	-- taille de sa feuille entiere (constate le 28/09 sur l'echange)
-	local O = N.ombres
-	local coins = {}
-	for cle, v in pairs({ hg = { "TOPLEFT", "cornertopleft" }, bg = { "BOTTOMLEFT", "cornerbottomleft" },
-		hd = { "TOPRIGHT", "cornertopright" }, bd = { "BOTTOMRIGHT", "cornerbottomright" } }) do
+	local background = f:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, ART.background)
+	background:SetAllPoints(rect)
+	skin.bankBackground, skin.panel = background, rect
+	skin.trim = Tpl.NineSlice(f, "InsetFrameTemplate", rect)
+	-- Shadows: corners at atlas size, edges 17 wide cut from a slice of their atlas (camelot
+	-- TexCoords, relative to the atlas). Without a size, 3.3.5 draws a texture at its full sheet
+	-- size.
+	local O = N.shadows
+	local corners = {}
+	for key, v in pairs({ topLeft = { "TOPLEFT", "cornertopleft" }, bottomLeft = { "BOTTOMLEFT", "cornerbottomleft" },
+		topRight = { "TOPRIGHT", "cornertopright" }, bottomRight = { "BOTTOMRIGHT", "cornerbottomright" } }) do
 		local t = f:CreateTexture(nil, "BORDER")
 		ForeverUI.SetAtlas(t, "bank-frame-shadow-" .. v[2])
-		t:SetPoint(v[1], f, v[1], O[cle][1], O[cle][2])
-		coins[cle] = t
+		t:SetPoint(v[1], f, v[1], O[key][1], O[key][2])
+		corners[key] = t
 	end
-	local function bord(atlas, tranche, vertical, a1, c1, r1, a2, c2, r2)
+	local function edge(atlas, slice, vertical, a1, c1, r1, a2, c2, r2)
 		local t = f:CreateTexture(nil, "BORDER")
 		local e = ForeverUI.AtlasEntry(atlas)
 		t:SetTexture(e[1])
 		local du, dv = e[3] - e[2], e[5] - e[4]
 		if vertical then
-			t:SetTexCoord(e[2] + du * tranche[1], e[2] + du * tranche[2], e[4], e[5])
-			t:SetWidth(O.epaisseur)
+			t:SetTexCoord(e[2] + du * slice[1], e[2] + du * slice[2], e[4], e[5])
+			t:SetWidth(O.thickness)
 		else
-			t:SetTexCoord(e[2], e[3], e[4] + dv * tranche[1], e[4] + dv * tranche[2])
-			t:SetHeight(O.epaisseur)
+			t:SetTexCoord(e[2], e[3], e[4] + dv * slice[1], e[4] + dv * slice[2])
+			t:SetHeight(O.thickness)
 		end
 		t:SetPoint(a1, c1, r1)
 		t:SetPoint(a2, c2, r2)
 		return t
 	end
-	local T = O.tranches
-	habit.ombres = {
-		coins = coins,
-		droite = bord("!bank-frame-vert-shadow", T.cote, true, "TOPRIGHT", coins.hd, "BOTTOMRIGHT", "BOTTOMRIGHT", coins.bd, "TOPRIGHT"),
-		gauche = bord("!bank-frame-vert-shadow", T.cote, true, "TOPLEFT", coins.hg, "BOTTOMLEFT", "BOTTOMLEFT", coins.bg, "TOPLEFT"),
-		bas = bord("_bank-frame-horiz-shadow", T.bas, false, "BOTTOMLEFT", coins.bg, "BOTTOMRIGHT", "BOTTOMRIGHT", coins.bd, "BOTTOMLEFT"),
-		haut = bord("_bank-frame-horiz-shadow", T.haut, false, "TOPLEFT", coins.hg, "TOPRIGHT", "TOPRIGHT", coins.hd, "TOPLEFT"),
+	local T = O.slices
+	skin.shadows = {
+		corners = corners,
+		right = edge("!bank-frame-vert-shadow", T.side, true, "TOPRIGHT", corners.topRight, "BOTTOMRIGHT", "BOTTOMRIGHT", corners.bottomRight, "TOPRIGHT"),
+		left = edge("!bank-frame-vert-shadow", T.side, true, "TOPLEFT", corners.topLeft, "BOTTOMLEFT", "BOTTOMLEFT", corners.bottomLeft, "TOPLEFT"),
+		down = edge("_bank-frame-horiz-shadow", T.down, false, "BOTTOMLEFT", corners.bottomLeft, "BOTTOMRIGHT", "BOTTOMRIGHT", corners.bottomRight, "BOTTOMLEFT"),
+		top = edge("_bank-frame-horiz-shadow", T.top, false, "TOPLEFT", corners.topLeft, "TOPRIGHT", "TOPRIGHT", corners.topRight, "TOPLEFT"),
 	}
-	Gb.Croix(BankCloseButton, f)
+	Tpl.CloseButton(BankCloseButton, f)
 	BankCloseButton:SetFrameLevel(f:GetFrameLevel() + 22)
-	-- les 28 cases du client, habillees
+	-- The 28 client cells, skinned
 	for i = 1, NUM_BANKGENERIC_SLOTS do
-		habillerCase(_G["BankFrameItem" .. i])
+		skinCell(_G["BankFrameItem" .. i])
 	end
-	sacs(f)
-	achat(f)
-	argent(f)
-	outils(f)
-	onglets(f)
-	hooksecurefunc("BankFrameItemButton_Update", apresBouton)
+	bags(f)
+	purchase(f)
+	money(f)
+	tools(f)
+	tabs(f)
+	hooksecurefunc("BankFrameItemButton_Update", afterButtonUpdate)
 	f:HookScript("OnShow", function()
-		SetPortraitTexture(habit.portrait, "npc")
+		SetPortraitTexture(skin.portrait, "npc")
 		B.page = 1
-		B.Disposer()
+		B.Layout()
 	end)
 end
 
-B.Habiller()
+B.Skin()

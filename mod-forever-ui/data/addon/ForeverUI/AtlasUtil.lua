@@ -1,11 +1,11 @@
--- ForeverUI : ce qu'on pose sur une feuille d'atlas.
---
--- Une feuille reste UNE texture : on ne decoupe rien en fichiers, on deplace
--- seulement le rectangle lu dedans. Un remplissage partiel (barre de vie a
--- 40 %) rogne ce rectangle au lieu d'etirer l'image, sinon l'art se deforme.
+-- ForeverUI: drawing parts of atlas sheets.
+-- A sheet stays one texture: only the rectangle read from it moves. A partial fill
+-- (health bar at 40 %) crops that rectangle instead of stretching the image, which would
+-- distort the art.
 
 ForeverUI = ForeverUI or {}
 
+-- Atlas entry { file, left, right, top, bottom, width, height }, or nil if unknown.
 local function entry(name)
 	if not UIAtlas or not UIAtlas.data then
 		return nil
@@ -15,8 +15,8 @@ end
 
 ForeverUI.AtlasEntry = entry
 
--- Regle une texture sur un element d'atlas. keepSize laisse la taille en place
--- (utile quand le cadre impose ses propres dimensions).
+-- Sets a texture to an atlas element. keepSize keeps the current size (when the frame
+-- sets its own dimensions).
 function ForeverUI.SetAtlas(texture, name, keepSize)
 	local e = entry(name)
 	if not e then
@@ -34,17 +34,8 @@ function ForeverUI.SetAtlas(texture, name, keepSize)
 	return true
 end
 
--- Cree une texture deja reglee sur un element, a sa taille d'origine.
-function ForeverUI.CreateAtlasTexture(parent, layer, name)
-	local texture = parent:CreateTexture(nil, layer)
-	if not ForeverUI.SetAtlas(texture, name) then
-		texture:Hide()
-	end
-	return texture
-end
-
--- Remplissage de gauche a droite : le rectangle est rogne a la fraction voulue.
--- Une largeur nulle est interdite par le client, donc la texture est masquee.
+-- Left-to-right fill: the rectangle is cropped to the fraction. fullWidth: width at 100 %.
+-- The client rejects a zero width, so the texture is hidden instead.
 function ForeverUI.SetAtlasFill(texture, name, fraction, fullWidth)
 	local e = entry(name)
 	if not e then
@@ -72,40 +63,30 @@ function ForeverUI.SetAtlasFill(texture, name, fraction, fullWidth)
 	return true
 end
 
--- DECOUPE EN NEUF.
---
--- RELEVE -- mainline/MainActionBar.xml, camelot/MainMenuBarBagButtons.xml et
--- camelot/MainMenuBarMicroMenu.xml posent tous les trois la MEME image pour
--- encadrer leur groupe :
---     <Texture parentKey="BorderArt" atlas="UI-HUD-ActionBar-Frame">
---       <Anchor point="TOPLEFT" x="-6" y="6"/>
---       <Anchor point="BOTTOMRIGHT" x="4" y="-5"/>
--- Cette image fait 55 x 55 (110 x 110 sur une feuille 2x) : c'est un octogone
--- a bord de bronze sur fond noir. Le client moderne l'etire en neuf tranches ;
--- etiree d'une seule piece sur 560 px, ses biseaux deviendraient des rampes.
--- On la coupe donc ici, ce qui donne le meme resultat a l'ecran.
---
--- options.nom         nom de l'element d'atlas
--- options.couche      couche de dessin (BACKGROUND par defaut)
--- options.margeImage  epaisseur du coin dans l'image, en pixels
--- options.tailleImage cote de l'image, en pixels
--- options.marge       epaisseur du coin a l'ecran, en pixels
+-- Nine-slice cut of one atlas element.
+-- mainline/MainActionBar.xml, camelot/MainMenuBarBagButtons.xml and MainMenuBarMicroMenu.xml
+-- all frame their group with UI-HUD-ActionBar-Frame (TOPLEFT -6, 6; BOTTOMRIGHT 4, -5):
+-- a 55 x 55 octagon (110 x 110 on a 2x sheet) with a bronze edge. The modern client
+-- nine-slices it; stretched in one piece over 560 px, its bevels would become ramps.
+-- options.name: atlas element; options.layer: draw layer (BACKGROUND by default);
+-- options.imageMargin: corner size in the image, px; options.imageSize: image side, px;
+-- options.margin: corner size on screen, px.
 function ForeverUI.SetAtlasNineSlice(parent, options)
-	local e = entry(options.nom)
+	local e = entry(options.name)
 	if not e then
 		return nil
 	end
 
-	local couche = options.couche or "BACKGROUND"
-	local marge = options.marge
-	local fraction = options.margeImage / options.tailleImage
+	local layer = options.layer or "BACKGROUND"
+	local margin = options.margin
+	local fraction = options.imageMargin / options.imageSize
 	local du = (e[3] - e[2]) * fraction
 	local dv = (e[5] - e[4]) * fraction
 	local u = { e[2], e[2] + du, e[3] - du, e[3] }
 	local v = { e[4], e[4] + dv, e[5] - dv, e[5] }
 
 	local function piece(cu1, cu2, cv1, cv2)
-		local t = parent:CreateTexture(nil, couche)
+		local t = parent:CreateTexture(nil, layer)
 		t:SetTexture(e[1])
 		t:SetTexCoord(u[cu1], u[cu2], v[cv1], v[cv2])
 		return t
@@ -113,258 +94,220 @@ function ForeverUI.SetAtlasNineSlice(parent, options)
 
 	local p = {}
 
-	p.coinHautGauche = piece(1, 2, 1, 2)
-	p.coinHautGauche:SetWidth(marge)
-	p.coinHautGauche:SetHeight(marge)
-	p.coinHautGauche:SetPoint("TOPLEFT", parent, "TOPLEFT")
+	p.topLeftCorner = piece(1, 2, 1, 2)
+	p.topLeftCorner:SetWidth(margin)
+	p.topLeftCorner:SetHeight(margin)
+	p.topLeftCorner:SetPoint("TOPLEFT", parent, "TOPLEFT")
 
-	p.coinHautDroit = piece(3, 4, 1, 2)
-	p.coinHautDroit:SetWidth(marge)
-	p.coinHautDroit:SetHeight(marge)
-	p.coinHautDroit:SetPoint("TOPRIGHT", parent, "TOPRIGHT")
+	p.topRightCorner = piece(3, 4, 1, 2)
+	p.topRightCorner:SetWidth(margin)
+	p.topRightCorner:SetHeight(margin)
+	p.topRightCorner:SetPoint("TOPRIGHT", parent, "TOPRIGHT")
 
-	p.coinBasGauche = piece(1, 2, 3, 4)
-	p.coinBasGauche:SetWidth(marge)
-	p.coinBasGauche:SetHeight(marge)
-	p.coinBasGauche:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT")
+	p.bottomLeftCorner = piece(1, 2, 3, 4)
+	p.bottomLeftCorner:SetWidth(margin)
+	p.bottomLeftCorner:SetHeight(margin)
+	p.bottomLeftCorner:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT")
 
-	p.coinBasDroit = piece(3, 4, 3, 4)
-	p.coinBasDroit:SetWidth(marge)
-	p.coinBasDroit:SetHeight(marge)
-	p.coinBasDroit:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT")
+	p.bottomRightCorner = piece(3, 4, 3, 4)
+	p.bottomRightCorner:SetWidth(margin)
+	p.bottomRightCorner:SetHeight(margin)
+	p.bottomRightCorner:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT")
 
-	-- Les bords et le centre sont definis par deux coins opposes : deux points
-	-- suffisent a fixer un rectangle, aucune taille a calculer.
-	p.bordHaut = piece(2, 3, 1, 2)
-	p.bordHaut:SetPoint("TOPLEFT", p.coinHautGauche, "TOPRIGHT")
-	p.bordHaut:SetPoint("BOTTOMRIGHT", p.coinHautDroit, "BOTTOMLEFT")
+	-- Edges and center are set by two opposite corners: no size to compute.
+	p.topEdge = piece(2, 3, 1, 2)
+	p.topEdge:SetPoint("TOPLEFT", p.topLeftCorner, "TOPRIGHT")
+	p.topEdge:SetPoint("BOTTOMRIGHT", p.topRightCorner, "BOTTOMLEFT")
 
-	p.bordBas = piece(2, 3, 3, 4)
-	p.bordBas:SetPoint("TOPLEFT", p.coinBasGauche, "TOPRIGHT")
-	p.bordBas:SetPoint("BOTTOMRIGHT", p.coinBasDroit, "BOTTOMLEFT")
+	p.bottomEdge = piece(2, 3, 3, 4)
+	p.bottomEdge:SetPoint("TOPLEFT", p.bottomLeftCorner, "TOPRIGHT")
+	p.bottomEdge:SetPoint("BOTTOMRIGHT", p.bottomRightCorner, "BOTTOMLEFT")
 
-	p.bordGauche = piece(1, 2, 2, 3)
-	p.bordGauche:SetPoint("TOPLEFT", p.coinHautGauche, "BOTTOMLEFT")
-	p.bordGauche:SetPoint("BOTTOMRIGHT", p.coinBasGauche, "TOPRIGHT")
+	p.leftEdge = piece(1, 2, 2, 3)
+	p.leftEdge:SetPoint("TOPLEFT", p.topLeftCorner, "BOTTOMLEFT")
+	p.leftEdge:SetPoint("BOTTOMRIGHT", p.bottomLeftCorner, "TOPRIGHT")
 
-	p.bordDroit = piece(3, 4, 2, 3)
-	p.bordDroit:SetPoint("TOPLEFT", p.coinHautDroit, "BOTTOMLEFT")
-	p.bordDroit:SetPoint("BOTTOMRIGHT", p.coinBasDroit, "TOPRIGHT")
+	p.rightEdge = piece(3, 4, 2, 3)
+	p.rightEdge:SetPoint("TOPLEFT", p.topRightCorner, "BOTTOMLEFT")
+	p.rightEdge:SetPoint("BOTTOMRIGHT", p.bottomRightCorner, "TOPRIGHT")
 
-	p.centre = piece(2, 3, 2, 3)
-	p.centre:SetPoint("TOPLEFT", p.coinHautGauche, "BOTTOMRIGHT")
-	p.centre:SetPoint("BOTTOMRIGHT", p.coinBasDroit, "TOPLEFT")
+	p.center = piece(2, 3, 2, 3)
+	p.center:SetPoint("TOPLEFT", p.topLeftCorner, "BOTTOMRIGHT")
+	p.center:SetPoint("BOTTOMRIGHT", p.bottomRightCorner, "TOPLEFT")
 
 	return p
 end
 
--- L'encadrement commun aux trois groupes du bas de l'ecran.
---
--- MESURE SUR L'IMAGE. Le coin doit contenir TOUT le biseau, pas seulement son
--- arete exterieure. Le profil du bord haut de l'image ne devient constant qu'a
--- partir de la colonne 19 sur 110, et celui du bord gauche a partir de la
--- ligne 19 : en dessous, on coupe dans la diagonale, et le morceau de
--- diagonale restant part s'etirer sur toute la longueur de la barre -- c'est
--- ce qui deformait les coins. On prend donc 20, avec un pixel de marge, soit
--- 10 px a l'ecran puisque la feuille est en double densite.
-function ForeverUI.SetBarFrameArt(frame, couche)
+-- Frame art shared by the three groups at the bottom of the screen.
+-- The corner must hold the whole bevel: the image's top and left profiles only become
+-- constant from pixel 19 of 110. A smaller cut stretches part of the diagonal along the
+-- bar. So 20 (one pixel of margin), which is 10 px on screen on this 2x sheet.
+function ForeverUI.SetBarFrameArt(frame, layer)
 	return ForeverUI.SetAtlasNineSlice(frame, {
-		nom = "ui-hud-actionbar-frame",
-		couche = couche or "BACKGROUND",
-		margeImage = 20,
-		tailleImage = 110,
-		marge = 10,
+		name = "ui-hud-actionbar-frame",
+		layer = layer or "BACKGROUND",
+		imageMargin = 20,
+		imageSize = 110,
+		margin = 10,
 	})
 end
 
--- SEPARATEUR ENTRE DEUX EMPLACEMENTS.
---
--- RELEVE -- mainline/MainActionBar.xml : HorizontalDividerTemplate fait 12 de
--- large et se monte en TROIS tranches verticales sur le jeu d'images
--- ui-hud-actionbar-frame-divider. Les hauteurs tombent juste sur un bouton de
--- 45 : 14 en haut, 16 au centre, 15 en bas.
-function ForeverUI.CreateDivider(parent, niveau)
-	local cadre = CreateFrame("Frame", nil, parent)
-	cadre:SetWidth(12)
-	cadre:SetFrameLevel(niveau or parent:GetFrameLevel())
+-- Divider between two slots. mainline/MainActionBar.xml HorizontalDividerTemplate: 12 wide,
+-- three vertical slices of ui-hud-actionbar-frame-divider. Heights 14 top, 16 center,
+-- 15 bottom fit a 45 button.
+function ForeverUI.CreateDivider(parent, level)
+	local frame = CreateFrame("Frame", nil, parent)
+	frame:SetWidth(12)
+	frame:SetFrameLevel(level or parent:GetFrameLevel())
 
-	local haut = cadre:CreateTexture(nil, "ARTWORK")
-	if not ForeverUI.SetAtlas(haut, "ui-hud-actionbar-frame-divider-threeslice-edgetop", true) then
-		cadre:Hide()
-		return cadre
+	local top = frame:CreateTexture(nil, "ARTWORK")
+	if not ForeverUI.SetAtlas(top, "ui-hud-actionbar-frame-divider-threeslice-edgetop", true) then
+		frame:Hide()
+		return frame
 	end
-	haut:SetHeight(14)
-	haut:SetPoint("TOPLEFT", cadre, "TOPLEFT")
-	haut:SetPoint("TOPRIGHT", cadre, "TOPRIGHT")
+	top:SetHeight(14)
+	top:SetPoint("TOPLEFT", frame, "TOPLEFT")
+	top:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
 
-	local bas = cadre:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(bas, "ui-hud-actionbar-frame-divider-threeslice-edgebottom", true)
-	bas:SetHeight(15)
-	bas:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT")
-	bas:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT")
+	local down = frame:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(down, "ui-hud-actionbar-frame-divider-threeslice-edgebottom", true)
+	down:SetHeight(15)
+	down:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT")
+	down:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
 
-	local centre = cadre:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(centre, "!ui-hud-actionbar-frame-divider-threeslice-center", true)
-	centre:SetPoint("TOPLEFT", haut, "BOTTOMLEFT")
-	centre:SetPoint("BOTTOMRIGHT", bas, "TOPRIGHT")
+	local center = frame:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(center, "!ui-hud-actionbar-frame-divider-threeslice-center", true)
+	center:SetPoint("TOPLEFT", top, "BOTTOMLEFT")
+	center:SetPoint("BOTTOMRIGHT", down, "TOPRIGHT")
 
-	cadre.haut, cadre.centre, cadre.bas = haut, centre, bas
-	return cadre
+	frame.top, frame.center, frame.down = top, center, down
+	return frame
 end
 
--- LE PANNEAU.
---
--- RELEVE -- mainline/SharedUIPanelTemplates.xml : un panneau du client moderne
--- (PortraitFrameFlatTemplate) est fait de deux couches.
---   1. le fond plat (FlatPanelBackgroundTemplate), pose entre TOPLEFT (2, -20)
---      et BOTTOMRIGHT (-2, 3) : deux coins arrondis de 16 x 16 en bas
---      (uiframebackground-nineslice-cornerbottom*), un bord entre eux, et tout
---      le reste en aplat, le tout teinte par PANEL_BACKGROUND_COLOR ;
---   2. l'encadrement de metal en neuf tranches, jeu HeldBagLayout de
---      mainline/NineSliceLayouts.lua, avec les corrections de
---      camelot/NineSliceLayoutOverrides.lua (coin haut droit x -2, coins bas
---      y = -8).
---
--- PANEL_BACKGROUND_COLOR est une couleur du client, absente du code extrait.
--- Elle est MESUREE sur la capture du vrai client (docs/reference) : le fond
--- d'un panneau y vaut (16, 14, 12) et il est OPAQUE -- le decor ne passe pas
--- au travers. Un fond translucide fait virer au bleu les ecarts entre les
--- cases d'un sac, ce qui a ete le premier ecart visible.
---
--- Les bords sont ETIRES et non paves : une texture d'atlas en pavage etale la
--- feuille entiere.
-local PANNEAU_FOND = { 16 / 255, 14 / 255, 12 / 255, 1 }
+-- Panel art: mainline/SharedUIPanelTemplates.xml PortraitFrameFlatTemplate, two layers.
+-- 1. Flat background (FlatPanelBackgroundTemplate), TOPLEFT (2, -20) to BOTTOMRIGHT (-2, 3):
+--    two 16 x 16 rounded bottom corners, an edge between them, the rest flat, all tinted
+--    by PANEL_BACKGROUND_COLOR.
+-- 2. Metal nine-slice frame: HeldBagLayout (mainline/NineSliceLayouts.lua) with the fixes
+--    of camelot/NineSliceLayoutOverrides.lua (top right corner x -2, bottom corners y -8).
+-- PANEL_BACKGROUND_COLOR is not in the extracted code; measured on a real client capture
+-- (docs/reference): (16, 14, 12), opaque. A translucent one turns bag slot gaps blue.
+-- Edges are stretched, not tiled: a tiled atlas texture spreads the whole sheet.
+local PANEL_BACKGROUND = { 16 / 255, 14 / 255, 12 / 255, 1 }
 
--- RELEVE -- HeldBagLayout (blizzard_sharedxml/mainline/nineslicelayouts.lua) :
--- les huit morceaux sont declares en OVERLAY, et chaque coin porte son
--- decalage. Tout est recopie ici tel quel.
---
--- Ce que cela impose : en OVERLAY, le metal couvre toute region du cadre
--- lui-meme. La source s'en accommode parce qu'elle range le titre et le
--- portrait dans des CADRES FILS (TitleContainer a frameLevel 510,
--- PortraitContainer) -- un cadre fils se dessine au-dessus des regions de
--- son parent, quel que soit leur calque. Les appelants doivent donc en
--- faire autant pour tout ce qui doit rester visible.
-local PANNEAU_COUCHE = "OVERLAY"
+-- HeldBagLayout (blizzard_sharedxml/mainline/nineslicelayouts.lua): the eight pieces are
+-- OVERLAY and each corner has its offset, copied as is. In OVERLAY the metal covers every
+-- region of the frame itself. The source puts title and portrait in child frames
+-- (TitleContainer at frameLevel 510, PortraitContainer), which draw above their parent's
+-- regions; callers must do the same for anything that must stay visible.
+local PANEL_LAYER = "OVERLAY"
 
-local PANNEAU_COINS = {
-	{ cle = "coinHautGauche", nom = "ui-frame-portraitmetal-cornertopleftsmall",
+local PANEL_CORNERS = {
+	{ key = "topLeftCorner", name = "ui-frame-portraitmetal-cornertopleftsmall",
 	  point = "TOPLEFT", x = -13, y = 16 },
-	{ cle = "coinHautDroit", nom = "ui-frame-metal-cornertopright",
+	{ key = "topRightCorner", name = "ui-frame-metal-cornertopright",
 	  point = "TOPRIGHT", x = 4, y = 16 },
-	{ cle = "coinBasGauche", nom = "ui-frame-metal-cornerbottomleft",
+	{ key = "bottomLeftCorner", name = "ui-frame-metal-cornerbottomleft",
 	  point = "BOTTOMLEFT", x = -13, y = -3 },
-	{ cle = "coinBasDroit", nom = "ui-frame-metal-cornerbottomright",
+	{ key = "bottomRightCorner", name = "ui-frame-metal-cornerbottomright",
 	  point = "BOTTOMRIGHT", x = 4, y = -3 },
 }
 
--- OPTIONS.
---   coinHautGauche : l'atlas du coin haut gauche. Les deux mises en page
---     de la source ne different que par lui -- HeldBagLayout prend
---     ...CornerTopLeftSmall, PortraitFrameTemplate prend ...CornerTopLeft,
---     un anneau plus large pour un portrait de 62.
---   coins : { cle = { x = , y = } } -- remplace le decalage d'un coin. La
---     source elle-meme s'en sert : camelot/NineSliceLayoutOverrides.lua
---     repasse sur TOUTES les mises en page apres les avoir definies, parce
---     que son art ne fait pas la meme taille que celui du jeu moderne.
---   niveau : quand il est donne, LE METAL se pose dans un CADRE FILS de ce
---     niveau au-dessus du cadre. La source fait de meme -- son NineSlice
---     est un cadre fils -- et il le faut des que le cadre porte d'autres
---     cadres fils : ceux-ci se dessinent au-dessus de toute region de leur
---     parent, et recouvriraient le metal.
---
---     LE FOND, LUI, RESTE SUR LE CADRE. Il doit passer DERRIERE tout le
---     reste : monte avec le metal, il recouvrait les volets de la feuille
---     du personnage. Une region du cadre est sous tous ses cadres fils,
---     c'est exactement la place qu'il lui faut.
+-- options.topLeftCorner: top left corner atlas. HeldBagLayout uses ...CornerTopLeftSmall,
+--   PortraitFrameTemplate ...CornerTopLeft (a wider ring for a 62 portrait).
+-- options.corners: { key = { x =, y = } } overrides a corner offset, as
+--   camelot/NineSliceLayoutOverrides.lua does on every layout (its art has other sizes).
+-- options.level: puts the metal in a child frame this many levels above the frame. Needed
+--   when the frame has other child frames, which would draw over the metal. The background
+--   stays on the frame itself, behind all its child frames.
 function ForeverUI.SetPanelArt(frame, options)
 	if frame.foreverPanel then
 		return frame.foreverPanel
 	end
 
 	options = options or {}
-	-- hote : ou va le METAL. Le fond reste sur le cadre, au dernier plan.
-	local hote = frame
-	if options.niveau then
-		hote = CreateFrame("Frame", nil, frame)
-		hote:SetAllPoints(frame)
-		hote:SetFrameLevel(frame:GetFrameLevel() + options.niveau)
-		frame.foreverHabillage = hote
+	-- host: where the metal goes. The background stays on the frame, at the back.
+	local host = frame
+	if options.level then
+		host = CreateFrame("Frame", nil, frame)
+		host:SetAllPoints(frame)
+		host:SetFrameLevel(frame:GetFrameLevel() + options.level)
+		frame.foreverSkinLayer = host
 	end
 
 	local p = {}
 
-	-- 1. le fond plat
-	local r, v, b, a = PANNEAU_FOND[1], PANNEAU_FOND[2], PANNEAU_FOND[3], PANNEAU_FOND[4]
+	-- 1. Flat background
+	local r, v, b, a = PANEL_BACKGROUND[1], PANEL_BACKGROUND[2], PANEL_BACKGROUND[3], PANEL_BACKGROUND[4]
 
-	local basGauche = frame:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(basGauche, "uiframebackground-nineslice-cornerbottomleft")
-	basGauche:SetVertexColor(r, v, b, a)
-	basGauche:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 3)
+	local bottomLeft = frame:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(bottomLeft, "uiframebackground-nineslice-cornerbottomleft")
+	bottomLeft:SetVertexColor(r, v, b, a)
+	bottomLeft:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 3)
 
-	local basDroit = frame:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(basDroit, "uiframebackground-nineslice-cornerbottomright")
-	basDroit:SetVertexColor(r, v, b, a)
-	basDroit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 3)
+	local bottomRight = frame:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(bottomRight, "uiframebackground-nineslice-cornerbottomright")
+	bottomRight:SetVertexColor(r, v, b, a)
+	bottomRight:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 3)
 
-	local bordBas = frame:CreateTexture(nil, "BACKGROUND")
-	bordBas:SetTexture(r, v, b, a)
-	bordBas:SetPoint("TOPLEFT", basGauche, "TOPRIGHT")
-	bordBas:SetPoint("BOTTOMRIGHT", basDroit, "BOTTOMLEFT")
+	local bottomEdge = frame:CreateTexture(nil, "BACKGROUND")
+	bottomEdge:SetTexture(r, v, b, a)
+	bottomEdge:SetPoint("TOPLEFT", bottomLeft, "TOPRIGHT")
+	bottomEdge:SetPoint("BOTTOMRIGHT", bottomRight, "BOTTOMLEFT")
 
-	local corps = frame:CreateTexture(nil, "BACKGROUND")
-	corps:SetTexture(r, v, b, a)
-	corps:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -20)
-	corps:SetPoint("BOTTOMRIGHT", basDroit, "TOPRIGHT")
+	local body = frame:CreateTexture(nil, "BACKGROUND")
+	body:SetTexture(r, v, b, a)
+	body:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -20)
+	body:SetPoint("BOTTOMRIGHT", bottomRight, "TOPRIGHT")
 
-	p.fond = { basGauche, basDroit, bordBas, corps }
+	p.background = { bottomLeft, bottomRight, bottomEdge, body }
 
-	-- 2. l'encadrement de metal
-	for _, coin in ipairs(PANNEAU_COINS) do
-		local texture = hote:CreateTexture(nil, PANNEAU_COUCHE)
-		local nomAtlas = coin.nom
-		if coin.cle == "coinHautGauche" and options.coinHautGauche then
-			nomAtlas = options.coinHautGauche
+	-- 2. Metal frame
+	for _, corner in ipairs(PANEL_CORNERS) do
+		local texture = host:CreateTexture(nil, PANEL_LAYER)
+		local atlasName = corner.name
+		if corner.key == "topLeftCorner" and options.topLeftCorner then
+			atlasName = options.topLeftCorner
 		end
-		if ForeverUI.SetAtlas(texture, nomAtlas) then
-			local x, y = coin.x, coin.y
-			local reglage = options.coins and options.coins[coin.cle]
-			if reglage then
-				x = reglage.x or x
-				y = reglage.y or y
+		if ForeverUI.SetAtlas(texture, atlasName) then
+			local x, y = corner.x, corner.y
+			local setting = options.corners and options.corners[corner.key]
+			if setting then
+				x = setting.x or x
+				y = setting.y or y
 			end
-			texture:SetPoint(coin.point, hote, coin.point, x, y)
-			p[coin.cle] = texture
-			p[coin.cle .. "Atlas"] = nomAtlas
+			texture:SetPoint(corner.point, host, corner.point, x, y)
+			p[corner.key] = texture
+			p[corner.key .. "Atlas"] = atlasName
 		else
 			texture:Hide()
 		end
 	end
 
-	local function bord(nom, point1, cible1, relatif1, point2, cible2, relatif2)
-		local texture = hote:CreateTexture(nil, PANNEAU_COUCHE)
-		if not ForeverUI.SetAtlas(texture, nom) then
+	local function edge(name, point1, target1, relative1, point2, target2, relative2)
+		local texture = host:CreateTexture(nil, PANEL_LAYER)
+		if not ForeverUI.SetAtlas(texture, name) then
 			texture:Hide()
 			return nil
 		end
-		texture:SetPoint(point1, cible1, relatif1)
-		texture:SetPoint(point2, cible2, relatif2)
+		texture:SetPoint(point1, target1, relative1)
+		texture:SetPoint(point2, target2, relative2)
 		return texture
 	end
 
-	if p.coinHautGauche and p.coinHautDroit then
-		p.bordHaut = bord("_ui-frame-metal-edgetop",
-			"TOPLEFT", p.coinHautGauche, "TOPRIGHT",
-			"TOPRIGHT", p.coinHautDroit, "TOPLEFT")
-		p.bordGauche = bord("!ui-frame-metal-edgeleft",
-			"TOPLEFT", p.coinHautGauche, "BOTTOMLEFT",
-			"BOTTOMLEFT", p.coinBasGauche, "TOPLEFT")
-		p.bordDroit = bord("!ui-frame-metal-edgeright",
-			"TOPRIGHT", p.coinHautDroit, "BOTTOMRIGHT",
-			"BOTTOMRIGHT", p.coinBasDroit, "TOPRIGHT")
-		p.bordBas = bord("_ui-frame-metal-edgebottom",
-			"BOTTOMLEFT", p.coinBasGauche, "BOTTOMRIGHT",
-			"BOTTOMRIGHT", p.coinBasDroit, "BOTTOMLEFT")
+	if p.topLeftCorner and p.topRightCorner then
+		p.topEdge = edge("_ui-frame-metal-edgetop",
+			"TOPLEFT", p.topLeftCorner, "TOPRIGHT",
+			"TOPRIGHT", p.topRightCorner, "TOPLEFT")
+		p.leftEdge = edge("!ui-frame-metal-edgeleft",
+			"TOPLEFT", p.topLeftCorner, "BOTTOMLEFT",
+			"BOTTOMLEFT", p.bottomLeftCorner, "TOPLEFT")
+		p.rightEdge = edge("!ui-frame-metal-edgeright",
+			"TOPRIGHT", p.topRightCorner, "BOTTOMRIGHT",
+			"BOTTOMRIGHT", p.bottomRightCorner, "TOPRIGHT")
+		p.bottomEdge = edge("_ui-frame-metal-edgebottom",
+			"BOTTOMLEFT", p.bottomLeftCorner, "BOTTOMRIGHT",
+			"BOTTOMRIGHT", p.bottomRightCorner, "BOTTOMLEFT")
 	end
 
 	frame.foreverPanel = p
@@ -372,344 +315,319 @@ function ForeverUI.SetPanelArt(frame, options)
 	return p
 end
 
--- RELEVE -- NineSliceUtil.UpdateCornerCropping et ClipNineSliceBottomCorner
--- (blizzard_sharedxml/nineslice.lua).
---
---   debord = hauteurCoinHaut + hauteurCoinBas - hauteurCadre
---            - decalageHaut - (-decalageBas)
---
--- Quand une fenetre est plus courte que ses deux coins empiles, le coin du
--- BAS est rogne PAR LE HAUT de cet excedent : ses coordonnees de texture
--- remontent d'autant et sa hauteur diminue. Sans cela les deux coins se
--- chevauchent et le bord gauche, tendu entre eux, se retrouve dessine a
--- l'envers en travers du cadre -- ce qui barrait l'anneau du trousseau.
+-- NineSliceUtil.UpdateCornerCropping and ClipNineSliceBottomCorner
+-- (blizzard_sharedxml/nineslice.lua):
+--   overhang = topCornerHeight + bottomCornerHeight - frameHeight
+--              - topOffset - (-bottomOffset)
+-- When a frame is shorter than its two corners stacked, the bottom corners are cropped from
+-- the top by that overhang (texture coordinates and height). Otherwise the corners overlap
+-- and the left edge between them is drawn upside down across the frame.
 function ForeverUI.UpdatePanelCorners(frame)
 	local p = frame.foreverPanel
 	if not p then
 		return
 	end
 
-	local hautGauche, basGauche
-	for _, coin in ipairs(PANNEAU_COINS) do
-		if coin.cle == "coinHautGauche" then hautGauche = coin end
-		if coin.cle == "coinBasGauche" then basGauche = coin end
+	local topLeft, bottomLeft
+	for _, corner in ipairs(PANEL_CORNERS) do
+		if corner.key == "topLeftCorner" then topLeft = corner end
+		if corner.key == "bottomLeftCorner" then bottomLeft = corner end
 	end
 
-	local eHaut = ForeverUI.AtlasEntry(p.coinHautGaucheAtlas or hautGauche.nom)
-	local eBas = ForeverUI.AtlasEntry(basGauche.nom)
-	if not (eHaut and eBas) then
+	local topEntry = ForeverUI.AtlasEntry(p.topLeftCornerAtlas or topLeft.name)
+	local bottomEntry = ForeverUI.AtlasEntry(bottomLeft.name)
+	if not (topEntry and bottomEntry) then
 		return
 	end
 
-	local debord = eHaut[7] + eBas[7] - frame:GetHeight() - hautGauche.y - (-basGauche.y)
+	local overhang = topEntry[7] + bottomEntry[7] - frame:GetHeight() - topLeft.y - (-bottomLeft.y)
 
-	for _, coin in ipairs(PANNEAU_COINS) do
-		if coin.point == "BOTTOMLEFT" or coin.point == "BOTTOMRIGHT" then
-			local texture = p[coin.cle]
-			local e = ForeverUI.AtlasEntry(coin.nom)
+	for _, corner in ipairs(PANEL_CORNERS) do
+		if corner.point == "BOTTOMLEFT" or corner.point == "BOTTOMRIGHT" then
+			local texture = p[corner.key]
+			local e = ForeverUI.AtlasEntry(corner.name)
 			if texture and e then
-				local rogne = math.max(0, math.min(debord, e[7]))
-				local hauteurUV = e[5] - e[4]
-				texture:SetTexCoord(e[2], e[3], e[4] + (rogne / e[7]) * hauteurUV, e[5])
+				local trim = math.max(0, math.min(overhang, e[7]))
+				local uvHeight = e[5] - e[4]
+				texture:SetTexCoord(e[2], e[3], e[4] + (trim / e[7]) * uvHeight, e[5])
 				texture:SetWidth(e[6])
-				texture:SetHeight(e[7] - rogne)
+				texture:SetHeight(e[7] - trim)
 			end
 		end
 	end
 end
 
 
--- UN SEPARATEUR VERTICAL EN TROIS TRANCHES. common-framedivider fait 11 x 50
--- et porte un EMBOUT a chaque extremite : l'etirer sur la hauteur d'un volet
--- les etale sur des dizaines de pixels. On decoupe donc l'element en trois
--- bandes par ses coordonnees de texture -- embout haut, milieu tire, embout
--- bas -- comme le ferait un neuf-tranches.
-function ForeverUI.CreateVerticalDivider(parent, atlas, embout, niveau)
+-- Vertical divider in three slices. common-framedivider (11 x 50) has a cap at each end;
+-- stretched over a panel's height, the caps smear over dozens of pixels. So it is cut by
+-- texture coordinates into top cap, stretched middle and bottom cap.
+-- atlas: element; endCap: cap height in px (4 by default); level: frame level.
+function ForeverUI.CreateVerticalDivider(parent, atlas, endCap, level)
 	local e = ForeverUI.AtlasEntry(atlas)
-	local cadre = CreateFrame("Frame", nil, parent)
+	local frame = CreateFrame("Frame", nil, parent)
 	if not e then
-		cadre:Hide()
-		return cadre
+		frame:Hide()
+		return frame
 	end
 
-	embout = embout or 4
-	cadre:SetWidth(e[6])
-	cadre:SetFrameLevel(niveau or parent:GetFrameLevel())
+	endCap = endCap or 4
+	frame:SetWidth(e[6])
+	frame:SetFrameLevel(level or parent:GetFrameLevel())
 
-	local u1, u2, v1, v2, hauteur = e[2], e[3], e[4], e[5], e[7]
-	local partV = (v2 - v1) * (embout / hauteur)
+	local u1, u2, v1, v2, height = e[2], e[3], e[4], e[5], e[7]
+	local partV = (v2 - v1) * (endCap / height)
 
-	local haut = cadre:CreateTexture(nil, "OVERLAY")
-	haut:SetTexture(e[1])
-	haut:SetTexCoord(u1, u2, v1, v1 + partV)
-	haut:SetHeight(embout)
-	haut:SetPoint("TOPLEFT", cadre, "TOPLEFT")
-	haut:SetPoint("TOPRIGHT", cadre, "TOPRIGHT")
+	local top = frame:CreateTexture(nil, "OVERLAY")
+	top:SetTexture(e[1])
+	top:SetTexCoord(u1, u2, v1, v1 + partV)
+	top:SetHeight(endCap)
+	top:SetPoint("TOPLEFT", frame, "TOPLEFT")
+	top:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
 
-	local bas = cadre:CreateTexture(nil, "OVERLAY")
-	bas:SetTexture(e[1])
-	bas:SetTexCoord(u1, u2, v2 - partV, v2)
-	bas:SetHeight(embout)
-	bas:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT")
-	bas:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT")
+	local down = frame:CreateTexture(nil, "OVERLAY")
+	down:SetTexture(e[1])
+	down:SetTexCoord(u1, u2, v2 - partV, v2)
+	down:SetHeight(endCap)
+	down:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT")
+	down:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
 
-	local milieu = cadre:CreateTexture(nil, "OVERLAY")
-	milieu:SetTexture(e[1])
-	milieu:SetTexCoord(u1, u2, v1 + partV, v2 - partV)
-	milieu:SetPoint("TOPLEFT", haut, "BOTTOMLEFT")
-	milieu:SetPoint("BOTTOMRIGHT", bas, "TOPRIGHT")
+	local middle = frame:CreateTexture(nil, "OVERLAY")
+	middle:SetTexture(e[1])
+	middle:SetTexCoord(u1, u2, v1 + partV, v2 - partV)
+	middle:SetPoint("TOPLEFT", top, "BOTTOMLEFT")
+	middle:SetPoint("BOTTOMRIGHT", down, "TOPRIGHT")
 
-	cadre.haut, cadre.milieu, cadre.bas = haut, milieu, bas
-	return cadre
+	frame.top, frame.middle, frame.down = top, middle, down
+	return frame
 end
 
--- NEUF TRANCHES DECOUPEES DANS UNE SEULE IMAGE.
---
--- POURQUOI. Une image de panneau porte une ombre et des coins arrondis de
--- taille fixe. L'etirer d'un bord a l'autre multiplie cette ombre par le
--- facteur d'echelle : sur une liste trois fois plus large que l'image, le
--- filet du bord rentre de vingt pixels et les angles se deforment. Les
--- coins doivent donc garder leur taille, les bords ne s'etirer que dans un
--- sens, et le centre seul dans les deux.
---
--- marges = { gauche, haut, droite, bas } : de combien le rectangle de
--- l'image deborde du cadre. C'est ainsi qu'on fait tomber le filet de
--- l'image exactement sur le bord du cadre : on donne l'epaisseur de
--- l'ombre, mesuree sur l'image.
-function ForeverUI.CreateNineSlice(parent, atlas, coin, marges, niveau)
+-- Nine slices cut from one image. A panel image has a shadow and fixed-size rounded
+-- corners; stretched whole, the shadow scales with it and the corners distort. Corners keep
+-- their size, edges stretch one way, the center both.
+-- corner: corner size in px; margins = { left, top, right, bottom }: how far the image
+-- overhangs the frame (the shadow thickness measured on the image), so the image's rim
+-- falls on the frame edge; level: draw layer (BACKGROUND by default).
+function ForeverUI.CreateNineSlice(parent, atlas, corner, margins, level)
 	local e = ForeverUI.AtlasEntry(atlas)
 	if not e then
 		return nil
 	end
 
-	local chemin, u1, u2, v1, v2, largeur, hauteur = e[1], e[2], e[3], e[4], e[5], e[6], e[7]
-	local du = (u2 - u1) * coin / largeur
-	local dv = (v2 - v1) * coin / hauteur
+	local path, u1, u2, v1, v2, width, height = e[1], e[2], e[3], e[4], e[5], e[6], e[7]
+	local du = (u2 - u1) * corner / width
+	local dv = (v2 - v1) * corner / height
 	local us = { u1, u1 + du, u2 - du, u2 }
 	local vs = { v1, v1 + dv, v2 - dv, v2 }
 
-	local tranches = {}
-	local function tranche(colonne, ligne)
-		local t = parent:CreateTexture(nil, niveau or "BACKGROUND")
-		t:SetTexture(chemin)
-		t:SetTexCoord(us[colonne], us[colonne + 1], vs[ligne], vs[ligne + 1])
-		tranches[#tranches + 1] = t
+	local slices = {}
+	local function slice(column, row)
+		local t = parent:CreateTexture(nil, level or "BACKGROUND")
+		t:SetTexture(path)
+		t:SetTexCoord(us[column], us[column + 1], vs[row], vs[row + 1])
+		slices[#slices + 1] = t
 		return t
 	end
 
-	local hg, hd = tranche(1, 1), tranche(3, 1)
-	local bg, bd = tranche(1, 3), tranche(3, 3)
-	local haut, bas = tranche(2, 1), tranche(2, 3)
-	local gauche, droite = tranche(1, 2), tranche(3, 2)
-	local centre = tranche(2, 2)
+	local topLeft, topRight = slice(1, 1), slice(3, 1)
+	local bottomLeft, bottomRight = slice(1, 3), slice(3, 3)
+	local top, down = slice(2, 1), slice(2, 3)
+	local left, right = slice(1, 2), slice(3, 2)
+	local center = slice(2, 2)
 
-	for _, c in ipairs({ hg, hd, bg, bd }) do
-		c:SetWidth(coin)
-		c:SetHeight(coin)
+	for _, c in ipairs({ topLeft, topRight, bottomLeft, bottomRight }) do
+		c:SetWidth(corner)
+		c:SetHeight(corner)
 	end
-	haut:SetHeight(coin)
-	bas:SetHeight(coin)
-	gauche:SetWidth(coin)
-	droite:SetWidth(coin)
+	top:SetHeight(corner)
+	down:SetHeight(corner)
+	left:SetWidth(corner)
+	right:SetWidth(corner)
 
-	local G, H, D, B = marges[1], marges[2], marges[3], marges[4]
-	hg:SetPoint("TOPLEFT", parent, "TOPLEFT", -G, H)
-	hd:SetPoint("TOPRIGHT", parent, "TOPRIGHT", D, H)
-	bg:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", -G, -B)
-	bd:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", D, -B)
+	local G, H, D, B = margins[1], margins[2], margins[3], margins[4]
+	topLeft:SetPoint("TOPLEFT", parent, "TOPLEFT", -G, H)
+	topRight:SetPoint("TOPRIGHT", parent, "TOPRIGHT", D, H)
+	bottomLeft:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", -G, -B)
+	bottomRight:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", D, -B)
 
-	haut:SetPoint("TOPLEFT", hg, "TOPRIGHT")
-	haut:SetPoint("TOPRIGHT", hd, "TOPLEFT")
-	bas:SetPoint("BOTTOMLEFT", bg, "BOTTOMRIGHT")
-	bas:SetPoint("BOTTOMRIGHT", bd, "BOTTOMLEFT")
-	gauche:SetPoint("TOPLEFT", hg, "BOTTOMLEFT")
-	gauche:SetPoint("BOTTOMRIGHT", bg, "TOPRIGHT")
-	droite:SetPoint("TOPLEFT", hd, "BOTTOMLEFT")
-	droite:SetPoint("BOTTOMRIGHT", bd, "TOPRIGHT")
-	centre:SetPoint("TOPLEFT", hg, "BOTTOMRIGHT")
-	centre:SetPoint("BOTTOMRIGHT", bd, "TOPLEFT")
+	top:SetPoint("TOPLEFT", topLeft, "TOPRIGHT")
+	top:SetPoint("TOPRIGHT", topRight, "TOPLEFT")
+	down:SetPoint("BOTTOMLEFT", bottomLeft, "BOTTOMRIGHT")
+	down:SetPoint("BOTTOMRIGHT", bottomRight, "BOTTOMLEFT")
+	left:SetPoint("TOPLEFT", topLeft, "BOTTOMLEFT")
+	left:SetPoint("BOTTOMRIGHT", bottomLeft, "TOPRIGHT")
+	right:SetPoint("TOPLEFT", topRight, "BOTTOMLEFT")
+	right:SetPoint("BOTTOMRIGHT", bottomRight, "TOPRIGHT")
+	center:SetPoint("TOPLEFT", topLeft, "BOTTOMRIGHT")
+	center:SetPoint("BOTTOMRIGHT", bottomRight, "TOPLEFT")
 
-	return tranches
+	return slices
 end
 
--- LE BOUTON TERTIAIRE, EN DEUX ETATS.
---
--- common-button-tertiary-normal et ...-pressed, 46 x 34 chacun, sur la
--- feuille commonbuttontertiaryc60. Mesure sur l'art : a partir de x = 11 le
--- profil d'une colonne ne change plus -- l'about arrondi fait 11 px, d'ou un
--- coin de 11 sur les deux axes (11 + 24 + 11 en largeur, 11 + 12 + 11 en
--- hauteur). Etire au lieu d'etre decoupe, il ecraserait ses angles des qu'il
--- depasse 46 de large.
---
--- Le bouton garde ses propres textures, simplement effacees : elles portent
--- encore son etat pour le client, et certaines fonctions les lisent.
---
--- auto : l'etat presse suit le bouton de la souris. Sans lui, c'est a
--- l'appelant de commander, par bouton.foreverPresser(vrai ou faux) -- ce que
--- font les selecteurs de statistiques, dont l'etat tient tant que leur liste
--- est ouverte.
-local TERTIAIRE_NORMAL = "common-button-tertiary-normal"
-local TERTIAIRE_PRESSE = "common-button-tertiary-pressed"
-local TERTIAIRE_COIN = 11
-local TERTIAIRE_MARGES = { 0, 0, 0, 0 }
+-- Tertiary button, two states: common-button-tertiary-normal / -pressed, 46 x 34 each, sheet
+-- commonbuttontertiaryc60. The rounded end is 11 px (column profile constant from x = 11),
+-- so the corner is 11 on both axes. Stretched instead of sliced, it squashes past 46 wide.
+-- The button keeps its own textures at alpha 0: they still hold its state for the client,
+-- and some functions read them.
+-- auto: the pressed state follows the mouse button. Otherwise the caller drives it with
+-- button.foreverPress(true or false), e.g. statistic selectors, pressed while their list
+-- is open.
+local TERTIARY_NORMAL = "common-button-tertiary-normal"
+local TERTIARY_PRESSED = "common-button-tertiary-pressed"
+local TERTIARY_CORNER = 11
+local TERTIARY_MARGINS = { 0, 0, 0, 0 }
 
-function ForeverUI.SkinTertiaryButton(bouton, auto)
-	if bouton.foreverPresser then
-		return bouton
+function ForeverUI.SkinTertiaryButton(button, auto)
+	if button.foreverPress then
+		return button
 	end
 
-	for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+	for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture",
 		"GetHighlightTexture", "GetDisabledTexture" }) do
-		local texture = bouton[methode] and bouton[methode](bouton)
+		local texture = button[method] and button[method](button)
 		if texture then
 			texture:SetAlpha(0)
 		end
 	end
 
-	bouton.foreverNormal = ForeverUI.CreateNineSlice(bouton, TERTIAIRE_NORMAL,
-		TERTIAIRE_COIN, TERTIAIRE_MARGES, "BACKGROUND")
-	bouton.foreverPresse = ForeverUI.CreateNineSlice(bouton, TERTIAIRE_PRESSE,
-		TERTIAIRE_COIN, TERTIAIRE_MARGES, "BACKGROUND")
+	button.foreverNormal = ForeverUI.CreateNineSlice(button, TERTIARY_NORMAL,
+		TERTIARY_CORNER, TERTIARY_MARGINS, "BACKGROUND")
+	button.foreverPressed = ForeverUI.CreateNineSlice(button, TERTIARY_PRESSED,
+		TERTIARY_CORNER, TERTIARY_MARGINS, "BACKGROUND")
 
-	bouton.foreverPresser = function(etat)
-		for _, tranche in ipairs(bouton.foreverPresse or {}) do
-			if etat then tranche:Show() else tranche:Hide() end
+	button.foreverPress = function(state)
+		for _, slice in ipairs(button.foreverPressed or {}) do
+			if state then slice:Show() else slice:Hide() end
 		end
-		for _, tranche in ipairs(bouton.foreverNormal or {}) do
-			if etat then tranche:Hide() else tranche:Show() end
+		for _, slice in ipairs(button.foreverNormal or {}) do
+			if state then slice:Hide() else slice:Show() end
 		end
 	end
-	bouton.foreverPresser(false)
+	button.foreverPress(false)
 
 	if auto then
-		bouton:HookScript("OnMouseDown", function() bouton.foreverPresser(true) end)
-		bouton:HookScript("OnMouseUp", function() bouton.foreverPresser(false) end)
+		button:HookScript("OnMouseDown", function() button.foreverPress(true) end)
+		button:HookScript("OnMouseUp", function() button.foreverPress(false) end)
 	end
 
-	return bouton
+	return button
 end
 
--- L'ENCADRE DE CAMELOT -- InsetFrameTemplate (shareduipaneltemplates.xml et
--- nineslicelayouts.lua) : fond UI-Background-Marble en mosaique ; lisere
--- UI-Frame-InnerTopLeft / TopRight / BotLeftCorner / BotRight (6 x 6, les
--- deux du bas a y = -1) et _UI-Frame-InnerTopTile / BotTile,
--- !UI-Frame-InnerLeftTile / RightTile (3 d'epaisseur) entre eux.
--- Mis en commun le 2026-09-26 (volet des champs de bataille, fenetre Social).
-local MARBRE = "interface" .. string.char(92) .. "ForeverUI" .. string.char(92)
+-- Camelot inset: InsetFrameTemplate (shareduipaneltemplates.xml, nineslicelayouts.lua).
+-- Tiled UI-Background-Marble background; UI-Frame-InnerTopLeft / TopRight / BotLeftCorner /
+-- BotRight corners (6 x 6, bottom ones at y = -1) joined by _UI-Frame-InnerTopTile / BotTile
+-- and !UI-Frame-InnerLeftTile / RightTile (3 thick).
+local MARBLE = "interface" .. string.char(92) .. "ForeverUI" .. string.char(92)
 	.. "framegeneral" .. string.char(92) .. "ui-background-marble"
 
-function ForeverUI.CreateInset(parent, nom)
-	return ForeverUI.DecorateInset(CreateFrame("Frame", nom, parent))
+function ForeverUI.CreateInset(parent, name)
+	return ForeverUI.DecorateInset(CreateFrame("Frame", name, parent))
 end
 
--- Le meme habillage, pose sur un cadre qui existe deja (le cadre des droits
--- de banque de la fenetre de controle de guilde, par exemple) : ses regions
--- a lui, sous ses cadres fils.
+-- Same art on an existing frame (e.g. the bank rights frame of the guild control window):
+-- regions of its own, below its child frames.
 function ForeverUI.DecorateInset(e)
-	local fond = e:CreateTexture(nil, "BACKGROUND")
-	fond:SetTexture(MARBRE, true)
-	if fond.SetHorizTile then
-		fond:SetHorizTile(true)
-		fond:SetVertTile(true)
+	local background = e:CreateTexture(nil, "BACKGROUND")
+	background:SetTexture(MARBLE, true)
+	if background.SetHorizTile then
+		background:SetHorizTile(true)
+		background:SetVertTile(true)
 	end
-	fond:SetAllPoints(e)
-	e.fond = fond
+	background:SetAllPoints(e)
+	e.background = background
 
-	local function coin(atlas, point, y)
+	local function corner(atlas, point, y)
 		local t = e:CreateTexture(nil, "BORDER")
 		ForeverUI.SetAtlas(t, atlas)
 		t:SetPoint(point, e, point, 0, y or 0)
 		return t
 	end
-	local hg = coin("ui-frame-innertopleft", "TOPLEFT")
-	local hd = coin("ui-frame-innertopright", "TOPRIGHT")
-	local bg = coin("ui-frame-innerbotleftcorner", "BOTTOMLEFT", -1)
-	local bd = coin("ui-frame-innerbotright", "BOTTOMRIGHT", -1)
-	-- l'epaisseur vient de l'element (3), la longueur des coins
-	local function bord(atlas, a1, c1, r1, a2, c2, r2)
+	local topLeft = corner("ui-frame-innertopleft", "TOPLEFT")
+	local topRight = corner("ui-frame-innertopright", "TOPRIGHT")
+	local bottomLeft = corner("ui-frame-innerbotleftcorner", "BOTTOMLEFT", -1)
+	local bottomRight = corner("ui-frame-innerbotright", "BOTTOMRIGHT", -1)
+	-- thickness from the element (3), length from the corners
+	local function edge(atlas, a1, c1, r1, a2, c2, r2)
 		local t = e:CreateTexture(nil, "BORDER")
 		ForeverUI.SetAtlas(t, atlas, true)
 		t:SetPoint(a1, c1, r1)
 		t:SetPoint(a2, c2, r2)
 		return t
 	end
-	local haut = bord("_ui-frame-innertoptile", "TOPLEFT", hg, "TOPRIGHT", "TOPRIGHT", hd, "TOPLEFT")
-	haut:SetHeight(3)
-	local bas = bord("_ui-frame-innerbottile", "BOTTOMLEFT", bg, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "BOTTOMLEFT")
-	bas:SetHeight(3)
-	local gauche = bord("!ui-frame-innerlefttile", "TOPLEFT", hg, "BOTTOMLEFT", "BOTTOMLEFT", bg, "TOPLEFT")
-	gauche:SetWidth(3)
-	local droite = bord("!ui-frame-innerrighttile", "TOPRIGHT", hd, "BOTTOMRIGHT", "BOTTOMRIGHT", bd, "TOPRIGHT")
-	droite:SetWidth(3)
-	e.lisere = { hg, hd, bg, bd, haut, bas, gauche, droite }
+	local top = edge("_ui-frame-innertoptile", "TOPLEFT", topLeft, "TOPRIGHT", "TOPRIGHT", topRight, "TOPLEFT")
+	top:SetHeight(3)
+	local down = edge("_ui-frame-innerbottile", "BOTTOMLEFT", bottomLeft, "BOTTOMRIGHT", "BOTTOMRIGHT", bottomRight, "BOTTOMLEFT")
+	down:SetHeight(3)
+	local left = edge("!ui-frame-innerlefttile", "TOPLEFT", topLeft, "BOTTOMLEFT", "BOTTOMLEFT", bottomLeft, "TOPLEFT")
+	left:SetWidth(3)
+	local right = edge("!ui-frame-innerrighttile", "TOPRIGHT", topRight, "BOTTOMRIGHT", "BOTTOMRIGHT", bottomRight, "TOPRIGHT")
+	right:SetWidth(3)
+	e.trim = { topLeft, topRight, bottomLeft, bottomRight, top, down, left, right }
 	return e
 end
 
--- LE BOUTON DE PANNEAU DE CAMELOT -- UIPanelButtonTemplate : trois morceaux
--- de UI-Panel-Button-Up / -Down / -Disabled (gauche 12, milieu etire,
--- droite 12 ; 0,6875 de haut), surbrillance -Highlight en ADD.
--- Mis en commun le 2026-09-26 (equipes d'arene, champs de bataille, Social).
--- Activer(oui) : UIPanelButton_OnEnable / _OnDisable, l'image -Disabled et
--- la police grisee.
-local BOUTON_PANNEAU = "Interface" .. string.char(92) .. "Buttons" .. string.char(92) .. "UI-Panel-Button-"
+-- Camelot panel button, UIPanelButtonTemplate: three pieces of UI-Panel-Button-Up / -Down /
+-- -Disabled (left 12, stretched middle, right 12; 0.6875 high), -Highlight in ADD.
+-- b:Activate(yes): UIPanelButton_OnEnable / _OnDisable, -Disabled image and grey font.
+-- font: font object name (GameFontNormalSmall by default); template: optional frame template.
+local PANEL_BUTTON = "Interface" .. string.char(92) .. "Buttons" .. string.char(92) .. "UI-Panel-Button-"
 
-function ForeverUI.CreatePanelButton(parent, texteBouton, largeur, hauteur, nom, police, gabarit)
-	local b = CreateFrame("Button", nom, parent, gabarit)
-	b:SetWidth(largeur)
-	b:SetHeight(hauteur)
-	local function morceau(u1, u2)
+function ForeverUI.CreatePanelButton(parent, buttonText, width, height, name, font, template)
+	local b = CreateFrame("Button", name, parent, template)
+	b:SetWidth(width)
+	b:SetHeight(height)
+	local function piece(u1, u2)
 		local t = b:CreateTexture(nil, "BACKGROUND")
 		t:SetTexCoord(u1, u2, 0, 0.6875)
 		return t
 	end
-	local g = morceau(0, 0.09375)
+	local g = piece(0, 0.09375)
 	g:SetWidth(12)
 	g:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
 	g:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
-	local d = morceau(0.53125, 0.625)
+	local d = piece(0.53125, 0.625)
 	d:SetWidth(12)
 	d:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
 	d:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
-	local m = morceau(0.09375, 0.53125)
+	local m = piece(0.09375, 0.53125)
 	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
 	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
-	local morceaux = { g, m, d }
-	local function etat(suffixe)
-		for _, t in ipairs(morceaux) do
-			t:SetTexture(BOUTON_PANNEAU .. suffixe)
+	local pieces = { g, m, d }
+	local function state(suffix)
+		for _, t in ipairs(pieces) do
+			t:SetTexture(PANEL_BUTTON .. suffix)
 		end
 	end
-	etat("Up")
-	local normale = police and _G[police .. ""] or GameFontNormalSmall
-	local survol = police and _G[(police == "GameFontNormal") and "GameFontHighlight" or "GameFontHighlightSmall"]
+	state("Up")
+	local normalFont = font and _G[font .. ""] or GameFontNormalSmall
+	local hover = font and _G[(font == "GameFontNormal") and "GameFontHighlight" or "GameFontHighlightSmall"]
 		or GameFontHighlightSmall
 	local fs = b:CreateFontString(nil, "ARTWORK")
-	fs:SetFontObject(normale)
+	fs:SetFontObject(normalFont)
 	fs:SetPoint("CENTER", b, "CENTER", 0, 0)
 	b:SetFontString(fs)
-	b:SetNormalFontObject(normale)
-	b:SetHighlightFontObject(survol)
+	b:SetNormalFontObject(normalFont)
+	b:SetHighlightFontObject(hover)
 	if b.SetDisabledFontObject then
-		b:SetDisabledFontObject((police == "GameFontNormal") and GameFontDisable or GameFontDisableSmall)
+		b:SetDisabledFontObject((font == "GameFontNormal") and GameFontDisable or GameFontDisableSmall)
 	end
-	b:SetText(texteBouton)
-	b:SetHighlightTexture(BOUTON_PANNEAU .. "Highlight")
+	b:SetText(buttonText)
+	b:SetHighlightTexture(PANEL_BUTTON .. "Highlight")
 	local s = b:GetHighlightTexture()
 	if s then
 		s:SetTexCoord(0, 0.625, 0, 0.6875)
 		s:SetBlendMode("ADD")
 	end
-	b.actif = true
-	b:SetScript("OnMouseDown", function(self) if self.actif then etat("Down") end end)
-	b:SetScript("OnMouseUp", function(self) if self.actif then etat("Up") end end)
-	function b:Activer(oui)
-		self.actif = oui and true or false
-		if oui then
+	b.active = true
+	b:SetScript("OnMouseDown", function(self) if self.active then state("Down") end end)
+	b:SetScript("OnMouseUp", function(self) if self.active then state("Up") end end)
+	function b:Activate(yes)
+		self.active = yes and true or false
+		if yes then
 			self:Enable()
-			etat("Up")
+			state("Up")
 		else
 			self:Disable()
-			etat("Disabled")
+			state("Disabled")
 		end
 	end
 	return b

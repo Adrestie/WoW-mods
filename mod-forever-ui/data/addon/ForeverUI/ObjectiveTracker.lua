@@ -1,61 +1,7 @@
--- ForeverUI : le suivi de quetes et de hauts faits de camelot, pose sur le
--- WatchFrame de WotLK (docs/SUIVI_DES_QUETES.md).
---
--- L'OSSATURE RESTE CELLE DE WOTLK. WatchFrame, WatchFrameLines, leurs
--- evenements, leurs CVar (trackerSorting, trackerFilter), VISIBLE_WATCHES,
--- WatchFrameItem<n> et l'API des gestionnaires d'objectifs restent en place :
--- WatchFrame_Update appelle toujours, dans l'ordre, les fonctions de
--- WATCHFRAME_OBJECTIVEHANDLERS, et un addon peut toujours y ajouter la sienne.
--- On retire seulement les trois gestionnaires d'affichage de WotLK (minuteurs,
--- hauts faits, quetes) pour poser les deux modules de camelot a leur place.
---
--- RELEVE -- blizzard_objectivetracker (le .toc charge les fichiers de la
--- racine ; camelot/ ne surcharge que CanShowTimerBar) :
---   ObjectiveTrackerFrame   260 de large ; en-tete 260 x 32 en TOPLEFT, fond
---                           ui-questtracker-primary-objective-header a sa
---                           taille, centre ; texte "All Objectives" en
---                           ObjectiveTrackerHeaderFont (14, doree, ombre
---                           1/-1) a LEFT (7, 0), 208 de large ; bouton
---                           reduire-tout 18 x 19 a RIGHT (-1, 0), surbrillance
---                           rouge ; bouton filtre a sa gauche (-2), cache par
---                           defaut
---   modules                 le premier a 38 sous le haut (BASE_TOP_PADDING),
---                           les suivants a 10 du precedent (moduleSpacing)
---   en-tete de module       260 x 26, fond ui-questtracker-secondary-objective-
---                           header centre ; texte a LEFT (7, 0), 200 de large ;
---                           bouton 16 x 16 a RIGHT (1, 0), surbrillance jaune ;
---                           le module compte 25 pour son en-tete (headerHeight)
---   blocs                   a 20 du bord gauche (blockOffsetX), a 10 sous
---                           l'en-tete puis 10 sous le bloc precedent ; titre
---                           en ObjectiveTrackerLineFont (12, ombre) couleur
---                           OBJECTIVE_TRACKER_BLOCK_HEADER_COLOR ; lignes a 4
---                           l'une de l'autre (lineSpacing)
---   lignes                  tiret QUEST_DASH en TOPLEFT (0, 1), texte a sa
---                           droite ; objectif rempli : tiret cache (sa place
---                           reste), gris 0,6, coche 16 x 16 a (-10, 2)
---   objet de quete          26 x 26 en TOPRIGHT du bloc, cadre
---                           ui-questtrackerbutton-questitem-frame 42 x 42 ; le
---                           titre et les lignes s'arretent 2 avant lui
---   repere                  POIButton en TOPRIGHT (-7, 5) du titre
---
--- CE QUI DIFFERE, ET POURQUOI.
---   * le repere est celui de WotLK (decision 3) : QuestPOI_DisplayButton, 32 x
---     32, centre la ou camelot centre son bouton de 20.
---   * le tri, les filtres (decision 2) passent dans le bouton filtre de
---     l'en-tete, que camelot prevoit et cache ; le deplacement manuel dans le
---     menu de la quete.
---   * le minuteur d'une quete : 3.3.5 ne donne que le temps RESTANT
---     (GetQuestTimers). La duree totale de la barre est la plus grande valeur
---     vue depuis le chargement de l'interface.
---   * 3.3.5 n'a ni QUEST_WATCH_LIST_CHANGED ni QUEST_TURNED_IN : une quete
---     nouvellement suivie se reconnait a ce qu'elle n'etait pas dans l'affichage
---     precedent ; l'animation de rendu n'existe pas.
---   * les animations sont jouees a la main (un OnUpdate), aux durees et
---     delais des groupes d'animation de camelot : ceux de 3.3.5 n'ont ni
---     fromAlpha / toAlpha ni setToFinalAlpha.
---   * absents de 3.3.5, donc absents d'ici : le suivi prioritaire (Focus), la
---     progression du groupe au survol, les barres de progression, les
---     fenetres surgissantes de quete automatique.
+-- Camelot's quest and achievement tracker on the WotLK WatchFrame (docs/SUIVI_DES_QUETES.md).
+-- WatchFrame, its events and CVars, VISIBLE_WATCHES, WatchFrameItem<n> and the handler API stay;
+-- only the three WotLK display handlers are replaced by camelot's two modules.
+-- Missing from 3.3.5, so absent here: Focus tracking, progress bars, automatic quest popups.
 
 ForeverUI = ForeverUI or {}
 
@@ -64,128 +10,129 @@ ForeverUI.ObjectiveTracker = T
 local L = ForeverUI.L
 
 local G = {
-	largeur = 260, enteteH = 32, enteteTexteX = 7, enteteTexteL = 208,
-	boutonL = 18, boutonH = 19, boutonX = -1, filtreX = -2,
-	hautModules = 38, basLignes = 12,
-	moduleEnteteH = 26, moduleCompteEntete = 25, moduleTexteL = 200, moduleBoutonCote = 16, moduleBoutonX = 1,
-	blocX = 20, premierBlocY = -10, blocY = -10, ligneEcart = 4,
-	objetCote = 26, objetCadre = 42, droiteEcart = 2,
-	coche = 16, cocheX = -10, cocheY = 2,
-	repereX = -17, repereY = -5,
-	lueurLigneL = 180, lueurEnteteL = 240,
-	minuteurL = 192, minuteurH = 20, barreL = 128, barreH = 10, barreX = -4,
-	criteresMax = 5,
-	-- la place par defaut : EditModePresetLayouts de camelot, systeme
-	-- ObjectiveTracker, TOPRIGHT de UIParent a (-110, -275)
-	defautX = -110, defautY = -275, hauteurMin = 140,
+	width = 260, headerH = 32, headerTextX = 7, headerTextL = 208,
+	buttonW = 18, buttonH = 19, buttonX = -1, filterX = -2,
+	modulesTop = 38, rowsBottom = 12,
+	moduleHeaderH = 26, moduleCountedHeader = 25, moduleTextL = 200, moduleButtonSide = 16, moduleButtonX = 1,
+	blockX = 20, firstBlockY = -10, blockY = -10, rowGap = 4,
+	itemSide = 26, itemFrame = 42, rightGap = 2,
+	checkMark = 16, checkMarkX = -10, checkMarkY = 2,
+	poiX = -17, poiY = -5,
+	rowGlowL = 180, headerGlowL = 240,
+	timerW = 192, timerH = 20, barW = 128, barH = 10, barX = -4,
+	maxCriteria = 5,
+	-- default place: camelot EditModePresetLayouts, ObjectiveTracker system,
+	-- TOPRIGHT of UIParent at (-110, -275)
+	defaultX = -110, defaultY = -275, minHeight = 140,
 }
 
--- OBJECTIVE_TRACKER_COLOR, valeurs de GlobalColor.db2 du client camelot
-local COULEUR = {
-	normal = { 0.8, 0.8, 0.8 }, normalSurvol = { 1, 1, 1 },
-	echec = { 0.8, 0.098, 0.098 }, echecSurvol = { 1, 0.125, 0.125 },
-	entete = { 0.749, 0.612, 0 }, enteteSurvol = { 1, 0.824, 0 },
-	fini = { 0.6, 0.6, 0.6 },
-	titre = { 1, 0.824, 0 },                        -- NORMAL_FONT_COLOR
-	barre = { 0.26, 0.42, 1 }, fondBarre = { 0.04, 0.07, 0.18 },
+-- OBJECTIVE_TRACKER_COLOR, values from camelot's GlobalColor.db2
+local COLOR = {
+	normal = { 0.8, 0.8, 0.8 }, normalHover = { 1, 1, 1 },
+	failed = { 0.8, 0.098, 0.098 }, failedHover = { 1, 0.125, 0.125 },
+	header = { 0.749, 0.612, 0 }, headerHover = { 1, 0.824, 0 },
+	finished = { 0.6, 0.6, 0.6 },
+	title = { 1, 0.824, 0 },                        -- NORMAL_FONT_COLOR
+	bar = { 0.26, 0.42, 1 }, barBackground = { 0.04, 0.07, 0.18 },
 }
-COULEUR.normal.inverse = COULEUR.normalSurvol
-COULEUR.normalSurvol.inverse = COULEUR.normal
-COULEUR.echec.inverse = COULEUR.echecSurvol
-COULEUR.echecSurvol.inverse = COULEUR.echec
+COLOR.normal.inverse = COLOR.normalHover
+COLOR.normalHover.inverse = COLOR.normal
+COLOR.failed.inverse = COLOR.failedHover
+COLOR.failedHover.inverse = COLOR.failed
 
--- Les textes de 3.3.5 quand il les a, ceux de camelot sinon (dans
--- Textes_<langue>.lua).
-local TEXTE = {
-	tout = L.OBJECTIVETRACKER_ALL_OBJECTIVES, -- TRACKER_ALL_OBJECTIVES
-	quetes = QUESTS_LABEL,                   -- TRACKER_HEADER_QUESTS (3.3.5 : QUESTS_LABEL)
-	hautsFaits = ACHIEVEMENTS,               -- TRACKER_HEADER_ACHIEVEMENTS (3.3.5 : ACHIEVEMENTS)
-	pret = L.OBJECTIVETRACKER_READY,         -- QUEST_WATCH_QUEST_READY
-	voirPage = OBJECTIVES_VIEW_IN_QUESTLOG,  -- OBJECTIVES_VIEW_IN_QUESTLOG (3.3.5 l'a)
-	voirCarte = L.OBJECTIVETRACKER_OPEN_MAP, -- OBJECTIVES_SHOW_QUEST_MAP
-	nePlusSuivre = L.OBJECTIVETRACKER_UNTRACK, -- OBJECTIVES_STOP_TRACKING
-	partagerChat = L.OBJECTIVETRACKER_SHARE_IN_CHAT, -- SHARE_IN_CHAT
-	abandonner = ABANDON_QUEST_ABBREV,       -- ABANDON_QUEST_ABBREV (3.3.5 l'a)
-	voirHautFait = OBJECTIVES_VIEW_ACHIEVEMENT, -- OBJECTIVES_VIEW_ACHIEVEMENT (3.3.5 l'a)
+-- 3.3.5 strings when it has them, camelot's otherwise (Textes_<locale>.lua)
+local TEXT = {
+	all = L.OBJECTIVETRACKER_ALL_OBJECTIVES, -- TRACKER_ALL_OBJECTIVES
+	quests = QUESTS_LABEL,                   -- TRACKER_HEADER_QUESTS (3.3.5: QUESTS_LABEL)
+	achievements = ACHIEVEMENTS,               -- TRACKER_HEADER_ACHIEVEMENTS (3.3.5: ACHIEVEMENTS)
+	ready = L.OBJECTIVETRACKER_READY,         -- QUEST_WATCH_QUEST_READY
+	viewPage = OBJECTIVES_VIEW_IN_QUESTLOG,  -- OBJECTIVES_VIEW_IN_QUESTLOG (in 3.3.5)
+	viewMap = L.OBJECTIVETRACKER_OPEN_MAP, -- OBJECTIVES_SHOW_QUEST_MAP
+	untrack = L.OBJECTIVETRACKER_UNTRACK, -- OBJECTIVES_STOP_TRACKING
+	shareInChat = L.OBJECTIVETRACKER_SHARE_IN_CHAT, -- SHARE_IN_CHAT
+	abandonQuest = ABANDON_QUEST_ABBREV,       -- ABANDON_QUEST_ABBREV (in 3.3.5)
+	viewAchievement = OBJECTIVES_VIEW_ACHIEVEMENT, -- OBJECTIVES_VIEW_ACHIEVEMENT (in 3.3.5)
 	minutes = "%.2d:%.2d",                    -- MINUTES_SECONDS
-	heures = "%.2d:%.2d:%.2d",                -- HOURS_MINUTES_SECONDS
+	hours = "%.2d:%.2d:%.2d",                -- HOURS_MINUTES_SECONDS
 }
 
-local POLICE = "Fonts\\FRIZQT__.TTF"
+local FONT = "Fonts\\FRIZQT__.TTF"
 
-local function couleur(fs, c)
+local function color(fs, c)
 	fs:SetTextColor(c[1], c[2], c[3])
-	fs.couleur = c
+	fs.color = c
 end
 
--- ObjectiveTrackerLineFont (12) et ObjectiveTrackerHeaderFont (14), ombre
--- noire (1, -1)
-local function police(fs, taille)
-	fs:SetFont(POLICE, taille)
+-- ObjectiveTrackerLineFont (12) and ObjectiveTrackerHeaderFont (14), black shadow (1, -1)
+local function font(fs, size)
+	fs:SetFont(FONT, size)
 	fs:SetShadowOffset(1, -1)
 	fs:SetShadowColor(0, 0, 0, 1)
 	fs:SetJustifyH("LEFT")
 	fs:SetJustifyV("TOP")
 end
 
-local function reglages()
+local function settings()
 	ForeverUIDB = ForeverUIDB or {}
-	ForeverUIDB.suivi = ForeverUIDB.suivi or {}
-	ForeverUIDB.suivi.replis = ForeverUIDB.suivi.replis or {}
-	return ForeverUIDB.suivi
+	ForeverUIDB.tracking = ForeverUIDB.tracking or {}
+	ForeverUIDB.tracking.collapsedModules = ForeverUIDB.tracking.collapsedModules or {}
+	return ForeverUIDB.tracking
 end
 
--- SecondsToClock de camelot
-local function horloge(secondes)
-	secondes = math.max(0, math.floor(secondes))
-	local h = math.floor(secondes / 3600)
-	local m = math.floor((secondes % 3600) / 60)
-	local s = secondes % 60
+-- camelot SecondsToClock
+local function clock(seconds)
+	seconds = math.max(0, math.floor(seconds))
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local s = seconds % 60
 	if h > 0 then
-		return format(TEXTE.heures, h, m, s)
+		return format(TEXT.hours, h, m, s)
 	end
-	return format(TEXTE.minutes, m, s)
+	return format(TEXT.minutes, m, s)
 end
 
--- --------------------------------------------------------- les animations
--- Un seul OnUpdate joue toutes les etapes en cours. Une etape : un delai, une
--- duree, et une fonction qui recoit l'avancement de 0 a 1.
-local A = { etapes = {} }
-A.cadre = CreateFrame("Frame")
-A.cadre:Hide()
-A.cadre:SetScript("OnUpdate", function(self, ecoule)
-	local restantes = 0
-	for cle, e in pairs(A.etapes) do
-		e.t = e.t + ecoule
-		if e.t >= e.delai then
-			local p = (e.duree > 0) and math.min(1, (e.t - e.delai) / e.duree) or 1
+-- ---------- Animations
+-- One OnUpdate plays every running step: a delay, a duration, and a function that receives
+-- the progress from 0 to 1. 3.3.5 animation groups lack fromAlpha / toAlpha and
+-- setToFinalAlpha, so camelot's animations are replayed by hand with its timings.
+local A = { steps = {} }
+A.frame = CreateFrame("Frame")
+A.frame:Hide()
+A.frame:SetScript("OnUpdate", function(self, elapsed)
+	local remaining = 0
+	for key, e in pairs(A.steps) do
+		e.t = e.t + elapsed
+		if e.t >= e.delay then
+			local p = (e.duration > 0) and math.min(1, (e.t - e.delay) / e.duration) or 1
 			e.fn(p)
 			if p >= 1 then
-				A.etapes[cle] = nil
-				if e.fin then e.fin() end
+				A.steps[key] = nil
+				if e.finish then e.finish() end
 			else
-				restantes = restantes + 1
+				remaining = remaining + 1
 			end
 		else
-			restantes = restantes + 1
+			remaining = remaining + 1
 		end
 	end
-	if restantes == 0 then self:Hide() end
+	if remaining == 0 then self:Hide() end
 end)
 
--- cle : { objet, nom } ; une etape de meme cle remplace la precedente
-local function jouer(cle, delai, duree, fn, fin)
-	cle = tostring(cle[1]) .. cle[2]
-	A.etapes[cle] = { t = 0, delai = delai, duree = duree, fn = fn, fin = fin }
-	A.cadre:Show()
+-- key: { object, name }, a step with the same key replaces the running one;
+-- fn(progress) runs each frame; finish: called once done
+local function play(key, delay, duration, fn, finish)
+	key = tostring(key[1]) .. key[2]
+	A.steps[key] = { t = 0, delay = delay, duration = duration, fn = fn, finish = finish }
+	A.frame:Show()
 end
-T.jouer = jouer
+T.play = play
 
 -- smoothing="OUT"
-local function sortie(p) return 1 - (1 - p) * (1 - p) end
+local function easeOut(p) return 1 - (1 - p) * (1 - p) end
 
--- --------------------------------------------------------- les boutons
-local function boutonAtlas(parent, l, h, normal, presse, survol)
+-- ---------- Buttons
+-- atlasButton: l, h: size; normal, pressed, hover: atlas names
+local function atlasButton(parent, l, h, normal, pressed, hover)
 	local b = CreateFrame("Button", nil, parent)
 	b:SetWidth(l)
 	b:SetHeight(h)
@@ -194,52 +141,53 @@ local function boutonAtlas(parent, l, h, normal, presse, survol)
 	ForeverUI.SetAtlas(b:GetNormalTexture(), normal, true)
 	b:GetNormalTexture():SetAllPoints(b)
 	b:SetPushedTexture(e and e[1] or "")
-	ForeverUI.SetAtlas(b:GetPushedTexture(), presse, true)
+	ForeverUI.SetAtlas(b:GetPushedTexture(), pressed, true)
 	b:GetPushedTexture():SetAllPoints(b)
 	b:SetHighlightTexture(e and e[1] or "")
 	local s = b:GetHighlightTexture()
-	ForeverUI.SetAtlas(s, survol, true)
+	ForeverUI.SetAtlas(s, hover, true)
 	s:SetAllPoints(b)
 	s:SetBlendMode("ADD")
 	return b
 end
 
-local function etatsBouton(b, normal, presse)
+local function buttonStates(b, normal, pressed)
 	ForeverUI.SetAtlas(b:GetNormalTexture(), normal, true)
-	ForeverUI.SetAtlas(b:GetPushedTexture(), presse, true)
+	ForeverUI.SetAtlas(b:GetPushedTexture(), pressed, true)
 end
 
-local function menu(ancre, liste)
-	if ForeverUI.WorldMap and ForeverUI.WorldMap.ouvrirMenu then
-		ForeverUI.WorldMap.ouvrirMenu(ancre, liste)
+-- opens a dropdown through the world map's menu helper
+local function menu(anchor, list)
+	if ForeverUI.WorldMap and ForeverUI.WorldMap.openMenu then
+		ForeverUI.WorldMap.openMenu(anchor, list)
 	end
 end
 
--- --------------------------------------------------------- l'en-tete general
--- ObjectiveTrackerContainerHeaderTemplate, pose sur WatchFrame
-local function creerEntete()
+-- ---------- Main header
+-- ObjectiveTrackerContainerHeaderTemplate, on WatchFrame
+local function createHeader()
 	local h = CreateFrame("Frame", "ForeverUIObjectiveTrackerHeader", WatchFrame)
-	h:SetWidth(G.largeur)
-	h:SetHeight(G.enteteH)
+	h:SetWidth(G.width)
+	h:SetHeight(G.headerH)
 	h:SetPoint("TOPLEFT", WatchFrame, "TOPLEFT", 0, 0)
-	local fond = h:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, "ui-questtracker-primary-objective-header")
-	fond:SetPoint("CENTER", h, "CENTER", 0, 0)
-	h.fond = fond
-	local texte = h:CreateFontString(nil, "ARTWORK")
-	police(texte, 14)
-	couleur(texte, COULEUR.titre)
-	texte:SetWidth(G.enteteTexteL)
-	texte:SetJustifyV("MIDDLE")
-	texte:SetPoint("LEFT", h, "LEFT", G.enteteTexteX, 0)
-	texte:SetText(TEXTE.tout)
-	h.texte = texte
+	local background = h:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, "ui-questtracker-primary-objective-header")
+	background:SetPoint("CENTER", h, "CENTER", 0, 0)
+	h.background = background
+	local text = h:CreateFontString(nil, "ARTWORK")
+	font(text, 14)
+	color(text, COLOR.title)
+	text:SetWidth(G.headerTextL)
+	text:SetJustifyV("MIDDLE")
+	text:SetPoint("LEFT", h, "LEFT", G.headerTextX, 0)
+	text:SetText(TEXT.all)
+	h.text = text
 
-	local reduire = boutonAtlas(h, G.boutonL, G.boutonH, "ui-questtrackerbutton-collapse-all",
+	local shrink = atlasButton(h, G.buttonW, G.buttonH, "ui-questtrackerbutton-collapse-all",
 		"ui-questtrackerbutton-collapse-all-pressed", "ui-questtrackerbutton-red-highlight")
-	reduire:SetPoint("RIGHT", h, "RIGHT", G.boutonX, 0)
-	-- WatchFrame_CollapseExpandButton_OnClick, au son de camelot
-	reduire:SetScript("OnClick", function()
+	shrink:SetPoint("RIGHT", h, "RIGHT", G.buttonX, 0)
+	-- WatchFrame_CollapseExpandButton_OnClick, with camelot's sound
+	shrink:SetScript("OnClick", function()
 		PlaySound("igMainMenuOptionCheckBoxOn")
 		if WatchFrame.collapsed then
 			WatchFrame.userCollapsed = nil
@@ -249,503 +197,503 @@ local function creerEntete()
 			WatchFrame_Collapse(WatchFrame)
 		end
 	end)
-	h.reduire = reduire
+	h.shrink = shrink
 
-	-- le bouton filtre : le tri et les filtres de WotLK (decision 2)
-	local filtre = boutonAtlas(h, G.boutonL, G.boutonH, "ui-questtrackerbutton-filter",
+	-- filter button (camelot has it but hides it): WotLK sorting and filters
+	local filter = atlasButton(h, G.buttonW, G.buttonH, "ui-questtrackerbutton-filter",
 		"ui-questtrackerbutton-filter-pressed", "ui-questtrackerbutton-red-highlight")
-	filtre:SetPoint("RIGHT", reduire, "LEFT", G.filtreX, 0)
-	filtre:SetScript("OnClick", function(self)
+	filter:SetPoint("RIGHT", shrink, "LEFT", G.filterX, 0)
+	filter:SetScript("OnClick", function(self)
 		PlaySound("igMainMenuOptionCheckBoxOn")
-		T.menuFiltres(self)
+		T.filterMenu(self)
 	end)
-	h.filtre = filtre
+	h.filter = filter
 	h:Hide()
 	return h
 end
 
--- WatchFrameHeaderDropDown_Initialize, entree pour entree
-function T.menuFiltres(ancre)
-	local tri = WATCHFRAME_SORT_TYPE
-	local filtre = WATCHFRAME_FILTER_TYPE
-	local function trier(valeur)
-		return function() WatchFrame_SetSorting(nil, valeur) end
+-- WatchFrameHeaderDropDown_Initialize, entry for entry
+function T.filterMenu(anchor)
+	local sort = WATCHFRAME_SORT_TYPE
+	local filter = WATCHFRAME_FILTER_TYPE
+	local function sortBy(value)
+		return function() WatchFrame_SetSorting(nil, value) end
 	end
-	local function filtrer(valeur)
-		return function() WatchFrame_SetFilter(nil, valeur) end
+	local function filterBy(value)
+		return function() WatchFrame_SetFilter(nil, value) end
 	end
-	local function actif(bit_)
-		return bit.band(filtre, bit_) == bit_
+	local function active(bit_)
+		return bit.band(filter, bit_) == bit_
 	end
-	menu(ancre, {
+	menu(anchor, {
 		{ text = TRACKER_SORT_LABEL, isTitle = true },
-		{ text = TRACKER_SORT_PROXIMITY, checked = tri == WATCHFRAME_SORT_PROXIMITY, func = trier(WATCHFRAME_SORT_PROXIMITY) },
-		{ text = TRACKER_SORT_DIFFICULTY_HIGH, checked = tri == WATCHFRAME_SORT_DIFFICULTY_HIGH, func = trier(WATCHFRAME_SORT_DIFFICULTY_HIGH) },
-		{ text = TRACKER_SORT_DIFFICULTY_LOW, checked = tri == WATCHFRAME_SORT_DIFFICULTY_LOW, func = trier(WATCHFRAME_SORT_DIFFICULTY_LOW) },
-		{ text = TRACKER_SORT_MANUAL, checked = tri == WATCHFRAME_SORT_MANUAL, func = trier(WATCHFRAME_SORT_MANUAL) },
+		{ text = TRACKER_SORT_PROXIMITY, checked = sort == WATCHFRAME_SORT_PROXIMITY, func = sortBy(WATCHFRAME_SORT_PROXIMITY) },
+		{ text = TRACKER_SORT_DIFFICULTY_HIGH, checked = sort == WATCHFRAME_SORT_DIFFICULTY_HIGH, func = sortBy(WATCHFRAME_SORT_DIFFICULTY_HIGH) },
+		{ text = TRACKER_SORT_DIFFICULTY_LOW, checked = sort == WATCHFRAME_SORT_DIFFICULTY_LOW, func = sortBy(WATCHFRAME_SORT_DIFFICULTY_LOW) },
+		{ text = TRACKER_SORT_MANUAL, checked = sort == WATCHFRAME_SORT_MANUAL, func = sortBy(WATCHFRAME_SORT_MANUAL) },
 		{ text = TRACKER_FILTER_LABEL, isTitle = true },
-		{ text = TRACKER_FILTER_ACHIEVEMENTS, checked = actif(WATCHFRAME_FILTER_ACHIEVEMENTS), keepShownOnClick = 1, func = filtrer(WATCHFRAME_FILTER_ACHIEVEMENTS) },
-		{ text = TRACKER_FILTER_COMPLETED_QUESTS, checked = actif(WATCHFRAME_FILTER_COMPLETED_QUESTS), keepShownOnClick = 1, func = filtrer(WATCHFRAME_FILTER_COMPLETED_QUESTS) },
-		{ text = TRACKER_FILTER_REMOTE_ZONES, checked = actif(WATCHFRAME_FILTER_REMOTE_ZONES), keepShownOnClick = 1, func = filtrer(WATCHFRAME_FILTER_REMOTE_ZONES) },
+		{ text = TRACKER_FILTER_ACHIEVEMENTS, checked = active(WATCHFRAME_FILTER_ACHIEVEMENTS), keepShownOnClick = 1, func = filterBy(WATCHFRAME_FILTER_ACHIEVEMENTS) },
+		{ text = TRACKER_FILTER_COMPLETED_QUESTS, checked = active(WATCHFRAME_FILTER_COMPLETED_QUESTS), keepShownOnClick = 1, func = filterBy(WATCHFRAME_FILTER_COMPLETED_QUESTS) },
+		{ text = TRACKER_FILTER_REMOTE_ZONES, checked = active(WATCHFRAME_FILTER_REMOTE_ZONES), keepShownOnClick = 1, func = filterBy(WATCHFRAME_FILTER_REMOTE_ZONES) },
 	})
 end
 
--- --------------------------------------------------------- les modules
--- ObjectiveTrackerModuleTemplate : un en-tete, puis les blocs.
-local function creerModule(nom, titre, cle)
-	local m = CreateFrame("Frame", nom, WatchFrameLines)
-	m:SetWidth(G.largeur)
+-- ---------- Modules
+-- ObjectiveTrackerModuleTemplate: a header, then the blocks.
+-- title: header text; key: saved collapse state key
+local function createModule(name, title, key)
+	local m = CreateFrame("Frame", name, WatchFrameLines)
+	m:SetWidth(G.width)
 	m:SetHeight(10)
-	m.cle = cle
+	m.key = key
 	local h = CreateFrame("Frame", nil, m)
-	h:SetWidth(G.largeur)
-	h:SetHeight(G.moduleEnteteH)
+	h:SetWidth(G.width)
+	h:SetHeight(G.moduleHeaderH)
 	h:SetPoint("TOPLEFT", m, "TOPLEFT", 0, 0)
-	local fond = h:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, "ui-questtracker-secondary-objective-header")
-	fond:SetPoint("CENTER", h, "CENTER", 0, 0)
-	local texte = h:CreateFontString(nil, "ARTWORK")
-	police(texte, 14)
-	couleur(texte, COULEUR.titre)
-	texte:SetWidth(G.moduleTexteL)
-	texte:SetJustifyV("MIDDLE")
-	texte:SetPoint("LEFT", h, "LEFT", G.enteteTexteX, 0)
-	texte:SetText(titre)
-	local brillant = h:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(brillant, "ui-questtracker-objfx-shine")
-	brillant:SetWidth(brillant:GetWidth() * 0.95)
-	brillant:SetHeight(brillant:GetHeight() * 0.95)
-	brillant:SetPoint("CENTER", h, "CENTER", -150, 1)
-	brillant:SetAlpha(0)
-	local lueur = h:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(lueur, "ui-questtracker-objfx-barglow")
-	lueur:SetPoint("CENTER", h, "CENTER", -120, 1)
-	lueur:SetAlpha(0)
-	local bouton = boutonAtlas(h, G.moduleBoutonCote, G.moduleBoutonCote, "ui-questtrackerbutton-secondary-collapse",
+	local background = h:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, "ui-questtracker-secondary-objective-header")
+	background:SetPoint("CENTER", h, "CENTER", 0, 0)
+	local text = h:CreateFontString(nil, "ARTWORK")
+	font(text, 14)
+	color(text, COLOR.title)
+	text:SetWidth(G.moduleTextL)
+	text:SetJustifyV("MIDDLE")
+	text:SetPoint("LEFT", h, "LEFT", G.headerTextX, 0)
+	text:SetText(title)
+	local shine = h:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(shine, "ui-questtracker-objfx-shine")
+	shine:SetWidth(shine:GetWidth() * 0.95)
+	shine:SetHeight(shine:GetHeight() * 0.95)
+	shine:SetPoint("CENTER", h, "CENTER", -150, 1)
+	shine:SetAlpha(0)
+	local glow = h:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(glow, "ui-questtracker-objfx-barglow")
+	glow:SetPoint("CENTER", h, "CENTER", -120, 1)
+	glow:SetAlpha(0)
+	local button = atlasButton(h, G.moduleButtonSide, G.moduleButtonSide, "ui-questtrackerbutton-secondary-collapse",
 		"ui-questtrackerbutton-secondary-collapse-pressed", "ui-questtrackerbutton-yellow-highlight")
-	bouton:SetPoint("RIGHT", h, "RIGHT", G.moduleBoutonX, 0)
-	bouton:SetScript("OnClick", function()
+	button:SetPoint("RIGHT", h, "RIGHT", G.moduleButtonX, 0)
+	button:SetScript("OnClick", function()
 		PlaySound("igMainMenuOptionCheckBoxOn")
-		local r = reglages().replis
-		r[cle] = not r[cle] or nil
+		local r = settings().collapsedModules
+		r[key] = not r[key] or nil
 		WatchFrame_Update()
 	end)
-	h.fond, h.texte, h.brillant, h.lueur, h.bouton = fond, texte, brillant, lueur, bouton
-	m.entete = h
-	m.blocs, m.libres = {}, {}
+	h.background, h.text, h.shine, h.glow, h.button = background, text, shine, glow, button
+	m.header = h
+	m.blocks, m.freeBlocks = {}, {}
 	m:Hide()
 	return m
 end
 
 -- ObjectiveTrackerModuleHeaderMixin:PlayAddAnimation
-local function animerEnteteModule(m)
-	local h = m.entete
-	local cle = m
-	h.fond:SetAlpha(0)
-	h.bouton:SetAlpha(0)
-	jouer({ cle, "fond" }, 0, 0.5, function(p) h.fond:SetAlpha(p) end)
-	jouer({ cle, "bouton" }, 0, 1, function(p) h.bouton:SetAlpha(p) end)
-	jouer({ cle, "lueur" }, 0, 0.2, function(p) h.lueur:SetAlpha(p) end, function()
-		jouer({ cle, "lueur" }, 0, 0.6, function(p) h.lueur:SetAlpha(1 - p) end)
+local function animateModuleHeader(m)
+	local h = m.header
+	local key = m
+	h.background:SetAlpha(0)
+	h.button:SetAlpha(0)
+	play({ key, "background" }, 0, 0.5, function(p) h.background:SetAlpha(p) end)
+	play({ key, "button" }, 0, 1, function(p) h.button:SetAlpha(p) end)
+	play({ key, "glow" }, 0, 0.2, function(p) h.glow:SetAlpha(p) end, function()
+		play({ key, "glow" }, 0, 0.6, function(p) h.glow:SetAlpha(1 - p) end)
 	end)
-	jouer({ cle, "brillant" }, 0.2, 1.2, function(p)
+	play({ key, "shine" }, 0.2, 1.2, function(p)
 		local q = math.min(1, p * 1.2 / 0.7)
-		h.brillant:ClearAllPoints()
-		h.brillant:SetPoint("CENTER", h, "CENTER", -150 + 200 * q, 1)
-		h.brillant:SetAlpha(1 - p)
-	end, function() h.brillant:SetAlpha(0) end)
+		h.shine:ClearAllPoints()
+		h.shine:SetPoint("CENTER", h, "CENTER", -150 + 200 * q, 1)
+		h.shine:SetAlpha(1 - p)
+	end, function() h.shine:SetAlpha(0) end)
 end
 
--- --------------------------------------------------------- les blocs
-local function creerLigne(bloc)
-	local l = CreateFrame("Frame", nil, bloc)
-	local tiret = l:CreateFontString(nil, "ARTWORK")
-	police(tiret, 12)
-	tiret:SetPoint("TOPLEFT", l, "TOPLEFT", 0, 1)
-	tiret:SetText(QUEST_DASH)
-	local texte = l:CreateFontString(nil, "ARTWORK")
-	police(texte, 12)
-	texte:SetPoint("TOP", l, "TOP", 0, 0)
-	texte:SetPoint("LEFT", tiret, "RIGHT", 0, 0)
-	local coche = l:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(coche, "ui-questtracker-tracker-check", true)
-	coche:SetWidth(G.coche)
-	coche:SetHeight(G.coche)
-	coche:SetPoint("TOPLEFT", l, "TOPLEFT", G.cocheX, G.cocheY)
-	coche:Hide()
-	local eclat = l:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(eclat, "ui-questtracker-tracker-check-glow", true)
-	eclat:SetWidth(G.coche)
-	eclat:SetHeight(G.coche)
-	eclat:SetPoint("CENTER", coche, "CENTER", 0, 0)
-	eclat:SetAlpha(0)
-	local lueur = l:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(lueur, "ui-questtracker-objfx-barglow", true)
-	lueur:SetWidth(G.lueurLigneL)
-	lueur:SetPoint("LEFT", texte, "LEFT", -2, 0)
-	lueur:SetPoint("TOP", l, "TOP", 0, 0)
-	lueur:SetPoint("BOTTOM", l, "BOTTOM", 0, -4)
-	lueur:SetAlpha(0)
-	l.tiret, l.texte, l.coche, l.eclat, l.lueur = tiret, texte, coche, eclat, lueur
+-- ---------- Blocks
+local function createRow(block)
+	local l = CreateFrame("Frame", nil, block)
+	local dash = l:CreateFontString(nil, "ARTWORK")
+	font(dash, 12)
+	dash:SetPoint("TOPLEFT", l, "TOPLEFT", 0, 1)
+	dash:SetText(QUEST_DASH)
+	local text = l:CreateFontString(nil, "ARTWORK")
+	font(text, 12)
+	text:SetPoint("TOP", l, "TOP", 0, 0)
+	text:SetPoint("LEFT", dash, "RIGHT", 0, 0)
+	local checkMark = l:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(checkMark, "ui-questtracker-tracker-check", true)
+	checkMark:SetWidth(G.checkMark)
+	checkMark:SetHeight(G.checkMark)
+	checkMark:SetPoint("TOPLEFT", l, "TOPLEFT", G.checkMarkX, G.checkMarkY)
+	checkMark:Hide()
+	local flare = l:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(flare, "ui-questtracker-tracker-check-glow", true)
+	flare:SetWidth(G.checkMark)
+	flare:SetHeight(G.checkMark)
+	flare:SetPoint("CENTER", checkMark, "CENTER", 0, 0)
+	flare:SetAlpha(0)
+	local glow = l:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(glow, "ui-questtracker-objfx-barglow", true)
+	glow:SetWidth(G.rowGlowL)
+	glow:SetPoint("LEFT", text, "LEFT", -2, 0)
+	glow:SetPoint("TOP", l, "TOP", 0, 0)
+	glow:SetPoint("BOTTOM", l, "BOTTOM", 0, -4)
+	glow:SetAlpha(0)
+	l.dash, l.text, l.checkMark, l.flare, l.glow = dash, text, checkMark, flare, glow
 	return l
 end
 
 -- ObjectiveTrackerTimerBarTemplate
-local function creerMinuteur(bloc)
-	local m = CreateFrame("Frame", nil, bloc)
-	m:SetWidth(G.minuteurL)
-	m:SetHeight(G.minuteurH)
-	-- GameFontHighlightMedium de camelot : FRIZQT 14, blanc, ombre
-	local texte = m:CreateFontString(nil, "ARTWORK")
-	texte:SetFont(POLICE, 14)
-	texte:SetShadowOffset(1, -1)
-	texte:SetShadowColor(0, 0, 0, 1)
-	texte:SetJustifyH("LEFT")
-	texte:SetPoint("LEFT", m, "LEFT", 0, 0)
-	local barre = CreateFrame("StatusBar", nil, m)
-	barre:SetWidth(G.barreL)
-	barre:SetHeight(G.barreH)
-	barre:SetPoint("RIGHT", m, "RIGHT", G.barreX, 0)
-	barre:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-	barre:SetStatusBarColor(COULEUR.barre[1], COULEUR.barre[2], COULEUR.barre[3])
-	local fond = barre:CreateTexture(nil, "BACKGROUND")
-	fond:SetTexture(COULEUR.fondBarre[1], COULEUR.fondBarre[2], COULEUR.fondBarre[3])
-	fond:SetAllPoints(barre)
-	local BORD = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-BarBorder"
-	local g = barre:CreateTexture(nil, "ARTWORK")
-	g:SetTexture(BORD)
+local function createTimer(block)
+	local m = CreateFrame("Frame", nil, block)
+	m:SetWidth(G.timerW)
+	m:SetHeight(G.timerH)
+	-- camelot GameFontHighlightMedium: FRIZQT 14, white, shadow
+	local text = m:CreateFontString(nil, "ARTWORK")
+	text:SetFont(FONT, 14)
+	text:SetShadowOffset(1, -1)
+	text:SetShadowColor(0, 0, 0, 1)
+	text:SetJustifyH("LEFT")
+	text:SetPoint("LEFT", m, "LEFT", 0, 0)
+	local bar = CreateFrame("StatusBar", nil, m)
+	bar:SetWidth(G.barW)
+	bar:SetHeight(G.barH)
+	bar:SetPoint("RIGHT", m, "RIGHT", G.barX, 0)
+	bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+	bar:SetStatusBarColor(COLOR.bar[1], COLOR.bar[2], COLOR.bar[3])
+	local background = bar:CreateTexture(nil, "BACKGROUND")
+	background:SetTexture(COLOR.barBackground[1], COLOR.barBackground[2], COLOR.barBackground[3])
+	background:SetAllPoints(bar)
+	local BAR_BORDER = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-BarBorder"
+	local g = bar:CreateTexture(nil, "ARTWORK")
+	g:SetTexture(BAR_BORDER)
 	g:SetTexCoord(0.007843, 0.043137, 0.193548, 0.774193)
 	g:SetWidth(9) g:SetHeight(14)
-	g:SetPoint("LEFT", barre, "LEFT", -3, 0)
-	local d = barre:CreateTexture(nil, "ARTWORK")
-	d:SetTexture(BORD)
+	g:SetPoint("LEFT", bar, "LEFT", -3, 0)
+	local d = bar:CreateTexture(nil, "ARTWORK")
+	d:SetTexture(BAR_BORDER)
 	d:SetTexCoord(0.043137, 0.007843, 0.193548, 0.774193)
 	d:SetWidth(9) d:SetHeight(14)
-	d:SetPoint("RIGHT", barre, "RIGHT", 3, 0)
-	local mi = barre:CreateTexture(nil, "ARTWORK")
-	mi:SetTexture(BORD)
-	mi:SetTexCoord(0.113726, 0.1490196, 0.193548, 0.774193)
-	mi:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
-	mi:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
-	m.texte, m.barre = texte, barre
-	-- ObjectiveTrackerTimerBarMixin:OnUpdate et GetTextColor
+	d:SetPoint("RIGHT", bar, "RIGHT", 3, 0)
+	local mid = bar:CreateTexture(nil, "ARTWORK")
+	mid:SetTexture(BAR_BORDER)
+	mid:SetTexCoord(0.113726, 0.1490196, 0.193548, 0.774193)
+	mid:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
+	mid:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
+	m.text, m.bar = text, bar
+	-- ObjectiveTrackerTimerBarMixin:OnUpdate and GetTextColor
 	m:SetScript("OnUpdate", function(self)
-		if not self.duree then return end
-		local reste = self.duree - (GetTime() - self.debut)
-		self.barre:SetValue(math.max(0, reste))
-		if reste < -1 then
-			self.duree = nil
+		if not self.duration then return end
+		local rest = self.duration - (GetTime() - self.start)
+		self.bar:SetValue(math.max(0, rest))
+		if rest < -1 then
+			self.duration = nil
 			WatchFrame_Update()
 			return
 		end
-		reste = math.max(0, reste)
-		self.texte:SetText(horloge(reste))
-		local part = reste / self.duree
+		rest = math.max(0, rest)
+		self.text:SetText(clock(rest))
+		local part = rest / self.duration
 		if part > 0.66 then
-			self.texte:SetTextColor(1, 1, 1)
+			self.text:SetTextColor(1, 1, 1)
 		elseif part > 0.33 then
-			self.texte:SetTextColor(1, 1, (part - 0.33) / 0.33)
+			self.text:SetTextColor(1, 1, (part - 0.33) / 0.33)
 		else
-			self.texte:SetTextColor(1, part / 0.33, 0)
+			self.text:SetTextColor(1, part / 0.33, 0)
 		end
 	end)
 	return m
 end
 
-local function creerBloc(m)
+local function createBlock(m)
 	local b = CreateFrame("Frame", nil, m)
-	local titre = b:CreateFontString(nil, "ARTWORK")
-	police(titre, 12)
-	titre:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
-	b.titre = titre
-	local lueur = b:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(lueur, "ui-questtracker-objfx-barglow", true)
-	lueur:SetWidth(G.lueurEnteteL)
-	lueur:SetPoint("TOPLEFT", titre, "TOPLEFT", 0, 3)
-	lueur:SetPoint("BOTTOMLEFT", titre, "BOTTOMLEFT", 0, -4)
-	lueur:SetAlpha(0)
-	b.lueur = lueur
-	-- HeaderButton : sur le titre, clic gauche et droit
-	local bouton = CreateFrame("Button", nil, b)
-	bouton:SetPoint("TOPLEFT", titre, "TOPLEFT", 0, 0)
-	bouton:SetPoint("BOTTOMRIGHT", titre, "BOTTOMRIGHT", 0, 0)
-	bouton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	bouton:SetScript("OnClick", function(_, souris) m.clic(b, souris) end)
-	bouton:SetScript("OnEnter", function() T.surligner(b, true) end)
-	bouton:SetScript("OnLeave", function() T.surligner(b, false) end)
-	b.bouton = bouton
-	b.lignes, b.lignesLibres = {}, {}
+	local title = b:CreateFontString(nil, "ARTWORK")
+	font(title, 12)
+	title:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+	b.title = title
+	local glow = b:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(glow, "ui-questtracker-objfx-barglow", true)
+	glow:SetWidth(G.headerGlowL)
+	glow:SetPoint("TOPLEFT", title, "TOPLEFT", 0, 3)
+	glow:SetPoint("BOTTOMLEFT", title, "BOTTOMLEFT", 0, -4)
+	glow:SetAlpha(0)
+	b.glow = glow
+	-- HeaderButton: over the title, left and right click
+	local button = CreateFrame("Button", nil, b)
+	button:SetPoint("TOPLEFT", title, "TOPLEFT", 0, 0)
+	button:SetPoint("BOTTOMRIGHT", title, "BOTTOMRIGHT", 0, 0)
+	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	button:SetScript("OnClick", function(_, mouse) m.onClick(b, mouse) end)
+	button:SetScript("OnEnter", function() T.toggleHighlight(b, true) end)
+	button:SetScript("OnLeave", function() T.toggleHighlight(b, false) end)
+	b.button = button
+	b.rows, b.freeRows = {}, {}
 	return b
 end
 
--- ObjectiveTrackerBlockMixin:UpdateHighlight
-function T.surligner(b, oui)
-	b.survol = oui
-	couleur(b.titre, oui and COULEUR.enteteSurvol or COULEUR.entete)
-	local tiret = oui and COULEUR.normalSurvol or COULEUR.normal
-	for _, l in ipairs(b.lignesMontrees or {}) do
-		local c = l.texte.couleur
-		if c and c.inverse and ((oui and (c == COULEUR.normal or c == COULEUR.echec))
-			or (not oui and (c == COULEUR.normalSurvol or c == COULEUR.echecSurvol))) then
-			couleur(l.texte, c.inverse)
+-- ObjectiveTrackerBlockMixin:UpdateHighlight; yes: hovered
+function T.toggleHighlight(b, yes)
+	b.hover = yes
+	color(b.title, yes and COLOR.headerHover or COLOR.header)
+	local dash = yes and COLOR.normalHover or COLOR.normal
+	for _, l in ipairs(b.shownRows or {}) do
+		local c = l.text.color
+		if c and c.inverse and ((yes and (c == COLOR.normal or c == COLOR.failed))
+			or (not yes and (c == COLOR.normalHover or c == COLOR.failedHover))) then
+			color(l.text, c.inverse)
 		end
-		l.tiret:SetTextColor(tiret[1], tiret[2], tiret[3])
+		l.dash:SetTextColor(dash[1], dash[2], dash[3])
 	end
 end
 
--- Un bloc repart de zero a chaque passage (Reset), ses lignes aussi.
-local function prendreBloc(m, id)
-	local b = m.blocs[id]
+-- A block starts from scratch on every pass (Reset), and so do its rows.
+local function acquireBlock(m, id)
+	local b = m.blocks[id]
 	if not b then
-		b = table.remove(m.libres) or creerBloc(m)
-		m.blocs[id] = b
+		b = table.remove(m.freeBlocks) or createBlock(m)
+		m.blocks[id] = b
 	end
-	b.id, b.utilise = id, true
-	b:SetWidth(G.largeur - G.blocX)
-	b.hauteur = 0
-	b.dernier = nil
-	b.droite = 0
-	b.lignesMontrees = {}
-	for _, l in pairs(b.lignes) do l.utilisee = nil end
-	if b.minuteur then b.minuteur:Hide() b.minuteur.duree = nil end
+	b.id, b.inUse = id, true
+	b:SetWidth(G.width - G.blockX)
+	b.contentHeight = 0
+	b.last = nil
+	b.right = 0
+	b.shownRows = {}
+	for _, l in pairs(b.rows) do l.used = nil end
+	if b.timer then b.timer:Hide() b.timer.duration = nil end
 	b:ClearAllPoints()
 	b:SetAlpha(1)
-	b.titre:SetAlpha(1)
+	b.title:SetAlpha(1)
 	return b
 end
 
--- Les largeurs sont posees a la main : le bloc n'est pas encore place quand
--- on mesure ses textes, et 3.3.5 ne sait mesurer qu'un texte qui a une
--- largeur (camelot, lui, s'en remet aux ancres).
-local function titreBloc(b, texte)
-	b.titre:SetWidth(G.largeur - G.blocX + b.droite)
-	b.titre:SetHeight(0)
-	b.titre:SetText(texte)
-	couleur(b.titre, b.survol and COULEUR.enteteSurvol or COULEUR.entete)
-	b.hauteur = b.titre:GetHeight()
+-- Widths are set by hand: the block is not placed yet when its texts are measured, and
+-- 3.3.5 only measures a text that has a width (camelot relies on anchors).
+local function setBlockTitle(b, text)
+	b.title:SetWidth(G.width - G.blockX + b.right)
+	b.title:SetHeight(0)
+	b.title:SetText(text)
+	color(b.title, b.hover and COLOR.headerHover or COLOR.header)
+	b.contentHeight = b.title:GetHeight()
 end
 
--- ObjectiveTrackerBlockMixin:AddObjective
-local function ligne(b, cle, texte, tiret, c)
-	local l = b.lignes[cle]
+-- ObjectiveTrackerBlockMixin:AddObjective. key: row id in the block; dash: show the dash;
+-- c: text color (default normal)
+local function row(b, key, text, dash, c)
+	local l = b.rows[key]
 	if not l then
-		l = table.remove(b.lignesLibres) or creerLigne(b)
-		b.lignes[cle] = l
+		l = table.remove(b.freeRows) or createRow(b)
+		b.rows[key] = l
 	end
-	l.utilisee = true
+	l.used = true
 	l:ClearAllPoints()
-	l:SetPoint("TOPLEFT", b.dernier or b.titre, "BOTTOMLEFT", 0, -G.ligneEcart)
-	local largeur = G.largeur - G.blocX + b.droite
-	l:SetWidth(largeur)
-	l.tiret:SetText(QUEST_DASH)
-	if tiret then l.tiret:Show() else l.tiret:Hide() end
-	l.texte:SetWidth(largeur - l.tiret:GetStringWidth())
-	l.texte:SetHeight(0)
-	l.texte:SetText(texte)
-	c = c or COULEUR.normal
-	if b.survol and c.inverse then c = c.inverse end
-	couleur(l.texte, c)
-	local tc = b.survol and COULEUR.normalSurvol or COULEUR.normal
-	l.tiret:SetTextColor(tc[1], tc[2], tc[3])
-	local h = l.texte:GetHeight()
+	l:SetPoint("TOPLEFT", b.last or b.title, "BOTTOMLEFT", 0, -G.rowGap)
+	local width = G.width - G.blockX + b.right
+	l:SetWidth(width)
+	l.dash:SetText(QUEST_DASH)
+	if dash then l.dash:Show() else l.dash:Hide() end
+	l.text:SetWidth(width - l.dash:GetStringWidth())
+	l.text:SetHeight(0)
+	l.text:SetText(text)
+	c = c or COLOR.normal
+	if b.hover and c.inverse then c = c.inverse end
+	color(l.text, c)
+	local tc = b.hover and COLOR.normalHover or COLOR.normal
+	l.dash:SetTextColor(tc[1], tc[2], tc[3])
+	local h = l.text:GetHeight()
 	l:SetHeight(h)
 	l:SetAlpha(1)
 	l:Show()
-	b.hauteur = b.hauteur + h + G.ligneEcart
-	b.dernier = l
-	table.insert(b.lignesMontrees, l)
+	b.contentHeight = b.contentHeight + h + G.rowGap
+	b.last = l
+	table.insert(b.shownRows, l)
 	return l
 end
 
--- ObjectiveTrackerBlockMixin:AddTimerBar
-local function minuteur(b, duree, debut)
-	if not b.minuteur then b.minuteur = creerMinuteur(b) end
-	local m = b.minuteur
+-- ObjectiveTrackerBlockMixin:AddTimerBar; start: GetTime() when the timer began
+local function timer(b, duration, start)
+	if not b.timer then b.timer = createTimer(b) end
+	local m = b.timer
 	m:ClearAllPoints()
-	m:SetPoint("TOPLEFT", b.dernier or b.titre, "BOTTOMLEFT", 0, -G.ligneEcart)
-	m.barre:SetMinMaxValues(0, duree)
-	m.duree, m.debut = duree, debut
+	m:SetPoint("TOPLEFT", b.last or b.title, "BOTTOMLEFT", 0, -G.rowGap)
+	m.bar:SetMinMaxValues(0, duration)
+	m.duration, m.start = duration, start
 	m:Show()
-	b.hauteur = b.hauteur + G.minuteurH + G.ligneEcart
-	b.dernier = m
+	b.contentHeight = b.contentHeight + G.timerH + G.rowGap
+	b.last = m
 end
 
--- les lignes non reprises et les blocs non repris sont rendus
-local function libererLignes(b)
-	for cle, l in pairs(b.lignes) do
-		if not l.utilisee then
+-- rows and blocks not reused in this pass are released
+local function releaseRows(b)
+	for key, l in pairs(b.rows) do
+		if not l.used then
 			l:Hide()
-			l.coche:Hide()
-			l.lueur:SetAlpha(0)
-			l.eclat:SetAlpha(0)
-			b.lignes[cle] = nil
-			table.insert(b.lignesLibres, l)
+			l.checkMark:Hide()
+			l.glow:SetAlpha(0)
+			l.flare:SetAlpha(0)
+			b.rows[key] = nil
+			table.insert(b.freeRows, l)
 		end
 	end
 end
 
-local function libererBlocs(m)
-	for id, b in pairs(m.blocs) do
-		if not b.utilise then
+local function releaseBlocks(m)
+	for id, b in pairs(m.blocks) do
+		if not b.inUse then
 			b:Hide()
-			b.survol = nil
-			m.blocs[id] = nil
-			table.insert(m.libres, b)
+			b.hover = nil
+			m.blocks[id] = nil
+			table.insert(m.freeBlocks, b)
 		end
 	end
 end
 
--- l'etat de coche d'une ligne : Completed = coche montree, sans animation ;
--- Completing = coche + eclat + lueur (CheckAnim et GlowAnim)
-local function cocher(l, animer)
-	l.coche:Show()
-	if not animer then
-		l.coche:SetAlpha(1)
+-- check state of a row: Completed = check mark shown, no animation;
+-- Completing (animate) = check mark + flare + glow (CheckAnim and GlowAnim)
+local function checkOff(l, animate)
+	l.checkMark:Show()
+	if not animate then
+		l.checkMark:SetAlpha(1)
 		return
 	end
-	jouer({ l, "coche" }, 0, 0.3, function(p)
-		local s = (p < 0.5) and (1 + 0.2 * sortie(p * 2)) or (1.2 - 0.2 * sortie((p - 0.5) * 2))
-		l.coche:SetWidth(G.coche * s)
-		l.coche:SetHeight(G.coche * s)
-		l.coche:SetAlpha(math.min(1, p / 0.53))
-		l.eclat:SetWidth(G.coche * s)
-		l.eclat:SetHeight(G.coche * s)
-		l.eclat:SetAlpha(p < 0.5 and p * 2 or (1 - p) * 2)
+	play({ l, "checkMark" }, 0, 0.3, function(p)
+		local s = (p < 0.5) and (1 + 0.2 * easeOut(p * 2)) or (1.2 - 0.2 * easeOut((p - 0.5) * 2))
+		l.checkMark:SetWidth(G.checkMark * s)
+		l.checkMark:SetHeight(G.checkMark * s)
+		l.checkMark:SetAlpha(math.min(1, p / 0.53))
+		l.flare:SetWidth(G.checkMark * s)
+		l.flare:SetHeight(G.checkMark * s)
+		l.flare:SetAlpha(p < 0.5 and p * 2 or (1 - p) * 2)
 	end, function()
-		l.coche:SetWidth(G.coche) l.coche:SetHeight(G.coche) l.coche:SetAlpha(1)
-		l.eclat:SetAlpha(0)
+		l.checkMark:SetWidth(G.checkMark) l.checkMark:SetHeight(G.checkMark) l.checkMark:SetAlpha(1)
+		l.flare:SetAlpha(0)
 	end)
-	T.balayer(l.lueur, G.lueurLigneL, 0.1, 0.66, 0.33, 0.58)
+	T.sweep(l.glow, G.rowGlowL, 0.1, 0.66, 0.33, 0.58)
 end
 
--- une lueur qui s'etire depuis la gauche (Scale x 0 -> 1, origine LEFT) et
--- s'efface ensuite (Alpha 1 -> 0)
-function T.balayer(t, largeur, delai, duree, delaiAlpha, dureeAlpha)
-	jouer({ t, "largeur" }, delai, duree, function(p)
-		t:SetWidth(math.max(1, largeur * sortie(p)))
+-- a glow that stretches from the left (Scale x 0 -> 1, origin LEFT), then fades out
+-- (Alpha 1 -> 0)
+function T.sweep(t, width, delay, duration, alphaDelay, alphaDuration)
+	play({ t, "width" }, delay, duration, function(p)
+		t:SetWidth(math.max(1, width * easeOut(p)))
 	end)
-	jouer({ t, "alpha" }, delaiAlpha, dureeAlpha, function(p) t:SetAlpha(1 - p) end,
-		function() t:SetAlpha(0) t:SetWidth(largeur) end)
+	play({ t, "alpha" }, alphaDelay, alphaDuration, function(p) t:SetAlpha(1 - p) end,
+		function() t:SetAlpha(0) t:SetWidth(width) end)
 end
 
--- ObjectiveTrackerAnimBlockMixin:PlayAddAnimation : la lueur du titre, le
--- titre et les lignes qui apparaissent
-local function animerAjout(b)
-	b.lueur:SetWidth(1)
-	b.lueur:SetAlpha(1)
-	jouer({ b.lueur, "largeur" }, 0.15, 0.31, function(p) b.lueur:SetWidth(math.max(1, G.lueurEnteteL * p)) end)
-	jouer({ b.lueur, "alpha" }, 0.33, 0.41, function(p) b.lueur:SetAlpha(1 - p) end,
-		function() b.lueur:SetAlpha(0) b.lueur:SetWidth(G.lueurEnteteL) end)
-	b.titre:SetAlpha(0)
-	jouer({ b.titre, "alpha" }, 0, 0.03, function(p) b.titre:SetAlpha(p) end)
-	for _, l in ipairs(b.lignesMontrees) do
+-- ObjectiveTrackerAnimBlockMixin:PlayAddAnimation: title glow, then the title and rows fade in
+local function animateAdd(b)
+	b.glow:SetWidth(1)
+	b.glow:SetAlpha(1)
+	play({ b.glow, "width" }, 0.15, 0.31, function(p) b.glow:SetWidth(math.max(1, G.headerGlowL * p)) end)
+	play({ b.glow, "alpha" }, 0.33, 0.41, function(p) b.glow:SetAlpha(1 - p) end,
+		function() b.glow:SetAlpha(0) b.glow:SetWidth(G.headerGlowL) end)
+	b.title:SetAlpha(0)
+	play({ b.title, "alpha" }, 0, 0.03, function(p) b.title:SetAlpha(p) end)
+	for _, l in ipairs(b.shownRows) do
 		l:SetAlpha(0)
-		jouer({ l, "entree" }, 0, 0.5, function(p) l:SetAlpha(p) end)
+		play({ l, "entry" }, 0, 0.5, function(p) l:SetAlpha(p) end)
 	end
 end
 
--- --------------------------------------------------------- la mise en page
--- ObjectiveTrackerModuleMixin : BeginLayout, AddBlock / CanFitBlock,
--- EndLayout. Rend la hauteur prise par le module, 0 s'il ne se montre pas.
-local function debuter(m, place)
-	m.place = place
-	m.hauteur = G.moduleCompteEntete
-	m.dernier = nil
-	m.contenu = false
-	m.saute = false
-	m.essaye = false
-	for _, b in pairs(m.blocs) do b.utilise = nil end
+-- ---------- Layout
+-- ObjectiveTrackerModuleMixin: BeginLayout, AddBlock / CanFitBlock, EndLayout.
+-- position: height available; finalize returns the module height, 0 when hidden.
+local function begin(m, position)
+	m.position = position
+	m.contentHeight = G.moduleCountedHeader
+	m.last = nil
+	m.content = false
+	m.skipped = false
+	m.tried = false
+	for _, b in pairs(m.blocks) do b.inUse = nil end
 end
 
--- rend vrai si le bloc a trouve sa place
-local function placer(m, b)
-	m.essaye = true
-	libererLignes(b)
-	b:SetHeight(math.max(1, b.hauteur))
-	local ecart = m.dernier and G.blocY or G.premierBlocY
-	if m.hauteur + b.hauteur - ecart > m.place then
-		m.saute = true
-		b.utilise = nil
+-- returns true when the block fits
+local function place(m, b)
+	m.tried = true
+	releaseRows(b)
+	b:SetHeight(math.max(1, b.contentHeight))
+	local gap = m.last and G.blockY or G.firstBlockY
+	if m.contentHeight + b.contentHeight - gap > m.position then
+		m.skipped = true
+		b.inUse = nil
 		return false
 	end
-	m.contenu = true
-	if reglages().replis[m.cle] then
-		b.utilise = nil
+	m.content = true
+	if settings().collapsedModules[m.key] then
+		b.inUse = nil
 		return true
 	end
 	b:ClearAllPoints()
-	if m.dernier then
-		b:SetPoint("TOP", m.dernier, "BOTTOM", 0, ecart)
+	if m.last then
+		b:SetPoint("TOP", m.last, "BOTTOM", 0, gap)
 	else
-		b:SetPoint("TOP", m.entete, "BOTTOM", 0, ecart)
+		b:SetPoint("TOP", m.header, "BOTTOM", 0, gap)
 	end
-	b:SetPoint("LEFT", m, "LEFT", G.blocX, 0)
+	b:SetPoint("LEFT", m, "LEFT", G.blockX, 0)
 	b:SetPoint("RIGHT", m, "RIGHT", 0, 0)
 	b:Show()
-	m.hauteur = m.hauteur + b.hauteur - ecart
-	m.dernier = b
+	m.contentHeight = m.contentHeight + b.contentHeight - gap
+	m.last = b
 	return true
 end
 
-local function terminer(m, lineFrame, decalage)
-	libererBlocs(m)
-	local replie = reglages().replis[m.cle]
-	etatsBouton(m.entete.bouton,
-		replie and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse",
-		replie and "ui-questtrackerbutton-secondary-expand-pressed" or "ui-questtrackerbutton-secondary-collapse-pressed")
-	if m.contenu then
+local function finalize(m, lineFrame, offset)
+	releaseBlocks(m)
+	local collapsed = settings().collapsedModules[m.key]
+	buttonStates(m.header.button,
+		collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse",
+		collapsed and "ui-questtrackerbutton-secondary-expand-pressed" or "ui-questtrackerbutton-secondary-collapse-pressed")
+	if m.content then
 		m:ClearAllPoints()
-		m:SetPoint("TOPLEFT", lineFrame, "TOPLEFT", 0, decalage)
-		m:SetHeight(m.hauteur)
-		local etaitLa = m:IsShown() and m.montre
+		m:SetPoint("TOPLEFT", lineFrame, "TOPLEFT", 0, offset)
+		m:SetHeight(m.contentHeight)
+		local wasShown = m:IsShown() and m.displayed
 		m:Show()
-		m.montre = true
-		if not etaitLa then animerEnteteModule(m) end
-		return m.hauteur
+		m.displayed = true
+		if not wasShown then animateModuleHeader(m) end
+		return m.contentHeight
 	end
 	m:Hide()
-	m.montre = nil
+	m.displayed = nil
 	return 0
 end
 
--- la place qu'il reste dans WatchFrameLines, sous ce decalage
-local function placeRestante(maxHeight, decalage)
-	return (maxHeight or 0) - G.hautModules - G.basLignes + (decalage or 0)
+-- space left in WatchFrameLines below this offset
+local function remainingSpace(maxHeight, offset)
+	return (maxHeight or 0) - G.modulesTop - G.rowsBottom + (offset or 0)
 end
 
--- --------------------------------------------------------- les quetes
-local Q = { etats = {}, vus = nil, durees = {} }
+-- ---------- Quests
+-- durations: largest remaining time seen per quest. 3.3.5 only gives the remaining time
+-- (GetQuestTimers), so that value is the timer bar's full duration.
+local Q = { states = {}, seen = nil, durations = {} }
 
--- WatchFrame_DisplayTrackedQuests pour les donnees, QuestObjectiveTracker
--- pour l'affichage
--- LES QUETES DE LA ZONE : la table de WotLK (LOCAL_MAP_QUESTS) tenue ici,
--- dans la notre. Le client ne la remplit que dans son gestionnaire de
--- quetes, qu'on a retire ; l'ecrire depuis l'addon la ferait passer a
--- l'addon, et avec elle la carte du monde qui la lit (taint, 2026-09-26).
+-- WatchFrame_DisplayTrackedQuests for the data, QuestObjectiveTracker for the display.
+-- Zone quests: WotLK's LOCAL_MAP_QUESTS is kept in our own table. The client fills it only in
+-- its quest handler, which is removed; writing it from the addon would taint it, and with it
+-- the world map that reads it.
 local locales = {}
 T.locales = locales
-T.nbObjets = 0
+T.numItems = 0
 
-local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
-	local m = T.quetes
-	debuter(m, placeRestante(maxHeight, initialOffset))
-	local argent = GetMoney()
-	local nbSuivies = GetNumQuestWatches()
-	local nPOI = { numerique = 0, dedans = 0, dehors = 0 }
-	local objets = 0
-	local vus = {}
-	for w = 1, nbSuivies do
+local function displayQuests(lineFrame, initialOffset, maxHeight, frameWidth)
+	local m = T.quests
+	begin(m, remainingSpace(maxHeight, initialOffset))
+	local money = GetMoney()
+	local numWatched = GetNumQuestWatches()
+	local nPOI = { numbered = 0, inside = 0, outside = 0 }
+	local objects = 0
+	local seen = {}
+	for w = 1, numWatched do
 		local index = GetQuestIndexForWatch(w)
 		if index then
-			local titre, _, _, _, _, _, _, _, questID = GetQuestLogTitle(index)
-			vus[questID or titre] = true
+			local title, _, _, _, _, _, _, _, questID = GetQuestLogTitle(index)
+			seen[questID or title] = true
 		end
 	end
-	local minuteurs = {}
+	local questTimers = {}
 	local timers = { GetQuestTimers() }
-	for i, secondes in ipairs(timers) do
+	for i, seconds in ipairs(timers) do
 		local index = GetQuestIndexForTimer(i)
-		if index then minuteurs[index] = secondes end
+		if index then questTimers[index] = seconds end
 	end
 
 	local selection
@@ -760,142 +708,143 @@ local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
 	end
 	table.wipe(VISIBLE_WATCHES)
 
-	for w = 1, nbSuivies do
+	for w = 1, numWatched do
 		local index = GetQuestIndexForWatch(w)
 		if index then
-			local titre, _, _, _, _, _, complet, _, questID = GetQuestLogTitle(index)
-			local requis = GetQuestLogRequiredMoney(index)
-			local nbObjectifs = GetNumQuestLeaderBoards(index)
-			local echec = complet and complet < 0
-			if echec then
-				complet = false
-			elseif complet and complet > 0 then
-				complet = true
-			elseif nbObjectifs == 0 and argent >= requis then
-				complet = true
+			local title, _, _, _, _, _, isComplete, _, questID = GetQuestLogTitle(index)
+			local required = GetQuestLogRequiredMoney(index)
+			local numObjectives = GetNumQuestLeaderBoards(index)
+			local failed = isComplete and isComplete < 0
+			if failed then
+				isComplete = false
+			elseif isComplete and isComplete > 0 then
+				isComplete = true
+			elseif numObjectives == 0 and money >= required then
+				isComplete = true
 			else
-				complet = false
+				isComplete = false
 			end
-			-- les filtres de WotLK
-			local garder = true
-			if complet and bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_COMPLETED_QUESTS) ~= WATCHFRAME_FILTER_COMPLETED_QUESTS then
-				garder = false
+			-- WotLK filters
+			local keep = true
+			if isComplete and bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_COMPLETED_QUESTS) ~= WATCHFRAME_FILTER_COMPLETED_QUESTS then
+				keep = false
 			elseif bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_REMOTE_ZONES) ~= WATCHFRAME_FILTER_REMOTE_ZONES and not locales[questID] then
-				garder = false
+				keep = false
 			end
-			if garder then
-				if requis > 0 then WatchFrame.watchMoney = true end
-				local _, objet, charges = GetQuestLogSpecialItemInfo(index)
-				local cle = questID or titre
-				local avant = Q.etats[cle]
-				local etat = { fini = {}, complet = complet }
-				local b = prendreBloc(m, cle)
-				b.index, b.watch, b.questID, b.titreQuete = index, w, questID, titre
-				-- l'objet de quete, a droite du bloc
-				local bouton
-				if objet and not complet then
-					objets = objets + 1
-					bouton = T.objet(objets, lineFrame, index, objet, charges)
-					b.droite = -(G.objetCote + G.droiteEcart)
+			if keep then
+				if required > 0 then WatchFrame.watchMoney = true end
+				local _, object, charges = GetQuestLogSpecialItemInfo(index)
+				local key = questID or title
+				local before = Q.states[key]
+				local state = { finished = {}, isComplete = isComplete }
+				local b = acquireBlock(m, key)
+				b.index, b.watch, b.questID, b.questTitle = index, w, questID, title
+				-- quest item, right of the block
+				local button
+				if object and not isComplete then
+					objects = objects + 1
+					button = T.object(objects, lineFrame, index, object, charges)
+					b.right = -(G.itemSide + G.rightGap)
 				end
-				titreBloc(b, titre)
+				setBlockTitle(b, title)
 
-				local animer = {}
-				if complet then
-					-- QUEST_LOG_UPDATE : les objectifs deja montres s'effacent
-					-- (FadeOutAnim : 1 s puis 0,1 s), puis le texte de rendu
-					local fondu = avant and not avant.complet and not (avant.fondu and avant.fondu <= GetTime())
-					if fondu then
-						etat.fondu = avant.fondu or (GetTime() + 1.1)
-						for j = 1, nbObjectifs do
-							local texte = GetQuestLogLeaderBoard(j, index)
-							if texte then
-								local l = ligne(b, j, WatchFrame_ReverseQuestObjective(texte), false, COULEUR.fini)
-								etat.fini[j] = true
-								table.insert(animer, { l, not (avant.fini and avant.fini[j]) })
-								jouer({ l, "fondu" }, math.max(0, etat.fondu - 0.1 - GetTime()), 0.1,
+				local animate = {}
+				if isComplete then
+					-- QUEST_LOG_UPDATE: objectives already shown fade out (FadeOutAnim: 1 s then 0.1 s),
+					-- then the completion text
+					local fade = before and not before.isComplete and not (before.fade and before.fade <= GetTime())
+					if fade then
+						state.fade = before.fade or (GetTime() + 1.1)
+						for j = 1, numObjectives do
+							local text = GetQuestLogLeaderBoard(j, index)
+							if text then
+								local l = row(b, j, WatchFrame_ReverseQuestObjective(text), false, COLOR.finished)
+								state.finished[j] = true
+								table.insert(animate, { l, not (before.finished and before.finished[j]) })
+								play({ l, "fade" }, math.max(0, state.fade - 0.1 - GetTime()), 0.1,
 									function(p) l:SetAlpha(1 - p) end)
 							end
 						end
-						etat.complet = false
-						T.relancer(etat.fondu)
+						state.isComplete = false
+						T.restart(state.fade)
 					else
-						local rendu = GetQuestLogCompletionText(index)
-						if rendu then
-							ligne(b, "QuestComplete", rendu, false)
+						local completionText = GetQuestLogCompletionText(index)
+						if completionText then
+							row(b, "QuestComplete", completionText, false)
 						else
-							ligne(b, "QuestComplete", TEXTE.pret, false, COULEUR.fini)
+							row(b, "QuestComplete", TEXT.ready, false, COLOR.finished)
 						end
 					end
-				elseif echec then
-					ligne(b, "Failed", FAILED, false, COULEUR.echec)
+				elseif failed then
+					row(b, "Failed", FAILED, false, COLOR.failed)
 				else
-					for j = 1, nbObjectifs do
-						local texte, _, fini = GetQuestLogLeaderBoard(j, index)
-						if texte then
-							texte = WatchFrame_ReverseQuestObjective(texte)
-							if fini then
-								etat.fini[j] = true
-								local l = ligne(b, j, texte, false, COULEUR.fini)
-								table.insert(animer, { l, avant and not (avant.fini and avant.fini[j]) })
+					for j = 1, numObjectives do
+						local text, _, finished = GetQuestLogLeaderBoard(j, index)
+						if text then
+							text = WatchFrame_ReverseQuestObjective(text)
+							if finished then
+								state.finished[j] = true
+								local l = row(b, j, text, false, COLOR.finished)
+								table.insert(animate, { l, before and not (before.finished and before.finished[j]) })
 							else
-								local l = ligne(b, j, texte, true)
-								l.coche:Hide()
+								local l = row(b, j, text, true)
+								l.checkMark:Hide()
 							end
 						end
 					end
-					if requis > argent then
-						ligne(b, "Money", GetMoneyString(argent) .. " / " .. GetMoneyString(requis), true)
+					if required > money then
+						row(b, "Money", GetMoneyString(money) .. " / " .. GetMoneyString(required), true)
 					end
-					local reste = minuteurs[index]
-					if reste then
-						local duree = math.max(Q.durees[cle] or 0, reste)
-						Q.durees[cle] = duree
-						minuteur(b, duree, GetTime() - (duree - reste))
+					local rest = questTimers[index]
+					if rest then
+						local duration = math.max(Q.durations[key] or 0, rest)
+						Q.durations[key] = duration
+						timer(b, duration, GetTime() - (duration - rest))
 					end
 				end
 
-				Q.etats[cle] = etat
-				if placer(m, b) then
-					if not reglages().replis[m.cle] then
+				Q.states[key] = state
+				if place(m, b) then
+					if not settings().collapsedModules[m.key] then
 						table.insert(VISIBLE_WATCHES, index)
-						for _, a in ipairs(animer) do cocher(a[1], a[2]) end
-						if bouton then
-							bouton:ClearAllPoints()
-							bouton:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
-							bouton:Show()
+						for _, a in ipairs(animate) do checkOff(a[1], a[2]) end
+						if button then
+							button:ClearAllPoints()
+							button:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
+							button:Show()
 						end
-						-- le repere de WotLK, centre ou camelot centre le sien
+						-- WotLK POI button (QuestPOI_DisplayButton, 32 x 32), centered where camelot centers
+						-- its 20 x 20 one
 						if WatchFrame.showObjectives then
 							local poi
 							if CURRENT_MAP_QUESTS[questID] then
-								if complet then
-									nPOI.dedans = nPOI.dedans + 1
-									poi = QuestPOI_DisplayButton("WatchFrameLines", QUEST_POI_COMPLETE_IN, nPOI.dedans, questID)
+								if isComplete then
+									nPOI.inside = nPOI.inside + 1
+									poi = QuestPOI_DisplayButton("WatchFrameLines", QUEST_POI_COMPLETE_IN, nPOI.inside, questID)
 								else
-									nPOI.numerique = nPOI.numerique + 1
-									poi = QuestPOI_DisplayButton("WatchFrameLines", QUEST_POI_NUMERIC, nPOI.numerique, questID)
+									nPOI.numbered = nPOI.numbered + 1
+									poi = QuestPOI_DisplayButton("WatchFrameLines", QUEST_POI_NUMERIC, nPOI.numbered, questID)
 								end
-							elseif complet then
-								nPOI.dehors = nPOI.dehors + 1
-								poi = QuestPOI_DisplayButton("WatchFrameLines", QUEST_POI_COMPLETE_OUT, nPOI.dehors, questID)
+							elseif isComplete then
+								nPOI.outside = nPOI.outside + 1
+								poi = QuestPOI_DisplayButton("WatchFrameLines", QUEST_POI_COMPLETE_OUT, nPOI.outside, questID)
 							end
 							if poi then
 								poi:ClearAllPoints()
-								poi:SetPoint("CENTER", b.titre, "TOPLEFT", G.repereX, G.repereY)
+								poi:SetPoint("CENTER", b.title, "TOPLEFT", G.poiX, G.poiY)
 							end
 						end
-						-- une quete qui n'etait pas la au passage precedent
-						if Q.vus and not Q.vus[cle] then
-							animerAjout(b)
+						-- a quest absent from the previous pass is new (3.3.5 has no QUEST_WATCH_LIST_CHANGED)
+						if Q.seen and not Q.seen[key] then
+							animateAdd(b)
 						end
-					elseif bouton then
-						bouton:Hide()
+					elseif button then
+						button:Hide()
 					end
 				else
-					if bouton then
-						bouton:Hide()
-						objets = objets - 1
+					if button then
+						button:Hide()
+						objects = objects - 1
 					end
 					break
 				end
@@ -903,64 +852,65 @@ local function afficherQuetes(lineFrame, initialOffset, maxHeight, frameWidth)
 		end
 	end
 
-	for i = objets + 1, T.nbObjets do
+	for i = objects + 1, T.numItems do
 		local it = _G["WatchFrameItem" .. i]
 		if it then it:Hide() end
 	end
-	QuestPOI_HideButtons("WatchFrameLines", QUEST_POI_NUMERIC, nPOI.numerique + 1)
-	QuestPOI_HideButtons("WatchFrameLines", QUEST_POI_COMPLETE_IN, nPOI.dedans + 1)
-	QuestPOI_HideButtons("WatchFrameLines", QUEST_POI_COMPLETE_OUT, nPOI.dehors + 1)
+	QuestPOI_HideButtons("WatchFrameLines", QUEST_POI_NUMERIC, nPOI.numbered + 1)
+	QuestPOI_HideButtons("WatchFrameLines", QUEST_POI_COMPLETE_IN, nPOI.inside + 1)
+	QuestPOI_HideButtons("WatchFrameLines", QUEST_POI_COMPLETE_OUT, nPOI.outside + 1)
 	if selection then
 		QuestPOI_SelectButtonByQuestId("WatchFrameLines", selection, true)
 	end
-	-- le premier passage ne fete aucune quete : elles etaient deja la
-	for cle in pairs(Q.etats) do
-		if not vus[cle] then Q.etats[cle] = nil end
+	-- remember this pass; the first pass animates no quest (they were already there)
+	for key in pairs(Q.states) do
+		if not seen[key] then Q.states[key] = nil end
 	end
-	Q.vus = vus
-	local hauteur = terminer(m, lineFrame, initialOffset)
-	return hauteur, G.largeur, nbSuivies
+	Q.seen = seen
+	local height = finalize(m, lineFrame, initialOffset)
+	return height, G.width, numWatched
 end
-T.afficherQuetes = afficherQuetes
+T.displayQuests = displayQuests
 
--- un passage de plus quand un fondu se termine
-function T.relancer(quand)
-	jouer({ T, "relance" }, math.max(0, quand - GetTime()), 0, function() end, function()
+-- one more pass when a fade ends
+function T.restart(when)
+	play({ T, "rerun" }, math.max(0, when - GetTime()), 0, function() end, function()
 		WatchFrame_Update()
 	end)
 end
 
--- WatchFrameItem<n> : les boutons de WotLK, rhabilles une fois
-function T.objet(n, lineFrame, index, icone, charges)
+-- WatchFrameItem<n>: the WotLK buttons, reskinned once. n: button number;
+-- index: quest log index; icon, charges: the quest item
+function T.object(n, lineFrame, index, icon, charges)
 	local b = _G["WatchFrameItem" .. n]
 	if not b then
 		b = CreateFrame("Button", "WatchFrameItem" .. n, lineFrame, "WatchFrameItemButtonTemplate")
 	end
-	-- le compte des boutons : WATCHFRAME_NUM_ITEMS chez WotLK, que seul son
-	-- gestionnaire de quetes (retire) lit ; tenu ici pour ne pas l'ecrire
-	if n > T.nbObjets then T.nbObjets = n end
-	if not b.foreverHabille then
-		b.foreverHabille = true
-		b:SetWidth(G.objetCote)
-		b:SetHeight(G.objetCote)
+	-- button count: WotLK's WATCHFRAME_NUM_ITEMS is read only by its removed quest handler;
+	-- kept here so the addon never writes that global
+	if n > T.numItems then T.numItems = n end
+	if not b.foreverSkinApplied then
+		b.foreverSkinApplied = true
+		b:SetWidth(G.itemSide)
+		b:SetHeight(G.itemSide)
 		local e = ForeverUI.AtlasEntry("ui-questtrackerbutton-questitem-frame")
 		b:SetNormalTexture(e and e[1] or "")
 		local t = b:GetNormalTexture()
 		ForeverUI.SetAtlas(t, "ui-questtrackerbutton-questitem-frame", true)
 		t:ClearAllPoints()
-		t:SetWidth(G.objetCadre)
-		t:SetHeight(G.objetCadre)
+		t:SetWidth(G.itemFrame)
+		t:SetHeight(G.itemFrame)
 		t:SetPoint("CENTER", b, "CENTER", 0, 0)
 		b:SetPushedTexture(e and e[1] or "")
 		local p = b:GetPushedTexture()
 		ForeverUI.SetAtlas(p, "ui-questtrackerbutton-questitem-frame", true)
 		p:ClearAllPoints()
-		p:SetWidth(G.objetCadre)
-		p:SetHeight(G.objetCadre)
+		p:SetWidth(G.itemFrame)
+		p:SetHeight(G.itemFrame)
 		p:SetPoint("CENTER", b, "CENTER", 0, 0)
 	end
 	b:SetID(index)
-	SetItemButtonTexture(b, icone)
+	SetItemButtonTexture(b, icon)
 	SetItemButtonCount(b, charges)
 	b.charges = charges
 	WatchFrameItem_UpdateCooldown(b)
@@ -968,117 +918,117 @@ function T.objet(n, lineFrame, index, icone, charges)
 	return b
 end
 
--- --------------------------------------------------------- les hauts faits
-local function afficherHautsFaits(lineFrame, initialOffset, maxHeight, frameWidth, ...)
-	local m = T.hautsFaits
-	debuter(m, placeRestante(maxHeight, initialOffset))
-	local nb = select("#", ...)
-	local arene = ArenaEnemyFrames and ArenaEnemyFrames:IsShown()
+-- ---------- Achievements
+local function showAchievements(lineFrame, initialOffset, maxHeight, frameWidth, ...)
+	local m = T.achievements
+	begin(m, remainingSpace(maxHeight, initialOffset))
+	local count = select("#", ...)
+	local arena = ArenaEnemyFrames and ArenaEnemyFrames:IsShown()
 	if bit.band(WATCHFRAME_FILTER_TYPE, WATCHFRAME_FILTER_ACHIEVEMENTS) == WATCHFRAME_FILTER_ACHIEVEMENTS then
-		for i = 1, nb do
+		for i = 1, count do
 			local id = select(i, ...)
-			local categorie = GetAchievementCategory(id)
-			local _, nom, _, fait, _, _, _, description = GetAchievementInfo(id)
-			if not fait and not arene or categorie == WATCHFRAME_ACHIEVEMENT_ARENA_CATEGORY then
-				local b = prendreBloc(m, id)
-				b.hautFait = id
-				titreBloc(b, nom)
-				local nbCriteres = GetAchievementNumCriteria(id)
-				if nbCriteres > 0 then
-					local montres = 0
-					for j = 1, nbCriteres do
-						local texte, _, rempli, _, _, _, drapeaux, _, quantite, critere = GetAchievementCriteriaInfo(id, j)
-						if rempli or montres > G.criteresMax then
-							-- rien
-						elseif montres == G.criteresMax and nbCriteres > G.criteresMax + 1 then
-							ligne(b, "Extra", "...", false)
-							montres = montres + 1
+			local category = GetAchievementCategory(id)
+			local _, name, _, completed, _, _, _, description = GetAchievementInfo(id)
+			if not completed and not arena or category == WATCHFRAME_ACHIEVEMENT_ARENA_CATEGORY then
+				local b = acquireBlock(m, id)
+				b.achievement = id
+				setBlockTitle(b, name)
+				local numCriteria = GetAchievementNumCriteria(id)
+				if numCriteria > 0 then
+					local shownItems = 0
+					for j = 1, numCriteria do
+						local text, _, filled, _, _, _, flags, _, quantity, criteriaID = GetAchievementCriteriaInfo(id, j)
+						if filled or shownItems > G.maxCriteria then
+							-- skip: criterion done, or past the limit
+						elseif shownItems == G.maxCriteria and numCriteria > G.maxCriteria + 1 then
+							row(b, "Extra", "...", false)
+							shownItems = shownItems + 1
 						else
-							if bit.band(drapeaux, ACHIEVEMENT_CRITERIA_PROGRESS_BAR) == ACHIEVEMENT_CRITERIA_PROGRESS_BAR then
-								texte = quantite
+							if bit.band(flags, ACHIEVEMENT_CRITERIA_PROGRESS_BAR) == ACHIEVEMENT_CRITERIA_PROGRESS_BAR then
+								text = quantity
 							end
-							ligne(b, j, texte, true)
-							montres = montres + 1
-							local chrono = WATCHFRAME_TIMEDCRITERIA[critere]
-							if chrono and GetTime() - chrono.startTime < chrono.duration then
-								minuteur(b, chrono.duration, chrono.startTime)
+							row(b, j, text, true)
+							shownItems = shownItems + 1
+							local stopwatch = WATCHFRAME_TIMEDCRITERIA[criteriaID]
+							if stopwatch and GetTime() - stopwatch.startTime < stopwatch.duration then
+								timer(b, stopwatch.duration, stopwatch.startTime)
 							end
 						end
 					end
 				else
-					ligne(b, 1, description, true)
-					for _, chrono in pairs(WATCHFRAME_TIMEDCRITERIA) do
-						if chrono.achievementID == id and GetTime() - chrono.startTime <= chrono.duration then
-							minuteur(b, chrono.duration, chrono.startTime)
+					row(b, 1, description, true)
+					for _, stopwatch in pairs(WATCHFRAME_TIMEDCRITERIA) do
+						if stopwatch.achievementID == id and GetTime() - stopwatch.startTime <= stopwatch.duration then
+							timer(b, stopwatch.duration, stopwatch.startTime)
 							break
 						end
 					end
 				end
-				if not placer(m, b) then
+				if not place(m, b) then
 					break
 				end
 			end
 		end
 	end
-	local hauteur = terminer(m, lineFrame, initialOffset)
-	return hauteur, G.largeur, nb
+	local height = finalize(m, lineFrame, initialOffset)
+	return height, G.width, count
 end
 
-local function gestionnaireHautsFaits(lineFrame, initialOffset, maxHeight, frameWidth)
-	return afficherHautsFaits(lineFrame, initialOffset, maxHeight, frameWidth, GetTrackedAchievements())
+local function achievementHandler(lineFrame, initialOffset, maxHeight, frameWidth)
+	return showAchievements(lineFrame, initialOffset, maxHeight, frameWidth, GetTrackedAchievements())
 end
-T.gestionnaireHautsFaits = gestionnaireHautsFaits
+T.achievementHandler = achievementHandler
 
--- --------------------------------------------------------- les clics
+-- ---------- Clicks
 -- QuestObjectiveTrackerMixin:OnBlockHeaderClick
-local function clicQuete(b, souris)
+local function questClick(b, mouse)
 	if IsModifiedClick("CHATLINK") and ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() then
-		local lien = GetQuestLink(b.index)
-		if lien then ChatEdit_InsertLink(lien) end
+		local link = GetQuestLink(b.index)
+		if link then ChatEdit_InsertLink(link) end
 		return
 	end
-	if souris ~= "RightButton" then
+	if mouse ~= "RightButton" then
 		CloseDropDownMenus()
 		if IsModifiedClick("QUESTWATCHTOGGLE") then
 			WatchFrame_StopTrackingQuest(nil, b.watch)
 		else
-			T.ouvrirPage(b.watch)
+			T.openPage(b.watch)
 		end
 		return
 	end
 	local w = b.watch
 	local index = b.index
 	local l = {
-		{ text = b.titreQuete, isTitle = true },
-		{ text = TEXTE.voirPage, func = function() T.ouvrirPage(w) end },
-		{ text = TEXTE.voirCarte, func = function() WatchFrame_OpenMapToQuest(nil, w) end },
-		{ text = TEXTE.nePlusSuivre, func = function() WatchFrame_StopTrackingQuest(nil, w) end },
+		{ text = b.questTitle, isTitle = true },
+		{ text = TEXT.viewPage, func = function() T.openPage(w) end },
+		{ text = TEXT.viewMap, func = function() WatchFrame_OpenMapToQuest(nil, w) end },
+		{ text = TEXT.untrack, func = function() WatchFrame_StopTrackingQuest(nil, w) end },
 	}
 	if GetQuestLogPushable and (GetNumPartyMembers() > 0 or GetNumRaidMembers() > 1) then
 		local selection = GetQuestLogSelection()
 		SelectQuestLogEntry(index)
-		local partageable = GetQuestLogPushable()
+		local shareable = GetQuestLogPushable()
 		SelectQuestLogEntry(selection)
-		if partageable then
+		if shareable then
 			table.insert(l, { text = SHARE_QUEST, func = function() WatchFrame_ShareQuest(nil, w) end })
 		end
 	end
-	table.insert(l, { text = TEXTE.partagerChat, func = function()
-		local lien = GetQuestLink(index)
-		if lien and not (ChatEdit_InsertLink and ChatEdit_InsertLink(lien)) then
-			ChatFrame_OpenChat(lien)
+	table.insert(l, { text = TEXT.shareInChat, func = function()
+		local link = GetQuestLink(index)
+		if link and not (ChatEdit_InsertLink and ChatEdit_InsertLink(link)) then
+			ChatFrame_OpenChat(link)
 		end
 	end })
-	table.insert(l, { text = TEXTE.abandonner, func = function() WatchFrame_AbandonQuest(nil, w) end })
-	-- le deplacement manuel de WotLK (decision 2)
+	table.insert(l, { text = TEXT.abandonQuest, func = function() WatchFrame_AbandonQuest(nil, w) end })
+	-- WotLK manual ordering
 	local n = #VISIBLE_WATCHES
-	local rang = WatchFrame_GetVisibleIndex(index)
-	if n > 1 and rang then
-		if rang > 1 then
+	local rank = WatchFrame_GetVisibleIndex(index)
+	if n > 1 and rank then
+		if rank > 1 then
 			table.insert(l, { text = TRACKER_SORT_MANUAL_UP, func = function() WatchFrame_MoveQuest(nil, index, -1) end })
 			table.insert(l, { text = TRACKER_SORT_MANUAL_TOP, func = function() WatchFrame_MoveQuest(nil, index, -100) end })
 		end
-		if rang < n then
+		if rank < n then
 			table.insert(l, { text = TRACKER_SORT_MANUAL_DOWN, func = function() WatchFrame_MoveQuest(nil, index, 1) end })
 			table.insert(l, { text = TRACKER_SORT_MANUAL_BOTTOM, func = function() WatchFrame_MoveQuest(nil, index, 100) end })
 		end
@@ -1087,14 +1037,14 @@ local function clicQuete(b, souris)
 end
 
 -- AchievementObjectiveTrackerMixin:OnBlockHeaderClick
-local function clicHautFait(b, souris)
-	local id = b.hautFait
+local function achievementClick(b, mouse)
+	local id = b.achievement
 	if IsModifiedClick("CHATLINK") and ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() then
-		local lien = GetAchievementLink(id)
-		if lien then ChatEdit_InsertLink(lien) end
+		local link = GetAchievementLink(id)
+		if link then ChatEdit_InsertLink(link) end
 		return
 	end
-	if souris ~= "RightButton" then
+	if mouse ~= "RightButton" then
 		CloseDropDownMenus()
 		if IsModifiedClick("QUESTWATCHTOGGLE") then
 			WatchFrame_StopTrackingAchievement(nil, id)
@@ -1103,28 +1053,28 @@ local function clicHautFait(b, souris)
 		end
 		return
 	end
-	local _, nom = GetAchievementInfo(id)
+	local _, name = GetAchievementInfo(id)
 	menu("cursor", {
-		{ text = nom, isTitle = true },
-		{ text = TEXTE.voirHautFait, func = function() WatchFrame_OpenAchievementFrame(nil, id) end },
-		{ text = TEXTE.nePlusSuivre, func = function() WatchFrame_StopTrackingAchievement(nil, id) end },
+		{ text = name, isTitle = true },
+		{ text = TEXT.viewAchievement, func = function() WatchFrame_OpenAchievementFrame(nil, id) end },
+		{ text = TEXT.untrack, func = function() WatchFrame_StopTrackingAchievement(nil, id) end },
 	})
 end
 
--- QuestMapFrame_OpenToQuestDetails : la carte, le volet, la page. WotLK
--- deplie d'abord l'en-tete de la quete (WatchFrameLinkButtonTemplate_OnLeftClick).
-function T.ouvrirPage(watch)
+-- QuestMapFrame_OpenToQuestDetails: map, side panel, quest page. WotLK first expands the
+-- quest's header (WatchFrameLinkButtonTemplate_OnLeftClick).
+function T.openPage(watch)
 	local index = GetQuestIndexForWatch(watch)
 	if not index then return end
 	ExpandQuestHeader(GetQuestSortIndex(index))
 	index = GetQuestIndexForWatch(watch)
-	if index and ForeverUI.QuestLog and ForeverUI.QuestLog.ouvrirPage then
-		ForeverUI.QuestLog.ouvrirPage(index)
+	if index and ForeverUI.QuestLog and ForeverUI.QuestLog.openPage then
+		ForeverUI.QuestLog.openPage(index)
 	end
 end
 
--- --------------------------------------------------------- l'assemblage
-local function etoufferEnteteWotLK()
+-- ---------- Assembly
+local function suppressWotLKHeader()
 	for _, f in ipairs({ WatchFrameHeader, WatchFrameCollapseExpandButton }) do
 		if f then
 			f:SetAlpha(0)
@@ -1134,117 +1084,111 @@ local function etoufferEnteteWotLK()
 	end
 end
 
--- apres chaque WatchFrame_Update : notre en-tete prend la place du sien.
--- WotLK decide de le montrer ou non dans WatchFrame_Update seulement : on
--- retient sa decision, car l'en-tete de WotLK est deja etouffe quand le
--- repli (WatchFrame_Collapse / _Expand) nous rappelle.
-local function apresMiseAJour(depuisMaj)
-	local h = T.entete
+-- After each WatchFrame_Update our header replaces WotLK's. WotLK decides whether to show it
+-- only in WatchFrame_Update, so that decision is kept: its header is already hidden when
+-- WatchFrame_Collapse / _Expand call us again. fromUpdate: called from WatchFrame_Update.
+local function afterUpdate(fromUpdate)
+	local h = T.header
 	if not h then return end
-	if depuisMaj then
-		T.enteteVoulu = WatchFrameHeader:IsShown() and true or false
+	if fromUpdate then
+		T.headerWanted = WatchFrameHeader:IsShown() and true or false
 	end
-	local montrer = T.enteteVoulu
-	etoufferEnteteWotLK()
-	if montrer then
+	local showRegion = T.headerWanted
+	suppressWotLKHeader()
+	if showRegion then
 		h:Show()
-		local actif = WatchFrameCollapseExpandButton:IsEnabled() == 1
-		if actif then h.reduire:Enable() else h.reduire:Disable() end
+		local active = WatchFrameCollapseExpandButton:IsEnabled() == 1
+		if active then h.shrink:Enable() else h.shrink:Disable() end
 	else
 		h:Hide()
 	end
 	if WatchFrame.collapsed then
-		etatsBouton(h.reduire, "ui-questtrackerbutton-expand-all", "ui-questtrackerbutton-expand-all-pressed")
+		buttonStates(h.shrink, "ui-questtrackerbutton-expand-all", "ui-questtrackerbutton-expand-all-pressed")
 	else
-		etatsBouton(h.reduire, "ui-questtrackerbutton-collapse-all", "ui-questtrackerbutton-collapse-all-pressed")
+		buttonStates(h.shrink, "ui-questtrackerbutton-collapse-all", "ui-questtrackerbutton-collapse-all-pressed")
 	end
 end
-T.apresMiseAJour = apresMiseAJour
+T.afterUpdate = afterUpdate
 
--- WatchFrame_SetWidth et WatchFrame_Collapse / _Expand : 260, replie ou non.
--- WATCHFRAME_EXPANDEDWIDTH et WATCHFRAME_MAXLINEWIDTH restent ceux du
--- client : on repasse derriere lui (les accroches ci-dessous), et nos
--- gestionnaires ne lisent pas la largeur qu'il leur passe.
-local function largeur()
-	WatchFrame:SetWidth(G.largeur)
+-- WatchFrame_SetWidth and WatchFrame_Collapse / _Expand: 260, collapsed or not.
+-- WATCHFRAME_EXPANDEDWIDTH and WATCHFRAME_MAXLINEWIDTH keep the client's values: the width
+-- is re-applied after it (hooks below), and our handlers ignore the width it passes.
+local function width()
+	WatchFrame:SetWidth(G.width)
 end
 
--- LA PLACE DU SUIVI (demande du 2026-09-25 : il passait derriere la
--- minimap, et doit se deplacer par /fui). UIParent_ManageFramePositions de
--- WotLK recolle WatchFrame sous MinimapCluster a chaque passage, et lui
--- ajoute un point BOTTOMRIGHT sur le bas de l'ecran. Le suivi suit donc un
--- PORTEUR, enregistre dans le mode edition comme tout le reste, et on le
--- repose apres chaque passage de WotLK. Sa hauteur va du porteur au bas que
--- WotLK lui donnait (CONTAINER_OFFSET_Y, au-dessus des barres d'action).
-function T.placer()
-	local porteur = T.porteur
-	if not porteur then return end
+-- The tracker follows a CARRIER registered in edit mode. WotLK's
+-- UIParent_ManageFramePositions re-anchors WatchFrame under MinimapCluster on every pass and
+-- adds a BOTTOMRIGHT point, so WatchFrame is re-placed after it. Its height runs from the
+-- carrier down to WotLK's bottom (CONTAINER_OFFSET_Y, above the action bars).
+function T.place()
+	local carrier = T.carrier
+	if not carrier then return end
 	WatchFrame:ClearAllPoints()
-	WatchFrame:SetPoint("TOPLEFT", porteur, "TOPLEFT", 0, 0)
-	local haut = porteur:GetTop()
-	if haut then
-		WatchFrame:SetHeight(math.max(G.hauteurMin, haut - (CONTAINER_OFFSET_Y or 0)))
+	WatchFrame:SetPoint("TOPLEFT", carrier, "TOPLEFT", 0, 0)
+	local top = carrier:GetTop()
+	if top then
+		WatchFrame:SetHeight(math.max(G.minHeight, top - (CONTAINER_OFFSET_Y or 0)))
 	end
 end
 
-local function construirePorteur()
-	local porteur = CreateFrame("Frame", "ForeverUIObjectiveTrackerHolder", UIParent)
-	porteur:SetWidth(G.largeur)
-	porteur:SetHeight(G.enteteH)
-	T.porteur = porteur
+local function buildCarrier()
+	local carrier = CreateFrame("Frame", "ForeverUIObjectiveTrackerHolder", UIParent)
+	carrier:SetWidth(G.width)
+	carrier:SetHeight(G.headerH)
+	T.carrier = carrier
 	local L = ForeverUI.Layout
 	if L and L.Register then
-		L.Register(porteur, "suivi", ForeverUI.L.OBJECTIVETRACKER_EDIT_LABEL, "TOPRIGHT", "TOPRIGHT", G.defautX, G.defautY)
-		-- deplace, remis a zero ou repose a l'entree en jeu : le suivi suit
-		local function apres(id)
-			if id == "suivi" then T.placer() end
+		L.Register(carrier, "tracking", ForeverUI.L.OBJECTIVETRACKER_EDIT_LABEL, "TOPRIGHT", "TOPRIGHT", G.defaultX, G.defaultY)
+		-- moved, reset or applied at login: the tracker follows
+		local function after(id)
+			if id == "tracking" then T.place() end
 		end
-		hooksecurefunc(L, "Save", apres)
-		hooksecurefunc(L, "Apply", apres)
+		hooksecurefunc(L, "Save", after)
+		hooksecurefunc(L, "Apply", after)
 	end
 	if UIParent_ManageFramePositions then
-		hooksecurefunc("UIParent_ManageFramePositions", T.placer)
+		hooksecurefunc("UIParent_ManageFramePositions", T.place)
 	end
-	T.placer()
+	T.place()
 end
 
-local function construire()
-	if T.entete or not WatchFrame or not WatchFrameLines then
+local function build()
+	if T.header or not WatchFrame or not WatchFrameLines then
 		return
 	end
-	construirePorteur()
-	T.entete = creerEntete()
-	T.quetes = creerModule("ForeverUIQuestObjectiveTracker", TEXTE.quetes, "quetes")
-	T.quetes.clic = clicQuete
-	T.hautsFaits = creerModule("ForeverUIAchievementObjectiveTracker", TEXTE.hautsFaits, "hautsFaits")
-	T.hautsFaits.clic = clicHautFait
+	buildCarrier()
+	T.header = createHeader()
+	T.quests = createModule("ForeverUIQuestObjectiveTracker", TEXT.quests, "quests")
+	T.quests.onClick = questClick
+	T.achievements = createModule("ForeverUIAchievementObjectiveTracker", TEXT.achievements, "achievements")
+	T.achievements.onClick = achievementClick
 
 	WatchFrameLines:ClearAllPoints()
-	WatchFrameLines:SetPoint("TOPLEFT", WatchFrame, "TOPLEFT", 0, -G.hautModules)
-	WatchFrameLines:SetPoint("BOTTOMRIGHT", WatchFrame, "BOTTOMRIGHT", 0, G.basLignes)
-	largeur()
+	WatchFrameLines:SetPoint("TOPLEFT", WatchFrame, "TOPLEFT", 0, -G.modulesTop)
+	WatchFrameLines:SetPoint("BOTTOMRIGHT", WatchFrame, "BOTTOMRIGHT", 0, G.rowsBottom)
+	width()
 
-	-- les deux modules de camelot, dans l'ordre de camelot, a la place des
-	-- trois gestionnaires de WotLK ; ceux des addons restent apres eux
+	-- camelot's two modules, in camelot's order, replace the three WotLK handlers;
+	-- addon handlers stay after them
 	WatchFrame_RemoveObjectiveHandler(WatchFrame_HandleDisplayQuestTimers)
 	WatchFrame_RemoveObjectiveHandler(WatchFrame_HandleDisplayTrackedAchievements)
 	WatchFrame_RemoveObjectiveHandler(WatchFrame_DisplayTrackedQuests)
-	table.insert(WATCHFRAME_OBJECTIVEHANDLERS, 1, afficherQuetes)
-	table.insert(WATCHFRAME_OBJECTIVEHANDLERS, 2, gestionnaireHautsFaits)
+	table.insert(WATCHFRAME_OBJECTIVEHANDLERS, 1, displayQuests)
+	table.insert(WATCHFRAME_OBJECTIVEHANDLERS, 2, achievementHandler)
 
-	hooksecurefunc("WatchFrame_Update", function() apresMiseAJour(true) end)
+	hooksecurefunc("WatchFrame_Update", function() afterUpdate(true) end)
 	hooksecurefunc("WatchFrame_SetWidth", function()
-		if not WatchFrame.collapsed then largeur() end
+		if not WatchFrame.collapsed then width() end
 	end)
-	-- suivre une quete depuis la carte : WotLK l'ajoutait a LOCAL_MAP_QUESTS
-	-- si la table etait celle de la zone affichee, et l'en retirait sinon
-	-- (WorldMapFrame.lua:2162-2167) ; la table est la notre, on refait son
-	-- geste puis le rafraichissement que le client a deja joue sans elle
+	-- Tracking a quest from the map: WotLK adds it to LOCAL_MAP_QUESTS when that table is the
+	-- shown zone's, and removes it otherwise (WorldMapFrame.lua:2162-2167). The table is ours,
+	-- so do the same, then redo the refresh the client already ran without it.
 	if WorldMapTrackQuest_Toggle then
-		hooksecurefunc("WorldMapTrackQuest_Toggle", function(coche)
+		hooksecurefunc("WorldMapTrackQuest_Toggle", function(checkMark)
 			local id = WORLDMAP_SETTINGS and WORLDMAP_SETTINGS.selectedQuestId
 			if not id then return end
-			if coche then
+			if checkMark then
 				if locales["zone"] == GetCurrentMapZone() then locales[id] = true end
 			else
 				locales[id] = nil
@@ -1253,38 +1197,37 @@ local function construire()
 		end)
 	end
 	hooksecurefunc("WatchFrame_Collapse", function(self)
-		self:SetWidth(G.largeur)
-		apresMiseAJour()
+		self:SetWidth(G.width)
+		afterUpdate()
 	end)
 	hooksecurefunc("WatchFrame_Expand", function(self)
-		self:SetWidth(G.largeur)
-		apresMiseAJour()
+		self:SetWidth(G.width)
+		afterUpdate()
 	end)
-	etoufferEnteteWotLK()
-	-- WatchFrame_Update mesure le cadre : pas avant qu'il soit place (au
-	-- chargement de l'addon, il ne l'est pas encore ; ses evenements
-	-- d'entree en jeu le rafraichiront)
+	suppressWotLKHeader()
+	-- WatchFrame_Update measures the frame, so not before it is placed (it is not at addon
+	-- load; its login events refresh it)
 	if WatchFrame:GetTop() and WatchFrame:GetBottom() then
 		WatchFrame_Update()
 	end
 end
-T.construire = construire
+T.build = build
 
-construire()
+build()
 
 ForeverUI.ObjectiveTrackerDebug = function()
-	local prefixe = "|cff66ccffForeverUI|r "
-	if not T.entete then
-		DEFAULT_CHAT_FRAME:AddMessage(prefixe .. L.OBJECTIVETRACKER_DEBUG_NOT_BUILT)
+	local prefix = "|cff66ccffForeverUI|r "
+	if not T.header then
+		DEFAULT_CHAT_FRAME:AddMessage(prefix .. L.OBJECTIVETRACKER_DEBUG_NOT_BUILT)
 		return
 	end
 	local n = 0
-	for _ in pairs(T.quetes.blocs) do n = n + 1 end
+	for _ in pairs(T.quests.blocks) do n = n + 1 end
 	local a = 0
-	for _ in pairs(T.hautsFaits.blocs) do a = a + 1 end
-	DEFAULT_CHAT_FRAME:AddMessage(prefixe .. string.format(
+	for _ in pairs(T.achievements.blocks) do a = a + 1 end
+	DEFAULT_CHAT_FRAME:AddMessage(prefix .. string.format(
 		L.OBJECTIVETRACKER_DEBUG_STATE,
-		WatchFrame:GetWidth(), WatchFrame:GetHeight(), tostring(WatchFrame.collapsed), tostring(T.entete:IsShown()),
-		n, tostring(T.quetes:IsShown()), a, tostring(T.hautsFaits:IsShown()), #WATCHFRAME_OBJECTIVEHANDLERS,
+		WatchFrame:GetWidth(), WatchFrame:GetHeight(), tostring(WatchFrame.collapsed), tostring(T.header:IsShown()),
+		n, tostring(T.quests:IsShown()), a, tostring(T.achievements:IsShown()), #WATCHFRAME_OBJECTIVEHANDLERS,
 		tostring(WATCHFRAME_SORT_TYPE), tostring(WATCHFRAME_FILTER_TYPE)))
 end

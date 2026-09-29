@@ -1,9 +1,9 @@
--- UIAtlas : equivalent de SetAtlas pour un client 3.3.5
--- Une seule texture par feuille, adressage par SetTexCoord : aucun decoupage de fichier.
+-- UIAtlas: SetAtlas for the 3.3.5 client.
+-- One texture per sheet, addressed with SetTexCoord; no file slicing.
 UIAtlas = UIAtlas or { sheets = {}, data = {} }
 
--- texture : objet Texture ; name : nom d'atlas (ex. "ui-hud-unitframe-player-portraiton-bar-health")
--- useAtlasSize : si vrai, applique aussi la taille d'origine de l'element
+-- texture: Texture object; name: atlas name (e.g. "ui-hud-unitframe-player-portraiton-bar-health")
+-- useAtlasSize: if true, also applies the element's original size
 function UIAtlas.Apply(texture, name, useAtlasSize)
 	local e = UIAtlas.data[name]
 	if not e then
@@ -21,7 +21,7 @@ function UIAtlas.Apply(texture, name, useAtlasSize)
 	return true
 end
 
--- Renvoie les donnees brutes : chemin, u1, u2, v1, v2, largeur, hauteur
+-- Returns the raw data: path, u1, u2, v1, v2, width, height
 function UIAtlas.Get(name)
 	local e = UIAtlas.data[name]
 	if not e then

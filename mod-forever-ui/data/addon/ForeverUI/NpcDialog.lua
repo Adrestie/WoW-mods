@@ -1,89 +1,43 @@
--- ForeverUI : le dialogue des PNJ (GossipFrame) et la fenetre de quete
--- (QuestFrame), a la DA de camelot (demande de l'utilisateur, 2026-09-28 :
--- « fait les PNJ », etape 1).
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (GossipFrame.xml / .lua, QuestFrame.xml
--- / .lua, QuestFrameTemplates.xml, QuestInfo.lua de 3.3.5, FrameXML) :
---   GossipFrame et QuestFrame 384 x 512 a TOPLEFT (0, -104), HitRectInsets
---     (0, 30, 0, 70) ; UIPanelWindows : area "left" ; portrait 60 x 60 a
---     (7, -6) (SetPortraitTexture "npc" / "questnpc", sinon
---     UI-QuestLog-BookIcon), nom du PNJ dans GossipFrameNpcNameText /
---     QuestFrameNpcNameText (GossipFrameUpdate, QuestFrame_SetPortrait) ;
---     croix CENTER sur TOPRIGHT (-42, -31) ;
---   les panneaux (GossipFramePanelTemplate, QuestFramePanelTemplate, 384 x
---     512) : l'art UI-QuestGreeting-TopLeft / TopRight / BotLeft / BotRight
---     (sans nom, sauf <panneau>BotRight), la matiere <panneau>MaterialTopLeft
---     239 x 241 a (21, -75) et ses trois voisines (QuestFrame_SetMaterial),
---     UI-Quest-BotLeftPatch sous l'accueil ;
---   les fenetres a defilement (UIPanelScrollFrameTemplate) 300 x 334 a (23,
---     -81) : GossipGreetingScrollFrame, QuestDetail-, QuestProgress-,
---     QuestReward-, QuestGreetingScrollFrame ; enfants 300 x 334 ;
---   les boutons a BOTTOMLEFT (22 / 23, 72) et BOTTOMRIGHT (-39, 72 / 73) ;
---   QuestProgressTitleText a (5, -10) ;
---   les objets : QuestInfoItem1..10 (QuestInfo_ShowRewards, GetQuestItemInfo
---     hors journal), QuestProgressItem1..6 (QuestFrameProgressItems_Update,
---     GetQuestItemInfo "required").
---
--- RELEVE -- CAMELOT (blizzard_uipanels_game : [Family] mainline
--- gossipframe.xml, questframe.xml, questframetemplates.xml / .lua ; shared
--- gossipframeshared.lua ; blizzard_accessibilitytemplates questtextcontrast) :
---   GossipFrame et QuestFrame : ButtonFrameTemplate 338 x 496, portrait de
---     l'unite (SetPortraitToUnit, sinon le livre), titre = nom du PNJ
---     (SetTitle) ;
---   le fond : l'atlas QuestBG-Parchment (useAtlasSize) a (7, -62) ;
---   le dialogue : ScrollBox 300 x 403 a (8, -65), MinimalScrollBar a (6, -3)
---     / (6, 3) ; Au revoir BOTTOMRIGHT (-6, 4) ;
---   la quete : QuestScrollFrameTemplate 300 x 403 a (5, -65), barre
---     scrollBarX 9, scrollBarTopY -2, bas par defaut 5 (ScrollDefine) ;
---     enfants 300 x 403 (recompense : 300 x 334) ; matiere a (7, -62), 239 x
---     300 / 64 x 300 / 239 x 138 / 64 x 138 ; boutons BOTTOMLEFT (6, 4) et
---     BOTTOMRIGHT (-6, 4) ; QuestProgressTitleText a (10, -10) ;
---   les objets : LargeItemButtonTemplate (le meme qu'en 3.3.5) et le contour
---     de qualite de l'icone (SetItemButtonQuality).
---
--- CE QUI DIFFERE, ET POURQUOI. « 3.3.5 rhabillee » : les cadres et la
--- logique du client restent, poses aux places de camelot. Le portrait suit
--- la regle VALIDEE (48, centre sur le trou de l'anneau, Inspect.lua). Le
--- dialogue garde le ScrollFrame de 3.3.5 (pas de ScrollBox), a la place de
--- celle de camelot. Le bouton Annuler de la recompense reste (camelot ne
--- montre que Terminer la quete) : il passe a droite comme les autres.
+-- ForeverUI: NPC gossip (GossipFrame) and quest (QuestFrame) windows in Camelot's style.
+-- The client's frames and logic stay, moved to Camelot's places (portrait ButtonFrameTemplate
+-- 338 x 496, QuestBG-Parchment background). The gossip keeps the 3.3.5 ScrollFrame instead of
+-- Camelot's ScrollBox. The reward Cancel button stays (Camelot has only Complete Quest).
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 
 local D = {}
-ForeverUI.DialoguePNJ = D
+ForeverUI.NpcDialog = D
 
 local SEP = string.char(92)
 
 local N = {
-	fenetre = { 338, 496 },
-	portrait = { cote = 48, x = 1, y = 1.5 },
-	parchemin = { 7, -62, droite = -9 },
-	gauche = { 6, 4 }, droite = { -6, 4 },
-	-- le dialogue
-	dialogue = { defile = { 8, -65, 300, 403 }, barre = { 6, -3, 3 } },
-	-- la quete
-	quete = { defile = { 5, -65, 300, 403 }, barre = { 9, -2, 5 }, enfant = 403, enfantRecompense = 334,
-		matiere = { 7, -62, haut = 300, bas = 138, gauche = 239, droite = 64 },
-		titreProgres = { 10, -10 } },
+	window = { 338, 496 },
+	portrait = { side = 48, x = 1, y = 1.5 },
+	parchment = { 7, -62, right = -9 },
+	left = { 6, 4 }, right = { -6, 4 },
+	-- gossip
+	dialog = { scroll = { 8, -65, 300, 403 }, bar = { 6, -3, 3 } },
+	-- quest
+	quest = { scroll = { 5, -65, 300, 403 }, bar = { 9, -2, 5 }, child = 403, rewardChild = 334,
+		material = { 7, -62, top = 300, down = 138, left = 239, right = 64 },
+		progressTitle = { 10, -10 } },
 }
 
 local ART = {
-	parchemin = "questbg-parchment",
-	livre = "Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestLog-BookIcon",
+	parchment = "questbg-parchment",
+	book = "Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestLog-BookIcon",
 }
 
-local function poser(r, ...)
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
--- l'art de 3.3.5 d'un panneau : ses quatre morceaux UI-QuestGreeting et la
--- piece du bas de l'accueil
-local function eteindrePanneau(p)
+-- hides the 3.3.5 panel art: its four UI-QuestGreeting pieces and the greeting's bottom patch
+local function blankPanel(p)
 	for _, r in ipairs({ p:GetRegions() }) do
 		if r:GetObjectType() == "Texture" then
 			local f = r:GetTexture()
@@ -97,415 +51,358 @@ local function eteindrePanneau(p)
 	end
 end
 
--- ButtonFrameTemplate a portrait, le parchemin, la croix ; le nom du PNJ
--- passe dans la barre de titre. o (facultatif) : { hauteur, page = hauteur
--- du parchemin } -- 424 et 357 / 334 pour les pages de l'etape 2, sinon 496
--- et la hauteur de l'atlas.
-local function habiller(f, nom, portraitClient, croix, o)
+-- Portrait ButtonFrameTemplate, parchment and close button; the NPC name moves to the title bar.
+-- name, clientPortrait, closeButton: regions of client frame f;
+-- o (optional): { height, page = parchment height }, by default 496 and the atlas height.
+local function applySkin(f, name, clientPortrait, closeButton, o)
 	o = o or {}
-	portraitClient:SetAlpha(0)
-	nom:SetAlpha(0)
-	f:SetWidth(N.fenetre[1])
-	f:SetHeight(o.hauteur or N.fenetre[2])
+	clientPortrait:SetAlpha(0)
+	name:SetAlpha(0)
+	f:SetWidth(N.window[1])
+	f:SetHeight(o.height or N.window[2])
 	f:SetHitRectInsets(0, 0, 0, 0)
-	local habit = Gb.FenetrePortrait(f, {
-		portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = nom:GetText(),
+	local skin = Tpl.PortraitWindow(f, {
+		portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = name:GetText(),
 	})
-	local function suivre() habit.titre:SetText(nom:GetText() or "") end
-	hooksecurefunc(nom, "SetText", suivre)
-	hooksecurefunc(nom, "SetFormattedText", suivre)
-	-- le parchemin en BORDER : camelot le pose au-dessus de la pierre et des
-	-- stries du cadre par un sous-calque ; 3.3.5 n'en a pas, et dans le meme
-	-- calque la pierre passait devant (dialogue, 28/09 : « le fond n'est pas
-	-- correct »). Les panneaux et leur matiere, cadres fils, restent dessus.
-	local fond = f:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(fond, ART.parchemin)
-	if o.page then fond:SetHeight(o.page) end
-	fond:SetPoint("TOPLEFT", f, "TOPLEFT", N.parchemin[1], N.parchemin[2])
-	habit.parchemin = fond
-	Gb.Croix(croix, f)
-	croix:SetFrameLevel(f:GetFrameLevel() + 22)
-	f.foreverHabit = habit
-	return habit
+	local function follow() skin.title:SetText(name:GetText() or "") end
+	hooksecurefunc(name, "SetText", follow)
+	hooksecurefunc(name, "SetFormattedText", follow)
+	-- Parchment in BORDER: Camelot puts it above the frame's rock and streaks with a sublevel;
+	-- 3.3.5 has none, and in the same layer the rock draws in front. The panels and their
+	-- material, child frames, stay on top.
+	local background = f:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(background, ART.parchment)
+	if o.page then background:SetHeight(o.page) end
+	background:SetPoint("TOPLEFT", f, "TOPLEFT", N.parchment[1], N.parchment[2])
+	skin.parchment = background
+	Tpl.CloseButton(closeButton, f)
+	closeButton:SetFrameLevel(f:GetFrameLevel() + 22)
+	f.foreverSkin = skin
+	return skin
 end
 
--- le portrait de l'unite, sinon le livre (GossipFrameUpdate,
--- QuestFrame_SetPortrait)
-local function portrait(habit, unite)
-	if UnitExists(unite) then
-		SetPortraitTexture(habit.portrait, unite)
+-- unit portrait, else the book (GossipFrameUpdate, QuestFrame_SetPortrait)
+local function portrait(skin, unit)
+	if UnitExists(unit) then
+		SetPortraitTexture(skin.portrait, unit)
 	else
-		habit.portrait:SetTexture(ART.livre)
+		skin.portrait:SetTexture(ART.book)
 	end
 end
 
--- le contour de qualite, sur l'icone de 39 d'un LargeItemButtonTemplate
-local function contour(b, q)
-	local icone = _G[b:GetName() .. "IconTexture"]
-	local t = Gb.Contour(b)
-	if icone and not b.foreverContourPose then
+-- quality outline on the 39 wide icon of a LargeItemButtonTemplate
+local function outline(b, q)
+	local icon = _G[b:GetName() .. "IconTexture"]
+	local t = Tpl.Outline(b)
+	if icon and not b.foreverOutlinePlaced then
 		t:ClearAllPoints()
-		t:SetAllPoints(icone)
-		b.foreverContourPose = true
+		t:SetAllPoints(icon)
+		b.foreverOutlinePlaced = true
 	end
-	Gb.ContourQualite(b, q)
+	Tpl.QualityOutline(b, q)
 end
 
--- LA BARRE SEULEMENT SI ELLE SERT (demande du 28/09 ; camelot :
--- scrollBarHideIfUnscrollable). Le client 3.3.5 sait le faire :
--- ScrollFrame_OnScrollRangeChanged cache la barre quand rien ne defile si la
--- fenetre porte scrollBarHideable. On lit aussi la plage a l'ouverture, le
--- client ne la relisant qu'a un changement.
--- SANS BARRE, LA PAGE PREND TOUT L'ESPACE (demande du 28/09) : le parchemin
--- s'etend sur le couloir de la barre, jusqu'au bord interieur droit, a la
--- meme marge qu'a gauche au regard de l'encart de camelot (4 / -6 : 7 /
--- -9) ; avec la barre, il reprend sa largeur d'atlas.
-local function pagePleine(f, pleine)
-	local h = f.foreverHabit
-	local t = h and h.parchemin
+-- Without a scroll bar the page takes all the room: the parchment covers the bar's gutter up
+-- to the inner right edge, with the same margin as on the left (Camelot's inset 4 / -6 gives
+-- 7 / -9); with the bar it gets back its atlas width.
+local function fullPage(f, isFull)
+	local h = f.foreverSkin
+	local t = h and h.parchment
 	if not t then return end
-	local P = N.parchemin
+	local P = N.parchment
 	t:ClearAllPoints()
 	t:SetPoint("TOPLEFT", f, "TOPLEFT", P[1], P[2])
-	if pleine then
-		t:SetPoint("TOPRIGHT", f, "TOPRIGHT", P.droite, P[2])
+	if isFull then
+		t:SetPoint("TOPRIGHT", f, "TOPRIGHT", P.right, P[2])
 	else
-		local e = ForeverUI.AtlasEntry(ART.parchemin)
+		local e = ForeverUI.AtlasEntry(ART.parchment)
 		t:SetWidth(e[6])
 	end
 end
-D.PagePleine = pagePleine
 
--- LE CONTENU S'ADAPTE A LA BARRE (regle du 28/09, Gb.BarreSelonContenu) :
--- avec elle, la fenetre a defilement, son enfant et les textes du client
--- gardent leurs largeurs du XML ; sans elle, chacun s'etend jusqu'a laisser
--- A DROITE DE LA PAGE LA MEME MARGE QU'A GAUCHE (demande du 28/09 : « le
--- meme espace a gauche et a droite »). `largeurs` : { { objet, avec la
--- barre, sans la barre } }.
-local function elargir(largeurs, avec)
-	for _, v in ipairs(largeurs) do
-		if v[1] then v[1]:SetWidth(avec and v[2] or v[3]) end
+-- Content follows the bar (Tpl.BarByContent): with it, the scroll frame, its child and the
+-- client texts keep their XML widths; without it, each widens to leave the same margin right
+-- of the page as on the left. widths: { { object, width with bar, width without bar } }
+local function widen(widths, hasBar)
+	for _, v in ipairs(widths) do
+		if v[1] then v[1]:SetWidth(hasBar and v[2] or v[3]) end
 	end
 end
 
--- la largeur qui laisse a droite de la page (sans barre : de N.parchemin[1]
--- a la largeur de la fenetre + N.parchemin.droite) la marge qu'un objet a a
--- gauche ; `gauche` : son bord gauche dans la fenetre
-local function jusquAMarge(gauche)
-	local P = N.parchemin
-	return (N.fenetre[1] + P.droite) - (gauche - P[1]) - gauche
+-- width that leaves right of the page (without bar: from N.parchment[1] to the window width
+-- + N.parchment.right) the margin an object has on the left; left: its left edge in the window
+local function widthToMargin(left)
+	local P = N.parchment
+	return (N.window[1] + P.right) - (left - P[1]) - left
 end
 
--- adapter : ce que la fenetre fait en plus de la page (la quete a quatre
--- zones : seule la visible decide, Gb.BarreSelonContenu ne l'appelle que
--- visible)
-local function barreSiBesoin(fx, f, adapter)
-	return Gb.BarreSelonContenu(fx, function(avec)
-		pagePleine(f, not avec)
-		if adapter then adapter(avec) end
+-- adapter: what the window does besides the page (the quest has four scroll frames: only the
+-- visible one decides, as Tpl.BarByContent calls it only when visible)
+local function barIfNeeded(fx, f, adapter)
+	return Tpl.BarByContent(fx, function(hasBar)
+		fullPage(f, not hasBar)
+		if adapter then adapter(hasBar) end
 	end)
 end
-D.BarreSiBesoin = barreSiBesoin
 
--- ------------------------------------------------------------ le dialogue
+-- ------------------------------------------------------------ Gossip
 
-function D.ApresDialogue()
-	local h = GossipFrame.foreverHabit
+function D.AfterDialog()
+	local h = GossipFrame.foreverSkin
 	if h then portrait(h, "npc") end
 end
 
-function D.HabillerDialogue()
+function D.SkinDialog()
 	local f = GossipFrame
-	if not f or f.foreverHabit then return end
-	habiller(f, GossipFrameNpcNameText, GossipFramePortrait, GossipFrameCloseButton)
-	eteindrePanneau(GossipFrameGreetingPanel)
-	local S = N.dialogue
+	if not f or f.foreverSkin then return end
+	applySkin(f, GossipFrameNpcNameText, GossipFramePortrait, GossipFrameCloseButton)
+	blankPanel(GossipFrameGreetingPanel)
+	local S = N.dialog
 	local fx = GossipGreetingScrollFrame
-	fx:SetWidth(S.defile[3])
-	fx:SetHeight(S.defile[4])
-	poser(fx, "TOPLEFT", f, "TOPLEFT", S.defile[1], S.defile[2])
-	Gb.BarreA(GossipGreetingScrollFrameScrollBar, fx, S.barre[1], S.barre[2], S.barre[3])
-	-- le contenu : la fenetre, son enfant, le texte d'accueil (270, a (10,
-	-- -10) de l'enfant), les choix (300, a -10 du texte ; leur texte 275 :
-	-- GossipTitleButtonTemplate, qui suit son bouton)
-	local x, texteX = S.defile[1], S.defile[1] + 10
-	local fxSans = jusquAMarge(x)
-	local largeurs = { { fx, S.defile[3], fxSans }, { GossipGreetingScrollChildFrame, S.defile[3], fxSans },
-		{ GossipGreetingText, 270, jusquAMarge(texteX) } }
+	fx:SetWidth(S.scroll[3])
+	fx:SetHeight(S.scroll[4])
+	place(fx, "TOPLEFT", f, "TOPLEFT", S.scroll[1], S.scroll[2])
+	Tpl.BarAt(GossipGreetingScrollFrameScrollBar, fx, S.bar[1], S.bar[2], S.bar[3])
+	-- content: scroll frame, its child, greeting text (270, at (10, -10) of the child), options
+	-- (300, at -10 of the text; their text 275: GossipTitleButtonTemplate, follows its button)
+	local x, textX = S.scroll[1], S.scroll[1] + 10
+	local fxNoBar = widthToMargin(x)
+	local widths = { { fx, S.scroll[3], fxNoBar }, { GossipGreetingScrollChildFrame, S.scroll[3], fxNoBar },
+		{ GossipGreetingText, 270, widthToMargin(textX) } }
 	for i = 1, NUMGOSSIPBUTTONS do
 		local b = _G["GossipTitleButton" .. i]
 		if b then
-			largeurs[#largeurs + 1] = { b, 300, jusquAMarge(x) }
-			largeurs[#largeurs + 1] = { b:GetFontString(), 275, 275 + jusquAMarge(x) - 300 }
+			widths[#widths + 1] = { b, 300, widthToMargin(x) }
+			widths[#widths + 1] = { b:GetFontString(), 275, 275 + widthToMargin(x) - 300 }
 		end
 	end
-	barreSiBesoin(fx, f, function(avec) elargir(largeurs, avec) end)
-	poser(GossipFrameGreetingGoodbyeButton, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.droite[1], N.droite[2])
-	hooksecurefunc("GossipFrameUpdate", D.ApresDialogue)
+	barIfNeeded(fx, f, function(hasBar) widen(widths, hasBar) end)
+	place(GossipFrameGreetingGoodbyeButton, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.right[1], N.right[2])
+	hooksecurefunc("GossipFrameUpdate", D.AfterDialog)
 end
 
--- ------------------------------------------------------------ la quete
+-- ------------------------------------------------------------ Quest
 
-function D.ApresPortraitQuete()
-	local h = QuestFrame.foreverHabit
+function D.AfterQuestPortrait()
+	local h = QuestFrame.foreverSkin
 	if h then portrait(h, "questnpc") end
 end
 
--- APRES QuestInfo_ShowRewards : le contour de qualite des objets, hors
--- journal (le journal a les siens, QuestLog.lua)
-function D.ApresRecompenses()
+-- after QuestInfo_ShowRewards: item quality outlines outside the quest log
+-- (the log has its own, QuestLog.lua)
+function D.AfterRewards()
 	if QuestInfoFrame and QuestInfoFrame.questLog then return end
 	for i = 1, MAX_NUM_ITEMS do
 		local b = _G["QuestInfoItem" .. i]
 		if b and b:IsShown() and b.type then
 			local _, _, _, q = GetQuestItemInfo(b.type, b:GetID())
-			contour(b, q)
-		elseif b and b.foreverContour then
-			b.foreverContour:Hide()
+			outline(b, q)
+		elseif b and b.foreverOutline then
+			b.foreverOutline:Hide()
 		end
 	end
 end
 
--- APRES QuestFrameProgressItems_Update : les objets demandes
-function D.ApresProgres()
+-- after QuestFrameProgressItems_Update: required items
+function D.AfterProgress()
 	for i = 1, MAX_REQUIRED_ITEMS do
 		local b = _G["QuestProgressItem" .. i]
 		if b and b:IsShown() and b.type == "required" then
 			local _, _, _, q = GetQuestItemInfo("required", b:GetID())
-			contour(b, q)
-		elseif b and b.foreverContour then
-			b.foreverContour:Hide()
+			outline(b, q)
+		elseif b and b.foreverOutline then
+			b.foreverOutline:Hide()
 		end
 	end
 end
 
-function D.HabillerQuete()
+function D.SkinQuest()
 	local f = QuestFrame
-	if not f or f.foreverHabit then return end
-	habiller(f, QuestFrameNpcNameText, QuestFramePortrait, QuestFrameCloseButton)
-	local Q = N.quete
-	local M = Q.matiere
-	for _, nom in ipairs({ "QuestFrameGreetingPanel", "QuestFrameDetailPanel", "QuestFrameProgressPanel", "QuestFrameRewardPanel" }) do
-		local p = _G[nom]
-		eteindrePanneau(p)
-		-- la matiere (QuestFrame_SetMaterial la montre et la cache)
-		local hg = _G[nom .. "MaterialTopLeft"]
-		hg:SetWidth(M.gauche)
-		hg:SetHeight(M.haut)
-		poser(hg, "TOPLEFT", f, "TOPLEFT", M[1], M[2])
-		_G[nom .. "MaterialTopRight"]:SetWidth(M.droite)
-		_G[nom .. "MaterialTopRight"]:SetHeight(M.haut)
-		_G[nom .. "MaterialBotLeft"]:SetWidth(M.gauche)
-		_G[nom .. "MaterialBotLeft"]:SetHeight(M.bas)
-		_G[nom .. "MaterialBotRight"]:SetWidth(M.droite)
-		_G[nom .. "MaterialBotRight"]:SetHeight(M.bas)
+	if not f or f.foreverSkin then return end
+	applySkin(f, QuestFrameNpcNameText, QuestFramePortrait, QuestFrameCloseButton)
+	local Q = N.quest
+	local M = Q.material
+	for _, name in ipairs({ "QuestFrameGreetingPanel", "QuestFrameDetailPanel", "QuestFrameProgressPanel", "QuestFrameRewardPanel" }) do
+		local p = _G[name]
+		blankPanel(p)
+		-- material (QuestFrame_SetMaterial shows and hides it)
+		local topLeft = _G[name .. "MaterialTopLeft"]
+		topLeft:SetWidth(M.left)
+		topLeft:SetHeight(M.top)
+		place(topLeft, "TOPLEFT", f, "TOPLEFT", M[1], M[2])
+		_G[name .. "MaterialTopRight"]:SetWidth(M.right)
+		_G[name .. "MaterialTopRight"]:SetHeight(M.top)
+		_G[name .. "MaterialBotLeft"]:SetWidth(M.left)
+		_G[name .. "MaterialBotLeft"]:SetHeight(M.down)
+		_G[name .. "MaterialBotRight"]:SetWidth(M.right)
+		_G[name .. "MaterialBotRight"]:SetHeight(M.down)
 	end
-	-- le contenu commun des pages de quete (QuestInfo.xml : 285 ;
-	-- QuestInfoFrame 300 ; tout a 5 de l'enfant, QUEST_TEMPLATE_* : le titre a
-	-- (5, -10), le reste dessous), de la progression (285 / 275 / 295, a 10
-	-- de l'enfant) et de l'accueil (270 / 300 a 10, les titres 300 a 0 et leur
-	-- texte 275) ; sans barre, chacun jusqu'a la marge qu'il a a gauche
-	local x = Q.defile[1]
-	local fxSans = jusquAMarge(x)
-	local communs = { { QuestInfoFrame, 300, jusquAMarge(x) } }
+	-- content shared by quest pages (QuestInfo.xml: 285; QuestInfoFrame 300; all 5 from the child,
+	-- QUEST_TEMPLATE_*: title at (5, -10)), progress (285 / 275 / 295, 10 from the child) and
+	-- greeting (270 / 300 at 10, title buttons 300 at 0, their text 275); without bar, each widens
+	-- to its left margin
+	local x = Q.scroll[1]
+	local fxNoBar = widthToMargin(x)
+	local common = { { QuestInfoFrame, 300, widthToMargin(x) } }
 	for _, n in ipairs({ "QuestInfoTitleHeader", "QuestInfoObjectivesText", "QuestInfoRewardText",
 		"QuestInfoDescriptionHeader", "QuestInfoObjectivesHeader", "QuestInfoDescriptionText", "QuestInfoTimerText",
 		"QuestInfoRewardsHeader", "QuestInfoItemChooseText", "QuestInfoReputationText", "QuestInfoObjectivesFrame",
 		"QuestInfoRewardsFrame", "QuestInfoReputationsFrame", "QuestInfoRequiredMoneyFrame" }) do
-		communs[#communs + 1] = { _G[n], 285, jusquAMarge(x + 5) }
+		common[#common + 1] = { _G[n], 285, widthToMargin(x + 5) }
 	end
-	for i = 1, 10 do communs[#communs + 1] = { _G["QuestInfoObjective" .. i], 285, jusquAMarge(x + 5) } end
-	local progres, accueil = jusquAMarge(x + Q.titreProgres[1]), jusquAMarge(x + 10)
-	local parPage = {
-		QuestProgressScrollFrame = { { QuestProgressTitleText, 285, progres }, { QuestProgressText, 275, progres },
-			{ QuestProgressRequiredItemsText, 295, progres } },
-		QuestGreetingScrollFrame = { { GreetingText, 270, accueil }, { CurrentQuestsText, 300, accueil },
-			{ AvailableQuestsText, 300, accueil } },
+	for i = 1, 10 do common[#common + 1] = { _G["QuestInfoObjective" .. i], 285, widthToMargin(x + 5) } end
+	local progress, home = widthToMargin(x + Q.progressTitle[1]), widthToMargin(x + 10)
+	local perPage = {
+		QuestProgressScrollFrame = { { QuestProgressTitleText, 285, progress }, { QuestProgressText, 275, progress },
+			{ QuestProgressRequiredItemsText, 295, progress } },
+		QuestGreetingScrollFrame = { { GreetingText, 270, home }, { CurrentQuestsText, 300, home },
+			{ AvailableQuestsText, 300, home } },
 	}
 	for i = 1, 32 do
 		local b = _G["QuestTitleButton" .. i]
 		if b then
-			table.insert(parPage.QuestGreetingScrollFrame, { b, 300, jusquAMarge(x) })
-			table.insert(parPage.QuestGreetingScrollFrame, { b:GetFontString(), 275, 275 + jusquAMarge(x) - 300 })
+			table.insert(perPage.QuestGreetingScrollFrame, { b, 300, widthToMargin(x) })
+			table.insert(perPage.QuestGreetingScrollFrame, { b:GetFontString(), 275, 275 + widthToMargin(x) - 300 })
 		end
 	end
-	-- la matiere de chaque panneau (239 + 64) : sans barre, jusqu'au bord de
-	-- la page, comme le parchemin
-	local matiere = jusquAMarge(M[1]) - M.droite
+	-- material of each panel (239 + 64): without bar, up to the page edge like the parchment
+	local material = widthToMargin(M[1]) - M.right
 	for fx, p in pairs({ QuestGreetingScrollFrame = "QuestFrameGreetingPanel", QuestDetailScrollFrame = "QuestFrameDetailPanel",
 		QuestProgressScrollFrame = "QuestFrameProgressPanel", QuestRewardScrollFrame = "QuestFrameRewardPanel" }) do
-		parPage[fx] = parPage[fx] or {}
-		table.insert(parPage[fx], { _G[p .. "MaterialTopLeft"], M.gauche, matiere })
-		table.insert(parPage[fx], { _G[p .. "MaterialBotLeft"], M.gauche, matiere })
+		perPage[fx] = perPage[fx] or {}
+		table.insert(perPage[fx], { _G[p .. "MaterialTopLeft"], M.left, material })
+		table.insert(perPage[fx], { _G[p .. "MaterialBotLeft"], M.left, material })
 	end
-	-- les fenetres a defilement et leurs enfants
-	for _, v in ipairs({ { "QuestGreetingScrollFrame", "QuestGreetingScrollChildFrame", Q.enfant },
-		{ "QuestDetailScrollFrame", "QuestDetailScrollChildFrame", Q.enfant },
-		{ "QuestProgressScrollFrame", "QuestProgressScrollChildFrame", Q.enfant },
-		{ "QuestRewardScrollFrame", "QuestRewardScrollChildFrame", Q.enfantRecompense } }) do
+	-- scroll frames and their children
+	for _, v in ipairs({ { "QuestGreetingScrollFrame", "QuestGreetingScrollChildFrame", Q.child },
+		{ "QuestDetailScrollFrame", "QuestDetailScrollChildFrame", Q.child },
+		{ "QuestProgressScrollFrame", "QuestProgressScrollChildFrame", Q.child },
+		{ "QuestRewardScrollFrame", "QuestRewardScrollChildFrame", Q.rewardChild } }) do
 		local fx = _G[v[1]]
-		fx:SetWidth(Q.defile[3])
-		fx:SetHeight(Q.defile[4])
-		poser(fx, "TOPLEFT", f, "TOPLEFT", Q.defile[1], Q.defile[2])
+		fx:SetWidth(Q.scroll[3])
+		fx:SetHeight(Q.scroll[4])
+		place(fx, "TOPLEFT", f, "TOPLEFT", Q.scroll[1], Q.scroll[2])
 		_G[v[2]]:SetHeight(v[3])
-		Gb.BarreA(_G[v[1] .. "ScrollBar"], fx, Q.barre[1], Q.barre[2], Q.barre[3])
-		local largeurs = { { fx, Q.defile[3], fxSans }, { _G[v[2]], Q.defile[3], fxSans } }
-		for _, c in ipairs(communs) do largeurs[#largeurs + 1] = c end
-		for _, c in ipairs(parPage[v[1]] or {}) do largeurs[#largeurs + 1] = c end
-		barreSiBesoin(fx, f, function(avec) elargir(largeurs, avec) end)
+		Tpl.BarAt(_G[v[1] .. "ScrollBar"], fx, Q.bar[1], Q.bar[2], Q.bar[3])
+		local widths = { { fx, Q.scroll[3], fxNoBar }, { _G[v[2]], Q.scroll[3], fxNoBar } }
+		for _, c in ipairs(common) do widths[#widths + 1] = c end
+		for _, c in ipairs(perPage[v[1]] or {}) do widths[#widths + 1] = c end
+		barIfNeeded(fx, f, function(hasBar) widen(widths, hasBar) end)
 	end
-	poser(QuestProgressTitleText, "TOPLEFT", QuestProgressScrollChildFrame, "TOPLEFT", Q.titreProgres[1], Q.titreProgres[2])
-	-- les boutons : a gauche l'action, a droite le refus
+	place(QuestProgressTitleText, "TOPLEFT", QuestProgressScrollChildFrame, "TOPLEFT", Q.progressTitle[1], Q.progressTitle[2])
+	-- buttons: action on the left, refusal on the right
 	for _, b in ipairs({ QuestFrameAcceptButton, QuestFrameCompleteButton, QuestFrameCompleteQuestButton }) do
-		poser(b, "BOTTOMLEFT", f, "BOTTOMLEFT", N.gauche[1], N.gauche[2])
+		place(b, "BOTTOMLEFT", f, "BOTTOMLEFT", N.left[1], N.left[2])
 	end
 	for _, b in ipairs({ QuestFrameDeclineButton, QuestFrameGoodbyeButton, QuestFrameCancelButton, QuestFrameGreetingGoodbyeButton }) do
-		poser(b, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.droite[1], N.droite[2])
+		place(b, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.right[1], N.right[2])
 	end
-	hooksecurefunc("QuestFrame_SetPortrait", D.ApresPortraitQuete)
-	hooksecurefunc("QuestInfo_ShowRewards", D.ApresRecompenses)
-	hooksecurefunc("QuestFrameProgressItems_Update", D.ApresProgres)
+	hooksecurefunc("QuestFrame_SetPortrait", D.AfterQuestPortrait)
+	hooksecurefunc("QuestInfo_ShowRewards", D.AfterRewards)
+	hooksecurefunc("QuestFrameProgressItems_Update", D.AfterProgress)
 end
 
--- ------------------------------------------------------------ etape 2
+-- ------------------------------------------------------------ Book, petition, guild registrar
 
--- RELEVE -- CE QUE LE CLIENT CHARGE (ItemTextFrame.xml / .lua,
--- PetitionFrame.xml / .lua, GuildRegistrarFrame.xml / .lua de 3.3.5) :
---   les trois fenetres 384 x 512 a TOPLEFT (0, -104) ;
---   ItemTextFrame : art sans nom (Spellbook-Icon 58 x 58 a (10, -8),
---     UI-ItemText-TopLeft / BotLeft, UI-SpellbookPanel-TopRight / BotRight),
---     ItemTextMaterialTopLeft (21, -76) et ses voisines, ItemTextTitleText
---     CENTER (6, 230) (ItemTextGetItem), ItemTextCurrentPage TOP (10, -50),
---     ItemTextScrollFrame 280 x 355 TOPRIGHT (-66, -76) et ses fonds
---     ItemTextScrollFrameTop / Bottom / Middle, scrollBarHideable pose par le
---     client ; ItemTextPageText (0, -15) 270 x 304 ; Prev / Next CENTER sur
---     TOPLEFT (90, -56) et TOPRIGHT (-55, -56) ; ItemTextCloseButton ;
---   PetitionFrame : PetitionFramePortrait (GuildCharter-Icon) 58 x 58 a (10,
---     -8), art UI-QuestGreeting sans nom, PetitionFrameCharterTitle (30,
---     -95) et les lignes enchainees, nom dans PetitionFrameNpcNameText
---     (PetitionFrame_Update, SetFormattedText), boutons BOTTOMRIGHT (-40,
---     72) et BOTTOMLEFT (22, 72) ;
---   GuildRegistrarFrame : GuildRegistrarFramePortrait 60 x 60 a (7, -6) et
---     GuildRegistrarFrameNpcNameText (GuildRegistrar_OnShow), art
---     UI-QuestGreeting, UI-Quest-BotLeftPatch sous l'accueil,
---     AvailableServicesText (35, -100), GuildRegistrarPurchaseText (35, -95),
---     boutons BOTTOMRIGHT (-40, 72) et BOTTOMLEFT (22, 72).
---
--- RELEVE -- CAMELOT ([Family] mainline itemtextframe, petitionframe,
--- guildregistrarframe) :
---   ButtonFrameTemplate 338 x 424 (DEFAULT_ITEM_TEXT_FRAME_WIDTH / HEIGHT) ;
---   ItemTextFrame : ItemTextFramePageBg (QuestBG-Parchment) 299 x 357 a (7,
---     -62), matiere a (7, -62), ItemTextCurrentPage TOP (20, -35), Prev /
---     Next CENTER (75, -41) / (-23, -41), ItemTextScrollFrame de TOPRIGHT
---     (-31, -63) a BOTTOMLEFT (6, 6), barre scrollBarX 7, TopY -5, BottomY 5,
---     texte a (18, -15) 270 x 304, titre = ItemTextGetItem (SetTitle) ;
---   PetitionFrame : Bg (QuestBG-Parchment) 299 x 334 a (7, -62),
---     PetitionFrameCharterTitle (12, -80), boutons BOTTOMRIGHT (-6, 4) et
---     BOTTOMLEFT (4, 4) ;
---   GuildRegistrarFrame : Bg 299 x 334 a (7, -62), AvailableServicesText et
---     GuildRegistrarPurchaseText (20, -70), boutons (-6, 4) et (6, 4).
---
--- CE QUI DIFFERE, ET POURQUOI. Le portrait suit la regle VALIDEE (48 a (1,
--- 1,5)) : le livre, la charte ou le PNJ. Les regles VALIDEES sur le
--- dialogue valent pour le livre : la barre seulement si elle sert, la page
--- sur tout l'espace sans elle. Le mode livre agrandi (ParchmentLarge) et la
--- page pleine (ItemTextIsFullPage) n'existent pas en 3.3.5.
+-- ItemTextFrame, PetitionFrame and GuildRegistrarFrame (3.3.5: 384 x 512) in Camelot's
+-- ButtonFrameTemplate 338 x 424 (DEFAULT_ITEM_TEXT_FRAME_WIDTH / HEIGHT), QuestBG-Parchment page
+-- at (7, -62); positions from Camelot's itemtextframe, petitionframe and guildregistrarframe.
+-- Portrait: the book, the charter or the NPC. The book follows the gossip scroll bar rules.
+-- The large book mode (ParchmentLarge) and full page (ItemTextIsFullPage) do not exist in 3.3.5.
 local P2 = {
-	hauteur = 424,
-	livre = { page = 357, defileHD = { -31, -63 }, defileBG = { 6, 6 }, barre = { 7, -5, 5 }, texte = { 18, -15 }, largeurTexte = 270,
-		pageCourante = { 20, -35 }, precedent = { 75, -41 }, suivant = { -23, -41 } },
-	petition = { page = 334, charte = { 12, -80 }, gauche = { 4, 4 } },
-	registre = { page = 334, services = { 20, -70 }, achat = { 20, -70 } },
+	height = 424,
+	book = { page = 357, scrollTopRight = { -31, -63 }, scrollBottomLeft = { 6, 6 }, bar = { 7, -5, 5 }, text = { 18, -15 }, textWidth = 270,
+		currentPage = { 20, -35 }, previous = { 75, -41 }, following = { -23, -41 } },
+	petition = { page = 334, charter = { 12, -80 }, left = { 4, 4 } },
+	registrar = { page = 334, services = { 20, -70 }, purchase = { 20, -70 } },
 }
 
 local ART2 = {
-	livre = "Interface" .. SEP .. "Spellbook" .. SEP .. "Spellbook-Icon",
+	book = "Interface" .. SEP .. "Spellbook" .. SEP .. "Spellbook-Icon",
 }
 
--- l'art sans nom d'une fenetre (avant de l'habiller : nos textures sont
--- sans nom aussi)
-local function eteindreSansNom(f)
+-- hides a window's unnamed textures (before skinning: ours are unnamed too)
+local function blankUnnamed(f)
 	for _, r in ipairs({ f:GetRegions() }) do
 		if r:GetObjectType() == "Texture" and not r:GetName() then r:SetAlpha(0) end
 	end
 end
 
-function D.HabillerLivre()
+function D.SkinBook()
 	local f = ItemTextFrame
-	if not f or f.foreverHabit then return end
-	local L = P2.livre
-	eteindreSansNom(f)
-	local habit = habiller(f, ItemTextTitleText, ItemTextTitleText, ItemTextCloseButton,
-		{ hauteur = P2.hauteur, page = L.page })
-	habit.portrait:SetTexture(ART2.livre)
-	poser(ItemTextMaterialTopLeft, "TOPLEFT", f, "TOPLEFT", N.parchemin[1], N.parchemin[2])
-	poser(ItemTextCurrentPage, "TOP", f, "TOP", L.pageCourante[1], L.pageCourante[2])
-	poser(ItemTextPrevPageButton, "CENTER", f, "TOPLEFT", L.precedent[1], L.precedent[2])
-	poser(ItemTextNextPageButton, "CENTER", f, "TOPRIGHT", L.suivant[1], L.suivant[2])
+	if not f or f.foreverSkin then return end
+	local L = P2.book
+	blankUnnamed(f)
+	local skin = applySkin(f, ItemTextTitleText, ItemTextTitleText, ItemTextCloseButton,
+		{ height = P2.height, page = L.page })
+	skin.portrait:SetTexture(ART2.book)
+	place(ItemTextMaterialTopLeft, "TOPLEFT", f, "TOPLEFT", N.parchment[1], N.parchment[2])
+	place(ItemTextCurrentPage, "TOP", f, "TOP", L.currentPage[1], L.currentPage[2])
+	place(ItemTextPrevPageButton, "CENTER", f, "TOPLEFT", L.previous[1], L.previous[2])
+	place(ItemTextNextPageButton, "CENTER", f, "TOPRIGHT", L.following[1], L.following[2])
 	local fx = ItemTextScrollFrame
 	fx:ClearAllPoints()
-	fx:SetPoint("TOPRIGHT", f, "TOPRIGHT", L.defileHD[1], L.defileHD[2])
-	fx:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", L.defileBG[1], L.defileBG[2])
+	fx:SetPoint("TOPRIGHT", f, "TOPRIGHT", L.scrollTopRight[1], L.scrollTopRight[2])
+	fx:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", L.scrollBottomLeft[1], L.scrollBottomLeft[2])
 	for _, s in ipairs({ "Top", "Bottom", "Middle" }) do
 		local t = _G["ItemTextScrollFrame" .. s]
 		if t then t:SetAlpha(0) end
 	end
-	poser(ItemTextPageText, "TOPLEFT", ItemTextPageScrollChild, "TOPLEFT", L.texte[1], L.texte[2])
-	Gb.BarreA(ItemTextScrollFrameScrollBar, fx, L.barre[1], L.barre[2], L.barre[3])
-	-- le contenu : sans barre, la fenetre s'etend sur le couloir, le texte
-	-- (270, a 18 de la fenetre a defilement) jusqu'a la marge qu'il a a
-	-- gauche, la matiere (256 + 64) jusqu'au bord de la page
-	local texteSans = jusquAMarge(L.defileBG[1] + L.texte[1])
-	local matiere = jusquAMarge(N.parchemin[1]) - 64
-	barreSiBesoin(fx, f, function(avec)
-		fx:SetPoint("TOPRIGHT", f, "TOPRIGHT", L.defileHD[1] + (avec and 0 or Gb.COULOIR), L.defileHD[2])
-		ItemTextPageText:SetWidth(avec and L.largeurTexte or texteSans)
-		ItemTextMaterialTopLeft:SetWidth(avec and 256 or matiere)
-		ItemTextMaterialBotLeft:SetWidth(avec and 256 or matiere)
+	place(ItemTextPageText, "TOPLEFT", ItemTextPageScrollChild, "TOPLEFT", L.text[1], L.text[2])
+	Tpl.BarAt(ItemTextScrollFrameScrollBar, fx, L.bar[1], L.bar[2], L.bar[3])
+	-- content: without bar, the scroll frame covers the gutter, the text (270, 18 from the scroll
+	-- frame) widens to its left margin, the material (256 + 64) reaches the page edge
+	local textNoBar = widthToMargin(L.scrollBottomLeft[1] + L.text[1])
+	local material = widthToMargin(N.parchment[1]) - 64
+	barIfNeeded(fx, f, function(hasBar)
+		fx:SetPoint("TOPRIGHT", f, "TOPRIGHT", L.scrollTopRight[1] + (hasBar and 0 or Tpl.GUTTER), L.scrollTopRight[2])
+		ItemTextPageText:SetWidth(hasBar and L.textWidth or textNoBar)
+		ItemTextMaterialTopLeft:SetWidth(hasBar and 256 or material)
+		ItemTextMaterialBotLeft:SetWidth(hasBar and 256 or material)
 	end)
 end
 
-function D.HabillerPetition()
+function D.SkinPetition()
 	local f = PetitionFrame
-	if not f or f.foreverHabit then return end
+	if not f or f.foreverSkin then return end
 	local T = P2.petition
-	local charte = PetitionFramePortrait:GetTexture()
-	eteindrePanneau(f)
-	local habit = habiller(f, PetitionFrameNpcNameText, PetitionFramePortrait, PetitionFrameCloseButton,
-		{ hauteur = P2.hauteur, page = T.page })
-	habit.portrait:SetTexture(charte)
-	poser(PetitionFrameCharterTitle, "TOPLEFT", f, "TOPLEFT", T.charte[1], T.charte[2])
-	poser(PetitionFrameCancelButton, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.droite[1], N.droite[2])
+	local charter = PetitionFramePortrait:GetTexture()
+	blankPanel(f)
+	local skin = applySkin(f, PetitionFrameNpcNameText, PetitionFramePortrait, PetitionFrameCloseButton,
+		{ height = P2.height, page = T.page })
+	skin.portrait:SetTexture(charter)
+	place(PetitionFrameCharterTitle, "TOPLEFT", f, "TOPLEFT", T.charter[1], T.charter[2])
+	place(PetitionFrameCancelButton, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.right[1], N.right[2])
 	for _, b in ipairs({ PetitionFrameSignButton, PetitionFrameRequestButton }) do
-		poser(b, "BOTTOMLEFT", f, "BOTTOMLEFT", T.gauche[1], T.gauche[2])
+		place(b, "BOTTOMLEFT", f, "BOTTOMLEFT", T.left[1], T.left[2])
 	end
 end
 
-function D.ApresRegistre()
-	local h = GuildRegistrarFrame.foreverHabit
+function D.AfterRegistrar()
+	local h = GuildRegistrarFrame.foreverSkin
 	if h then portrait(h, "npc") end
 end
 
-function D.HabillerRegistre()
+function D.SkinRegistrar()
 	local f = GuildRegistrarFrame
-	if not f or f.foreverHabit then return end
-	local R = P2.registre
-	eteindrePanneau(f)
-	eteindrePanneau(GuildRegistrarGreetingFrame)
-	habiller(f, GuildRegistrarFrameNpcNameText, GuildRegistrarFramePortrait, GuildRegistrarFrameCloseButton,
-		{ hauteur = P2.hauteur, page = R.page })
-	poser(AvailableServicesText, "TOPLEFT", f, "TOPLEFT", R.services[1], R.services[2])
-	poser(GuildRegistrarPurchaseText, "TOPLEFT", f, "TOPLEFT", R.achat[1], R.achat[2])
+	if not f or f.foreverSkin then return end
+	local R = P2.registrar
+	blankPanel(f)
+	blankPanel(GuildRegistrarGreetingFrame)
+	applySkin(f, GuildRegistrarFrameNpcNameText, GuildRegistrarFramePortrait, GuildRegistrarFrameCloseButton,
+		{ height = P2.height, page = R.page })
+	place(AvailableServicesText, "TOPLEFT", f, "TOPLEFT", R.services[1], R.services[2])
+	place(GuildRegistrarPurchaseText, "TOPLEFT", f, "TOPLEFT", R.purchase[1], R.purchase[2])
 	for _, b in ipairs({ GuildRegistrarFrameGoodbyeButton, GuildRegistrarFrameCancelButton }) do
-		poser(b, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.droite[1], N.droite[2])
+		place(b, "BOTTOMRIGHT", f, "BOTTOMRIGHT", N.right[1], N.right[2])
 	end
-	poser(GuildRegistrarFramePurchaseButton, "BOTTOMLEFT", f, "BOTTOMLEFT", N.gauche[1], N.gauche[2])
-	hooksecurefunc("GuildRegistrar_OnShow", D.ApresRegistre)
+	place(GuildRegistrarFramePurchaseButton, "BOTTOMLEFT", f, "BOTTOMLEFT", N.left[1], N.left[2])
+	hooksecurefunc("GuildRegistrar_OnShow", D.AfterRegistrar)
 end
 
-D.HabillerDialogue()
-D.HabillerQuete()
-D.HabillerLivre()
-D.HabillerPetition()
-D.HabillerRegistre()
+D.SkinDialog()
+D.SkinQuest()
+D.SkinBook()
+D.SkinPetition()
+D.SkinRegistrar()

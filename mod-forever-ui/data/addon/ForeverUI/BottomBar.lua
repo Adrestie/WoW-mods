@@ -1,1030 +1,899 @@
--- ForeverUI : le bas de l'ecran -- micro-menu et barre des sacs.
---
--- RELEVE DES SOURCES -- tout vient du code extrait de camelot.
---
--- mainline/MainMenuBarMicroMenuTemplate.xml + camelot/MainMenuBarMicroMenu.xml
---   bouton        32 x 40
---   ecart         childXPadding = -5 : un pas de 27, les boutons se
---                 chevauchent de 5 px
---   fond          UI-HUD-MicroMenu-ButtonBG-Up a sa taille d'atlas, centre ;
---                 UI-HUD-MicroMenu-ButtonBG-Down prend sa place quand le
---                 bouton est enfonce (MainMenuBarMicroButtonMixin:SetPushed)
---   icones        UI-HUD-MicroMenu-<jeu>-Up / -Down / -Disabled / -Mouseover
---                 (LoadMicroButtonTextures)
---   survol        -Mouseover en BLEND quand le bouton est normal,
---                 -Down en ADD a 50 % quand il est enfonce
---   encadrement   UI-HUD-ActionBar-Frame, TOPLEFT (-8, 8), BOTTOMRIGHT (8, -8)
---   fond du bloc  UI-HUD-ActionBar-IconFrame-Background, pose sur
---                 l'encadrement : TOPLEFT (-13, 0), BOTTOMRIGHT (14, 4)
---   portrait      CharacterMicroButton n'a pas d'icone : une ombre
---                 (Portrait-Shadow), le portrait du joueur rogne a
---                 (0.2, 0.8, 0.0666, 0.9) et rentre de 7 px, et une seconde
---                 ombre (Portrait-Down) quand le bouton est enfonce
---   latence       MainMenuBarPerformanceBar, 19 x 39, BOTTOM (0, -2) -- (0, 0) ici, voir
---                 plus bas --, sur l'image
---                 de camelot (UI-MainMenuBar-PerformanceBar, 32 x 64)
---
--- camelot/MicroMenuContainerOverrides.lua donne l'ordre. Trois des dix boutons
--- de 3.3.5 n'existent plus chez camelot, et l'atlas ne leur offre pas de jeu
--- d'images c60 :
---   Succes -> jeu "Achievements", present dans l'atlas mais sans variante c60
---             (camelot a retire ce bouton) : on prend la variante de base.
---   JcJ    -> RETIRE le 2026-09-26, a la demande : le PvP s'ouvre par
---             l'onglet de la feuille de personnage. Le bouton du client est
---             neutralise (ForeverUI.Suppress).
---   Aide   -> RETIRE le 2026-09-26, a la demande -- camelot cache ce bouton
---             lui aussi. La demande d'aide passe au menu Echap, la ou camelot
---             met GAMEMENU_SUPPORT (voir plus bas) ; le bouton du client est
---             neutralise, comme celui du JcJ.
--- LE BANDEAU A LA LARGEUR DE SES BOUTONS (demande du 2026-09-26) : plus de
--- rallonge -- ni la place des boutons retires, ni celle du sac a composants --
--- et la barre d'action et les sacs, poses de part et d'autre, s'en
--- rapprochent.
---
--- camelot/MainMenuBarBagButtons.xml + shared/BagsBar.lua
---   sac              45 x 45, bagPadding = 2, ranges vers la GAUCHE depuis le
---                    sac a dos
---   ordre            sac a dos, sacs 1 a 4, trousseau (le sac a composants
---                    de camelot n'existe pas sur 3.3.5 et sa place n'est plus
---                    tenue)
---   trousseau        33 x 45
---   cadre d'un sac   ui-hud-actionbar-iconframe-bags, 46 x 46, ancre TOPLEFT
---                    (BaseBagSlotButtonMixin:UpdateTextures)
---   survol           le meme dessin, en ADD a 40 %, sur tout le bouton
---   cadre trousseau  ui-hud-actionbar-iconframe-small, 33 x 46 ; son image est
---                    UI-HUD-ActionBar-Keyring-Small quand showKeyring est
---                    actif, UI-HUD-ActionBar-IconFrame-Slot-Small sinon
---   encadrement      UI-HUD-ActionBar-Frame, TOPLEFT (-6, 6), BOTTOMRIGHT (5, -5)
---   separateurs      useDividers : LEFT sur le RIGHT du sac decale de -5,
---                    sur toute sa hauteur
---
--- camelot/EditModePresetLayoutConstants.lua, mainline/EditModePresetLayouts.lua
---   micro-menu       BOTTOM de l'ecran, (116.5, 6)
---   barre d'action   BOTTOMRIGHT sur le BOTTOMLEFT du micro-menu, (-4.5, -4)
---   sacs             BOTTOMLEFT sur le BOTTOMRIGHT du micro-menu, (7, -4)
---   embout gauche    bord gauche de la barre d'action, rentre de 30
---   embout droit     bord droit de la barre des sacs, rentre de 30
---                    (cales par le BAS : voir ActionBar.lua)
+-- Bottom of the screen: the micro menu and the bags bar, rebuilt from camelot.
+-- Sources: camelot/MainMenuBarMicroMenu.xml, MicroMenuContainerOverrides.lua (order),
+-- MainMenuBarBagButtons.xml, shared/BagsBar.lua, EditModePresetLayoutConstants.lua (positions).
+-- The client's PvP and Help micro buttons are removed; the strip is as wide as its buttons.
 
+-- camelot/MainMenuBarMicroMenu.xml: 32 x 40 buttons, childXPadding = -5 (5 px overlap)
 local MICRO_W, MICRO_H = 32, 40
 local MICRO_PADDING = -5
 local MICRO_PITCH = MICRO_W + MICRO_PADDING
 
--- Hauteur affichee d'un bouton. Le bandeau fait 40, son encadrement deborde de
--- 8 de chaque cote (56 au total) et le liseré de bronze prend 5 px : il reste
--- 46 d'ouverture. Les images de camelot font 41 et laissaient donc du vide en
--- haut et en bas ; on les etire a la hauteur de l'ouverture.
+-- Displayed button height: the 40 px strip plus its 8 px frame on each side (56),
+-- minus the 5 px bronze edge on each side, leaves a 46 px opening.
+-- Camelot's 41 px art is stretched to fill it.
 local MICRO_ART_H = 46
 
+-- camelot/MainMenuBarBagButtons.xml: bags 45 x 45, bagPadding = 2, bag frame 46 x 46,
+-- keyring 33 wide
 local BAG_SIZE = 45
 local BAG_PADDING = 2
 local BAG_FRAME_W, BAG_FRAME_H = 46, 46
 local KEYRING_W = 33
 
 
+-- camelot/EditModePresetLayoutConstants.lua: micro menu at BOTTOM (116.5, 6); action bar
+-- BOTTOMRIGHT on its BOTTOMLEFT (-4.5, -4); bags BOTTOMLEFT on its BOTTOMRIGHT (7, -4)
 local MICRO_X, MICRO_Y = 116.5, 6
 local BAR_OFFSET_X, BAR_OFFSET_Y = -4.5, -4
 local BAGS_OFFSET_X, BAGS_OFFSET_Y = 7, -4
 
--- Lua 5.1 lit les antislashs d'une chaine comme des echappements : on pose le
--- separateur de chemin en clair plutot que de le doubler.
+-- Backslash built with string.char, so the path needs no escaped separators.
 local SEP = string.char(92)
-local ICONE_SAC = "Interface" .. SEP .. "ForeverUI" .. SEP .. "icons" .. SEP .. "ui-hud-actionbar-bag"
+local BAG_ICON = "Interface" .. SEP .. "ForeverUI" .. SEP .. "icons" .. SEP .. "ui-hud-actionbar-bag"
 local PERFORMANCE_IMAGE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "mainmenubar" .. SEP .. "ui-mainmenubar-performancebar"
 local L = ForeverUI.L
 
--- L'ordre de camelot, reduit aux boutons que ce client possede.
---
--- LE BOUTON DES METIERS (demande du 2026-09-28) : ProfessionMicroButton de
--- camelot, juste apres la feuille de personnage. 3.3.5 n'en a pas : le
--- bouton est cree ici (creer), a l'image de ceux du client ; il ouvre le
--- livre des metiers (ProfessionsBook.lua).
---
--- UN AUTRE ADDON PEUT Y AJOUTER SON BOUTON (ForeverUI.AjouterMicroBouton,
--- plus bas) sans que ForeverUI le connaisse.
---
--- creer : le role du bouton cree, qui choisit son infobulle et son clic
--- (ROLES_MICRO).
+-- Camelot's order, limited to the buttons this client has.
+-- The professions button (camelot ProfessionMicroButton) does not exist in 3.3.5: it is
+-- created here and opens ProfessionsBook.lua.
+-- create: role of a created button, which picks its tooltip and click (MICRO_ROLES).
+-- Other addons add their own buttons with ForeverUI.AddMicroButton (below).
 local MICRO = {
-	{ nom = "CharacterMicroButton", portrait = true },
-	{ nom = "ForeverUIProfessionMicroButton", jeu = "professions", creer = "metiers" },
-	{ nom = "SpellbookMicroButton", jeu = "spellbookabilities" },
-	{ nom = "TalentMicroButton", jeu = "spectalents" },
-	{ nom = "AchievementMicroButton", jeu = "achievements" },
-	{ nom = "QuestLogMicroButton", jeu = "questlog" },
-	{ nom = "SocialsMicroButton", jeu = "guildcommunities" },
-	{ nom = "LFDMicroButton", jeu = "groupfinder" },
-	{ nom = "MainMenuMicroButton", jeu = "gamemenu" },
+	{ name = "CharacterMicroButton", portrait = true },
+	{ name = "ForeverUIProfessionMicroButton", atlasSet = "professions", create = "professions" },
+	{ name = "SpellbookMicroButton", atlasSet = "spellbookabilities" },
+	{ name = "TalentMicroButton", atlasSet = "spectalents" },
+	{ name = "AchievementMicroButton", atlasSet = "achievements" },
+	{ name = "QuestLogMicroButton", atlasSet = "questlog" },
+	{ name = "SocialsMicroButton", atlasSet = "guildcommunities" },
+	{ name = "LFDMicroButton", atlasSet = "groupfinder" },
+	{ name = "MainMenuMicroButton", atlasSet = "gamemenu" },
 }
 
-local ETATS_MICRO = {
+local MICRO_STATES = {
 	up = "GetNormalTexture",
 	down = "GetPushedTexture",
 	disabled = "GetDisabledTexture",
 	mouseover = "GetHighlightTexture",
 }
 
--- camelot affiche le jeu c60. La table d'atlas donne ces images sous leur nom
--- complet ; le nom logique, lui, tombe sur la variante de base, la feuille c60
--- etant versee apres dans l'ordre alphabetique. On demande donc la c60 par son
--- nom, et on se rabat sur la base quand elle n'existe pas.
--- L'etat desactive s'ecrit "-disable" sur la feuille c60 et "-disabled" sur la
--- feuille de base : les deux sont essayes.
-local function microAtlas(jeu, etat)
-	local candidats = {
-		"ui-hud-micromenu-" .. jeu .. "-" .. etat .. "-c60-2x",
-		"ui-hud-micromenu-" .. jeu .. "-" .. etat .. "-2x",
+-- Camelot shows the c60 set. The logical atlas name resolves to the base variant (the c60
+-- sheet sorts after it), so the c60 name is tried first, with the base one as fallback.
+-- The disabled state is -disable on the c60 sheet and -disabled on the base sheet.
+local function microAtlas(atlasSet, state)
+	local candidates = {
+		"ui-hud-micromenu-" .. atlasSet .. "-" .. state .. "-c60-2x",
+		"ui-hud-micromenu-" .. atlasSet .. "-" .. state .. "-2x",
 	}
-	if etat == "disabled" then
-		table.insert(candidats, 1, "ui-hud-micromenu-" .. jeu .. "-disable-c60-2x")
+	if state == "disabled" then
+		table.insert(candidates, 1, "ui-hud-micromenu-" .. atlasSet .. "-disable-c60-2x")
 	end
-	for _, nom in ipairs(candidats) do
-		if ForeverUI.AtlasEntry(nom) then
-			return nom
+	for _, name in ipairs(candidates) do
+		if ForeverUI.AtlasEntry(name) then
+			return name
 		end
 	end
 	return nil
 end
 
--- --------------------------------------------------------- le micro-menu
+-- --------------------------------------------------------- Micro menu
 local micro = CreateFrame("Frame", "ForeverUIMicroMenu", UIParent)
 micro:SetHeight(MICRO_H)
 
-local fondBloc = micro:CreateTexture(nil, "BACKGROUND")
-ForeverUI.SetAtlas(fondBloc, "ui-hud-actionbar-iconframe-background", true)
+local blockBackground = micro:CreateTexture(nil, "BACKGROUND")
+ForeverUI.SetAtlas(blockBackground, "ui-hud-actionbar-iconframe-background", true)
 
-local cadreBloc = CreateFrame("Frame", nil, micro)
-cadreBloc:SetPoint("TOPLEFT", -8, 8)
-cadreBloc:SetPoint("BOTTOMRIGHT", 8, -8)
-cadreBloc:SetFrameLevel(micro:GetFrameLevel())
-ForeverUI.SetBarFrameArt(cadreBloc, "BORDER")
+local blockFrame = CreateFrame("Frame", nil, micro)
+blockFrame:SetPoint("TOPLEFT", -8, 8)
+blockFrame:SetPoint("BOTTOMRIGHT", 8, -8)
+blockFrame:SetFrameLevel(micro:GetFrameLevel())
+ForeverUI.SetBarFrameArt(blockFrame, "BORDER")
 
--- Le fond deborde de l'encadrement. La source le declare apres lui, mais dans
--- un sous-niveau inferieur : a l'ecran il passe DESSOUS, et 3.3.5 n'ayant pas
--- de sous-niveaux, on le range dans une couche plus basse.
-fondBloc:SetPoint("TOPLEFT", cadreBloc, "TOPLEFT", -13, 0)
-fondBloc:SetPoint("BOTTOMRIGHT", cadreBloc, "BOTTOMRIGHT", 14, 4)
+-- The background overflows the frame. The source declares it after the frame but in a
+-- lower sublevel, so it draws below; 3.3.5 has no sublevels, so it uses a lower layer.
+blockBackground:SetPoint("TOPLEFT", blockFrame, "TOPLEFT", -13, 0)
+blockBackground:SetPoint("BOTTOMRIGHT", blockFrame, "BOTTOMRIGHT", 14, 4)
 
-local boutonsMicro = {}
+local microButtons = {}
 
-local function etatMicro(entree)
-	local bouton = entree.bouton
-	local enfonce = bouton:GetButtonState() == "PUSHED"
+-- Shows the normal or pushed art of a micro button entry, from its button state.
+local function applyMicroState(entry)
+	local button = entry.button
+	local pressed = button:GetButtonState() == "PUSHED"
 
-	if enfonce then
-		entree.fond:Hide()
-		entree.fondEnfonce:Show()
+	if pressed then
+		entry.background:Hide()
+		entry.pressedBackground:Show()
 	else
-		entree.fond:Show()
-		entree.fondEnfonce:Hide()
+		entry.background:Show()
+		entry.pressedBackground:Hide()
 	end
 
-	if entree.ombreEnfoncee then
-		if enfonce then
-			entree.ombreEnfoncee:Show()
+	if entry.pressedShadow then
+		if pressed then
+			entry.pressedShadow:Show()
 		else
-			entree.ombreEnfoncee:Hide()
+			entry.pressedShadow:Hide()
 		end
 	end
 
 
-	-- l'embleme du tabard : CENTER (0, 2), enfonce (1, 1)
-	if entree.embleme then
-		for _, t in ipairs({ entree.embleme, entree.emblemeSurvol }) do
+	-- tabard emblem: CENTER (0, 2), pushed (1, 1)
+	if entry.emblem then
+		for _, t in ipairs({ entry.emblem, entry.emblemHover }) do
 			t:ClearAllPoints()
-			t:SetPoint("CENTER", bouton, "CENTER", enfonce and 1 or 0, enfonce and 1 or 2)
+			t:SetPoint("CENTER", button, "CENTER", pressed and 1 or 0, pressed and 1 or 2)
 		end
 	end
 
-	-- CharacterMicroButton_SetPushed change le rognage du portrait ; camelot
-	-- garde le meme dans les deux etats.
-	if entree.portrait and MicroButtonPortrait then
+	-- CharacterMicroButton_SetPushed changes the portrait crop; camelot keeps the same crop
+	-- in both states.
+	if entry.portrait and MicroButtonPortrait then
 		MicroButtonPortrait:SetTexCoord(0.2, 0.8, 0.0666, 0.9)
 	end
 
-	local surbrillance = bouton:GetHighlightTexture()
-	if surbrillance and entree.jeu then
-		if enfonce then
-			if ForeverUI.SetAtlas(surbrillance, microAtlas(entree.jeu, "down"), true) then
-				surbrillance:SetBlendMode("ADD")
-				surbrillance:SetAlpha(0.5)
+	local highlight = button:GetHighlightTexture()
+	if highlight and entry.atlasSet then
+		if pressed then
+			if ForeverUI.SetAtlas(highlight, microAtlas(entry.atlasSet, "down"), true) then
+				highlight:SetBlendMode("ADD")
+				highlight:SetAlpha(0.5)
 			end
 		else
-			if ForeverUI.SetAtlas(surbrillance, microAtlas(entree.jeu, "mouseover"), true) then
-				surbrillance:SetBlendMode("BLEND")
-				surbrillance:SetAlpha(1)
+			if ForeverUI.SetAtlas(highlight, microAtlas(entry.atlasSet, "mouseover"), true) then
+				highlight:SetBlendMode("BLEND")
+				highlight:SetAlpha(1)
 			end
 		end
 	end
 end
 
--- la barre de latence du bouton du menu : camelot l'ancre a (0, -2) ; son
--- trait (le bas de l'image) deborde alors d'un pixel sous le bouton, ou il
--- n'y a rien. Ici le bord interieur de l'encadrement du bandeau tombe au bas
--- du bouton et le couvrait : ancre a (0, 0), le trait passe juste au-dessus.
---
--- LE TRAIT A 3 PIXELS (demande du 2026-09-28 : « pas assez epais, vise les
--- 3 pixels »). Sur l'image (32 x 64), le trait tient sur les lignes 58 et
--- 59 -- la 57 est son liseré sombre. A 39 de haut, une ligne de l'image
--- faisait moins d'un pixel d'ecran, et le trait, un seul. L'image prend
--- donc la hauteur qui donne 1,5 pixel par ligne : ses deux lignes colorees
--- font 3 pixels. La largeur reste celle de camelot (19). Le pixel se
--- compte sur la hauteur de l'ecran (gxResolution) et l'echelle du bouton.
-local LATENCE = { lignes = 64, pixelsParLigne = 1.5, largeur = 19 }
-local function pixelsParUnite(cadre)
+-- Latency bar of the game menu button. Camelot anchors it at (0, -2); here the strip
+-- frame's inner edge covers the button bottom, so it is anchored at (0, 0).
+-- The bar's line is rows 58-59 of the 64-row image. The height gives each row 1.5 screen
+-- pixels, so the line is 3 pixels thick; the width stays camelot's 19.
+-- Pixels come from gxResolution and the button's effective scale.
+local LATENCY = { rows = 64, pixelsPerLine = 1.5, width = 19 }
+local function pixelsPerUnit(frame)
 	local h = tonumber(string.match(GetCVar("gxResolution") or "", "%d+x(%d+)")) or 768
-	return h / 768 * cadre:GetEffectiveScale()
+	return h / 768 * frame:GetEffectiveScale()
 end
-ForeverUI.PixelsParUnite = pixelsParUnite
 
-local function poserLatence(bouton)
-	MainMenuBarPerformanceBar:SetWidth(LATENCE.largeur)
-	MainMenuBarPerformanceBar:SetHeight(LATENCE.lignes * LATENCE.pixelsParLigne / pixelsParUnite(bouton))
+local function placeLatency(button)
+	MainMenuBarPerformanceBar:SetWidth(LATENCY.width)
+	MainMenuBarPerformanceBar:SetHeight(LATENCY.rows * LATENCY.pixelsPerLine / pixelsPerUnit(button))
 	MainMenuBarPerformanceBar:ClearAllPoints()
-	MainMenuBarPerformanceBar:SetPoint("BOTTOM", bouton, "BOTTOM", 0, 0)
+	MainMenuBarPerformanceBar:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
 end
 
--- ProfessionMicroButtonMixin (mainline/mainmenubarmicrobuttons.lua) :
--- LoadMicroButtonTextures(self, "Professions") ; infobulle
--- MicroButtonTooltipText(PROFESSIONS_BUTTON, "TOGGLEPROFESSIONBOOK") --
--- PROFESSIONS_BUTTON est TRADE_SKILLS dans 3.3.5, qui n'a pas ce raccourci ;
--- le clic ouvre ou ferme les metiers (ToggleProfessionsBook). L'infobulle
--- et les images sont posees comme celles des boutons du client (OnEnter de
--- MainMenuBarMicroButton, GameTooltip_AddNewbieTip) ; habillerMicro les
--- reprend ensuite.
---
--- Un bouton ajoute par un autre addon porte lui-meme son infobulle (un texte,
--- ou une fonction qui le rend) et son clic.
-local ROLES_MICRO = {
-	metiers = {
-		infobulle = function() return MicroButtonTooltipText(TRADE_SKILLS, "TOGGLEPROFESSIONBOOK") end,
-		clic = function()
-			if ForeverUI.LivreMetiers then ForeverUI.LivreMetiers.Basculer() end
+-- Roles of created micro buttons: tooltip and click.
+-- ProfessionMicroButtonMixin (mainline/mainmenubarmicrobuttons.lua): tooltip
+-- MicroButtonTooltipText(PROFESSIONS_BUTTON, TOGGLEPROFESSIONBOOK); PROFESSIONS_BUTTON is
+-- TRADE_SKILLS in 3.3.5, which has no such key binding.
+-- Tooltip and textures are set like the client's micro buttons (MainMenuBarMicroButton
+-- OnEnter, GameTooltip_AddNewbieTip), then skinMicro re-skins them.
+-- A button added by another addon carries its own tooltip (text or function) and click.
+local MICRO_ROLES = {
+	professions = {
+		tooltip = function() return MicroButtonTooltipText(TRADE_SKILLS, "TOGGLEPROFESSIONBOOK") end,
+		onClick = function()
+			if ForeverUI.ProfessionsBook then ForeverUI.ProfessionsBook.Toggle() end
 		end,
 	},
 }
 
-local function creerMicro(definition)
-	local role = ROLES_MICRO[definition.creer] or definition
-	local infobulle = role.infobulle
-	if type(infobulle) ~= "function" then
-		local texte = infobulle
-		infobulle = function() return texte end
+local function createMicro(definition)
+	local role = MICRO_ROLES[definition.create] or definition
+	local tooltip = role.tooltip
+	if type(tooltip) ~= "function" then
+		local text = tooltip
+		tooltip = function() return text end
 	end
 	local parent = (CharacterMicroButton and CharacterMicroButton:GetParent()) or micro
-	local bouton = CreateFrame("Button", definition.nom, parent)
-	for etat, methode in pairs(ETATS_MICRO) do
-		local e = ForeverUI.AtlasEntry(microAtlas(definition.jeu, etat))
+	local button = CreateFrame("Button", definition.name, parent)
+	for state, method in pairs(MICRO_STATES) do
+		local e = ForeverUI.AtlasEntry(microAtlas(definition.atlasSet, state))
 		if e then
-			bouton[string.gsub(methode, "^Get", "Set")](bouton, e[1])
+			button[string.gsub(method, "^Get", "Set")](button, e[1])
 		end
 	end
-	bouton:RegisterForClicks("AnyUp")
-	bouton.tooltipText = infobulle()
-	bouton:SetScript("OnEnter", function(self)
-		self.tooltipText = infobulle()
+	button:RegisterForClicks("AnyUp")
+	button.tooltipText = tooltip()
+	button:SetScript("OnEnter", function(self)
+		self.tooltipText = tooltip()
 		GameTooltip_AddNewbieTip(self, self.tooltipText, 1.0, 1.0, 1.0, self.newbieText)
 	end)
-	bouton:SetScript("OnLeave", function()
+	button:SetScript("OnLeave", function()
 		GameTooltip:Hide()
 	end)
-	bouton:SetScript("OnClick", role.clic)
-	return bouton
+	button:SetScript("OnClick", role.onClick)
+	return button
 end
 
-local function habillerMicro(definition, index)
-	if definition.creer and not _G[definition.nom] then
-		creerMicro(definition)
+-- Skins a micro button with camelot art and places it in the strip; creates it if needed.
+-- index: 1-based slot in the strip
+local function skinMicro(definition, index)
+	if definition.create and not _G[definition.name] then
+		createMicro(definition)
 	end
-	local bouton = _G[definition.nom]
-	if not bouton then
+	local button = _G[definition.name]
+	if not button then
 		return nil
 	end
 
-	bouton:SetWidth(MICRO_W)
-	bouton:SetHeight(MICRO_ART_H)
-	-- 3.3.5 rend les 18 px du haut insensibles a la souris : c'etait la partie
-	-- decorative de l'ancien bouton, qui n'existe plus.
-	bouton:SetHitRectInsets(0, 0, 0, 0)
-	-- Les boutons se chevauchent de 5 px : celui de droite passe devant.
+	button:SetWidth(MICRO_W)
+	button:SetHeight(MICRO_ART_H)
+	-- 3.3.5 makes the top 18 px ignore the mouse (decor of the old button art); undo that.
+	button:SetHitRectInsets(0, 0, 0, 0)
+	-- Buttons overlap by 5 px: the right one draws on top.
 	if MainMenuBarArtFrame then
-		bouton:SetFrameLevel(MainMenuBarArtFrame:GetFrameLevel() + index)
+		button:SetFrameLevel(MainMenuBarArtFrame:GetFrameLevel() + index)
 	end
 
-	local entree = { bouton = bouton, jeu = definition.jeu, portrait = definition.portrait, cree = definition.creer }
+	local entry = { button = button, atlasSet = definition.atlasSet, portrait = definition.portrait, created = definition.create }
 
-	entree.fond = bouton:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(entree.fond, "ui-hud-micromenu-buttonbg-up-c60-2x", true)
-	entree.fond:SetAllPoints(bouton)
+	entry.background = button:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(entry.background, "ui-hud-micromenu-buttonbg-up-c60-2x", true)
+	entry.background:SetAllPoints(button)
 
-	entree.fondEnfonce = bouton:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(entree.fondEnfonce, "ui-hud-micromenu-buttonbg-down-c60-2x", true)
-	entree.fondEnfonce:SetAllPoints(bouton)
-	entree.fondEnfonce:Hide()
+	entry.pressedBackground = button:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(entry.pressedBackground, "ui-hud-micromenu-buttonbg-down-c60-2x", true)
+	entry.pressedBackground:SetAllPoints(button)
+	entry.pressedBackground:Hide()
 
-	if definition.jeu then
-		for etat, methode in pairs(ETATS_MICRO) do
-			local texture = bouton[methode] and bouton[methode](bouton)
+	if definition.atlasSet then
+		for state, method in pairs(MICRO_STATES) do
+			local texture = button[method] and button[method](button)
 			if texture then
-				ForeverUI.SetAtlas(texture, microAtlas(definition.jeu, etat), true)
+				ForeverUI.SetAtlas(texture, microAtlas(definition.atlasSet, state), true)
 				texture:ClearAllPoints()
-				texture:SetAllPoints(bouton)
+				texture:SetAllPoints(button)
 			end
 		end
 	else
-		-- Portrait et JcJ n'ont pas de jeu d'icones : on efface celui du client
-		-- et le fond de camelot fait tout le dessin.
-		for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture" }) do
-			local texture = bouton[methode] and bouton[methode](bouton)
+		-- The portrait button has no icon set: hide the client's textures and let camelot's
+		-- background do all the drawing.
+		for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture" }) do
+			local texture = button[method] and button[method](button)
 			if texture then
 				texture:SetAlpha(0)
 			end
 		end
-		local surbrillance = bouton:GetHighlightTexture()
-		if surbrillance then
-			ForeverUI.SetAtlas(surbrillance, "ui-hud-micromenu-buttonbg-down-c60-2x", true)
-			surbrillance:ClearAllPoints()
-			surbrillance:SetAllPoints(bouton)
-			surbrillance:SetBlendMode("ADD")
-			surbrillance:SetAlpha(0.4)
+		local highlight = button:GetHighlightTexture()
+		if highlight then
+			ForeverUI.SetAtlas(highlight, "ui-hud-micromenu-buttonbg-down-c60-2x", true)
+			highlight:ClearAllPoints()
+			highlight:SetAllPoints(button)
+			highlight:SetBlendMode("ADD")
+			highlight:SetAlpha(0.4)
 		end
 	end
 
 	if definition.portrait then
-		local ombre = bouton:CreateTexture(nil, "BORDER")
-		ForeverUI.SetAtlas(ombre, "ui-hud-micromenu-portrait-shadow-2x", true)
-		ombre:SetAllPoints(bouton)
-		entree.ombre = ombre
+		local shadow = button:CreateTexture(nil, "BORDER")
+		ForeverUI.SetAtlas(shadow, "ui-hud-micromenu-portrait-shadow-2x", true)
+		shadow:SetAllPoints(button)
+		entry.shadow = shadow
 
 		if MicroButtonPortrait then
-			-- La source rentre le portrait de 7 px sur un bouton de 32 x 40,
-			-- soit 18 x 26. On garde cette taille : suivre la hauteur du
-			-- bouton etirerait le visage.
+			-- The source insets the portrait 7 px on a 32 x 40 button, i.e. 18 x 26. Keep that
+			-- size: following the button height would stretch the face.
 			MicroButtonPortrait:SetDrawLayer("ARTWORK")
 			MicroButtonPortrait:ClearAllPoints()
 			MicroButtonPortrait:SetWidth(MICRO_W - 14)
 			MicroButtonPortrait:SetHeight(MICRO_H - 14)
-			MicroButtonPortrait:SetPoint("CENTER", bouton, "CENTER", 0, 0)
+			MicroButtonPortrait:SetPoint("CENTER", button, "CENTER", 0, 0)
 			MicroButtonPortrait:SetTexCoord(0.2, 0.8, 0.0666, 0.9)
 		end
 
-		local ombreEnfoncee = bouton:CreateTexture(nil, "OVERLAY")
-		ForeverUI.SetAtlas(ombreEnfoncee, "ui-hud-micromenu-portrait-down-2x", true)
-		ombreEnfoncee:SetWidth(MICRO_W)
-		ombreEnfoncee:SetHeight(MICRO_ART_H)
-		ombreEnfoncee:SetPoint("CENTER", bouton, "CENTER", 1, -4)
-		ombreEnfoncee:Hide()
-		entree.ombreEnfoncee = ombreEnfoncee
+		local pressedShadow = button:CreateTexture(nil, "OVERLAY")
+		ForeverUI.SetAtlas(pressedShadow, "ui-hud-micromenu-portrait-down-2x", true)
+		pressedShadow:SetWidth(MICRO_W)
+		pressedShadow:SetHeight(MICRO_ART_H)
+		pressedShadow:SetPoint("CENTER", button, "CENTER", 1, -4)
+		pressedShadow:Hide()
+		entry.pressedShadow = pressedShadow
 	end
 
-	if definition.nom == "MainMenuMicroButton" and MainMenuBarPerformanceBar then
-		-- l'image de camelot (32 x 64, un trait en bas) : celle de 3.3.5 est
-		-- un pave de 16 x 8, qui s'etirait en gros carre vert
+	if definition.name == "MainMenuMicroButton" and MainMenuBarPerformanceBar then
+		-- camelot image (32 x 64, a line at the bottom); the 3.3.5 one is a 16 x 8 block
+		-- that stretches into a big green square
 		MainMenuBarPerformanceBar:SetTexture(PERFORMANCE_IMAGE)
-		poserLatence(bouton)
-		-- l'ecran ou l'echelle changent : le pixel aussi
-		local veilleLatence = CreateFrame("Frame")
-		veilleLatence:RegisterEvent("DISPLAY_SIZE_CHANGED")
-		veilleLatence:RegisterEvent("UI_SCALE_CHANGED")
-		veilleLatence:RegisterEvent("PLAYER_ENTERING_WORLD")
-		veilleLatence:SetScript("OnEvent", function() poserLatence(bouton) end)
-		-- 3.3.5 REANCRE la barre a chaque appui et a chaque relachement
-		-- (MainMenuMicroButton_SetPushed / _SetNormal : SetPoint TOPLEFT
-		-- (9, -36) / (10, -34), sans ClearAllPoints). Cette ancre s'ajoutait a
-		-- la notre : l'image, tiree entre les deux, tombait a 12 x 12 et son
-		-- trait disparaissait (AMELIORATIONS, 2026-09-28). On repose la notre
-		-- derriere elles ; camelot ne deplace pas la barre quand le bouton
-		-- s'enfonce.
-		for _, nom in ipairs({ "MainMenuMicroButton_SetPushed", "MainMenuMicroButton_SetNormal" }) do
-			if _G[nom] then
-				hooksecurefunc(nom, function() poserLatence(bouton) end)
+		placeLatency(button)
+		-- the pixel size changes with the screen or the scale
+		local latencyWatcher = CreateFrame("Frame")
+		latencyWatcher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+		latencyWatcher:RegisterEvent("UI_SCALE_CHANGED")
+		latencyWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+		latencyWatcher:SetScript("OnEvent", function() placeLatency(button) end)
+		-- 3.3.5 re-anchors the bar on every push and release (MainMenuMicroButton_SetPushed /
+		-- _SetNormal: SetPoint TOPLEFT (9, -36) / (10, -34), without ClearAllPoints). That
+		-- anchor adds to ours and squeezes the image to 12 x 12, so ours is re-applied after
+		-- them; camelot does not move the bar when the button is pushed.
+		for _, name in ipairs({ "MainMenuMicroButton_SetPushed", "MainMenuMicroButton_SetNormal" }) do
+			if _G[name] then
+				hooksecurefunc(name, function() placeLatency(button) end)
 			end
 		end
 	end
 
-	bouton:ClearAllPoints()
-	bouton:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
+	button:ClearAllPoints()
+	button:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
 
-	return entree
+	return entry
 end
 
-local nombreMicro = 0
+local microCount = 0
 for index, definition in ipairs(MICRO) do
-	local entree = habillerMicro(definition, index)
-	if entree then
-		table.insert(boutonsMicro, entree)
-		nombreMicro = index
+	local entry = skinMicro(definition, index)
+	if entry then
+		table.insert(microButtons, entry)
+		microCount = index
 	end
 end
-local LARGEUR_BOUTONS = nombreMicro * MICRO_W + (nombreMicro - 1) * MICRO_PADDING
+local BUTTONS_WIDTH = microCount * MICRO_W + (microCount - 1) * MICRO_PADDING
 
--- LE TABARD DE GUILDE SUR LE BOUTON SOCIAL (2026-09-26, demande de
--- l'utilisateur ; camelot : GuildMicroButtonMixin:UpdateTabard). Avec une
--- guilde qui a un tabard, le bouton prend le jeu GuildCommunities-GuildColor
--- teint de la couleur de fond du tabard (LoadMicroButtonTextures : les quatre
--- etats), et son embleme de 12 x 14 au centre (0, 2), (1, 1) enfonce -- en
--- OVERLAY, et en HIGHLIGHT pour le survol --, pris sur la planche
--- GuildEmblems_01 (SetSmallGuildTabardTextures : cases de 18/256, 14 par
--- ligne, rentrees de 1/256) et teint de la couleur de l'embleme. Sans tabard :
--- le jeu GuildCommunities, sans embleme.
--- 3.3.5 n'a pas C_GuildInfo.GetGuildTabardInfo : GetGuildTabardFileNames ne
--- rend que les noms des textures (Background_<fond>_TU_U,
--- Emblem_<motif>_<couleur>_TU_U). Le motif est le numero de case de la
--- planche (verifie sur les motifs 0 a 150) ; les couleurs, lues dans ces
--- textures, sont dans TabardColors.lua (tools/couleurs_tabard.py).
-local PLANCHE_EMBLEMES = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildemblems_01"
-local CASE_EMBLEME, COLONNES_EMBLEMES, BORD_EMBLEME = 18 / 256, 14, 1 / 256
+-- Guild tabard on the Social button (camelot: GuildMicroButtonMixin:UpdateTabard).
+-- With a tabard: the GuildCommunities-GuildColor set tinted with the tabard background,
+-- and the 12 x 14 emblem at CENTER (0, 2), (1, 1) pushed, in OVERLAY and HIGHLIGHT, cut
+-- from GuildEmblems_01 (SetSmallGuildTabardTextures: 18/256 cells, 14 per row, inset
+-- 1/256) and tinted with the emblem color. Without a tabard: the plain GuildCommunities set.
+-- 3.3.5 lacks C_GuildInfo.GetGuildTabardInfo; GetGuildTabardFileNames only returns texture
+-- names (Background_<bg>_TU_U, Emblem_<motif>_<color>_TU_U). The motif is the cell index on
+-- the sheet; colors come from TabardColors.lua (tools/tabard_colors.py).
+local EMBLEM_SHEET = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildemblems_01"
+local EMBLEM_CELL, EMBLEM_COLUMNS, EMBLEM_EDGE = 18 / 256, 14, 1 / 256
 
-local function tabardDeGuilde()
+-- Returns background color, emblem cell index and emblem color; nil without a readable
+-- tabard.
+local function guildTabard()
 	if not (GetGuildTabardFileNames and IsInGuild and IsInGuild()) then return nil end
-	local fond, _, embleme = GetGuildTabardFileNames()
-	if not fond or not embleme then return nil end
-	local f = tonumber(string.match(string.lower(fond), "background_(%d+)"))
-	local motif, couleur = string.match(string.lower(embleme), "emblem_(%d+)_(%d+)")
-	local couleurs = ForeverUI.TabardCouleurs
-	if not (f and motif and couleurs) then return nil end
-	local cf, ce = couleurs.fond[f], couleurs.embleme[tonumber(couleur)]
+	local background, _, emblem = GetGuildTabardFileNames()
+	if not background or not emblem then return nil end
+	local f = tonumber(string.match(string.lower(background), "background_(%d+)"))
+	local motif, color = string.match(string.lower(emblem), "emblem_(%d+)_(%d+)")
+	local colors = ForeverUI.TabardColors
+	if not (f and motif and colors) then return nil end
+	local cf, ce = colors.background[f], colors.emblem[tonumber(color)]
 	if not (cf and ce) then return nil end
 	return cf, tonumber(motif), ce
 end
 
 local social
-for _, entree in ipairs(boutonsMicro) do
-	if entree.bouton:GetName() == "SocialsMicroButton" then social = entree end
+for _, entry in ipairs(microButtons) do
+	if entry.button:GetName() == "SocialsMicroButton" then social = entry end
 end
 
 if social then
-	social.jeuBase = social.jeu
-	social.embleme = social.bouton:CreateTexture(nil, "OVERLAY")
-	social.emblemeSurvol = social.bouton:CreateTexture(nil, "HIGHLIGHT")
-	for _, t in ipairs({ social.embleme, social.emblemeSurvol }) do
-		t:SetTexture(PLANCHE_EMBLEMES)
+	social.baseSet = social.atlasSet
+	social.emblem = social.button:CreateTexture(nil, "OVERLAY")
+	social.emblemHover = social.button:CreateTexture(nil, "HIGHLIGHT")
+	for _, t in ipairs({ social.emblem, social.emblemHover }) do
+		t:SetTexture(EMBLEM_SHEET)
 		t:SetWidth(12)
 		t:SetHeight(14)
-		t:SetPoint("CENTER", social.bouton, "CENTER", 0, 2)
+		t:SetPoint("CENTER", social.button, "CENTER", 0, 2)
 		t:Hide()
 	end
 end
 
--- APRES UN CHANGEMENT D'EMBLEME (constate le 28/09) : a GUILDTABARD_UPDATE,
--- GetGuildTabardFileNames ne rend rien tant que les nouvelles donnees de la
--- guilde ne sont pas arrivees, et aucun evenement ne suit leur arrivee -- le
--- bouton retombait sur son jeu de base et y restait. Dans une guilde, un
--- tabard illisible laisse donc le visuel en place, et le tabard est relu
--- toutes les RELECTURE s, RELECTURES fois apres chaque evenement ; la
--- derniere lecture tranche (une guilde sans tabard : le jeu de base).
-local RELECTURE, RELECTURES = 0.5, 20
-local relecture = CreateFrame("Frame")
-relecture:Hide()
-ForeverUI.RelectureTabard = relecture
+-- After an emblem change, GetGuildTabardFileNames returns nothing at GUILDTABARD_UPDATE
+-- until the new guild data arrives, and no event follows that arrival. So in a guild an
+-- unreadable tabard keeps the current look, and the tabard is re-read every
+-- RECHECK_INTERVAL s, RECHECK_COUNT times after each event; the last read decides
+-- (no tabard: base set).
+local RECHECK_INTERVAL, RECHECK_COUNT = 0.5, 20
+local rechecker = CreateFrame("Frame")
+rechecker:Hide()
+ForeverUI.TabardReread = rechecker
 
-local function appliquerTabard(fond, motif, couleur)
-	social.jeu = fond and (social.jeuBase .. "-guildcolor") or social.jeuBase
-	for etat, methode in pairs(ETATS_MICRO) do
-		local texture = social.bouton[methode] and social.bouton[methode](social.bouton)
-		if texture and ForeverUI.SetAtlas(texture, microAtlas(social.jeu, etat), true) then
-			if fond then
-				texture:SetVertexColor(fond[1], fond[2], fond[3])
+-- Applies the tabard look (values from guildTabard); nil background restores the base set.
+local function applyTabard(background, motif, color)
+	social.atlasSet = background and (social.baseSet .. "-guildcolor") or social.baseSet
+	for state, method in pairs(MICRO_STATES) do
+		local texture = social.button[method] and social.button[method](social.button)
+		if texture and ForeverUI.SetAtlas(texture, microAtlas(social.atlasSet, state), true) then
+			if background then
+				texture:SetVertexColor(background[1], background[2], background[3])
 			else
 				texture:SetVertexColor(1, 1, 1)
 			end
 		end
 	end
-	if fond then
-		local x = (motif % COLONNES_EMBLEMES) * CASE_EMBLEME
-		local y = math.floor(motif / COLONNES_EMBLEMES) * CASE_EMBLEME
-		for _, t in ipairs({ social.embleme, social.emblemeSurvol }) do
-			t:SetTexCoord(x + BORD_EMBLEME, x + CASE_EMBLEME - BORD_EMBLEME, y + BORD_EMBLEME, y + CASE_EMBLEME - BORD_EMBLEME)
-			t:SetVertexColor(couleur[1], couleur[2], couleur[3])
+	if background then
+		local x = (motif % EMBLEM_COLUMNS) * EMBLEM_CELL
+		local y = math.floor(motif / EMBLEM_COLUMNS) * EMBLEM_CELL
+		for _, t in ipairs({ social.emblem, social.emblemHover }) do
+			t:SetTexCoord(x + EMBLEM_EDGE, x + EMBLEM_CELL - EMBLEM_EDGE, y + EMBLEM_EDGE, y + EMBLEM_CELL - EMBLEM_EDGE)
+			t:SetVertexColor(color[1], color[2], color[3])
 			t:Show()
 		end
 	else
-		social.embleme:Hide()
-		social.emblemeSurvol:Hide()
+		social.emblem:Hide()
+		social.emblemHover:Hide()
 	end
-	etatMicro(social)
+	applyMicroState(social)
 end
 
--- GuildMicroButtonMixin:UpdateTabard ; definitif : la derniere relecture
-function ForeverUI.MajTabardSocial(definitif)
+-- GuildMicroButtonMixin:UpdateTabard; isFinal: last re-read, applies even without a tabard
+function ForeverUI.UpdateSocialTabard(isFinal)
 	if not social then return end
-	local fond, motif, couleur = tabardDeGuilde()
-	local enGuilde = IsInGuild and IsInGuild()
-	if fond or definitif or not enGuilde then
-		appliquerTabard(fond, motif, couleur)
+	local background, motif, color = guildTabard()
+	local inGuild = IsInGuild and IsInGuild()
+	if background or isFinal or not inGuild then
+		applyTabard(background, motif, color)
 	end
 end
 
-relecture:SetScript("OnUpdate", function(self, ecoule)
-	self.attente = (self.attente or 0) + ecoule
-	if self.attente < RELECTURE then return end
-	self.attente = 0
-	self.restantes = (self.restantes or 0) - 1
-	local fin = self.restantes <= 0
-	ForeverUI.MajTabardSocial(fin)
-	if fin then self:Hide() end
+rechecker:SetScript("OnUpdate", function(self, elapsed)
+	self.pending = (self.pending or 0) + elapsed
+	if self.pending < RECHECK_INTERVAL then return end
+	self.pending = 0
+	self.remaining = (self.remaining or 0) - 1
+	local finish = self.remaining <= 0
+	ForeverUI.UpdateSocialTabard(finish)
+	if finish then self:Hide() end
 end)
 
-local veilleTabard = CreateFrame("Frame")
+local tabardWatcher = CreateFrame("Frame")
 for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_GUILD_UPDATE", "GUILDTABARD_UPDATE" }) do
-	veilleTabard:RegisterEvent(ev)
+	tabardWatcher:RegisterEvent(ev)
 end
-veilleTabard:SetScript("OnEvent", function()
-	ForeverUI.MajTabardSocial()
-	relecture.restantes, relecture.attente = RELECTURES, 0
-	relecture:Show()
+tabardWatcher:SetScript("OnEvent", function()
+	ForeverUI.UpdateSocialTabard()
+	rechecker.remaining, rechecker.pending = RECHECK_COUNT, 0
+	rechecker:Show()
 end)
-micro:SetWidth(LARGEUR_BOUTONS)
+micro:SetWidth(BUTTONS_WIDTH)
 
--- LE BOUTON JcJ DU CLIENT S'EN VA (2026-09-26). Masquer ne suffit pas :
--- UpdateMicroButtons et VehicleMenuBar_MoveMicroButtons le reprennent.
+-- Remove the client's PvP button (PvP opens from the character sheet). Hiding is not
+-- enough: UpdateMicroButtons and VehicleMenuBar_MoveMicroButtons show it again.
 ForeverUI.Suppress(_G["PVPMicroButton"])
 
--- LE BOUTON D'AIDE DU CLIENT S'EN VA AUSSI (2026-09-26, demande de
--- l'utilisateur) et la demande d'aide passe au menu Echap, entre AddOns et
--- Log Out, un espace de chaque cote (demande du 2026-09-26). AddOns n'est pas
--- du client : c'est ACP (patch-5.mpq), sous Macros, qui a chaque ouverture
--- remet Log Out sous lui (et ajoute 25 a la hauteur, qu'il retire a la
--- fermeture) -- on repasse donc derriere son OnShow. Sans ACP, la demande
--- d'aide vient sous Macros. L'espace est celui que le menu du client laisse
--- deja avant Return to Game (16, GameMenuFrame.xml ; camelot en met 20 entre
--- deux sections). Le texte est celui du bouton du client (HELP_BUTTON),
--- l'action aussi (ToggleHelpFrame), apres la fermeture du menu comme ses
--- voisins. Un bouton simple : un bouton securise rendrait tout le menu Echap
--- protege, et Show/HideUIPanel passent deja par le delegue du client.
-local ECART_MENU = 16
+-- Remove the client's Help button; Help moves to the Esc menu (camelot: GAMEMENU_SUPPORT),
+-- between AddOns and Log Out with a gap on each side. AddOns is ACP (patch-5.mpq), under
+-- Macros; it re-anchors Log Out under itself on every show, so we re-place after its
+-- OnShow. Without ACP, Help goes under Macros. The gap is the one the client menu leaves
+-- before Return to Game (16, GameMenuFrame.xml). A plain button: a secure one would make
+-- the whole Esc menu protected.
+local MENU_GAP = 16
 ForeverUI.Suppress(_G["HelpMicroButton"])
 if GameMenuFrame and GameMenuButtonMacros and GameMenuButtonLogout then
-	local aide = CreateFrame("Button", "ForeverUIGameMenuButtonHelp", GameMenuFrame, "GameMenuButtonTemplate")
-	aide:SetText(HELP_BUTTON)
-	aide:SetScript("OnClick", function()
+	local help = CreateFrame("Button", "ForeverUIGameMenuButtonHelp", GameMenuFrame, "GameMenuButtonTemplate")
+	help:SetText(HELP_BUTTON)
+	help:SetScript("OnClick", function()
 		PlaySound("igMainMenuOption")
 		HideUIPanel(GameMenuFrame)
 		ToggleHelpFrame()
 	end)
-	local function poser()
-		aide:ClearAllPoints()
-		aide:SetPoint("TOP", _G["GameMenuButtonAddOns"] or GameMenuButtonMacros, "BOTTOM", 0, -ECART_MENU)
-		GameMenuButtonLogout:SetPoint("TOP", aide, "BOTTOM", 0, -ECART_MENU)
+	local function place()
+		help:ClearAllPoints()
+		help:SetPoint("TOP", _G["GameMenuButtonAddOns"] or GameMenuButtonMacros, "BOTTOM", 0, -MENU_GAP)
+		GameMenuButtonLogout:SetPoint("TOP", help, "BOTTOM", 0, -MENU_GAP)
 	end
-	-- ACP charge avant nous (ordre alphabetique) ; s'il venait apres, on
-	-- s'accroche des qu'il arrive, avant la premiere ouverture du menu
-	local branche = false
-	local function brancherACP()
+	-- ACP loads before us (alphabetical order); if it loads later, hook it as soon as it
+	-- arrives, before the menu is first opened
+	local hooked = false
+	local function attachACP()
 		local acp = _G["GameMenuButtonAddOns"]
-		if acp and not branche and acp.HookScript then
-			branche = true
-			acp:HookScript("OnShow", poser)
+		if acp and not hooked and acp.HookScript then
+			hooked = true
+			acp:HookScript("OnShow", place)
 		end
-		poser()
+		place()
 	end
-	brancherACP()
-	local veilleACP = CreateFrame("Frame")
-	veilleACP:RegisterEvent("ADDON_LOADED")
-	veilleACP:SetScript("OnEvent", function(self)
-		brancherACP()
-		if branche then self:UnregisterEvent("ADDON_LOADED") end
+	attachACP()
+	local acpWatcher = CreateFrame("Frame")
+	acpWatcher:RegisterEvent("ADDON_LOADED")
+	acpWatcher:SetScript("OnEvent", function(self)
+		attachACP()
+		if hooked then self:UnregisterEvent("ADDON_LOADED") end
 	end)
-	-- Log Out etait a 1 sous son voisin ; il y a maintenant l'aide et deux espaces
-	GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + aide:GetHeight() + 2 * ECART_MENU - 1)
+	-- The client places Log Out 1 below its neighbour; add Help and two gaps
+	GameMenuFrame:SetHeight(GameMenuFrame:GetHeight() + help:GetHeight() + 2 * MENU_GAP - 1)
 end
 
--- Les boutons partent du bord GAUCHE du bandeau (layoutFramesGoingRight chez
--- camelot) ; le bandeau a leur largeur.
---
--- ET ON LES REPOSE, PARCE QUE LE CLIENT LES REPREND.
---
--- VehicleMenuBar_MoveMicroButtons les reancre : CharacterMicroButton a
--- BOTTOMLEFT (552, 2) et SocialsMicroButton sur le BOTTOMRIGHT de
--- QuestLogMicroButton. Elle est appelee par MainMenuBar_ToPlayerArt et
--- MainMenuBar_ToVehicleArt -- donc a chaque entree ou sortie de vehicule,
--- et le micro-menu se disloquait. Releve par /fui micro, qui a montre ces
--- deux boutons-la ancres ailleurs que sur notre bandeau.
---
--- Le bouton des metiers suit ses voisins : en vehicule, le client les passe
--- sur VehicleMenuBarArtFrame (MainMenuBar cache) ; il change de parent avec
--- eux, un cran au-dessus de la feuille de personnage.
-local function poserMicro()
-	for index, entree in ipairs(boutonsMicro) do
-		if entree.cree and CharacterMicroButton then
+-- Buttons run from the strip's LEFT edge (camelot: layoutFramesGoingRight).
+-- Re-applied after VehicleMenuBar_MoveMicroButtons, which re-anchors CharacterMicroButton
+-- and SocialsMicroButton on every vehicle enter or exit (MainMenuBar_ToPlayerArt /
+-- _ToVehicleArt). In a vehicle the client moves its buttons to VehicleMenuBarArtFrame;
+-- created buttons follow, with frame levels counted from CharacterMicroButton.
+local function layoutMicro()
+	for index, entry in ipairs(microButtons) do
+		if entry.created and CharacterMicroButton then
 			local parent = CharacterMicroButton:GetParent()
-			if entree.bouton:GetParent() ~= parent then
-				entree.bouton:SetParent(parent)
+			if entry.button:GetParent() ~= parent then
+				entry.button:SetParent(parent)
 			end
-			entree.bouton:SetFrameLevel(CharacterMicroButton:GetFrameLevel() + index - 1)
+			entry.button:SetFrameLevel(CharacterMicroButton:GetFrameLevel() + index - 1)
 		end
-		entree.bouton:ClearAllPoints()
-		entree.bouton:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
+		entry.button:ClearAllPoints()
+		entry.button:SetPoint("LEFT", micro, "LEFT", (index - 1) * MICRO_PITCH, 0)
 	end
 end
-ForeverUI.MicroLayout = poserMicro
 
--- l'etat d'un bouton cree, par son role (pour un bouton ajoute par un autre
--- addon : son nom) : enfonce tant que sa fenetre est ouverte
-function ForeverUI.MajMicro(role, ouvert)
-	for _, entree in ipairs(boutonsMicro) do
-		if entree.cree == role then
-			if ouvert then
-				entree.bouton:SetButtonState("PUSHED", 1)
+-- Pushes a created button while its window is open.
+-- role: create role, or the button name for one added by another addon
+function ForeverUI.UpdateMicro(role, isOpen)
+	for _, entry in ipairs(microButtons) do
+		if entry.created == role then
+			if isOpen then
+				entry.button:SetButtonState("PUSHED", 1)
 			else
-				entree.bouton:SetButtonState("NORMAL")
+				entry.button:SetButtonState("NORMAL")
 			end
-			etatMicro(entree)
+			applyMicroState(entry)
 		end
 	end
 end
 
--- le bouton des metiers : enfonce tant que les metiers sont ouverts (le
--- livre ou la page de fabrication) -- voir ProfessionsBook.lua
-function ForeverUI.MajMicroMetiers(ouvert)
-	ForeverUI.MajMicro("metiers", ouvert)
+-- professions button: pushed while the book or the crafting page is open
+-- (ProfessionsBook.lua)
+function ForeverUI.UpdateProfessionsMicro(isOpen)
+	ForeverUI.UpdateMicro("professions", isOpen)
 end
 
-poserMicro()
+layoutMicro()
 
 if hooksecurefunc and type(_G["VehicleMenuBar_MoveMicroButtons"]) == "function" then
-	hooksecurefunc("VehicleMenuBar_MoveMicroButtons", poserMicro)
+	hooksecurefunc("VehicleMenuBar_MoveMicroButtons", layoutMicro)
 end
 
--- ------------------------------------------------------ la barre des sacs
-local sacs = CreateFrame("Frame", "ForeverUIBagsBar", UIParent)
-sacs:SetHeight(BAG_SIZE)
-sacs:SetWidth(5 * BAG_SIZE + KEYRING_W + 5 * BAG_PADDING)
+-- ------------------------------------------------------ Bags bar
+local bags = CreateFrame("Frame", "ForeverUIBagsBar", UIParent)
+bags:SetHeight(BAG_SIZE)
+bags:SetWidth(5 * BAG_SIZE + KEYRING_W + 5 * BAG_PADDING)
 
-local cadreSacs = CreateFrame("Frame", nil, sacs)
-cadreSacs:SetPoint("TOPLEFT", -6, 6)
-cadreSacs:SetPoint("BOTTOMRIGHT", 5, -5)
-cadreSacs:SetFrameLevel(sacs:GetFrameLevel())
-ForeverUI.SetBarFrameArt(cadreSacs)
+local bagsFrame = CreateFrame("Frame", nil, bags)
+bagsFrame:SetPoint("TOPLEFT", -6, 6)
+bagsFrame:SetPoint("BOTTOMRIGHT", 5, -5)
+bagsFrame:SetFrameLevel(bags:GetFrameLevel())
+ForeverUI.SetBarFrameArt(bagsFrame)
 
-local function habillerSac(bouton, atlasCadre, largeurCadre)
-	if not bouton then
+-- Skins a bag slot with a camelot frame.
+-- frameAtlas: frame art; frameWidth: art width (KEYRING_W for the keyring)
+local function skinBag(button, frameAtlas, frameWidth)
+	if not button then
 		return false
 	end
 
-	bouton:SetWidth(largeurCadre == KEYRING_W and KEYRING_W or BAG_SIZE)
-	bouton:SetHeight(BAG_SIZE)
+	button:SetWidth(frameWidth == KEYRING_W and KEYRING_W or BAG_SIZE)
+	button:SetHeight(BAG_SIZE)
 
-	local normale = bouton:GetNormalTexture()
-	if normale then
-		ForeverUI.SetAtlas(normale, atlasCadre, true)
-		normale:SetWidth(largeurCadre)
-		normale:SetHeight(BAG_FRAME_H)
-		normale:ClearAllPoints()
-		normale:SetPoint("TOPLEFT", bouton, "TOPLEFT")
+	local normalFont = button:GetNormalTexture()
+	if normalFont then
+		ForeverUI.SetAtlas(normalFont, frameAtlas, true)
+		normalFont:SetWidth(frameWidth)
+		normalFont:SetHeight(BAG_FRAME_H)
+		normalFont:ClearAllPoints()
+		normalFont:SetPoint("TOPLEFT", button, "TOPLEFT")
 	end
 
-	local enfoncee = bouton:GetPushedTexture()
-	if enfoncee then
-		ForeverUI.SetAtlas(enfoncee, atlasCadre, true)
-		enfoncee:SetWidth(largeurCadre)
-		enfoncee:SetHeight(BAG_FRAME_H)
-		enfoncee:ClearAllPoints()
-		enfoncee:SetPoint("TOPLEFT", bouton, "TOPLEFT")
+	local pushed = button:GetPushedTexture()
+	if pushed then
+		ForeverUI.SetAtlas(pushed, frameAtlas, true)
+		pushed:SetWidth(frameWidth)
+		pushed:SetHeight(BAG_FRAME_H)
+		pushed:ClearAllPoints()
+		pushed:SetPoint("TOPLEFT", button, "TOPLEFT")
 	end
 
-	local surbrillance = bouton:GetHighlightTexture()
-	if surbrillance then
-		ForeverUI.SetAtlas(surbrillance, atlasCadre, true)
-		surbrillance:ClearAllPoints()
-		surbrillance:SetAllPoints(bouton)
-		surbrillance:SetBlendMode("ADD")
-		surbrillance:SetAlpha(0.4)
+	local highlight = button:GetHighlightTexture()
+	if highlight then
+		ForeverUI.SetAtlas(highlight, frameAtlas, true)
+		highlight:ClearAllPoints()
+		highlight:SetAllPoints(button)
+		highlight:SetBlendMode("ADD")
+		highlight:SetAlpha(0.4)
 	end
 
-	-- La coche verte de 3.3.5 n'a rien a faire sur ce cadre : on reprend le
-	-- meme dessin en ADD, comme pour les boutons d'action.
-	local cochee = bouton.GetCheckedTexture and bouton:GetCheckedTexture()
-	if cochee then
-		ForeverUI.SetAtlas(cochee, atlasCadre, true)
-		cochee:SetWidth(largeurCadre)
-		cochee:SetHeight(BAG_FRAME_H)
-		cochee:ClearAllPoints()
-		cochee:SetPoint("TOPLEFT", bouton, "TOPLEFT")
-		cochee:SetBlendMode("ADD")
+	-- The 3.3.5 green check does not fit this frame: use the same art in ADD, as on the
+	-- action buttons.
+	local checked = button.GetCheckedTexture and button:GetCheckedTexture()
+	if checked then
+		ForeverUI.SetAtlas(checked, frameAtlas, true)
+		checked:SetWidth(frameWidth)
+		checked:SetHeight(BAG_FRAME_H)
+		checked:ClearAllPoints()
+		checked:SetPoint("TOPLEFT", button, "TOPLEFT")
+		checked:SetBlendMode("ADD")
 	end
 
-	local icone = _G[bouton:GetName() .. "IconTexture"]
-	if icone then
-		icone:ClearAllPoints()
-		icone:SetAllPoints(bouton)
-		icone:SetTexCoord(0, 1, 0, 1)
+	local icon = _G[button:GetName() .. "IconTexture"]
+	if icon then
+		icon:ClearAllPoints()
+		icon:SetAllPoints(button)
+		icon:SetTexCoord(0, 1, 0, 1)
 	end
 
 	return true
 end
 
--- Le trousseau : un bouton plus etroit, son propre cadre, sa propre image.
-local iconeTrousseau
-local function habillerTrousseau()
-	local bouton = KeyRingButton
-	if not bouton then
+-- Keyring: a narrower button with its own frame and image.
+local keyringIcon
+local function skinKeyring()
+	local button = KeyRingButton
+	if not button then
 		return
 	end
 
-	habillerSac(bouton, "ui-hud-actionbar-iconframe-small", KEYRING_W)
+	skinBag(button, "ui-hud-actionbar-iconframe-small", KEYRING_W)
 
-	if not iconeTrousseau then
-		iconeTrousseau = bouton:CreateTexture(nil, "BORDER")
-		iconeTrousseau:SetPoint("CENTER")
+	if not keyringIcon then
+		keyringIcon = button:CreateTexture(nil, "BORDER")
+		keyringIcon:SetPoint("CENTER")
 	end
 
-	-- ECART ASSUME. KeyRingMixin:OnBagUpdate ne montre l'image du trousseau
-	-- que si la CVar showKeyring est allumee, et prend sinon l'emplacement
-	-- vide. Cette condition vient d'un client ou le trousseau est un reste
-	-- du passe, masque par defaut : sa CVar ne s'allume qu'au tutoriel, la
-	-- premiere fois qu'on ramasse une cle. En 3.3.5 le trousseau est un
-	-- element permanent de la barre, et notre barre montre toujours sa
-	-- cellule : un emplacement vide y serait faux. L'image du trousseau est
-	-- donc TOUJOURS posee.
-	-- LA VARIANTE DOUBLE DENSITE (demande du 2026-09-28 : « l'icone semble
-	-- pixelisee ou zoomee ») : la simple fait 27 x 40 texels pour 27 x 40
-	-- unites, et une unite vaut plus d'un pixel a l'ecran -- elle
-	-- s'agrandissait. La -2x (uiactionbar2xc60, 54 x 80) se pose a la meme
-	-- taille, nette.
-	ForeverUI.SetAtlas(iconeTrousseau, "ui-hud-actionbar-keyring-small-c60-2x")
+	-- Deliberate difference: KeyRingMixin:OnBagUpdate shows the keyring image only when the
+	-- showKeyring CVar is on (set by a tutorial on the first key looted). In 3.3.5 the
+	-- keyring is a permanent part of the bar, so the image is always set.
+	-- The -2x variant (54 x 80 texels for 27 x 40 units) stays sharp; the 1x one looks
+	-- pixelated because a unit is more than one screen pixel.
+	ForeverUI.SetAtlas(keyringIcon, "ui-hud-actionbar-keyring-small-c60-2x")
 
-	-- camelot garde toujours ce bouton dans la barre ; 3.3.5 le laisse cache
-	-- tant que le joueur n'a pas ramasse de cle.
-	bouton:Show()
+	-- camelot always keeps this button in the bar; 3.3.5 hides it until the player loots
+	-- a key.
+	button:Show()
 end
 
--- L'ANIMATION D'ENTREE DU TROUSSEAU (demande du 2026-09-28). RELEVE --
--- BaseBagSlotButtonTemplate (mainline/mainmenubarbagbuttontemplates.xml) :
--- AnimIcon, calque OVERLAY, sur tout le bouton ; FlyIn : en 1 s, echelle de
--- 0,125 a 1, alpha de 0 a 1, chemin doux (SMOOTH) par (-15, 30) et
--- (-75, 60). KeyRingMixin le joue A L'ENVERS (FlyIn:Play(true)) : l'icone
--- de la cle part de (-75, 60), entiere et opaque, et rentre dans le bouton,
--- reduite au huitieme et effacee. 3.3.5 n'a ni lecture a l'envers ni echelle
--- de depart : on la joue image par image. Elle remplace l'animation 3D de
--- 3.3.5 (KeyRingButtonItemAnim, ForcedBackpackItem.mdx).
-local VOL = { duree = 1, echelle = 0.125, points = { { 0, 0 }, { -15, 30 }, { -75, 60 } } }
+-- Keyring fly-in (BaseBagSlotButtonTemplate, mainline/mainmenubarbagbuttontemplates.xml):
+-- AnimIcon, OVERLAY, whole button; FlyIn: 1 s, scale 0.125 to 1, alpha 0 to 1, SMOOTH
+-- path through (-15, 30) and (-75, 60). KeyRingMixin plays it reversed (FlyIn:Play(true)).
+-- 3.3.5 has neither reverse play nor a start scale, so it runs frame by frame. It
+-- replaces the 3.3.5 3D animation (KeyRingButtonItemAnim, ForcedBackpackItem.mdx).
+local FLIGHT = { duration = 1, scale = 0.125, points = { { 0, 0 }, { -15, 30 }, { -75, 60 } } }
 
--- la courbe douce : Catmull-Rom par les points, extremites doublees
-local function courbe(q)
-	local p = VOL.points
+-- Smooth path: Catmull-Rom through the points, end points doubled.
+-- q: progress from 0 to 1; returns x, y
+local function curve(q)
+	local p = FLIGHT.points
 	local n = #p - 1
 	local s = math.min(n - 1e-9, math.max(0, q * n))
 	local i = math.floor(s) + 1
 	local u = s - (i - 1)
 	local a, b, c, d = p[math.max(1, i - 1)], p[i], p[i + 1], p[math.min(#p, i + 2)]
-	local function axe(k)
+	local function axis(k)
 		return 0.5 * (2 * b[k] + (c[k] - a[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * u * u
 			+ (3 * b[k] - a[k] - 3 * c[k] + d[k]) * u * u * u)
 	end
-	return axe(1), axe(2)
+	return axis(1), axis(2)
 end
-ForeverUI.KeyRingFlyCurve = courbe
 
-local vol = CreateFrame("Frame")
-vol:Hide()
-vol:SetScript("OnUpdate", function(self, ecoule)
-	self.t = self.t + (ecoule or 0)
-	local icone = self.icone
-	if self.t >= VOL.duree then
-		icone:Hide()
+local flight = CreateFrame("Frame")
+flight:Hide()
+flight:SetScript("OnUpdate", function(self, elapsed)
+	self.t = self.t + (elapsed or 0)
+	local icon = self.icon
+	if self.t >= FLIGHT.duration then
+		icon:Hide()
 		self:Hide()
 		return
 	end
-	-- a l'envers : la progression va de 1 a 0
-	local q = 1 - self.t / VOL.duree
-	local x, y = courbe(q)
-	local k = VOL.echelle + (1 - VOL.echelle) * q
+	-- reversed: progress goes from 1 to 0
+	local q = 1 - self.t / FLIGHT.duration
+	local x, y = curve(q)
+	local k = FLIGHT.scale + (1 - FLIGHT.scale) * q
 	local b = KeyRingButton
-	icone:ClearAllPoints()
-	icone:SetPoint("CENTER", b, "CENTER", x, y)
-	icone:SetWidth(b:GetWidth() * k)
-	icone:SetHeight(b:GetHeight() * k)
-	icone:SetAlpha(q)
-	icone:Show()
+	icon:ClearAllPoints()
+	icon:SetPoint("CENTER", b, "CENTER", x, y)
+	icon:SetWidth(b:GetWidth() * k)
+	icon:SetHeight(b:GetHeight() * k)
+	icon:SetAlpha(q)
+	icon:Show()
 end)
-vol:RegisterEvent("ITEM_PUSH")
-vol:SetScript("OnEvent", function(self, _, sac, texture)
+flight:RegisterEvent("ITEM_PUSH")
+flight:SetScript("OnEvent", function(self, _, bag, texture)
 	local b = KeyRingButton
-	if not b or sac ~= b:GetID() then
+	if not b or bag ~= b:GetID() then
 		return
 	end
-	if not self.icone then
-		self.icone = b:CreateTexture(nil, "OVERLAY")
-		self.icone:Hide()
+	if not self.icon then
+		self.icon = b:CreateTexture(nil, "OVERLAY")
+		self.icon:Hide()
 	end
-	self.icone:SetTexture(texture)
+	self.icon:SetTexture(texture)
 	self.t = 0
 	self:Show()
 end)
-ForeverUI.KeyRingFly = vol
+ForeverUI.KeyRingFly = flight
 if KeyRingButtonItemAnim then
 	KeyRingButtonItemAnim:UnregisterEvent("ITEM_PUSH")
 	KeyRingButtonItemAnim:Hide()
 end
 
-local ORDRE_SACS = {
+local BAG_ORDER = {
 	"MainMenuBarBackpackButton",
 	"CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot", "CharacterBag3Slot",
 }
 
-local cellules = {}
-local separateurs = {}
+local cells = {}
+local separators = {}
 
-local function poserSacs()
-	local precedent = nil
-	cellules = {}
+local function layoutBags()
+	local previous = nil
+	cells = {}
 
-	for _, nom in ipairs(ORDRE_SACS) do
-		local bouton = _G[nom]
-		if bouton then
-			habillerSac(bouton, "ui-hud-actionbar-iconframe-bags", BAG_FRAME_W)
-			bouton:ClearAllPoints()
-			if precedent then
-				bouton:SetPoint("RIGHT", precedent, "LEFT", -BAG_PADDING, 0)
+	for _, name in ipairs(BAG_ORDER) do
+		local button = _G[name]
+		if button then
+			skinBag(button, "ui-hud-actionbar-iconframe-bags", BAG_FRAME_W)
+			button:ClearAllPoints()
+			if previous then
+				button:SetPoint("RIGHT", previous, "LEFT", -BAG_PADDING, 0)
 			else
-				bouton:SetPoint("RIGHT", sacs, "RIGHT", 0, 0)
+				button:SetPoint("RIGHT", bags, "RIGHT", 0, 0)
 			end
-			precedent = bouton
-			table.insert(cellules, bouton)
+			previous = button
+			table.insert(cells, button)
 		end
 	end
 
-	habillerTrousseau()
-	if KeyRingButton and precedent then
+	skinKeyring()
+	if KeyRingButton and previous then
 		KeyRingButton:ClearAllPoints()
-		KeyRingButton:SetPoint("RIGHT", precedent, "LEFT", -BAG_PADDING, 0)
-		table.insert(cellules, KeyRingButton)
+		KeyRingButton:SetPoint("RIGHT", previous, "LEFT", -BAG_PADDING, 0)
+		table.insert(cells, KeyRingButton)
 	end
 
-	-- Un separateur entre deux cellules voisines : LEFT sur le RIGHT de la
-	-- cellule de gauche, decale de -5, donc centre sur l'ecart de 2 px.
-	for index = 2, #cellules do
-		if not separateurs[index] then
-			local divider = ForeverUI.CreateDivider(sacs, sacs:GetFrameLevel() + 2)
-			divider:SetPoint("TOP", cellules[index], "TOP", 0, 0)
-			divider:SetPoint("BOTTOM", cellules[index], "BOTTOM", 0, 0)
-			divider:SetPoint("LEFT", cellules[index], "RIGHT", -5, 0)
-			separateurs[index] = divider
+	-- Divider between neighbouring cells: LEFT on the left cell's RIGHT, offset -5, so it
+	-- is centred on the 2 px gap.
+	for index = 2, #cells do
+		if not separators[index] then
+			local divider = ForeverUI.CreateDivider(bags, bags:GetFrameLevel() + 2)
+			divider:SetPoint("TOP", cells[index], "TOP", 0, 0)
+			divider:SetPoint("BOTTOM", cells[index], "BOTTOM", 0, 0)
+			divider:SetPoint("LEFT", cells[index], "RIGHT", -5, 0)
+			separators[index] = divider
 		end
 	end
 end
 
--- Le sac a dos porte l'icone de camelot, un fichier a part et non un element
--- d'atlas (camelot/MainMenuBarBagButtons.xml : bagIcon).
-local function iconeSacADos()
-	local icone = MainMenuBarBackpackButtonIconTexture
-	if icone then
-		icone:SetTexture(ICONE_SAC)
-		icone:SetTexCoord(0, 1, 0, 1)
+-- The backpack uses camelot's icon, a separate file, not an atlas entry
+-- (camelot/MainMenuBarBagButtons.xml: bagIcon).
+local function setBackpackIcon()
+	local icon = MainMenuBarBackpackButtonIconTexture
+	if icon then
+		icon:SetTexture(BAG_ICON)
+		icon:SetTexCoord(0, 1, 0, 1)
 	end
 end
 
--- ------------------------------------------------------------ assemblage
--- La rangee est une chaine : la barre d'action et les sacs se posent de part
--- et d'autre du micro-menu. On convertit cette chaine en positions par rapport
--- a l'ecran, pour que chaque element reste deplacable separement.
-local function positionsParDefaut()
-	local demi = micro:GetWidth() / 2
+-- ------------------------------------------------------------ Assembly
+-- The row is a chain: the action bar and the bags sit on each side of the micro menu.
+-- The chain is turned into screen positions so each element stays movable on its own.
+local function applyDefaultPositions()
+	local half = micro:GetWidth() / 2
 	ForeverUI.Layout.SetDefaults("actionbar", "BOTTOMRIGHT", "BOTTOM",
-		MICRO_X - demi + BAR_OFFSET_X, MICRO_Y + BAR_OFFSET_Y)
-	ForeverUI.Layout.SetDefaults("sacs", "BOTTOMLEFT", "BOTTOM",
-		MICRO_X + demi + BAGS_OFFSET_X, MICRO_Y + BAGS_OFFSET_Y)
+		MICRO_X - half + BAR_OFFSET_X, MICRO_Y + BAR_OFFSET_Y)
+	ForeverUI.Layout.SetDefaults("bags", "BOTTOMLEFT", "BOTTOM",
+		MICRO_X + half + BAGS_OFFSET_X, MICRO_Y + BAGS_OFFSET_Y)
 end
 
--- La rangee mesuree, pour ce qui vient se poser dessus (les barres d'etat).
--- Tout est exprime comme les positions par defaut : x compte depuis le centre
--- de l'ecran, y depuis le bas.
-local function mesurerRangee()
-	local demi = micro:GetWidth() / 2
-	local barre = ForeverUI.ActionBarHolder
-	local barreDroite = MICRO_X - demi + BAR_OFFSET_X
-	local barreGauche = barreDroite - (barre and barre:GetWidth() or 0)
-	local sacsGauche = MICRO_X + demi + BAGS_OFFSET_X
+-- Measures the row for what sits on top of it (status bars).
+-- Like the default positions, x counts from the screen centre and y from the bottom.
+local function measureRow()
+	local half = micro:GetWidth() / 2
+	local bar = ForeverUI.ActionBarHolder
+	local barRight = MICRO_X - half + BAR_OFFSET_X
+	local barLeft = barRight - (bar and bar:GetWidth() or 0)
+	local bagsLeft = MICRO_X + half + BAGS_OFFSET_X
 
-	-- Le haut de la rangee, c'est le plus haut des trois encadrements : celui
-	-- de la barre d'action et celui des sacs debordent de 6, celui du
-	-- micro-menu de 8.
-	local hautBarre = MICRO_Y + BAR_OFFSET_Y + BAG_SIZE + 6
-	local hautMicro = MICRO_Y + MICRO_H + 8
-	local hautSacs = MICRO_Y + BAGS_OFFSET_Y + BAG_SIZE + 6
+	-- Row top is the highest of the three frames: the action bar and bags frames overflow
+	-- by 6, the micro menu frame by 8.
+	local barTop = MICRO_Y + BAR_OFFSET_Y + BAG_SIZE + 6
+	local microTop = MICRO_Y + MICRO_H + 8
+	local bagsTop = MICRO_Y + BAGS_OFFSET_Y + BAG_SIZE + 6
 
 	ForeverUI.BottomRow = {
-		-- D'un bout a l'autre des trois blocs : du bord gauche de la barre
-		-- d'action au bord droit de la barre des sacs. Les embouts debordent
-		-- de 30 px de chaque cote, mais ce qui se pose au-dessus s'aligne sur
-		-- les blocs, pas sur les griffons.
-		gauche = barreGauche,
-		droite = sacsGauche + sacs:GetWidth(),
-		haut = math.max(hautBarre, hautMicro, hautSacs),
+		-- From the action bar's left edge to the bags bar's right edge. The end caps
+		-- overflow 30 px on each side, but what sits above aligns on the blocks, not the
+		-- griffins.
+		left = barLeft,
+		right = bagsLeft + bags:GetWidth(),
+		top = math.max(barTop, microTop, bagsTop),
 	}
 end
 
--- Les embouts encadrent TOUTE la rangee : le gauche tient a la barre d'action,
--- le droit a la barre des sacs.
-local function poserEmbouts()
-	local embouts = ForeverUI.ActionBarEndCaps
-	if not embouts or not embouts.right then
+-- The end caps frame the whole row: left one on the action bar, right one on the bags
+-- bar.
+local function placeEndCaps()
+	local endCaps = ForeverUI.ActionBarEndCaps
+	if not endCaps or not endCaps.right then
 		return
 	end
 
-	embouts.right:ClearAllPoints()
-	-- Meme descente de 2 px que l'embout gauche (voir ActionBar.lua).
-	embouts.right:SetPoint("BOTTOMLEFT", sacs, "BOTTOMRIGHT", -30, -2)
+	endCaps.right:ClearAllPoints()
+	-- Same 2 px drop as the left end cap (see ActionBar.lua).
+	endCaps.right:SetPoint("BOTTOMLEFT", bags, "BOTTOMRIGHT", -30, -2)
 end
 
-local function toutPoser()
-	poserSacs()
-	iconeSacADos()
-	poserMicro()
-	for _, entree in ipairs(boutonsMicro) do
-		etatMicro(entree)
+local function layoutAll()
+	layoutBags()
+	setBackpackIcon()
+	layoutMicro()
+	for _, entry in ipairs(microButtons) do
+		applyMicroState(entry)
 	end
 end
 
 ForeverUI.Layout.Register(micro, "micromenu", L.BOTTOMBAR_EDIT_LABEL_MICROMENU, "BOTTOM", "BOTTOM", MICRO_X, MICRO_Y)
-ForeverUI.Layout.Register(sacs, "sacs", L.BOTTOMBAR_EDIT_LABEL_BAGS, "BOTTOMLEFT", "BOTTOM",
+ForeverUI.Layout.Register(bags, "bags", L.BOTTOMBAR_EDIT_LABEL_BAGS, "BOTTOMLEFT", "BOTTOM",
 	MICRO_X + micro:GetWidth() / 2 + BAGS_OFFSET_X, MICRO_Y + BAGS_OFFSET_Y)
-positionsParDefaut()
-mesurerRangee()
-poserEmbouts()
-toutPoser()
+applyDefaultPositions()
+measureRow()
+placeEndCaps()
+layoutAll()
 
--- UN MICRO-BOUTON AJOUTE PAR UN AUTRE ADDON (regle de l'utilisateur,
--- 2026-09-29 : « si un module ou un addon veut mettre un bouton dans la
--- micro barre, il doit pouvoir le faire sans que "Forever-ui" ait
--- connaissance de ce module ou addon » ; et « il est prevu que la barre des
--- micro boutons se redimensionne »).
---
--- ForeverUI.AjouterMicroBouton(def), def :
---   nom        le nom global du bouton ; si la barre porte deja un bouton de
---              ce nom, il est rendu tel quel : jamais de doublon
---   jeu        son jeu d'icones de camelot (ui-hud-micromenu-<jeu>-<etat>,
---              la variante c60 d'abord), habille comme ceux du client
---   apres      le nom du bouton apres lequel il se range ; sans lui (ou s'il
---              manque), juste avant le menu du jeu
---   infobulle  son texte, ou une fonction qui le rend (lue au survol)
---   clic       son clic
---   pret       (facultatif) appelee avec le bouton une fois pose
--- Rend le bouton, ou nil tant qu'il attend la sortie du combat : la barre
--- d'action porte des boutons securises et ne se deplace pas en combat.
--- Le bandeau prend la largeur d'un bouton de plus ; la barre d'action et les
--- sacs s'en ecartent (positions par defaut recalculees -- une place choisie
--- par le joueur reste la sienne), les embouts et les barres d'etat suivent la
--- rangee. ForeverUI.MajMicro(nom, ouvert) l'enfonce ou le relache.
-local attenteMicro = CreateFrame("Frame")
-local enAttente = {}
+-- Micro button added by another addon, without ForeverUI knowing that addon.
+-- ForeverUI.AddMicroButton(def), def fields:
+--   name      global button name; a button already in the strip is returned, never doubled
+--   atlasSet  camelot icon set (ui-hud-micromenu-<set>-<state>, c60 first)
+--   after     name of the button it follows; default: just before the game menu
+--   tooltip   text, or a function returning it (read on hover)
+--   onClick   click handler
+--   ready     optional, called with the button once placed
+-- Returns the button, or nil while waiting for combat to end (the action bar holds
+-- secure buttons and cannot move in combat). The strip widens and the action bar and bags
+-- move apart (default positions only; a player-chosen position stays); end caps and
+-- status bars follow. ForeverUI.UpdateMicro(name, isOpen) pushes or releases it.
+local pendingMicro = CreateFrame("Frame")
+local queued = {}
 
-local function boutonNomme(nom)
-	for _, entree in ipairs(boutonsMicro) do
-		if entree.bouton:GetName() == nom then return entree.bouton end
+local function namedButton(name)
+	for _, entry in ipairs(microButtons) do
+		if entry.button:GetName() == name then return entry.button end
 	end
 end
 
-function ForeverUI.AjouterMicroBouton(def)
-	if type(def) ~= "table" or type(def.nom) ~= "string" then return nil end
-	local deja = boutonNomme(def.nom)
-	if deja then return deja end
+function ForeverUI.AddMicroButton(def)
+	if type(def) ~= "table" or type(def.name) ~= "string" then return nil end
+	local already = namedButton(def.name)
+	if already then return already end
 	if InCombatLockdown() then
-		enAttente[def.nom] = def
-		attenteMicro:RegisterEvent("PLAYER_REGEN_ENABLED")
+		queued[def.name] = def
+		pendingMicro:RegisterEvent("PLAYER_REGEN_ENABLED")
 		return nil
 	end
-	local definition = { nom = def.nom, jeu = def.jeu, creer = def.nom, infobulle = def.infobulle, clic = def.clic }
-	local rang, menu
-	for index, entree in ipairs(boutonsMicro) do
-		local nom = entree.bouton:GetName()
-		if def.apres and nom == def.apres then rang = index + 1 end
-		if nom == "MainMenuMicroButton" then menu = index end
+	local definition = { name = def.name, atlasSet = def.atlasSet, create = def.name, tooltip = def.tooltip, onClick = def.onClick }
+	local rank, menu
+	for index, entry in ipairs(microButtons) do
+		local name = entry.button:GetName()
+		if def.after and name == def.after then rank = index + 1 end
+		if name == "MainMenuMicroButton" then menu = index end
 	end
-	rang = rang or menu or (#boutonsMicro + 1)
-	local entree = habillerMicro(definition, rang)
-	if not entree then return nil end
-	table.insert(boutonsMicro, rang, entree)
-	-- les suivants passent d'un cran : celui de droite reste devant
-	for index = rang + 1, #boutonsMicro do
-		local e = boutonsMicro[index]
-		if not e.cree and MainMenuBarArtFrame then
-			e.bouton:SetFrameLevel(MainMenuBarArtFrame:GetFrameLevel() + index)
+	rank = rank or menu or (#microButtons + 1)
+	local entry = skinMicro(definition, rank)
+	if not entry then return nil end
+	table.insert(microButtons, rank, entry)
+	-- following buttons shift one slot: the right one stays on top
+	for index = rank + 1, #microButtons do
+		local e = microButtons[index]
+		if not e.created and MainMenuBarArtFrame then
+			e.button:SetFrameLevel(MainMenuBarArtFrame:GetFrameLevel() + index)
 		end
 	end
-	local n = #boutonsMicro
+	local n = #microButtons
 	micro:SetWidth(n * MICRO_W + (n - 1) * MICRO_PADDING)
-	positionsParDefaut()
-	mesurerRangee()
-	poserEmbouts()
-	toutPoser()
-	if ForeverUI.StatusBarsPoser then ForeverUI.StatusBarsPoser() end
-	if type(def.pret) == "function" then def.pret(entree.bouton) end
-	return entree.bouton
+	applyDefaultPositions()
+	measureRow()
+	placeEndCaps()
+	layoutAll()
+	if ForeverUI.StatusBarsLayout then ForeverUI.StatusBarsLayout() end
+	if type(def.ready) == "function" then def.ready(entry.button) end
+	return entry.button
 end
 
-attenteMicro:SetScript("OnEvent", function(self)
+pendingMicro:SetScript("OnEvent", function(self)
 	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-	local liste = enAttente
-	enAttente = {}
-	for _, def in pairs(liste) do ForeverUI.AjouterMicroBouton(def) end
+	local list = queued
+	queued = {}
+	for _, def in pairs(list) do ForeverUI.AddMicroButton(def) end
 end)
 
 if hooksecurefunc then
 	hooksecurefunc("UpdateMicroButtons", function()
-		for _, entree in ipairs(boutonsMicro) do
-			etatMicro(entree)
+		for _, entry in ipairs(microButtons) do
+			applyMicroState(entry)
 		end
 	end)
 end
@@ -1034,86 +903,72 @@ watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("BAG_UPDATE")
 watcher:RegisterEvent("CVAR_UPDATE")
 watcher:SetScript("OnEvent", function()
-	toutPoser()
+	layoutAll()
 end)
 
--- TEMOIN -- /fui micro. Deux questions a la fois : ou est chaque bouton, et
--- qui prend la souris a sa place.
---
--- L'ANCRAGE dit s'il a bouge : nous les posons une fois, a gauche du
--- bandeau, d'un pas fixe. Un ancrage sur autre chose que ForeverUIMicroMenu,
--- ou un decalage qui n'est pas un multiple du pas, veut dire que le client
--- les a repris -- VehicleMenuBar_MoveMicroButtons est le seul a le faire en
--- 3.3.5, mais un autre addon le peut aussi.
---
--- GetMouseFocus dit qui recoit reellement le clic : un bouton peut etre au
--- bon endroit et recouvert.
+-- /fui micro: prints each button's anchor, then for five seconds what the cursor hits.
+-- An anchor other than ForeverUIMicroMenu, or an offset that is not a multiple of the
+-- pitch, means something moved the buttons (in 3.3.5 only VehicleMenuBar_MoveMicroButtons
+-- does, but another addon could). GetMouseFocus shows which frame really gets the click.
 function ForeverUI.MicroDebug()
-	local dire = function(texte)
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	local say = function(text)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. text)
 	end
 
-	dire(string.format(L.BOTTOMBAR_MICRO_DEBUG,
-		#boutonsMicro, micro:GetWidth() or 0, micro:GetHeight() or 0, MICRO_PITCH))
+	say(string.format(L.BOTTOMBAR_MICRO_DEBUG,
+		#microButtons, micro:GetWidth() or 0, micro:GetHeight() or 0, MICRO_PITCH))
 
-	for index, entree in ipairs(boutonsMicro) do
-		local bouton = entree.bouton
-		local point, cible, pointCible, x, y = bouton:GetPoint(1)
+	for index, entry in ipairs(microButtons) do
+		local button = entry.button
+		local point, target, _, x, y = button:GetPoint(1)
 		DEFAULT_CHAT_FRAME:AddMessage(string.format(
 			"   " .. L.BOTTOMBAR_MICRO_BUTTON,
-			index, bouton:GetName() or "?", tostring(point),
-			tostring(cible and cible.GetName and cible:GetName()),
-			tostring(x), tostring(y), bouton:GetWidth() or 0, bouton:GetHeight() or 0,
+			index, button:GetName() or "?", tostring(point),
+			tostring(target and target.GetName and target:GetName()),
+			tostring(x), tostring(y), button:GetWidth() or 0, button:GetHeight() or 0,
 			(index - 1) * MICRO_PITCH,
-			tostring(bouton:IsShown()), tostring(bouton:IsEnabled()),
-			bouton:GetFrameLevel() or 0, bouton:GetNumPoints() or 0))
+			tostring(button:IsShown()), tostring(button:IsEnabled()),
+			button:GetFrameLevel() or 0, button:GetNumPoints() or 0))
 	end
 
-	-- Pendant cinq secondes, ce que le curseur touche reellement.
-	local veille = CreateFrame("Frame")
-	local reste, dernier = 5, nil
-	veille:SetScript("OnUpdate", function(self, ecoule)
-		reste = reste - (ecoule or 0)
-		local sous = GetMouseFocus and GetMouseFocus()
-		local nom = sous and sous.GetName and sous:GetName() or L.BOTTOMBAR_NOTHING
-		if nom ~= dernier then
-			dernier = nom
-            DEFAULT_CHAT_FRAME:AddMessage("   " .. L.BOTTOMBAR_UNDER_CURSOR .. nom)
+	-- For five seconds, report what the cursor really hits.
+	local watcher = CreateFrame("Frame")
+	local rest, last = 5, nil
+	watcher:SetScript("OnUpdate", function(self, elapsed)
+		rest = rest - (elapsed or 0)
+		local sub = GetMouseFocus and GetMouseFocus()
+		local name = sub and sub.GetName and sub:GetName() or L.BOTTOMBAR_NOTHING
+		if name ~= last then
+			last = name
+            DEFAULT_CHAT_FRAME:AddMessage("   " .. L.BOTTOMBAR_UNDER_CURSOR .. name)
 		end
-		if reste <= 0 then
+		if rest <= 0 then
 			self:SetScript("OnUpdate", nil)
 		end
 	end)
-	dire(L.BOTTOMBAR_HOVER_PROMPT)
+	say(L.BOTTOMBAR_HOVER_PROMPT)
 end
 
--- LES CONTENANTS VIDES NE PRENNENT PLUS LA SOURIS.
---
--- MainMenuBar est declaree enableMouse="true" et couvre tout le bas de
--- l'ecran. Son art est remplace par le notre, mais elle restait une dalle
--- qui avalait les clics -- GetMouseFocus la rendait a la place du bouton
--- survole. Comme BonusActionBarFrame, et pour la meme raison : un cadre qui
--- ne sert que de contenant n'a pas a recevoir de clic. Ses enfants -- les
--- boutons d'action, les micro-boutons -- gardent le leur.
-for _, nom in ipairs({ "MainMenuBar", "MainMenuBarArtFrame" }) do
-	local cadre = _G[nom]
-	if cadre and cadre.EnableMouse then
-		cadre:EnableMouse(false)
+-- Pure containers do not take the mouse. MainMenuBar is enableMouse=true and covers the
+-- whole bottom of the screen, so it swallows clicks meant for the buttons. Its children
+-- (action buttons, micro buttons) keep their mouse.
+for _, name in ipairs({ "MainMenuBar", "MainMenuBarArtFrame" }) do
+	local frame = _G[name]
+	if frame and frame.EnableMouse then
+		frame:EnableMouse(false)
 	end
 end
 
-ForeverUI.MicroMenu = micro
-ForeverUI.MicroButtons = boutonsMicro
-ForeverUI.BagsBar = sacs
-ForeverUI.BagsCells = cellules
-ForeverUI.BagsDividers = separateurs
+ForeverUI.MicroButtons = microButtons
+ForeverUI.BagsCells = cells
+ForeverUI.BagsDividers = separators
 
 ForeverUI.BottomBarDebug = function()
-	local point, _relativeTo, relativePoint, x, y = sacs:GetPoint(1)
+	local point, _, relativePoint, x, y = bags:GetPoint(1)
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"|cff66ccffForeverUI|r " .. L.BOTTOMBAR_DEBUG,
-		micro:GetWidth(), micro:GetHeight(), #boutonsMicro,
-		sacs:GetWidth(), sacs:GetHeight(),
+		micro:GetWidth(), micro:GetHeight(), #microButtons,
+		bags:GetWidth(), bags:GetHeight(),
 		tostring(point), tostring(relativePoint), x or 0, y or 0,
 		tostring(KeyRingButton and KeyRingButton:IsShown())))
 end

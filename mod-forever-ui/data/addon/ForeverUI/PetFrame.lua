@@ -1,42 +1,8 @@
--- ForeverUI : le cadre du familier.
---
--- POURQUOI. Le PetFrame de 3.3.5 est un enfant de PlayerFrame : en etouffant
--- le cadre joueur du client (PlayerFrame.lua), ForeverUI l'avait emporte avec
--- lui. Il est refait ici a la maniere de camelot (demande du 2026-09-25).
---
--- SOURCE. blizzard_unitframe.toc charge [Family]\PetFrame.xml et .lua pour
--- tous les types de jeu : le gabarit de mainline/ est donc celui de camelot.
---   cadre        120 x 49, strate LOW, zone cliquable rognee (7, 66, 6, 7)
---   portrait      37 x 37 ancre TOPLEFT (5, -5), rond
---   art          UI-HUD-UnitFrame-TargetofTarget-PortraitOn, centre (le
---                familier reprend VOLONTAIREMENT l'art de la cible de la cible)
---   nom           68 x 10 a droite du portrait (2, 0), GameFontNormalSmall
---   vie           70 x 10, BOTTOMLEFT sur le RIGHT du portrait (2, -3.5),
---                soit TOPLEFT (44, -17)
---   ressource     74 x 7, TOPLEFT sur le BOTTOMLEFT de la vie (-4, -1), soit
---                TOPLEFT (40, -28)
---   menace       ...-PortraitOn-InCombat, TOPLEFT (1, 0) : la lueur de
---                menace de UnitFrame_Initialize
---   attaque      ...-PortraitOn-Status en ADD, TOPLEFT (0, 1) : pulsation
---                rouge entre PET_ATTACK_START et PET_ATTACK_STOP
---   degats       PetHitIndicator, NumberFontNormalHuge, TOPLEFT (5, -5)
---   humeur       PetFrameHappinessTemplate 24 x 23, LEFT sur le RIGHT du
---                cadre (0, -4), Interface\PetPaperDollFrame\UI-PetHappiness
---   place        PlayerBottomManagedFrameContainer : TOP sur le BOTTOM du
---                cadre joueur (30, 25) ; le familier y est centre avec une
---                marge gauche de 15, soit (30 + 7.5, 25). Sous les runes du
---                chevalier de la mort s'il y en a, a 2 d'ecart (spacing).
---   survol       UnitFrame_OnEnter, puis PartyMemberBuffTooltip en (60, -35) ;
---                en 3.3.5, PartyMemberBuffTooltip_Update prend le CADRE (il lit
---                self.unit) et montre ou cache l'infobulle lui-meme
---   vehicule     le cadre montre le JOUEUR quand un vehicule prend le cadre
---                joueur (toggleForVehicle, comme SecureButton_GetModifiedUnit)
---
--- CE QUI DIFFERE, ET POURQUOI :
---   * pas de MaskTexture en 3.3.5 : les barres ne sont pas rognees a la forme
---     du cadre, comme pour la cible de la cible ;
---   * les petites icones d'affaiblissement sous le cadre (AuraFrameContainer)
---     ne sont pas reprises ; les ameliorations restent dans l'infobulle.
+-- ForeverUI: the pet frame, from Camelot's mainline PetFrame template. The 3.3.5 PetFrame is a
+-- child of PlayerFrame, so it goes away with the client's player frame (see PlayerFrame.lua).
+-- It uses the target-of-target art on purpose. 3.3.5 has no MaskTexture, so the bars are not
+-- clipped to the frame shape. The debuff icons under the frame are left out; buffs stay in the
+-- tooltip.
 
 local player = ForeverUI.PlayerFrame
 
@@ -64,8 +30,9 @@ frame:SetHeight(49)
 frame:SetFrameStrata("LOW")
 frame:SetHitRectInsets(7, 66, 6, 7)
 
--- sous les runes s'il y en a (le conteneur les porte deja a la place de
--- camelot), sinon a la place du conteneur
+-- Below the runes if any (their container already sits where Camelot's does), 2 apart;
+-- otherwise where Camelot's PlayerBottomManagedFrameContainer is, (30, 25), plus 7.5 for the
+-- pet's 15 left margin
 local runes = _G.ForeverUIClassResourceContainer
 if runes then
 	frame:SetPoint("TOP", runes, "BOTTOM", 7.5, -2)
@@ -80,7 +47,7 @@ frame:SetAttribute("*type1", "target")
 frame:SetAttribute("*type2", "menu")
 frame:RegisterForClicks("AnyUp")
 frame.menu = function(self)
-	ForeverUI.MenuUnite.ouvrir(ToggleDropDownMenu, 1, nil, PetFrameDropDown, self, 44, 8)
+	ForeverUI.UnitMenu.open(ToggleDropDownMenu, 1, nil, PetFrameDropDown, self, 44, 8)
 end
 
 local portrait = frame:CreateTexture(nil, "BACKGROUND")
@@ -131,7 +98,7 @@ if CombatFeedback_Initialize then
 	CombatFeedback_Initialize(frame, hitText, 30)
 end
 
--- l'humeur du familier de chasseur
+-- Hunter pet happiness (PetFrameHappinessTemplate)
 local happiness = CreateFrame("Frame", "ForeverUIPetFrameHappiness", frame)
 happiness:SetWidth(24)
 happiness:SetHeight(23)
@@ -142,7 +109,9 @@ happinessTexture:SetTexture(HAPPINESS_FILE)
 happinessTexture:SetAllPoints(happiness)
 happiness:Hide()
 
--- ------------------------------------------------------------ mises a jour
+-- ------------------------------------------------------------ updates
+-- The unit shown: the player when a vehicle takes over the player frame
+-- (toggleForVehicle, as in SecureButton_GetModifiedUnit)
 local function displayedUnit()
 	if UnitHasVehicleUI and UnitHasVehicleUI("player") then
 		return "player"
@@ -171,7 +140,7 @@ local function updatePower()
 	ForeverUI.SetAtlasFill(powerFill, POWER_FILL[powerToken or ""] or POWER_FILL.MANA, fraction)
 end
 
--- le texte des barres suit petStatusText, et s'affiche au survol
+-- Bar text follows petStatusText, and shows on hover
 local function formatValue(value, maximum)
 	if not maximum or maximum <= 0 then
 		return ""
@@ -193,7 +162,7 @@ local function updateTexts()
 	local powerType = UnitPowerType(unit)
 	healthText:SetText(formatValue(UnitHealth(unit), UnitHealthMax(unit)))
 	healthText:Show()
-	-- PetFrameMixin:Update : pas de texte de ressource sans ressource
+	-- PetFrameMixin:Update: no power text without power
 	local powerMax = UnitPowerMax(unit, powerType)
 	if powerMax and powerMax > 0 then
 		powerText:SetText(formatValue(UnitPower(unit, powerType), powerMax))
@@ -203,8 +172,7 @@ local function updateTexts()
 	end
 end
 
--- UnitFrame_UpdateThreatIndicator : allumee au-dessus de zero, teinte du
--- niveau de menace
+-- UnitFrame_UpdateThreatIndicator: shown above zero, tinted by threat level
 local function updateThreat()
 	local status = UnitThreatSituation and UnitThreatSituation(displayedUnit())
 	if status and status > 0 and GetThreatStatusColor then
@@ -243,7 +211,7 @@ end
 
 local function updateAll()
 	local unit = displayedUnit()
-	-- l'unite que lisent l'infobulle et PartyMemberBuffTooltip_Update
+	-- The unit read by the tooltip and PartyMemberBuffTooltip_Update
 	frame.unit = unit
 	updateHealth()
 	updatePower()
@@ -269,6 +237,8 @@ happiness:SetScript("OnEnter", function(self)
 end)
 happiness:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+-- In 3.3.5, PartyMemberBuffTooltip_Update takes the frame (it reads self.unit)
+-- and shows or hides the tooltip itself
 frame:SetScript("OnEnter", function(self)
 	self.hovered = true
 	updateTexts()
@@ -288,7 +258,8 @@ end)
 
 frame:SetScript("OnShow", updateAll)
 
--- la pulsation d'attaque (PetFrameMixin:OnUpdate) et les degats recus
+-- Attack pulse (PetFrameMixin:OnUpdate), red between PET_ATTACK_START and PET_ATTACK_STOP,
+-- and damage taken
 frame.attackCounter, frame.attackSign = 0, -1
 frame:SetScript("OnUpdate", function(self, elapsed)
 	if attack:IsShown() then
@@ -371,7 +342,7 @@ for _, event in ipairs({
 	frame:RegisterEvent(event)
 end
 
--- le client montre et cache le cadre selon que le familier existe
+-- The client shows and hides the frame depending on whether the pet exists
 if RegisterUnitWatch then
 	RegisterUnitWatch(frame)
 end

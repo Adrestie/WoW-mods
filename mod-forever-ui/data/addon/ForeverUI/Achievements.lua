@@ -1,86 +1,69 @@
--- ForeverUI : la fenetre des hauts faits, deplacable (demande de
--- l'utilisateur, 2026-09-28 : « Hauts faits : ils n'existent pas dans
--- Camelot, rend juste la fenetre deplacable »).
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (Blizzard_AchievementUI.xml / .lua de
--- 3.3.5, charge a la demande) :
---   AchievementFrame 768 x 500, non deplacable ; AchievementFrameHeader
---     726 x 106 (souris active), pose au-dessus de la fenetre ;
---   Blizzard_AchievementUI.lua, ligne 1 : UIPanelWindows["AchievementFrame"]
---     = { area = "doublewide", pushable = 0, width = 840, xoffset = 80,
---     whileDead = 1 } -- le systeme de panneaux la repose a gauche
---     (FramePositionDelegate:UpdateUIPanelPositions, UIParent.lua) a chaque
---     ouverture ou fermeture d'un panneau.
---
--- RELEVE -- CAMELOT : blizzard_achievementui.toc ne charge ses fichiers que
--- pour mainline, tbc, wrath, cata et mists -- pas camelot.
---
--- CE QUI EST FAIT. La fenetre garde l'allure de 3.3.5 et reste un panneau
--- (Echap la ferme, elle pousse les autres comme avant). Son en-tete sert de
--- poignee ; la place est retenue dans ForeverUIDB.positions (cle
--- « hautsfaits », haut-centre de la fenetre, comme Superposition.lua) et
--- reposee apres le systeme de panneaux (UpdateUIPanelPositions) et a
--- l'ouverture. Rien n'y est securise : le deplacement marche aussi en
--- combat.
+-- ForeverUI: makes the achievement window (Blizzard_AchievementUI, load-on-demand) movable.
+-- camelot has no achievement UI, so the window keeps its 3.3.5 look and stays a UI panel.
+-- The panel system (UpdateUIPanelPositions) re-anchors it on every panel open or close, so
+-- the saved place (ForeverUIDB.positions) is applied again after it and on show.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
 local A = {}
-ForeverUI.HautsFaits = A
+ForeverUI.Achievements = A
 
-local CLE = "hautsfaits"
+local KEY = "achievements"
 
+-- Saved window positions (ForeverUIDB.positions), created on first use.
 local function positions()
 	ForeverUIDB = ForeverUIDB or {}
 	ForeverUIDB.positions = ForeverUIDB.positions or {}
 	return ForeverUIDB.positions
 end
 
-function A.Reposer()
+-- Anchors the window's top centre at its saved place, as WindowStack.lua does.
+function A.Reposition()
 	local f = AchievementFrame
-	local p = positions()[CLE]
+	local p = positions()[KEY]
 	if not f or not p then return end
 	f:ClearAllPoints()
 	f:SetPoint("TOP", UIParent, "TOP", p.x, p.y)
 end
 
-function A.Habiller()
+-- Makes the window movable by its header, once. No secure code, so it also works in combat.
+function A.Skin()
 	local f = AchievementFrame
-	local poignee = AchievementFrameHeader
-	if not f or not poignee or f.foreverDeplacable then return end
-	f.foreverDeplacable = true
+	local handle = AchievementFrameHeader
+	if not f or not handle or f.foreverMovable then return end
+	f.foreverMovable = true
 	f:SetMovable(true)
 	f:SetClampedToScreen(true)
-	poignee:EnableMouse(true)
-	poignee:RegisterForDrag("LeftButton")
-	poignee:SetScript("OnDragStart", function()
+	handle:EnableMouse(true)
+	handle:RegisterForDrag("LeftButton")
+	handle:SetScript("OnDragStart", function()
 		f:StartMoving()
 	end)
-	poignee:SetScript("OnDragStop", function()
+	handle:SetScript("OnDragStop", function()
 		f:StopMovingOrSizing()
 		local cx = f:GetCenter()
 		local ux = UIParent:GetCenter()
 		local x, y = cx - ux, f:GetTop() - UIParent:GetTop()
 		f:ClearAllPoints()
 		f:SetPoint("TOP", UIParent, "TOP", x, y)
-		-- la place est a nous : le client ne la retient pas en plus
+		-- we save the place ourselves: keep the client from saving it too
 		if f.SetUserPlaced then f:SetUserPlaced(false) end
-		positions()[CLE] = { x = x, y = y }
+		positions()[KEY] = { x = x, y = y }
 	end)
-	f:HookScript("OnShow", A.Reposer)
+	f:HookScript("OnShow", A.Reposition)
 	hooksecurefunc("UpdateUIPanelPositions", function()
-		if f:IsShown() then A.Reposer() end
+		if f:IsShown() then A.Reposition() end
 	end)
-	A.Reposer()
+	A.Reposition()
 end
 
-A.Habiller()
+A.Skin()
 
-local veille = CreateFrame("Frame")
-veille:RegisterEvent("ADDON_LOADED")
-veille:SetScript("OnEvent", function(_, _, nom)
-	if nom == "Blizzard_AchievementUI" then
-		A.Habiller()
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("ADDON_LOADED")
+watcher:SetScript("OnEvent", function(_, _, name)
+	if name == "Blizzard_AchievementUI" then
+		A.Skin()
 	end
 end)

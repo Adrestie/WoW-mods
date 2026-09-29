@@ -19,7 +19,7 @@ en plus.
 - **Un seul écran, trois arbres côte à côte** : un en-tête par arbre (icône
   masquée ronde dans `Talents-Main-Ring-c60`, nom, points dépensés dans
   `talents-main-ring-box-c60`), séparateurs verticaux, fond par classe
-  `talent-background-<classe>` (pas de chevalier de la mort), nuages et
+  `talent-background-<className>` (pas de chevalier de la mort), nuages et
   particules.
 - **Nœuds** : carré (sort actif) ou rond (passif), 40 × 40, icône 36 ;
   vert = achetable ou partiel, jaune = au maximum, gris = verrouillé ; le
@@ -67,14 +67,14 @@ Rien n'est protégé : `LearnTalent`, `AddPreviewTalentPoints`,
 
 Précisions du 2026-09-25 : 11 paliers au lieu de 7 → nœuds à 0,75 et rangées au pas de 43, colonnes et arbres au pas de Camelot ; chevalier de la mort → le fond moderne de chaque spécialisation, un par arbre.
 
-Étape 1 livrée le 2026-09-25 (non validée) : `Talents.lua`, `TalentsData.lua` (généré par `tools/formes_talents.py` depuis les DBC du serveur : carré = sort actif) ; relevé et écarts en tête du fichier.
+Étape 1 livrée le 2026-09-25 (non validée) : `Talents.lua`, `TalentsData.lua` (généré par `tools/talent_shapes.py` depuis les DBC du serveur : carré = sort actif) ; relevé et écarts en tête du fichier.
 
 Étape 2 livrée le 2026-09-25 (non validée) : onglets latéraux à droite (Primary, Secondary, Pet), « Activate » à la place d’Apply sur une spécialisation inactive, fenêtre réduite à un arbre pour le familier.
 
-Étape 2 validée le 2026-09-25. Fenêtre déplaçable par son titre (place retenue dans ForeverUIDB) et superposée entière aux autres grandes fenêtres (`Superposition.lua`).
+Étape 2 validée le 2026-09-25. Fenêtre déplaçable par son titre (place retenue dans ForeverUIDB) et superposée entière aux autres grandes fenêtres (`WindowStack.lua`).
 
 Étape 3 livrée le 2026-09-25 (non validée) : glyphes = le GlyphFrame de WotLK tel quel (choix de l’utilisateur), parchemin rogné, dans la fenêtre réduite ; onglet « Glyphs » après les spécialisations.
 
-Glyphes refaits le 2026-09-25, validés : décor sur l’art fourni (`tools/cuire_glyphes.py` → `glyphes-fond.blp`, `glyphes-lueurs.blp`), fonctionnement et montures d’alvéole de WotLK conservés.
+Glyphes refaits le 2026-09-25, validés : décor sur l’art fourni (`tools/bake_glyphs.py` → `glyphes-fond.blp`, `glyphes-lueurs.blp`), fonctionnement et montures d’alvéole de WotLK conservés.
 
 Étape 4 livrée le 2026-09-25 (non validée) : recherche (`TalentsSearch.lua`, champ à gauche du compteur, aperçu de 5) et confirmation à la fermeture avec des changements en attente.

@@ -64,7 +64,7 @@ en jeu avant la suivante.
 
 Étape 1 livrée le 2026-09-25 (non validée) : `SpellBook.lua` ; relevé et écarts en tête du fichier.
 
-Retours du 2026-09-25 appliqués : portrait (livre fermé `inv_misc_book_09`, masque rond cuit par `tools/cuire_masque.py`), en-tête répété sur chaque vue, réglages (masquer les passifs, tous les rangs), croix au-dessus du livre, passifs sans ombre carrée.
+Retours du 2026-09-25 appliqués : portrait (livre fermé `inv_misc_book_09`, masque rond cuit par `tools/bake_masks.py`), en-tête répété sur chaque vue, réglages (masquer les passifs, tous les rangs), croix au-dessus du livre, passifs sans ombre carrée.
 
 Réglages complétés le 2026-09-25 : « Group Similar Spells on Flyouts » (groupes relevés dans `SpellFlyout.db2` / `SpellFlyoutItem.db2` de Camelot, menu volant à boutons sécurisés, hors combat) ; « Show all spell ranks » pour toutes les classes, à la demande (Camelot l'ôte au voleur et au guerrier).
 
@@ -80,4 +80,4 @@ Groupes complétés et validés le 2026-09-25 : sorts de Burning Crusade et WotL
 
 Étape 3 VALIDÉE le 2026-09-25 : la recherche suit « Hide Passives » et « Show all spell ranks » (ce dernier reste actif pendant une recherche), ne groupe jamais en menus volants, et l'aperçu montre 5 résultats — écarts à Camelot demandés.
 
-Ajout du 2026-09-25 : fenêtre déplaçable par son titre (place retenue dans ForeverUIDB) et superposée entière aux autres grandes fenêtres (`Superposition.lua`).
+Ajout du 2026-09-25 : fenêtre déplaçable par son titre (place retenue dans ForeverUIDB) et superposée entière aux autres grandes fenêtres (`WindowStack.lua`).

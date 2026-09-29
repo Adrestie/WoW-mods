@@ -1,111 +1,38 @@
--- ForeverUI : les reglages du jeu -- les fenetres Video (VideoOptionsFrame),
--- Son et voix (AudioOptionsFrame) et Interface (InterfaceOptionsFrame), a la
--- DA de camelot (demande de l'utilisateur, 2026-09-28 : « fait le menu et
--- reglages », etape 1).
---
--- CHOIX : « 3.3.5 rhabillee », celui que l'utilisateur a pris le 28/09 pour
--- les options des ecrans d'accueil, VALIDEES (ForeverUIGlueOptions.lua).
--- Camelot n'a pas ces trois fenetres (il ouvre SettingsPanel, reglages
--- regroupes) : on garde les ecrans du client -- places, tailles, logique,
--- reglages, CVars, boutons -- et on pose l'art de camelot apres lui, avec
--- les memes elements et les memes nombres qu'a l'accueil.
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (FrameXML de 3.3.5, par la chaine
--- d'archives) :
---   OptionsFrameTemplate (OptionsFrameTemplates.xml) 648 x 520 : <Backdrop>
---     UI-DialogBox, en-tete UI-DialogBox-Header et $parentHeaderText ;
---     $parentCategoryFrame (OptionsFrameListTemplate, 175 x 429 a (22, -40))
---     et $parentPanelContainer (bord d'infobulle gris 0,6) ; Video : Apply,
---     Cancel, Okay a BOTTOMRIGHT (-16, 16), Defaults (gris) a BOTTOMLEFT ;
---     Son : Cancel, Okay, Defaults.
---   InterfaceOptionsFrame (InterfaceOptionsFrame.xml) : la meme fenetre, deux
---     listes ($parentCategories, $parentAddOns) et deux onglets
---     (OptionsFrameTabButtonTemplate, GAME et ADDONS) au-dessus des listes ;
---     Cancel, Okay, Defaults.
---   OptionsFrameListTemplate : bord en huit textures (UI-Tooltip-Border),
---     deux entretoises UI-OptionsFrame-Spacer, un defilement a fausse barre
---     ($parentList, UIPanelScrollBarTemplate) montre quand la liste deborde,
---     les lignes OptionsListButtonTemplate (175 x 18, surbrillance
---     UI-QuestLogTitleHighlight, bouton de depliage $parentToggle 14 x 14 a
---     TOPRIGHT (-6, -1), UI-PlusButton / UI-MinusButton).
---     OptionsList_DisplayButton pose les polices a chaque passage :
---     GameFontNormal / Highlight, GameFontHighlightSmall en sous-categorie.
---   OptionsPanelTemplates.xml : cases OptionsBaseCheckButtonTemplate (26 x
---     26, UI-CheckBox-*), curseurs OptionsSliderTemplate (144 x 17, <Backdrop>
---     UI-SliderBar), cadres de groupe OptionsBoxTemplate (bord d'infobulle
---     gris 0,4) ; menus deroulants UIDropDownMenuTemplate (cadre
---     CharacterCreate-LabelFrame, comme a l'accueil).
---   Echap : ToggleGameMenu clique Cancel ; UIPanelWindows les tient au
---     centre.
---
--- RELEVE -- CAMELOT : les nombres sont ceux de l'accueil (relevee des
--- gabarits de reglages du 28/09) :
---   SettingsFrameTemplate : cadre de metal ButtonFrameTemplateNoPortrait,
---     titre GameFontNormal a -5 ; croix UIPanelCloseButton a (-2, 1) ;
---     boutons UIPanelButtonTemplate 96 x 22 a BOTTOMRIGHT (-16, 16), 2 entre
---     eux (ApplyButton).
---   SettingsCategoryListButtonTemplate : choisie Options_List_Active a sa
---     taille, centree, GameFontHighlight ; survolee Options_List_Hover ;
---     sinon GameFontNormal (sous-categorie GameFontHighlight) ; depliage
---     common-button-dropdown-open / -closed (+ -pressed), lueur
---     UI-PlusButton-Hilight ; liste sans cadre, barre MinimalScrollBar.
---   MinimalTabTemplate (onglets Game / AddOns) : Options_Tab_Left / Middle /
---     Right, choisi Options_Tab_Active_* ; largeur = texte + 40 ; texte
---     BOTTOM (0, 4), choisi (0, 6), GameFontNormalSmall, GameFontHighlight-
---     Small au survol et choisi ; 5 entre deux onglets.
---   SettingsCheckboxTemplate (checkbox-minimal, checkmark-minimal), curseur
---     MinimalSliderTemplate, menu WowStyle2DropdownTemplate : voir plus bas.
---
--- CE QUI DIFFERE, ET POURQUOI.
---   Comme a l'accueil (ecarts deja valides) : fond noir translucide ; le
---   cadre des panneaux prend le cadre interieur de camelot (Options_
---   InnerFrame, voir plus bas : l'Interface le 28/09, puis Video et Son a
---   la demande, au lieu de l'encart de l'accueil) ; pas de stries ; cases et
---   curseurs a la taille du client ; poignee du curseur 16 x 15, art affine ;
---   menus sans fleches de pas ; cadres de groupe au bord d'infobulle gris ;
---   textes des menus en taille 10.
---   ECART propre au jeu : la croix FERME la fenetre (HideUIPanel), la ou
---   celle de l'accueil cliquait Cancel. Cliquer Cancel depuis le code d'un
---   addon ferait jouer les annulations du client (BlizzardOptionsPanel_
---   Cancel, qui reecrivent CVars et variables d'interface) hors du chemin
---   securise, et souillerait ces variables pour tout le client (meme cas que
---   StaticPopupDialogs, 26/09). Une valeur changee et ni validee ni annulee
---   n'est pas appliquee ; le client la relit a la prochaine ouverture.
---   Le bouton de depliage garde la place et la taille du client (14 x 14 a
---   TOPRIGHT), avec l'art de camelot.
---   Les panneaux des autres addons (onglet AddOns) gardent leurs commandes :
---   seuls ceux du client sont rhabilles ; la fenetre, la liste et les
---   onglets le sont pour tous.
+-- ForeverUI: camelot art on the client Video, Sound and Interface options windows.
+-- camelot has no such windows (it uses SettingsPanel): the client screens, logic and CVars stay,
+-- with the same art pieces and numbers as the glue options (ForeverUIGlueOptions.lua).
+-- Panels of other addons (AddOns tab) keep their controls; only the window, list and tabs change.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
-local vrai = Gb.Vrai
+local Tpl = ForeverUI.Templates
+local truthy = Tpl.Truthy
 
 local R = {}
-ForeverUI.Reglages = R
+ForeverUI.Settings = R
 
--- les nombres, en tables : Lua 5.1 refuse plus de 60 valeurs exterieures
--- dans une fonction
+-- Numbers kept in tables: Lua 5.1 allows at most 60 upvalues per function.
 local N = {
-	boite = { 0.4, 0.4, 0.4 },          -- OptionsBoxTemplate : son bord
-	poignee = { 16, 15 },               -- ECART : 20 x 19 chez camelot
-	poigneeGrisee = 0.7,                -- MinimalSliderWithSteppers
-	bouton = { 96, 22 },
-	boutonBord = 16,
-	boutonEcart = 2,
-	menu = { gauche = 16, haut = -19, droite = -17, hauteur = 25, fond = 7, texte = 13, flecheY = -5 },
-	onglet = { hauteur = 37, marge = 40, texte = 4, texteChoisi = 6, ecart = 5 },
-	veille = 0.1,
+	box = { 0.4, 0.4, 0.4 },          -- OptionsBoxTemplate border
+	handle = { 16, 15 },               -- camelot: 20 x 19
+	disabledHandle = 0.7,                -- MinimalSliderWithSteppers
+	button = { 96, 22 },
+	buttonEdge = 16,
+	buttonGap = 2,
+	menu = { left = 16, top = -19, right = -17, height = 25, background = 7, text = 13, arrowY = -5 },
+	tab = { height = 37, margin = 40, text = 4, selectedText = 6, gap = 5 },
+	watcher = 0.1,
 }
 
--- ------------------------------------------------------------ les commandes
+-- ------------------------------------------------------------ Controls
 
-local function poserEtat(b, set, get, nom, mode)
-	b[set](b, Gb.Art(nom)[1])
+-- Sets one state texture of a button to a camelot atlas, stretched over the button.
+-- set, get: texture setter and getter names; name: atlas; mode: optional blend mode.
+local function applyState(b, set, get, name, mode)
+	b[set](b, Tpl.Art(name)[1])
 	local t = b[get](b)
-	Gb.Poser(t, nom)
+	Tpl.Place(t, name)
 	t:ClearAllPoints()
 	t:SetAllPoints(b)
 	if mode then
@@ -114,217 +41,213 @@ local function poserEtat(b, set, get, nom, mode)
 	return t
 end
 
--- SettingsCheckboxTemplate, a la taille de la case du client (26) : pas de
--- lueur au survol
-function R.Case(c)
-	if c.foreverCase then return end
-	c.foreverCase = true
-	poserEtat(c, "SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
-	poserEtat(c, "SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
-	local lueur = c:GetHighlightTexture()
-	if lueur then
-		lueur:SetTexture(nil)
-		lueur:SetAlpha(0)
+-- SettingsCheckboxTemplate at the client checkbox size (26), no hover glow.
+function R.Checkbox(c)
+	if c.foreverCell then return end
+	c.foreverCell = true
+	applyState(c, "SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
+	applyState(c, "SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
+	local glow = c:GetHighlightTexture()
+	if glow then
+		glow:SetTexture(nil)
+		glow:SetAlpha(0)
 	end
-	poserEtat(c, "SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
-	poserEtat(c, "SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal-disabled")
+	applyState(c, "SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
+	applyState(c, "SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal-disabled")
 end
 
--- OptionsBoxTemplate : le bord des infobulles de camelot au gris du client
--- (0,4), sans fond (le client n'en pose pas)
-function R.Boite(f)
-	if f.foreverNeuf then return end
-	local p = ForeverUI.Tooltips.Habiller(f)
-	for nom, t in pairs(p) do
-		if nom == "Center" then
+-- OptionsBoxTemplate: camelot tooltip border in the client grey (0.4), no background (the
+-- client has none).
+function R.Box(f)
+	if f.foreverNineSlice then return end
+	local p = ForeverUI.Tooltips.Skin(f)
+	for name, t in pairs(p) do
+		if name == "Center" then
 			t:SetAlpha(0)
 		else
-			t:SetVertexColor(N.boite[1], N.boite[2], N.boite[3], 1)
+			t:SetVertexColor(N.box[1], N.box[2], N.box[3], 1)
 		end
 	end
 end
 
--- MinimalSliderTemplate sur le curseur du client, a sa taille (17 de haut,
--- celle de la glissiere) : Left / Right a leur taille, Middle entre eux,
--- bouton Minimal_SliderBar_Button (ECART : 16 x 15)
-R.curseurs = {}
-function R.Curseur(s)
-	if s.foreverCurseur then return end
-	s.foreverCurseur = true
+-- MinimalSliderTemplate on the client slider, at its size (17 high, the track height):
+-- Left / Right at atlas size, Middle between them, thumb Minimal_SliderBar_Button (16 x 15).
+R.sliders = {}
+function R.Cursor(s)
+	if s.foreverCursor then return end
+	s.foreverCursor = true
 	s:SetBackdrop(nil)
 	local g = s:CreateTexture(nil, "ARTWORK")
-	Gb.Poser(g, "minimal_sliderbar_left", true)
+	Tpl.Place(g, "minimal_sliderbar_left", true)
 	g:SetPoint("LEFT", s, "LEFT")
 	local d = s:CreateTexture(nil, "ARTWORK")
-	Gb.Poser(d, "minimal_sliderbar_right", true)
+	Tpl.Place(d, "minimal_sliderbar_right", true)
 	d:SetPoint("RIGHT", s, "RIGHT")
 	local m = s:CreateTexture(nil, "ARTWORK")
-	Gb.Poser(m, "_minimal_sliderbar_middle", true)
+	Tpl.Place(m, "_minimal_sliderbar_middle", true)
 	m:SetPoint("TOPLEFT", g, "TOPRIGHT")
 	m:SetPoint("TOPRIGHT", d, "TOPLEFT")
-	s:SetThumbTexture(Gb.Art("minimal_sliderbar_button")[1])
-	local bouton = s:GetThumbTexture()
-	Gb.Poser(bouton, "minimal_sliderbar_button")
-	bouton:SetWidth(N.poignee[1])
-	bouton:SetHeight(N.poignee[2])
-	R.curseurs[#R.curseurs + 1] = s
+	s:SetThumbTexture(Tpl.Art("minimal_sliderbar_button")[1])
+	local button = s:GetThumbTexture()
+	Tpl.Place(button, "minimal_sliderbar_button")
+	button:SetWidth(N.handle[1])
+	button:SetHeight(N.handle[2])
+	R.sliders[#R.sliders + 1] = s
 end
 
--- ------------------------------------------------------------ le menu deroulant
+-- ------------------------------------------------------------ Dropdown menu
 
--- WowStyle2DropdownTemplate (celui de SettingsDropdownControl), dans la
--- partie visible du cadre de 3.3.5 (CharacterCreate-LabelFrame : opaque de
--- 16 a 111 sur 128 en largeur, de 19 a 45 sur 64 en hauteur) : fond
--- common-dropdown-c-button de (-7, 7) a (7, -7), etats hover-1 / pressed-1 /
--- pressedhover-1 / open / disabled ; fleche common-dropdown-c-button-hover-
--- arrow a BOTTOM (0, -5) au survol seulement, desaturee si desactive ; texte
--- centre de 13 a -13, 20 de haut, decale de (2, -1) enfonce ; ECART : texte
--- GameFontNormalSmall (taille 10) au lieu de GameFontNormal. La liste :
--- DropDown.lua, style 2.
-local function ouvert(dd)
+-- WowStyle2DropdownTemplate (SettingsDropdownControl), inside the visible part of the 3.3.5
+-- frame (CharacterCreate-LabelFrame: opaque from 16 to 111 of 128 wide, 19 to 45 of 64 high):
+-- background common-dropdown-c-button from (-7, 7) to (7, -7) with its hover, pressed, open
+-- and disabled states; hover arrow at BOTTOM (0, -5), desaturated when disabled; text centered
+-- from 13 to -13, shifted (2, -1) when pressed, in GameFontNormalSmall (size 10) instead of
+-- GameFontNormal. The list: DropDown.lua, style 2.
+local function isOpen(dd)
 	return DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == dd
 end
 
-local function peindreMenu(dd)
-	local b = dd.foreverBouton
-	local actif = vrai(b:IsEnabled())
+-- Draws the dropdown state: background atlas, hover arrow, text color and pressed offset.
+local function paintMenu(dd)
+	local b = dd.foreverButton
+	local active = truthy(b:IsEnabled())
 	local n = "common-dropdown-c-button"
-	if not actif then
+	if not active then
 		n = n .. "-disabled"
-	elseif b.foreverBas and b.foreverDessus then
+	elseif b.foreverMouseDown and b.foreverHovered then
 		n = n .. "-pressedhover-1"
-	elseif b.foreverDessus then
+	elseif b.foreverHovered then
 		n = n .. "-hover-1"
-	elseif b.foreverBas then
+	elseif b.foreverMouseDown then
 		n = n .. "-pressed-1"
-	elseif ouvert(dd) then
+	elseif isOpen(dd) then
 		n = n .. "-open"
 	end
-	dd.foreverFond:Poser(n)
-	Gb.Montrer(dd.foreverFleche, b.foreverDessus)
-	dd.foreverFleche:SetDesaturated(not actif)
-	local texte = _G[dd:GetName() .. "Text"]
-	-- le client grise le texte par SetVertexColor : la couleur est la notre
-	texte:SetVertexColor(1, 1, 1)
-	if actif then
-		texte:SetTextColor(1, 0.82, 0)
+	dd.foreverBackground:Place(n)
+	Tpl.SetShown(dd.foreverArrow, b.foreverHovered)
+	dd.foreverArrow:SetDesaturated(not active)
+	local text = _G[dd:GetName() .. "Text"]
+	-- The client greys the text with SetVertexColor: reset it and use our own color.
+	text:SetVertexColor(1, 1, 1)
+	if active then
+		text:SetTextColor(1, 0.82, 0)
 	else
-		texte:SetTextColor(0.5, 0.5, 0.5)
+		text:SetTextColor(0.5, 0.5, 0.5)
 	end
-	-- SetDisplacedRegions(2, -1, Text)
+	-- camelot: SetDisplacedRegions(2, -1, Text)
 	local dx, dy = 0, 0
-	if b.foreverBas and actif then
+	if b.foreverMouseDown and active then
 		dx, dy = 2, -1
 	end
-	texte:ClearAllPoints()
-	texte:SetPoint("LEFT", b, "LEFT", N.menu.texte + dx, dy)
-	texte:SetPoint("RIGHT", b, "RIGHT", -N.menu.texte + dx, dy)
+	text:ClearAllPoints()
+	text:SetPoint("LEFT", b, "LEFT", N.menu.text + dx, dy)
+	text:SetPoint("RIGHT", b, "RIGHT", -N.menu.text + dx, dy)
 end
 
+-- Skins a client UIDropDownMenu as a camelot dropdown.
 function R.Menu(dd)
-	if dd.foreverBouton then return end
+	if dd.foreverButton then return end
 	dd.foreverStyle = 2
-	local nom = dd:GetName()
-	local gauche, droite = _G[nom .. "Left"], _G[nom .. "Right"]
-	for _, suffixe in ipairs({ "Left", "Middle", "Right" }) do
-		_G[nom .. suffixe]:SetAlpha(0)
+	local name = dd:GetName()
+	local left, right = _G[name .. "Left"], _G[name .. "Right"]
+	for _, suffix in ipairs({ "Left", "Middle", "Right" }) do
+		_G[name .. suffix]:SetAlpha(0)
 	end
-	local b = _G[nom .. "Button"]
-	dd.foreverBouton = b
+	local b = _G[name .. "Button"]
+	dd.foreverButton = b
 	b:ClearAllPoints()
-	b:SetPoint("TOPLEFT", gauche, "TOPLEFT", N.menu.gauche, N.menu.haut)
-	b:SetPoint("RIGHT", droite, "RIGHT", N.menu.droite, 0)
-	b:SetHeight(N.menu.hauteur)
-	Gb.EffacerArt(b)
-	-- le fond en region du menu, sous son texte ; la case (cadre fils) ne
-	-- porte que la fleche
-	local texte = _G[nom .. "Text"]
-	texte:SetHeight(20)
-	texte:SetFontObject(GameFontNormalSmall)
-	texte:SetJustifyH("CENTER")
-	dd.foreverFond = Gb.AtlasEtire(dd, "common-dropdown-c-button", "BACKGROUND")
-	dd.foreverFond.rect:SetPoint("TOPLEFT", b, "TOPLEFT", -N.menu.fond, N.menu.fond)
-	dd.foreverFond.rect:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", N.menu.fond, -N.menu.fond)
-	dd.foreverFleche = b:CreateTexture(nil, "OVERLAY")
-	Gb.Poser(dd.foreverFleche, "common-dropdown-c-button-hover-arrow", true)
-	dd.foreverFleche:SetPoint("BOTTOM", b, "BOTTOM", 0, N.menu.flecheY)
-	dd.foreverPeindre = function() peindreMenu(dd) end
+	b:SetPoint("TOPLEFT", left, "TOPLEFT", N.menu.left, N.menu.top)
+	b:SetPoint("RIGHT", right, "RIGHT", N.menu.right, 0)
+	b:SetHeight(N.menu.height)
+	Tpl.ClearArt(b)
+	-- Background as a region of the dropdown, below its text; the button (child frame) holds only
+	-- the arrow.
+	local text = _G[name .. "Text"]
+	text:SetHeight(20)
+	text:SetFontObject(GameFontNormalSmall)
+	text:SetJustifyH("CENTER")
+	dd.foreverBackground = Tpl.StretchedAtlas(dd, "common-dropdown-c-button", "BACKGROUND")
+	dd.foreverBackground.rect:SetPoint("TOPLEFT", b, "TOPLEFT", -N.menu.background, N.menu.background)
+	dd.foreverBackground.rect:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", N.menu.background, -N.menu.background)
+	dd.foreverArrow = b:CreateTexture(nil, "OVERLAY")
+	Tpl.Place(dd.foreverArrow, "common-dropdown-c-button-hover-arrow", true)
+	dd.foreverArrow:SetPoint("BOTTOM", b, "BOTTOM", 0, N.menu.arrowY)
+	dd.foreverPaint = function() paintMenu(dd) end
 	b:HookScript("OnEnter", function(self)
-		self.foreverDessus = true
-		peindreMenu(dd)
-		-- le survol du menu (son infobulle) reste celui du client : la case
-		-- le relaie
-		local surEntree = dd:GetScript("OnEnter")
-		if surEntree then surEntree(dd) end
+		self.foreverHovered = true
+		paintMenu(dd)
+		-- The dropdown's own hover script (its tooltip) stays the client's: the button forwards it.
+		local onEnter = dd:GetScript("OnEnter")
+		if onEnter then onEnter(dd) end
 	end)
 	b:HookScript("OnLeave", function(self)
-		self.foreverDessus = false
-		peindreMenu(dd)
-		local surSortie = dd:GetScript("OnLeave")
-		if surSortie then surSortie(dd) end
+		self.foreverHovered = false
+		paintMenu(dd)
+		local onLeave = dd:GetScript("OnLeave")
+		if onLeave then onLeave(dd) end
 	end)
-	b:HookScript("OnMouseDown", function(self) self.foreverBas = true; peindreMenu(dd) end)
-	b:HookScript("OnMouseUp", function(self) self.foreverBas = false; peindreMenu(dd) end)
-	b:HookScript("OnDisable", function() peindreMenu(dd) end)
-	b:HookScript("OnEnable", function() peindreMenu(dd) end)
-	dd:HookScript("OnShow", function() peindreMenu(dd) end)
-	peindreMenu(dd)
+	b:HookScript("OnMouseDown", function(self) self.foreverMouseDown = true; paintMenu(dd) end)
+	b:HookScript("OnMouseUp", function(self) self.foreverMouseDown = false; paintMenu(dd) end)
+	b:HookScript("OnDisable", function() paintMenu(dd) end)
+	b:HookScript("OnEnable", function() paintMenu(dd) end)
+	dd:HookScript("OnShow", function() paintMenu(dd) end)
+	paintMenu(dd)
 end
 
--- le texte du menu est repose par le client (UIDropDownMenu_SetText,
--- _EnableDropDown, _DisableDropDown) : on repasse derriere lui
-for _, nom in ipairs({ "UIDropDownMenu_EnableDropDown", "UIDropDownMenu_DisableDropDown" }) do
-	if type(_G[nom]) == "function" then
-		hooksecurefunc(nom, function(dd)
-			if dd and dd.foreverPeindre then dd.foreverPeindre() end
+-- The client resets the dropdown in UIDropDownMenu_EnableDropDown / _DisableDropDown:
+-- repaint after it.
+for _, name in ipairs({ "UIDropDownMenu_EnableDropDown", "UIDropDownMenu_DisableDropDown" }) do
+	if type(_G[name]) == "function" then
+		hooksecurefunc(name, function(dd)
+			if dd and dd.foreverPaint then dd.foreverPaint() end
 		end)
 	end
 end
 
--- le texte du bouton, converti comme les lignes (Gb.TexteUtf8)
-hooksecurefunc("UIDropDownMenu_SetText", function(dd, texte)
-	local fs = dd and dd.foreverBouton and _G[dd:GetName() .. "Text"]
-	local propre = Gb.TexteUtf8(texte)
-	if fs and propre ~= texte then
-		fs:SetText(propre)
+-- Button text, converted like the list lines (Tpl.Utf8Text).
+hooksecurefunc("UIDropDownMenu_SetText", function(dd, text)
+	local fs = dd and dd.foreverButton and _G[dd:GetName() .. "Text"]
+	local clean = Tpl.Utf8Text(text)
+	if fs and clean ~= text then
+		fs:SetText(clean)
 	end
 end)
 
--- ------------------------------------------------------------ les panneaux
+-- ------------------------------------------------------------ Panels
 
--- tout un panneau : chaque commande selon son gabarit, et les cadres qui en
--- portent d'autres (cadres de groupe, sous-cadres)
-function R.Panneau(cadre)
-	for _, c in ipairs({ cadre:GetChildren() }) do
-		local nom = c:GetName()
-		local genre = c:GetObjectType()
-		if genre == "CheckButton" then
-			R.Case(c)
-		elseif genre == "Slider" then
-			R.Curseur(c)
-		elseif nom and _G[nom .. "Button"] and _G[nom .. "Middle"] and _G[nom .. "Left"] then
+-- Skins a whole panel: each control by its template, recursing into frames that hold others
+-- (group boxes, sub-frames).
+function R.Panel(frame)
+	for _, c in ipairs({ frame:GetChildren() }) do
+		local name = c:GetName()
+		local kind = c:GetObjectType()
+		if kind == "CheckButton" then
+			R.Checkbox(c)
+		elseif kind == "Slider" then
+			R.Cursor(c)
+		elseif name and _G[name .. "Button"] and _G[name .. "Middle"] and _G[name .. "Left"] then
 			R.Menu(c)
 		else
-			local fond = c.GetBackdrop and c:GetBackdrop()
-			if fond and type(fond.edgeFile) == "string"
-				and string.find(string.lower(fond.edgeFile), "ui%-tooltip%-border") then
-				R.Boite(c)
+			local background = c.GetBackdrop and c:GetBackdrop()
+			if background and type(background.edgeFile) == "string"
+				and string.find(string.lower(background.edgeFile), "ui%-tooltip%-border") then
+				R.Box(c)
 			end
-			if genre == "Frame" then
-				R.Panneau(c)
+			if kind == "Frame" then
+				R.Panel(c)
 			end
 		end
 	end
 end
 
--- le bouton a 0,7 quand le curseur est desactive (MinimalSliderWithSteppers :
--- ConfigureSlider) ; le client desactive ses curseurs par une fonction qu'il
--- garde sur chacun : on le lit pendant que les fenetres sont ouvertes
-local veille = CreateFrame("Frame")
-veille.t = 0
-veille:SetScript("OnUpdate", function(self, ecoule)
-	self.t = self.t + (ecoule or 0)
-	if self.t < N.veille then
+-- Slider thumb at 0.7 alpha when disabled (MinimalSliderWithSteppers: ConfigureSlider). The
+-- client disables sliders through a function stored on each one, so poll them while the
+-- windows are open.
+local watcher = CreateFrame("Frame")
+watcher.t = 0
+watcher:SetScript("OnUpdate", function(self, elapsed)
+	self.t = self.t + (elapsed or 0)
+	if self.t < N.watcher then
 		return
 	end
 	self.t = 0
@@ -332,224 +255,215 @@ veille:SetScript("OnUpdate", function(self, ecoule)
 	if not ((f1 and f1:IsShown()) or (f2 and f2:IsShown()) or (f3 and f3:IsShown())) then
 		return
 	end
-	for _, s in ipairs(R.curseurs) do
-		local actif = not s.IsEnabled or vrai(s:IsEnabled())
-		s:GetThumbTexture():SetAlpha(actif and 1 or N.poigneeGrisee)
+	for _, s in ipairs(R.sliders) do
+		local active = not s.IsEnabled or truthy(s:IsEnabled())
+		s:GetThumbTexture():SetAlpha(active and 1 or N.disabledHandle)
 	end
 end)
-R.veille = veille
+R.watcher = watcher
 
--- ------------------------------------------------------------ les categories
+-- ------------------------------------------------------------ Categories
 
--- SettingsCategoryListButtonMixin:UpdateStateInternal, apres le client
--- (OptionsList_DisplayButton reposent polices et depliage ; OptionsList_
--- SelectButton / ClearSelection la selection)
-local function peindreLigne(liste, b)
+-- camelot SettingsCategoryListButtonMixin:UpdateStateInternal, run after the client
+-- (OptionsList_DisplayButton resets fonts and toggle; OptionsList_SelectButton /
+-- ClearSelection set the selection).
+local function paintRow(list, b)
 	local el = b.element
-	local choisi = el ~= nil and liste.selection == el
-	Gb.Montrer(b.foreverActif, choisi)
-	Gb.Montrer(b.foreverSurvol, not choisi and b.foreverDessus)
-	local police
-	if choisi or (el and el.parent) then
-		police = GameFontHighlight
+	local selected = el ~= nil and list.selection == el
+	Tpl.SetShown(b.foreverActive, selected)
+	Tpl.SetShown(b.foreverHover, not selected and b.foreverHovered)
+	local font
+	if selected or (el and el.parent) then
+		font = GameFontHighlight
 	else
-		police = GameFontNormal
+		font = GameFontNormal
 	end
-	b:SetNormalFontObject(police)
-	b:SetHighlightFontObject(police)
-	-- le depliage : common-button-dropdown-open / -closed
+	b:SetNormalFontObject(font)
+	b:SetHighlightFontObject(font)
+	-- Toggle: common-button-dropdown-open / -closed
 	local t = b.toggle
 	if t and el and el.hasChildren then
-		local etat = el.collapsed and "closed" or "open"
-		t:SetNormalTexture(ForeverUI.AtlasEntry("common-button-dropdown-" .. etat)[1])
-		ForeverUI.SetAtlas(t:GetNormalTexture(), "common-button-dropdown-" .. etat, true)
-		t:SetPushedTexture(ForeverUI.AtlasEntry("common-button-dropdown-" .. etat .. "pressed")[1])
-		ForeverUI.SetAtlas(t:GetPushedTexture(), "common-button-dropdown-" .. etat .. "pressed", true)
+		local state = el.collapsed and "closed" or "open"
+		t:SetNormalTexture(ForeverUI.AtlasEntry("common-button-dropdown-" .. state)[1])
+		ForeverUI.SetAtlas(t:GetNormalTexture(), "common-button-dropdown-" .. state, true)
+		t:SetPushedTexture(ForeverUI.AtlasEntry("common-button-dropdown-" .. state .. "pressed")[1])
+		ForeverUI.SetAtlas(t:GetPushedTexture(), "common-button-dropdown-" .. state .. "pressed", true)
 	end
 end
 
-function R.PeindreListe(liste)
-	for _, b in ipairs(liste.buttons or {}) do
-		peindreLigne(liste, b)
+function R.PaintList(list)
+	for _, b in ipairs(list.buttons or {}) do
+		paintRow(list, b)
 	end
 end
 
--- LA BARRE DE LA LISTE : l'art de MinimalScrollBar (les morceaux de
--- ScrollBar.lua : fleches minimal-scrollbar-arrow-top / -bottom 17 x 11 et
--- leur survol, glissiere track-top / middle / bottom et curseur thumb-top,
--- middle, thumb-top retourne, 8 de large) POSE SUR la fausse barre du
--- client. Celle-ci reste a sa place, invisible (alpha 0) mais a la souris :
--- c'est elle qu'on clique, qu'on glisse et qui tourne a la molette, par le
--- chemin securise du client -- faire defiler la liste depuis le code d'un
--- addon rejouerait OptionsCategoryFrame_Update hors de ce chemin et
--- souillerait les lignes (button.element) que lit ensuite le clic. L'art
--- suit : fleches sur les siennes, glissiere sur la sienne, curseur ancre
--- sur le sien. ECART : le curseur a la taille de celui du client (fixe), et
--- non a la part visible de la liste.
-local BARRE = {
-	largeur = 8, bout = 8,
-	flecheHaut = "minimal-scrollbar-arrow-top-c60", flecheHautSurvol = "minimal-scrollbar-arrow-top-over-c60",
-	flecheBas = "minimal-scrollbar-arrow-bottom-c60", flecheBasSurvol = "minimal-scrollbar-arrow-bottom-over-c60",
-	pisteHaut = "minimal-scrollbar-track-top-c60", pisteMilieu = "!minimal-scrollbar-track-middle-c60",
-	pisteBas = "minimal-scrollbar-track-bottom-c60",
-	curseurBout = "minimal-scrollbar-thumb-top-c60", curseurMilieu = "minimal-scrollbar-thumb-middle-c60",
+-- List scroll bar: MinimalScrollBar art (ScrollBar.lua pieces: arrows 17 x 11 with hover,
+-- track top / middle / bottom, thumb top / middle / flipped top, 8 wide) laid over the client
+-- bar. The client bar stays in place at alpha 0 and takes clicks, drags and the wheel through
+-- its secure path: scrolling from addon code would run OptionsCategoryFrame_Update outside it
+-- and taint the rows (button.element) the click reads. The thumb keeps the client's fixed size.
+local BAR = {
+	width = 8, tip = 8,
+	upArrow = "minimal-scrollbar-arrow-top-c60", upArrowHover = "minimal-scrollbar-arrow-top-over-c60",
+	downArrow = "minimal-scrollbar-arrow-bottom-c60", downArrowHover = "minimal-scrollbar-arrow-bottom-over-c60",
+	trackTop = "minimal-scrollbar-track-top-c60", trackMiddle = "!minimal-scrollbar-track-middle-c60",
+	trackBottom = "minimal-scrollbar-track-bottom-c60",
+	cursorTip = "minimal-scrollbar-thumb-top-c60", cursorMiddle = "minimal-scrollbar-thumb-middle-c60",
 }
 
-local function fleche(v, bouton, atlas, survol)
-	-- a la taille de l'element (17 x 11) : une texture sans taille prendrait
-	-- celle de sa feuille
+-- Arrow art over a client scroll button. v: overlay frame; atlas, hover: normal and hover art.
+local function arrow(v, button, atlas, hover)
+	-- At atlas size (17 x 11): a texture without a size takes the size of its sheet.
 	local t = v:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(t, atlas)
-	t:SetPoint("CENTER", bouton, "CENTER", 0, 0)
-	bouton:HookScript("OnEnter", function() ForeverUI.SetAtlas(t, survol, true) end)
-	bouton:HookScript("OnLeave", function() ForeverUI.SetAtlas(t, atlas, true) end)
+	t:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button:HookScript("OnEnter", function() ForeverUI.SetAtlas(t, hover, true) end)
+	button:HookScript("OnLeave", function() ForeverUI.SetAtlas(t, atlas, true) end)
 	return t
 end
 
-function R.Barre(liste)
-	local defile = liste.scrollFrame
-	local sb = defile and _G[defile:GetName() .. "ScrollBar"]
+function R.Bar(list)
+	local scroll = list.scrollFrame
+	local sb = scroll and _G[scroll:GetName() .. "ScrollBar"]
 	if not sb then return end
-	defile:SetBackdrop(nil)
+	scroll:SetBackdrop(nil)
 	sb:SetAlpha(0)
-	local v = CreateFrame("Frame", nil, defile)
+	local v = CreateFrame("Frame", nil, scroll)
 	v:SetFrameLevel(sb:GetFrameLevel() + 5)
-	v:SetAllPoints(defile)
-	local b = BARRE
-	v.haut = fleche(v, _G[sb:GetName() .. "ScrollUpButton"], b.flecheHaut, b.flecheHautSurvol)
-	v.bas = fleche(v, _G[sb:GetName() .. "ScrollDownButton"], b.flecheBas, b.flecheBasSurvol)
-	local function tranche(atlas, couche)
-		local t = v:CreateTexture(nil, couche)
+	v:SetAllPoints(scroll)
+	local b = BAR
+	v.top = arrow(v, _G[sb:GetName() .. "ScrollUpButton"], b.upArrow, b.upArrowHover)
+	v.down = arrow(v, _G[sb:GetName() .. "ScrollDownButton"], b.downArrow, b.downArrowHover)
+	local function slice(atlas, layer)
+		local t = v:CreateTexture(nil, layer)
 		ForeverUI.SetAtlas(t, atlas)
-		t:SetWidth(b.largeur)
+		t:SetWidth(b.width)
 		return t
 	end
-	local ph = tranche(b.pisteHaut, "BACKGROUND")
+	local ph = slice(b.trackTop, "BACKGROUND")
 	ph:SetPoint("TOP", sb, "TOP", 0, 0)
-	local pb = tranche(b.pisteBas, "BACKGROUND")
+	local pb = slice(b.trackBottom, "BACKGROUND")
 	pb:SetPoint("BOTTOM", sb, "BOTTOM", 0, 0)
-	local pm = tranche(b.pisteMilieu, "BACKGROUND")
+	local pm = slice(b.trackMiddle, "BACKGROUND")
 	pm:SetPoint("TOP", ph, "BOTTOM", 0, 0)
 	pm:SetPoint("BOTTOM", pb, "TOP", 0, 0)
-	local pouce = sb:GetThumbTexture()
-	local ch = tranche(b.curseurBout, "ARTWORK")
-	ch:SetHeight(b.bout)
-	ch:SetPoint("TOP", pouce, "TOP", 0, 0)
-	-- le meme morceau, retourne, pour le bas
-	local cb = tranche(b.curseurBout, "ARTWORK")
-	local e = ForeverUI.AtlasEntry(b.curseurBout)
+	local thumb = sb:GetThumbTexture()
+	local ch = slice(b.cursorTip, "ARTWORK")
+	ch:SetHeight(b.tip)
+	ch:SetPoint("TOP", thumb, "TOP", 0, 0)
+	-- Same piece, flipped, for the bottom.
+	local cb = slice(b.cursorTip, "ARTWORK")
+	local e = ForeverUI.AtlasEntry(b.cursorTip)
 	cb:SetTexCoord(e[2], e[3], e[5], e[4])
-	cb:SetHeight(b.bout)
-	cb:SetPoint("BOTTOM", pouce, "BOTTOM", 0, 0)
-	local cm = tranche(b.curseurMilieu, "ARTWORK")
+	cb:SetHeight(b.tip)
+	cb:SetPoint("BOTTOM", thumb, "BOTTOM", 0, 0)
+	local cm = slice(b.cursorMiddle, "ARTWORK")
 	cm:SetPoint("TOP", ch, "BOTTOM", 0, 0)
 	cm:SetPoint("BOTTOM", cb, "TOP", 0, 0)
-	v.curseur = { ch, cm, cb }
-	liste.foreverBarre = v
+	v.cursor = { ch, cm, cb }
+	list.foreverBar = v
 end
 
-function R.Liste(liste)
-	if liste.foreverCategories then return end
-	liste.foreverCategories = true
-	local nom = liste:GetName()
-	-- sans cadre : les huit textures du bord et les deux entretoises
-	for _, suffixe in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight", "Left", "Right", "Top", "Bottom" }) do
-		local t = _G[nom .. suffixe]
+-- Skins a client options category list: no border, camelot selection and hover, scroll bar.
+function R.List(list)
+	if list.foreverCategories then return end
+	list.foreverCategories = true
+	local name = list:GetName()
+	-- No border: hide the eight border textures.
+	for _, suffix in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight", "Left", "Right", "Top", "Bottom" }) do
+		local t = _G[name .. suffix]
 		if t then
 			t:SetAlpha(0)
 		end
 	end
-	for _, b in ipairs(liste.buttons or {}) do
-		local lueur = b:GetHighlightTexture()
-		if lueur then
-			lueur:SetTexture(nil)
-			lueur:SetAlpha(0)
+	for _, b in ipairs(list.buttons or {}) do
+		local glow = b:GetHighlightTexture()
+		if glow then
+			glow:SetTexture(nil)
+			glow:SetAlpha(0)
 		end
-		-- le choix et le survol debordent la ligne de 6 de chaque cote (187
-		-- pour 175) et SUIVENT SA LARGEUR : le client la retrecit de la place
-		-- de la barre quand elle parait (OptionsList_DisplayScrollBar), et ils
-		-- passaient dessous (regle du 28/09)
-		b.foreverActif = b:CreateTexture(nil, "BACKGROUND")
-		ForeverUI.SetAtlas(b.foreverActif, "options_list_active")
-		b.foreverActif:SetPoint("LEFT", b, "LEFT", -6, 0)
-		b.foreverActif:SetPoint("RIGHT", b, "RIGHT", 6, 0)
-		b.foreverActif:Hide()
-		b.foreverSurvol = b:CreateTexture(nil, "BACKGROUND")
-		ForeverUI.SetAtlas(b.foreverSurvol, "options_list_hover")
-		b.foreverSurvol:SetPoint("LEFT", b, "LEFT", -6, 0)
-		b.foreverSurvol:SetPoint("RIGHT", b, "RIGHT", 6, 0)
-		b.foreverSurvol:Hide()
+		-- Selection and hover extend 6 px past each side of the row (187 for 175) and follow its
+		-- width: the client narrows the row when the scroll bar shows (OptionsList_DisplayScrollBar).
+		b.foreverActive = b:CreateTexture(nil, "BACKGROUND")
+		ForeverUI.SetAtlas(b.foreverActive, "options_list_active")
+		b.foreverActive:SetPoint("LEFT", b, "LEFT", -6, 0)
+		b.foreverActive:SetPoint("RIGHT", b, "RIGHT", 6, 0)
+		b.foreverActive:Hide()
+		b.foreverHover = b:CreateTexture(nil, "BACKGROUND")
+		ForeverUI.SetAtlas(b.foreverHover, "options_list_hover")
+		b.foreverHover:SetPoint("LEFT", b, "LEFT", -6, 0)
+		b.foreverHover:SetPoint("RIGHT", b, "RIGHT", 6, 0)
+		b.foreverHover:Hide()
 		b:HookScript("OnEnter", function(self)
-			self.foreverDessus = true
-			peindreLigne(liste, self)
+			self.foreverHovered = true
+			paintRow(list, self)
 		end)
 		b:HookScript("OnLeave", function(self)
-			self.foreverDessus = false
-			peindreLigne(liste, self)
+			self.foreverHovered = false
+			paintRow(list, self)
 		end)
 	end
-	R.Barre(liste)
-	R.PeindreListe(liste)
+	R.Bar(list)
+	R.PaintList(list)
 end
 
-local function apresListe(liste)
-	if liste and liste.foreverCategories then
-		R.PeindreListe(liste)
+local function afterListSelect(list)
+	if list and list.foreverCategories then
+		R.PaintList(list)
 	end
 end
 
 hooksecurefunc("OptionsList_DisplayButton", function(b)
-	local liste = b and b:GetParent()
-	if liste and liste.foreverCategories then
-		peindreLigne(liste, b)
+	local list = b and b:GetParent()
+	if list and list.foreverCategories then
+		paintRow(list, b)
 	end
 end)
-hooksecurefunc("OptionsList_SelectButton", apresListe)
-hooksecurefunc("OptionsList_ClearSelection", apresListe)
-hooksecurefunc("OptionsCategoryFrame_Update", apresListe)
-for _, nom in ipairs({ "InterfaceCategoryList_Update", "InterfaceAddOnsList_Update" }) do
-	if type(_G[nom]) == "function" then
-		hooksecurefunc(nom, function()
-			apresListe(InterfaceOptionsFrameCategories)
-			apresListe(InterfaceOptionsFrameAddOns)
+hooksecurefunc("OptionsList_SelectButton", afterListSelect)
+hooksecurefunc("OptionsList_ClearSelection", afterListSelect)
+hooksecurefunc("OptionsCategoryFrame_Update", afterListSelect)
+for _, name in ipairs({ "InterfaceCategoryList_Update", "InterfaceAddOnsList_Update" }) do
+	if type(_G[name]) == "function" then
+		hooksecurefunc(name, function()
+			afterListSelect(InterfaceOptionsFrameCategories)
+			afterListSelect(InterfaceOptionsFrameAddOns)
 		end)
 	end
 end
 
--- ------------------------------------------------------------ les onglets
+-- ------------------------------------------------------------ Tabs
 
--- MinimalTabTemplate sur un onglet du client (PanelTemplates : l'onglet
--- choisi est DESACTIVE)
-local function peindreOnglet(o)
-	local choisi = not vrai(o:IsEnabled())
-	local suffixe = choisi and "active_" or ""
-	for _, cote in ipairs({ "left", "middle", "right" }) do
-		-- a la taille de l'element (useAtlasSize) : sans taille, une texture
-		-- prend celle de sa feuille (1024 x 1024) -- vu en jeu le 28/09
-		ForeverUI.SetAtlas(o.foreverArt[cote], "options_tab_" .. suffixe .. cote)
+-- camelot MinimalTabTemplate on a client tab (PanelTemplates: the selected tab is disabled).
+local function paintTab(o)
+	local selected = not truthy(o:IsEnabled())
+	local suffix = selected and "active_" or ""
+	for _, side in ipairs({ "left", "middle", "right" }) do
+		-- At atlas size (useAtlasSize): without a size, a texture takes the size of its sheet
+		-- (1024 x 1024).
+		ForeverUI.SetAtlas(o.foreverArt[side], "options_tab_" .. suffix .. side)
 	end
-	local texte = o:GetFontString()
-	if texte then
-		texte:ClearAllPoints()
-		texte:SetPoint("BOTTOM", o, "BOTTOM", 0, choisi and N.onglet.texteChoisi or N.onglet.texte)
+	local text = o:GetFontString()
+	if text then
+		text:ClearAllPoints()
+		text:SetPoint("BOTTOM", o, "BOTTOM", 0, selected and N.tab.selectedText or N.tab.text)
 	end
-	o:SetNormalFontObject((choisi or o.foreverDessus) and GameFontHighlightSmall or GameFontNormalSmall)
-	o:SetWidth((texte and texte:GetStringWidth() or 0) + N.onglet.marge)
+	o:SetNormalFontObject((selected or o.foreverHovered) and GameFontHighlightSmall or GameFontNormalSmall)
+	o:SetWidth((text and text:GetStringWidth() or 0) + N.tab.margin)
 end
 
-function R.Onglet(o)
+function R.Tab(o)
 	if o.foreverArt then return end
-	local nom = o:GetName()
-	for _, suffixe in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
-		local t = _G[nom .. suffixe]
+	local name = o:GetName()
+	for _, suffix in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
+		local t = _G[name .. suffix]
 		if t then t:SetAlpha(0) end
 	end
-	local lueur = o:GetHighlightTexture()
-	if lueur then
-		lueur:SetTexture(nil)
-		lueur:SetAlpha(0)
+	local glow = o:GetHighlightTexture()
+	if glow then
+		glow:SetTexture(nil)
+		glow:SetAlpha(0)
 	end
-	o:SetHeight(N.onglet.hauteur)
+	o:SetHeight(N.tab.height)
 	local a = {}
 	a.left = o:CreateTexture(nil, "BACKGROUND")
 	a.left:SetPoint("BOTTOMLEFT", o, "BOTTOMLEFT")
@@ -560,54 +474,49 @@ function R.Onglet(o)
 	a.middle:SetPoint("TOPRIGHT", a.right, "TOPLEFT")
 	o.foreverArt = a
 	o:SetDisabledFontObject(GameFontHighlightSmall)
-	o:HookScript("OnEnter", function(self) self.foreverDessus = true; peindreOnglet(self) end)
-	o:HookScript("OnLeave", function(self) self.foreverDessus = false; peindreOnglet(self) end)
-	o:HookScript("OnShow", peindreOnglet)
-	o:HookScript("OnEnable", peindreOnglet)
-	o:HookScript("OnDisable", peindreOnglet)
-	peindreOnglet(o)
+	o:HookScript("OnEnter", function(self) self.foreverHovered = true; paintTab(self) end)
+	o:HookScript("OnLeave", function(self) self.foreverHovered = false; paintTab(self) end)
+	o:HookScript("OnShow", paintTab)
+	o:HookScript("OnEnable", paintTab)
+	o:HookScript("OnDisable", paintTab)
+	paintTab(o)
 end
 
--- ------------------------------------------------------------ le cadre interieur
+-- ------------------------------------------------------------ Inner frame
 
--- Options_InnerFrame (camelot : SettingsPanel, couche OVERLAY, TOPLEFT
--- (17, -64), 886 x 618 sur la feuille optionsc60) : le cadre qui entoure la
--- liste des categories et les reglages -- un fond sombre presque
--- transparent, un filet brun, un degrade vers l'interieur (29 sur les
--- cotes, 82 en haut, 167 en bas) et le SEPARATEUR de la liste (colonnes 199
--- et 200). Chez camelot : liste a 18 (1 a l'interieur), separateur a
--- 17 + 199 (bord droit de la liste - 1), haut 12 au-dessus de la liste
--- (-64 / -76), bord droit a 17 de la fenetre, onglets POSES sur son haut.
--- Decoupe ici en 5 x 3 : bords et degrades a leur taille, separateur a sa
--- place, le reste etire.
-local INTERIEUR = {
+-- camelot Options_InnerFrame (SettingsPanel, OVERLAY, TOPLEFT (17, -64), 886 x 618 on the
+-- optionsc60 sheet): frame around the category list and the settings, with a dark translucent
+-- fill, a brown edge, an inward gradient (29 on the sides, 82 at the top, 167 at the bottom)
+-- and the list separator (columns 199-200). camelot: top 12 above the list, right edge 17 from
+-- the window, tabs on its top. Cut here into 5 x 3 pieces: edges and gradients at their size,
+-- separator in place, the rest stretched.
+local INNER = {
 	cols = { 0, 29, 199, 201, 857, 886 },
-	rangs = { 0, 82, 451, 618 },
-	gauche = -1, haut = 12, bas = -4, droite = -17,
+	ranks = { 0, 82, 451, 618 },
+	left = -1, top = 12, down = -4, right = -17,
 }
 
--- f : la fenetre ; liste : la liste des categories, sur laquelle le cadre
--- se cale. Rend le rectangle (un cadre sans image, pour les ancres).
-function R.Interieur(hote, f, liste)
-	local I = INTERIEUR
+-- host: parent of the textures; f: the window; list: the category list the frame fits on.
+-- Returns the rectangle (an empty frame, for anchors).
+function R.Interior(host, f, list)
+	local I = INNER
 	local e = ForeverUI.AtlasEntry("options_innerframe")
-	local rect = CreateFrame("Frame", nil, hote)
-	rect:SetPoint("TOPLEFT", liste, "TOPLEFT", I.gauche, I.haut)
-	rect:SetPoint("BOTTOMLEFT", liste, "BOTTOMLEFT", I.gauche, I.bas)
-	rect:SetPoint("RIGHT", f, "RIGHT", I.droite, 0)
+	local rect = CreateFrame("Frame", nil, host)
+	rect:SetPoint("TOPLEFT", list, "TOPLEFT", I.left, I.top)
+	rect:SetPoint("BOTTOMLEFT", list, "BOTTOMLEFT", I.left, I.down)
+	rect:SetPoint("RIGHT", f, "RIGHT", I.right, 0)
 	local W, H = e[6], e[7]
 	local du, dv = (e[3] - e[2]) / W, (e[5] - e[4]) / H
-	-- le separateur a la place de camelot : largeur de la liste depuis le
-	-- bord gauche du cadre
-	local sep = liste:GetWidth() - I.gauche - 1
+	-- Separator where camelot has it: list width from the frame's left edge.
+	local sep = list:GetWidth() - I.left - 1
 	local xs = { 0, I.cols[2], sep, sep + 2 }
 	local pieces = {}
 	for c = 1, 5 do
 		for r = 1, 3 do
-			local t = hote:CreateTexture(nil, "ARTWORK")
+			local t = host:CreateTexture(nil, "ARTWORK")
 			t:SetTexture(e[1])
 			t:SetTexCoord(e[2] + I.cols[c] * du, e[2] + I.cols[c + 1] * du,
-				e[4] + I.rangs[r] * dv, e[4] + I.rangs[r + 1] * dv)
+				e[4] + I.ranks[r] * dv, e[4] + I.ranks[r + 1] * dv)
 			if c == 5 then
 				t:SetPoint("RIGHT", rect, "RIGHT", 0, 0)
 				t:SetWidth(I.cols[6] - I.cols[5])
@@ -620,13 +529,13 @@ function R.Interieur(hote, f, liste)
 			end
 			if r == 1 then
 				t:SetPoint("TOP", rect, "TOP", 0, 0)
-				t:SetHeight(I.rangs[2])
+				t:SetHeight(I.ranks[2])
 			elseif r == 3 then
 				t:SetPoint("BOTTOM", rect, "BOTTOM", 0, 0)
-				t:SetHeight(I.rangs[4] - I.rangs[3])
+				t:SetHeight(I.ranks[4] - I.ranks[3])
 			else
-				t:SetPoint("TOP", rect, "TOP", 0, -I.rangs[2])
-				t:SetPoint("BOTTOM", rect, "BOTTOM", 0, I.rangs[4] - I.rangs[3])
+				t:SetPoint("TOP", rect, "TOP", 0, -I.ranks[2])
+				t:SetPoint("BOTTOM", rect, "BOTTOM", 0, I.ranks[4] - I.ranks[3])
 			end
 			pieces[#pieces + 1] = t
 		end
@@ -635,76 +544,78 @@ function R.Interieur(hote, f, liste)
 	return rect
 end
 
--- ------------------------------------------------------------ les fenetres
+-- ------------------------------------------------------------ Windows
 
--- f : la fenetre du client ; boutonsDroite : de droite a gauche, dans
--- l'ordre du client ; defaut : le bouton Defaults ; listes : ses listes
-function R.Fenetre(f, boutonsDroite, defaut, listes, interieur)
-	local nom = f:GetName()
+-- f: client window; rightButtons: right to left, in client order; default: the Defaults
+-- button; lists: its category lists; inner: camelot inner frame instead of an inset.
+function R.Window(f, rightButtons, default, lists, inner)
+	local name = f:GetName()
 	f:SetBackdrop(nil)
-	_G[nom .. "Header"]:SetAlpha(0)
-	local titre = _G[nom .. "HeaderText"]
-	titre:SetAlpha(0)
-	-- la fenetre de camelot, au niveau de la fenetre du client : ses cadres
-	-- fils (listes, panneaux, boutons) passent devant
-	local fen = CreateFrame("Frame", nil, f)
-	fen:SetFrameLevel(f:GetFrameLevel())
-	fen:SetAllPoints(f)
-	local habit = Gb.Fenetre(fen, titre:GetText())
-	habit.stries:Hide()
-	f.foreverHabit = habit
-	-- la croix : elle ferme (voir l'ECART plus haut)
-	local croix = CreateFrame("Button", nom .. "ForeverUICloseButton", f)
-	croix:SetFrameLevel(f:GetFrameLevel() + 20)
-	Gb.Croix(croix, f)
-	croix:SetScript("OnClick", function()
+	_G[name .. "Header"]:SetAlpha(0)
+	local title = _G[name .. "HeaderText"]
+	title:SetAlpha(0)
+	-- camelot window at the client window's level: its child frames (lists, panels, buttons)
+	-- draw in front.
+	local win = CreateFrame("Frame", nil, f)
+	win:SetFrameLevel(f:GetFrameLevel())
+	win:SetAllPoints(f)
+	local skin = Tpl.Window(win, title:GetText())
+	skin.stripes:Hide()
+	f.foreverSkin = skin
+	-- The close button hides the window (HideUIPanel) instead of clicking Cancel: running the
+	-- client's cancel code (BlizzardOptionsPanel_Cancel) from an addon would taint the CVars and
+	-- UI variables it rewrites. An unconfirmed change is not applied; the client reads it again
+	-- on the next open.
+	local closeButton = CreateFrame("Button", name .. "ForeverUICloseButton", f)
+	closeButton:SetFrameLevel(f:GetFrameLevel() + 20)
+	Tpl.CloseButton(closeButton, f)
+	closeButton:SetScript("OnClick", function()
 		HideUIPanel(f)
 	end)
-	f.foreverCroix = croix
-	-- le cadre des panneaux : un encart, ou le cadre interieur de camelot
-	local conteneur = _G[nom .. "PanelContainer"]
-	conteneur:SetBackdrop(nil)
-	if interieur then
-		f.foreverInterieur = R.Interieur(fen, f, listes[1])
+	f.foreverCloseButton = closeButton
+	-- Panel frame: an inset, or the camelot inner frame.
+	local container = _G[name .. "PanelContainer"]
+	container:SetBackdrop(nil)
+	if inner then
+		f.foreverInner = R.Interior(win, f, lists[1])
 	else
-		Gb.Encart(fen, conteneur)
+		Tpl.Inset(win, container)
 	end
-	for _, liste in ipairs(listes) do
-		R.Liste(liste)
+	for _, list in ipairs(lists) do
+		R.List(list)
 	end
-	-- OptionsFrame_OnShow redessine la liste par categoryFrame:update(), une
-	-- reference prise au chargement : l'accroche sur la fonction ne la voit
-	-- pas ; on repasse apres l'ouverture de la fenetre
+	-- OptionsFrame_OnShow redraws the list through categoryFrame:update(), a reference taken at
+	-- load time that a function hook does not see: repaint after the window opens.
 	f:HookScript("OnShow", function()
-		for _, liste in ipairs(listes) do
-			R.PeindreListe(liste)
+		for _, list in ipairs(lists) do
+			R.PaintList(list)
 		end
 	end)
-	-- les boutons : UIPanelButtonTemplate 96 x 22
-	local precedent
-	for _, b in ipairs(boutonsDroite) do
-		b:SetWidth(N.bouton[1])
-		b:SetHeight(N.bouton[2])
-		Gb.BoutonPanneau(b)
+	-- Buttons: UIPanelButtonTemplate 96 x 22.
+	local previous
+	for _, b in ipairs(rightButtons) do
+		b:SetWidth(N.button[1])
+		b:SetHeight(N.button[2])
+		Tpl.PanelButton(b)
 		b:ClearAllPoints()
-		if precedent then
-			b:SetPoint("RIGHT", precedent, "LEFT", -N.boutonEcart, 0)
+		if previous then
+			b:SetPoint("RIGHT", previous, "LEFT", -N.buttonGap, 0)
 		else
-			b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -N.boutonBord, N.boutonBord)
+			b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -N.buttonEdge, N.buttonEdge)
 		end
-		precedent = b
+		previous = b
 	end
-	defaut:SetWidth(N.bouton[1])
-	defaut:SetHeight(N.bouton[2])
-	Gb.BoutonPanneau(defaut)
-	defaut:ClearAllPoints()
-	defaut:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", N.boutonBord, N.boutonBord)
-	return habit
+	default:SetWidth(N.button[1])
+	default:SetHeight(N.button[2])
+	Tpl.PanelButton(default)
+	default:ClearAllPoints()
+	default:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", N.buttonEdge, N.buttonEdge)
+	return skin
 end
 
--- ------------------------------------------------------------ la mise en place
+-- ------------------------------------------------------------ Setup
 
-local PANNEAUX = {
+local PANELS = {
 	"VideoOptionsResolutionPanel", "VideoOptionsEffectsPanel", "VideoOptionsStereoPanel",
 	"AudioOptionsSoundPanel", "AudioOptionsVoicePanel",
 	"InterfaceOptionsControlsPanel", "InterfaceOptionsCombatPanel", "InterfaceOptionsDisplayPanel",
@@ -716,48 +627,43 @@ local PANNEAUX = {
 }
 
 if VideoOptionsFrame then
-	R.Fenetre(VideoOptionsFrame, { VideoOptionsFrameApply, VideoOptionsFrameCancel, VideoOptionsFrameOkay },
+	R.Window(VideoOptionsFrame, { VideoOptionsFrameApply, VideoOptionsFrameCancel, VideoOptionsFrameOkay },
 		VideoOptionsFrameDefaults, { VideoOptionsFrameCategoryFrame }, true)
 end
 if AudioOptionsFrame then
-	R.Fenetre(AudioOptionsFrame, { AudioOptionsFrameCancel, AudioOptionsFrameOkay },
+	R.Window(AudioOptionsFrame, { AudioOptionsFrameCancel, AudioOptionsFrameOkay },
 		AudioOptionsFrameDefaults, { AudioOptionsFrameCategoryFrame }, true)
 end
--- L'INTERFACE A LA DISPOSITION DE CAMELOT (retour du 28/09 : « les onglets
--- debordent dans le header de la fenetre », « l'encadre argente des options
--- n'est pas beau ») : en 3.3.5 les listes commencent a -40 et il n'y a que
--- 19 entre la barre de titre et elles, pour des onglets de 26. ECART
--- (geometrie de 3.3.5) : comme chez camelot, les listes a -76 et les
--- onglets (37) poses sur le haut du cadre interieur (-64), a 15 de son bord
--- gauche ; la fenetre grandit d'autant (36) pour garder la hauteur des
--- listes et l'ecart aux boutons du bas. Le cadre des reglages est le cadre
--- interieur de camelot (Options_InnerFrame) au lieu de l'encart.
-local INTERFACE = { listesY = -76, grandit = 36, ongletX = 15 }
+-- Interface window in the camelot layout. In 3.3.5 the lists start at -40, leaving 19 px under
+-- the title bar for 26 px tabs. As in camelot: lists at -76, tabs (37 high) on top of the
+-- inner frame (-64), 15 from its left edge; the window grows by 36 to keep the list height and
+-- the gap to the bottom buttons.
+local INTERFACE = { listsY = -76, extraHeight = 36, tabX = 15 }
 
 if InterfaceOptionsFrame then
 	local f = InterfaceOptionsFrame
-	f:SetHeight(f:GetHeight() + INTERFACE.grandit)
+	f:SetHeight(f:GetHeight() + INTERFACE.extraHeight)
 	for _, l in ipairs({ InterfaceOptionsFrameCategories, InterfaceOptionsFrameAddOns }) do
 		local _, _, _, x = l:GetPoint(1)
 		l:ClearAllPoints()
-		l:SetPoint("TOPLEFT", f, "TOPLEFT", x or 22, INTERFACE.listesY)
+		l:SetPoint("TOPLEFT", f, "TOPLEFT", x or 22, INTERFACE.listsY)
 	end
-	R.Fenetre(f, { InterfaceOptionsFrameCancel, InterfaceOptionsFrameOkay },
+	R.Window(f, { InterfaceOptionsFrameCancel, InterfaceOptionsFrameOkay },
 		InterfaceOptionsFrameDefaults, { InterfaceOptionsFrameCategories, InterfaceOptionsFrameAddOns }, true)
 	for _, s in ipairs({ "Tab1TabSpacer", "Tab2TabSpacer1", "Tab2TabSpacer2" }) do
 		local t = _G["InterfaceOptionsFrame" .. s]
 		if t then t:SetAlpha(0) end
 	end
-	R.Onglet(InterfaceOptionsFrameTab1)
-	R.Onglet(InterfaceOptionsFrameTab2)
+	R.Tab(InterfaceOptionsFrameTab1)
+	R.Tab(InterfaceOptionsFrameTab2)
 	InterfaceOptionsFrameTab1:ClearAllPoints()
-	InterfaceOptionsFrameTab1:SetPoint("BOTTOMLEFT", f.foreverInterieur, "TOPLEFT", INTERFACE.ongletX, 0)
+	InterfaceOptionsFrameTab1:SetPoint("BOTTOMLEFT", f.foreverInner, "TOPLEFT", INTERFACE.tabX, 0)
 	InterfaceOptionsFrameTab2:ClearAllPoints()
-	InterfaceOptionsFrameTab2:SetPoint("TOPLEFT", InterfaceOptionsFrameTab1, "TOPRIGHT", N.onglet.ecart, 0)
+	InterfaceOptionsFrameTab2:SetPoint("TOPLEFT", InterfaceOptionsFrameTab1, "TOPRIGHT", N.tab.gap, 0)
 end
-for _, nom in ipairs(PANNEAUX) do
-	local p = _G[nom]
+for _, name in ipairs(PANELS) do
+	local p = _G[name]
 	if p then
-		R.Panneau(p)
+		R.Panel(p)
 	end
 end

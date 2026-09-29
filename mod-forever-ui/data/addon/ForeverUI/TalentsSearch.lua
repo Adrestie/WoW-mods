@@ -1,53 +1,25 @@
--- ForeverUI : la recherche des talents de camelot (docs/TALENTS.md, etape 4).
+-- ForeverUI: camelot's talent search (search box, options, preview, node markers).
 --
--- RELEVE -- blizzard_playerspells (camelot/classtalents), blizzard_sharedtalentui
--- (classtalentsearch, talentbuttonart, sharedtalentbuttontemplates,
--- sharedtalentutil) et blizzard_spellsearch (filtres, gabarits) :
---   champ        SpellSearchBoxTemplate 184 x 30, 40 lettres ; consigne SEARCH
---                (SearchBoxTemplate) ; loupe, bord et effacement comme le
---                grimoire (ForeverUI SpellBookSearch.lua)
---   options      SearchOptionsDropdown (WowStyle1ArrowDropdownTemplate 25 x 25,
---                fleche common-dropdown-a-button et ses etats) a RIGHT du champ
---                (3, -2) ; deux cases : CLASS_TALENT_SEARCH_OPTION_HIDE_PASSIVES
---                "Hide Passives" et _SHOW_RANKS "Show Ranks", non retenues ;
---                elles ne touchent QUE l'apercu (TransformPreviewResults) :
---                passifs retires, "Nom (rang/max)"
---   apercu       SpellSearchPreviewContainerTemplate 176 de large, TOPRIGHT
---                sur le BOTTOMRIGHT du champ (-4, 2) ; filtre de NOM (exact,
---                contenu) ; la suggestion TALENT_FRAME_SEARCH_NOT_ON_ACTIONBAR
---                "Missing from action bar" sous 3 lettres
---   recherche    filtre de TEXTE (GetMatchTypeForText) : exact, nom,
---                description, puis "apparente" (le nom du talent figure dans
---                la description du talent qui porte exactement le texte) ;
---                ou le filtre des BARRES : un talent appris, sort actif,
---                absent d'une barre active
---   marques      pas de liste : chaque noeud trouve porte SearchIcon, 63 x 63
---                (talents-search-*, taille d'atlas), CENTER sur le TOPRIGHT de
---                son icone, au-dessus du noeud ; OverlayIcon, la meme en ADD,
---                bat de 0 a 0,5 en 1 s puis retombe en 1 s ; au survol de son
---                centre (18 x 18), TALENT_FRAME_SEARCH_TOOLTIP_* :
---                  exact            talents-search-exactmatch  "Exact search match"
---                  nom, description talents-search-match       "Search match"
---                  apparente        talents-search-relatedmatch
---                                   "Related to the talent you searched for"
---                  absent           talents-search-notonactionbar "Not on action bar"
---                  posture inactive talents-search-notonactionbarhidden
---                                   "On an action bar belonging to a different stance"
---                  barre desactivee talents-search-notonactionbarhidden
---                                   "On a disabled action bar"
---   mise a jour  la recherche se recalcule a chaque changement de l'ecran
---                (UpdateFullSearchResults)
+-- From blizzard_playerspells (camelot/classtalents), blizzard_sharedtalentui (classtalentsearch,
+-- talentbuttonart, sharedtalentbuttontemplates, sharedtalentutil) and blizzard_spellsearch:
+--   box       SpellSearchBoxTemplate 184 x 30, 40 letters; same look as SpellBookSearch.lua
+--   options   SearchOptionsDropdown (25 x 25 arrow, common-dropdown-a-button); two unsaved
+--             options, Hide Passives and Show Ranks, that only change the preview
+--             (TransformPreviewResults)
+--   preview   SpellSearchPreviewContainerTemplate, 176 wide; name filter (exact, contains);
+--             below 3 letters, the "Missing from action bar" suggestion
+--   search    text filter (GetMatchTypeForText): exact, name, description, then related
+--             (the talent's name is in the description of the exact match); or the action
+--             bar filter: a learned active talent that is on no active bar
+--   markers   no result list: each matching node gets a SearchIcon (talents-search-*,
+--             63 x 63) centered on its icon's TOPRIGHT, with an ADD glow pulsing
+--             0 -> 0.5 -> 0 over 2 s; hovering its 18 x 18 center shows its tooltip
+--   update    results are recomputed on every screen update (UpdateFullSearchResults)
 --
--- CE QUI DIFFERE, ET POURQUOI.
---   * le champ est a GAUCHE du compteur "Unspent Talents" (camelot : a droite,
---     la ou le compteur a ete remonte a la demande) ; en fenetre reduite il se
---     retrecit pour tenir (decision du 2026-09-25).
---   * l'apercu montre 5 resultats (camelot : 3), comme le grimoire
---     (decision du 2026-09-25).
---   * 3.3.5 ne donne pas la description d'un talent : elle se lit dans une
---     infobulle cachee (SetTalent), sans ses lignes de rang, de prerequis ni
---     "Click to learn".
---   * pas de champ sur la page des glyphes.
+-- Differences: the box sits left of the "Unspent Talents" counter and shrinks in the small
+-- window; the preview shows 5 results (camelot: 3), like the spellbook; 3.3.5 has no talent
+-- description API, so it is read from a hidden tooltip (SetTalent) without its rank,
+-- prerequisite and "Click to learn" lines; no box on the glyph page.
 
 ForeverUI = ForeverUI or {}
 
@@ -56,62 +28,61 @@ ForeverUI.TalentsSearch = K
 
 local SEP = string.char(92)
 local L = ForeverUI.L
-local TEXTE = {
-	consigne = SEARCH,
-	pasSurBarre = L.TALENTSSEARCH_NOT_ON_ACTIONBAR,   -- TALENT_FRAME_SEARCH_NOT_ON_ACTIONBAR
-	masquerPassifs = L.TALENTSSEARCH_HIDE_PASSIVES,   -- CLASS_TALENT_SEARCH_OPTION_HIDE_PASSIVES
-	rangs = L.TALENTSSEARCH_SHOW_RANKS,               -- CLASS_TALENT_SEARCH_OPTION_SHOW_RANKS
-	depassement = L.TALENTSSEARCH_PREVIEW_OVERFLOW,   -- TALENT_FRAME_SEARCH_PREVIEW_OVERFLOW_FORMAT
+local TEXT = {
+	instruction = SEARCH,
+	notOnBar = L.TALENTSSEARCH_NOT_ON_ACTIONBAR,   -- TALENT_FRAME_SEARCH_NOT_ON_ACTIONBAR
+	hidePassives = L.TALENTSSEARCH_HIDE_PASSIVES,   -- CLASS_TALENT_SEARCH_OPTION_HIDE_PASSIVES
+	ranks = L.TALENTSSEARCH_SHOW_RANKS,               -- CLASS_TALENT_SEARCH_OPTION_SHOW_RANKS
+	overflow = L.TALENTSSEARCH_PREVIEW_OVERFLOW,   -- TALENT_FRAME_SEARCH_PREVIEW_OVERFLOW_FORMAT
 }
-local MIN_LETTRES = 3                                 -- MIN_CHARACTER_SEARCH
+local MIN_LETTERS = 3                                 -- MIN_CHARACTER_SEARCH
 
--- SpellSearchUtil.MatchType : le plus grand est le meilleur
-local TYPE = { description = 1, nom = 2, apparente = 3, exact = 4, absent = 5, postureInactive = 6, barreDesactivee = 7 }
+-- SpellSearchUtil.MatchType: higher is better
+local TYPE = { description = 1, name = 2, related = 3, exact = 4, absent = 5, inactiveStance = 6, disabledBar = 7 }
 -- SearchMatchStyles (blizzard_sharedtalentutil.lua)
 local STYLES = {
-	[TYPE.apparente] = { icone = "talents-search-relatedmatch", info = L.TALENTSSEARCH_TOOLTIP_RELATED_MATCH },
-	[TYPE.nom] = { icone = "talents-search-match", info = L.TALENTSSEARCH_TOOLTIP_MATCH },
-	[TYPE.description] = { icone = "talents-search-match", info = L.TALENTSSEARCH_TOOLTIP_MATCH },
-	[TYPE.exact] = { icone = "talents-search-exactmatch", info = L.TALENTSSEARCH_TOOLTIP_EXACT_MATCH },
-	[TYPE.absent] = { icone = "talents-search-notonactionbar", info = L.TALENTSSEARCH_TOOLTIP_NOT_ON_ACTIONBAR },
-	[TYPE.postureInactive] = { icone = "talents-search-notonactionbarhidden",
+	[TYPE.related] = { icon = "talents-search-relatedmatch", info = L.TALENTSSEARCH_TOOLTIP_RELATED_MATCH },
+	[TYPE.name] = { icon = "talents-search-match", info = L.TALENTSSEARCH_TOOLTIP_MATCH },
+	[TYPE.description] = { icon = "talents-search-match", info = L.TALENTSSEARCH_TOOLTIP_MATCH },
+	[TYPE.exact] = { icon = "talents-search-exactmatch", info = L.TALENTSSEARCH_TOOLTIP_EXACT_MATCH },
+	[TYPE.absent] = { icon = "talents-search-notonactionbar", info = L.TALENTSSEARCH_TOOLTIP_NOT_ON_ACTIONBAR },
+	[TYPE.inactiveStance] = { icon = "talents-search-notonactionbarhidden",
 		info = L.TALENTSSEARCH_TOOLTIP_ON_INACTIVE_BONUSBAR },
-	[TYPE.barreDesactivee] = { icone = "talents-search-notonactionbarhidden", info = L.TALENTSSEARCH_TOOLTIP_ON_DISABLED_ACTIONBAR },
+	[TYPE.disabledBar] = { icon = "talents-search-notonactionbarhidden", info = L.TALENTSSEARCH_TOOLTIP_ON_DISABLED_ACTIONBAR },
 }
 
 local M = {
-	boiteL = 184, boiteH = 30, lettres = 40, ecartCompteur = 10, margeGauche = 10,
-	fleche = 25, flecheX = 3, flecheY = -2,
-	bordL = 8, bordH = 20, bordX = -5, loupe = 10, loupeX = 1, loupeY = -1, gris = 0.6,
-	effacer = 17, effacerX = -3, effacerIcone = 10, effacerIconeX = 3, effacerIconeY = -3,
-	margeG = 16, margeD = 20, consigneGris = 0.35,
-	apercuL = 176, apercuX = -4, apercuY = 2, ligneH = 27, lignes = 5, hautMarge = 1, basMarge = 3,
-	ecart = 1, depassementH = 16, depassementY = 5, depassementX = 9,
-	cadreIcone = 18, cadreIconeX = 5, cadreIconeY = 1, nomX = 5, nomY = 1, nomD = -5,
-	loupeSugg = 14, loupeSuggX = 10, loupeSuggY = 1, texteSuggX = 10,
-	-- la marque d'un noeud et son battement
-	marque = 63, marqueSurvol = 18, battement = 1, battementAlpha = 0.5,
-	-- la liste des options (celle des reglages du grimoire)
-	ligneMenuH = 20, bordMenu = 15, ligneMenuX = 11, texteMenuX = 20, largeurPlus = 40, margeMenu = 25,
-	case = 12, cocheL = 15, cocheH = 14, cocheX = 2, cocheY = 1,
-	fondCoin = 18, fondMarges = { 9, 6, 9, 12 }, fondAlpha = 0.925, attente = 2,
+	boxW = 184, boxH = 30, maxLetters = 40, counterGap = 10, leftMargin = 10,
+	arrow = 25, arrowX = 3, arrowY = -2,
+	edgeW = 8, edgeH = 20, edgeX = -5, magnifier = 10, magnifierX = 1, magnifierY = -1, gray = 0.6,
+	clear = 17, clearX = -3, clearIcon = 10, clearIconX = 3, clearIconY = -3,
+	insetLeft = 16, insetRight = 20, instructionGray = 0.35,
+	previewW = 176, previewX = -4, previewY = 2, rowH = 27, rows = 5, topMargin = 1, bottomMargin = 3,
+	gap = 1, overflowH = 16, overflowY = 5, overflowX = 9,
+	iconFrame = 18, iconFrameX = 5, iconFrameY = 1, nameX = 5, nameY = 1, nameRight = -5,
+	suggMagnifier = 14, suggMagnifierX = 10, suggMagnifierY = 1, suggTextX = 10,
+	-- node marker and its pulse
+	marker = 63, markerHover = 18, pulse = 1, pulseAlpha = 0.5,
+	-- options list (same as the spellbook settings list)
+	menuRowH = 20, menuEdge = 15, menuRowX = 11, menuTextX = 20, extraWidth = 40, menuMargin = 25,
+	checkbox = 12, checkMarkW = 15, checkMarkH = 14, checkMarkX = 2, checkMarkY = 1,
+	backgroundCorner = 18, backgroundMargins = { 9, 6, 9, 12 }, backgroundAlpha = 0.925, pending = 2,
 }
 
--- ------------------------------------------------------------ les chaines
-local function egal(a, b)
+-- ------------------------------------------------------------ Strings
+local function equals(a, b)
 	return a and b and string.lower(a) == string.lower(b)
 end
-local function contient(parent, sous)
-	return parent and sous and string.find(string.lower(parent), string.lower(sous), 1, true) ~= nil
+local function contains(parent, sub)
+	return parent and sub and string.find(string.lower(parent), string.lower(sub), 1, true) ~= nil
 end
 
--- ------------------------------------------------------------ la description
--- l'infobulle d'un talent, sans son nom, ses lignes de rang, de prerequis ni
--- l'invite d'apprentissage : ce qui reste est la description (et celle du
--- rang suivant)
-local lecteur = CreateFrame("GameTooltip", "ForeverUITalentsScanTooltip", nil, "GameTooltipTemplate")
--- un format du client en motif Lua ; ses arguments peuvent etre numerotes
--- ("Requires %1$d points in %2$s Talents" : TOOLTIP_TALENT_TIER_POINTS)
+-- ------------------------------------------------------------ Description
+-- A talent tooltip without its name, rank and prerequisite lines or the learn prompt:
+-- what remains is the description (and the next rank's).
+local scanner = CreateFrame("GameTooltip", "ForeverUITalentsScanTooltip", nil, "GameTooltipTemplate")
+-- Turns a client format string into a Lua pattern; its arguments may be numbered
+-- ("Requires %1$d points in %2$s Talents": TOOLTIP_TALENT_TIER_POINTS).
 local function motif(format)
 	if not format then return nil end
 	local m = string.gsub(format, "%%%d%$", "%%")
@@ -120,684 +91,685 @@ local function motif(format)
 	m = string.gsub(m, "%%s", ".+")
 	return "^" .. m .. "$"
 end
-local LIGNES_ECARTEES = {}
+local EXCLUDED_LINES = {}
 for _, f in ipairs({ TOOLTIP_TALENT_RANK, TOOLTIP_TALENT_NEXT_RANK, TOOLTIP_TALENT_LEARN,
 	TOOLTIP_TALENT_TIER_POINTS, TOOLTIP_TALENT_PREREQ, TOOLTIP_TALENT_UNLEARN }) do
 	local m = motif(f)
-	if m then table.insert(LIGNES_ECARTEES, m) end
+	if m then table.insert(EXCLUDED_LINES, m) end
 end
 local descriptions = {}
+-- Cached description of talent t; T: the talents module (pet, group).
 local function description(T, t)
-	local cle = (T.pet and "p" or "j") .. T.groupe .. ":" .. t.onglet .. ":" .. t.index .. ":" .. t.rang
-	local d = descriptions[cle]
+	local key = (T.pet and "p" or "j") .. T.group .. ":" .. t.tab .. ":" .. t.index .. ":" .. t.rank
+	local d = descriptions[key]
 	if d == nil then
-		local parties = {}
-		lecteur:SetOwner(WorldFrame, "ANCHOR_NONE")
-		lecteur:ClearLines()
-		lecteur:SetTalent(t.onglet, t.index, false, T.pet, T.groupe, true)
-		for i = 2, lecteur:NumLines() do
-			local ligne = _G["ForeverUITalentsScanTooltipTextLeft" .. i]
-			local texte = ligne and ligne:GetText()
-			if texte and texte ~= "" then
-				local ecartee = false
-				for _, m in ipairs(LIGNES_ECARTEES) do
-					local ok, trouve = pcall(string.find, texte, m)
-					if ok and trouve then ecartee = true break end
+		local parts = {}
+		scanner:SetOwner(WorldFrame, "ANCHOR_NONE")
+		scanner:ClearLines()
+		scanner:SetTalent(t.tab, t.index, false, T.pet, T.group, true)
+		for i = 2, scanner:NumLines() do
+			local row = _G["ForeverUITalentsScanTooltipTextLeft" .. i]
+			local text = row and row:GetText()
+			if text and text ~= "" then
+				local excluded = false
+				for _, m in ipairs(EXCLUDED_LINES) do
+					local ok, match = pcall(string.find, text, m)
+					if ok and match then excluded = true break end
 				end
-				if not ecartee then table.insert(parties, texte) end
+				if not excluded then table.insert(parts, text) end
 			end
 		end
-		lecteur:Hide()
-		d = table.concat(parties, "\n")
-		descriptions[cle] = d
+		scanner:Hide()
+		d = table.concat(parts, "\n")
+		descriptions[key] = d
 	end
 	return d
 end
 K.description = description
 
--- ------------------------------------------------------------ l'etat
-K.etat = nil                      -- { filtre = "texte", texte } | { filtre = "barres" }
-K.options = { passifs = false, rangs = false }
-local T                           -- ForeverUI.Talents, a la construction
+-- ------------------------------------------------------------ State
+K.state = nil                      -- { filter = "text", text } | { filter = "bars" }
+K.options = { passives = false, ranks = false }
+local T                           -- ForeverUI.Talents, set by K.build
 
--- les talents de l'ecran, dans l'ordre (arbre, palier, colonne)
+-- talents on screen, in order (tree, tier, column)
 local function talents()
-	local liste = {}
-	for _, o in ipairs(T.onglets or {}) do
-		for _, t in ipairs(o.talents) do table.insert(liste, t) end
+	local list = {}
+	for _, o in ipairs(T.tabs or {}) do
+		for _, t in ipairs(o.talents) do table.insert(list, t) end
 	end
-	table.sort(liste, function(a, b)
-		if a.onglet ~= b.onglet then return a.onglet < b.onglet end
-		if a.palier ~= b.palier then return a.palier < b.palier end
-		return a.colonne < b.colonne
+	table.sort(list, function(a, b)
+		if a.tab ~= b.tab then return a.tab < b.tab end
+		if a.tier ~= b.tier then return a.tier < b.tier end
+		return a.column < b.column
 	end)
-	return liste
+	return list
 end
 
--- GetActionbarStatusForSpell : un talent appris (valide), sort actif, qui
--- n'est sur aucune barre active
-local function typeBarre(t, barres)
-	if not t.carre or (t.appris or 0) == 0 then return end
+-- GetActionbarStatusForSpell: a learned active talent that is on no active bar.
+-- bars: action bar spell sets from SpellBookSearch.bars()
+local function barType(t, bars)
+	if not t.square or (t.learned or 0) == 0 then return end
 	if T.pet then
-		if barres.familier[t.nom] then return end
+		if bars.pet[t.name] then return end
 		return TYPE.absent
 	end
-	if barres.actives[t.nom] then return end
-	if barres.desactivees[t.nom] then return TYPE.barreDesactivee end
-	if barres.inactives[t.nom] then return TYPE.postureInactive end
+	if bars.activeSet[t.name] then return end
+	if bars.disabled[t.name] then return TYPE.disabledBar end
+	if bars.inactive[t.name] then return TYPE.inactiveStance end
 	return TYPE.absent
 end
 
--- les types de la recherche en cours, par talent (onglet:index)
-function K.calculer()
-	local etat = K.etat
+-- match types of the current search, per talent ("tab:index")
+function K.compute()
+	local state = K.state
 	local types = {}
-	if not etat then return types end
-	local tous = talents()
-	if etat.filtre == "barres" then
+	if not state then return types end
+	local all = talents()
+	if state.filter == "bars" then
 		local R = ForeverUI.SpellBookSearch
-		local barres = R and R.barres and R.barres()
-		if barres then
-			for _, t in ipairs(tous) do
-				types[t.onglet .. ":" .. t.index] = typeBarre(t, barres)
+		local bars = R and R.bars and R.bars()
+		if bars then
+			for _, t in ipairs(all) do
+				types[t.tab .. ":" .. t.index] = barType(t, bars)
 			end
 		end
 		return types
 	end
-	local texte = etat.texte
-	local descExacte
-	for _, t in ipairs(tous) do
-		if egal(t.nom, texte) then
-			descExacte = description(T, t)
+	local text = state.text
+	local exactDesc
+	for _, t in ipairs(all) do
+		if equals(t.name, text) then
+			exactDesc = description(T, t)
 			break
 		end
 	end
-	for _, t in ipairs(tous) do
+	for _, t in ipairs(all) do
 		local ty
-		if egal(t.nom, texte) then
+		if equals(t.name, text) then
 			ty = TYPE.exact
-		elseif contient(t.nom, texte) then
-			ty = TYPE.nom
-		elseif contient(description(T, t), texte) then
+		elseif contains(t.name, text) then
+			ty = TYPE.name
+		elseif contains(description(T, t), text) then
 			ty = TYPE.description
-		elseif descExacte and contient(descExacte, t.nom) then
-			ty = TYPE.apparente
+		elseif exactDesc and contains(exactDesc, t.name) then
+			ty = TYPE.related
 		end
-		types[t.onglet .. ":" .. t.index] = ty
+		types[t.tab .. ":" .. t.index] = ty
 	end
 	return types
 end
 
--- l'apercu : le filtre de nom ; puis les options (TransformPreviewResults)
-function K.apercu(texte)
-	local trouves = {}
+-- preview: the name filter, then the options (TransformPreviewResults)
+function K.preview(text)
+	local matches = {}
 	for _, t in ipairs(talents()) do
 		local ty
-		if egal(t.nom, texte) then ty = TYPE.exact elseif contient(t.nom, texte) then ty = TYPE.nom end
-		if ty and not (K.options.passifs and not t.carre) then
-			local nom = t.nom
-			if K.options.rangs then nom = nom .. " (" .. t.rang .. "/" .. t.max .. ")" end
-			table.insert(trouves, { talent = t, type = ty, nom = nom, cherche = t.nom, icone = t.icone })
+		if equals(t.name, text) then ty = TYPE.exact elseif contains(t.name, text) then ty = TYPE.name end
+		if ty and not (K.options.passives and not t.square) then
+			local name = t.name
+			if K.options.ranks then name = name .. " (" .. t.rank .. "/" .. t.max .. ")" end
+			table.insert(matches, { talent = t, type = ty, name = name, searching = t.name, icon = t.icon })
 		end
 	end
-	-- PreviewSearchResultSort : le type, puis l'ordre de l'ecran
-	local ordre = {}
-	for i, r in ipairs(trouves) do ordre[r] = i end
-	table.sort(trouves, function(a, b)
+	-- PreviewSearchResultSort: by type, then screen order
+	local order = {}
+	for i, r in ipairs(matches) do order[r] = i end
+	table.sort(matches, function(a, b)
 		if a.type ~= b.type then return a.type > b.type end
-		return ordre[a] < ordre[b]
+		return order[a] < order[b]
 	end)
-	return trouves
+	return matches
 end
 
--- ------------------------------------------------------------ les marques
-local function creerMarque(b)
+-- ------------------------------------------------------------ Markers
+local function createMarker(b)
 	local m = CreateFrame("Frame", nil, b)
-	m:SetWidth(M.marque)
-	m:SetHeight(M.marque)
-	m:SetPoint("CENTER", b.icone, "TOPRIGHT", 0, 0)
+	m:SetWidth(M.marker)
+	m:SetHeight(M.marker)
+	m:SetPoint("CENTER", b.icon, "TOPRIGHT", 0, 0)
 	m:SetFrameLevel(b:GetFrameLevel() + 50)
-	local icone = m:CreateTexture(nil, "OVERLAY")
-	icone:SetAllPoints(m)
-	local battant = m:CreateTexture(nil, "OVERLAY")
-	battant:SetAllPoints(m)
-	battant:SetBlendMode("ADD")
-	battant:SetAlpha(0)
-	m.icone, m.battant = icone, battant
-	-- le survol : son centre seulement
-	local survol = CreateFrame("Frame", nil, m)
-	survol:SetWidth(M.marqueSurvol)
-	survol:SetHeight(M.marqueSurvol)
-	survol:SetPoint("CENTER", m, "CENTER", 0, 0)
-	survol:EnableMouse(true)
-	survol:SetScript("OnEnter", function(self)
+	local icon = m:CreateTexture(nil, "OVERLAY")
+	icon:SetAllPoints(m)
+	local beatGlow = m:CreateTexture(nil, "OVERLAY")
+	beatGlow:SetAllPoints(m)
+	beatGlow:SetBlendMode("ADD")
+	beatGlow:SetAlpha(0)
+	m.icon, m.beatGlow = icon, beatGlow
+	-- hover: its center only
+	local hover = CreateFrame("Frame", nil, m)
+	hover:SetWidth(M.markerHover)
+	hover:SetHeight(M.markerHover)
+	hover:SetPoint("CENTER", m, "CENTER", 0, 0)
+	hover:EnableMouse(true)
+	hover:SetScript("OnEnter", function(self)
 		if not m.info then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:SetText(m.info, NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
 		GameTooltip:Show()
 	end)
-	survol:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	m.survol = survol
-	-- GlowAnim : 0 -> 0,5 en 1 s, puis 0,5 -> 0 en 1 s, en boucle
-	m:SetScript("OnUpdate", function(self, ecoule)
-		self.temps = ((self.temps or 0) + ecoule) % (2 * M.battement)
-		local t = self.temps
-		local a = t < M.battement and t / M.battement or 2 - t / M.battement
-		self.battant:SetAlpha(a * M.battementAlpha)
+	hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	m.hover = hover
+	-- GlowAnim: 0 -> 0.5 in 1 s, then 0.5 -> 0 in 1 s, looping
+	m:SetScript("OnUpdate", function(self, elapsed)
+		self.clock = ((self.clock or 0) + elapsed) % (2 * M.pulse)
+		local t = self.clock
+		local a = t < M.pulse and t / M.pulse or 2 - t / M.pulse
+		self.beatGlow:SetAlpha(a * M.pulseAlpha)
 	end)
 	m:Hide()
-	b.marque = m
-	-- une marque monte tres haut (noeud + 50) : la croix repasse au-dessus
-	if T.leverCroix then T.leverCroix() end
+	b.marker = m
+	-- a marker sits very high (node + 50): raise the close button above it again
+	if T.raiseCloseButton then T.raiseCloseButton() end
 	return m
 end
 
--- SetSearchMatchType sur chaque noeud montre
-local function marquer(types)
-	for _, b in pairs(T.arbre and T.arbre.noeuds or {}) do
+-- SetSearchMatchType on each shown node
+local function mark(types)
+	for _, b in pairs(T.tree and T.tree.nodes or {}) do
 		local t = b:IsShown() and b.talent
-		local ty = t and types[t.onglet .. ":" .. t.index]
+		local ty = t and types[t.tab .. ":" .. t.index]
 		if ty then
-			local m = b.marque or creerMarque(b)
+			local m = b.marker or createMarker(b)
 			local style = STYLES[ty]
-			ForeverUI.SetAtlas(m.icone, style.icone, true)
-			ForeverUI.SetAtlas(m.battant, style.icone, true)
+			ForeverUI.SetAtlas(m.icon, style.icon, true)
+			ForeverUI.SetAtlas(m.beatGlow, style.icon, true)
 			m.info = style.info
 			m.type = ty
 			m:Show()
-		elseif b.marque then
-			b.marque.type = nil
-			b.marque:Hide()
+		elseif b.marker then
+			b.marker.type = nil
+			b.marker:Hide()
 		end
 	end
 end
 
--- ------------------------------------------------------------ le champ
-local boite, effacer, apercu, fleche, liste
+-- ------------------------------------------------------------ Search box
+local box, clear, preview, arrow, list
 
-local function evaluer()
-	local t = boite:GetText() or ""
-	if string.len(t) >= MIN_LETTRES then return t end
+-- box text if it has at least MIN_LETTERS letters, else nil
+local function evaluate()
+	local t = box:GetText() or ""
+	if string.len(t) >= MIN_LETTERS then return t end
 end
 
-local function cacherApercu()
-	apercu:Hide()
-	apercu.surligne = 0
+local function hidePreview()
+	preview:Hide()
+	preview.highlighted = 0
 end
 
-local function majLoupe()
-	local actif = boite:HasFocus() or (boite:GetText() or "") ~= ""
-	local g = actif and 1 or M.gris
-	boite.loupe:SetVertexColor(g, g, g)
-	if (boite:GetText() or "") == "" then boite.consigne:Show() else boite.consigne:Hide() end
-	if actif then effacer:Show() else effacer:Hide() end
+local function updateMagnifier()
+	local active = box:HasFocus() or (box:GetText() or "") ~= ""
+	local g = active and 1 or M.gray
+	box.magnifier:SetVertexColor(g, g, g)
+	if (box:GetText() or "") == "" then box.instruction:Show() else box.instruction:Hide() end
+	if active then clear:Show() else clear:Hide() end
 end
 
 -- SetFullResultSearch
-function K.chercher(texte)
-	if not texte then
-		K.quitter()
+function K.find(text)
+	if not text then
+		K.quit()
 		return
 	end
-	if egal(texte, TEXTE.pasSurBarre) then
-		K.etat = { filtre = "barres" }
+	if equals(text, TEXT.notOnBar) then
+		K.state = { filter = "bars" }
 	else
-		K.etat = { filtre = "texte", texte = texte }
+		K.state = { filter = "text", text = text }
 	end
-	K.maj()
+	K.update()
 end
 
 -- ClearActiveSearchState
-function K.quitter()
-	K.etat = nil
-	if boite then
-		boite:ClearFocus()
-		boite:SetText("")
-		cacherApercu()
-		majLoupe()
+function K.quit()
+	K.state = nil
+	if box then
+		box:ClearFocus()
+		box:SetText("")
+		hidePreview()
+		updateMagnifier()
 	end
-	K.maj()
+	K.update()
 end
 
--- ------------------------------------------------------------ l'apercu
-local function ligneResultat(parent, i)
+-- ------------------------------------------------------------ Preview
+local function resultRow(parent, i)
 	local l = CreateFrame("Button", "ForeverUITalentsSearchResult" .. i, parent)
-	l:SetHeight(M.ligneH)
+	l:SetHeight(M.rowH)
 	local e = ForeverUI.AtlasEntry("_search-rowbg")
 	l:SetNormalTexture(e and e[1] or "")
 	ForeverUI.SetAtlas(l:GetNormalTexture(), "_search-rowbg", true)
 	l:SetPushedTexture(e and e[1] or "")
 	ForeverUI.SetAtlas(l:GetPushedTexture(), "_search-rowbg", true)
-	local dessus = CreateFrame("Frame", nil, l)
-	dessus:SetAllPoints(l)
-	dessus:SetFrameLevel(l:GetFrameLevel() + 1)
-	l.dessus = dessus
-	local surligne = dessus:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(surligne, "search-highlight", true)
-	surligne:SetAllPoints(l)
-	surligne:SetBlendMode("ADD")
-	surligne:Hide()
-	l.surligne = surligne
+	local hovered = CreateFrame("Frame", nil, l)
+	hovered:SetAllPoints(l)
+	hovered:SetFrameLevel(l:GetFrameLevel() + 1)
+	l.hovered = hovered
+	local highlighted = hovered:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(highlighted, "search-highlight", true)
+	highlighted:SetAllPoints(l)
+	highlighted:SetBlendMode("ADD")
+	highlighted:Hide()
+	l.highlighted = highlighted
 	return l
 end
 
-local function construireApercu(parent)
+local function buildPreview(parent)
 	local a = CreateFrame("Frame", "ForeverUITalentsSearchPreview", parent)
 	a:SetFrameStrata("HIGH")
-	a:SetWidth(M.apercuL)
-	a:SetPoint("TOPRIGHT", boite, "BOTTOMRIGHT", M.apercuX, M.apercuY)
-	a:SetHeight(M.ligneH)
+	a:SetWidth(M.previewW)
+	a:SetPoint("TOPRIGHT", box, "BOTTOMRIGHT", M.previewX, M.previewY)
+	a:SetHeight(M.rowH)
 	a:EnableMouse(true)
 	a:Hide()
-	local fond = a:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, "_search-rowbg", true)
-	fond:SetAllPoints(a)
-	local coinG = a:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(coinG, "ui-frame-botcornerleft")
-	coinG:SetPoint("LEFT", a, "LEFT", -7, 0)
-	coinG:SetPoint("BOTTOM", a, "BOTTOM", 0, -7)
-	local coinD = a:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(coinD, "ui-frame-botcornerright")
-	coinD:SetPoint("BOTTOM", coinG, "BOTTOM", 0, 0)
-	coinD:SetPoint("RIGHT", a, "RIGHT", 4, 0)
-	local bas = a:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(bas, "_ui-frame-bot", true)
-	bas:SetHeight(9)
-	bas:SetPoint("BOTTOMLEFT", coinG, "BOTTOMRIGHT", 0, 0)
-	bas:SetPoint("BOTTOMRIGHT", coinD, "BOTTOMLEFT", 0, 0)
-	local gauche = a:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(gauche, "!ui-frame-lefttile", true)
-	gauche:SetWidth(16)
-	gauche:SetPoint("BOTTOMLEFT", coinG, "TOPLEFT", 0, 0)
-	gauche:SetPoint("TOPLEFT", a, "TOPLEFT", -7, 2)
-	local droite = a:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(droite, "!ui-frame-righttile", true)
-	droite:SetWidth(10)
-	droite:SetPoint("BOTTOMRIGHT", coinD, "TOPRIGHT", 1, 0)
-	droite:SetPoint("TOPRIGHT", a, "TOPRIGHT", 5, 2)
+	local background = a:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, "_search-rowbg", true)
+	background:SetAllPoints(a)
+	local leftCorner = a:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(leftCorner, "ui-frame-botcornerleft")
+	leftCorner:SetPoint("LEFT", a, "LEFT", -7, 0)
+	leftCorner:SetPoint("BOTTOM", a, "BOTTOM", 0, -7)
+	local rightCorner = a:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(rightCorner, "ui-frame-botcornerright")
+	rightCorner:SetPoint("BOTTOM", leftCorner, "BOTTOM", 0, 0)
+	rightCorner:SetPoint("RIGHT", a, "RIGHT", 4, 0)
+	local down = a:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(down, "_ui-frame-bot", true)
+	down:SetHeight(9)
+	down:SetPoint("BOTTOMLEFT", leftCorner, "BOTTOMRIGHT", 0, 0)
+	down:SetPoint("BOTTOMRIGHT", rightCorner, "BOTTOMLEFT", 0, 0)
+	local left = a:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(left, "!ui-frame-lefttile", true)
+	left:SetWidth(16)
+	left:SetPoint("BOTTOMLEFT", leftCorner, "TOPLEFT", 0, 0)
+	left:SetPoint("TOPLEFT", a, "TOPLEFT", -7, 2)
+	local right = a:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(right, "!ui-frame-righttile", true)
+	right:SetWidth(10)
+	right:SetPoint("BOTTOMRIGHT", rightCorner, "TOPRIGHT", 1, 0)
+	right:SetPoint("TOPRIGHT", a, "TOPRIGHT", 5, 2)
 
-	a.lignes = {}
-	for i = 1, M.lignes do
-		local l = ligneResultat(a, i)
-		l:SetPoint("TOPLEFT", a, "TOPLEFT", 0, -M.hautMarge - (i - 1) * (M.ligneH + M.ecart))
-		l:SetPoint("TOPRIGHT", a, "TOPRIGHT", 0, -M.hautMarge - (i - 1) * (M.ligneH + M.ecart))
-		local cadre = l.dessus:CreateTexture(nil, "ARTWORK")
-		ForeverUI.SetAtlas(cadre, "talents-search-suggestion-itemborder")
-		cadre:SetWidth(M.cadreIcone)
-		cadre:SetHeight(M.cadreIcone)
-		cadre:SetPoint("LEFT", l, "LEFT", M.cadreIconeX, M.cadreIconeY)
-		local icone = l:CreateTexture(nil, "OVERLAY")
-		icone:SetPoint("TOPLEFT", cadre, "TOPLEFT", 1, -1)
-		icone:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT", -1, 1)
-		local nom = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		nom:SetJustifyH("LEFT")
-		nom:SetPoint("LEFT", icone, "RIGHT", M.nomX, M.nomY)
-		nom:SetPoint("RIGHT", l, "RIGHT", M.nomD, 0)
-		l.icone, l.nom = icone, nom
-		l:SetScript("OnEnter", function() K.surligner(i) end)
-		l:SetScript("OnClick", function() K.choisir(i) end)
+	a.rows = {}
+	for i = 1, M.rows do
+		local l = resultRow(a, i)
+		l:SetPoint("TOPLEFT", a, "TOPLEFT", 0, -M.topMargin - (i - 1) * (M.rowH + M.gap))
+		l:SetPoint("TOPRIGHT", a, "TOPRIGHT", 0, -M.topMargin - (i - 1) * (M.rowH + M.gap))
+		local frame = l.hovered:CreateTexture(nil, "ARTWORK")
+		ForeverUI.SetAtlas(frame, "talents-search-suggestion-itemborder")
+		frame:SetWidth(M.iconFrame)
+		frame:SetHeight(M.iconFrame)
+		frame:SetPoint("LEFT", l, "LEFT", M.iconFrameX, M.iconFrameY)
+		local icon = l:CreateTexture(nil, "OVERLAY")
+		icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+		icon:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+		local name = l:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		name:SetJustifyH("LEFT")
+		name:SetPoint("LEFT", icon, "RIGHT", M.nameX, M.nameY)
+		name:SetPoint("RIGHT", l, "RIGHT", M.nameRight, 0)
+		l.icon, l.name = icon, name
+		l:SetScript("OnEnter", function() K.toggleHighlight(i) end)
+		l:SetScript("OnClick", function() K.choose(i) end)
 		l:Hide()
-		a.lignes[i] = l
+		a.rows[i] = l
 	end
-	local sugg = ligneResultat(a, "Suggestion")
+	local sugg = resultRow(a, "Suggestion")
 	sugg:SetPoint("TOPLEFT", a, "TOPLEFT", 0, 0)
 	sugg:SetPoint("TOPRIGHT", a, "TOPRIGHT", 0, 0)
-	local loupe = sugg:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(loupe, "talents-search-suggestion-magnifyingglass", true)
-	loupe:SetWidth(M.loupeSugg)
-	loupe:SetHeight(M.loupeSugg)
-	loupe:SetPoint("LEFT", sugg, "LEFT", M.loupeSuggX, M.loupeSuggY)
-	local texte = sugg:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	texte:SetJustifyH("LEFT")
-	texte:SetPoint("LEFT", loupe, "RIGHT", M.texteSuggX, 0)
-	texte:SetPoint("RIGHT", sugg, "RIGHT", -5, 0)
-	texte:SetText(TEXTE.pasSurBarre)
-	sugg.texte = texte
-	sugg:SetScript("OnEnter", function() K.surligner(1) end)
-	sugg:SetScript("OnClick", function() K.choisir(1) end)
+	local magnifier = sugg:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(magnifier, "talents-search-suggestion-magnifyingglass", true)
+	magnifier:SetWidth(M.suggMagnifier)
+	magnifier:SetHeight(M.suggMagnifier)
+	magnifier:SetPoint("LEFT", sugg, "LEFT", M.suggMagnifierX, M.suggMagnifierY)
+	local text = sugg:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	text:SetJustifyH("LEFT")
+	text:SetPoint("LEFT", magnifier, "RIGHT", M.suggTextX, 0)
+	text:SetPoint("RIGHT", sugg, "RIGHT", -5, 0)
+	text:SetText(TEXT.notOnBar)
+	sugg.text = text
+	sugg:SetScript("OnEnter", function() K.toggleHighlight(1) end)
+	sugg:SetScript("OnClick", function() K.choose(1) end)
 	sugg:Hide()
 	a.suggestion = sugg
 	local plus = CreateFrame("Frame", nil, a)
-	plus:SetHeight(M.depassementH)
-	plus:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 0, M.depassementY)
-	plus:SetPoint("BOTTOMRIGHT", a, "BOTTOMRIGHT", 0, M.depassementY)
-	local plusTexte = plus:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	plusTexte:SetJustifyH("LEFT")
-	plusTexte:SetPoint("TOPLEFT", plus, "TOPLEFT", M.depassementX, 0)
-	plusTexte:SetPoint("BOTTOMRIGHT", plus, "BOTTOMRIGHT", 0, 0)
-	plus.texte = plusTexte
+	plus:SetHeight(M.overflowH)
+	plus:SetPoint("BOTTOMLEFT", a, "BOTTOMLEFT", 0, M.overflowY)
+	plus:SetPoint("BOTTOMRIGHT", a, "BOTTOMRIGHT", 0, M.overflowY)
+	local moreText = plus:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	moreText:SetJustifyH("LEFT")
+	moreText:SetPoint("TOPLEFT", plus, "TOPLEFT", M.overflowX, 0)
+	moreText:SetPoint("BOTTOMRIGHT", plus, "BOTTOMRIGHT", 0, 0)
+	plus.text = moreText
 	plus:Hide()
-	a.depassement = plus
-	a.surligne = 0
+	a.overflow = plus
+	a.highlighted = 0
 	a:SetScript("OnUpdate", function(self)
-		if not boite:HasFocus() and not MouseIsOver(self) then cacherApercu() end
+		if not box:HasFocus() and not MouseIsOver(self) then hidePreview() end
 	end)
 	return a
 end
 
-function K.majApercu(texte)
-	local a = apercu
-	a.surligne = 0
-	a.resultats = nil
-	for _, l in ipairs(a.lignes) do l:Hide() l.surligne:Hide() end
+function K.updatePreview(text)
+	local a = preview
+	a.highlighted = 0
+	a.results = nil
+	for _, l in ipairs(a.rows) do l:Hide() l.highlighted:Hide() end
 	a.suggestion:Hide()
-	a.suggestion.surligne:Hide()
-	a.depassement:Hide()
-	if not texte then
+	a.suggestion.highlighted:Hide()
+	a.overflow:Hide()
+	if not text then
 		a.suggestion:Show()
-		a.nombre = 1
-		a:SetHeight(M.ligneH + M.basMarge)
+		a.count = 1
+		a:SetHeight(M.rowH + M.bottomMargin)
 		a:Show()
 		return
 	end
-	local trouves = K.apercu(texte)
-	if #trouves == 0 then
-		cacherApercu()
+	local matches = K.preview(text)
+	if #matches == 0 then
+		hidePreview()
 		return
 	end
-	a.resultats = trouves
-	local n = math.min(#trouves, M.lignes)
+	a.results = matches
+	local n = math.min(#matches, M.rows)
 	for i = 1, n do
-		local l = a.lignes[i]
-		l.nom:SetText(trouves[i].nom)
-		l.icone:SetTexture(trouves[i].icone)
+		local l = a.rows[i]
+		l.name:SetText(matches[i].name)
+		l.icon:SetTexture(matches[i].icon)
 		l:Show()
 	end
-	a.nombre = n
-	local h = M.hautMarge + n * M.ligneH + (n - 1) * M.ecart + M.basMarge
-	if #trouves > M.lignes then
-		a.depassement.texte:SetText(string.format(TEXTE.depassement, #trouves - M.lignes))
-		a.depassement:Show()
-		h = h + M.depassementH
+	a.count = n
+	local h = M.topMargin + n * M.rowH + (n - 1) * M.gap + M.bottomMargin
+	if #matches > M.rows then
+		a.overflow.text:SetText(string.format(TEXT.overflow, #matches - M.rows))
+		a.overflow:Show()
+		h = h + M.overflowH
 	end
 	a:SetHeight(h)
 	a:Show()
 end
 
-function K.surligner(i)
-	local a = apercu
-	a.surligne = i
-	if a.resultats then
-		for j, l in ipairs(a.lignes) do
-			if j == i then l.surligne:Show() else l.surligne:Hide() end
+function K.toggleHighlight(i)
+	local a = preview
+	a.highlighted = i
+	if a.results then
+		for j, l in ipairs(a.rows) do
+			if j == i then l.highlighted:Show() else l.highlighted:Hide() end
 		end
 	else
-		if i == 1 then a.suggestion.surligne:Show() else a.suggestion.surligne:Hide() end
+		if i == 1 then a.suggestion.highlighted:Show() else a.suggestion.highlighted:Hide() end
 	end
 end
 
-local function parcourir(sens)
-	local a = apercu
-	if not a:IsShown() or not a.nombre or a.nombre == 0 then return end
-	local n, i = a.nombre, a.surligne or 0
-	if sens < 0 then i = (i - 2) % n + 1 else i = i % n + 1 end
-	K.surligner(i)
+-- moves the preview highlight; direction: -1 up, 1 down (wraps around)
+local function browse(direction)
+	local a = preview
+	if not a:IsShown() or not a.count or a.count == 0 then return end
+	local n, i = a.count, a.highlighted or 0
+	if direction < 0 then i = (i - 2) % n + 1 else i = i % n + 1 end
+	K.toggleHighlight(i)
 end
 
--- OnPreviewSearchResultClicked : le nom d'origine (sans "(rang/max)")
-function K.choisir(i)
-	local a = apercu
+-- OnPreviewSearchResultClicked: searches the original name (without "(rank/max)")
+function K.choose(i)
+	local a = preview
 	PlaySound("igMainMenuOptionCheckBoxOn")
-	local texte
-	if a.resultats then
-		local r = a.resultats[i]
+	local text
+	if a.results then
+		local r = a.results[i]
 		if not r then return end
-		texte = r.cherche
+		text = r.searching
 	else
-		texte = TEXTE.pasSurBarre
+		text = TEXT.notOnBar
 	end
-	boite:ClearFocus()
-	boite:SetText(texte)
-	cacherApercu()
-	K.chercher(texte)
+	box:ClearFocus()
+	box:SetText(text)
+	hidePreview()
+	K.find(text)
 end
 
--- ------------------------------------------------------------ les options
-local function majFleche()
-	local etat = "common-dropdown-a-button"
-	if fleche.enfonce and fleche.survol then
-		etat = "common-dropdown-a-button-pressedhover"
-	elseif fleche.survol then
-		etat = "common-dropdown-a-button-hover"
-	elseif fleche.enfonce then
-		etat = "common-dropdown-a-button-pressed"
-	elseif liste and liste:IsShown() then
-		etat = "common-dropdown-a-button-open"
+-- ------------------------------------------------------------ Options
+local function updateArrow()
+	local state = "common-dropdown-a-button"
+	if arrow.pressed and arrow.hover then
+		state = "common-dropdown-a-button-pressedhover"
+	elseif arrow.hover then
+		state = "common-dropdown-a-button-hover"
+	elseif arrow.pressed then
+		state = "common-dropdown-a-button-pressed"
+	elseif list and list:IsShown() then
+		state = "common-dropdown-a-button-open"
 	end
-	ForeverUI.SetAtlas(fleche.icone, etat)
+	ForeverUI.SetAtlas(arrow.icon, state)
 end
 
-local function majCoches()
-	for _, l in ipairs(liste.lignes) do
-		if K.options[l.cle] then l.coche:Show() else l.coche:Hide() end
+local function updateCheckMarks()
+	for _, l in ipairs(list.rows) do
+		if K.options[l.key] then l.checkMark:Show() else l.checkMark:Hide() end
 	end
 end
 
-local function construireOptions(parent)
+local function buildOptions(parent)
 	local b = CreateFrame("Button", "ForeverUITalentsSearchOptions", parent)
-	fleche = b
-	b:SetWidth(M.fleche)
-	b:SetHeight(M.fleche)
-	b:SetPoint("LEFT", boite, "RIGHT", M.flecheX, M.flecheY)
-	b.icone = b:CreateTexture(nil, "OVERLAY")
-	b.icone:SetPoint("CENTER", b, "CENTER", 0, -2)
-	b:SetScript("OnEnter", function(self) self.survol = true majFleche() end)
-	b:SetScript("OnLeave", function(self) self.survol = false majFleche() end)
-	b:SetScript("OnMouseDown", function(self) self.enfonce = true majFleche() end)
-	b:SetScript("OnMouseUp", function(self) self.enfonce = false majFleche() end)
+	arrow = b
+	b:SetWidth(M.arrow)
+	b:SetHeight(M.arrow)
+	b:SetPoint("LEFT", box, "RIGHT", M.arrowX, M.arrowY)
+	b.icon = b:CreateTexture(nil, "OVERLAY")
+	b.icon:SetPoint("CENTER", b, "CENTER", 0, -2)
+	b:SetScript("OnEnter", function(self) self.hover = true updateArrow() end)
+	b:SetScript("OnLeave", function(self) self.hover = false updateArrow() end)
+	b:SetScript("OnMouseDown", function(self) self.pressed = true updateArrow() end)
+	b:SetScript("OnMouseUp", function(self) self.pressed = false updateArrow() end)
 	b:SetScript("OnClick", function()
-		if liste:IsShown() then liste:Hide() else liste.attente = 0 liste:Show() end
-		majFleche()
+		if list:IsShown() then list:Hide() else list.pending = 0 list:Show() end
+		updateArrow()
 	end)
 
 	local l0 = CreateFrame("Frame", "ForeverUITalentsSearchOptionsList", parent)
-	liste = l0
+	list = l0
 	l0:SetFrameStrata("DIALOG")
 	l0:EnableMouse(true)
 	l0:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, 0)
 	l0:Hide()
-	local tranches = ForeverUI.CreateNineSlice(l0, "common-dropdown-bg-c60", M.fondCoin, M.fondMarges, "BACKGROUND")
-	for _, t in ipairs(tranches or {}) do t:SetAlpha(M.fondAlpha) end
-	l0.lignes = {}
-	local plusLong = 0
-	for i, def in ipairs({ { cle = "passifs", texte = TEXTE.masquerPassifs }, { cle = "rangs", texte = TEXTE.rangs } }) do
+	local slices = ForeverUI.CreateNineSlice(l0, "common-dropdown-bg-c60", M.backgroundCorner, M.backgroundMargins, "BACKGROUND")
+	for _, t in ipairs(slices or {}) do t:SetAlpha(M.backgroundAlpha) end
+	l0.rows = {}
+	local longest = 0
+	for i, def in ipairs({ { key = "passives", text = TEXT.hidePassives }, { key = "ranks", text = TEXT.ranks } }) do
 		local l = CreateFrame("Button", "ForeverUITalentsSearchOption" .. i, l0)
-		l:SetHeight(M.ligneMenuH)
-		l:SetPoint("TOPLEFT", l0, "TOPLEFT", M.ligneMenuX, -M.bordMenu - (i - 1) * M.ligneMenuH)
+		l:SetHeight(M.menuRowH)
+		l:SetPoint("TOPLEFT", l0, "TOPLEFT", M.menuRowX, -M.menuEdge - (i - 1) * M.menuRowH)
 		l:SetHighlightTexture("Interface" .. SEP .. "QuestFrame" .. SEP .. "UI-QuestTitleHighlight")
 		l:GetHighlightTexture():SetBlendMode("ADD")
-		local texte = l:CreateFontString(nil, "ARTWORK", "GameFontHighlightLeft")
-		texte:SetPoint("LEFT", l, "LEFT", M.texteMenuX, 0)
-		texte:SetText(def.texte)
-		plusLong = math.max(plusLong, texte:GetStringWidth() or 0)
-		local case = l:CreateTexture(nil, "BORDER")
-		ForeverUI.SetAtlas(case, "common-dropdown-ticksquare", true)
-		case:SetWidth(M.case)
-		case:SetHeight(M.case)
-		case:SetPoint("LEFT", l, "LEFT", 0, 0)
-		local coche = l:CreateTexture(nil, "ARTWORK")
-		ForeverUI.SetAtlas(coche, "common-dropdown-icon-checkmark-yellow", true)
-		coche:SetWidth(M.cocheL)
-		coche:SetHeight(M.cocheH)
-		coche:SetPoint("CENTER", case, "CENTER", M.cocheX, M.cocheY)
-		coche:Hide()
-		l.cle, l.texte, l.coche = def.cle, texte, coche
-		-- CreateCheckbox : la case bascule, la liste reste ouverte ; l'apercu
-		-- ouvert se refait
+		local text = l:CreateFontString(nil, "ARTWORK", "GameFontHighlightLeft")
+		text:SetPoint("LEFT", l, "LEFT", M.menuTextX, 0)
+		text:SetText(def.text)
+		longest = math.max(longest, text:GetStringWidth() or 0)
+		local checkbox = l:CreateTexture(nil, "BORDER")
+		ForeverUI.SetAtlas(checkbox, "common-dropdown-ticksquare", true)
+		checkbox:SetWidth(M.checkbox)
+		checkbox:SetHeight(M.checkbox)
+		checkbox:SetPoint("LEFT", l, "LEFT", 0, 0)
+		local checkMark = l:CreateTexture(nil, "ARTWORK")
+		ForeverUI.SetAtlas(checkMark, "common-dropdown-icon-checkmark-yellow", true)
+		checkMark:SetWidth(M.checkMarkW)
+		checkMark:SetHeight(M.checkMarkH)
+		checkMark:SetPoint("CENTER", checkbox, "CENTER", M.checkMarkX, M.checkMarkY)
+		checkMark:Hide()
+		l.key, l.text, l.checkMark = def.key, text, checkMark
+		-- CreateCheckbox: the option toggles and the list stays open; an open preview
+		-- is rebuilt
 		l:SetScript("OnClick", function(self)
 			PlaySound("UChatScrollButton")
-			K.options[self.cle] = not K.options[self.cle]
-			majCoches()
-			if boite:HasFocus() then K.majApercu(evaluer()) end
+			K.options[self.key] = not K.options[self.key]
+			updateCheckMarks()
+			if box:HasFocus() then K.updatePreview(evaluate()) end
 		end)
-		l0.lignes[i] = l
+		l0.rows[i] = l
 	end
-	local largeur = plusLong + M.largeurPlus + M.margeMenu
-	l0:SetWidth(largeur)
-	l0:SetHeight(#l0.lignes * M.ligneMenuH + 2 * M.bordMenu)
-	for _, l in ipairs(l0.lignes) do l:SetWidth(largeur - M.margeMenu) end
-	-- elle se ferme 2 s apres que la souris l'a quittee (et la fleche)
-	l0:SetScript("OnUpdate", function(self, ecoule)
-		if MouseIsOver(self) or MouseIsOver(fleche) then
-			self.attente = 0
+	local width = longest + M.extraWidth + M.menuMargin
+	l0:SetWidth(width)
+	l0:SetHeight(#l0.rows * M.menuRowH + 2 * M.menuEdge)
+	for _, l in ipairs(l0.rows) do l:SetWidth(width - M.menuMargin) end
+	-- it closes 2 s after the mouse leaves it (and the arrow)
+	l0:SetScript("OnUpdate", function(self, elapsed)
+		if MouseIsOver(self) or MouseIsOver(arrow) then
+			self.pending = 0
 		else
-			self.attente = (self.attente or 0) + ecoule
-			if self.attente >= M.attente then self:Hide() end
+			self.pending = (self.pending or 0) + elapsed
+			if self.pending >= M.pending then self:Hide() end
 		end
 	end)
-	l0:SetScript("OnShow", majCoches)
-	l0:SetScript("OnHide", majFleche)
-	majFleche()
+	l0:SetScript("OnShow", updateCheckMarks)
+	l0:SetScript("OnHide", updateArrow)
+	updateArrow()
 end
 
--- ------------------------------------------------------------ construction
-function K.construire(talentsModule)
-	if boite then return end
+-- ------------------------------------------------------------ Build
+function K.build(talentsModule)
+	if box then return end
 	T = talentsModule
-	local parent = T.cadre
+	local parent = T.frame
 	local b = CreateFrame("EditBox", "ForeverUITalentsSearchBox", parent)
-	boite = b
+	box = b
 	b:SetAutoFocus(false)
-	b:SetMaxLetters(M.lettres)
-	b:SetHeight(M.boiteH)
-	b:SetWidth(M.boiteL)
+	b:SetMaxLetters(M.maxLetters)
+	b:SetHeight(M.boxH)
+	b:SetWidth(M.boxW)
 	b:SetFrameLevel(parent:GetFrameLevel() + 6)
 	b:SetFontObject(GameFontHighlightSmall)
-	b:SetTextInsets(M.margeG, M.margeD, 0, 0)
+	b:SetTextInsets(M.insetLeft, M.insetRight, 0, 0)
 	local g = b:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(g, "common-search-border-left", true)
-	g:SetWidth(M.bordL) g:SetHeight(M.bordH)
-	g:SetPoint("LEFT", b, "LEFT", M.bordX, 0)
+	g:SetWidth(M.edgeW) g:SetHeight(M.edgeH)
+	g:SetPoint("LEFT", b, "LEFT", M.edgeX, 0)
 	local d = b:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(d, "common-search-border-right", true)
-	d:SetWidth(M.bordL) d:SetHeight(M.bordH)
+	d:SetWidth(M.edgeW) d:SetHeight(M.edgeH)
 	d:SetPoint("RIGHT", b, "RIGHT", 0, 0)
 	local m = b:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(m, "common-search-border-middle", true)
-	m:SetHeight(M.bordH)
+	m:SetHeight(M.edgeH)
 	m:SetPoint("LEFT", g, "RIGHT", 0, 0)
 	m:SetPoint("RIGHT", d, "LEFT", 0, 0)
-	local loupe = b:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(loupe, "common-search-magnifyingglass", true)
-	loupe:SetWidth(M.loupe) loupe:SetHeight(M.loupe)
-	loupe:SetPoint("LEFT", b, "LEFT", M.loupeX, M.loupeY)
-	b.loupe = loupe
-	local consigne = b:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-	consigne:SetJustifyH("LEFT")
-	consigne:SetJustifyV("MIDDLE")
-	consigne:SetPoint("TOPLEFT", b, "TOPLEFT", M.margeG, 0)
-	consigne:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -M.margeD, 0)
-	consigne:SetTextColor(M.consigneGris, M.consigneGris, M.consigneGris)
-	consigne:SetText(TEXTE.consigne)
-	b.consigne = consigne
+	local magnifier = b:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(magnifier, "common-search-magnifyingglass", true)
+	magnifier:SetWidth(M.magnifier) magnifier:SetHeight(M.magnifier)
+	magnifier:SetPoint("LEFT", b, "LEFT", M.magnifierX, M.magnifierY)
+	b.magnifier = magnifier
+	local instruction = b:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	instruction:SetJustifyH("LEFT")
+	instruction:SetJustifyV("MIDDLE")
+	instruction:SetPoint("TOPLEFT", b, "TOPLEFT", M.insetLeft, 0)
+	instruction:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -M.insetRight, 0)
+	instruction:SetTextColor(M.instructionGray, M.instructionGray, M.instructionGray)
+	instruction:SetText(TEXT.instruction)
+	b.instruction = instruction
 
 	local e = CreateFrame("Button", "ForeverUITalentsSearchClear", b)
-	effacer = e
-	e:SetWidth(M.effacer) e:SetHeight(M.effacer)
-	e:SetPoint("RIGHT", b, "RIGHT", M.effacerX, 0)
+	clear = e
+	e:SetWidth(M.clear) e:SetHeight(M.clear)
+	e:SetPoint("RIGHT", b, "RIGHT", M.clearX, 0)
 	e:SetFrameLevel(b:GetFrameLevel() + 2)
-	local icone = e:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(icone, "common-search-clearbutton", true)
-	icone:SetWidth(M.effacerIcone) icone:SetHeight(M.effacerIcone)
-	icone:SetPoint("TOPLEFT", e, "TOPLEFT", M.effacerIconeX, M.effacerIconeY)
-	icone:SetAlpha(0.5)
-	e.icone = icone
-	e:SetScript("OnEnter", function() icone:SetAlpha(1) end)
-	e:SetScript("OnLeave", function() icone:SetAlpha(0.5) end)
-	e:SetScript("OnMouseDown", function() icone:SetPoint("TOPLEFT", e, "TOPLEFT", M.effacerIconeX + 1, M.effacerIconeY - 1) end)
-	e:SetScript("OnMouseUp", function() icone:SetPoint("TOPLEFT", e, "TOPLEFT", M.effacerIconeX, M.effacerIconeY) end)
+	local icon = e:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(icon, "common-search-clearbutton", true)
+	icon:SetWidth(M.clearIcon) icon:SetHeight(M.clearIcon)
+	icon:SetPoint("TOPLEFT", e, "TOPLEFT", M.clearIconX, M.clearIconY)
+	icon:SetAlpha(0.5)
+	e.icon = icon
+	e:SetScript("OnEnter", function() icon:SetAlpha(1) end)
+	e:SetScript("OnLeave", function() icon:SetAlpha(0.5) end)
+	e:SetScript("OnMouseDown", function() icon:SetPoint("TOPLEFT", e, "TOPLEFT", M.clearIconX + 1, M.clearIconY - 1) end)
+	e:SetScript("OnMouseUp", function() icon:SetPoint("TOPLEFT", e, "TOPLEFT", M.clearIconX, M.clearIconY) end)
 	e:SetScript("OnClick", function()
 		PlaySound("igMainMenuOptionCheckBoxOn")
-		K.quitter()
+		K.quit()
 	end)
 	e:Hide()
 
-	construireOptions(parent)
-	fleche:SetFrameLevel(b:GetFrameLevel())
-	-- la place : la fleche contre le libelle du compteur, le champ contre la
-	-- fleche (camelot : la fleche a RIGHT du champ en (3, -2))
-	fleche:ClearAllPoints()
-	fleche:SetPoint("RIGHT", T.points.libelle, "LEFT", -M.ecartCompteur, M.flecheY - 1)
-	b:SetPoint("RIGHT", fleche, "LEFT", -M.flecheX, -M.flecheY)
+	buildOptions(parent)
+	arrow:SetFrameLevel(b:GetFrameLevel())
+	-- placement: the arrow against the counter label, the box against the arrow
+	-- (camelot: arrow at RIGHT of the box, (3, -2))
+	arrow:ClearAllPoints()
+	arrow:SetPoint("RIGHT", T.points.caption, "LEFT", -M.counterGap, M.arrowY - 1)
+	b:SetPoint("RIGHT", arrow, "LEFT", -M.arrowX, -M.arrowY)
 
-	apercu = construireApercu(parent)
+	preview = buildPreview(parent)
 
 	b:SetScript("OnEditFocusGained", function()
-		majLoupe()
-		K.majApercu(evaluer())
+		updateMagnifier()
+		K.updatePreview(evaluate())
 	end)
 	b:SetScript("OnEditFocusLost", function()
-		majLoupe()
-		if not MouseIsOver(apercu) then cacherApercu() end
+		updateMagnifier()
+		if not MouseIsOver(preview) then hidePreview() end
 	end)
 	b:SetScript("OnTextChanged", function(self)
-		majLoupe()
-		if self:HasFocus() then K.majApercu(evaluer()) end
+		updateMagnifier()
+		if self:HasFocus() then K.updatePreview(evaluate()) end
 	end)
 	b:SetScript("OnEnterPressed", function(self)
-		local a = apercu
-		if a:IsShown() and (a.surligne or 0) > 0 then
-			K.choisir(a.surligne)
+		local a = preview
+		if a:IsShown() and (a.highlighted or 0) > 0 then
+			K.choose(a.highlighted)
 			return
 		end
-		cacherApercu()
-		K.chercher(evaluer())
+		hidePreview()
+		K.find(evaluate())
 		self:ClearFocus()
 	end)
 	b:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-	b:SetScript("OnKeyDown", function(_, touche)
-		if touche == "UP" then parcourir(-1) elseif touche == "DOWN" then parcourir(1) end
+	b:SetScript("OnKeyDown", function(_, pressedKey)
+		if pressedKey == "UP" then browse(-1) elseif pressedKey == "DOWN" then browse(1) end
 	end)
-	majLoupe()
-	K.boite, K.effacer, K.apercuCadre, K.fleche, K.liste = boite, effacer, apercu, fleche, liste
+	updateMagnifier()
+	K.box, K.clear, K.previewFrame, K.arrow, K.list = box, clear, preview, arrow, list
 end
 
--- la largeur : 184, ou ce qui reste a gauche du compteur (fenetre reduite)
-function K.poser(largeurPage)
-	if not boite then return end
-	local libelle = T.points.libelle
-	local droiteLibelle = T.points.droiteLibelle or 0
-	local w = libelle:GetStringWidth() or 0
-	-- du bord gauche du cadre (page + 2 de chaque cote) a la gauche du champ
-	local reste = largeurPage + 4 + droiteLibelle - w - M.ecartCompteur - M.fleche - M.flecheX - M.margeGauche
-	boite:SetWidth(math.max(60, math.min(M.boiteL, reste)))
+-- width: 184, or what is left of the counter (small window)
+function K.place(pageWidth)
+	if not box then return end
+	local caption = T.points.caption
+	local captionRight = T.points.captionRight or 0
+	local w = caption:GetStringWidth() or 0
+	-- from the frame's left edge (page + 2 on each side) to the box's left
+	local rest = pageWidth + 4 + captionRight - w - M.counterGap - M.arrow - M.arrowX - M.leftMargin
+	box:SetWidth(math.max(60, math.min(M.boxW, rest)))
 end
 
--- apres chaque mise a jour de l'ecran : les marques (UpdateFullSearchResults) ;
--- rien sur la page des glyphes, ni sur les talents d'un inspecte (retour du
--- 2026-09-28) -- la recherche du joueur reprend a son retour
-function K.maj()
-	if not boite or not T then return end
-	if T.glyphes or T.inspection then
-		boite:Hide()
-		fleche:Hide()
-		liste:Hide()
-		cacherApercu()
-		marquer({})
+-- after each screen update: the markers (UpdateFullSearchResults); nothing on the glyph
+-- page or on an inspected player's talents, the player's search resumes afterwards
+function K.update()
+	if not box or not T then return end
+	if T.glyphs or T.inspection then
+		box:Hide()
+		arrow:Hide()
+		list:Hide()
+		hidePreview()
+		mark({})
 		return
 	end
-	boite:Show()
-	fleche:Show()
-	marquer(K.calculer())
+	box:Show()
+	arrow:Show()
+	mark(K.compute())
 end
 
--- LES BARRES CHANGENT (un sort pose, retire, une page ou une posture) : la
--- recherche "Missing from action bar" se refait, et le talent qu'on vient de
--- poser perd sa marque (demande du 2026-09-25)
-local veille = CreateFrame("Frame")
+-- When action bars change (spell placed or removed, page or stance), the
+-- "Missing from action bar" search is redone, so a talent just placed loses its marker.
+local watcher = CreateFrame("Frame")
 for _, ev in ipairs({ "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR",
 	"ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "PET_BAR_UPDATE", "UPDATE_MULTI_ACTIONBAR" }) do
-	veille:RegisterEvent(ev)
+	watcher:RegisterEvent(ev)
 end
-veille:SetScript("OnEvent", function()
-	if K.etat and K.etat.filtre == "barres" and T and T.livre and T.livre:IsVisible() then
-		K.maj()
+watcher:SetScript("OnEvent", function()
+	if K.state and K.state.filter == "bars" and T and T.book and T.book:IsVisible() then
+		K.update()
 	end
 end)
-K.veilleBarres = veille
+K.barWatcher = watcher
 
--- les talents deja construits (Blizzard_TalentUI charge avant ce fichier)
-if ForeverUI.Talents and ForeverUI.Talents.livre then
-	K.construire(ForeverUI.Talents)
-	ForeverUI.Talents.maj()
+-- talents already built (Blizzard_TalentUI loads before this file)
+if ForeverUI.Talents and ForeverUI.Talents.book then
+	K.build(ForeverUI.Talents)
+	ForeverUI.Talents.update()
 end

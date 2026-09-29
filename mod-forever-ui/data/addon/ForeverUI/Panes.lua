@@ -1,49 +1,7 @@
--- ForeverUI : les hotes et leurs contenus.
---
--- CE QUE C'EST, ET POURQUOI.
---
--- Une fenetre moderne n'est pas un bloc : c'est un ou deux HOTES -- des
--- surfaces fixes -- dans lesquels des CONTENUS se remplacent. camelot le dit
--- ainsi dans CharacterFrame.xml : LeftPaneHost et RightPaneHost, et une
--- SidePane par onglet. Changer d'onglet n'y recalcule rien : un contenu se
--- masque, un autre se montre.
---
--- LE DEFAUT QUE CELA CORRIGE. La feuille de personnage decidait sa visibilite
--- a cinq endroits -- l'habillage, les deux onglets du volet, le repli, et la
--- fonction des statistiques -- et reposait TOUTE sa geometrie a chaque
--- evenement. D'ou deux fautes que rien ne pouvait prevenir :
---   * le panneau du gestionnaire d'equipement restait a l'ecran quand on
---     changeait d'onglet lateral, parce qu'il appartient a NOTRE volet et
---     non au PaperDollFrame du client, que lui seul masque ;
---   * les barres de reputation traversaient le volet droit, parce que le
---     cadre du client garde la taille de la fenetre d'origine et que
---     personne ne le bornait.
--- Tant que la visibilite se decide partout, chaque nouvel ecran rouvre les
--- memes plaies. Elle se decide donc ICI, et nulle part ailleurs.
---
--- LE MODELE, en trois mots :
---
---   HOTE     une surface qui accueille : un volet, une colonne.
---   GROUPE   ce qu'un onglet ouvre. Un groupe touche TOUS les hotes a la
---            fois : c'est un ecran entier.
---   PAGE     un contenu dans un hote pour un groupe donne. Plusieurs pages
---            dans le meme hote et le meme groupe se remplacent entre elles
---            -- ce sont des boutons, pas des onglets.
---   MOBILIER  ce qu'un hote porte pour un groupe QUELLE QUE SOIT la page : la
---            bande de pierre, les onglets qui choisissent la page. camelot le
---            traite ainsi -- UpdateRightPaneHeader ne masque que le StoneBg,
---            l'hote, lui, reste en place.
---
--- Un contenu se CONSTRUIT une seule fois, a sa premiere ouverture, et pose sa
--- geometrie a ce moment-la. Ensuite il ne fait plus que paraitre et
--- disparaitre. Rien n'est recalcule.
---
--- CE QU'UN CONTENU DECLARE POSSEDER. Notre racine est un cadre a nous : ses
--- fils la suivent. Mais un ecran de 3.3.5 est fait de cadres DU CLIENT, que
--- l'on ne reparente pas -- leur niveau et leur strate s'y perdraient, et des
--- reglages deja valides avec. Un contenu declare donc aussi la LISTE des
--- cadres du client qu'il possede, et la bibliotheque les montre et les masque
--- avec sa racine. Une seule boucle, un seul endroit.
+-- Hosts and their contents: the single place that decides what a window shows.
+-- A host is a fixed surface (a pane, a column) in which contents replace each other, like
+-- LeftPaneHost / RightPaneHost in camelot CharacterFrame.xml. A content is built once, on
+-- first show, then only shown or hidden; nothing is recomputed.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -51,244 +9,217 @@ _G.ForeverUI = ForeverUI
 local Panes = {}
 ForeverUI.Panes = Panes
 
-local hotes = {}        -- nom -> { cadre, contenus, groupe, page, montre }
-local ordreHotes = {}
+local hosts = {}        -- name -> host (frame, contents, pages, furniture, group, current)
+local hostOrder = {}
 local L = ForeverUI.L
 
--- --------------------------------------------------------------- les hotes
+-- ---------------------------------------------------------------- hosts
 
--- Declarer un hote. Le cadre existe deja : la bibliotheque ne le cree pas,
--- elle ne fait que savoir ou les contenus vont.
-function Panes.NewHost(nom, cadre)
-	local hote = hotes[nom]
-	if not hote then
-		hote = { nom = nom, contenus = {}, ordre = {}, pages = {},
-		         mobilier = {}, montre = true }
-		hotes[nom] = hote
-		ordreHotes[#ordreHotes + 1] = nom
+-- Declares a host on an existing frame; the library only records where contents go.
+function Panes.NewHost(name, frame)
+	local host = hosts[name]
+	if not host then
+		host = { name = name, contents = {}, order = {}, pages = {},
+		         furniture = {}, displayed = true }
+		hosts[name] = host
+		hostOrder[#hostOrder + 1] = name
 	end
-	hote.cadre = cadre
-	return hote
+	host.frame = frame
+	return host
 end
 
-function Panes.Host(nom)
-	local hote = hotes[nom]
-	return hote and hote.cadre
-end
+-- ------------------------------------------------------------ contents
 
--- ---------------------------------------------------------- les contenus
-
--- def = { hote, groupe, id, construire }
---
--- construire(hoteCadre) est appelee UNE fois, a la premiere ouverture. Elle
--- rend, dans l'ordre : la racine -- un cadre a nous, ou nil -- et la liste
--- des cadres du client que ce contenu possede.
+-- def = { host, group, id, build }: group is the screen a tab opens (it sets every host);
+-- id names the page. Pages of the same host and group replace each other.
+-- build(hostFrame) runs once, on first show, and returns our root frame (or nil) and the
+-- list of client frames the content owns. Client frames are not reparented (they would
+-- lose their level and strata), so they are shown and hidden with the root.
 function Panes.Register(def)
-	local hote = hotes[def.hote]
-	if not hote then
-		error(ForeverUI.L.PANES_ERROR_UNKNOWN_HOST .. tostring(def.hote))
+	local host = hosts[def.host]
+	if not host then
+		error(ForeverUI.L.PANES_ERROR_UNKNOWN_HOST .. tostring(def.host))
 	end
 
-	local contenu = {
+	local content = {
 		id = def.id,
-		groupe = def.groupe,
-		construire = def.construire,
-		hote = hote,
-		bati = false,
-		cadres = {},
+		group = def.group,
+		build = def.build,
+		host = host,
+		built = false,
+		frames = {},
 	}
-	hote.contenus[def.id] = contenu
-	hote.ordre[#hote.ordre + 1] = def.id
+	host.contents[def.id] = content
+	host.order[#host.order + 1] = def.id
 
-	-- La premiere page declaree pour un groupe en devient la page par defaut.
-	if hote.pages[def.groupe] == nil then
-		hote.pages[def.groupe] = def.id
+	-- The first page declared for a group becomes its default page.
+	if host.pages[def.group] == nil then
+		host.pages[def.group] = def.id
 	end
-	return contenu
+	return content
 end
 
-local function batir(contenu)
-	if contenu.bati then
+local function assemble(content)
+	if content.built then
 		return
 	end
-	contenu.bati = true                     -- avant l'appel : pas de boucle
+	content.built = true                     -- set before the call: no re-entry
 
-	if contenu.construire then
-		local racine, cadres = contenu.construire(contenu.hote.cadre)
-		contenu.racine = racine
-		contenu.cadres = cadres or {}
+	if content.build then
+		local root, frames = content.build(content.host.frame)
+		content.root = root
+		content.frames = frames or {}
 	end
 end
 
--- Un contenu possede aussi des cadres du client, declares apres coup : un
--- ecran peut en decouvrir a l'usage, quand le client les cree tard.
-function Panes.Own(hote, id, cadre)
-	local h = hotes[hote]
-	local contenu = h and h.contenus[id]
-	if not contenu or not cadre then
+-- Furniture: frames a host shows for a group whatever the page (stone band, page tabs),
+-- like camelot UpdateRightPaneHeader. Can be called several times; frames add up.
+function Panes.Furniture(name, group, frames)
+	local host = hosts[name]
+	if not host then
 		return
 	end
-	for _, connu in ipairs(contenu.cadres) do
-		if connu == cadre then
-			return
-		end
-	end
-	contenu.cadres[#contenu.cadres + 1] = cadre
-end
-
--- Le mobilier d'un groupe. Appelable plusieurs fois : les cadres s'ajoutent.
-function Panes.Furniture(nom, groupe, cadres)
-	local hote = hotes[nom]
-	if not hote then
-		return
-	end
-	local liste = hote.mobilier[groupe] or {}
-	hote.mobilier[groupe] = liste
-	for _, cadre in ipairs(cadres or {}) do
-		if cadre then
-			liste[#liste + 1] = cadre
+	local list = host.furniture[group] or {}
+	host.furniture[group] = list
+	for _, frame in ipairs(frames or {}) do
+		if frame then
+			list[#list + 1] = frame
 		end
 	end
 end
 
-local function poser(contenu, visible)
+-- Shows or hides a content and the client frames it owns; builds it on first show
+local function place(content, visible)
 	if visible then
-		batir(contenu)
-	elseif not contenu.bati then
-		-- Jamais ouvert, donc rien a masquer : on ne le batit pas pour cela.
+		assemble(content)
+	elseif not content.built then
+		-- Never shown, so nothing to hide: do not build it just for that.
 		return
 	end
 
-	if contenu.racine then
-		if visible then contenu.racine:Show() else contenu.racine:Hide() end
+	if content.root then
+		if visible then content.root:Show() else content.root:Hide() end
 	end
-	for _, cadre in ipairs(contenu.cadres) do
-		if cadre and cadre.Show then
-			if visible then cadre:Show() else cadre:Hide() end
+	for _, frame in ipairs(content.frames) do
+		if frame and frame.Show then
+			if visible then frame:Show() else frame:Hide() end
 		end
 	end
 end
 
--- ------------------------------------------------------------ l'affichage
+-- ------------------------------------------------------------- display
 
-local function appliquer(hote)
-	local voulu = hote.montre and hote.pages[hote.groupe or ""] or nil
+-- Applies a host's group and page: shows the wanted content and furniture, hides the rest
+local function apply(host)
+	local wanted = host.displayed and host.pages[host.group or ""] or nil
 
-	for _, id in ipairs(hote.ordre) do
-		poser(hote.contenus[id], id == voulu)
+	for _, id in ipairs(host.order) do
+		place(host.contents[id], id == wanted)
 	end
-	hote.actuel = voulu
+	host.current = wanted
 
-	-- LE MOBILIER. On masque tout ce qui est declare, puis on remontre celui
-	-- du groupe courant : un meuble partage par deux groupes ne depend ainsi
-	-- d'aucun ordre de parcours.
-	local actifs = {}
-	local sien = hote.mobilier[hote.groupe or ""]
-	if hote.montre and voulu and sien then
-		for _, cadre in ipairs(sien) do
-			actifs[cadre] = true
+	-- Furniture: hide everything declared, then show the current group's, so a frame shared by
+	-- two groups does not depend on the loop order.
+	local activeFrames = {}
+	local ownScreen = host.furniture[host.group or ""]
+	if host.displayed and wanted and ownScreen then
+		for _, frame in ipairs(ownScreen) do
+			activeFrames[frame] = true
 		end
 	end
-	for _, liste in pairs(hote.mobilier) do
-		for _, cadre in ipairs(liste) do
-			if cadre and cadre.Hide and not actifs[cadre] then
-				cadre:Hide()
+	for _, list in pairs(host.furniture) do
+		for _, frame in ipairs(list) do
+			if frame and frame.Hide and not activeFrames[frame] then
+				frame:Hide()
 			end
 		end
 	end
-	for cadre in pairs(actifs) do
-		if cadre.Show then
-			cadre:Show()
+	for frame in pairs(activeFrames) do
+		if frame.Show then
+			frame:Show()
 		end
 	end
 
-	-- UN HOTE SANS CONTENU NE S'AFFICHE PAS. C'est ce qui empeche un volet
-	-- droit vide -- et son fond, et sa bande de pierre -- de rester a
-	-- l'ecran sur un onglet qui n'a rien a y mettre.
-	if hote.cadre then
-		local utile = hote.montre and voulu ~= nil
-		if utile then hote.cadre:Show() else hote.cadre:Hide() end
+	-- A host with no content is hidden, so an empty right pane (with its background and stone
+	-- band) does not stay on a tab that has nothing to put there.
+	if host.frame then
+		local needed = host.displayed and wanted ~= nil
+		if needed then host.frame:Show() else host.frame:Hide() end
 	end
 end
 
--- Ouvrir un groupe : un ecran entier, tous les hotes a la fois.
-function Panes.ShowGroup(groupe)
-	for _, nom in ipairs(ordreHotes) do
-		local hote = hotes[nom]
-		hote.groupe = groupe
-		appliquer(hote)
+-- Opens a group: a whole screen, all hosts at once.
+function Panes.ShowGroup(group)
+	for _, name in ipairs(hostOrder) do
+		local host = hosts[name]
+		host.group = group
+		apply(host)
 	end
-	Panes.groupe = groupe
+	Panes.group = group
 end
 
 function Panes.CurrentGroup()
-	return Panes.groupe
+	return Panes.group
 end
 
--- Changer de page dans un hote, sans toucher au groupe : c'est ce que font
--- deux boutons qui se partagent la meme surface.
-function Panes.ShowPage(nom, id)
-	local hote = hotes[nom]
-	if not hote or not hote.contenus[id] then
+-- Switches the page of a host without changing the group (two buttons sharing one surface).
+function Panes.ShowPage(name, id)
+	local host = hosts[name]
+	if not host or not host.contents[id] then
 		return
 	end
-	hote.pages[hote.groupe or ""] = id
-	appliquer(hote)
+	host.pages[host.group or ""] = id
+	apply(host)
 end
 
-function Panes.CurrentPage(nom)
-	local hote = hotes[nom]
-	return hote and hote.actuel
+function Panes.CurrentPage(name)
+	local host = hosts[name]
+	return host and host.current
 end
 
--- Masquer un hote entier -- le repli d'un volet. Le groupe et la page
--- choisie sont conserves : deplier les retrouve.
-function Panes.SetHostShown(nom, etat)
-	local hote = hotes[nom]
-	if not hote then
+-- Hides a whole host (a collapsed pane). The group and the chosen page are kept for when it
+-- is expanded again.
+function Panes.SetHostShown(name, state)
+	local host = hosts[name]
+	if not host then
 		return
 	end
-	hote.montre = etat and true or false
-	appliquer(hote)
+	host.displayed = state and true or false
+	apply(host)
 end
 
-function Panes.IsHostShown(nom)
-	local hote = hotes[nom]
-	return hote ~= nil and hote.montre and hote.actuel ~= nil
+-- Tells whether a host has something to show for this group, without building anything
+-- (e.g. whether the collapse button makes sense).
+function Panes.HasContent(name, group)
+	local host = hosts[name]
+	return host ~= nil and host.pages[group or host.group or ""] ~= nil
 end
 
--- Un hote a-t-il quelque chose a montrer pour ce groupe ? Repond sans rien
--- batir : c'est ce qui decide, par exemple, si le bouton de repli a un sens.
-function Panes.HasContent(nom, groupe)
-	local hote = hotes[nom]
-	return hote ~= nil and hote.pages[groupe or hote.groupe or ""] ~= nil
-end
-
--- Reposer l'etat courant. A appeler quand un contenu vient d'etre declare
--- apres l'ouverture du groupe, jamais dans une boucle d'affichage.
+-- Re-applies the current state. Call it when a content is registered after its group was
+-- opened, never from a display loop.
 function Panes.Refresh()
-	for _, nom in ipairs(ordreHotes) do
-		appliquer(hotes[nom])
+	for _, name in ipairs(hostOrder) do
+		apply(hosts[name])
 	end
 end
 
--- TEMOIN. Ce que chaque hote montre, et ce qu'il possede.
+-- Debug report: what each host shows and owns.
 function Panes.Report()
-	local lignes = {}
-	for _, nom in ipairs(ordreHotes) do
-		local hote = hotes[nom]
+	local rows = {}
+	for _, name in ipairs(hostOrder) do
+		local host = hosts[name]
 		local pages = {}
-		for _, id in ipairs(hote.ordre) do
-			local contenu = hote.contenus[id]
-			if contenu.groupe == hote.groupe then
+		for _, id in ipairs(host.order) do
+			local content = host.contents[id]
+			if content.group == host.group then
 				pages[#pages + 1] = string.format(L.PANES_REPORT_PAGE, id,
-					#contenu.cadres, contenu.bati and "" or L.PANES_REPORT_NEVER_BUILT)
+					#content.frames, content.built and "" or L.PANES_REPORT_NEVER_BUILT)
 			end
 		end
-		lignes[#lignes + 1] = string.format(
+		rows[#rows + 1] = string.format(
 			L.PANES_REPORT_LINE,
-			nom, tostring(hote.groupe), tostring(hote.actuel),
-			tostring(hote.montre), table.concat(pages, ", "))
+			name, tostring(host.group), tostring(host.current),
+			tostring(host.displayed), table.concat(pages, ", "))
 	end
-	return lignes
+	return rows
 end

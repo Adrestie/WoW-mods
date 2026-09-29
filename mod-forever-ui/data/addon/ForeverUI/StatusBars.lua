@@ -1,62 +1,34 @@
--- ForeverUI : les deux barres d'etat du bas -- experience et reputation.
---
--- RELEVE DES SOURCES -- tout vient du code extrait de camelot.
---
--- mainline/StatusTrackingBar.xml, mainline/StatusTrackingBarTemplate.xml
---   Les deux barres sont le MEME objet, monte deux fois dans deux conteneurs :
---   fond UI-HUD-ExperienceBar-Background, remplissage
---   UI-HUD-ExperienceBar-Fill-<quoi>, encadrement UI-HUD-ExperienceBar-Frame
---   par-dessus, et un texte centre. C'est pourquoi ce fichier les construit
---   toutes les deux de la meme facon.
---
--- camelot/StatusTrackingBarConstants.lua
---   Les deux conteneurs sont distants de STATUS_BAR_2_ANCHOR_OFFSET_Y = 17,
---   soit exactement une hauteur de conteneur : les deux barres se touchent.
---   Ici l'image camelot fait 13 de haut, l'ecart est donc de 13.
---
---   ORDRE : OBSERVE EN JEU, et non deduit du code. Les priorites du fichier
---   (Experience 0, Reputation 2) triees par ordre decroissant mettraient la
---   reputation dans le conteneur du bas et l'experience au-dessus ; le jeu
---   montre l'inverse -- la reputation en haut, l'experience en dessous.
---   Comme pour la lueur de menace du cadre joueur, ce que le client affiche
---   prime sur la lecture de la fonction.
---
--- shared/ReputationBar.lua
---   le remplissage depend de l'attitude : rouge pour hai et hostile, orange
---   pour inamical, jaune pour neutre, vert a partir d'amical. Ce sont les
---   memes tranches que FACTION_BAR_COLORS de 3.3.5.
---
--- DONNEES 3.3.5
---   experience : UnitXP, UnitXPMax, GetXPExhaustion ; la barre disparait au
---                niveau maximum, comme celle du client -- et la reputation
---                DESCEND a sa place (StatusTrackingBarManager de camelot : les
---                barres montrees remplissent les conteneurs depuis le bas ;
---                demande du 2026-09-28).
---   reputation : GetWatchedFactionInfo() rend nom, attitude, min, max, valeur ;
---                la barre disparait quand aucune faction n'est suivie.
---
--- PLACEMENT. Les deux barres ont la longueur de la rangee du bas -- barre
--- d'action, micro-menu et sacs alignes -- et se posent sur son point le plus
--- haut, mesure par BottomBar (ForeverUI.BottomRow). Elles restent deplacables
--- separement, comme tout le reste.
+-- Bottom status bars: experience and reputation.
+-- mainline/StatusTrackingBarTemplate.xml: both bars are the same object (background, fill,
+-- frame over it, centered text), so both are built the same way.
+-- camelot/StatusTrackingBarConstants.lua: the containers are one bar height apart, so the
+-- bars touch; camelot's image is 13 high. The game shows reputation above experience,
+-- although the priorities (Experience 0, Reputation 2) sorted descending suggest the reverse.
+-- Reputation fill color by standing (shared/ReputationBar.lua), same ranges as 3.3.5
+-- FACTION_BAR_COLORS.
+-- The experience bar hides at max level and reputation moves down to its place (camelot
+-- StatusTrackingBarManager fills containers from the bottom). Reputation hides when no
+-- faction is watched.
+-- Both bars span the bottom row (action bar, micro menu, bags) and sit on its top, measured
+-- by BottomBar (ForeverUI.BottomRow). Each stays movable.
 
-local HAUTEUR = 13   -- hauteur de l'image camelot (1020 x 13)
+local HEIGHT = 13   -- camelot image height (1020 x 13)
 local L = ForeverUI.L
 
 local ATLAS_REPUTATION = {
-	"ui-hud-experiencebar-fill-reputation-faction-red-camelot",     -- hai
+	"ui-hud-experiencebar-fill-reputation-faction-red-camelot",     -- hated
 	"ui-hud-experiencebar-fill-reputation-faction-red-camelot",     -- hostile
-	"ui-hud-experiencebar-fill-reputation-faction-orange-camelot",  -- inamical
-	"ui-hud-experiencebar-fill-reputation-faction-yellow-camelot",  -- neutre
-	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- amical
-	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- honore
-	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- revere
-	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- exalte
+	"ui-hud-experiencebar-fill-reputation-faction-orange-camelot",  -- unfriendly
+	"ui-hud-experiencebar-fill-reputation-faction-yellow-camelot",  -- neutral
+	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- friendly
+	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- honored
+	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- revered
+	"ui-hud-experiencebar-fill-reputation-faction-green-camelot",   -- exalted
 }
 
--- Rogner un remplissage a la fraction voulue. L'image a des bouts arrondis :
--- on la coupe a droite, ce qui donne le bord franc d'un remplissage partiel.
-local function remplir(texture, atlas, fraction, largeur)
+-- Crops a fill to the fraction. The image has rounded ends: cutting it on the right gives
+-- the straight edge of a partial fill. width: bar width at 100 %.
+local function populate(texture, atlas, fraction, width)
 	local e = atlas and ForeverUI.AtlasEntry(atlas)
 	if not e or not fraction or fraction ~= fraction or fraction <= 0 then
 		texture:Hide()
@@ -67,7 +39,7 @@ local function remplir(texture, atlas, fraction, largeur)
 		fraction = 1
 	end
 
-	local w = largeur * fraction
+	local w = width * fraction
 	if w < 1 then
 		texture:Hide()
 		return
@@ -79,186 +51,181 @@ local function remplir(texture, atlas, fraction, largeur)
 	texture:Show()
 end
 
-local function creerBarre(nom)
-	local barre = CreateFrame("Frame", nom, UIParent)
-	barre:SetHeight(HAUTEUR)
-	barre:EnableMouse(true)
+local function createBar(name)
+	local bar = CreateFrame("Frame", name, UIParent)
+	bar:SetHeight(HEIGHT)
+	bar:EnableMouse(true)
 
-	local fond = barre:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, "ui-hud-experiencebar-background-camelot", true)
-	fond:SetAllPoints(barre)
+	local background = bar:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, "ui-hud-experiencebar-background-camelot", true)
+	background:SetAllPoints(bar)
 
-	-- La part reposee se voit DERRIERE l'acquis : elle est dans une couche
-	-- inferieure et part du meme bord.
-	local repos = barre:CreateTexture(nil, "BORDER")
-	repos:SetPoint("LEFT", barre, "LEFT", 0, 0)
-	repos:SetHeight(HAUTEUR)
-	repos:Hide()
+	-- Rested part shows behind the earned part: lower layer, same left edge.
+	local rested = bar:CreateTexture(nil, "BORDER")
+	rested:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	rested:SetHeight(HEIGHT)
+	rested:Hide()
 
-	local remplissage = barre:CreateTexture(nil, "ARTWORK")
-	remplissage:SetPoint("LEFT", barre, "LEFT", 0, 0)
-	remplissage:SetHeight(HAUTEUR)
-	remplissage:Hide()
+	local fill = bar:CreateTexture(nil, "ARTWORK")
+	fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	fill:SetHeight(HEIGHT)
+	fill:Hide()
 
-	local cadre = barre:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(cadre, "ui-hud-experiencebar-frame-camelot", true)
-	cadre:SetAllPoints(barre)
+	local frame = bar:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(frame, "ui-hud-experiencebar-frame-camelot", true)
+	frame:SetAllPoints(bar)
 
-	local texte = barre:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	texte:SetPoint("CENTER")
-	texte:Hide()
+	local text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	text:SetPoint("CENTER")
+	text:Hide()
 
-	barre.fond, barre.repos, barre.remplissage, barre.cadre, barre.texte =
-		fond, repos, remplissage, cadre, texte
+	bar.background, bar.rested, bar.fill, bar.frame, bar.text =
+		background, rested, fill, frame, text
 
-	barre:SetScript("OnEnter", function(self)
-		self.texte:Show()
+	bar:SetScript("OnEnter", function(self)
+		self.text:Show()
 	end)
-	barre:SetScript("OnLeave", function(self)
-		self.texte:Hide()
+	bar:SetScript("OnLeave", function(self)
+		self.text:Hide()
 	end)
 
-	return barre
+	return bar
 end
 
-local experience = creerBarre("ForeverUIExperienceBar")
-local reputation = creerBarre("ForeverUIReputationBar")
+local experience = createBar("ForeverUIExperienceBar")
+local reputation = createBar("ForeverUIReputationBar")
 
--- la reputation : juste au-dessus de l'experience, ou a sa place quand
--- l'experience n'est pas montree (niveau maximum)
-local function placerReputation()
-	local rangee = ForeverUI.BottomRow
-	if not rangee then
+-- Reputation: just above experience, or in its place when experience is hidden (max level)
+local function placeReputation()
+	local rowLine = ForeverUI.BottomRow
+	if not rowLine then
 		return
 	end
-	local centre = (rangee.gauche + rangee.droite) / 2
-	local y = experience:IsShown() and rangee.haut + HAUTEUR or rangee.haut
-	ForeverUI.Layout.SetDefaults("reputationbar", "BOTTOM", "BOTTOM", centre, y)
+	local center = (rowLine.left + rowLine.right) / 2
+	local y = experience:IsShown() and rowLine.top + HEIGHT or rowLine.top
+	ForeverUI.Layout.SetDefaults("reputationbar", "BOTTOM", "BOTTOM", center, y)
 end
 
--- ------------------------------------------------------------ experience
-local function majExperience()
+-- ---------- Experience
+local function updateExperience()
 	local maximum = UnitXPMax("player")
-	local niveau = UnitLevel("player")
-	local maxNiveau = MAX_PLAYER_LEVEL or 80
+	local level = UnitLevel("player")
+	local maxLevel = MAX_PLAYER_LEVEL or 80
 
-	if not maximum or maximum <= 0 or (niveau and niveau >= maxNiveau) then
+	if not maximum or maximum <= 0 or (level and level >= maxLevel) then
 		experience:Hide()
-		placerReputation()
+		placeReputation()
 		return
 	end
 
 	experience:Show()
-	placerReputation()
+	placeReputation()
 
-	local largeur = experience:GetWidth()
-	local acquis = UnitXP("player")
-	local repose = (GetXPExhaustion and GetXPExhaustion()) or 0
-	local fraction = acquis / maximum
+	local width = experience:GetWidth()
+	local earned = UnitXP("player")
+	local rested = (GetXPExhaustion and GetXPExhaustion()) or 0
+	local fraction = earned / maximum
 
-	remplir(experience.repos, "ui-hud-experiencebar-fill-rested-camelot",
-		(acquis + repose) / maximum, largeur)
-	remplir(experience.remplissage, "ui-hud-experiencebar-fill-experience-camelot",
-		fraction, largeur)
+	populate(experience.rested, "ui-hud-experiencebar-fill-rested-camelot",
+		(earned + rested) / maximum, width)
+	populate(experience.fill, "ui-hud-experiencebar-fill-experience-camelot",
+		fraction, width)
 
-	experience.texte:SetText(string.format("%d / %d  (%d%%)", acquis, maximum,
+	experience.text:SetText(string.format("%d / %d  (%d%%)", earned, maximum,
 		math.floor(fraction * 100)))
 end
 
--- ------------------------------------------------------------ reputation
-local function majReputation()
-	local nom, attitude, minimum, maximum, valeur = GetWatchedFactionInfo()
-	if not nom or not maximum or maximum <= minimum then
+-- ---------- Reputation
+local function updateReputation()
+	local name, standingId, minimum, maximum, value = GetWatchedFactionInfo()
+	if not name or not maximum or maximum <= minimum then
 		reputation:Hide()
 		return
 	end
 
 	reputation:Show()
 
-	local etendue = maximum - minimum
-	local acquis = valeur - minimum
-	local fraction = acquis / etendue
+	local span = maximum - minimum
+	local earned = value - minimum
+	local fraction = earned / span
 
-	remplir(reputation.remplissage, ATLAS_REPUTATION[attitude] or ATLAS_REPUTATION[4],
+	populate(reputation.fill, ATLAS_REPUTATION[standingId] or ATLAS_REPUTATION[4],
 		fraction, reputation:GetWidth())
 
-	reputation.texte:SetText(string.format("%s  %d / %d", nom, acquis, etendue))
+	reputation.text:SetText(string.format("%s  %d / %d", name, earned, span))
 end
 
--- ------------------------------------------------------------- placement
--- Les deux barres font la longueur de la rangee -- barre d'action, micro-menu
--- et sacs alignes -- et se touchent : l'experience pose sur la rangee, la
--- reputation juste au-dessus (ou sur la rangee, sans experience).
-local function poser()
-	local rangee = ForeverUI.BottomRow
-	if not rangee then
+-- ---------- Placement
+-- Both bars span the row (action bar, micro menu, bags) and touch: experience on the row,
+-- reputation just above (or on the row without experience).
+local function place()
+	local rowLine = ForeverUI.BottomRow
+	if not rowLine then
 		return
 	end
 
-	local largeur = rangee.droite - rangee.gauche
-	local centre = (rangee.gauche + rangee.droite) / 2
+	local width = rowLine.right - rowLine.left
+	local center = (rowLine.left + rowLine.right) / 2
 
-	experience:SetWidth(largeur)
-	reputation:SetWidth(largeur)
+	experience:SetWidth(width)
+	reputation:SetWidth(width)
 
-	ForeverUI.Layout.SetDefaults("experiencebar", "BOTTOM", "BOTTOM", centre, rangee.haut)
-	placerReputation()
+	ForeverUI.Layout.SetDefaults("experiencebar", "BOTTOM", "BOTTOM", center, rowLine.top)
+	placeReputation()
 end
 
-local veilleur = CreateFrame("Frame")
-veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
-veilleur:RegisterEvent("PLAYER_XP_UPDATE")
-veilleur:RegisterEvent("PLAYER_LEVEL_UP")
-veilleur:RegisterEvent("UPDATE_EXHAUSTION")
-veilleur:RegisterEvent("UPDATE_FACTION")
-veilleur:SetScript("OnEvent", function(_self, event)
+local listener = CreateFrame("Frame")
+listener:RegisterEvent("PLAYER_ENTERING_WORLD")
+listener:RegisterEvent("PLAYER_XP_UPDATE")
+listener:RegisterEvent("PLAYER_LEVEL_UP")
+listener:RegisterEvent("UPDATE_EXHAUSTION")
+listener:RegisterEvent("UPDATE_FACTION")
+listener:SetScript("OnEvent", function(_self, event)
 	if event == "PLAYER_ENTERING_WORLD" then
-		-- Les barres d'origine : celle d'experience, la marque de repos, et
-		-- celle de reputation, qui se replace toute seule a chaque mise a jour.
+		-- The client's bars: experience, rested tick, and reputation, which re-places itself on
+		-- every update.
 		ForeverUI.Suppress(MainMenuExpBar)
 		ForeverUI.Suppress(ExhaustionTick)
 		ForeverUI.Suppress(ReputationWatchBar)
-		poser()
+		place()
 	end
-	majExperience()
-	majReputation()
+	updateExperience()
+	updateReputation()
 end)
 
 ForeverUI.Layout.Register(experience, "experiencebar", L.STATUSBARS_EDIT_LABEL_EXPERIENCE, "BOTTOM", "BOTTOM", 0, 54)
 ForeverUI.Layout.Register(reputation, "reputationbar", L.STATUSBARS_EDIT_LABEL_REPUTATION, "BOTTOM", "BOTTOM", 0, 67)
-poser()
-majExperience()
-majReputation()
+place()
+updateExperience()
+updateReputation()
 
-ForeverUI.ExperienceBar = experience
 ForeverUI.ReputationBar = reputation
 ForeverUI.StatusBarsUpdate = function()
-	majExperience()
-	majReputation()
+	updateExperience()
+	updateReputation()
 end
--- la rangee a change de largeur (BottomBar.lua : un micro-bouton ajoute)
-ForeverUI.StatusBarsPoser = function()
-	poser()
-	majExperience()
-	majReputation()
+-- the row changed width (BottomBar.lua: a micro button was added)
+ForeverUI.StatusBarsLayout = function()
+	place()
+	updateExperience()
+	updateReputation()
 end
 
 ForeverUI.StatusBarsDebug = function()
-	local rangee = ForeverUI.BottomRow or {}
+	local rowLine = ForeverUI.BottomRow or {}
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"|cff66ccffForeverUI|r " .. L.STATUSBARS_DEBUG,
-		rangee.gauche or 0, rangee.droite or 0, tostring(rangee.haut),
+		rowLine.left or 0, rowLine.right or 0, tostring(rowLine.top),
 		experience:GetWidth(),
 		tostring(experience:IsShown()), tostring(select(5, experience:GetPoint(1))),
 		tostring(reputation:IsShown()), tostring(select(5, reputation:GetPoint(1)))))
-	-- ce qui decide de la place de la reputation : le niveau, le niveau
-	-- maximum que le client annonce, l'XP a gagner, la place par defaut, une
-	-- place retenue
-	local systeme = ForeverUI.Layout.systems["reputationbar"]
-	local retenue = ForeverUIDB and ForeverUIDB.positions and ForeverUIDB.positions["reputationbar"]
+	-- what decides the reputation's place: level, the client's max level, XP to earn, default
+	-- place, saved place
+	local system = ForeverUI.Layout.systems["reputationbar"]
+	local saved = ForeverUIDB and ForeverUIDB.positions and ForeverUIDB.positions["reputationbar"]
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(
 		"|cff66ccffForeverUI|r " .. L.STATUSBARS_DEBUG_STATE,
 		tostring(UnitLevel("player")), tostring(MAX_PLAYER_LEVEL), tostring(UnitXPMax("player")),
-		tostring(systeme and systeme.defaults and systeme.defaults.y), tostring(retenue and retenue.y),
+		tostring(system and system.defaults and system.defaults.y), tostring(saved and saved.y),
 		tostring(reputation.IsUserPlaced and reputation:IsUserPlaced())))
 end

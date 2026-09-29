@@ -1,230 +1,121 @@
--- ForeverUI : la minimap.
---
--- RELEVE DES SOURCES -- blizzard_minimap de camelot, lu en entier avant
--- d'ecrire une ligne.
---
--- blizzard_minimap.toc
---   `[Family]\Minimap.lua` et `[Family]\Minimap.xml` se chargent pour TOUS
---   les types de jeu, et camelot appartient a la famille mainline : le
---   gabarit de la minimap de camelot EST celui de mainline. camelot n'y
---   ajoute que deux fichiers, `[Game]\Skin.lua` et `[Game]\Diel.lua`.
---
--- camelot/Skin.lua -- ce qui change, et c'est peu :
---   le cadre devient `UI-HUD-Minimap-Frame`, le masque
---   `ui-hud-minimap-frame-generic-mask`, et le CONTENEUR, le fond et la
---   texture de boussole prennent LA TAILLE DE L'ATLAS -- 253 x 253 dans la
---   variante c60, la ou mainline en donne 215 x 226. La carte, elle, garde
---   ses 198 du gabarit : Skin.lua n'y touche pas.
---
--- camelot/Diel.lua -- l'anneau du cycle jour/nuit :
---   bord `UI-HUD-Minimap-Frame-Cycle`, astre `UI-HUD-Minimap-DayCycle` ou
---   `UI-HUD-Minimap-NightCycle`, pose au CENTRE du cluster decale de
---   (63, 72), niveau de cadre 5.
---
--- mainline/Minimap.xml -- le gabarit, releve au chiffre pres :
---   MinimapCluster        256 x 256, TOPRIGHT, marges de souris 30/10/0/30
---     BorderTop           175 x 16 en TOP (15, -4), decoupe en neuf sur le
---                         kit `ui-hud-minimap-button`
---     ZoneTextButton      135 x 12, a GAUCHE du BorderTop (4, 0)
---       MinimapZoneText   130 x 12, CENTER (0, 1), GameFontNormal, a gauche
---     Tracking            17 x 17, sa DROITE sur la GAUCHE du BorderTop (-2)
---       Button            13 x 14 au centre, jumelles up/down/mouseover
---     IndicatorFrame      son TOPRIGHT sur le BOTTOMRIGHT du suivi
---       MailFrame         20 x 15, icone `ui-hud-minimap-mail-up`
---     MinimapContainer    215 x 226 -- donc 253 x 253 apres Skin.lua
---       Minimap           198 x 198 au centre
---         ZoomHitArea     40 x 40, CENTER (77, -77)
---         ZoomIn          17 x 17, CENTER (88, -68), MASQUE au repos
---         ZoomOut         17 x  9, CENTER (72, -84), MASQUE au repos
---         MinimapBackdrop 215 x 226 -- donc 253 -- centre sur la carte
---       PlayerCoords      90 x 10, sous la carte (0, -18)
---     InstanceDifficulty  TOPRIGHT du BorderTop (0, -15)
---
--- mainline/GameTime.xml -- le calendrier, que le .toc charge aussi pour
--- camelot (`[Family]\GameTime.xml`, famille mainline) :
---   GameTimeFrame         19 x 18, son TOPLEFT sur le TOPRIGHT du BorderTop
---                         (1, 0), images `ui-hud-calendar-<jour>-up`, -down,
---                         -mouseover. GameTimeFrame_SetDate n'ecrit PLUS le
---                         jour en texte : il est dans l'image.
---
--- blizzard_timemanager/mainline/Blizzard_TimeManager.xml -- l'horloge :
---   TimeManagerClockButton 40 x 16, TOPRIGHT du BorderTop (-4, 0), marges de
---                         souris 8/5/3/3, AUCUN fond ; le texte
---                         TimeManagerClockTicker en WhiteNormalNumberFont,
---                         CENTER (3, 1).
---
--- mainline/Minimap.lua, MinimapPlayerCoordsMixin -- les coordonnees :
---   relues toutes les 0,1 s, format MINIMAP_PLAYER_COORDS_INTEGER (`%d, %d`)
---   ou MINIMAP_PLAYER_COORDS (`%.1f, %.1f`) selon le CVar coordsByTenths.
---   Les deux chaines sont relevees dans la table GlobalStrings du client
---   camelot : 3.3.5 ne les a pas.
---
--- mainline/Minimap.lua -- le seul comportement qui ne se lit pas dans le XML :
---   les deux boutons de zoom sont MASQUES tant que la souris n'est ni sur la
---   carte, ni sur eux, ni sur la ZoomHitArea (MinimapMixin:OnEnter /
---   :OnLeave), et ils s'eteignent aux deux bouts de la course de zoom.
---
--- CE QUE 3.3.5 DONNE, ET COMMENT ON S'EN SERT.
---
--- Contrairement aux ecrans de la feuille de personnage, on NE REFAIT PAS la
--- carte : `Minimap` est un type de cadre a part que seul le client sait
--- fabriquer, et c'est lui qui dessine le terrain, les points et la fleche du
--- joueur. On le garde donc, on le retaille, on le masque, et on remplace tout
--- ce qui l'entoure. C'est l'exception que la regle du coeur d'abord commande.
---
--- LE MASQUE. `Minimap:SetMaskTexture` existe en 3.3.5 -- releve dans Wow.exe,
--- avec GetZoom, GetZoomLevels, SetBlipTexture -- mais il y prend un CHEMIN de
--- fichier, pas un nom d'atlas. La feuille du masque entre donc telle quelle
--- dans patch-Z, et c'est son chemin qu'on donne.
---
--- CE QU'IL FAUT ETOUFFER, et pourquoi le masquer ne suffit pas :
---   MinimapBorderTop      la barre du haut, texture du cluster
---   MinimapBorder         l'anneau dore, texture du fond
---   MinimapNorthTag       la fleche du nord
---   MinimapCompassTexture l'anneau de boussole, 365 x 365 -- ATTENTION, ce
---                         nom existe DES DEUX COTES : chez camelot c'est le
---                         cadre lui-meme, ici c'est la boussole a jeter
---   Minimap_UpdateRotationSetting REMONTRE les deux dernieres a chaque bascule
---   du CVar rotateMinimap, et MiniMapTracking_Update REND SON FICHIER a
---   l'icone de suivi. On leur retire donc l'image ET l'opacite, pas seulement
---   la visibilite.
---
--- LE CYCLE JOUR/NUIT est le SEUL chiffre de cet ecran que le client ne peut
--- pas confirmer : camelot ecoute `DIEL_CYCLE_CHANGED` et interroge
--- `C_DateAndTime.IsDayTime()`, et 3.3.5 n'a ni l'un ni l'autre. Il n'a que
--- `GetGameTime()`, l'heure du serveur. Le partage est donc le notre : jour de
--- 6 h a 18 h.
---
--- LES QUATRE BOUTONS QUE CAMELOT N'A PAS -- carte du monde, oeil du groupe,
--- champ de bataille, enregistrement -- n'ont AUCUNE place dans la source :
--- camelot les a ranges ailleurs. Les laisser ou 3.3.5 les met les
--- poserait dans le vide, leurs decalages ayant ete calcules pour une carte de
--- 140 dans un cluster de 192. On les repose donc sur l'anneau, a des angles
--- qui sont les NOTRES, et sans les rhabiller.
+-- Minimap in camelot style: mainline Minimap.xml as reskinned by camelot Skin.lua and Diel.lua.
+-- The client's Minimap frame is kept (only the client draws terrain, blips and the player
+-- arrow): it is resized, masked and scaled, and everything around it is replaced.
+-- Sizes and anchors: mainline Minimap.xml, GameTime.xml and Blizzard_TimeManager.xml.
 
 ForeverUI = ForeverUI or {}
 
--- LE CLUSTER ET SON CONTENEUR
-local CLUSTER_L, CLUSTER_H = 256, 256
-local MARGES_SOURIS = { 30, 10, 0, 30 }   -- gauche, droite, haut, bas
+-- Cluster and container. Frame 253 x 253 is the c60 atlas size (camelot Skin.lua); the map
+-- keeps 198. 3.3.5 SetMaskTexture takes a file path, not an atlas name.
+local CLUSTER_W, CLUSTER_H = 256, 256
+local MOUSE_MARGINS = { 30, 10, 0, 30 }   -- left, right, top, bottom
 
-local ATLAS_CADRE = "ui-hud-minimap-frame-c60"
-local CADRE_L, CADRE_H = 253, 253
-local CHEMIN_MASQUE = "interface\\ForeverUI\\hud\\uiminimapmaskgeneralc60"
+local ATLAS_FRAME = "ui-hud-minimap-frame-c60"
+local FRAME_W, FRAME_H = 253, 253
+local MASK_PATH = "interface\\ForeverUI\\hud\\uiminimapmaskgeneralc60"
 
-local CONTENEUR_X, CONTENEUR_Y = 10, -30
-local CARTE_COTE = 198
+local CONTAINER_X, CONTAINER_Y = 10, -30
+local MAP_SIDE = 198
 
--- L'ECHELLE DE LA CARTE. Le moteur pose les fleches des points hors de portee
--- (cadavre, quete, POI) a un rayon FIXE dans les unites de la carte -- celui
--- de la carte de 140 de Minimap.xml en 3.3.5 -- et aucune methode ne le
--- regle. Constate en jeu le 2026-09-24 avec `/fui minimap echelle` :
---   - la carte agrandie par sa TAILLE (198) : fleches A L'INTERIEUR ;
---   - un aller-retour de zoom n'y change rien ;
---   - la carte a l'echelle 1,4 et de taille 141 : fleches au bord du trou,
---     comme chez camelot, mais grossies d'autant.
--- La carte garde donc sa taille de 3.3.5 et prend l'echelle 198 / 140 : a
--- l'ecran elle fait toujours 198, et le rayon des fleches suit.
-local CARTE_CLIENT = 140
-local ECHELLE_CARTE = CARTE_COTE / CARTE_CLIENT
+-- 3.3.5 draws out-of-range arrows (corpse, quest, POI) at a fixed radius in map units, sized
+-- for its 140 px map, and no method changes it. So the map keeps size 140 and gets scale
+-- 198 / 140: it still shows 198 wide on screen, and the arrows reach its edge.
+local CLIENT_MAP = 140
+local MAP_SCALE = MAP_SIDE / CLIENT_MAP
 
--- LES IMAGES DES FLECHES, motif reduit de 140 / 198 par
--- tools/reduire_fleches.py pour annuler le grossissement. La methode de
--- chaque image est relevee dans Wow.exe (voir l'outil). La fleche de GROUPE
--- n'a aucune methode : sa version reduite REMPLACE le fichier d'origine dans
--- patch-Z (exception a la regle du prefixe, accordee le 2026-09-24).
-local FLECHES = {
-	chemin = "interface\\ForeverUI\\minimap\\",
-	{ methode = "SetStaticPOIArrowTexture", fichier = "rotating-minimaparrow" },
-	{ methode = "SetPOIArrowTexture", fichier = "rotating-minimapguidearrow" },
-	{ methode = "SetCorpsePOIArrowTexture", fichier = "rotating-minimapcorpsearrow" },
+-- Arrow images shrunk by 140 / 198 (tools/shrink_arrows.py) to undo the scale. The party arrow
+-- has no setter: its shrunk file replaces the original in patch-Z.
+local ARROWS = {
+	path = "interface\\ForeverUI\\minimap\\",
+	{ method = "SetStaticPOIArrowTexture", file = "rotating-minimaparrow" },
+	{ method = "SetPOIArrowTexture", file = "rotating-minimapguidearrow" },
+	{ method = "SetCorpsePOIArrowTexture", file = "rotating-minimapcorpsearrow" },
 }
 
--- LA BARRE DU NOM DE ZONE
-local KIT_BARRE = "ui-hud-minimap-button"
-local BARRE_L, BARRE_H = 175, 16
-local BARRE_X, BARRE_Y = 15, -4
-local ZONE_L, ZONE_H = 135, 12
+-- Zone name bar
+local BAR_KIT = "ui-hud-minimap-button"
+local BAR_W, BAR_H = 175, 16
+local BAR_X, BAR_Y = 15, -4
+local ZONE_W, ZONE_H = 135, 12
 local ZONE_X = 4
-local TEXTE_L, TEXTE_H = 130, 12
-local TEXTE_Y = 1
+local TEXT_W, TEXT_H = 130, 12
+local TEXT_Y = 1
 
--- LE SUIVI ET LE COURRIER
-local SUIVI_COTE = 17
-local SUIVI_X = -2
-local SUIVI_BOUTON_L, SUIVI_BOUTON_H = 13, 14
-local COURRIER_L, COURRIER_H = 20, 15
+-- Tracking and mail
+local TRACKING_SIDE = 17
+local TRACKING_X = -2
+local TRACKING_BUTTON_W, TRACKING_BUTTON_H = 13, 14
+local MAIL_W, MAIL_H = 20, 15
 
--- LE ZOOM
+-- Zoom (buttons hidden unless hovered)
 local ZOOM_ZONE = 40
 local ZOOM_ZONE_X, ZOOM_ZONE_Y = 77, -77
-local ZOOM_PLUS_L, ZOOM_PLUS_H = 17, 17
+local ZOOM_PLUS_W, ZOOM_PLUS_H = 17, 17
 local ZOOM_PLUS_X, ZOOM_PLUS_Y = 88, -68
-local ZOOM_MOINS_L, ZOOM_MOINS_H = 17, 9
-local ZOOM_MOINS_X, ZOOM_MOINS_Y = 72, -84
+local ZOOM_MINUS_W, ZOOM_MINUS_H = 17, 9
+local ZOOM_MINUS_X, ZOOM_MINUS_Y = 72, -84
 
--- L'ANNEAU DU CYCLE
+-- Day/night ring (camelot Diel.lua). 3.3.5 has no DIEL_CYCLE_CHANGED or IsDayTime, only the
+-- server hour: day is 6 h to 18 h.
 local ATLAS_CYCLE = "ui-hud-minimap-frame-cycle-c60"
-local ATLAS_JOUR = "ui-hud-minimap-daycycle-c60"
-local ATLAS_NUIT = "ui-hud-minimap-nightcycle-c60"
-local CYCLE_COTE = 42
-local ASTRE_COTE = 33
+local ATLAS_DAY = "ui-hud-minimap-daycycle-c60"
+local ATLAS_NIGHT = "ui-hud-minimap-nightcycle-c60"
+local CYCLE_SIDE = 42
+local ORB_SIDE = 33
 local CYCLE_X, CYCLE_Y = 63, 72
-local CYCLE_NIVEAU = 5
-local AUBE, CREPUSCULE = 6, 18
-local CYCLE_PERIODE = 60          -- une relecture de l'heure par minute
+local CYCLE_LEVEL = 5
+local DAWN, DUSK = 6, 18
+local CYCLE_PERIOD = 60          -- re-read the server hour once a minute
 
-local DIFFICULTE_Y = -15
+local DIFFICULTY_Y = -15
 
--- UNE TABLE PAR ELEMENT, et non une locale par chiffre : le Lua 5.1 du client
--- refuse plus de 60 upvalues dans une fonction, et `construire` les depassait
--- (Logs/FrameXML.log, 2026-09-24 -- le fichier entier ne se chargeait plus).
+-- One table per element rather than one local per value: Lua 5.1 allows at most 60 upvalues
+-- per function, and build() exceeded it.
 
--- LE CALENDRIER, a droite de la barre
-local CALENDRIER = { L = 19, H = 18, X = 1, ATLAS = "ui-hud-calendar-%d-%s" }
+-- Calendar, right of the bar
+local CALENDAR = { L = 19, H = 18, X = 1, ATLAS = "ui-hud-calendar-%d-%s" }
 
--- L'HORLOGE, dans la barre
-local HORLOGE = {
+-- Clock, in the bar
+local CLOCK = {
 	L = 40, H = 16, X = -4,
-	MARGES = { 8, 5, 3, 3 },
-	TEXTE_X = 3, TEXTE_Y = 1,
--- WhiteNormalNumberFont (blizzard_fonts_shared/shared/GameFontStyles.xml) :
--- NumberFont_GameNormal, FRIZQT__ de 10, ombre noire (1, -1), en blanc.
--- 3.3.5 n'a pas cet objet de police : on pose ses reglages un a un.
-	POLICE = "Fonts\\FRIZQT__.TTF", TAILLE = 10,
+	MARGINS = { 8, 5, 3, 3 },
+	TEXT_X = 3, TEXT_Y = 1,
+-- WhiteNormalNumberFont (GameFontStyles.xml): FRIZQT__ 10, white, black shadow (1, -1).
+-- 3.3.5 lacks this font object, so its settings are applied one by one.
+	FONT = "Fonts\\FRIZQT__.TTF", SIZE = 10,
 }
 
--- LES COORDONNEES, sous la carte
+-- Player coordinates under the map (camelot MinimapPlayerCoordsMixin), every 0.1 s.
+-- Formats from camelot GlobalStrings: 3.3.5 does not have them.
 local COORD = {
 	L = 90, H = 10, Y = -18,
-	PERIODE = 0.1,
-	ENTIER = "%d, %d",          -- MINIMAP_PLAYER_COORDS_INTEGER
-	DIXIEMES = "%.1f, %.1f",    -- MINIMAP_PLAYER_COORDS
+	INTERVAL = 0.1,
+	INTEGER = "%d, %d",          -- MINIMAP_PLAYER_COORDS_INTEGER
+	TENTHS = "%.1f, %.1f",    -- MINIMAP_PLAYER_COORDS
 }
 
--- LES CINQ BOUTONS DE 3.3.5, poses sur l'anneau. MESURE SUR L'ART : le trou
--- du cadre fait 185 et le metal 15 de part et d'autre, donc le milieu du
--- metal est a 100 du centre.
-local ANNEAU_RAYON = 100
-local AUTOUR = {
-	{ nom = "MiniMapWorldMapButton", angle = 180 },
-	{ nom = "MiniMapLFGFrame", angle = 215 },
-	{ nom = "MiniMapBattlefieldFrame", angle = 250 },
-	{ nom = "MiniMapRecordingButton", angle = 285 },
+-- 3.3.5 buttons camelot places elsewhere, set on the ring at our own angles: their 3.3.5
+-- offsets fit a 140 map in a 192 cluster. Radius 100 is the middle of the ring's metal
+-- (hole 185, metal 15 on each side).
+local RING_RADIUS = 100
+local RING_ITEMS = {
+	{ name = "MiniMapWorldMapButton", angle = 180 },
+	{ name = "MiniMapLFGFrame", angle = 215 },
+	{ name = "MiniMapBattlefieldFrame", angle = 250 },
+	{ name = "MiniMapRecordingButton", angle = 285 },
 }
 
 local PREFIX = "|cff66ccffForeverUI|r "
 local L = ForeverUI.L
 
-local function dire(message)
+local function say(message)
 	DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. message)
 end
 
--- ETOUFFER UNE REGION DU CLIENT. La masquer ne suffit pas : son propre code
--- la remontre, et lui rend parfois son fichier. On lui retire donc les trois
--- a la fois -- image, opacite, visibilite -- pour qu'aucun des trois chemins
--- ne la ramene.
-local function etouffer(region)
+-- Hides a client region for good. Its own code shows it again or restores its file
+-- (Minimap_UpdateRotationSetting, MiniMapTracking_Update), so texture, alpha and visibility
+-- are all cleared.
+local function suppress(region)
 	if not region then
 		return
 	end
@@ -239,175 +130,156 @@ local function etouffer(region)
 	end
 end
 
--- UN ETAT DE BOUTON SUR UN ATLAS. En 3.3.5, un bouton n'a que les etats que
--- son XML declare : MiniMapTrackingButton n'a qu'une HighlightTexture, et
--- GetNormalTexture y rend nil -- c'est ce qui arretait `construire` au
--- chargement. Et SetNormalTexture n'accepte qu'un CHEMIN : on pose donc la
--- feuille, puis le rectangle sur la texture que le bouton vient de creer.
--- etat : "Normal", "Pushed", "Highlight" ou "Disabled".
-local function etatBouton(bouton, etat, nom)
-	local e = ForeverUI.AtlasEntry(nom)
+-- Puts an atlas on a button state. A 3.3.5 button has only the states its XML declares
+-- (MiniMapTrackingButton has only a highlight), and Set<State>Texture takes only a file path,
+-- so the sheet is set first, then the atlas rectangle on the texture it creates.
+-- state: "Normal", "Pushed", "Highlight" or "Disabled"; name: atlas name
+local function applyButtonState(button, state, name)
+	local e = ForeverUI.AtlasEntry(name)
 	if not e then
 		return nil
 	end
-	local texture = bouton["Get" .. etat .. "Texture"](bouton)
+	local texture = button["Get" .. state .. "Texture"](button)
 	if not texture then
-		bouton["Set" .. etat .. "Texture"](bouton, e[1])
-		texture = bouton["Get" .. etat .. "Texture"](bouton)
+		button["Set" .. state .. "Texture"](button, e[1])
+		texture = button["Get" .. state .. "Texture"](button)
 	end
 	if texture then
-		ForeverUI.SetAtlas(texture, nom, true)
+		ForeverUI.SetAtlas(texture, name, true)
 	end
 	return texture
 end
 
--- LE DECOUPAGE EN NEUF A NEUF ATLAS.
---
--- Ce n'est pas celui de ForeverUI.SetAtlasNineSlice, qui taille ses neuf
--- morceaux dans UNE image. camelot appelle celui-ci UniqueCornersLayout :
--- chaque morceau est un atlas a lui, et les neuf ne sont meme pas sur la meme
--- feuille -- les coins et les bords horizontaux dans uiminimap, les bords
--- verticaux dans uiminimapvertical, le centre dans uiminimapbackground. Les
--- prefixes `_` et `!` font partie du nom : ils disent au client moderne de
--- repeter le morceau au lieu de l'etirer. 3.3.5 ne sait pas repeter un
--- rectangle pris dans un atlas -- il faudrait le fichier entier -- donc on
--- etire, comme partout ailleurs dans ce projet. Ces quatre bords sont des
--- degrades : l'etirement ne se voit pas.
-local function decouperEnNeuf(cadre, kit, couche)
+-- Nine-slice with one atlas per piece (camelot UniqueCornersLayout), unlike
+-- ForeverUI.SetAtlasNineSlice which cuts one image. The `_` and `!` prefixes are part of the
+-- names (tile flags); 3.3.5 cannot tile an atlas rectangle, so pieces stretch (the edges are
+-- gradients). kit: atlas name prefix; layer: draw layer
+local function sliceNine(frame, kit, layer)
 	local p = {}
 
-	local function morceau(nom, garderTaille)
-		local t = cadre:CreateTexture(nil, couche or "BACKGROUND")
-		if not ForeverUI.SetAtlas(t, nom, garderTaille) then
+	local function piece(name, keepSize)
+		local t = frame:CreateTexture(nil, layer or "BACKGROUND")
+		if not ForeverUI.SetAtlas(t, name, keepSize) then
 			t:Hide()
 		end
 		return t
 	end
 
-	p.coinHautGauche = morceau(kit .. "-nineslice-cornertopleft")
-	p.coinHautGauche:SetPoint("TOPLEFT", cadre, "TOPLEFT")
+	p.topLeftCorner = piece(kit .. "-nineslice-cornertopleft")
+	p.topLeftCorner:SetPoint("TOPLEFT", frame, "TOPLEFT")
 
-	p.coinHautDroit = morceau(kit .. "-nineslice-cornertopright")
-	p.coinHautDroit:SetPoint("TOPRIGHT", cadre, "TOPRIGHT")
+	p.topRightCorner = piece(kit .. "-nineslice-cornertopright")
+	p.topRightCorner:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
 
-	p.coinBasGauche = morceau(kit .. "-nineslice-cornerbottomleft")
-	p.coinBasGauche:SetPoint("BOTTOMLEFT", cadre, "BOTTOMLEFT")
+	p.bottomLeftCorner = piece(kit .. "-nineslice-cornerbottomleft")
+	p.bottomLeftCorner:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT")
 
-	p.coinBasDroit = morceau(kit .. "-nineslice-cornerbottomright")
-	p.coinBasDroit:SetPoint("BOTTOMRIGHT", cadre, "BOTTOMRIGHT")
+	p.bottomRightCorner = piece(kit .. "-nineslice-cornerbottomright")
+	p.bottomRightCorner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
 
-	-- Les quatre bords et le centre sont tenus par deux coins opposes : deux
-	-- points suffisent a fixer un rectangle, aucune taille a calculer.
-	p.bordHaut = morceau("_" .. kit .. "-nineslice-edgetop", true)
-	p.bordHaut:SetPoint("TOPLEFT", p.coinHautGauche, "TOPRIGHT")
-	p.bordHaut:SetPoint("BOTTOMRIGHT", p.coinHautDroit, "BOTTOMLEFT")
+	-- Edges and center are anchored between opposite corners: no size to compute.
+	p.topEdge = piece("_" .. kit .. "-nineslice-edgetop", true)
+	p.topEdge:SetPoint("TOPLEFT", p.topLeftCorner, "TOPRIGHT")
+	p.topEdge:SetPoint("BOTTOMRIGHT", p.topRightCorner, "BOTTOMLEFT")
 
-	p.bordBas = morceau("_" .. kit .. "-nineslice-edgebottom", true)
-	p.bordBas:SetPoint("TOPLEFT", p.coinBasGauche, "TOPRIGHT")
-	p.bordBas:SetPoint("BOTTOMRIGHT", p.coinBasDroit, "BOTTOMLEFT")
+	p.bottomEdge = piece("_" .. kit .. "-nineslice-edgebottom", true)
+	p.bottomEdge:SetPoint("TOPLEFT", p.bottomLeftCorner, "TOPRIGHT")
+	p.bottomEdge:SetPoint("BOTTOMRIGHT", p.bottomRightCorner, "BOTTOMLEFT")
 
-	p.bordGauche = morceau("!" .. kit .. "-nineslice-edgeleft", true)
-	p.bordGauche:SetPoint("TOPLEFT", p.coinHautGauche, "BOTTOMLEFT")
-	p.bordGauche:SetPoint("BOTTOMRIGHT", p.coinBasGauche, "TOPRIGHT")
+	p.leftEdge = piece("!" .. kit .. "-nineslice-edgeleft", true)
+	p.leftEdge:SetPoint("TOPLEFT", p.topLeftCorner, "BOTTOMLEFT")
+	p.leftEdge:SetPoint("BOTTOMRIGHT", p.bottomLeftCorner, "TOPRIGHT")
 
-	p.bordDroit = morceau("!" .. kit .. "-nineslice-edgeright", true)
-	p.bordDroit:SetPoint("TOPLEFT", p.coinHautDroit, "BOTTOMLEFT")
-	p.bordDroit:SetPoint("BOTTOMRIGHT", p.coinBasDroit, "TOPRIGHT")
+	p.rightEdge = piece("!" .. kit .. "-nineslice-edgeright", true)
+	p.rightEdge:SetPoint("TOPLEFT", p.topRightCorner, "BOTTOMLEFT")
+	p.rightEdge:SetPoint("BOTTOMRIGHT", p.bottomRightCorner, "TOPRIGHT")
 
-	p.centre = morceau(kit .. "-nineslice-center", true)
-	p.centre:SetPoint("TOPLEFT", p.coinHautGauche, "BOTTOMRIGHT")
-	p.centre:SetPoint("BOTTOMRIGHT", p.coinBasDroit, "TOPLEFT")
+	p.center = piece(kit .. "-nineslice-center", true)
+	p.center:SetPoint("TOPLEFT", p.topLeftCorner, "BOTTOMRIGHT")
+	p.center:SetPoint("BOTTOMRIGHT", p.bottomRightCorner, "TOPLEFT")
 
 	return p
 end
 
--- Poser un cadre sur l'anneau, a l'angle voulu. Zero pointe a l'est, les
--- degres tournent dans le sens direct.
-local function poserSurAnneau(cadre, carte, angle)
+-- Places a frame on the ring at angle degrees: 0 is east, counterclockwise.
+local function placeOnRing(frame, map, angle)
 	local radians = angle * math.pi / 180
-	cadre:ClearAllPoints()
-	cadre:SetPoint("CENTER", carte, "CENTER",
-		ANNEAU_RAYON * math.cos(radians), ANNEAU_RAYON * math.sin(radians))
+	frame:ClearAllPoints()
+	frame:SetPoint("CENTER", map, "CENTER",
+		RING_RADIUS * math.cos(radians), RING_RADIUS * math.sin(radians))
 end
 
 local M = {}
 ForeverUI.Minimap = M
 
--- LE JOUR DU MOIS dans l'image du calendrier. GameTimeFrame_SetDate de 3.3.5
--- ecrit le jour en TEXTE sur son bouton ; celui de camelot change d'image.
--- On garde son appel -- il suit le changement de jour -- et on fait comme
--- camelot par-dessus.
-function M.majCalendrier()
-	local bouton = _G["GameTimeFrame"]
-	if not bouton then
+-- Day of the month shown by the calendar image, as in camelot. The 3.3.5 GameTimeFrame_SetDate
+-- writes it as text; it still runs (it tracks day changes) and its text is hidden.
+function M.updateCalendar()
+	local button = _G["GameTimeFrame"]
+	if not button then
 		return
 	end
-	local jour = 1
+	local day = 1
 	if CalendarGetDate then
 		local _, _, j = CalendarGetDate()
-		jour = j or jour
+		day = j or day
 	end
-	etatBouton(bouton, "Normal", string.format(CALENDRIER.ATLAS, jour, "up"))
-	etatBouton(bouton, "Pushed", string.format(CALENDRIER.ATLAS, jour, "down"))
-	local survol = etatBouton(bouton, "Highlight", string.format(CALENDRIER.ATLAS, jour, "mouseover"))
-	if survol then
-		survol:SetBlendMode("BLEND")
+	applyButtonState(button, "Normal", string.format(CALENDAR.ATLAS, day, "up"))
+	applyButtonState(button, "Pushed", string.format(CALENDAR.ATLAS, day, "down"))
+	local hover = applyButtonState(button, "Highlight", string.format(CALENDAR.ATLAS, day, "mouseover"))
+	if hover then
+		hover:SetBlendMode("BLEND")
 	end
-	local texte = bouton.GetFontString and bouton:GetFontString()
-	if texte then
-		texte:SetAlpha(0)
+	local text = button.GetFontString and button:GetFontString()
+	if text then
+		text:SetAlpha(0)
 	end
 end
 
--- L'HORLOGE. Son fond de 3.3.5 est une texture SANS NOM (ClockBackground) :
--- on la retrouve parmi les regions, en epargnant le texte et la lueur de
--- l'alarme, que camelot garde telle quelle.
-function M.habillerHorloge()
-	local horloge = _G["TimeManagerClockButton"]
-	local barre = M.barre
-	if not horloge or not barre then
+-- Clock: its 3.3.5 background is an unnamed texture (ClockBackground), found among the
+-- regions; the text and the alarm glow are kept.
+function M.skinClock()
+	local clock = _G["TimeManagerClockButton"]
+	local bar = M.bar
+	if not clock or not bar then
 		return
 	end
-	local texte = _G["TimeManagerClockTicker"]
-	local alarme = _G["TimeManagerAlarmFiredTexture"]
-	for _, region in ipairs({ horloge:GetRegions() }) do
-		if region ~= texte and region ~= alarme then
-			etouffer(region)
+	local text = _G["TimeManagerClockTicker"]
+	local alarm = _G["TimeManagerAlarmFiredTexture"]
+	for _, region in ipairs({ clock:GetRegions() }) do
+		if region ~= text and region ~= alarm then
+			suppress(region)
 		end
 	end
-	horloge:SetParent(M.cluster)
-	horloge:SetWidth(HORLOGE.L)
-	horloge:SetHeight(HORLOGE.H)
-	horloge:ClearAllPoints()
-	horloge:SetPoint("TOPRIGHT", barre, "TOPRIGHT", HORLOGE.X, 0)
-	horloge:SetFrameLevel(barre:GetFrameLevel() + 1)
-	horloge:SetHitRectInsets(HORLOGE.MARGES[1], HORLOGE.MARGES[2],
-		HORLOGE.MARGES[3], HORLOGE.MARGES[4])
-	if texte then
-		texte:SetFont(HORLOGE.POLICE, HORLOGE.TAILLE)
-		texte:SetShadowOffset(1, -1)
-		texte:SetShadowColor(0, 0, 0, 1)
-		texte:SetTextColor(1, 1, 1)
-		texte:ClearAllPoints()
-		texte:SetPoint("CENTER", horloge, "CENTER", HORLOGE.TEXTE_X, HORLOGE.TEXTE_Y)
+	clock:SetParent(M.cluster)
+	clock:SetWidth(CLOCK.L)
+	clock:SetHeight(CLOCK.H)
+	clock:ClearAllPoints()
+	clock:SetPoint("TOPRIGHT", bar, "TOPRIGHT", CLOCK.X, 0)
+	clock:SetFrameLevel(bar:GetFrameLevel() + 1)
+	clock:SetHitRectInsets(CLOCK.MARGINS[1], CLOCK.MARGINS[2],
+		CLOCK.MARGINS[3], CLOCK.MARGINS[4])
+	if text then
+		text:SetFont(CLOCK.FONT, CLOCK.SIZE)
+		text:SetShadowOffset(1, -1)
+		text:SetShadowColor(0, 0, 0, 1)
+		text:SetTextColor(1, 1, 1)
+		text:ClearAllPoints()
+		text:SetPoint("CENTER", clock, "CENTER", CLOCK.TEXT_X, CLOCK.TEXT_Y)
 	end
-	M.horlogeHabillee = true
+	M.clockSkinned = true
 end
 
--- LES COORDONNEES. camelot demande C_Map.GetPlayerMapPosition sur la meilleure
--- carte ; 3.3.5 n'a que GetPlayerMapPosition, qui repond sur la carte
--- AFFICHEE par la carte du monde. On la ramene sur la zone du joueur aux
--- changements de zone et a la fermeture de la carte du monde -- jamais
--- pendant qu'elle est ouverte, on changerait la page que le joueur lit.
--- En instance, 3.3.5 rend (0, 0) : rien n'est ecrit, comme chez camelot
--- quand la position n'existe pas.
-function M.recentrerCarteDuMonde()
+-- 3.3.5 GetPlayerMapPosition answers for the map shown by the world map, so it is set back to
+-- the player's zone on zone change and when the world map closes, never while it is open.
+-- In instances 3.3.5 returns (0, 0) and nothing is shown.
+function M.recenterWorldMap()
 	if SetMapToCurrentZone and not (WorldMapFrame and WorldMapFrame:IsShown()) then
 		SetMapToCurrentZone()
 	end
 end
 
-function M.majCoordonnees()
+function M.updateCoordinates()
 	local coords = M.coords
 	if not coords then
 		return
@@ -417,481 +289,460 @@ function M.majCoordonnees()
 		x, y = GetPlayerMapPosition("player")
 	end
 	if not x or not y or (x == 0 and y == 0) then
-		coords.texte:SetText("")
+		coords.text:SetText("")
 		return
 	end
 	if GetCVar and GetCVar("coordsByTenths") == "1" then
-		coords.texte:SetText(string.format(COORD.DIXIEMES, x * 100, y * 100))
+		coords.text:SetText(string.format(COORD.TENTHS, x * 100, y * 100))
 	else
-		coords.texte:SetText(string.format(COORD.ENTIER,
+		coords.text:SetText(string.format(COORD.INTEGER,
 			math.floor(x * 100 + 0.5), math.floor(y * 100 + 0.5)))
 	end
 end
 
--- POSER L'ECHELLE k SUR LA CARTE. Sa taille devient 198 / k, ce qui la laisse
--- a 198 a l'ecran. Ses fils que l'addon place lui-meme -- le fond qui porte le
--- cadre et les boutons, la zone du zoom -- recoivent 1 / k pour garder leur
--- taille. MinimapPing, lui, SUIT la carte : Minimap_SetPing le place en unites
--- de la carte (x * Minimap:GetWidth()).
-local function appliquerEchelle(k)
-	local carte = M.carte
-	if not carte then
+-- Applies scale k to the map: its size becomes 198 / k, so it stays 198 on screen. Children the
+-- addon places (MinimapBackdrop, zoom hit area) get 1 / k to keep their size. MinimapPing
+-- follows the map: Minimap_SetPing works in map units.
+local function applyScale(k)
+	local map = M.map
+	if not map then
 		return
 	end
-	M.echelle = k
-	carte:SetScale(k)
-	carte:SetWidth(CARTE_COTE / k)
-	carte:SetHeight(CARTE_COTE / k)
-	for _, fils in ipairs({ _G["MinimapBackdrop"], M.zoneZoom }) do
-		if fils then
-			fils:SetScale(1 / k)
+	M.scale = k
+	map:SetScale(k)
+	map:SetWidth(MAP_SIDE / k)
+	map:SetHeight(MAP_SIDE / k)
+	for _, childFrame in ipairs({ _G["MinimapBackdrop"], M.zoomZone }) do
+		if childFrame then
+			childFrame:SetScale(1 / k)
 		end
 	end
 end
 
-M.appliquerEchelle = appliquerEchelle
+M.applyScale = applyScale
 
-local function construire()
+-- Reskins the cluster; returns false when client frames or AtlasUtil are missing.
+local function build()
 	local cluster = _G["MinimapCluster"]
-	local carte = _G["Minimap"]
-	local fond = _G["MinimapBackdrop"]
+	local map = _G["Minimap"]
+	local background = _G["MinimapBackdrop"]
 
-	if not cluster or not carte or not fond then
-		dire(L.MINIMAP_DEBUG_NO_CLIENT_FRAMES)
+	if not cluster or not map or not background then
+		say(L.MINIMAP_DEBUG_NO_CLIENT_FRAMES)
 		return false
 	end
 
 	if not ForeverUI.SetAtlas then
-		dire(L.MINIMAP_DEBUG_NO_ATLASUTIL)
+		say(L.MINIMAP_DEBUG_NO_ATLASUTIL)
 		return false
 	end
 
 	M.cluster = cluster
-	M.carte = carte
+	M.map = map
 
-	-- 1. LE CLUSTER. camelot garde les memes marges de souris qu'en 3.3.5 ;
-	-- seule la taille change.
-	cluster:SetWidth(CLUSTER_L)
+	-- 1. Cluster: same mouse margins as 3.3.5, new size.
+	cluster:SetWidth(CLUSTER_W)
 	cluster:SetHeight(CLUSTER_H)
 	cluster:SetFrameStrata("LOW")
-	cluster:SetHitRectInsets(MARGES_SOURIS[1], MARGES_SOURIS[2],
-		MARGES_SOURIS[3], MARGES_SOURIS[4])
+	cluster:SetHitRectInsets(MOUSE_MARGINS[1], MOUSE_MARGINS[2],
+		MOUSE_MARGINS[3], MOUSE_MARGINS[4])
 
-	etouffer(_G["MinimapBorderTop"])
+	suppress(_G["MinimapBorderTop"])
 
-	-- 2. LE CONTENEUR ET LA CARTE.
-	local conteneur = M.conteneur
-	if not conteneur then
-		conteneur = CreateFrame("Frame", "ForeverUIMinimapContainer", cluster)
-		M.conteneur = conteneur
+	-- 2. Container and map.
+	local container = M.container
+	if not container then
+		container = CreateFrame("Frame", "ForeverUIMinimapContainer", cluster)
+		M.container = container
 	end
-	conteneur:SetWidth(CADRE_L)
-	conteneur:SetHeight(CADRE_H)
-	conteneur:ClearAllPoints()
-	conteneur:SetPoint("TOP", cluster, "TOP", CONTENEUR_X, CONTENEUR_Y)
+	container:SetWidth(FRAME_W)
+	container:SetHeight(FRAME_H)
+	container:ClearAllPoints()
+	container:SetPoint("TOP", cluster, "TOP", CONTAINER_X, CONTAINER_Y)
 
-	carte:SetParent(conteneur)
-	carte:ClearAllPoints()
-	carte:SetPoint("CENTER", conteneur, "CENTER", 0, 0)
-	carte:SetMaskTexture(CHEMIN_MASQUE)
-	for _, fleche in ipairs(FLECHES) do
-		if carte[fleche.methode] then
-			carte[fleche.methode](carte, FLECHES.chemin .. fleche.fichier)
+	map:SetParent(container)
+	map:ClearAllPoints()
+	map:SetPoint("CENTER", container, "CENTER", 0, 0)
+	map:SetMaskTexture(MASK_PATH)
+	for _, arrow in ipairs(ARROWS) do
+		if map[arrow.method] then
+			map[arrow.method](map, ARROWS.path .. arrow.file)
 		end
 	end
 
-	-- 3. LE CADRE. Il se pose sur MinimapBackdrop, comme chez camelot : ce
-	-- cadre est fils de la carte, donc dessine PAR-DESSUS le terrain et ses
-	-- points, et ses propres fils -- les boutons -- passent au-dessus de lui.
-	fond:SetWidth(CADRE_L)
-	fond:SetHeight(CADRE_H)
-	fond:ClearAllPoints()
-	fond:SetPoint("CENTER", carte, "CENTER", 0, 0)
+	-- 3. Frame ring on MinimapBackdrop, as in camelot: a child of the map, it draws above the
+	-- terrain, and its own children (the buttons) draw above it.
+	-- MinimapCompassTexture is the 3.3.5 compass here, not camelot's frame of the same name.
+	background:SetWidth(FRAME_W)
+	background:SetHeight(FRAME_H)
+	background:ClearAllPoints()
+	background:SetPoint("CENTER", map, "CENTER", 0, 0)
 
-	etouffer(_G["MinimapBorder"])
-	etouffer(_G["MinimapNorthTag"])
-	etouffer(_G["MinimapCompassTexture"])
+	suppress(_G["MinimapBorder"])
+	suppress(_G["MinimapNorthTag"])
+	suppress(_G["MinimapCompassTexture"])
 
-	local anneau = M.anneau
-	if not anneau then
-		anneau = fond:CreateTexture(nil, "ARTWORK")
-		M.anneau = anneau
+	local ring = M.ring
+	if not ring then
+		ring = background:CreateTexture(nil, "ARTWORK")
+		M.ring = ring
 	end
-	ForeverUI.SetAtlas(anneau, ATLAS_CADRE, true)
-	anneau:SetWidth(CADRE_L)
-	anneau:SetHeight(CADRE_H)
-	anneau:ClearAllPoints()
-	anneau:SetPoint("CENTER", fond, "CENTER", 0, 0)
+	ForeverUI.SetAtlas(ring, ATLAS_FRAME, true)
+	ring:SetWidth(FRAME_W)
+	ring:SetHeight(FRAME_H)
+	ring:ClearAllPoints()
+	ring:SetPoint("CENTER", background, "CENTER", 0, 0)
 
-	-- 4. LA BARRE DU NOM DE ZONE.
-	local barre = M.barre
-	if not barre then
-		barre = CreateFrame("Frame", "ForeverUIMinimapBorderTop", cluster)
-		M.barre = barre
-		decouperEnNeuf(barre, KIT_BARRE, "BACKGROUND")
+	-- 4. Zone name bar.
+	local bar = M.bar
+	if not bar then
+		bar = CreateFrame("Frame", "ForeverUIMinimapBorderTop", cluster)
+		M.bar = bar
+		sliceNine(bar, BAR_KIT, "BACKGROUND")
 	end
-	barre:SetWidth(BARRE_L)
-	barre:SetHeight(BARRE_H)
-	barre:ClearAllPoints()
-	barre:SetPoint("TOP", cluster, "TOP", BARRE_X, BARRE_Y)
+	bar:SetWidth(BAR_W)
+	bar:SetHeight(BAR_H)
+	bar:ClearAllPoints()
+	bar:SetPoint("TOP", cluster, "TOP", BAR_X, BAR_Y)
 
-	local zoneBouton = _G["MinimapZoneTextButton"]
-	if zoneBouton then
-		zoneBouton:SetParent(cluster)
-		zoneBouton:SetWidth(ZONE_L)
-		zoneBouton:SetHeight(ZONE_H)
-		zoneBouton:ClearAllPoints()
-		zoneBouton:SetPoint("LEFT", barre, "LEFT", ZONE_X, 0)
-		zoneBouton:SetFrameLevel(barre:GetFrameLevel() + 1)
-	end
-
-	local zoneTexte = _G["MinimapZoneText"]
-	if zoneTexte then
-		zoneTexte:SetWidth(TEXTE_L)
-		zoneTexte:SetHeight(TEXTE_H)
-		zoneTexte:ClearAllPoints()
-		zoneTexte:SetPoint("CENTER", zoneBouton or barre, "CENTER", 0, TEXTE_Y)
-		zoneTexte:SetDrawLayer("OVERLAY")
-		-- La justification vient de l'attribut du gabarit camelot, pas de
-		-- l'objet de police : GameFontNormal n'en porte aucune, donc centre.
-		zoneTexte:SetJustifyH("LEFT")
-		zoneTexte:SetJustifyV("MIDDLE")
+	local zoneButton = _G["MinimapZoneTextButton"]
+	if zoneButton then
+		zoneButton:SetParent(cluster)
+		zoneButton:SetWidth(ZONE_W)
+		zoneButton:SetHeight(ZONE_H)
+		zoneButton:ClearAllPoints()
+		zoneButton:SetPoint("LEFT", bar, "LEFT", ZONE_X, 0)
+		zoneButton:SetFrameLevel(bar:GetFrameLevel() + 1)
 	end
 
-	-- 5. LE SUIVI. On garde le cadre du client -- c'est lui qui ouvre le menu
-	-- des pistages et qui connait leur liste -- et on ne lui laisse que ca.
-	local suivi = _G["MiniMapTracking"]
-	if suivi then
-		suivi:SetParent(cluster)
-		suivi:SetWidth(SUIVI_COTE)
-		suivi:SetHeight(SUIVI_COTE)
-		suivi:ClearAllPoints()
-		suivi:SetPoint("RIGHT", barre, "LEFT", SUIVI_X, 0)
-		suivi:SetFrameLevel(barre:GetFrameLevel() + 1)
+	local zoneText = _G["MinimapZoneText"]
+	if zoneText then
+		zoneText:SetWidth(TEXT_W)
+		zoneText:SetHeight(TEXT_H)
+		zoneText:ClearAllPoints()
+		zoneText:SetPoint("CENTER", zoneButton or bar, "CENTER", 0, TEXT_Y)
+		zoneText:SetDrawLayer("OVERLAY")
+		-- Left justification comes from the camelot template attribute; GameFontNormal has none.
+		zoneText:SetJustifyH("LEFT")
+		zoneText:SetJustifyV("MIDDLE")
+	end
 
-		etouffer(_G["MiniMapTrackingBackground"])
-		etouffer(_G["MiniMapTrackingIcon"])
-		etouffer(_G["MiniMapTrackingIconOverlay"])
+	-- 5. Tracking: the client frame stays (it opens the tracking menu), only reskinned.
+	local tracking = _G["MiniMapTracking"]
+	if tracking then
+		tracking:SetParent(cluster)
+		tracking:SetWidth(TRACKING_SIDE)
+		tracking:SetHeight(TRACKING_SIDE)
+		tracking:ClearAllPoints()
+		tracking:SetPoint("RIGHT", bar, "LEFT", TRACKING_X, 0)
+		tracking:SetFrameLevel(bar:GetFrameLevel() + 1)
 
-		if not M.suiviFond then
-			M.suiviFond = suivi:CreateTexture(nil, "BACKGROUND")
+		suppress(_G["MiniMapTrackingBackground"])
+		suppress(_G["MiniMapTrackingIcon"])
+		suppress(_G["MiniMapTrackingIconOverlay"])
+
+		if not M.trackingBackground then
+			M.trackingBackground = tracking:CreateTexture(nil, "BACKGROUND")
 		end
-		ForeverUI.SetAtlas(M.suiviFond, KIT_BARRE, true)
-		M.suiviFond:SetAllPoints(suivi)
+		ForeverUI.SetAtlas(M.trackingBackground, BAR_KIT, true)
+		M.trackingBackground:SetAllPoints(tracking)
 
-		local bouton = _G["MiniMapTrackingButton"]
-		if bouton then
-			bouton:SetWidth(SUIVI_BOUTON_L)
-			bouton:SetHeight(SUIVI_BOUTON_H)
-			bouton:ClearAllPoints()
-			bouton:SetPoint("CENTER", suivi, "CENTER", 0, 0)
-			bouton:SetHitRectInsets(0, 0, 0, 0)
+		local button = _G["MiniMapTrackingButton"]
+		if button then
+			button:SetWidth(TRACKING_BUTTON_W)
+			button:SetHeight(TRACKING_BUTTON_H)
+			button:ClearAllPoints()
+			button:SetPoint("CENTER", tracking, "CENTER", 0, 0)
+			button:SetHitRectInsets(0, 0, 0, 0)
 
-			etouffer(_G["MiniMapTrackingButtonBorder"])
-			etouffer(_G["MiniMapTrackingButtonShine"])
+			suppress(_G["MiniMapTrackingButtonBorder"])
+			suppress(_G["MiniMapTrackingButtonShine"])
 
-			etatBouton(bouton, "Normal", "ui-hud-minimap-tracking-up")
-			etatBouton(bouton, "Pushed", "ui-hud-minimap-tracking-down")
-			local survol = etatBouton(bouton, "Highlight", "ui-hud-minimap-tracking-mouseover")
-			if survol then
-				survol:SetBlendMode("BLEND")
+			applyButtonState(button, "Normal", "ui-hud-minimap-tracking-up")
+			applyButtonState(button, "Pushed", "ui-hud-minimap-tracking-down")
+			local hover = applyButtonState(button, "Highlight", "ui-hud-minimap-tracking-mouseover")
+			if hover then
+				hover:SetBlendMode("BLEND")
 			end
 		end
 	end
 
-	-- 6. LE COURRIER, sous le suivi.
-	local rangee = M.rangee
-	if not rangee then
-		rangee = CreateFrame("Frame", "ForeverUIMinimapIndicators", cluster)
-		M.rangee = rangee
+	-- 6. Mail, under tracking.
+	local rowLine = M.rowLine
+	if not rowLine then
+		rowLine = CreateFrame("Frame", "ForeverUIMinimapIndicators", cluster)
+		M.rowLine = rowLine
 	end
-	rangee:SetWidth(COURRIER_L)
-	rangee:SetHeight(COURRIER_H)
-	rangee:ClearAllPoints()
-	rangee:SetPoint("TOPRIGHT", suivi or barre, "BOTTOMRIGHT", 0, 0)
+	rowLine:SetWidth(MAIL_W)
+	rowLine:SetHeight(MAIL_H)
+	rowLine:ClearAllPoints()
+	rowLine:SetPoint("TOPRIGHT", tracking or bar, "BOTTOMRIGHT", 0, 0)
 
-	local courrier = _G["MiniMapMailFrame"]
-	if courrier then
-		courrier:SetParent(rangee)
-		courrier:SetWidth(COURRIER_L)
-		courrier:SetHeight(COURRIER_H)
-		courrier:ClearAllPoints()
-		courrier:SetPoint("TOPLEFT", rangee, "TOPLEFT", 0, 0)
+	local mail = _G["MiniMapMailFrame"]
+	if mail then
+		mail:SetParent(rowLine)
+		mail:SetWidth(MAIL_W)
+		mail:SetHeight(MAIL_H)
+		mail:ClearAllPoints()
+		mail:SetPoint("TOPLEFT", rowLine, "TOPLEFT", 0, 0)
 
-		etouffer(_G["MiniMapMailIcon"])
-		etouffer(_G["MiniMapMailBorder"])
+		suppress(_G["MiniMapMailIcon"])
+		suppress(_G["MiniMapMailBorder"])
 
-		if not M.courrierIcone then
-			M.courrierIcone = courrier:CreateTexture(nil, "ARTWORK")
+		if not M.mailIcon then
+			M.mailIcon = mail:CreateTexture(nil, "ARTWORK")
 		end
-		ForeverUI.SetAtlas(M.courrierIcone, "ui-hud-minimap-mail-up")
-		M.courrierIcone:ClearAllPoints()
-		M.courrierIcone:SetPoint("TOPLEFT", courrier, "TOPLEFT", 0, 0)
+		ForeverUI.SetAtlas(M.mailIcon, "ui-hud-minimap-mail-up")
+		M.mailIcon:ClearAllPoints()
+		M.mailIcon:SetPoint("TOPLEFT", mail, "TOPLEFT", 0, 0)
 	end
 
-	-- 7. LE ZOOM. La zone de saisie passe en strate BACKGROUND, comme chez
-	-- camelot : elle ne doit attraper la souris que la ou rien d'autre ne la
-	-- prend, sinon elle volerait les clics de la carte.
-	local zoneZoom = M.zoneZoom
-	if not zoneZoom then
-		zoneZoom = CreateFrame("Frame", "ForeverUIMinimapZoomHitArea", carte)
-		zoneZoom:EnableMouse(true)
-		zoneZoom:SetFrameStrata("BACKGROUND")
-		M.zoneZoom = zoneZoom
+	-- 7. Zoom. The hit area uses the BACKGROUND strata, as in camelot, so it takes the mouse only
+	-- where nothing else does and does not steal map clicks.
+	local zoomZone = M.zoomZone
+	if not zoomZone then
+		zoomZone = CreateFrame("Frame", "ForeverUIMinimapZoomHitArea", map)
+		zoomZone:EnableMouse(true)
+		zoomZone:SetFrameStrata("BACKGROUND")
+		M.zoomZone = zoomZone
 	end
-	zoneZoom:SetWidth(ZOOM_ZONE)
-	zoneZoom:SetHeight(ZOOM_ZONE)
-	zoneZoom:ClearAllPoints()
-	zoneZoom:SetPoint("CENTER", carte, "CENTER", ZOOM_ZONE_X, ZOOM_ZONE_Y)
+	zoomZone:SetWidth(ZOOM_ZONE)
+	zoomZone:SetHeight(ZOOM_ZONE)
+	zoomZone:ClearAllPoints()
+	zoomZone:SetPoint("CENTER", map, "CENTER", ZOOM_ZONE_X, ZOOM_ZONE_Y)
 
 	local plus = _G["MinimapZoomIn"]
-	local moins = _G["MinimapZoomOut"]
+	local minus = _G["MinimapZoomOut"]
 
-	local function habillerZoom(bouton, largeur, hauteur, x, y, nom)
-		if not bouton then
+	local function skinZoom(button, width, height, x, y, name)
+		if not button then
 			return
 		end
-		bouton:SetWidth(largeur)
-		bouton:SetHeight(hauteur)
-		bouton:ClearAllPoints()
-		bouton:SetPoint("CENTER", carte, "CENTER", x, y)
-		-- Les marges du client rognaient 4 px a gauche et a droite d'un
-		-- bouton de 32 ; sur 17 il ne resterait rien a cliquer.
-		bouton:SetHitRectInsets(0, 0, 0, 0)
-		etatBouton(bouton, "Normal", nom)
-		etatBouton(bouton, "Pushed", nom .. "-down")
+		button:SetWidth(width)
+		button:SetHeight(height)
+		button:ClearAllPoints()
+		button:SetPoint("CENTER", map, "CENTER", x, y)
+		-- Client hit insets cut 4 px on each side of a 32 px button; a 17 px one needs none.
+		button:SetHitRectInsets(0, 0, 0, 0)
+		applyButtonState(button, "Normal", name)
+		applyButtonState(button, "Pushed", name .. "-down")
 
-		-- camelot ecrit `desaturated="true"` sur l'etat eteint. 3.3.5 a bien
-		-- SetDesaturated, mais il REND FAUX quand la carte graphique ne sait
-		-- pas le faire : on assombrit alors a la main.
-		local eteint = etatBouton(bouton, "Disabled", nom)
-		if eteint and not (eteint.SetDesaturated and eteint:SetDesaturated(true)) then
-			eteint:SetVertexColor(0.45, 0.45, 0.45)
+		-- camelot desaturates the disabled state. 3.3.5 SetDesaturated returns false when the GPU
+		-- cannot do it: then darken by hand.
+		local disabled = applyButtonState(button, "Disabled", name)
+		if disabled and not (disabled.SetDesaturated and disabled:SetDesaturated(true)) then
+			disabled:SetVertexColor(0.45, 0.45, 0.45)
 		end
 
-		-- L'etat de survol du client est ADDITIF -- une lueur posee sur
-		-- l'image. Celui de camelot est une IMAGE COMPLETE, la meme en plus
-		-- clair : la poser en additif la ferait blanchir.
-		local survol = etatBouton(bouton, "Highlight", nom .. "-mouseover")
-		if survol then
-			survol:SetBlendMode("BLEND")
+		-- The client highlight is additive; camelot's is a full, lighter image, drawn with BLEND.
+		local hover = applyButtonState(button, "Highlight", name .. "-mouseover")
+		if hover then
+			hover:SetBlendMode("BLEND")
 		end
-		bouton:Hide()
+		button:Hide()
 	end
 
-	habillerZoom(plus, ZOOM_PLUS_L, ZOOM_PLUS_H, ZOOM_PLUS_X, ZOOM_PLUS_Y,
+	skinZoom(plus, ZOOM_PLUS_W, ZOOM_PLUS_H, ZOOM_PLUS_X, ZOOM_PLUS_Y,
 		"ui-hud-minimap-zoom-in")
-	habillerZoom(moins, ZOOM_MOINS_L, ZOOM_MOINS_H, ZOOM_MOINS_X, ZOOM_MOINS_Y,
+	skinZoom(minus, ZOOM_MINUS_W, ZOOM_MINUS_H, ZOOM_MINUS_X, ZOOM_MINUS_Y,
 		"ui-hud-minimap-zoom-out")
 
-	-- MinimapMixin:OnLeave ne cache les deux boutons que si la souris n'est
-	-- plus sur AUCUN des quatre. On rejoue la meme condition.
-	local function montrer()
+	-- As MinimapMixin:OnLeave: hide the zoom buttons only when the mouse is on none of the four.
+	local function showRegion()
 		if plus then plus:Show() end
-		if moins then moins:Show() end
+		if minus then minus:Show() end
 	end
 
-	local function cacherSiPossible()
+	local function hideIfPossible()
 		if plus and plus:IsMouseOver() then return end
-		if moins and moins:IsMouseOver() then return end
-		if zoneZoom:IsMouseOver() then return end
-		if carte:IsMouseOver() then return end
+		if minus and minus:IsMouseOver() then return end
+		if zoomZone:IsMouseOver() then return end
+		if map:IsMouseOver() then return end
 		if plus then plus:Hide() end
-		if moins then moins:Hide() end
+		if minus then minus:Hide() end
 	end
 
-	M.montrerZoom = montrer
-	M.cacherZoom = cacherSiPossible
 
-	if not M.zoomBranche then
-		carte:HookScript("OnEnter", montrer)
-		carte:HookScript("OnLeave", cacherSiPossible)
-		zoneZoom:SetScript("OnEnter", montrer)
-		zoneZoom:SetScript("OnLeave", cacherSiPossible)
+	if not M.zoomHooked then
+		map:HookScript("OnEnter", showRegion)
+		map:HookScript("OnLeave", hideIfPossible)
+		zoomZone:SetScript("OnEnter", showRegion)
+		zoomZone:SetScript("OnLeave", hideIfPossible)
 		if plus then
-			plus:HookScript("OnEnter", montrer)
-			plus:HookScript("OnLeave", cacherSiPossible)
+			plus:HookScript("OnEnter", showRegion)
+			plus:HookScript("OnLeave", hideIfPossible)
 		end
-		if moins then
-			moins:HookScript("OnEnter", montrer)
-			moins:HookScript("OnLeave", cacherSiPossible)
+		if minus then
+			minus:HookScript("OnEnter", showRegion)
+			minus:HookScript("OnLeave", hideIfPossible)
 		end
-		-- LA MOLETTE (demande du 2026-09-28) : MinimapMixin:OnMouseWheel de
-		-- camelot -- vers le haut Minimap_ZoomIn, vers le bas Minimap_ZoomOut,
-		-- qui cliquent les boutons « + » et « - » : meme effet, meme son, et
-		-- rien quand le bouton est eteint en bout de course. 3.3.5 ne donne
-		-- pas la molette a la carte : on la lui donne. IsEnabled rend 0 ou 1,
-		-- et 0 est vrai en Lua.
-		local function cliquer(bouton)
-			local etat = bouton and bouton:IsEnabled()
-			if etat and etat ~= 0 then bouton:Click() end
+		-- Mouse wheel as camelot MinimapMixin:OnMouseWheel: clicks + or - (same effect and sound,
+		-- nothing when disabled). 3.3.5 does not give the wheel to the map.
+		-- IsEnabled returns 0 or 1, and 0 is true in Lua.
+		local function click(button)
+			local state = button and button:IsEnabled()
+			if state and state ~= 0 then button:Click() end
 		end
-		carte:EnableMouseWheel(true)
-		carte:SetScript("OnMouseWheel", function(_, sens)
-			if sens > 0 then
-				cliquer(plus)
-			elseif sens < 0 then
-				cliquer(moins)
+		map:EnableMouseWheel(true)
+		map:SetScript("OnMouseWheel", function(_, direction)
+			if direction > 0 then
+				click(plus)
+			elseif direction < 0 then
+				click(minus)
 			end
 		end)
-		M.zoomBranche = true
+		M.zoomHooked = true
 	end
 
-	-- 8. L'ANNEAU DU CYCLE JOUR/NUIT.
+	-- 8. Day/night ring.
 	local cycle = M.cycle
 	if not cycle then
 		cycle = CreateFrame("Frame", "ForeverUIMinimapDiel", cluster)
-		cycle:SetFrameLevel(CYCLE_NIVEAU)
+		cycle:SetFrameLevel(CYCLE_LEVEL)
 		M.cycle = cycle
-		M.astre = cycle:CreateTexture(nil, "BACKGROUND")
-		M.astre:SetPoint("CENTER", cycle, "CENTER", 0, 0)
-		M.cycleBord = cycle:CreateTexture(nil, "OVERLAY")
-		M.cycleBord:SetAllPoints(cycle)
+		M.orb = cycle:CreateTexture(nil, "BACKGROUND")
+		M.orb:SetPoint("CENTER", cycle, "CENTER", 0, 0)
+		M.cycleEdge = cycle:CreateTexture(nil, "OVERLAY")
+		M.cycleEdge:SetAllPoints(cycle)
 	end
-	cycle:SetWidth(CYCLE_COTE)
-	cycle:SetHeight(CYCLE_COTE)
+	cycle:SetWidth(CYCLE_SIDE)
+	cycle:SetHeight(CYCLE_SIDE)
 	cycle:ClearAllPoints()
 	cycle:SetPoint("CENTER", cluster, "CENTER", CYCLE_X, CYCLE_Y)
-	ForeverUI.SetAtlas(M.cycleBord, ATLAS_CYCLE, true)
-	M.astre:SetWidth(ASTRE_COTE)
-	M.astre:SetHeight(ASTRE_COTE)
+	ForeverUI.SetAtlas(M.cycleEdge, ATLAS_CYCLE, true)
+	M.orb:SetWidth(ORB_SIDE)
+	M.orb:SetHeight(ORB_SIDE)
 
-	-- 9. LA DIFFICULTE D'INSTANCE, au coin de la barre.
-	local difficulte = _G["MiniMapInstanceDifficulty"]
-	if difficulte then
-		difficulte:SetParent(cluster)
-		difficulte:ClearAllPoints()
-		difficulte:SetPoint("TOPRIGHT", barre, "TOPRIGHT", 0, DIFFICULTE_Y)
+	-- 9. Instance difficulty, at the bar's corner.
+	local difficulty = _G["MiniMapInstanceDifficulty"]
+	if difficulty then
+		difficulty:SetParent(cluster)
+		difficulty:ClearAllPoints()
+		difficulty:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, DIFFICULTY_Y)
 	end
 
-	-- 10. LE CALENDRIER, a droite de la barre.
-	local calendrier = _G["GameTimeFrame"]
-	if calendrier then
-		calendrier:SetParent(cluster)
-		calendrier:SetWidth(CALENDRIER.L)
-		calendrier:SetHeight(CALENDRIER.H)
-		calendrier:ClearAllPoints()
-		calendrier:SetPoint("TOPLEFT", barre, "TOPRIGHT", CALENDRIER.X, 0)
-		calendrier:SetFrameLevel(barre:GetFrameLevel() + 1)
-		-- 3.3.5 lui donne des marges de 6/0/5/10 pour un bouton de 40 ;
-		-- camelot n'en declare aucune.
-		calendrier:SetHitRectInsets(0, 0, 0, 0)
-		M.majCalendrier()
+	-- 10. Calendar, right of the bar.
+	local calendar = _G["GameTimeFrame"]
+	if calendar then
+		calendar:SetParent(cluster)
+		calendar:SetWidth(CALENDAR.L)
+		calendar:SetHeight(CALENDAR.H)
+		calendar:ClearAllPoints()
+		calendar:SetPoint("TOPLEFT", bar, "TOPRIGHT", CALENDAR.X, 0)
+		calendar:SetFrameLevel(bar:GetFrameLevel() + 1)
+		-- 3.3.5 gives it hit insets of 6/0/5/10 for a 40 px button; camelot declares none.
+		calendar:SetHitRectInsets(0, 0, 0, 0)
+		M.updateCalendar()
 	end
 
-	-- 11. L'HORLOGE, dans la barre. Blizzard_TimeManager se charge a la
-	-- demande : si elle n'est pas encore la, ADDON_LOADED la rattrapera.
-	M.habillerHorloge()
+	-- 11. Clock, in the bar. Blizzard_TimeManager loads on demand: ADDON_LOADED skins it later.
+	M.skinClock()
 
-	-- 12. LES COORDONNEES DU JOUEUR, sous la carte. Frere de la carte dans le
-	-- conteneur, comme PlayerCoords chez camelot.
+	-- 12. Player coordinates under the map, a sibling of the map in the container
+	-- (camelot PlayerCoords).
 	local coords = M.coords
 	if not coords then
-		coords = CreateFrame("Frame", "ForeverUIMinimapPlayerCoords", conteneur)
-		coords.texte = coords:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		coords.texte:SetAllPoints(coords)
-		coords.texte:SetJustifyH("CENTER")
-		coords.attente = 0
-		coords:SetScript("OnUpdate", function(self, ecoule)
-			self.attente = self.attente - (ecoule or 0)
-			if self.attente > 0 then
+		coords = CreateFrame("Frame", "ForeverUIMinimapPlayerCoords", container)
+		coords.text = coords:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		coords.text:SetAllPoints(coords)
+		coords.text:SetJustifyH("CENTER")
+		coords.pending = 0
+		coords:SetScript("OnUpdate", function(self, elapsed)
+			self.pending = self.pending - (elapsed or 0)
+			if self.pending > 0 then
 				return
 			end
-			self.attente = COORD.PERIODE
-			M.majCoordonnees()
+			self.pending = COORD.INTERVAL
+			M.updateCoordinates()
 		end)
 		M.coords = coords
 	end
 	coords:SetWidth(COORD.L)
 	coords:SetHeight(COORD.H)
 	coords:ClearAllPoints()
-	coords:SetPoint("BOTTOM", carte, "BOTTOM", 0, COORD.Y)
+	coords:SetPoint("BOTTOM", map, "BOTTOM", 0, COORD.Y)
 
-	-- 13. L'ECHELLE, en dernier : la zone du zoom doit exister.
-	appliquerEchelle(M.echelle or ECHELLE_CARTE)
+	-- 13. Scale last: the zoom hit area must exist.
+	applyScale(M.scale or MAP_SCALE)
 
-	-- 14. LES QUATRE BOUTONS QUE CAMELOT N'A PAS, poses sur l'anneau.
-	for _, item in ipairs(AUTOUR) do
-		local bouton = _G[item.nom]
-		if bouton then
-			bouton:SetParent(fond)
-			poserSurAnneau(bouton, carte, item.angle)
+	-- 14. The buttons camelot does not have, on the ring.
+	for _, item in ipairs(RING_ITEMS) do
+		local button = _G[item.name]
+		if button then
+			button:SetParent(background)
+			placeOnRing(button, map, item.angle)
 		end
 	end
 
 	return true
 end
 
--- L'HEURE DU SERVEUR decide de l'astre. 3.3.5 n'a pas d'evenement de cycle :
--- on relit l'heure une fois par minute.
-local function majCycle()
-	if not M.astre then
+-- The server hour picks sun or moon; 3.3.5 has no cycle event, so it is read once a minute.
+local function updateCycle()
+	if not M.orb then
 		return
 	end
-	local heure = GetGameTime and GetGameTime() or 12
-	local jour = heure >= AUBE and heure < CREPUSCULE
-	M.jour = jour
-	ForeverUI.SetAtlas(M.astre, jour and ATLAS_JOUR or ATLAS_NUIT, true)
+	local hour = GetGameTime and GetGameTime() or 12
+	local day = hour >= DAWN and hour < DUSK
+	M.day = day
+	ForeverUI.SetAtlas(M.orb, day and ATLAS_DAY or ATLAS_NIGHT, true)
 end
 
 M.Refresh = function()
 	if M.cluster then
-		majCycle()
+		updateCycle()
 	end
 end
 
-local veilleur = CreateFrame("Frame")
-veilleur.ecoule = 0
-veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
-veilleur:RegisterEvent("MINIMAP_UPDATE_ZOOM")
-veilleur:RegisterEvent("ADDON_LOADED")
-veilleur:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-veilleur:SetScript("OnEvent", function(_self, event, arg1)
+local listener = CreateFrame("Frame")
+listener.elapsed = 0
+listener:RegisterEvent("PLAYER_ENTERING_WORLD")
+listener:RegisterEvent("MINIMAP_UPDATE_ZOOM")
+listener:RegisterEvent("ADDON_LOADED")
+listener:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+listener:SetScript("OnEvent", function(_self, event, arg1)
 	if event == "PLAYER_ENTERING_WORLD" then
-		construire()
-		majCycle()
-		M.recentrerCarteDuMonde()
+		build()
+		updateCycle()
+		M.recenterWorldMap()
 	elseif event == "ADDON_LOADED" then
 		if arg1 == "Blizzard_TimeManager" then
-			M.habillerHorloge()
+			M.skinClock()
 		end
 	elseif event == "ZONE_CHANGED_NEW_AREA" then
-		M.recentrerCarteDuMonde()
+		M.recenterWorldMap()
 	elseif event == "MINIMAP_UPDATE_ZOOM" then
-		-- MinimapMixin:OnEvent eteint le bouton arrive au bout de sa course.
-		local plus, moins = _G["MinimapZoomIn"], _G["MinimapZoomOut"]
-		local carte = M.carte
-		if plus and moins and carte and carte.GetZoom and carte.GetZoomLevels then
-			local niveau = carte:GetZoom()
-			if niveau == carte:GetZoomLevels() - 1 then plus:Disable() else plus:Enable() end
-			if niveau == 0 then moins:Disable() else moins:Enable() end
+		-- As MinimapMixin:OnEvent: disable a zoom button at the end of its range.
+		local plus, minus = _G["MinimapZoomIn"], _G["MinimapZoomOut"]
+		local map = M.map
+		if plus and minus and map and map.GetZoom and map.GetZoomLevels then
+			local level = map:GetZoom()
+			if level == map:GetZoomLevels() - 1 then plus:Disable() else plus:Enable() end
+			if level == 0 then minus:Disable() else minus:Enable() end
 		end
 	end
 end)
 
-veilleur:SetScript("OnUpdate", function(self, elapsed)
-	self.ecoule = self.ecoule + (elapsed or 0)
-	if self.ecoule < CYCLE_PERIODE then
+listener:SetScript("OnUpdate", function(self, elapsed)
+	self.elapsed = self.elapsed + (elapsed or 0)
+	if self.elapsed < CYCLE_PERIOD then
 		return
 	end
-	self.ecoule = 0
-	majCycle()
+	self.elapsed = 0
+	updateCycle()
 end)
 
--- GameTimeFrame_SetDate est rappelee par le client a chaque changement de
--- jour : on repasse derriere elle.
+-- The client calls GameTimeFrame_SetDate on each day change: reapply the calendar image.
 if hooksecurefunc and GameTimeFrame_SetDate then
-	hooksecurefunc("GameTimeFrame_SetDate", function() M.majCalendrier() end)
+	hooksecurefunc("GameTimeFrame_SetDate", function() M.updateCalendar() end)
 end
 if WorldMapFrame and WorldMapFrame.HookScript then
-	WorldMapFrame:HookScript("OnHide", function() M.recentrerCarteDuMonde() end)
+	WorldMapFrame:HookScript("OnHide", function() M.recenterWorldMap() end)
 end
 
-if construire() then
-	majCycle()
-	-- La minimap s'enregistre comme tout le reste : rien dans ce projet ne
-	-- pose sa position definitive lui-meme, sinon elle serait la seule que le
-	-- joueur ne pourrait pas deplacer.
+if build() then
+	updateCycle()
+	-- Registered with the layout like every frame, so the player can move it.
 	if ForeverUI.Layout and ForeverUI.Layout.Register then
 		ForeverUI.Layout.Register(_G["MinimapCluster"], "minimap", MINIMAP_LABEL,
 			"TOPRIGHT", "TOPRIGHT", 0, 0)
@@ -899,55 +750,55 @@ if construire() then
 end
 
 
+-- /fui minimap: prints each element's size and state; "scale <k>" sets the map scale.
 ForeverUI.MinimapDebug = function(argument)
-	local cluster, carte = M.cluster, M.carte
-	if not cluster or not carte then
-		dire(L.MINIMAP_DEBUG_NOTHING_BUILT)
+	local cluster, map = M.cluster, M.map
+	if not cluster or not map then
+		say(L.MINIMAP_DEBUG_NOTHING_BUILT)
 		return
 	end
 
-	-- `/fui minimap echelle <k>` : retoucher l'echelle a la main, jusqu'au
-	-- prochain /reload. Sans nombre, rend celle du projet.
-	if argument and string.match(argument, "^echelle%s*$") then
-		argument = "echelle " .. ECHELLE_CARTE
+	-- /fui minimap scale <k>: set the map scale until the next /reload; without k, the default.
+	if argument and string.match(argument, "^scale%s*$") then
+		argument = "scale " .. MAP_SCALE
 	end
-	local k = argument and tonumber(string.match(argument, "^echelle%s+([%d%.]+)$"))
+	local k = argument and tonumber(string.match(argument, "^scale%s+([%d%.]+)$"))
 	if k and k > 0 then
-		appliquerEchelle(k)
-		dire(string.format(L.MINIMAP_DEBUG_SCALE,
-			k, carte:GetWidth(), carte:GetWidth() * k))
+		applyScale(k)
+		say(string.format(L.MINIMAP_DEBUG_SCALE,
+			k, map:GetWidth(), map:GetWidth() * k))
 		return
 	end
 
-	local function ligne(texte)
-		DEFAULT_CHAT_FRAME:AddMessage("   " .. texte)
+	local function row(text)
+		DEFAULT_CHAT_FRAME:AddMessage("   " .. text)
 	end
 
-	dire(string.format(L.MINIMAP_DEBUG_SIZES,
+	say(string.format(L.MINIMAP_DEBUG_SIZES,
 		cluster:GetWidth(), cluster:GetHeight(),
-		M.conteneur:GetWidth(), M.conteneur:GetHeight(), carte:GetWidth()))
-	ligne(string.format(L.MINIMAP_DEBUG_FRAME,
-		ATLAS_CADRE, CHEMIN_MASQUE, M.echelle or 1, ECHELLE_CARTE))
-	ligne(string.format(L.MINIMAP_DEBUG_ZONE,
+		M.container:GetWidth(), M.container:GetHeight(), map:GetWidth()))
+	row(string.format(L.MINIMAP_DEBUG_FRAME,
+		ATLAS_FRAME, MASK_PATH, M.scale or 1, MAP_SCALE))
+	row(string.format(L.MINIMAP_DEBUG_ZONE,
 		tostring(_G["MinimapZoneText"] and _G["MinimapZoneText"]:GetText()),
 		tostring(_G["MinimapZoneText"] and _G["MinimapZoneText"]:GetJustifyH()),
 		_G["MinimapZoneText"] and _G["MinimapZoneText"]:GetWidth() or 0))
-	ligne(string.format(L.MINIMAP_DEBUG_ZOOM,
-		tostring(carte:GetZoom()), tostring(carte:GetZoomLevels()),
+	row(string.format(L.MINIMAP_DEBUG_ZOOM,
+		tostring(map:GetZoom()), tostring(map:GetZoomLevels()),
 		tostring(_G["MinimapZoomIn"] and _G["MinimapZoomIn"]:IsShown()),
 		tostring(_G["MinimapZoomOut"] and _G["MinimapZoomOut"]:IsShown())))
-	ligne(string.format(L.MINIMAP_DEBUG_CYCLE, tostring(GetGameTime and GetGameTime()),
-		M.jour and L.MINIMAP_DEBUG_DAY or L.MINIMAP_DEBUG_NIGHT))
+	row(string.format(L.MINIMAP_DEBUG_CYCLE, tostring(GetGameTime and GetGameTime()),
+		M.day and L.MINIMAP_DEBUG_DAY or L.MINIMAP_DEBUG_NIGHT))
 
-	ligne(string.format(L.MINIMAP_DEBUG_CLOCK,
-		_G["TimeManagerClockButton"] and (M.horlogeHabillee and L.MINIMAP_DEBUG_SKINNED or L.MINIMAP_DEBUG_NOT_SKINNED) or L.MINIMAP_DEBUG_NOT_LOADED,
+	row(string.format(L.MINIMAP_DEBUG_CLOCK,
+		_G["TimeManagerClockButton"] and (M.clockSkinned and L.MINIMAP_DEBUG_SKINNED or L.MINIMAP_DEBUG_NOT_SKINNED) or L.MINIMAP_DEBUG_NOT_LOADED,
 		_G["GameTimeFrame"] and (_G["GameTimeFrame"]:IsShown() and L.MINIMAP_DEBUG_VISIBLE or L.MINIMAP_DEBUG_HIDDEN) or L.MINIMAP_DEBUG_ABSENT,
-		tostring(M.coords and M.coords.texte:GetText())))
+		tostring(M.coords and M.coords.text:GetText())))
 
-	for _, item in ipairs(AUTOUR) do
-		local bouton = _G[item.nom]
-		ligne(string.format(L.MINIMAP_DEBUG_BUTTON, item.nom,
-			bouton and (bouton:IsShown() and L.MINIMAP_DEBUG_VISIBLE or L.MINIMAP_DEBUG_HIDDEN) or L.MINIMAP_DEBUG_ABSENT,
+	for _, item in ipairs(RING_ITEMS) do
+		local button = _G[item.name]
+		row(string.format(L.MINIMAP_DEBUG_BUTTON, item.name,
+			button and (button:IsShown() and L.MINIMAP_DEBUG_VISIBLE or L.MINIMAP_DEBUG_HIDDEN) or L.MINIMAP_DEBUG_ABSENT,
 			item.angle))
 	end
 end

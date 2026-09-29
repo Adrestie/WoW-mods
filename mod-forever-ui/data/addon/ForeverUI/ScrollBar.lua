@@ -1,263 +1,226 @@
--- ForeverUI : la barre de defilement de camelot, MinimalScrollBar.
---
--- RELEVE -- camelot/reputationframe.xml et blizzard_tokenui/camelot :
---   <EventFrame parentKey="ScrollBar" inherits="MinimalScrollBar">
---     TOPLEFT    sur le TOPRIGHT du ScrollBox    (5, -2)
---     BOTTOMLEFT sur le BOTTOMRIGHT du ScrollBox (5,  4)
---
--- MESURE SUR L'ART, et non d'apres les noms -- la regle vaut ici plus
--- qu'ailleurs, les noms de ces atlas ne disant pas ce qu'ils portent :
---
---   minimal-scrollbar-track-top / -bottom    8 x 8, noir a 60 % d'alpha,
---                                            le texel du bout transparent :
---                                            ce sont les deux embouts
---                                            arrondis de la glissiere
---   !minimal-scrollbar-track-middle          8 x 1, faite pour s'etirer
---   minimal-scrollbar-thumb-top              8 x 8, brun : l'embout du haut
---   minimal-scrollbar-thumb-middle           8 x 515, brun, etirable
---   minimal-scrollbar-thumb-bottom           8 x 36 -- et ce N'EST PAS un
---                                            embout : son alpha monte de 1 a
---                                            255 sur les 36 pixels, donc son
---                                            HAUT est transparent. Posee au
---                                            bas du curseur, elle le faisait
---                                            fondre dans le noir de la
---                                            glissiere. ELLE N'EST PAS
---                                            EMPLOYEE.
---   minimal-scrollbar-arrow-top / -bottom    17 x 11, plus larges que la
---                                            barre : elles la debordent de
---                                            4,5 de chaque cote
---
--- LES DEUX BOUTS DU CURSEUR SONT LE MEME MORCEAU, le second RETOURNE.
--- thumb-top est opaque d'un bord a l'autre, avec un filet clair sur son
--- premier texel : c'est un embout fini. On le pose en haut tel quel et en
--- bas retourne, et le milieu s'etire entre les deux -- le curseur est alors
--- plein jusqu'a ses extremites, ce que la demande veut. Ecart assume, et
--- mesure : garder le morceau nomme "bottom" donnait un degrade.
---
--- CE QUI DIFFERE, ET POURQUOI. 3.3.5 n'a pas MinimalScrollBar, ni le
--- ScrollBox qui le pilote : la barre est refaite en entier, et c'est
--- l'appelant qui lui dit combien de lignes existent, combien tiennent, et
--- ou il en est. Elle lui rend le nouveau decalage, rien de plus -- elle ne
--- touche a aucune liste.
+-- camelot's MinimalScrollBar, rebuilt: 3.3.5 has neither it nor the ScrollBox that drives it.
+-- The caller gives the row count, the rows that fit and the offset; the bar returns the new
+-- offset and touches no list.
+-- Measured on the art, not the atlas names: thumb-bottom fades out (alpha 1 to 255 over 36 px),
+-- so it is not used; both thumb ends are thumb-top, the bottom one flipped.
+-- The arrows (17 x 11) overhang the 8-wide bar by 4.5 on each side.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local LARGEUR = 8
-local FLECHE_L, FLECHE_H = 17, 11
-local CURSEUR_BOUT = 8                  -- minimal-scrollbar-thumb-top
-local CURSEUR_MIN = 2 * CURSEUR_BOUT    -- ses deux bouts, sans milieu
-local TRACK_BOUT = 8
+local WIDTH = 8
+local ARROW_W, ARROW_H = 17, 11
+local CURSOR_TIP = 8                  -- minimal-scrollbar-thumb-top
+local CURSOR_MIN = 2 * CURSOR_TIP    -- both ends, no middle
+local TRACK_TIP = 8
 
 local ATLAS = {
-	trackHaut = "minimal-scrollbar-track-top-c60",
-	trackMilieu = "!minimal-scrollbar-track-middle-c60",
-	trackBas = "minimal-scrollbar-track-bottom-c60",
-	curseurBout = "minimal-scrollbar-thumb-top-c60",
-	curseurMilieu = "minimal-scrollbar-thumb-middle-c60",
-	flecheHaut = "minimal-scrollbar-arrow-top-c60",
-	flecheHautSurvol = "minimal-scrollbar-arrow-top-over-c60",
-	flecheBas = "minimal-scrollbar-arrow-bottom-c60",
-	flecheBasSurvol = "minimal-scrollbar-arrow-bottom-over-c60",
+	trackTop = "minimal-scrollbar-track-top-c60",
+	trackMiddle = "!minimal-scrollbar-track-middle-c60",
+	trackBottom = "minimal-scrollbar-track-bottom-c60",
+	cursorTip = "minimal-scrollbar-thumb-top-c60",
+	cursorMiddle = "minimal-scrollbar-thumb-middle-c60",
+	upArrow = "minimal-scrollbar-arrow-top-c60",
+	upArrowHover = "minimal-scrollbar-arrow-top-over-c60",
+	downArrow = "minimal-scrollbar-arrow-bottom-c60",
+	downArrowHover = "minimal-scrollbar-arrow-bottom-over-c60",
 }
 
--- OU EN EST LA SOURIS, dans le repere d'un cadre. GetCursorPosition rend des
--- coordonnees d'ECRAN : il faut les ramener a l'echelle du cadre.
-local function souris(cadre)
+-- Mouse Y in a frame's coordinates: GetCursorPosition returns screen coordinates, so divide
+-- by the frame's effective scale.
+local function mouse(frame)
 	local _, y = GetCursorPosition()
-	return y / (cadre:GetEffectiveScale() or 1)
+	return y / (frame:GetEffectiveScale() or 1)
 end
 
-local function creerFleche(barre, nom, atlas, atlasSurvol, pas)
-	local bouton = CreateFrame("Button", nom, barre)
-	bouton:SetWidth(FLECHE_L)
-	bouton:SetHeight(FLECHE_H)
+-- Arrow button; step: rows moved per click (-1 up, 1 down).
+local function createArrow(bar, name, atlas, hoverAtlas, step)
+	local button = CreateFrame("Button", name, bar)
+	button:SetWidth(ARROW_W)
+	button:SetHeight(ARROW_H)
 
-	local image = bouton:CreateTexture(nil, "ARTWORK")
+	local image = button:CreateTexture(nil, "ARTWORK")
 	ForeverUI.SetAtlas(image, atlas, true)
-	image:SetAllPoints(bouton)
-	bouton.image = image
+	image:SetAllPoints(button)
+	button.image = image
 
-	bouton:SetScript("OnEnter", function(self)
-		ForeverUI.SetAtlas(self.image, atlasSurvol, true)
+	button:SetScript("OnEnter", function(self)
+		ForeverUI.SetAtlas(self.image, hoverAtlas, true)
 	end)
-	bouton:SetScript("OnLeave", function(self)
+	button:SetScript("OnLeave", function(self)
 		ForeverUI.SetAtlas(self.image, atlas, true)
 	end)
-	bouton:SetScript("OnClick", function()
-		barre:Deplacer(barre.decalage + pas)
+	button:SetScript("OnClick", function()
+		bar:MoveTo(bar.offset + step)
 	end)
 
-	return bouton
+	return button
 end
 
--- LA BARRE. `parent` la porte, `liste` est ce qu'elle fait defiler : on
--- s'ancre sur lui comme camelot le fait sur son ScrollBox.
-function ForeverUI.CreateScrollBar(nom, parent, liste)
-	local barre = CreateFrame("Frame", nom, parent)
-	barre:SetWidth(LARGEUR)
-	barre:SetPoint("TOPLEFT", liste, "TOPRIGHT", 5, -2)
-	barre:SetPoint("BOTTOMLEFT", liste, "BOTTOMRIGHT", 5, 4)
+-- name: global name (arrows and thumb derive theirs from it); parent: owner frame;
+-- list: the scrolled frame, which the bar anchors to as camelot's does to its ScrollBox.
+function ForeverUI.CreateScrollBar(name, parent, list)
+	local bar = CreateFrame("Frame", name, parent)
+	bar:SetWidth(WIDTH)
+	bar:SetPoint("TOPLEFT", list, "TOPRIGHT", 5, -2)
+	bar:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", 5, 4)
 
-	barre.total = 0
-	barre.visibles = 0
-	barre.decalage = 0
+	bar.total = 0
+	bar.visibleCount = 0
+	bar.offset = 0
 
-	local haut = creerFleche(barre, nom .. "Up", ATLAS.flecheHaut,
-		ATLAS.flecheHautSurvol, -1)
-	haut:SetPoint("TOP", barre, "TOP", 0, 0)
-	barre.flecheHaut = haut
+	local top = createArrow(bar, name .. "Up", ATLAS.upArrow,
+		ATLAS.upArrowHover, -1)
+	top:SetPoint("TOP", bar, "TOP", 0, 0)
+	bar.upArrow = top
 
-	local bas = creerFleche(barre, nom .. "Down", ATLAS.flecheBas,
-		ATLAS.flecheBasSurvol, 1)
-	bas:SetPoint("BOTTOM", barre, "BOTTOM", 0, 0)
-	barre.flecheBas = bas
+	local down = createArrow(bar, name .. "Down", ATLAS.downArrow,
+		ATLAS.downArrowHover, 1)
+	down:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
+	bar.downArrow = down
 
-	-- LA GLISSIERE, entre les deux fleches : deux embouts et un milieu tendu.
-	local piste = CreateFrame("Frame", nil, barre)
-	piste:SetPoint("TOPLEFT", haut, "BOTTOMLEFT", 0, 0)
-	piste:SetPoint("BOTTOMRIGHT", bas, "TOPRIGHT", 0, 0)
-	piste:SetWidth(LARGEUR)
-	barre.piste = piste
+	-- Track between the arrows: two rounded ends and a stretched middle.
+	local track = CreateFrame("Frame", nil, bar)
+	track:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, 0)
+	track:SetPoint("BOTTOMRIGHT", down, "TOPRIGHT", 0, 0)
+	track:SetWidth(WIDTH)
+	bar.track = track
 
-	local function tranche(cadre, atlas, couche)
-		local t = cadre:CreateTexture(nil, couche or "BACKGROUND")
+	local function slice(frame, atlas, layer)
+		local t = frame:CreateTexture(nil, layer or "BACKGROUND")
 		ForeverUI.SetAtlas(t, atlas, true)
-		t:SetWidth(LARGEUR)
+		t:SetWidth(WIDTH)
 		return t
 	end
 
-	local pisteHaut = tranche(piste, ATLAS.trackHaut)
-	pisteHaut:SetHeight(TRACK_BOUT)
-	pisteHaut:SetPoint("TOP", piste, "TOP", 0, 0)
-	local pisteBas = tranche(piste, ATLAS.trackBas)
-	pisteBas:SetHeight(TRACK_BOUT)
-	pisteBas:SetPoint("BOTTOM", piste, "BOTTOM", 0, 0)
-	local pisteMilieu = tranche(piste, ATLAS.trackMilieu)
-	pisteMilieu:SetPoint("TOPLEFT", pisteHaut, "BOTTOMLEFT", 0, 0)
-	pisteMilieu:SetPoint("BOTTOMRIGHT", pisteBas, "TOPRIGHT", 0, 0)
+	local trackTop = slice(track, ATLAS.trackTop)
+	trackTop:SetHeight(TRACK_TIP)
+	trackTop:SetPoint("TOP", track, "TOP", 0, 0)
+	local trackBottom = slice(track, ATLAS.trackBottom)
+	trackBottom:SetHeight(TRACK_TIP)
+	trackBottom:SetPoint("BOTTOM", track, "BOTTOM", 0, 0)
+	local trackMiddle = slice(track, ATLAS.trackMiddle)
+	trackMiddle:SetPoint("TOPLEFT", trackTop, "BOTTOMLEFT", 0, 0)
+	trackMiddle:SetPoint("BOTTOMRIGHT", trackBottom, "TOPRIGHT", 0, 0)
 
-	-- LE CURSEUR : ses trois tranches, dans un cadre qu'on deplace.
-	local curseur = CreateFrame("Frame", nom .. "Thumb", piste)
-	curseur:SetWidth(LARGEUR)
-	curseur:SetHeight(CURSEUR_MIN)
-	curseur:EnableMouse(true)
-	barre.curseur = curseur
+	-- Thumb: three slices in a frame that moves.
+	local cursor = CreateFrame("Frame", name .. "Thumb", track)
+	cursor:SetWidth(WIDTH)
+	cursor:SetHeight(CURSOR_MIN)
+	cursor:EnableMouse(true)
+	bar.cursor = cursor
 
-	local cHaut = tranche(curseur, ATLAS.curseurBout, "ARTWORK")
-	cHaut:SetHeight(CURSEUR_BOUT)
-	cHaut:SetPoint("TOP", curseur, "TOP", 0, 0)
+	local cTop = slice(cursor, ATLAS.cursorTip, "ARTWORK")
+	cTop:SetHeight(CURSOR_TIP)
+	cTop:SetPoint("TOP", cursor, "TOP", 0, 0)
 
-	-- LE MEME MORCEAU, RETOURNE : on echange le haut et le bas de son
-	-- rectangle d'atlas.
-	local cBas = tranche(curseur, ATLAS.curseurBout, "ARTWORK")
-	local e = ForeverUI.AtlasEntry(ATLAS.curseurBout)
+	-- Same piece, flipped: swap the top and bottom of its atlas rectangle.
+	local cBottom = slice(cursor, ATLAS.cursorTip, "ARTWORK")
+	local e = ForeverUI.AtlasEntry(ATLAS.cursorTip)
 	if e then
-		cBas:SetTexCoord(e[2], e[3], e[5], e[4])
+		cBottom:SetTexCoord(e[2], e[3], e[5], e[4])
 	end
-	cBas:SetHeight(CURSEUR_BOUT)
-	cBas:SetPoint("BOTTOM", curseur, "BOTTOM", 0, 0)
+	cBottom:SetHeight(CURSOR_TIP)
+	cBottom:SetPoint("BOTTOM", cursor, "BOTTOM", 0, 0)
 
-	local cMilieu = tranche(curseur, ATLAS.curseurMilieu, "ARTWORK")
-	cMilieu:SetPoint("TOPLEFT", cHaut, "BOTTOMLEFT", 0, 0)
-	cMilieu:SetPoint("BOTTOMRIGHT", cBas, "TOPRIGHT", 0, 0)
+	local cMiddle = slice(cursor, ATLAS.cursorMiddle, "ARTWORK")
+	cMiddle:SetPoint("TOPLEFT", cTop, "BOTTOMLEFT", 0, 0)
+	cMiddle:SetPoint("BOTTOMRIGHT", cBottom, "TOPRIGHT", 0, 0)
 
-	-- CE QUE LA BARRE SAIT FAIRE.
+	-- Bar methods
 
-	-- Deplacer d'un cran, en bornant : elle ne connait pas la liste, elle
-	-- ne connait que ses trois nombres.
-	function barre:Deplacer(vers)
-		local maximum = math.max(0, self.total - self.visibles)
-		vers = math.max(0, math.min(math.floor(vers + 0.5), maximum))
-		if vers == self.decalage then
+	-- Moves to offset `to`, clamped. The bar knows only its three numbers, not the list.
+	-- Calls onScroll(offset) when the offset changes.
+	function bar:MoveTo(to)
+		local maximum = math.max(0, self.total - self.visibleCount)
+		to = math.max(0, math.min(math.floor(to + 0.5), maximum))
+		if to == self.offset then
 			return
 		end
-		self.decalage = vers
-		self:Repositionner()
-		if self.surDefilement then
-			self.surDefilement(vers)
+		self.offset = to
+		self:Reposition()
+		if self.onScroll then
+			self.onScroll(to)
 		end
 	end
 
-	-- Poser le curseur : sa hauteur dit la part visible, sa place le
-	-- decalage.
-	function barre:Repositionner()
-		local hauteur = self.piste:GetHeight() or 0
-		local maximum = math.max(0, self.total - self.visibles)
+	-- Places the thumb: its height shows the visible share, its position the offset.
+	function bar:Reposition()
+		local height = self.track:GetHeight() or 0
+		local maximum = math.max(0, self.total - self.visibleCount)
 
-		if hauteur <= 0 or maximum <= 0 then
-			self.curseur:Hide()
+		if height <= 0 or maximum <= 0 then
+			self.cursor:Hide()
 			return
 		end
 
-		local part = self.visibles / self.total
-		local taille = math.max(CURSEUR_MIN, math.floor(hauteur * part + 0.5))
-		if taille > hauteur then
-			taille = hauteur
+		local part = self.visibleCount / self.total
+		local size = math.max(CURSOR_MIN, math.floor(height * part + 0.5))
+		if size > height then
+			size = height
 		end
-		local course = hauteur - taille
+		local travel = height - size
 
-		self.curseur:SetHeight(taille)
-		self.curseur:ClearAllPoints()
-		self.curseur:SetPoint("TOP", self.piste, "TOP", 0,
-			-course * (self.decalage / maximum))
-		self.curseur:Show()
+		self.cursor:SetHeight(size)
+		self.cursor:ClearAllPoints()
+		self.cursor:SetPoint("TOP", self.track, "TOP", 0,
+			-travel * (self.offset / maximum))
+		self.cursor:Show()
 	end
 
-	-- CE QUE L'APPELANT LUI DIT : combien de lignes, combien tiennent, ou il
-	-- en est. La barre s'efface quand tout tient. Quand elle parait ou
-	-- s'efface, `surVisibilite(avec)` le dit a l'appelant, dont le contenu
-	-- prend ou rend sa place (regle du 28/09).
-	function barre:Regler(total, visibles, decalage)
+	-- The caller gives the row count, rows that fit, current offset. The bar hides when
+	-- everything fits. When it shows or hides, onVisibility(shown) tells the caller, whose
+	-- content takes or gives back the space.
+	function bar:Configure(total, visibleCount, offset)
 		self.total = total or 0
-		self.visibles = visibles or 0
-		self.decalage = decalage or 0
-		local avec = self.total > self.visibles
-		if avec then
+		self.visibleCount = visibleCount or 0
+		self.offset = offset or 0
+		local hasBar = self.total > self.visibleCount
+		if hasBar then
 			self:Show()
-			self:Repositionner()
+			self:Reposition()
 		else
 			self:Hide()
 		end
-		if avec ~= self.avecAvant then
-			self.avecAvant = avec
-			if self.surVisibilite then self.surVisibilite(avec) end
+		if hasBar ~= self.wasNeeded then
+			self.wasNeeded = hasBar
+			if self.onVisibility then self.onVisibility(hasBar) end
 		end
 	end
 
-	-- GLISSER LE CURSEUR. Un OnUpdate le suit tant que le bouton est tenu :
-	-- 3.3.5 n'a pas de suivi de souris sur un cadre.
-	curseur:SetScript("OnMouseDown", function(self)
-		self.prise = souris(self)
-		self.priseDecalage = barre.decalage
-		self:SetScript("OnUpdate", function(soi)
-			local hauteur = barre.piste:GetHeight() or 0
-			local course = hauteur - (soi:GetHeight() or 0)
-			local maximum = math.max(0, barre.total - barre.visibles)
-			if course <= 0 or maximum <= 0 then
+	-- Thumb drag: an OnUpdate follows the mouse while the button is held. 3.3.5 has no mouse
+	-- tracking on a frame.
+	cursor:SetScript("OnMouseDown", function(self)
+		self.grab = mouse(self)
+		self.grabOffset = bar.offset
+		self:SetScript("OnUpdate", function(me)
+			local height = bar.track:GetHeight() or 0
+			local travel = height - (me:GetHeight() or 0)
+			local maximum = math.max(0, bar.total - bar.visibleCount)
+			if travel <= 0 or maximum <= 0 then
 				return
 			end
-			local parcouru = soi.prise - souris(soi)
-			barre:Deplacer(soi.priseDecalage + parcouru / course * maximum)
+			local traveled = me.grab - mouse(me)
+			bar:MoveTo(me.grabOffset + traveled / travel * maximum)
 		end)
 	end)
-	curseur:SetScript("OnMouseUp", function(self)
+	cursor:SetScript("OnMouseUp", function(self)
 		self:SetScript("OnUpdate", nil)
 	end)
 
-	-- CLIQUER LA GLISSIERE saute d'une page, du cote ou l'on a clique.
-	piste:EnableMouse(true)
-	piste:SetScript("OnMouseDown", function(self)
-		local y = souris(self)
-		local dessus = barre.curseur:GetTop() or 0
-		local dessous = barre.curseur:GetBottom() or 0
-		if y > dessus then
-			barre:Deplacer(barre.decalage - barre.visibles)
-		elseif y < dessous then
-			barre:Deplacer(barre.decalage + barre.visibles)
+	-- Clicking the track jumps one page toward the click.
+	track:EnableMouse(true)
+	track:SetScript("OnMouseDown", function(self)
+		local y = mouse(self)
+		local hovered = bar.cursor:GetTop() or 0
+		local below = bar.cursor:GetBottom() or 0
+		if y > hovered then
+			bar:MoveTo(bar.offset - bar.visibleCount)
+		elseif y < below then
+			bar:MoveTo(bar.offset + bar.visibleCount)
 		end
 	end)
 
-	barre:Hide()
-	return barre
+	bar:Hide()
+	return bar
 end

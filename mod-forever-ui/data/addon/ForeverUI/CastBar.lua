@@ -1,24 +1,10 @@
--- ForeverUI : la barre d'incantation du joueur.
---
--- RELEVE DES SOURCES
---   art      interface/castingbar/uicastingbar.blp : ui-castingbar-frame
---            (214x16) pose par-dessus, ui-castingbar-background (209x11) en
---            fond, et trois remplissages de meme taille --
---            filling-standard, filling-channel, uninterruptable -- plus
---            ui-castingbar-interrupted pour l'echec et ui-castingbar-shield
---            (54x64) pour ce qui ne peut pas etre interrompu.
---   donnees  3.3.5 CastingBarFrame.lua : UnitCastingInfo et UnitChannelInfo
---            rendent nom, texture, debut et fin en millisecondes, et le
---            drapeau "non interruptible". Les evenements sont les
---            UNIT_SPELLCAST_*.
---   sens     une incantation se remplit, un canalisation se vide : c'est la
---            seule difference de calcul entre les deux.
---
--- POSITION : systeme a part entiere, comme dans l'editeur de camelot ou la
--- barre d'incantation se deplace independamment des cadres d'unite.
+-- ForeverUI: the player cast bar. Art: interface/castingbar/uicastingbar.blp (ui-castingbar-*).
+-- Data as in 3.3.5 CastingBarFrame.lua: UnitCastingInfo / UnitChannelInfo (times in ms) and
+-- the UNIT_SPELLCAST_* events. A cast fills, a channel drains.
+-- The bar is its own layout system, moved apart from the unit frames, as in camelot's editor.
 
 local BAR_WIDTH, BAR_HEIGHT = 214, 16
-local FILL_WIDTH, FILL_HEIGHT = 209, 11
+local FILL_WIDTH = 209
 local L = ForeverUI.L
 
 local FILL = {
@@ -72,6 +58,8 @@ local function stopBar()
 	frame:Hide()
 end
 
+-- Shows the failed bar for HOLD_AFTER_END seconds.
+-- atlasKey: key in FILL; message: text shown on the bar
 local function showFailure(atlasKey, message)
 	frame.casting = false
 	frame.channeling = false
@@ -83,6 +71,7 @@ local function showFailure(atlasKey, message)
 	frame:Show()
 end
 
+-- Starts the bar from the client's current cast. channel: true for a channeled spell
 local function startCast(channel)
 	local name, _subtext, text, texture, startTime, endTime, _isTrade, _castID, notInterruptible
 	if channel then
@@ -171,7 +160,7 @@ frame:SetScript("OnUpdate", function(self)
 		fraction = 1
 	end
 
-	-- Une incantation se remplit, une canalisation se vide.
+	-- A cast fills, a channel drains.
 	if self.channeling then
 		fraction = 1 - fraction
 	end

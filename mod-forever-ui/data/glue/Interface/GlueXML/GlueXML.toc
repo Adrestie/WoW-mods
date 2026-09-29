@@ -32,7 +32,7 @@ AudioOptionsFrame.xml
 AudioOptionsPanels.xml
 OptionsSelect.xml
 ##CameraSelect.xml
-## ForeverUI : les ecrans d'accueil a la DA de camelot
+## ForeverUI: login screens in Camelot's style
 ForeverUIGlue.xml
 
 ## This Always Runs Last, Add New Items above it.

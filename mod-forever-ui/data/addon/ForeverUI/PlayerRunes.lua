@@ -1,22 +1,7 @@
--- ForeverUI : les runes du chevalier de la mort.
---
--- RELEVE DES SOURCES
---   art        mainline/RuneFrame.xml : un bouton de 24x24 empile, du fond
---              vers l'avant, UF-DKRunes-BGShadow (centre, y -3), BGDis ou
---              BGActive, le crane SkullDis ou <type>-SkullActive, puis la
---              lueur <type>-FilledGlwA. Toutes ces images sont sur la feuille
---              interface/hud/uideathknightrunes.blp.
---   donnees    3.3.5 RuneFrame.lua : GetRuneCooldown(i) rend debut, duree et
---              disponibilite ; GetRuneType(i) rend 1 sang, 2 impie, 3 givre,
---              4 mort. Evenements RUNE_POWER_UPDATE et RUNE_TYPE_UPDATE.
---   cadre      camelot bascule l'art du cadre sur la variante ClassResource
---              des qu'une ressource de classe s'affiche sous les barres.
---   entorse    la source habille le balayage de recharge avec l'atlas
---              UF-DKRunes-<type>-LevelBar ; 3.3.5 n'a ni SetSwipeTexture ni
---              SetTexCoordRange, le balayage reste donc celui du client.
---
--- Le type 4 (rune de mort), propre a 3.3.5, n'a pas d'art dedie sur la feuille
--- moderne : il prend le jeu "default", qui est justement le crane neutre.
+-- ForeverUI: death knight runes. Art: mainline/RuneFrame.xml (sheet uideathknightrunes.blp);
+-- data: 3.3.5 RuneFrame.lua (GetRuneType: 1 blood, 2 unholy, 3 frost, 4 death).
+-- 3.3.5 has no SetSwipeTexture or SetTexCoordRange, so the cooldown swipe stays the client's.
+-- Death runes (3.3.5 only) have no art on the modern sheet: they use "default", the neutral skull.
 
 local CLASS = select(2, UnitClass("player"))
 if CLASS ~= "DEATHKNIGHT" then
@@ -25,12 +10,9 @@ end
 
 local frame = ForeverUI.PlayerFrame
 
--- RELEVE DE PLACEMENT, recopie des deux fichiers
---   mainline/PlayerFrame.xml : PlayerBottomManagedFrameContainer, largeur
---   fixe 160, TOP ancre sur le BOTTOM du cadre joueur en (30, 25).
---   mainline/RuneFrame.xml : RuneFrame 130 x 24, scale 0.95, et ses runes
---   rangees avec un espacement de -1 ; chaque bouton fait 24 x 24, la
---   minuterie 27 x 27 centree.
+-- mainline/PlayerFrame.xml: PlayerBottomManagedFrameContainer, width 160, TOP on the player
+-- frame's BOTTOM at (30, 25). mainline/RuneFrame.xml: RuneFrame 130 x 24, scale 0.95, runes
+-- 24 x 24 spaced -1, cooldown 27 x 27 centered.
 local RUNE_COUNT = 6
 local RUNE_SIZE = 24
 local RUNE_SPACING = -1
@@ -46,18 +28,14 @@ local TYPE_PREFIX = {
 	[4] = "default",
 }
 
--- Le cadre joueur prend sa variante a ressource de classe : elle est trois
--- pixels plus haute et menage la bande ou se posent les runes.
+-- class resource variant of the player frame: 3 pixels taller, with a strip for the runes
 ForeverUI.PlayerFrameSetArt("ui-hud-unitframe-player-portraiton-classresource")
 
--- Le cadre de runes du client se superposait au notre : il faut le
--- neutraliser, et pas seulement le masquer -- RuneFrame se reaffiche a chaque
--- mise a jour de rune.
+-- RuneFrame shows itself again on every rune update, so it is suppressed, not just hidden
 ForeverUI.Suppress(RuneFrame)
 
--- Le conteneur reprend la bande des ressources de classe : il n'est pas mis a
--- l'echelle, sinon son ancrage le serait aussi. C'est la barre de runes qui
--- porte le 0,95 de la source.
+-- The container (class resource strip) is not scaled, or its anchor offset would be too;
+-- the rune bar carries the source's 0.95 scale.
 local container = CreateFrame("Frame", "ForeverUIClassResourceContainer", frame)
 container:SetWidth(CONTAINER_WIDTH)
 container:SetHeight(BAR_HEIGHT)
@@ -72,15 +50,13 @@ runeBar:SetPoint("CENTER", container, "CENTER", 0, 0)
 
 local buttons = {}
 
--- Les calques, dans l'ordre et avec les melanges du XML : tous en BLEND, pas
--- un seul en additif. Les calques Mid, Eyes, Glow, Glow2 et Smoke ne servent
--- qu'aux transitions et finissent tous a 0 : ils ne sont pas construits.
+-- Layers in XML order, all BLEND. Mid, Eyes, Glow, Glow2 and Smoke only serve transitions
+-- and end at alpha 0, so they are not built.
 for index = 1, RUNE_COUNT do
 	local button = CreateFrame("Frame", nil, runeBar)
 	button:SetWidth(RUNE_SIZE)
 	button:SetHeight(RUNE_SIZE)
-	-- six boutons de 24 espaces de -1 : 139 de large, centres dans les 130
-	-- declares par la source.
+	-- six 24 buttons spaced -1 are 139 wide, centered in the source's 130
 	button:SetPoint("LEFT", runeBar, "LEFT",
 		(BAR_WIDTH - (RUNE_COUNT * RUNE_SIZE + (RUNE_COUNT - 1) * RUNE_SPACING)) / 2
 		+ (index - 1) * (RUNE_SIZE + RUNE_SPACING), 0)
@@ -118,13 +94,10 @@ for index = 1, RUNE_COUNT do
 	buttons[index] = button
 end
 
--- ALPHAS FINAUX, releves dans les groupes d'animation du XML (setToFinalAlpha) :
---   pret (CooldownEndingAnim) : BG_Active 1, BG_Inactive 0, Rune_Active 1,
---     Rune_Inactive 0, et tout le reste -- lueurs comprises -- a 0.
---   vide (EmptyAnim) : BG_Active 0, BG_Inactive 1, Rune_Active 0,
---     Rune_Inactive 0.4, Rune_Lines 0.
---   en recharge (CooldownFillAnim) : par-dessus l'etat vide, Rune_Grad 0.3 et
---     Rune_Lines 0.3. Rien d'autre ne s'allume.
+-- Final alphas of the XML animation groups (setToFinalAlpha):
+-- ready (CooldownEndingAnim): BG_Active 1, Rune_Active 1, all else 0 (glows included);
+-- empty (EmptyAnim): BG_Inactive 1, Rune_Inactive 0.4, all else 0;
+-- cooling down (CooldownFillAnim): empty state plus Rune_Grad 0.3 and Rune_Lines 0.3.
 local function updateRune(index)
 	local button = buttons[index]
 	if not button then
@@ -151,9 +124,9 @@ local function updateRune(index)
 		button.runeActive:SetAlpha(0)
 		button.runeInactive:SetAlpha(0.4)
 
-		local recharge = (start and duration and duration > 0) and 0.3 or 0
-		button.runeGrad:SetAlpha(recharge)
-		button.runeLines:SetAlpha(recharge)
+		local cooldown = (start and duration and duration > 0) and 0.3 or 0
+		button.runeGrad:SetAlpha(cooldown)
+		button.runeLines:SetAlpha(cooldown)
 	end
 
 	if start and duration and duration > 0 and CooldownFrame_SetTimer then
@@ -184,8 +157,8 @@ runeBar:SetScript("OnEvent", function(_self, event, rune)
 	end
 end)
 
--- La fin d'une recharge ne previent pas toujours : tant qu'une rune tourne, on
--- relit dix fois par seconde. Rien ne tourne quand tout est pret.
+-- The end of a cooldown does not always fire an event: while a rune is cooling down,
+-- poll ten times a second.
 runeBar:SetScript("OnUpdate", function(self, elapsed)
 	self.elapsed = (self.elapsed or 0) + elapsed
 	if self.elapsed < 0.1 then
@@ -204,5 +177,4 @@ end)
 updateAllRunes()
 
 ForeverUI.RuneBar = runeBar
-ForeverUI.ClassResourceContainer = container
 ForeverUI.RuneButtons = buttons

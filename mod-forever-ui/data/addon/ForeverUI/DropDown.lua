@@ -1,450 +1,352 @@
--- ForeverUI : les listes des menus deroulants.
---
--- CE QUE C'EST. Quand on clique sur un menu deroulant, 3.3.5 ouvre un cadre
--- global unique -- DropDownList1, et DropDownList2 pour un sous-menu. Tous
--- les menus du jeu passent par lui : celui des categories de statistiques
--- comme celui d'un clic droit sur un joueur. Le rhabiller les rhabille tous.
---
--- RELEVE -- CE QUE LE CLIENT CHARGE (patch-enUS-2 pour le .xml, patch-enUS-3
--- pour le .lua, le FrameXML d'origine).
---   UIDropDownListTemplate : un Button en strate DIALOG qui tient DEUX fonds
---   en cadres fils, montres l'un ou l'autre selon displayMode --
---   $parentBackdrop (UI-DialogBox-Background-Dark et UI-DialogBox-Border) et
---   $parentMenuBackdrop (UI-Tooltip-Background et UI-Tooltip-Border).
---   UIDropDownMenuButtonTemplate : 100 x 16, avec $parentHighlight
---   (UI-QuestTitleHighlight en ADD), $parentCheck (UI-CheckBox-Check, 18 x 18
---   a LEFT), $parentExpandArrow (ChatFrameExpandArrow) et $parentNormalText.
---   UIDROPDOWNMENU_BUTTON_HEIGHT 16, UIDROPDOWNMENU_BORDER_HEIGHT 15 :
---   une ligne se pose a -((rang - 1) x 16) - 15 et la liste fait
---   rangs x 16 + 15 x 2.
---
--- RELEVE -- CE QUE FAIT CAMELOT. Blizzard_Menu, MenuStyle1Mixin, que
--- MenuVariants.GetDefaultMenuMixin et GetDefaultContextMenuMixin rendent
--- tous deux -- donc le meme habillage pour un menu deroulant et pour un menu
--- contextuel.
---
---   Generate()   fond common-dropdown-bg, TOPLEFT (-10, 3) et BOTTOMRIGHT
---                (10, -3), alpha 0,925 -- UNE texture etiree.
---   GetInset()   gauche 8, haut 8, droite 8, bas 15.
---   ligne        DarkMenuElementTemplate, 20 de haut.
---   police       le compositeur pose GameFontHighlight, blanc, justifie a
---                gauche et centre verticalement.
---   largeur      DropdownButtonMixin:RegisterMenu -- si la description du
---                menu n'impose rien, SetMinimumWidth(self:GetWidth()) : la
---                liste fait AU MOINS la largeur du bouton qui l'ouvre.
---   coche        MenuVariants.CreateCheckbox : la CASE common-dropdown-
---                ticksquare a LEFT, toujours la, et la COCHE JAUNE
---                common-dropdown-icon-checkmark-yellow par-dessus, centree
---                a (2, 1), seulement quand la ligne est choisie.
---   surbrillance MenuVariants.CreateHighlight : UI-QuestTitleHighlight en
---                ADD sur toute la ligne -- DEJA CE QUE FAIT 3.3.5.
---   sous-menu    MenuVariants.CreateSubmenuArrow : ChatFrameExpandArrow --
---                DEJA CE QUE FAIT 3.3.5.
---
--- QUELLE SAVEUR. Blizzard_Menu.toc charge Camelot\Menu.xml pour camelot,
--- mais ses gabarits viennent de [Family]\MenuTemplates : il n'y a pas de
--- camelot/, et entre les deux familles presentes la reponse se lit dans
--- l'art -- les atlas common-dropdown-classic-* n'existent NULLE PART dans ce
--- client, tandis que common-dropdown-* ont tous leur variante c60. C'est
--- donc la famille mainline, avec l'art c60.
---
--- CE QUI DIFFERE, ET POURQUOI.
---   Les marges de camelot sont dissymetriques (8 en haut, 15 en bas) ; 3.3.5
---   n'a qu'une constante pour les deux, UIDROPDOWNMENU_BORDER_HEIGHT, et la
---   sert deux fois. Elle reste a 15 : la tordre deplacerait toutes les
---   lignes de tous les menus du jeu pour trois pixels.
---   La case a cocher et la coche jaune n'ont PAS de variante c60 : leur art
---   de base est celui que camelot montre.
---   3.3.5 ne distingue pas une case a cocher d'un bouton radio -- un menu
---   n'a que info.checked. La paire case + coche jaune sert donc partout, la
---   ou camelot choisirait le rond pour un choix unique.
+-- Dropdown lists with camelot's art. 3.3.5 opens every menu (dropdowns and right-click menus)
+-- in the global DropDownList1 (DropDownList2 for a submenu), so skinning it skins them all.
+-- Style 1 follows camelot's MenuStyle1Mixin (Blizzard_Menu, mainline family, c60 art):
+-- common-dropdown-bg background, 20-high rows, GameFontHighlight, and the
+-- common-dropdown-ticksquare box with the yellow checkmark over it. 3.3.5 has no radio
+-- buttons (only info.checked), so the box and checkmark serve everywhere.
+-- UIDROPDOWNMENU_BORDER_HEIGHT stays 15 for both top and bottom (camelot uses 8 and 15):
+-- changing it would move every row of every menu.
 
 ForeverUI = ForeverUI or {}
 
--- LE FOND, EN NEUF TRANCHES. Camelot etire une seule texture d'un bord a
--- l'autre. Mesure sur l'image -- common-dropdown-bg-c60, 68 x 68 -- le
--- panneau n'occupe que x 9..58 et y 6..55 : le reste est une OMBRE de 9 a
--- gauche et a droite, 6 en haut et 12 en bas, et les angles sont coupes sur
--- 6 pixels. L'etirer sur une liste de 200 x 130 multiplie cette ombre par
--- 3,3 en largeur et par 2 en hauteur : le filet dore rentre d'une vingtaine
--- de pixels de chaque cote, les angles s'ecrasent, et le bas du panneau
--- remonte au-dessus de la derniere ligne.
---
--- Les coins gardent donc leur taille et seuls les bords s'etirent. Le coin
--- vaut 18 : l'ombre la plus epaisse (12) plus le pan coupe (6), ce qui
--- laisse une bande centrale de 32 sur les 68.
---
--- Et les marges ne sont plus celles de camelot mais CELLES DE L'IMAGE :
--- donner l'epaisseur de l'ombre fait tomber le filet exactement sur le bord
--- du cadre, donc sur la largeur du menu deroulant.
-local FOND_ATLAS = "common-dropdown-bg-c60"
-local FOND_COIN = 18
-local FOND_MARGES = { 9, 6, 9, 12 }     -- gauche, haut, droite, bas
-local FOND_ALPHA = 0.925
-local LIGNE_HAUTEUR = 20
-local CASE_ATLAS = "common-dropdown-ticksquare"
-local CASE = 12
-local COCHE_ATLAS = "common-dropdown-icon-checkmark-yellow"
-local COCHE_L, COCHE_H = 15, 14
-local COCHE_X, COCHE_Y = 2, 1
-local FONDS = { "Backdrop", "MenuBackdrop" }
+-- Background in nine slices. Camelot stretches one texture, but common-dropdown-bg-c60
+-- (68 x 68) has a shadow around the panel (9 left and right, 6 top, 12 bottom) and 6 px cut
+-- corners: stretched, the shadow grows and the gold edge moves inward. Corners keep their
+-- size (18 = thickest shadow 12 + cut 6). The margins are the image's shadow, so the gold
+-- edge falls exactly on the frame edge.
+local BACKGROUND_ATLAS = "common-dropdown-bg-c60"
+local BACKGROUND_CORNER = 18
+local BACKGROUND_MARGINS = { 9, 6, 9, 12 }     -- left, top, right, bottom
+local BACKGROUND_ALPHA = 0.925
+local ROW_HEIGHT = 20
+local CHECKBOX_ATLAS = "common-dropdown-ticksquare"
+local CHECKBOX = 12
+local CHECKMARK_ATLAS = "common-dropdown-icon-checkmark-yellow"
+local CHECKMARK_W, CHECKMARK_H = 15, 14
+local CHECKMARK_X, CHECKMARK_Y = 2, 1
+local BACKDROPS = { "Backdrop", "MenuBackdrop" }
 
--- LE STYLE 2, CELUI DES REGLAGES (2026-09-28, menu et reglages « 3.3.5
--- rhabillee »). Un menu deroulant des fenetres d'options porte
--- foreverStyle = 2 (Settings.lua) ; sa liste prend alors ce que les options
--- de l'accueil ont VALIDE le 28/09 (ForeverUIGlueMenuDeroulant.lua) --
--- MenuStyle2Mixin de camelot (mainline/menutemplates.lua) : fond
--- common-dropdown-c-bg decoupe en neuf, de (-17, 12) a (17, -22), marges
--- 3 / 6 / 3 / 7 ; lignes de 20 ; choix unique : le rond
--- common-dropdown-tickradial a LEFT (-3, 0), le choisi
--- common-dropdown-icon-radialtick-yellow par-dessus, texte a 1 a sa droite ;
--- largeur = contenu (rond + 20 de rembourrage + texte), AU MOINS le bouton
--- (plancher de camelot, SetMinimumWidth) ; la liste sous le bouton, TOPLEFT
--- sur BOTTOMLEFT. ECART repris de l'accueil (demande du 28/09) : les lignes
--- en taille 10 (GameFont*SmallLeft) au lieu de 12. Les autres menus gardent
--- le style 1 ci-dessus, tel quel.
+-- Style 2, for settings: a dropdown of the options windows has foreverStyle = 2
+-- (Settings.lua), and its list matches the login screen options (ForeverUIGlueDropDown.lua).
+-- Camelot's MenuStyle2Mixin (mainline/menutemplates.lua): nine-slice common-dropdown-c-bg
+-- from (-17, 12) to (17, -22), margins 3 / 6 / 3 / 7, 20-high rows, radial tick for a
+-- single choice, width = content but at least the button, list below the button. Rows use
+-- size 10 (GameFont*SmallLeft) instead of 12. Other menus keep style 1.
 local STYLE2 = {
-	fond = "common-dropdown-c-bg",
-	fondA = { -17, 12 },
-	fondB = { 17, -22 },
-	marges = { 3, 6, 3, 7 },            -- gauche, haut, droite, bas
-	rond = "common-dropdown-tickradial",
+	background = "common-dropdown-c-bg",
+	backgroundA = { -17, 12 },
+	backgroundB = { 17, -22 },
+	margins = { 3, 6, 3, 7 },            -- left, top, right, bottom
+	circle = "common-dropdown-tickradial",
 	point = "common-dropdown-icon-radialtick-yellow",
-	etendue = 16 + 20,                  -- rond (-3 .. 15) + 1, et le rembourrage
-	sansRond = 20,
+	span = 16 + 20,                  -- circle (-3 .. 15) + 1, plus the padding
+	noRadio = 20,
 }
 
-local function style2(cadre)
-	return cadre ~= nil and type(cadre) == "table" and cadre.foreverStyle == 2
+local function style2(frame)
+	return frame ~= nil and type(frame) == "table" and frame.foreverStyle == 2
 end
 
--- le menu que la liste sert en ce moment : celui qu'on remplit, sinon celui
--- qui est ouvert
-local function menuEnCours()
+-- The menu the list serves now: the one being filled, else the open one
+local function currentMenu()
 	return UIDROPDOWNMENU_INIT_MENU or UIDROPDOWNMENU_OPEN_MENU
 end
 
--- L'ecart que le client garde entre la liste et ses lignes : il pose la
--- liste a maxWidth + 25 et les lignes a maxWidth. On le garde tel quel pour
--- que la marge de droite ne bouge pas quand la liste s'elargit.
-local LISTE_MARGE = 25
+-- Gap the client keeps between the list and its rows: list at maxWidth + 25, rows at
+-- maxWidth. Kept so the right margin does not move when the list widens.
+local LIST_MARGIN = 25
 
--- LA LARGEUR. Le client taille la liste sur son texte le plus long
--- (maxWidth + 25) ; camelot lui impose un PLANCHER, la largeur du bouton
--- qui l'ouvre (DropdownButtonMixin:RegisterMenu, SetMinimumWidth).
---
--- ECART ASSUME, sur demande : ici c'est une EGALITE, pas un plancher. La
--- liste prend exactement la largeur de son bouton, meme quand une entree
--- est plus longue -- auquel cas son texte se trouve serre.
---
--- Cela se joue a l'affichage de la liste : ToggleDropDownMenu retient le
--- menu ouvert (UIDROPDOWNMENU_OPEN_MENU) AVANT de la montrer, et ne verifie
--- qu'elle tient dans l'ecran qu'APRES -- la largeur doit donc etre acquise
--- a ce moment-la, sinon le recadrage se ferait sur l'ancienne.
---
--- Seul le premier niveau d'un MENU DEROULANT est concerne. Un menu
--- contextuel (displayMode "MENU" : clic droit, menus de la carte, du journal,
--- du suivi) n'a pas de bouton a epouser -- son ouvreur est un cadre
--- invisible de 40 de large -- et un sous-menu n'est ouvert par aucun bouton :
--- ceux-la prennent la largeur de leur CONTENU (corrige le 2026-09-25 : ils
--- etaient ecrases a 40).
---
--- LE CONTENU SE MESURE DANS LA POLICE AFFICHEE. Le client mesure chaque
--- ligne en GameFontHighlightSmallLeft, avant que nous passions a
--- GameFontHighlightLeft, plus grande : sa largeur (maxWidth) serait trop
--- courte. La mesure est refaite a chaque ligne posee (mesurerBouton) avec la
--- formule de UIDropDownMenu_AddButton.
-local function fixerLargeur(liste, voulue)
-	if math.abs(liste:GetWidth() - voulue) < 0.5 then
+-- Width. The client sizes the list on its longest text (maxWidth + 25); camelot uses the
+-- opening button as a floor (DropdownButtonMixin:RegisterMenu, SetMinimumWidth). Here the
+-- list gets exactly the button width, even when an entry is longer (its text is squeezed).
+-- It is set on show: ToggleDropDownMenu sets UIDROPDOWNMENU_OPEN_MENU before showing the
+-- list and clamps it to the screen after, so the width must be final by then.
+-- Only the first level of a dropdown does this. Context menus (displayMode "MENU", whose
+-- opener is an invisible 40-wide frame) and submenus take the width of their content,
+-- measured again per row (measureButton) in the displayed font: the client measures in
+-- the smaller GameFontHighlightSmallLeft.
+local function applyWidth(list, wantedValue)
+	if math.abs(list:GetWidth() - wantedValue) < 0.5 then
 		return
 	end
-	liste:SetWidth(voulue)
-	for index = 1, (liste.numButtons or 0) do
-		local bouton = _G[liste:GetName() .. "Button" .. index]
-		if bouton then
-			bouton:SetWidth(voulue - LISTE_MARGE)
+	list:SetWidth(wantedValue)
+	for index = 1, (list.numButtons or 0) do
+		local button = _G[list:GetName() .. "Button" .. index]
+		if button then
+			button:SetWidth(wantedValue - LIST_MARGIN)
 		end
 	end
 end
 
--- style 2 : le contenu dans ses marges, au moins le bouton au premier niveau
-local function largeurStyle2(liste, ouvreur, niveau)
-	local m = STYLE2.marges
-	local voulue = (liste.foreverContenu2 or 0) + m[1] + m[3]
-	if niveau == 1 and ouvreur.foreverBouton and ouvreur.displayMode ~= "MENU" then
-		voulue = math.max(voulue, ouvreur.foreverBouton:GetWidth() or 0)
+-- Style 2: content inside its margins, at least the button on the first level
+local function style2Width(list, opener, level)
+	local m = STYLE2.margins
+	local wantedValue = (list.foreverContent2 or 0) + m[1] + m[3]
+	if level == 1 and opener.foreverButton and opener.displayMode ~= "MENU" then
+		wantedValue = math.max(wantedValue, opener.foreverButton:GetWidth() or 0)
 	end
-	if not voulue or voulue <= 0 then
+	if not wantedValue or wantedValue <= 0 then
 		return
 	end
-	liste:SetWidth(voulue)
-	for index = 1, (liste.numButtons or 0) do
-		local bouton = _G[liste:GetName() .. "Button" .. index]
-		if bouton then
-			bouton:SetWidth(voulue - m[1] - m[3])
+	list:SetWidth(wantedValue)
+	for index = 1, (list.numButtons or 0) do
+		local button = _G[list:GetName() .. "Button" .. index]
+		if button then
+			button:SetWidth(wantedValue - m[1] - m[3])
 		end
 	end
 end
 
-local function ajusterLargeur(liste)
-	local ouvreur = UIDROPDOWNMENU_OPEN_MENU
-	local niveau = liste.foreverNiveau or liste:GetID()
-	if liste.foreverStyle2 and style2(ouvreur) then
-		largeurStyle2(liste, ouvreur, niveau)
+local function fitWidth(list)
+	local opener = UIDROPDOWNMENU_OPEN_MENU
+	local level = list.foreverLevel or list:GetID()
+	if list.foreverStyle2 and style2(opener) then
+		style2Width(list, opener, level)
 		return
 	end
-	if niveau ~= 1 or not ouvreur or not ouvreur.GetWidth or ouvreur.displayMode == "MENU" then
-		local contenu = liste.foreverContenu
-		if contenu and contenu > 0 then
-			-- un menu de ForeverUI peut demander un plancher : la largeur du
-			-- bouton qui l'ouvre, comme camelot (SetMinimumWidth)
-			local minimum = niveau == 1 and ouvreur and ouvreur.foreverMinimum or 0
-			fixerLargeur(liste, math.max(contenu + LISTE_MARGE, minimum))
+	if level ~= 1 or not opener or not opener.GetWidth or opener.displayMode == "MENU" then
+		local content = list.foreverContent
+		if content and content > 0 then
+			-- A ForeverUI menu can ask for a floor: the width of the button that opens it, as
+			-- camelot's SetMinimumWidth
+			local minimum = level == 1 and opener and opener.foreverMinimum or 0
+			applyWidth(list, math.max(content + LIST_MARGIN, minimum))
 		end
 		return
 	end
 
-	local voulue = ouvreur:GetWidth()
-	if not voulue or voulue <= 0 then
+	local wantedValue = opener:GetWidth()
+	if not wantedValue or wantedValue <= 0 then
 		return
 	end
-	-- un menu de ForeverUI peut demander la regle de camelot telle quelle :
-	-- le bouton comme PLANCHER, la liste s'elargissant a son contenu
-	-- (SetMinimumWidth ; filtre des metiers, demande du 2026-09-28)
-	if ouvreur.foreverPlancher and liste.foreverContenu then
-		voulue = math.max(voulue, liste.foreverContenu + LISTE_MARGE)
+	-- A ForeverUI menu can ask for camelot's rule as is: the button as a floor, the list
+	-- growing with its content (SetMinimumWidth)
+	if opener.foreverFloor and list.foreverContent then
+		wantedValue = math.max(wantedValue, list.foreverContent + LIST_MARGIN)
 	end
-	fixerLargeur(liste, voulue)
+	applyWidth(list, wantedValue)
 end
 
--- La largeur d'une ligne, par la formule de UIDropDownMenu_AddButton : texte
--- + 40, + 10 pour une fleche ou un nuancier, - 30 sans case, + 10 pour une
--- icone, + le rembourrage demande.
-local function mesurerBouton(liste, bouton, info)
-	if liste.numButtons == 1 then
-		liste.foreverContenu = 0
+-- Row width by the UIDropDownMenu_AddButton formula: text + 40, + 10 for an arrow or a
+-- color swatch, - 30 without a checkbox, + 10 for an icon, + the requested padding.
+local function measureButton(list, button, info)
+	if list.numButtons == 1 then
+		list.foreverContent = 0
 	end
-	local texte = _G[bouton:GetName() .. "NormalText"]
-	if not (texte and info and info.text) then
+	local text = _G[button:GetName() .. "NormalText"]
+	if not (text and info and info.text) then
 		return
 	end
-	local largeur = texte:GetStringWidth() + 40
-	if info.hasArrow or info.hasColorSwatch then largeur = largeur + 10 end
-	if info.notCheckable then largeur = largeur - 30 end
-	if info.icon then largeur = largeur + 10 end
-	if info.padding then largeur = largeur + info.padding end
-	if largeur > (liste.foreverContenu or 0) then
-		liste.foreverContenu = largeur
+	local width = text:GetStringWidth() + 40
+	if info.hasArrow or info.hasColorSwatch then width = width + 10 end
+	if info.notCheckable then width = width - 30 end
+	if info.icon then width = width + 10 end
+	if info.padding then width = width + info.padding end
+	if width > (list.foreverContent or 0) then
+		list.foreverContent = width
 	end
 end
 
--- La liste perd ses deux fonds d'epoque et prend celui de camelot.
---
--- On RETIRE le fond au lieu de masquer le cadre : ToggleDropDownMenu montre
--- l'un ou l'autre a chaque ouverture, selon displayMode, et remettrait
--- debout ce qu'on aurait couche. Un cadre sans fond ne dessine rien.
-local function habillerListe(liste)
-	if liste.foreverFond then
+-- The list drops its two old backdrops for camelot's background. The backdrop is removed
+-- instead of hiding the frame: ToggleDropDownMenu shows one frame or the other on each
+-- opening, by displayMode. A frame without backdrop draws nothing.
+local function skinList(list)
+	if list.foreverBackground then
 		return
 	end
 
-	local nom = liste:GetName()
-	for _, suffixe in ipairs(FONDS) do
-		local cadre = nom and _G[nom .. suffixe]
-		if cadre and cadre.SetBackdrop then
-			cadre:SetBackdrop(nil)
+	local name = list:GetName()
+	for _, suffix in ipairs(BACKDROPS) do
+		local frame = name and _G[name .. suffix]
+		if frame and frame.SetBackdrop then
+			frame:SetBackdrop(nil)
 		end
 	end
 
-	local tranches = ForeverUI.CreateNineSlice(liste, FOND_ATLAS, FOND_COIN,
-		FOND_MARGES, "BACKGROUND")
-	if not tranches then
+	local slices = ForeverUI.CreateNineSlice(list, BACKGROUND_ATLAS, BACKGROUND_CORNER,
+		BACKGROUND_MARGINS, "BACKGROUND")
+	if not slices then
 		return
 	end
-	for _, tranche in ipairs(tranches) do
-		tranche:SetAlpha(FOND_ALPHA)
+	for _, slice in ipairs(slices) do
+		slice:SetAlpha(BACKGROUND_ALPHA)
 	end
-	liste.foreverFond = tranches[1]
-	liste.foreverTranches = tranches
+	list.foreverBackground = slices[1]
+	list.foreverSlices = slices
 
-	liste:HookScript("OnShow", ajusterLargeur)
+	list:HookScript("OnShow", fitWidth)
 end
 
--- La case et la coche. La case va en BORDER et la coche reste en ARTWORK :
--- 3.3.5 n'a pas de sous-niveau de calque, l'ordre vient donc du calque, et
--- la coche doit passer par-dessus sa case.
-local function habillerBouton(bouton)
-	if bouton.foreverCase then
+-- Checkbox in BORDER, checkmark in ARTWORK: 3.3.5 has no draw sublevels, so only the
+-- layer puts the checkmark over its box.
+local function skinButton(button)
+	if button.foreverCell then
 		return
 	end
 
-	local case = bouton:CreateTexture(nil, "BORDER")
-	if not ForeverUI.SetAtlas(case, CASE_ATLAS, true) then
-		case:Hide()
+	local checkbox = button:CreateTexture(nil, "BORDER")
+	if not ForeverUI.SetAtlas(checkbox, CHECKBOX_ATLAS, true) then
+		checkbox:Hide()
 	end
-	case:SetWidth(CASE)
-	case:SetHeight(CASE)
-	case:SetPoint("LEFT", bouton, "LEFT", 0, 0)
-	case:Hide()
-	bouton.foreverCase = case
+	checkbox:SetWidth(CHECKBOX)
+	checkbox:SetHeight(CHECKBOX)
+	checkbox:SetPoint("LEFT", button, "LEFT", 0, 0)
+	checkbox:Hide()
+	button.foreverCell = checkbox
 
-	local coche = _G[bouton:GetName() .. "Check"]
-	if coche then
-		ForeverUI.SetAtlas(coche, COCHE_ATLAS, true)
-		coche:SetWidth(COCHE_L)
-		coche:SetHeight(COCHE_H)
-		coche:ClearAllPoints()
-		coche:SetPoint("CENTER", case, "CENTER", COCHE_X, COCHE_Y)
-	end
-end
-
--- la coche du style 1, reposee quand une liste de style 2 l'a changee
-local function cocheStyle1(bouton)
-	if not bouton.foreverStyle2 then
-		return
-	end
-	bouton.foreverStyle2 = nil
-	if bouton.foreverRond then
-		bouton.foreverRond:Hide()
-	end
-	local coche = _G[bouton:GetName() .. "Check"]
-	if coche and bouton.foreverCase then
-		ForeverUI.SetAtlas(coche, COCHE_ATLAS, true)
-		coche:SetWidth(COCHE_L)
-		coche:SetHeight(COCHE_H)
-		coche:ClearAllPoints()
-		coche:SetPoint("CENTER", bouton.foreverCase, "CENTER", COCHE_X, COCHE_Y)
+	local checkMark = _G[button:GetName() .. "Check"]
+	if checkMark then
+		ForeverUI.SetAtlas(checkMark, CHECKMARK_ATLAS, true)
+		checkMark:SetWidth(CHECKMARK_W)
+		checkMark:SetHeight(CHECKMARK_H)
+		checkMark:ClearAllPoints()
+		checkMark:SetPoint("CENTER", checkbox, "CENTER", CHECKMARK_X, CHECKMARK_Y)
 	end
 end
 
--- une ligne de style 2 : le rond sous la coche du client (qui devient le
--- point jaune), le texte a sa droite, la case du style 1 cachee
-local function ligneStyle2(liste, bouton, info)
-	local Gb = ForeverUI.Gabarits
-	local m = STYLE2.marges
-	local i = bouton:GetID()
-	if not bouton.foreverRond then
-		bouton.foreverRond = bouton:CreateTexture(nil, "BORDER")
-		Gb.Poser(bouton.foreverRond, STYLE2.rond, true)
-		bouton.foreverRond:SetPoint("LEFT", bouton, "LEFT", -3, 0)
+-- Restores the style 1 checkmark after a style 2 list changed it
+local function checkMarkStyle1(button)
+	if not button.foreverStyle2 then
+		return
 	end
-	bouton.foreverStyle2 = true
-	if bouton.foreverCase then
-		bouton.foreverCase:Hide()
+	button.foreverStyle2 = nil
+	if button.foreverCircle then
+		button.foreverCircle:Hide()
 	end
-	local coche = _G[bouton:GetName() .. "Check"]
-	if coche then
-		Gb.Poser(coche, STYLE2.point, true)
-		coche:ClearAllPoints()
-		coche:SetPoint("TOPLEFT", bouton.foreverRond, "TOPLEFT")
+	local checkMark = _G[button:GetName() .. "Check"]
+	if checkMark and button.foreverCell then
+		ForeverUI.SetAtlas(checkMark, CHECKMARK_ATLAS, true)
+		checkMark:SetWidth(CHECKMARK_W)
+		checkMark:SetHeight(CHECKMARK_H)
+		checkMark:ClearAllPoints()
+		checkMark:SetPoint("CENTER", button.foreverCell, "CENTER", CHECKMARK_X, CHECKMARK_Y)
 	end
-	bouton:SetHeight(LIGNE_HAUTEUR)
-	bouton:ClearAllPoints()
-	bouton:SetPoint("TOPLEFT", liste, "TOPLEFT", m[1], -(m[2] + (i - 1) * LIGNE_HAUTEUR))
-	bouton:SetNormalFontObject(GameFontHighlightSmallLeft)
-	bouton:SetHighlightFontObject(GameFontHighlightSmallLeft)
-	if bouton.SetDisabledFontObject then
+end
+
+-- A style 2 row: the circle under the client's checkmark (which becomes the yellow dot),
+-- text on its right, the style 1 box hidden
+local function style2Row(list, button, info)
+	local Tpl = ForeverUI.Templates
+	local m = STYLE2.margins
+	local i = button:GetID()
+	if not button.foreverCircle then
+		button.foreverCircle = button:CreateTexture(nil, "BORDER")
+		Tpl.Place(button.foreverCircle, STYLE2.circle, true)
+		button.foreverCircle:SetPoint("LEFT", button, "LEFT", -3, 0)
+	end
+	button.foreverStyle2 = true
+	if button.foreverCell then
+		button.foreverCell:Hide()
+	end
+	local checkMark = _G[button:GetName() .. "Check"]
+	if checkMark then
+		Tpl.Place(checkMark, STYLE2.point, true)
+		checkMark:ClearAllPoints()
+		checkMark:SetPoint("TOPLEFT", button.foreverCircle, "TOPLEFT")
+	end
+	button:SetHeight(ROW_HEIGHT)
+	button:ClearAllPoints()
+	button:SetPoint("TOPLEFT", list, "TOPLEFT", m[1], -(m[2] + (i - 1) * ROW_HEIGHT))
+	button:SetNormalFontObject(GameFontHighlightSmallLeft)
+	button:SetHighlightFontObject(GameFontHighlightSmallLeft)
+	if button.SetDisabledFontObject then
 		if info and info.isTitle then
-			bouton:SetDisabledFontObject(GameFontNormalSmallLeft)
+			button:SetDisabledFontObject(GameFontNormalSmallLeft)
 		elseif info and info.notClickable then
-			bouton:SetDisabledFontObject(GameFontHighlightSmallLeft)
+			button:SetDisabledFontObject(GameFontHighlightSmallLeft)
 		else
-			bouton:SetDisabledFontObject(GameFontDisableSmallLeft)
+			button:SetDisabledFontObject(GameFontDisableSmallLeft)
 		end
 	end
-	local brut = bouton:GetText()
-	local propre = Gb.TexteUtf8(brut)
-	if propre ~= brut then
-		bouton:SetText(propre)
+	local raw = button:GetText()
+	local clean = Tpl.Utf8Text(raw)
+	if clean ~= raw then
+		button:SetText(clean)
 	end
-	local texte = _G[bouton:GetName() .. "NormalText"]
-	local cochable = not (info and info.notCheckable)
-	if cochable then
-		bouton.foreverRond:Show()
+	local text = _G[button:GetName() .. "NormalText"]
+	local checkable = not (info and info.notCheckable)
+	if checkable then
+		button.foreverCircle:Show()
 	else
-		bouton.foreverRond:Hide()
+		button.foreverCircle:Hide()
 	end
-	if texte then
-		texte:ClearAllPoints()
-		if cochable then
-			texte:SetPoint("LEFT", bouton.foreverRond, "RIGHT", 1, 0)
+	if text then
+		text:ClearAllPoints()
+		if checkable then
+			text:SetPoint("LEFT", button.foreverCircle, "RIGHT", 1, 0)
 		elseif info and info.justifyH == "CENTER" then
-			texte:SetPoint("CENTER", bouton, "CENTER", 0, 0)
+			text:SetPoint("CENTER", button, "CENTER", 0, 0)
 		else
-			texte:SetPoint("LEFT", bouton, "LEFT", 0, 0)
+			text:SetPoint("LEFT", button, "LEFT", 0, 0)
 		end
-		-- l'etendue de la ligne (MeasureFrameExtents + rembourrage de 20)
-		local e = (cochable and STYLE2.etendue or STYLE2.sansRond) + (texte:GetStringWidth() or 0)
-		if i == 1 or e > (liste.foreverContenu2 or 0) then
-			liste.foreverContenu2 = e
+		-- Row extent (MeasureFrameExtents + padding of 20)
+		local e = (checkable and STYLE2.span or STYLE2.noRadio) + (text:GetStringWidth() or 0)
+		if i == 1 or e > (list.foreverContent2 or 0) then
+			list.foreverContent2 = e
 		end
 	end
-	liste:SetHeight(m[2] + (liste.numButtons or i) * LIGNE_HAUTEUR + m[4])
+	list:SetHeight(m[2] + (list.numButtons or i) * ROW_HEIGHT + m[4])
 end
 
--- les deux fonds d'une liste : celui du style 1 (tranches) ou celui du
--- style 2, selon le menu qu'elle sert
-local function fondsListe(liste, deux)
-	liste.foreverStyle2 = deux and true or nil
-	if deux and not liste.foreverFond2 then
-		local Gb = ForeverUI.Gabarits
-		local f = Gb.AtlasEtire(liste, STYLE2.fond, "BACKGROUND")
-		f.rect:SetPoint("TOPLEFT", liste, "TOPLEFT", STYLE2.fondA[1], STYLE2.fondA[2])
-		f.rect:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", STYLE2.fondB[1], STYLE2.fondB[2])
-		liste.foreverFond2 = f
+-- The two backgrounds of a list: style 1 (slices) or style 2, by the menu it serves
+local function applyListBackgrounds(list, isStyle2)
+	list.foreverStyle2 = isStyle2 and true or nil
+	if isStyle2 and not list.foreverBackground2 then
+		local Tpl = ForeverUI.Templates
+		local f = Tpl.StretchedAtlas(list, STYLE2.background, "BACKGROUND")
+		f.rect:SetPoint("TOPLEFT", list, "TOPLEFT", STYLE2.backgroundA[1], STYLE2.backgroundA[2])
+		f.rect:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", STYLE2.backgroundB[1], STYLE2.backgroundB[2])
+		list.foreverBackground2 = f
 	end
-	if liste.foreverFond2 then
-		liste.foreverFond2:Montrer(deux)
+	if list.foreverBackground2 then
+		list.foreverBackground2:SetShown(isStyle2)
 	end
-	for _, tranche in ipairs(liste.foreverTranches or {}) do
-		if deux then tranche:Hide() else tranche:Show() end
+	for _, slice in ipairs(list.foreverSlices or {}) do
+		if isStyle2 then slice:Hide() else slice:Show() end
 	end
 end
 
--- Ce qui se refait a chaque ligne posee : UIDropDownMenu_AddButton remet la
--- police a GameFontHighlightSmallLeft a chaque passage, et c'est elle qui
--- sait si la ligne porte une case (info.notCheckable).
-local function reglerBouton(bouton)
-	cocheStyle1(bouton)
-	bouton:SetHeight(LIGNE_HAUTEUR)
+-- Redone for every row added: UIDropDownMenu_AddButton resets the font to
+-- GameFontHighlightSmallLeft each time, and sets whether the row has a checkbox
+-- (info.notCheckable).
+local function adjustButton(button)
+	checkMarkStyle1(button)
+	button:SetHeight(ROW_HEIGHT)
 	if GameFontHighlightLeft then
-		bouton:SetNormalFontObject(GameFontHighlightLeft)
-		bouton:SetHighlightFontObject(GameFontHighlightLeft)
+		button:SetNormalFontObject(GameFontHighlightLeft)
+		button:SetHighlightFontObject(GameFontHighlightLeft)
 	end
 
-	if bouton.foreverCase then
-		if bouton.notCheckable then
-			bouton.foreverCase:Hide()
+	if button.foreverCell then
+		if button.notCheckable then
+			button.foreverCell:Hide()
 		else
-			bouton.foreverCase:Show()
+			button.foreverCell:Show()
 		end
 	end
 end
 
--- Le pas des lignes suit leur hauteur. Le client le lit dans
--- UIDROPDOWNMENU_BUTTON_HEIGHT -- a chaque ligne posee, a chaque calcul de
--- hauteur de liste, et pour la hauteur du menu deroulant lui-meme
--- (UIDropDownMenu_InitializeHelper) -- mais on N'ECRIT PAS cette globale :
--- ecrite par l'addon, elle souillerait chaque menu du client, jusqu'au menu
--- d'un clic droit sur un joueur et ses actions protegees (taint.log du
--- 2026-09-26, meme cas que StaticPopupDialogs). Le client pose donc ses
--- lignes a 16, et on les repose a 20 juste apres lui, aux memes endroits.
-local BORDURE = UIDROPDOWNMENU_BORDER_HEIGHT or 15
+-- Row spacing follows row height. The client reads UIDROPDOWNMENU_BUTTON_HEIGHT for each
+-- row, the list height and the dropdown height (UIDropDownMenu_InitializeHelper), but
+-- writing that global from the addon would taint every client menu, including the
+-- protected actions of a player's right-click menu. So the client lays rows at 16 and
+-- we move them to 20 right after it.
+local BORDER = UIDROPDOWNMENU_BORDER_HEIGHT or 15
 
-local function reposerLigne(liste, bouton)
-	local point, relatif, pointRelatif, x = bouton:GetPoint(1)
+local function relayoutRow(list, button)
+	local point, relativeTo, relativePoint, x = button:GetPoint(1)
 	if point then
-		bouton:ClearAllPoints()
-		bouton:SetPoint(point, relatif, pointRelatif, x,
-			-((bouton:GetID() - 1) * LIGNE_HAUTEUR) - BORDURE)
+		button:ClearAllPoints()
+		button:SetPoint(point, relativeTo, relativePoint, x,
+			-((button:GetID() - 1) * ROW_HEIGHT) - BORDER)
 	end
-	liste:SetHeight(((liste.numButtons or 1) * LIGNE_HAUTEUR) + (BORDURE * 2))
+	list:SetHeight(((list.numButtons or 1) * ROW_HEIGHT) + (BORDER * 2))
 end
 
 if hooksecurefunc and type(UIDropDownMenu_InitializeHelper) == "function" then
-	hooksecurefunc("UIDropDownMenu_InitializeHelper", function(cadre)
-		if cadre and cadre.SetHeight then
-			cadre:SetHeight(LIGNE_HAUTEUR * 2)
+	hooksecurefunc("UIDropDownMenu_InitializeHelper", function(frame)
+		if frame and frame.SetHeight then
+			frame:SetHeight(ROW_HEIGHT * 2)
 		end
 	end)
 end
@@ -452,125 +354,114 @@ end
 if hooksecurefunc and type(UIDropDownMenu_AddButton) == "function" then
 	hooksecurefunc("UIDropDownMenu_AddButton", function(info, level)
 		level = level or 1
-		local liste = _G["DropDownList" .. level]
-		if not liste then
+		local list = _G["DropDownList" .. level]
+		if not list then
 			return
 		end
 
-		liste.foreverNiveau = level
-		habillerListe(liste)
+		list.foreverLevel = level
+		skinList(list)
 
-		local deux = style2(menuEnCours())
-		fondsListe(liste, deux)
-		local bouton = _G[liste:GetName() .. "Button" .. (liste.numButtons or 1)]
-		if bouton then
-			habillerBouton(bouton)
-			if deux then
-				ligneStyle2(liste, bouton, info)
+		local isStyle2 = style2(currentMenu())
+		applyListBackgrounds(list, isStyle2)
+		local button = _G[list:GetName() .. "Button" .. (list.numButtons or 1)]
+		if button then
+			skinButton(button)
+			if isStyle2 then
+				style2Row(list, button, info)
 			else
-				reposerLigne(liste, bouton)
-				reglerBouton(bouton)
-				mesurerBouton(liste, bouton, info)
+				relayoutRow(list, button)
+				adjustButton(button)
+				measureButton(list, button, info)
 			end
 		end
 	end)
 end
 
--- STYLE 2 : apres ToggleDropDownMenu, la liste sous le bouton de camelot
--- (meme quand le client l'ancre ailleurs), a sa largeur ; le bouton se
--- repeint (fleche, etat ouvert) -- foreverPeindre, pose par Settings.lua
+-- Style 2: after ToggleDropDownMenu, put the list under camelot's button (even when the
+-- client anchors it elsewhere) at its width, and repaint the button (arrow, open state)
+-- with foreverPaint, set by Settings.lua
 if hooksecurefunc and type(ToggleDropDownMenu) == "function" then
-	hooksecurefunc("ToggleDropDownMenu", function(niveau)
-		niveau = niveau or 1
-		local liste = _G["DropDownList" .. niveau]
-		local ouvreur = UIDROPDOWNMENU_OPEN_MENU
-		if not (liste and style2(ouvreur)) then
+	hooksecurefunc("ToggleDropDownMenu", function(level)
+		level = level or 1
+		local list = _G["DropDownList" .. level]
+		local opener = UIDROPDOWNMENU_OPEN_MENU
+		if not (list and style2(opener)) then
 			return
 		end
-		if liste:IsShown() then
-			ajusterLargeur(liste)
-			if niveau == 1 and ouvreur.foreverBouton and ouvreur.displayMode ~= "MENU" then
-				liste:ClearAllPoints()
-				liste:SetPoint("TOPLEFT", ouvreur.foreverBouton, "BOTTOMLEFT", 0, 0)
+		if list:IsShown() then
+			fitWidth(list)
+			if level == 1 and opener.foreverButton and opener.displayMode ~= "MENU" then
+				list:ClearAllPoints()
+				list:SetPoint("TOPLEFT", opener.foreverButton, "BOTTOMLEFT", 0, 0)
 			end
 		end
-		if ouvreur.foreverPeindre then
-			ouvreur.foreverPeindre()
+		if opener.foreverPaint then
+			opener.foreverPaint()
 		end
 	end)
 end
 
--- la fleche du bouton revient au repos quand la liste se ferme
-for niveau = 1, (UIDROPDOWNMENU_MAXLEVELS or 2) do
-	local liste = _G["DropDownList" .. niveau]
-	if liste and liste.HookScript then
-		liste:HookScript("OnHide", function()
-			local ouvreur = UIDROPDOWNMENU_OPEN_MENU
-			if style2(ouvreur) and ouvreur.foreverPeindre then
-				ouvreur.foreverPeindre()
+-- The button arrow goes back to rest when the list closes
+for level = 1, (UIDROPDOWNMENU_MAXLEVELS or 2) do
+	local list = _G["DropDownList" .. level]
+	if list and list.HookScript then
+		list:HookScript("OnHide", function()
+			local opener = UIDROPDOWNMENU_OPEN_MENU
+			if style2(opener) and opener.foreverPaint then
+				opener.foreverPaint()
 			end
 		end)
 	end
 end
 
--- UIDropDownMenu_Refresh retaille la liste sur son texte (maxWidth + 25) et
--- effacerait la largeur voulue : on la repose derriere elle.
+-- UIDropDownMenu_Refresh resizes the list on its text (maxWidth + 25), erasing the wanted
+-- width: set it again after it.
 if hooksecurefunc and type(UIDropDownMenu_Refresh) == "function" then
-	hooksecurefunc("UIDropDownMenu_Refresh", function(cadre, valeur, niveau)
-		local liste = _G["DropDownList" .. (niveau or UIDROPDOWNMENU_MENU_LEVEL or 1)]
-		if liste and liste:IsShown() then
-			ajusterLargeur(liste)
+	hooksecurefunc("UIDropDownMenu_Refresh", function(frame, value, level)
+		local list = _G["DropDownList" .. (level or UIDROPDOWNMENU_MENU_LEVEL or 1)]
+		if list and list:IsShown() then
+			fitWidth(list)
 		end
 	end)
 end
 
 ForeverUI.DropDown = {
-	Skin = habillerListe,
-	SkinButton = habillerBouton,
-	Refresh = reglerBouton,
-	Fit = ajusterLargeur,
+	Skin = skinList,
+	SkinButton = skinButton,
+	Refresh = adjustButton,
+	Fit = fitWidth,
 }
 
--- ------------------------------------------------------------ LES MENUS D'UNITE
+-- ------------------------------------------------------------ Unit menus
 --
--- LE PROBLEME (taint.log du 2026-09-26). Nos cadres d'unite ouvrent le menu
--- du clic droit par une fonction a nous (le « menu » de leur action
--- securisee) : le client construit alors tout le menu comme venant de
--- l'addon, et les lignes qui appellent une fonction protegee sont bloquees
--- -- SET_FOCUS (FocusUnit), CLEAR_FOCUS (ClearFocus), TARGET
--- (TargetUnit) et PET_DISMISS (PetDismiss), UnitPopup.lua:1201-1384. Les
--- autres lignes marchent.
---
--- LA REPONSE (decision de l'utilisateur, 2026-09-26). Hors combat, un bouton
--- securise de ForeverUI se pose sur chacune de ces lignes : c'est vous qui
--- cliquez, et il fait l'action comme une macro -- focus sur l'unite,
--- /clearfocus, /targetexact <nom>, /script PetDismiss(). En combat, le
--- client interdit a tout addon de poser, montrer ou regler un bouton
--- securise : ces lignes sont grisees (et le restent, UnitPopup_OnUpdate les
--- reactivant a chaque image). A l'entree en combat, les boutons poses s'en
--- vont avant le verrou et leurs lignes se grisent.
---
--- Seuls les menus ouverts PAR NOS CADRES sont touches (MenuUnite.ouvrir) :
--- ceux que le client ouvre lui-meme marchent deja.
+-- Our unit frames open the right-click menu through our own function (the "menu" of
+-- their secure action), so the client builds the whole menu as addon code and blocks the
+-- rows that call a protected function: SET_FOCUS, CLEAR_FOCUS, TARGET and PET_DISMISS
+-- (UnitPopup.lua:1201-1384). Out of combat, a secure ForeverUI button covers each of these
+-- rows and runs the action as a macro on the player's click. In combat no addon may place
+-- or show a secure button, so these rows are grayed (UnitPopup_OnUpdate enables them
+-- every frame, so they are disabled again). Only menus opened by our frames (M.open) are
+-- touched: the client's own menus already work.
 
 local M = {}
-ForeverUI.MenuUnite = M
-M.surcouches = {}
-M.grises = {}
+ForeverUI.UnitMenu = M
+M.overlays = {}
+M.grayedRows = {}
 
-local SURBRILLANCE = "Interface" .. string.char(92) .. "QuestFrame" .. string.char(92) .. "UI-QuestTitleHighlight"
+local HIGHLIGHT = "Interface" .. string.char(92) .. "QuestFrame" .. string.char(92) .. "UI-QuestTitleHighlight"
 
--- le nom complet, comme UnitPopup_OnClick (UnitPopup.lua:1169-1174)
-local function nomComplet(menu)
-	local nom, serveur = menu.name, menu.server
-	if nom and serveur and (not menu.unit or not UnitIsSameServer("player", menu.unit)) then
-		return nom .. "-" .. serveur
+-- Full name, as UnitPopup_OnClick builds it (UnitPopup.lua:1169-1174)
+local function fullName(menu)
+	local name, server = menu.name, menu.server
+	if name and server and (not menu.unit or not UnitIsSameServer("player", menu.unit)) then
+		return name .. "-" .. server
 	end
-	return nom
+	return name
 end
 
--- ce que fait chaque ligne protegee, en action securisee
-local PROTEGEES = {
+-- Secure action of each protected row
+local PROTECTED = {
 	SET_FOCUS = function(o, menu)
 		if not menu.unit then return false end
 		o:SetAttribute("type", "focus")
@@ -581,72 +472,73 @@ local PROTEGEES = {
 		o:SetAttribute("macrotext", "/clearfocus")
 	end,
 	TARGET = function(o, menu)
-		local nom = nomComplet(menu)
-		if not nom then return false end
+		local name = fullName(menu)
+		if not name then return false end
 		o:SetAttribute("type", "macro")
-		o:SetAttribute("macrotext", "/targetexact " .. nom)
+		o:SetAttribute("macrotext", "/targetexact " .. name)
 	end,
 	PET_DISMISS = function(o)
 		o:SetAttribute("type", "macro")
 		o:SetAttribute("macrotext", "/script PetDismiss()")
 	end,
 }
-M.PROTEGEES = PROTEGEES
+M.PROTECTED = PROTECTED
 
-local function surcouche(k)
-	local o = M.surcouches[k]
+-- Secure overlay button k, created on first use
+local function overlay(k)
+	local o = M.overlays[k]
 	if o then return o end
 	o = CreateFrame("Button", "ForeverUIUnitMenuSecure" .. k, UIParent, "SecureActionButtonTemplate")
 	o:RegisterForClicks("LeftButtonUp")
-	o:SetHighlightTexture(SURBRILLANCE)
+	o:SetHighlightTexture(HIGHLIGHT)
 	local h = o:GetHighlightTexture()
 	if h then h:SetBlendMode("ADD") end
-	-- la liste se ferme d'elle-meme quand la souris quitte ses lignes : sur
-	-- la surcouche, on la retient comme sur une ligne
+	-- The list closes by itself when the mouse leaves its rows: keep it open over the
+	-- overlay as over a row
 	o:SetScript("OnEnter", function() UIDropDownMenu_StopCounting(DropDownList1) end)
 	o:SetScript("OnLeave", function() UIDropDownMenu_StartCounting(DropDownList1) end)
 	o:SetScript("PostClick", function() CloseDropDownMenus() end)
 	o:Hide()
-	M.surcouches[k] = o
+	M.overlays[k] = o
 	return o
 end
 
--- hors combat seulement : un bouton securise ne se touche pas sous le verrou
-function M.cacher()
+-- Out of combat only: a secure button cannot be touched under lockdown
+function M.hide()
 	if InCombatLockdown() then return end
-	for _, o in ipairs(M.surcouches) do
+	for _, o in ipairs(M.overlays) do
 		o:Hide()
 		o:ClearAllPoints()
 	end
 end
 
-local function griser(ligne)
-	ligne:Disable()
-	table.insert(M.grises, ligne)
+local function grayOut(row)
+	row:Disable()
+	table.insert(M.grayedRows, row)
 end
 
--- apres UnitPopup_ShowMenu, sur la premiere liste : les lignes protegees
-function M.poser(menu)
-	M.cacher()
-	table.wipe(M.grises)
-	local liste = DropDownList1
+-- After UnitPopup_ShowMenu, on the first list: cover or gray the protected rows.
+-- menu: the unit menu frame given to UnitPopup_ShowMenu
+function M.place(menu)
+	M.hide()
+	table.wipe(M.grayedRows)
+	local list = DropDownList1
 	local combat = InCombatLockdown()
 	local k = 0
-	for i = 1, (liste.numButtons or 0) do
-		local ligne = _G["DropDownList1Button" .. i]
-		local regler = ligne and PROTEGEES[ligne.value]
-		if regler then
+	for i = 1, (list.numButtons or 0) do
+		local row = _G["DropDownList1Button" .. i]
+		local configure = row and PROTECTED[row.value]
+		if configure then
 			if combat then
-				griser(ligne)
+				grayOut(row)
 			else
-				local o = surcouche(k + 1)
-				if regler(o, menu) ~= false then
+				local o = overlay(k + 1)
+				if configure(o, menu) ~= false then
 					k = k + 1
 					o:ClearAllPoints()
-					o:SetAllPoints(ligne)
-					-- DropDownList1, toplevel, remonte au premier plan de sa
-					-- strate en s'affichant : la strate des infobulles est
-					-- au-dessus (meme reponse que SocialRaid.lua)
+					o:SetAllPoints(row)
+					-- DropDownList1 is toplevel and rises to the top of its strata when shown:
+					-- the TOOLTIP strata stays above it (as in SocialRaid.lua)
 					o:SetFrameStrata("TOOLTIP")
 					o:Show()
 				end
@@ -655,51 +547,51 @@ function M.poser(menu)
 	end
 end
 
--- ouvrir un menu depuis un de nos cadres
-function M.ouvrir(fn, ...)
-	M.nous = true
+-- Opens a menu from one of our frames. fn: the client function that opens it;
+-- ...: its arguments
+function M.open(fn, ...)
+	M.ownCall = true
 	local ok, err = pcall(fn, ...)
-	M.nous = false
+	M.ownCall = false
 	if not ok then error(err, 0) end
 end
 
 if hooksecurefunc and type(UnitPopup_ShowMenu) == "function" then
 	hooksecurefunc("UnitPopup_ShowMenu", function(menu)
-		if not M.nous or not menu or (UIDROPDOWNMENU_MENU_LEVEL or 1) ~= 1 then return end
-		M.poser(menu)
+		if not M.ownCall or not menu or (UIDROPDOWNMENU_MENU_LEVEL or 1) ~= 1 then return end
+		M.place(menu)
 	end)
 end
 if hooksecurefunc and type(UnitPopup_OnUpdate) == "function" then
 	hooksecurefunc("UnitPopup_OnUpdate", function()
-		if #M.grises == 0 or not DropDownList1:IsShown() then return end
-		for _, ligne in ipairs(M.grises) do
-			if ligne:IsEnabled() == 1 then ligne:Disable() end
+		if #M.grayedRows == 0 or not DropDownList1:IsShown() then return end
+		for _, row in ipairs(M.grayedRows) do
+			if row:IsEnabled() == 1 then row:Disable() end
 		end
 	end)
 end
 if DropDownList1 then
 	DropDownList1:HookScript("OnHide", function()
-		M.cacher()
-		table.wipe(M.grises)
+		M.hide()
+		table.wipe(M.grayedRows)
 	end)
 end
 
--- a l'entree en combat, avant le verrou : les boutons s'en vont, leurs
--- lignes se grisent
-local veille = CreateFrame("Frame")
-veille:RegisterEvent("PLAYER_REGEN_DISABLED")
-veille:SetScript("OnEvent", function()
-	local posees = false
-	for _, o in ipairs(M.surcouches) do
-		if o:IsShown() then posees = true end
+-- On entering combat, before the lockdown: overlays go away and their rows are grayed
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+watcher:SetScript("OnEvent", function()
+	local placedCount = false
+	for _, o in ipairs(M.overlays) do
+		if o:IsShown() then placedCount = true end
 		o:Hide()
 		o:ClearAllPoints()
 	end
-	if posees and DropDownList1:IsShown() then
+	if placedCount and DropDownList1:IsShown() then
 		for i = 1, (DropDownList1.numButtons or 0) do
-			local ligne = _G["DropDownList1Button" .. i]
-			if ligne and PROTEGEES[ligne.value] then griser(ligne) end
+			local row = _G["DropDownList1Button" .. i]
+			if row and PROTECTED[row.value] then grayOut(row) end
 		end
 	end
 end)
-M.veille = veille
+M.watcher = watcher

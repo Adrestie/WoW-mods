@@ -1,71 +1,24 @@
--- ForeverUI : la barre du familier.
---
--- RELEVE DES SOURCES -- tout vient du code extrait de camelot.
---
--- mainline/PetActionBar.xml
---   PetActionButtonTemplate herite de SmallActionButtonTemplate : meme
---   bouton de 30 x 30 que les postures.
---   La barre : isHorizontal, numRows 1, numButtons 10, addButtonsToRight.
---
--- shared/ActionBar.lua -- minButtonPadding = 2, donc un pas de 32.
---
--- shared/ActionButton.lua, SmallActionButtonMixin_OnLoad
---   raccourci TOPRIGHT (-3, -4) ; quantite BOTTOMRIGHT (-3, 1) ; survol,
---   coche, bordure et eclat en 31,6 x 30,9 ; recharge sur l'icone en
---   (1,7 ; -1,7) et (-1 ; 1) ; cadre normal et enfonce ramenes a 35 x 35 ;
---   AutoCastOverlay en 31 x 31, centre a (0,5 ; -0,5).
---
--- L'AUTOLANCEMENT N'EST PAS REPRIS DE LA SOURCE. AutoCastTemplates n'existe
--- que dans mainline/, et seuls camelot/ et shared/ font foi : camelot garde
--- ici le comportement d'origine. On laisse donc au client sa bordure
--- scintillante ($parentAutoCastable) et ses quatre etincelles tournantes
--- ($parentShine), qu'il allume et eteint lui-meme dans PetActionBar_Update.
--- Elles sont seulement mises a l'echelle du bouton, qui passe de 36 a 30.
---
--- shared/PetActionBar.lua, PetActionButtonMixin:UpdateButtonState
---   l'icone prend la texture de l'action ; si isToken, le nom et la texture
---   sont des cles de variables GLOBALES et non des valeurs.
---   action active : le bouton est COCHE ; si c'est l'attaque, il clignote
---   et son coche tombe a 0,5 d'alpha -- "a pleine alpha on croirait une
---   capacite de plus selectionnee", dit le commentaire de la source.
---   action inutilisable : icone teintee a 0,4. Pas de texture : icone
---   masquee.
---   La barre se montre si PetHasActionBar() et UnitIsVisible("pet").
---
--- CE QUI DIFFERE, ET POURQUOI.
---   GetPetActionInfo ne rend pas la meme chose : le moderne donne
---   (nom, texture, isToken, active, autoPossible, autoActif, sort), 3.3.5
---   donne (nom, SOUS-TEXTE, texture, isToken, active, autoPossible,
---   autoActif). Un champ de plus au deuxieme rang : recopier la source au
---   mot pres prendrait le sous-texte pour la texture. Meme piege que sur la
---   barre des postures.
---   Les quatre etats sont CENTRES et non ancres TOPLEFT : un cadre de 35 sur
---   un bouton de 30 deborde de 5, et son trou sortirait de l'icone. Voir
---   StanceBar.lua, ou le calcul est detaille.
---   La marque de surbrillance (SpellHighlightTexture, atlas bags-newitem)
---   n'existe pas en 3.3.5 : HasPetActionHighlightMark n'y est pas.
---   Les boutons sont SECURISES : rhabilles, jamais recrees, et rien n'est
---   redimensionne ni deplace en combat.
+-- Pet action bar: the client's secure PetActionButtons, reskinned as camelot's
+-- SmallActionButtonTemplate (shared/PetActionBar.lua UpdateButtonState); never recreated,
+-- never resized or moved in combat. 3.3.5 has no HasPetActionHighlightMark: no highlight mark.
 
-local TAILLE = 30                       -- SmallActionButtonTemplate
-local ECART = 2                         -- minButtonPadding
-local PAS = TAILLE + ECART              -- 32
-local CADRE_L, CADRE_H = 35, 35         -- NormalTexture et PushedTexture
-local ETAT_L, ETAT_H = 31.6, 30.9       -- survol, coche, bordure, eclat
-local NB_BOUTONS = 10
-local TAILLE_ORIGINE = 36               -- le bouton de 3.3.5
-local AUTOCAST_BORDURE = 58             -- sa bordure d'autolancement
+local SIZE = 30                       -- SmallActionButtonTemplate
+local GAP = 2                         -- minButtonPadding
+local STEP = SIZE + GAP              -- 32
+local FRAME_W, FRAME_H = 35, 35         -- NormalTexture and PushedTexture
+local STATE_W, STATE_H = 31.6, 30.9       -- highlight, checked, border, flash
+local NUM_BUTTONS = 10
+local ORIGINAL_SIZE = 36               -- the 3.3.5 button
+local AUTOCAST_BORDER = 58             -- its autocast border
 local L = ForeverUI.L
-local GRISE = 0.4                       -- action inutilisable
-local COCHE_ATTAQUE = 0.5               -- alpha du coche sur l'attaque
+local GRAYED = 0.4                       -- unusable action
+local ATTACK_CHECK_ALPHA = 0.5               -- check mark alpha on the attack action
 
--- LA PLACE PAR DEFAUT. La barre se pose juste au-dessus de la barre de
--- reputation, sur le meme bord gauche que la barre d'action. Si la barre
--- des postures est la, la barre du familier passe A SA DROITE, separee
--- d'elle par la largeur de deux de ses icones.
-local BORD_GAUCHE = -587.5              -- le bord gauche de la barre d'action
-local RANGEE = 84                       -- au-dessus de la reputation
-local ECART_BARRES = 2 * TAILLE         -- deux icones entre les deux barres
+-- Default place: just above the reputation bar, on the action bar's left edge. When the
+-- stance bar is shown, the pet bar goes to its RIGHT, two icons apart.
+local LEFT_EDGE = -587.5              -- left edge of the action bar
+local ROW_Y = 84                       -- above the reputation bar
+local BARS_GAP = 2 * SIZE         -- two icons between the two bars
 
 local ATLAS = {
 	normal = "ui-hud-actionbar-iconframe",
@@ -76,133 +29,129 @@ local ATLAS = {
 	background = "ui-hud-actionbar-iconframe-background",
 }
 
-local nombreDeBoutons = NUM_PET_ACTION_SLOTS or NB_BOUTONS
+local buttonCount = NUM_PET_ACTION_SLOTS or NUM_BUTTONS
 
-local porteur = CreateFrame("Frame", "ForeverUIPetBarHolder", UIParent)
-porteur:SetWidth(PAS)
-porteur:SetHeight(TAILLE)
-porteur:Hide()
+local carrier = CreateFrame("Frame", "ForeverUIPetBarHolder", UIParent)
+carrier:SetWidth(STEP)
+carrier:SetHeight(SIZE)
+carrier:Hide()
 
-local function taireNormale(bouton)
-	local normale = bouton:GetNormalTexture()
-	if normale then
-		normale:SetAlpha(0)
-		normale:SetVertexColor(1, 1, 1, 0)
+local function hideNormalTexture(button)
+	local normalFont = button:GetNormalTexture()
+	if normalFont then
+		normalFont:SetAlpha(0)
+		normalFont:SetVertexColor(1, 1, 1, 0)
 	end
 end
 
--- Les quatre etats sont centres : voir l'entete et StanceBar.lua.
-local function poserEtat(texture, atlas, largeur, hauteur, add)
+-- The four states are CENTERED: a 35 frame on a 30 button overflows by 5, and its hole
+-- would leave the icon (see StanceBar.lua). add: ADD blend mode.
+local function applyState(texture, atlas, width, height, add)
 	if not texture then
 		return
 	end
 
 	ForeverUI.SetAtlas(texture, atlas, true)
-	texture:SetWidth(largeur)
-	texture:SetHeight(hauteur)
+	texture:SetWidth(width)
+	texture:SetHeight(height)
 	texture:ClearAllPoints()
 	texture:SetPoint("CENTER", 0, 0)
 	texture:SetBlendMode(add and "ADD" or "BLEND")
 end
 
-local function habiller(bouton)
-	if not bouton or bouton.foreverSkinned then
+local function applySkin(button)
+	if not button or button.foreverSkinned then
 		return
 	end
 
-	local nom = bouton:GetName()
-	bouton:SetWidth(TAILLE)
-	bouton:SetHeight(TAILLE)
-	taireNormale(bouton)
+	local name = button:GetName()
+	button:SetWidth(SIZE)
+	button:SetHeight(SIZE)
+	hideNormalTexture(button)
 
-	local flottant = _G[nom .. "FloatingBG"]
-	if flottant then
-		flottant:SetAlpha(0)
+	local floatingBg = _G[name .. "FloatingBG"]
+	if floatingBg then
+		floatingBg:SetAlpha(0)
 	end
 
-	-- L'AUTOLANCEMENT RESTE CELUI DU CLIENT. AutoCastTemplates n'existe que
-	-- dans mainline/, et seuls camelot/ et shared/ font foi : camelot garde
-	-- donc ici le comportement d'origine, sa bordure scintillante et ses
-	-- quatre etincelles tournantes. On n'y touche pas -- on les met
-	-- seulement a l'echelle du bouton, qui passe de 36 a 30.
-	local echelle = TAILLE / TAILLE_ORIGINE
-	local scintillante = _G[nom .. "AutoCastable"]
-	if scintillante then
-		scintillante:SetWidth(AUTOCAST_BORDURE * echelle)
-		scintillante:SetHeight(AUTOCAST_BORDURE * echelle)
+	-- Autocast stays the client's: AutoCastTemplates exists only in mainline/, and only
+	-- camelot/ and shared/ count, so camelot keeps the original border and four sparkles. They
+	-- are only scaled to the button, from 36 to 30.
+	local scale = SIZE / ORIGINAL_SIZE
+	local autoCastable = _G[name .. "AutoCastable"]
+	if autoCastable then
+		autoCastable:SetWidth(AUTOCAST_BORDER * scale)
+		autoCastable:SetHeight(AUTOCAST_BORDER * scale)
 	end
-	-- Les etincelles ne se redimensionnent pas : le client les pose lui-meme
-	-- autour du cadre, a une taille fixe, et AutoCastShine_OnUpdate les
-	-- deplace sans les retailler. Changer la taille du cadre laissait donc
-	-- des etincelles trop grosses tournant sur un cercle trop petit. On met
-	-- le cadre a l'ECHELLE : tout ce qu'il contient suit, tailles et orbite.
-	local etincelles = _G[nom .. "Shine"]
-	if etincelles then
-		etincelles:SetScale(echelle)
+	-- The sparkles cannot be resized: the client places them at a fixed size and
+	-- AutoCastShine_OnUpdate moves them without resizing, so the frame is SCALED instead:
+	-- sizes and orbit follow.
+	local sparkles = _G[name .. "Shine"]
+	if sparkles then
+		sparkles:SetScale(scale)
 	end
 
-	local fond = bouton:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, ATLAS.background, true)
-	fond:SetAllPoints(bouton)
+	local background = button:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, ATLAS.background, true)
+	background:SetAllPoints(button)
 
-	local emplacement = bouton:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(emplacement, ATLAS.slot, true)
-	emplacement:SetAllPoints(bouton)
-	bouton.foreverFond = fond
-	bouton.foreverEmplacement = emplacement
+	local slot = button:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(slot, ATLAS.slot, true)
+	slot:SetAllPoints(button)
+	button.foreverBackground = background
+	button.foreverSlot = slot
 
-	local icone = _G[nom .. "Icon"]
-	if icone then
-		icone:ClearAllPoints()
-		icone:SetAllPoints(bouton)
-		icone:SetTexCoord(0, 1, 0, 1)
-		icone:SetDrawLayer("BORDER")
-		bouton.foreverIcone = icone
+	local icon = _G[name .. "Icon"]
+	if icon then
+		icon:ClearAllPoints()
+		icon:SetAllPoints(button)
+		icon:SetTexCoord(0, 1, 0, 1)
+		icon:SetDrawLayer("BORDER")
+		button.foreverIcon = icon
 	end
 
-	local cadre = bouton:CreateTexture(nil, "OVERLAY")
-	poserEtat(cadre, ATLAS.normal, CADRE_L, CADRE_H)
-	bouton.foreverCadre = cadre
+	local frame = button:CreateTexture(nil, "OVERLAY")
+	applyState(frame, ATLAS.normal, FRAME_W, FRAME_H)
+	button.foreverFrame = frame
 
-	poserEtat(bouton:GetPushedTexture(), ATLAS.pushed, CADRE_L, CADRE_H)
-	poserEtat(bouton:GetHighlightTexture(), ATLAS.highlight, ETAT_L, ETAT_H)
-	poserEtat(bouton:GetCheckedTexture(), ATLAS.highlight, ETAT_L, ETAT_H, true)
-	poserEtat(_G[nom .. "Flash"], ATLAS.flash, ETAT_L, ETAT_H)
+	applyState(button:GetPushedTexture(), ATLAS.pushed, FRAME_W, FRAME_H)
+	applyState(button:GetHighlightTexture(), ATLAS.highlight, STATE_W, STATE_H)
+	applyState(button:GetCheckedTexture(), ATLAS.highlight, STATE_W, STATE_H, true)
+	applyState(_G[name .. "Flash"], ATLAS.flash, STATE_W, STATE_H)
 
-	local recharge = _G[nom .. "Cooldown"]
-	if recharge and icone then
-		recharge:ClearAllPoints()
-		recharge:SetPoint("TOPLEFT", icone, "TOPLEFT", 1.7, -1.7)
-		recharge:SetPoint("BOTTOMRIGHT", icone, "BOTTOMRIGHT", -1, 1)
-		bouton.foreverRecharge = recharge
+	local cooldown = _G[name .. "Cooldown"]
+	if cooldown and icon then
+		cooldown:ClearAllPoints()
+		cooldown:SetPoint("TOPLEFT", icon, "TOPLEFT", 1.7, -1.7)
+		cooldown:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -1, 1)
+		button.foreverCooldown = cooldown
 	end
 
-	local raccourci = _G[nom .. "HotKey"]
-	if raccourci then
-		raccourci:ClearAllPoints()
-		raccourci:SetPoint("TOPRIGHT", bouton, "TOPRIGHT", -3, -4)
+	local hotkey = _G[name .. "HotKey"]
+	if hotkey then
+		hotkey:ClearAllPoints()
+		hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -3, -4)
 	end
 
-	local quantite = _G[nom .. "Count"]
-	if quantite then
-		quantite:ClearAllPoints()
-		quantite:SetPoint("BOTTOMRIGHT", bouton, "BOTTOMRIGHT", -3, 1)
+	local quantity = _G[name .. "Count"]
+	if quantity then
+		quantity:ClearAllPoints()
+		quantity:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -3, 1)
 	end
 
-	bouton.foreverSkinned = true
+	button.foreverSkinned = true
 end
 
--- L'ART D'EPOQUE DE LA BARRE. 3.3.5 encadre sa barre de familier de deux
--- morceaux glissants, SlidingActionBarTexture0 et 1. On ne se fie pas a
--- leurs noms : TOUTES les regions du cadre lui-meme s'effacent, les boutons
--- etant des cadres fils et non des regions -- ils ne sont donc pas touches.
-local function effacerArtDepoque()
-	local barre = PetActionBarFrame
-	if not barre or not barre.GetNumRegions then
+-- Legacy bar art: 3.3.5 frames the pet bar with two sliding pieces (SlidingActionBarTexture0
+-- and 1). All the frame's own texture regions are hidden; the buttons are child frames, not
+-- regions, so they are untouched.
+local function clearLegacyArt()
+	local bar = PetActionBarFrame
+	if not bar or not bar.GetNumRegions then
 		return
 	end
 
-	local regions = { barre:GetRegions() }
+	local regions = { bar:GetRegions() }
 	for _, region in ipairs(regions) do
 		if region and region.GetObjectType and region:GetObjectType() == "Texture" then
 			region:SetAlpha(0)
@@ -210,36 +159,35 @@ local function effacerArtDepoque()
 	end
 end
 
-local function habillerTout()
-	for index = 1, nombreDeBoutons do
-		habiller(_G["PetActionButton" .. index])
+local function skinAll()
+	for index = 1, buttonCount do
+		applySkin(_G["PetActionButton" .. index])
 	end
-	effacerArtDepoque()
+	clearLegacyArt()
 end
 
--- La barre se montre si le familier a une barre ET s'il est visible.
-local function familierPresent()
+-- The bar shows when the pet has an action bar AND is visible.
+local function hasPet()
 	if not PetHasActionBar or not PetHasActionBar() then
 		return false
 	end
 	return UnitIsVisible and UnitIsVisible("pet") and true or false
 end
 
--- La place par defaut se recalcule : elle depend de la barre des postures,
--- qui va et vient avec les formes du personnage. SetDefaults ne repose le
--- cadre que si l'utilisateur ne l'a pas deja deplace lui-meme.
-local function posePardefaut()
-	local x = BORD_GAUCHE
-	local postures = ForeverUI.StanceBar and ForeverUI.StanceBar.Holder
-	if postures and postures:IsShown() then
-		x = x + postures:GetWidth() + ECART_BARRES
+-- The default place is recomputed: it depends on the stance bar, which comes and goes with
+-- shapeshift forms. SetDefaults only moves the frame when the user has not moved it.
+local function placeDefault()
+	local x = LEFT_EDGE
+	local stances = ForeverUI.StanceBar and ForeverUI.StanceBar.Holder
+	if stances and stances:IsShown() then
+		x = x + stances:GetWidth() + BARS_GAP
 	end
-	ForeverUI.Layout.SetDefaults("familier", "BOTTOMLEFT", "BOTTOM", x, RANGEE)
+	ForeverUI.Layout.SetDefaults("pet", "BOTTOMLEFT", "BOTTOM", x, ROW_Y)
 end
 
-local function poser()
-	if not familierPresent() then
-		porteur:Hide()
+local function place()
+	if not hasPet() then
+		carrier:Hide()
 		return
 	end
 
@@ -247,121 +195,118 @@ local function poser()
 		return
 	end
 
-	porteur:SetWidth(nombreDeBoutons * TAILLE + (nombreDeBoutons - 1) * ECART)
-	porteur:SetHeight(TAILLE)
+	carrier:SetWidth(buttonCount * SIZE + (buttonCount - 1) * GAP)
+	carrier:SetHeight(SIZE)
 
-	for index = 1, nombreDeBoutons do
-		local bouton = _G["PetActionButton" .. index]
-		if bouton then
-			bouton:SetWidth(TAILLE)
-			bouton:SetHeight(TAILLE)
-			bouton:ClearAllPoints()
-			bouton:SetPoint("LEFT", porteur, "LEFT", (index - 1) * PAS, 0)
-			bouton:Show()
+	for index = 1, buttonCount do
+		local button = _G["PetActionButton" .. index]
+		if button then
+			button:SetWidth(SIZE)
+			button:SetHeight(SIZE)
+			button:ClearAllPoints()
+			button:SetPoint("LEFT", carrier, "LEFT", (index - 1) * STEP, 0)
+			button:Show()
 		end
 	end
 
-	porteur:Show()
-	posePardefaut()
+	carrier:Show()
+	placeDefault()
 end
 
--- RELEVE -- PetActionButtonMixin:UpdateButtonState.
-local function majEtat()
-	for index = 1, nombreDeBoutons do
-		local bouton = _G["PetActionButton" .. index]
-		if bouton and bouton.foreverSkinned then
-			-- 3.3.5 : (nom, SOUS-TEXTE, texture, isToken, active,
-			-- autoPossible, autoActif). Le moderne n'a pas le sous-texte.
-			local nomAction, _, texture, estCle, active, autoPossible, autoActif =
+-- PetActionButtonMixin:UpdateButtonState
+local function updateState()
+	for index = 1, buttonCount do
+		local button = _G["PetActionButton" .. index]
+		if button and button.foreverSkinned then
+			-- 3.3.5: (name, SUBTEXT, texture, isToken, active, autoCastAllowed, autoCastEnabled).
+			-- Camelot has no subtext: copying its code would take the subtext for the texture.
+			local _, _, texture, isToken, active =
 				GetPetActionInfo(index)
-			local icone = bouton.foreverIcone
+			local icon = button.foreverIcon
 
-			if icone then
-				-- isToken : le nom et la texture sont des CLES de variables
-				-- globales, pas des valeurs.
-				icone:SetTexture(estCle and _G[texture] or texture)
+			if icon then
+				-- isToken: name and texture are KEYS of global variables, not values.
+				icon:SetTexture(isToken and _G[texture] or texture)
 				if texture then
-					local utilisable = not GetPetActionSlotUsable
+					local usable = not GetPetActionSlotUsable
 						or GetPetActionSlotUsable(index)
-					if utilisable then
-						icone:SetVertexColor(1, 1, 1)
+					if usable then
+						icon:SetVertexColor(1, 1, 1)
 					else
-						icone:SetVertexColor(GRISE, GRISE, GRISE)
+						icon:SetVertexColor(GRAYED, GRAYED, GRAYED)
 					end
-					icone:Show()
+					icon:Show()
 				else
-					icone:Hide()
+					icon:Hide()
 				end
 			end
 
-			local coche = bouton:GetCheckedTexture()
+			local checkMark = button:GetCheckedTexture()
 			if active then
-				-- L'attaque clignote, et son coche est a demi transparent :
-				-- a pleine alpha on croirait une capacite selectionnee.
-				local attaque = IsPetAttackAction and IsPetAttackAction(index)
-				if coche then
-					coche:SetAlpha(attaque and COCHE_ATTAQUE or 1)
+				-- The attack action flashes and its check mark is half transparent: at full alpha it would
+				-- look like one more selected ability.
+				local isAttack = IsPetAttackAction and IsPetAttackAction(index)
+				if checkMark then
+					checkMark:SetAlpha(isAttack and ATTACK_CHECK_ALPHA or 1)
 				end
-				bouton:SetChecked(1)
+				button:SetChecked(1)
 			else
-				bouton:SetChecked(nil)
+				button:SetChecked(nil)
 			end
 
-			local recharge = bouton.foreverRecharge
-			if recharge and GetPetActionCooldown then
-				local debut, duree, actif = GetPetActionCooldown(index)
+			local cooldown = button.foreverCooldown
+			if cooldown and GetPetActionCooldown then
+				local start, duration, active = GetPetActionCooldown(index)
 				if CooldownFrame_SetTimer then
-					CooldownFrame_SetTimer(recharge, debut, duree, actif)
+					CooldownFrame_SetTimer(cooldown, start, duration, active)
 				elseif CooldownFrame_Set then
-					CooldownFrame_Set(recharge, debut, duree, actif)
+					CooldownFrame_Set(cooldown, start, duration, active)
 				end
 			end
 
-			taireNormale(bouton)
+			hideNormalTexture(button)
 		end
 	end
 end
 
-local function tout()
-	habillerTout()
-	poser()
-	majEtat()
+local function all()
+	skinAll()
+	place()
+	updateState()
 end
 
-ForeverUI.PetBar = { Apply = tout, Holder = porteur }
+ForeverUI.PetBar = { Apply = all, Holder = carrier }
 
 if hooksecurefunc then
-	for _, nomFonction in ipairs({ "PetActionBar_Update", "PetActionBar_UpdateCooldowns" }) do
-		if type(_G[nomFonction]) == "function" then
-			hooksecurefunc(nomFonction, function()
-				poser()
-				majEtat()
+	for _, funcName in ipairs({ "PetActionBar_Update", "PetActionBar_UpdateCooldowns" }) do
+		if type(_G[funcName]) == "function" then
+			hooksecurefunc(funcName, function()
+				place()
+				updateState()
 			end)
 		end
 	end
 end
 
-local veilleur = CreateFrame("Frame", "ForeverUIPetBarWatcher")
-veilleur:RegisterEvent("PLAYER_ENTERING_WORLD")
-veilleur:RegisterEvent("PLAYER_REGEN_ENABLED")
-veilleur:RegisterEvent("UNIT_PET")
-veilleur:RegisterEvent("PET_BAR_UPDATE")
-veilleur:RegisterEvent("PET_BAR_UPDATE_COOLDOWN")
-veilleur:RegisterEvent("PET_BAR_UPDATE_USABLE")
-veilleur:RegisterEvent("PET_UI_UPDATE")
-veilleur:RegisterEvent("PLAYER_CONTROL_LOST")
-veilleur:RegisterEvent("PLAYER_CONTROL_GAINED")
--- Les formes changent la largeur de la barre des postures, donc la place
--- de celle-ci. StanceBar.lua est charge avant : son gestionnaire passe en
--- premier, et la largeur est deja bonne quand on la lit.
-veilleur:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
-veilleur:SetScript("OnEvent", tout)
+local listener = CreateFrame("Frame", "ForeverUIPetBarWatcher")
+listener:RegisterEvent("PLAYER_ENTERING_WORLD")
+listener:RegisterEvent("PLAYER_REGEN_ENABLED")
+listener:RegisterEvent("UNIT_PET")
+listener:RegisterEvent("PET_BAR_UPDATE")
+listener:RegisterEvent("PET_BAR_UPDATE_COOLDOWN")
+listener:RegisterEvent("PET_BAR_UPDATE_USABLE")
+listener:RegisterEvent("PET_UI_UPDATE")
+listener:RegisterEvent("PLAYER_CONTROL_LOST")
+listener:RegisterEvent("PLAYER_CONTROL_GAINED")
+-- Forms change the stance bar's width, hence this bar's place. StanceBar.lua loads first:
+-- its handler runs first, so the width is already right when read.
+listener:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
+listener:SetScript("OnEvent", all)
 
-tout()
+all()
 
--- Comme les autres barres : aucune position definitive ici, tout passe par
--- /fui. Par defaut la barre du familier se pose au-dessus de celle des
--- postures, sur le meme bord gauche.
-ForeverUI.Layout.Register(porteur, "familier", L.PETBAR_EDIT_LABEL,
-	"BOTTOMLEFT", "BOTTOM", BORD_GAUCHE, RANGEE)
-posePardefaut()
+-- No fixed position here, as for the other bars: everything goes through /fui.
+-- placeDefault then moves the default right of the stance bar when it is shown.
+ForeverUI.Layout.Register(carrier, "pet", L.PETBAR_EDIT_LABEL,
+	"BOTTOMLEFT", "BOTTOM", LEFT_EDGE, ROW_Y)
+placeDefault()

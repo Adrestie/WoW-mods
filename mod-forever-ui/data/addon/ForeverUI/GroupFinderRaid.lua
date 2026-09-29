@@ -1,91 +1,11 @@
--- ForeverUI : le navigateur de raid de WotLK dans la fenetre du chercheur
--- (GroupFinder.lua), a la DA du chercheur de groupe de camelot -- etape 2,
--- 2026-09-26 ; memoire foreverui-chercheur.
---
--- UN ONGLET LATERAL, DEUX ONGLETS EN BAS (demande de l'utilisateur,
--- 2026-09-26, apres deux essais -- deux onglets lateraux, puis deux sections
--- retractables) : l'onglet lateral "Raid Browser"
--- (Achievement_General_StayClassy), et sous la fenetre les onglets "List My
--- Group" (LIST_MY_GROUP) et "Join" (JOIN), ceux de la fenetre Social (onglets
--- du bas de camelot, PanelTabButtonTemplate). Chacun montre son panneau :
--- "List My Group" la page d'inscription de camelot (LFGListingFrame), "Join"
--- sa page de parcours (LFGBrowseFrame). L'onglet choisi est celui du client
--- (LFRParentFrame.activeTab, LFRFrame_SetActiveTab) : le raid rouvre sur le
--- dernier panneau vu.
---
--- LES CATEGORIES RETRACTABLES DE LA LISTE DES RAIDS sont celles de la feuille
--- de personnage (TokensTab.lua, TokenHeaderTemplate) : en-tete de 26,
--- common-button-list-collapseExpand en neuf tranches (coin 12), nom
--- GameFontNormalLeft a LEFT (10) sur 15 de haut, fleche
--- common-button-list-minus / -plus a RIGHT (-8, -1) ; entrees de 22 en
--- retrait de 2 ; 3 entre deux lignes. Un clic sur l'en-tete replie ou deplie
--- (LFRList_SetHeaderCollapsed du client). L'en-tete n'a plus sa case "tout
--- cocher" de WotLK : la feuille n'en a pas ; chaque raid garde la sienne.
--- Le rectangle des entrees est celui de la feuille aussi (TokenEntryTemplate,
--- decision de l'utilisateur) : charactercreate-customize-dropdown-
--- linemouseover en trois tranches (cotes de 6, le droit retourne), 0,10 au
--- survol, 0,20 sur un raid coche ; le survol se lit sur toute la ligne, sa
--- case comprise (IsMouseOver a chaque image, comme la feuille).
---
--- RELEVE -- blizzard_groupfinder_vanillastyle/mainline :
---   inscription  bandeau des roles (tank, soin, degats a x 70 / 174 / 278,
---                pas de chef : WotLK n'en a pas ici), encadre (4,-118 /
---                -4,37) ; la liste (ActivityView 7,-125 / -7,40, marge 4)
---                s'arrete a 88 au-dessus du bas de la vue ; filet
---                shop-list-rule a 80 au-dessus de ce bas ; le commentaire
---                (UIPanelInputScrollFrameTemplate 394 x 47, BOTTOM (0, 19) de
---                la vue) :
---                bord Common-Input-Border en neuf morceaux (coins 8 x 8 a
---                +/-5), texte GameFontHighlightSmall sur 394 - 18, consigne
---                GameFontNormalSmall gris 0,35 ; boutons Back 111 x 28
---                BOTTOMLEFT (4,6) -> Set Comment, Post 109 x 28 BOTTOMRIGHT
---                (-4,6) -> List Me
---   parcours     encadre (4,-80 / -4,37), fond entier ; menu
---                WowStyle1DropdownTemplate a TOPLEFT (70,-43) ; bouton de
---                rafraichissement
---                32 x 32 (UI-SquareButton, surbrillance UI-Common-MouseHilight,
---                icone UI-RefreshButton 16 x 16 a (-1, 0), (-2, -1) enfonce) a
---                sa droite (+9) ; lignes de 48 (LFGBrowseSearchEntryTemplate) :
---                fond blanc 0,04, chef UI-Group-LeaderIcon 24 x 24 a (8,-4),
---                nom GameFontNormalLarge (9,-9) seul, (32,-9) en groupe,
---                couleur de classe, niveau "LEVEL_ABBR n" GameFontDisableLeft
---                a +4, icone de classe groupfinder-icon-class-* 24 x 24 a
---                +3,-5, ligne du bas GameFontDisableLeft a (10,5) ; selection
---                groupfinder-highlightbar-yellow, survol -blue (3,-3 / -3,-1,
---                ADD) ; a droite : seul, "Roles:" GameFontHighlight a RIGHT
---                -120 et les roles groupfinder-icon-role-micro-* 20 x 20 (+4
---                puis +24) ; en groupe, groupfinder-waitdot 18 x 17 a RIGHT -16
---                et le nombre a sa gauche ; liste (7,-83 / -22,40 avec la
---                barre, -6 sans ; barre a +2,-4) ; boutons SendMessage 111 x 28
---                BOTTOMLEFT (4,6), GroupInvite 109 x 28 BOTTOMRIGHT (-4,6)
---
--- CE QUI VIENT DE WotLK (LFRFrame.lua) : les donnees et les actions. Le
--- contenu du panneau (LFRQueueFrame, LFRBrowseFrame) reste affiche mais
--- transparent sous notre fenetre ; on recopie son etat et on agit par ses
--- fonctions (LFRQueueFrameDungeonChoiceEnableButton_OnClick,
--- LFRBrowseButton_OnClick / _OnEnter avec notre ligne, Click() sur ses
--- boutons, son menu des raids ouvert sous notre bouton).
---
--- CORRESPONDANCES : menu de camelot -> le menu des raids de WotLK ; ligne
--- du bas -> le commentaire du joueur, sinon sa zone.
---
--- UN RAID A LA FOIS, COMME WotLK. Parcourir toute une categorie a ete
--- essaye le 2026-09-26 puis retire (decision de l'utilisateur) : le serveur
--- ne cherche qu'un raid par joueur (AzerothCore, LFGMgr : RBSearchersStore),
--- et SearchLFGJoin est PROTEGEE -- elle ne passe que pendant un clic ou une
--- touche ; appelee d'une horloge pour enchainer les raids, le client la
--- bloquait ("Interface action failed because of an addon"). Le menu reste le
--- notre (bati sur GetFullRaidList, sa liste a la largeur de notre bouton),
--- ses categories de simples sous-menus. Chaque reponse est relevee en entier
--- (membres du groupe, boss) : l'infobulle, reprise de LFRBrowseButton_OnEnter,
--- s'appuie sur ce releve. La selection est la notre ; Send Message et Invite
--- font ce que font ceux du client (ChatFrame_SendTell, InviteUnit,
--- LFRBrowse_UpdateButtonStates).
---
--- ECARTS SIGNALES : pas de tri par colonnes (camelot n'a pas d'en-tetes) ;
--- pas de separation "joueurs seuls / groupes" (ses chaines n'existent pas en
--- 3.3.5) ; pas de texte "aucun resultat" (idem) ; le commentaire garde la
--- limite de WotLK (64 lettres) et ne defile pas.
+-- WotLK raid browser inside the group finder window (GroupFinder.lua), styled after camelot's
+-- group finder: a side tab plus two bottom tabs from the Social window, "List My Group"
+-- (camelot LFGListingFrame) and "Join" (LFGBrowseFrame). The active tab is the client's
+-- (LFRParentFrame.activeTab), so the raid reopens on the last panel seen.
+-- Data and actions come from WotLK (LFRFrame.lua): LFRQueueFrame and LFRBrowseFrame stay shown
+-- but transparent under our window; we copy their state and act through their functions.
+-- One raid at a time: the server tracks one raid search per player (AzerothCore LFGMgr,
+-- RBSearchersStore), and SearchLFGJoin is protected, so it only runs from a click or a key.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -94,46 +14,45 @@ local F = ForeverUI.GroupFinder
 local R = {}
 ForeverUI.GroupFinderRaid = R
 
-if not (F and F.cadre and LFRParentFrame and LFRQueueFrame and LFRBrowseFrame) then return end
+if not (F and F.frame and LFRParentFrame and LFRQueueFrame and LFRBrowseFrame) then return end
 
 local SEP = string.char(92)
 local G = F.G
-local txt, actif = F.txt, F.actif
+local txt, active = F.txt, F.active
 
 local M = {
-	-- l'inscription
-	-- la liste des raids s'arrete a 88 + 4 au-dessus du bas de la vue ; ses
-	-- categories sont celles de la liste commune (GroupFinder.lua, F.LC)
-	regleY = 40 + 80, listeBas = 40 + 88 + 4,
-	commentaireL = 394, commentaireH = 47, commentaireY = 40 + 19, lettres = 64,
-	-- le parcours
-	parcoursY = -80, menuX = 70, menuY = -43, menuL = 300, menuH = 25,
-	rafraichir = 32, rafraichirX = 9,
-	-- sans barre, a -7 comme a gauche (G.listeX1 : 7)
-	resultat = 48, resultatsY = -83, resultatsX2 = -22, resultatsSans = -7,
-	-- les onglets du bas (ceux de Social : premier a (5, 2) sous la fenetre,
-	-- les suivants a +3)
-	ongletX = 5, ongletY = 2, ongletEcart = 3,
-	bord = "Interface" .. SEP .. "Common" .. SEP .. "Common-Input-Border-",
-	carre = "interface" .. SEP .. "ForeverUI" .. SEP .. "buttons" .. SEP,
-	chef = "Interface" .. SEP .. "GroupFrame" .. SEP .. "UI-Group-LeaderIcon",
-	gris = { 0.3, 0.3, 0.3 },
+	-- Sign-up page
+	-- The raid list stops 88 + 4 above the view bottom; its categories use the shared list
+	-- (GroupFinder.lua, F.LC)
+	ruleY = 40 + 80, listBottom = 40 + 88 + 4,
+	commentW = 394, commentH = 47, commentY = 40 + 19, maxLetters = 64,
+	-- Browse page
+	browseY = -80, menuX = 70, menuY = -43, menuW = 300, menuH = 25,
+	refresh = 32, refreshX = 9,
+	-- Without the bar, at -7 like the left side (G.listX1: 7)
+	result = 48, resultsY = -83, resultsX2 = -22, resultsNoBar = -7,
+	-- Bottom tabs, as in Social: the first at (5, 2) under the window, the next ones 3 apart
+	tabX = 5, tabY = 2, tabGap = 3,
+	edge = "Interface" .. SEP .. "Common" .. SEP .. "Common-Input-Border-",
+	square = "interface" .. SEP .. "ForeverUI" .. SEP .. "buttons" .. SEP,
+	leader = "Interface" .. SEP .. "GroupFrame" .. SEP .. "UI-Group-LeaderIcon",
+	gray = { 0.3, 0.3, 0.3 },
 }
 
--- ---------------------------------------------------------------- la source
--- la liste des raids (LFRFrame.lua) : en groupe, un seul raid, par un
--- bouton rond (LFRQueueFrame.selectedLFM) ; seul, des cases
+-- ---------------------------------------------------------------- Source
+-- Raid list (LFRFrame.lua): in a group, a single raid picked by a radio button
+-- (LFRQueueFrame.selectedLFM); solo, checkboxes
 local SOURCE_LFR = {
-	-- la case de camelot (GroupFinder.lua, caseCamelot)
+	-- camelot checkbox style (GroupFinder.lua)
 	style = "camelot",
-	replier = function(id, replie) LFRList_SetHeaderCollapsed(id, replie) end,
-	liste = function() return LFRRaidList or {} end,
-	habilite = function() return LFR_IsEmpowered() end,
+	collapse = function(id, collapsed) LFRList_SetHeaderCollapsed(id, collapsed) end,
+	list = function() return LFRRaidList or {} end,
+	empowered = function() return LFR_IsEmpowered() end,
 	plus = function(b) LFRQueueFrameExpandOrCollapseButton_OnClick(b) end,
-	case = function(c) LFRQueueFrameDungeonChoiceEnableButton_OnClick(c) end,
-	plusieurs = function() return LFR_CanQueueForMultiple() end,
-	verrou = function(id) return not LFR_CanQueueForLockedInstances() and LFGLockList[id] end,
-	etat = function(id, mode)
+	checkbox = function(c) LFRQueueFrameDungeonChoiceEnableButton_OnClick(c) end,
+	multiple = function() return LFR_CanQueueForMultiple() end,
+	lock = function(id) return not LFR_CanQueueForLockedInstances() and LFGLockList[id] end,
+	state = function(id, mode)
 		if mode == "queued" or mode == "listed" then return LFGQueuedForList[id] end
 		if not LFR_CanQueueForMultiple() then return id == LFRQueueFrame.selectedLFM end
 		return LFGEnabledList[id]
@@ -141,98 +60,95 @@ local SOURCE_LFR = {
 }
 R.SOURCE = SOURCE_LFR
 
-local function texteDe(nom)
-	local r = _G[nom]
+local function textOf(name)
+	local r = _G[name]
 	return r and r.GetText and r:GetText() or ""
 end
 
--- un bouton de la fenetre qui reprend le texte et l'etat d'un bouton du
--- client, et le fait cliquer
-local function refleter(b, nomClient, garderTexte)
-	local c = _G[nomClient]
+-- Copies a client button's text and enabled state to b; keepText: keep b's own text
+local function mirror(b, clientName, keepText)
+	local c = _G[clientName]
 	if not c then return end
-	if not garderTexte then b:SetText(c:GetText() or "") end
-	b:Activer(actif(c))
+	if not keepText then b:SetText(c:GetText() or "") end
+	b:Activate(active(c))
 end
 
--- ---------------------------------------------------------------- l'inscription
+-- ---------------------------------------------------------------- Sign-up
 
--- les roles de LFRQueueFrame, aux places de camelot
-local function rolesRaid()
+-- LFRQueueFrame roles, at camelot's positions
+local function raidRoles()
 	local l = {}
-	local clients = { tank = "LFRQueueFrameRoleButtonTank", soin = "LFRQueueFrameRoleButtonHealer",
-		degats = "LFRQueueFrameRoleButtonDPS" }
+	local clients = { tank = "LFRQueueFrameRoleButtonTank", healer = "LFRQueueFrameRoleButtonHealer",
+		damage = "LFRQueueFrameRoleButtonDPS" }
 	for _, r in ipairs(F.ROLES) do
-		if clients[r.cle] then
-			table.insert(l, { cle = r.cle, page = "Raid", client = clients[r.cle], id = r.id, x = r.x,
-				alpha = r.alpha, icone = r.icone, fond = r.fond })
+		if clients[r.key] then
+			table.insert(l, { key = r.key, page = "Raid", client = clients[r.key], id = r.id, x = r.x,
+				alpha = r.alpha, icon = r.icon, background = r.background })
 		end
 	end
 	return l
 end
 
--- LE COMMENTAIRE : le cadre de camelot, un champ de WotLK. Le champ du client
--- (LFRQueueFrameComment) reste celui que LFRQueueFrame_Join lit : le notre
--- lui recopie son texte ; ses regles de focus et d'envoi sont reprises de son
--- XML (OnEditFocusGained / OnEditFocusLost).
-local function construireCommentaire(p, niveau)
+-- Comment: camelot's frame around a WotLK edit box. The client's LFRQueueFrameComment stays
+-- the one LFRQueueFrame_Join reads, so ours copies its text into it; focus and send rules
+-- follow its XML (OnEditFocusGained / OnEditFocusLost). p: parent; level: frame level
+local function buildComment(p, level)
 	local c = CreateFrame("Frame", "ForeverUIGroupFinderRaidComment", p)
-	c:SetWidth(M.commentaireL)
-	c:SetHeight(M.commentaireH)
-	c:SetFrameLevel(niveau)
+	c:SetWidth(M.commentW)
+	c:SetHeight(M.commentH)
+	c:SetFrameLevel(level)
 	c:EnableMouse(true)
-	local function morceau(suffixe)
+	local function piece(suffix)
 		local t = c:CreateTexture(nil, "BACKGROUND")
-		t:SetTexture(M.bord .. suffixe)
+		t:SetTexture(M.edge .. suffix)
 		return t
 	end
-	local hg, hd, bg, bd = morceau("TL"), morceau("TR"), morceau("BL"), morceau("BR")
-	for _, t in ipairs({ hg, hd, bg, bd }) do t:SetWidth(8) t:SetHeight(8) end
-	hg:SetPoint("TOPLEFT", c, "TOPLEFT", -5, 5)
-	hd:SetPoint("TOPRIGHT", c, "TOPRIGHT", 5, 5)
-	bg:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", -5, -5)
-	bd:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 5, -5)
-	local haut, bas, gauche, droite = morceau("T"), morceau("B"), morceau("L"), morceau("R")
-	haut:SetPoint("TOPLEFT", hg, "TOPRIGHT", 0, 0)
-	haut:SetPoint("BOTTOMRIGHT", hd, "BOTTOMLEFT", 0, 0)
-	bas:SetPoint("TOPLEFT", bg, "TOPRIGHT", 0, 0)
-	bas:SetPoint("BOTTOMRIGHT", bd, "BOTTOMLEFT", 0, 0)
-	gauche:SetPoint("TOPLEFT", hg, "BOTTOMLEFT", 0, 0)
-	gauche:SetPoint("BOTTOMRIGHT", bg, "TOPRIGHT", 0, 0)
-	droite:SetPoint("TOPLEFT", hd, "BOTTOMLEFT", 0, 0)
-	droite:SetPoint("BOTTOMRIGHT", bd, "TOPRIGHT", 0, 0)
-	local milieu = morceau("M")
-	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT", 0, 0)
-	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT", 0, 0)
+	local topLeft, topRight, bottomLeft, bottomRight = piece("TL"), piece("TR"), piece("BL"), piece("BR")
+	for _, t in ipairs({ topLeft, topRight, bottomLeft, bottomRight }) do t:SetWidth(8) t:SetHeight(8) end
+	topLeft:SetPoint("TOPLEFT", c, "TOPLEFT", -5, 5)
+	topRight:SetPoint("TOPRIGHT", c, "TOPRIGHT", 5, 5)
+	bottomLeft:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", -5, -5)
+	bottomRight:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 5, -5)
+	local top, down, left, right = piece("T"), piece("B"), piece("L"), piece("R")
+	top:SetPoint("TOPLEFT", topLeft, "TOPRIGHT", 0, 0)
+	top:SetPoint("BOTTOMRIGHT", topRight, "BOTTOMLEFT", 0, 0)
+	down:SetPoint("TOPLEFT", bottomLeft, "TOPRIGHT", 0, 0)
+	down:SetPoint("BOTTOMRIGHT", bottomRight, "BOTTOMLEFT", 0, 0)
+	left:SetPoint("TOPLEFT", topLeft, "BOTTOMLEFT", 0, 0)
+	left:SetPoint("BOTTOMRIGHT", bottomLeft, "TOPRIGHT", 0, 0)
+	right:SetPoint("TOPLEFT", topRight, "BOTTOMLEFT", 0, 0)
+	right:SetPoint("BOTTOMRIGHT", bottomRight, "TOPRIGHT", 0, 0)
+	local middle = piece("M")
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
 
 	local e = CreateFrame("EditBox", "ForeverUIGroupFinderRaidCommentEditBox", c)
 	e:SetMultiLine(true)
 	e:SetAutoFocus(false)
-	e:SetMaxLetters(M.lettres)
-	-- toute la largeur : camelot en retire 18 pour sa barre, ce commentaire
-	-- ne defile pas et n'en a pas (regle du 28/09)
-	e:SetWidth(M.commentaireL)
-	e:SetHeight(M.commentaireH)
+	e:SetMaxLetters(M.maxLetters)
+	-- Full width: camelot removes 18 for its scroll bar; this comment does not scroll
+	e:SetWidth(M.commentW)
+	e:SetHeight(M.commentH)
 	e:SetPoint("TOPLEFT", c, "TOPLEFT", 0, 0)
 	e:SetFontObject(GameFontHighlightSmall)
-	local consigne = e:CreateFontString(nil, "BORDER", "GameFontNormalSmall")
-	consigne:SetPoint("TOPLEFT", e, "TOPLEFT", 0, 0)
-	consigne:SetWidth(M.commentaireL)
-	consigne:SetJustifyH("LEFT")
-	consigne:SetJustifyV("TOP")
-	consigne:SetTextColor(0.35, 0.35, 0.35)
-	consigne:SetText(txt("TYPE_LFR_COMMENT_HERE"))
-	e.consigne = consigne
+	local instruction = e:CreateFontString(nil, "BORDER", "GameFontNormalSmall")
+	instruction:SetPoint("TOPLEFT", e, "TOPLEFT", 0, 0)
+	instruction:SetWidth(M.commentW)
+	instruction:SetJustifyH("LEFT")
+	instruction:SetJustifyV("TOP")
+	instruction:SetTextColor(0.35, 0.35, 0.35)
+	instruction:SetText(txt("TYPE_LFR_COMMENT_HERE"))
+	e.instruction = instruction
 	e:SetScript("OnEditFocusGained", function(self)
 		if LFR_IsEmpowered() and LFRRaidList and LFRRaidList[1] then
-			self.consigne:Hide()
+			self.instruction:Hide()
 		else
 			self:ClearFocus()
 		end
 	end)
 	e:SetScript("OnEditFocusLost", function(self)
 		local t = self:GetText() or ""
-		if strtrim(t) == "" then self.consigne:Show() end
+		if strtrim(t) == "" then self.instruction:Show() end
 		LFRQueueFrameComment:SetText(t)
 		SetLFGComment(t)
 	end)
@@ -242,169 +158,166 @@ local function construireCommentaire(p, niveau)
 	e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	e:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 	c:SetScript("OnMouseDown", function() e:SetFocus() end)
-	R.saisie = e
-	R.commentaire = c
+	R.input = e
+	R.comment = c
 end
 
--- LA LISTE DES RAIDS, A CATEGORIES : la liste commune (GroupFinder.lua,
--- F.creerListeCat : en-tetes de la feuille de personnage, entrees communes
--- avec les donjons, source SOURCE_LFR)
-function R.majCategories()
-	F.majListeCat(R.liste)
+-- Raid list with categories: the shared list (GroupFinder.lua, F.createCatList: character
+-- sheet headers, entries shared with dungeons, source SOURCE_LFR)
+function R.updateCategories()
+	F.updateCategoryList(R.list)
 end
 
--- LE PANNEAU "LIST MY GROUP" : la page d'inscription de camelot
-local function construireInscription(p)
-	local f = F.cadre
-	R.bleu, R.roles = F.construireBandeau(p, rolesRaid())
-	local encadre = F.construireEncadre(p, "ForeverUIGroupFinderRaidInset", G.encadreY1, true)
-	R.encadre = encadre
+-- "List My Group" panel: camelot's sign-up page
+local function buildSignUp(p)
+	local f = F.frame
+	R.blue, R.roles = F.buildBanner(p, raidRoles())
+	local frameBox = F.buildFrameBox(p, "ForeverUIGroupFinderRaidInset", G.frameBoxY1, true)
+	R.frameBox = frameBox
 
-	local zone = F.creerListeCat(p, "ForeverUIGroupFinderRaidList", "ForeverUIGroupFinderRaid", SOURCE_LFR,
-		M.listeBas, encadre)
-	R.liste = zone
-	-- "aucun raid" : LFRQueueFrameSpecificNoRaidsAvailable
-	local aucun = zone:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-	aucun:SetWidth(300)
-	aucun:SetPoint("TOP", zone, "TOP", 0, -40)
-	aucun:SetText(txt("NO_RAIDS_AVAILABLE"))
-	aucun:Hide()
-	R.aucun = aucun
+	local zone = F.createCatList(p, "ForeverUIGroupFinderRaidList", "ForeverUIGroupFinderRaid", SOURCE_LFR,
+		M.listBottom, frameBox)
+	R.list = zone
+	-- "No raids": LFRQueueFrameSpecificNoRaidsAvailable
+	local none = zone:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	none:SetWidth(300)
+	none:SetPoint("TOP", zone, "TOP", 0, -40)
+	none:SetText(txt("NO_RAIDS_AVAILABLE"))
+	none:Hide()
+	R.none = none
 
-	-- le filet et le commentaire, au-dessus de l'encadre
-	local dessus = CreateFrame("Frame", nil, p)
-	dessus:SetAllPoints(f)
-	dessus:SetFrameLevel(encadre:GetFrameLevel() + 1)
-	local regle = dessus:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(regle, "shop-list-rule", true)
-	regle:SetHeight(G.regleH)
-	regle:SetPoint("LEFT", f, "BOTTOMLEFT", G.listeX1, M.regleY)
-	regle:SetPoint("RIGHT", f, "BOTTOMRIGHT", G.listeX2, M.regleY)
-	R.regle = regle
-	construireCommentaire(p, encadre:GetFrameLevel() + 2)
-	R.commentaire:SetPoint("BOTTOM", f, "BOTTOM", 0, M.commentaireY)
+	-- Rule and comment, above the inset
+	local hovered = CreateFrame("Frame", nil, p)
+	hovered:SetAllPoints(f)
+	hovered:SetFrameLevel(frameBox:GetFrameLevel() + 1)
+	local rule = hovered:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(rule, "shop-list-rule", true)
+	rule:SetHeight(G.ruleH)
+	rule:SetPoint("LEFT", f, "BOTTOMLEFT", G.listX1, M.ruleY)
+	rule:SetPoint("RIGHT", f, "BOTTOMRIGHT", G.listX2, M.ruleY)
+	R.rule = rule
+	buildComment(p, frameBox:GetFrameLevel() + 2)
+	R.comment:SetPoint("BOTTOM", f, "BOTTOM", 0, M.commentY)
 
-	-- "pas de raid pendant la file des donjons" : le voile de WotLK
-	local voile = F.creerVoile("ForeverUIGroupFinderNoLFRWhileLFD", 16, p, encadre)
-	voile:SetAllPoints(encadre)
-	voile.quitter = ForeverUI.CreatePanelButton(voile, txt("LEAVE_QUEUE"), 153, 22, nil, "GameFontNormal")
-	voile.quitter:SetPoint("TOP", voile.description, "BOTTOM", 0, -10)
-	voile.quitter:SetScript("OnClick", function()
+	-- "No raid while in the dungeon queue": the WotLK veil
+	local veil = F.createVeil("ForeverUIGroupFinderNoLFRWhileLFD", 16, p, frameBox)
+	veil:SetAllPoints(frameBox)
+	veil.quit = ForeverUI.CreatePanelButton(veil, txt("LEAVE_QUEUE"), 153, 22, nil, "GameFontNormal")
+	veil.quit:SetPoint("TOP", veil.description, "BOTTOM", 0, -10)
+	veil.quit:SetScript("OnClick", function()
 		if LFRQueueFrameNoLFRWhileLFDLeaveQueueButton then LFRQueueFrameNoLFRWhileLFDLeaveQueueButton:Click() end
 	end)
-	R.voile = voile
+	R.veil = veil
 
-	-- les boutons : "Set Comment" et "List Me", ceux du client
-	local commenter = ForeverUI.CreatePanelButton(p, txt("ACCEPT_COMMENT"), G.backL, G.boutonH,
+	-- "Set Comment" and "List Me" drive the client's buttons
+	local commentButton = ForeverUI.CreatePanelButton(p, txt("ACCEPT_COMMENT"), G.backL, G.buttonH,
 		"ForeverUIGroupFinderRaidCommentButton", "GameFontNormal")
-	commenter:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.boutonCote, G.boutonBas)
-	-- l'OnClick de LFRQueueFrameAcceptCommentButton : lacher le champ envoie
-	-- le commentaire ; sans focus, un son
-	commenter:SetScript("OnClick", function()
-		if R.saisie:HasFocus() then
-			R.saisie:ClearFocus()
+	commentButton:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.buttonSide, G.buttonBottom)
+	-- LFRQueueFrameAcceptCommentButton OnClick: losing focus sends the comment;
+	-- without focus, just a sound
+	commentButton:SetScript("OnClick", function()
+		if R.input:HasFocus() then
+			R.input:ClearFocus()
 		else
 			PlaySound("igMainMenuOptionCheckBoxOn")
 		end
 	end)
-	R.commenter = commenter
-	local inscrire = ForeverUI.CreatePanelButton(p, txt("LIST_ME"), G.postL, G.boutonH,
+	R.commentButton = commentButton
+	local register = ForeverUI.CreatePanelButton(p, txt("LIST_ME"), G.postW, G.buttonH,
 		"ForeverUIGroupFinderRaidListButton", "GameFontNormal")
-	inscrire:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -G.boutonCote, G.boutonBas)
-	inscrire:SetScript("OnClick", function()
-		if R.saisie:HasFocus() then R.saisie:ClearFocus() end
-		if LFRQueueFrameFindGroupButton and actif(LFRQueueFrameFindGroupButton) then
+	register:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -G.buttonSide, G.buttonBottom)
+	register:SetScript("OnClick", function()
+		if R.input:HasFocus() then R.input:ClearFocus() end
+		if LFRQueueFrameFindGroupButton and active(LFRQueueFrameFindGroupButton) then
 			LFRQueueFrameFindGroupButton:Click()
 		end
 	end)
-	R.inscrire = inscrire
+	R.register = register
 end
 
-local function majInscription()
-	R.majCategories()
+local function updateSignUp()
+	R.updateCategories()
 	if LFRQueueFrameSpecificNoRaidsAvailable and LFRQueueFrameSpecificNoRaidsAvailable:IsShown() then
-		R.aucun:Show()
+		R.none:Show()
 	else
-		R.aucun:Hide()
+		R.none:Hide()
 	end
-	-- le commentaire du client, tant qu'on n'ecrit pas
-	if not R.saisie:HasFocus() then
-		R.saisie:SetText(LFRQueueFrameComment:GetText() or "")
+	-- The client's comment, while we are not typing
+	if not R.input:HasFocus() then
+		R.input:SetText(LFRQueueFrameComment:GetText() or "")
 		if LFRQueueFrameCommentExplanation and not LFRQueueFrameCommentExplanation:IsShown()
-			and strtrim(R.saisie:GetText() or "") ~= "" then
-			R.saisie.consigne:Hide()
+			and strtrim(R.input:GetText() or "") ~= "" then
+			R.input.instruction:Hide()
 		else
-			R.saisie.consigne:Show()
+			R.input.instruction:Show()
 		end
 	end
 	local v = LFRQueueFrameNoLFRWhileLFD
 	if v and v:IsShown() then
-		R.voile.description:SetText(texteDe("LFRQueueFrameNoLFRWhileLFDDescription"))
-		refleter(R.voile.quitter, "LFRQueueFrameNoLFRWhileLFDLeaveQueueButton", true)
-		R.voile:Show()
+		R.veil.description:SetText(textOf("LFRQueueFrameNoLFRWhileLFDDescription"))
+		mirror(R.veil.quit, "LFRQueueFrameNoLFRWhileLFDLeaveQueueButton", true)
+		R.veil:Show()
 	else
-		R.voile:Hide()
+		R.veil:Hide()
 	end
-	refleter(R.commenter, "LFRQueueFrameAcceptCommentButton")
-	refleter(R.inscrire, "LFRQueueFrameFindGroupButton")
+	mirror(R.commentButton, "LFRQueueFrameAcceptCommentButton")
+	mirror(R.register, "LFRQueueFrameFindGroupButton")
 end
 
--- ---------------------------------------------------------------- le parcours
+-- ---------------------------------------------------------------- Browse
 
--- WowStyle1DropdownTemplate, comme les etages de la carte : fond
--- common-dropdown-textholder-c60 en trois (16 / 19), fleche a RIGHT (1,-3),
--- texte GameFontHighlight de (8,-8) a la fleche
-local function construireMenu(p)
+-- WowStyle1DropdownTemplate, as for the map floors: common-dropdown-textholder-c60 in three
+-- slices (16 / 19), arrow at RIGHT (1, -3), GameFontHighlight text from (8, -8) to the arrow
+local function buildMenu(p)
 	local b = CreateFrame("Button", "ForeverUIGroupFinderRaidDropDown", p)
-	b:SetWidth(M.menuL)
+	b:SetWidth(M.menuW)
 	b:SetHeight(M.menuH)
 	b:SetPoint("TOPLEFT", p, "TOPLEFT", M.menuX, M.menuY)
 	local e = ForeverUI.AtlasEntry("common-dropdown-textholder-c60")
-	local fond = CreateFrame("Frame", nil, b)
-	fond:SetPoint("TOPLEFT", b, "TOPLEFT", -8, 7)
-	fond:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 8, -9)
+	local background = CreateFrame("Frame", nil, b)
+	background:SetPoint("TOPLEFT", b, "TOPLEFT", -8, 7)
+	background:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 8, -9)
 	if e then
 		local du = (e[3] - e[2]) / e[6]
 		local u1, u2 = e[2] + 16 * du, e[3] - 19 * du
-		local function morceau(a, z)
+		local function piece(a, z)
 			local t = b:CreateTexture(nil, "BACKGROUND")
 			t:SetTexture(e[1])
 			t:SetTexCoord(a, z, e[4], e[5])
 			return t
 		end
-		local g = morceau(e[2], u1)
+		local g = piece(e[2], u1)
 		g:SetWidth(16)
-		g:SetPoint("TOPLEFT", fond, "TOPLEFT", 0, 0)
-		g:SetPoint("BOTTOMLEFT", fond, "BOTTOMLEFT", 0, 0)
-		local d = morceau(u2, e[3])
+		g:SetPoint("TOPLEFT", background, "TOPLEFT", 0, 0)
+		g:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT", 0, 0)
+		local d = piece(u2, e[3])
 		d:SetWidth(19)
-		d:SetPoint("TOPRIGHT", fond, "TOPRIGHT", 0, 0)
-		d:SetPoint("BOTTOMRIGHT", fond, "BOTTOMRIGHT", 0, 0)
-		local m = morceau(u1, u2)
+		d:SetPoint("TOPRIGHT", background, "TOPRIGHT", 0, 0)
+		d:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT", 0, 0)
+		local m = piece(u1, u2)
 		m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
 		m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
 	end
-	local fleche = b:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(fleche, "common-dropdown-a-button")
-	fleche:SetPoint("RIGHT", b, "RIGHT", 1, -3)
-	local texte = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	texte:SetJustifyH("LEFT")
-	texte:SetHeight(10)
-	texte:SetPoint("TOPLEFT", b, "TOPLEFT", 8, -8)
-	texte:SetPoint("TOPRIGHT", fleche, "LEFT", 0, 0)
-	b.texte = texte
-	b.fleche = fleche
-	b:SetScript("OnMouseDown", function(self) ForeverUI.SetAtlas(self.fleche, "common-dropdown-a-button-pressed", true) end)
-	b:SetScript("OnMouseUp", function(self) ForeverUI.SetAtlas(self.fleche, "common-dropdown-a-button", true) end)
-	-- NOTRE MENU, sous notre bouton : celui du client
-	-- (LFRBrowseFrameRaidDropDown_Initialize). Un menu sans bouton du client : displayMode "MENU", la
-	-- largeur de son contenu, au moins celle de notre bouton (DropDown.lua,
-	-- foreverMinimum)
+	local arrow = b:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(arrow, "common-dropdown-a-button")
+	arrow:SetPoint("RIGHT", b, "RIGHT", 1, -3)
+	local text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	text:SetJustifyH("LEFT")
+	text:SetHeight(10)
+	text:SetPoint("TOPLEFT", b, "TOPLEFT", 8, -8)
+	text:SetPoint("TOPRIGHT", arrow, "LEFT", 0, 0)
+	b.text = text
+	b.arrow = arrow
+	b:SetScript("OnMouseDown", function(self) ForeverUI.SetAtlas(self.arrow, "common-dropdown-a-button-pressed", true) end)
+	b:SetScript("OnMouseUp", function(self) ForeverUI.SetAtlas(self.arrow, "common-dropdown-a-button", true) end)
+	-- Our menu under our button, built like the client's (LFRBrowseFrameRaidDropDown_Initialize).
+	-- With no client button: displayMode "MENU", as wide as its content and at least as wide
+	-- as our button (DropDown.lua, foreverMinimum)
 	local menu = CreateFrame("Frame", "ForeverUIGroupFinderRaidMenu", p)
 	menu.displayMode = "MENU"
-	menu.foreverMinimum = M.menuL
-	menu.initialize = function(self, niveau) R.initialiserMenu(niveau) end
-	R.menuListe = menu
+	menu.foreverMinimum = M.menuW
+	menu.initialize = function(self, level) R.initMenu(level) end
+	R.menuList = menu
 	b:SetScript("OnClick", function(self)
 		PlaySound("igMainMenuOptionCheckBoxOn")
 		ToggleDropDownMenu(1, nil, menu, self, 0, 0)
@@ -412,129 +325,127 @@ local function construireMenu(p)
 	R.menu = b
 end
 
--- ---------------------------------------------------------------- la recherche
--- R.recherche = { nom, ids = { raid } } ; R.cache[raid] = les inscrits
--- releves pour ce raid.
-R.cache = {}
+-- ---------------------------------------------------------------- Search
+-- R.search = { name, ids = { raid } }; R.hidden[raid] = the entries collected for that raid
+R.hidden = {}
 
-local function typeDe(id)
+-- LFG type of a dungeon id, as SearchLFGJoin expects
+local function typeOf(id)
 	local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
 	return info and info[2] or 0
 end
 
-local function nomDe(id)
+-- Raid name with its level prefix
+local function nameOf(id)
 	local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
 	if not info then return "" end
 	return format(txt("LFD_LEVEL_FORMAT_SINGLE"), info[12] or 0) .. " " .. (info[1] or "")
 end
 
--- relever la reponse du serveur pour le raid cherche : tout ce que
--- l'infobulle du client lit (SearchLFGGetResults, GetPartyResults,
--- GetEncounterResults)
-function R.relever(raid)
+-- Collects the server answer for the searched raid: everything the client tooltip reads
+-- (SearchLFGGetResults, GetPartyResults, GetEncounterResults)
+function R.collect(raid)
 	local l = {}
-	local nombre = SearchLFGGetNumResults() or 0
-	for i = 1, nombre do
+	local count = SearchLFGGetNumResults() or 0
+	for i = 1, count do
 		local d = { SearchLFGGetResults(i) }
-		local e = { raid = raid, nom = d[1], niveau = d[2], zone = d[3], nomClasse = d[4], commentaire = d[5],
-			membres = d[6] or 0, classe = d[8], bossTotal = d[9] or 0, bossTues = d[10] or 0, chef = d[11],
-			tank = d[12], soin = d[13], degats = d[14], groupe = {}, boss = {} }
-		for j = 1, e.membres do
-			local nm, nv, lien = SearchLFGGetPartyResults(i, j)
-			e.groupe[j] = { nom = nm, lien = lien }
+		local e = { raid = raid, name = d[1], level = d[2], zone = d[3], localizedClass = d[4], comment = d[5],
+			members = d[6] or 0, className = d[8], bossTotal = d[9] or 0, bossKilled = d[10] or 0, leader = d[11],
+			tank = d[12], healer = d[13], damage = d[14], group = {}, boss = {} }
+		for j = 1, e.members do
+			local nm, _, link = SearchLFGGetPartyResults(i, j)
+			e.group[j] = { name = nm, link = link }
 		end
-		if e.bossTues > 0 then
+		if e.bossKilled > 0 then
 			for j = 1, e.bossTotal do
-				local bn, _, tue = SearchLFGGetEncounterResults(i, j)
-				e.boss[j] = { nom = bn, tue = tue }
+				local bn, _, killed = SearchLFGGetEncounterResults(i, j)
+				e.boss[j] = { name = bn, killed = killed }
 			end
 		end
 		l[i] = e
 	end
-	R.cache[raid] = l
+	R.hidden[raid] = l
 end
 
--- LFRBrowseFrameRaidDropDownButton_OnClick : aucun raid, ou un raid. Appele
--- du clic sur la ligne du menu -- SearchLFGJoin en a besoin.
-function R.choisir(valeur)
+-- LFRBrowseFrameRaidDropDownButton_OnClick: no raid (nil) or one raid id. Called from the
+-- menu line click: SearchLFGJoin is protected and only runs from a click.
+function R.choose(value)
 	CloseDropDownMenus()
-	R.choix = nil
-	if valeur == nil then
-		R.recherche = nil
+	R.choice = nil
+	if value == nil then
+		R.search = nil
 		SearchLFGLeave()
 	else
-		R.recherche = { nom = nomDe(valeur), ids = { valeur }, depuis = GetTime() }
-		SearchLFGJoin(typeDe(valeur), valeur)
+		R.search = { name = nameOf(value), ids = { value }, fromIndex = GetTime() }
+		SearchLFGJoin(typeOf(value), value)
 	end
-	F.demander()
+	F.request()
 end
 
--- LFRBrowseFrameRaidDropDown_Initialize ; le premier niveau sans cases
--- (demande de l'utilisateur, 2026-09-26 : ses categories ne se choisissent
--- pas)
-function R.initialiserMenu(niveau)
-	local ordre, liste = GetFullRaidList()
-	local r = R.recherche
+-- LFRBrowseFrameRaidDropDown_Initialize; top-level categories have no checkbox
+function R.initMenu(level)
+	local order, list = GetFullRaidList()
+	local r = R.search
 	local info = UIDropDownMenu_CreateInfo()
-	if not niveau or niveau == 1 then
+	if not level or level == 1 then
 		info.text = txt("NONE")
-		info.func = function() R.choisir(nil) end
+		info.func = function() R.choose(nil) end
 		info.notCheckable = true
 		UIDropDownMenu_AddButton(info, 1)
-		for _, groupe in ipairs(ordre) do
+		for _, group in ipairs(order) do
 			info = UIDropDownMenu_CreateInfo()
-			info.text = LFGGetDungeonInfoByID(groupe)[1]
-			info.value = groupe
+			info.text = LFGGetDungeonInfoByID(group)[1]
+			info.value = group
 			info.hasArrow = true
 			info.notCheckable = true
 			UIDropDownMenu_AddButton(info, 1)
 		end
-	elseif niveau == 2 then
-		for _, id in ipairs(liste[UIDROPDOWNMENU_MENU_VALUE] or {}) do
+	elseif level == 2 then
+		for _, id in ipairs(list[UIDROPDOWNMENU_MENU_VALUE] or {}) do
 			info = UIDropDownMenu_CreateInfo()
-			info.text = nomDe(id)
+			info.text = nameOf(id)
 			info.value = id
-			info.func = function() R.choisir(id) end
+			info.func = function() R.choose(id) end
 			info.checked = r ~= nil and r.ids[1] == id
 			UIDropDownMenu_AddButton(info, 2)
 		end
 	end
 end
 
--- ce que la liste montre : les inscrits des raids cherches, dans l'ordre
-function R.inscrits()
-	local r = R.recherche
+-- What the list shows: the entries of the searched raids, in order
+function R.collectListed()
+	local r = R.search
 	local l = {}
 	if not r then return l end
 	for _, id in ipairs(r.ids) do
-		for _, e in ipairs(R.cache[id] or {}) do table.insert(l, e) end
+		for _, e in ipairs(R.hidden[id] or {}) do table.insert(l, e) end
 	end
 	return l
 end
 
-local function construireRafraichir(p)
+local function buildRefresh(p)
 	local b = CreateFrame("Button", "ForeverUIGroupFinderRaidRefresh", p)
-	b:SetWidth(M.rafraichir)
-	b:SetHeight(M.rafraichir)
-	b:SetPoint("LEFT", R.menu, "RIGHT", M.rafraichirX, 0)
-	b:SetNormalTexture(M.carre .. "ui-squarebutton-up")
-	b:SetPushedTexture(M.carre .. "ui-squarebutton-down")
-	b:SetHighlightTexture(M.carre .. "ui-common-mousehilight")
+	b:SetWidth(M.refresh)
+	b:SetHeight(M.refresh)
+	b:SetPoint("LEFT", R.menu, "RIGHT", M.refreshX, 0)
+	b:SetNormalTexture(M.square .. "ui-squarebutton-up")
+	b:SetPushedTexture(M.square .. "ui-squarebutton-down")
+	b:SetHighlightTexture(M.square .. "ui-common-mousehilight")
 	local s = b:GetHighlightTexture()
 	if s then s:SetBlendMode("ADD") end
-	local icone = b:CreateTexture(nil, "ARTWORK")
-	icone:SetTexture(M.carre .. "ui-refreshbutton")
-	icone:SetWidth(16)
-	icone:SetHeight(16)
-	icone:SetPoint("CENTER", b, "CENTER", -1, 0)
-	b.icone = icone
+	local icon = b:CreateTexture(nil, "ARTWORK")
+	icon:SetTexture(M.square .. "ui-refreshbutton")
+	icon:SetWidth(16)
+	icon:SetHeight(16)
+	icon:SetPoint("CENTER", b, "CENTER", -1, 0)
+	b.icon = icon
 	b:SetScript("OnMouseDown", function(self)
-		self.icone:ClearAllPoints()
-		self.icone:SetPoint("CENTER", self, "CENTER", -2, -1)
+		self.icon:ClearAllPoints()
+		self.icon:SetPoint("CENTER", self, "CENTER", -2, -1)
 	end)
 	b:SetScript("OnMouseUp", function(self)
-		self.icone:ClearAllPoints()
-		self.icone:SetPoint("CENTER", self, "CENTER", -1, 0)
+		self.icon:ClearAllPoints()
+		self.icon:SetPoint("CENTER", self, "CENTER", -1, 0)
 	end)
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -542,45 +453,45 @@ local function construireRafraichir(p)
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	-- le bouton du client : RefreshLFGList
+	-- Client button: RefreshLFGList
 	b:SetScript("OnClick", function()
 		if LFRBrowseFrameRefreshButton then LFRBrowseFrameRefreshButton:Click() end
 	end)
-	R.rafraichir = b
+	R.refresh = b
 end
 
 -- LFGBrowseSearchEntryTemplate
-local function creerResultat(l)
-	local fond = l:CreateTexture(nil, "BACKGROUND")
-	fond:SetTexture(1, 1, 1, 0.04)
-	fond:SetPoint("TOPLEFT", l, "TOPLEFT", 3, -2)
-	fond:SetPoint("BOTTOMRIGHT", l, "BOTTOMRIGHT", -3, 0)
-	local chef = l:CreateTexture(nil, "ARTWORK")
-	chef:SetTexture(M.chef)
-	chef:SetWidth(24)
-	chef:SetHeight(24)
-	chef:SetPoint("TOPLEFT", l, "TOPLEFT", 8, -4)
-	l.chef = chef
-	local nom = l:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-	nom:SetHeight(14)
-	nom:SetJustifyH("LEFT")
-	l.nom = nom
-	local niveau = l:CreateFontString(nil, "ARTWORK", "GameFontDisableLeft")
-	niveau:SetHeight(14)
-	niveau:SetPoint("BOTTOMLEFT", nom, "BOTTOMRIGHT", 4, 0)
-	l.niveau = niveau
-	local classe = l:CreateTexture(nil, "ARTWORK")
-	classe:SetWidth(24)
-	classe:SetHeight(24)
-	classe:SetPoint("BOTTOMLEFT", niveau, "BOTTOMRIGHT", 3, -5)
-	l.classe = classe
-	local bas = l:CreateFontString(nil, "ARTWORK", "GameFontDisableLeft")
-	bas:SetHeight(15)
-	bas:SetPoint("BOTTOMLEFT", l, "BOTTOMLEFT", 10, 5)
-	bas:SetPoint("RIGHT", l, "RIGHT", -120, 0)
-	bas:SetJustifyH("LEFT")
-	l.bas = bas
-	local function barre(atlas)
+local function createResult(l)
+	local background = l:CreateTexture(nil, "BACKGROUND")
+	background:SetTexture(1, 1, 1, 0.04)
+	background:SetPoint("TOPLEFT", l, "TOPLEFT", 3, -2)
+	background:SetPoint("BOTTOMRIGHT", l, "BOTTOMRIGHT", -3, 0)
+	local leader = l:CreateTexture(nil, "ARTWORK")
+	leader:SetTexture(M.leader)
+	leader:SetWidth(24)
+	leader:SetHeight(24)
+	leader:SetPoint("TOPLEFT", l, "TOPLEFT", 8, -4)
+	l.leader = leader
+	local name = l:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	name:SetHeight(14)
+	name:SetJustifyH("LEFT")
+	l.name = name
+	local level = l:CreateFontString(nil, "ARTWORK", "GameFontDisableLeft")
+	level:SetHeight(14)
+	level:SetPoint("BOTTOMLEFT", name, "BOTTOMRIGHT", 4, 0)
+	l.level = level
+	local className = l:CreateTexture(nil, "ARTWORK")
+	className:SetWidth(24)
+	className:SetHeight(24)
+	className:SetPoint("BOTTOMLEFT", level, "BOTTOMRIGHT", 3, -5)
+	l.className = className
+	local down = l:CreateFontString(nil, "ARTWORK", "GameFontDisableLeft")
+	down:SetHeight(15)
+	down:SetPoint("BOTTOMLEFT", l, "BOTTOMLEFT", 10, 5)
+	down:SetPoint("RIGHT", l, "RIGHT", -120, 0)
+	down:SetJustifyH("LEFT")
+	l.down = down
+	local function bar(atlas)
 		local t = l:CreateTexture(nil, "OVERLAY")
 		ForeverUI.SetAtlas(t, atlas, true)
 		t:SetBlendMode("ADD")
@@ -589,393 +500,393 @@ local function creerResultat(l)
 		t:Hide()
 		return t
 	end
-	l.choisi = barre("groupfinder-highlightbar-yellow")
-	l.survol = barre("groupfinder-highlightbar-blue")
+	l.selected = bar("groupfinder-highlightbar-yellow")
+	l.hover = bar("groupfinder-highlightbar-blue")
 
-	-- a droite : les roles d'un joueur seul, le nombre d'un groupe
+	-- Right side: a solo player's roles, or a group's size
 	local roles = l:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	roles:SetHeight(20)
 	roles:SetPoint("RIGHT", l, "RIGHT", -2 - 120, -1)
 	roles:SetText(txt("LFG_TOOLTIP_ROLES"))
 	l.roles = roles
-	l.iconesRole = {}
+	l.roleIcons = {}
 	for i = 1, 3 do
 		local t = l:CreateTexture(nil, "ARTWORK")
 		t:SetWidth(20)
 		t:SetHeight(20)
 		t:SetPoint("LEFT", roles, "RIGHT", 4 + (i - 1) * 24, 0)
-		l.iconesRole[i] = t
+		l.roleIcons[i] = t
 	end
-	local attente = l:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(attente, "groupfinder-waitdot", true)
-	attente:SetWidth(18)
-	attente:SetHeight(17)
-	attente:SetPoint("RIGHT", l, "RIGHT", -2 - 16, -1)
-	l.attente = attente
-	local nombre = l:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	nombre:SetWidth(22)
-	nombre:SetHeight(18)
-	nombre:SetJustifyH("RIGHT")
-	nombre:SetPoint("RIGHT", attente, "LEFT", -1, 0)
-	l.nombre = nombre
+	local pending = l:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(pending, "groupfinder-waitdot", true)
+	pending:SetWidth(18)
+	pending:SetHeight(17)
+	pending:SetPoint("RIGHT", l, "RIGHT", -2 - 16, -1)
+	l.pending = pending
+	local count = l:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	count:SetWidth(22)
+	count:SetHeight(18)
+	count:SetJustifyH("RIGHT")
+	count:SetPoint("RIGHT", pending, "LEFT", -1, 0)
+	l.count = count
 
-	-- le survol et l'infobulle (R.infobulle, reprise du client) ; le clic
-	-- (LFRBrowseButton_OnClick : choisir, ou lacher ce qu'on avait choisi)
+	-- Hover and tooltip (R.tooltip, from the client); click as LFRBrowseButton_OnClick:
+	-- select, or clear the current selection
 	l:SetScript("OnEnter", function(self)
-		if not self.choisi:IsShown() then self.survol:Show() end
-		if self.donnee then R.infobulle(self, self.donnee) end
+		if not self.selected:IsShown() then self.hover:Show() end
+		if self.record then R.tooltip(self, self.record) end
 	end)
 	l:SetScript("OnLeave", function(self)
-		self.survol:Hide()
+		self.hover:Hide()
 		GameTooltip:Hide()
 	end)
 	l:SetScript("OnClick", function(self)
-		local e = self.donnee
-		if self.moi or not e then return end
-		if R.choix and R.choix.nom == e.nom then
+		local e = self.record
+		if self.isMe or not e then return end
+		if R.choice and R.choice.name == e.name then
 			PlaySound("igMainMenuOptionCheckBoxOff")
-			R.choix = nil
+			R.choice = nil
 		else
 			PlaySound("igMainMenuOptionCheckBoxOn")
-			R.choix = { nom = e.nom, groupe = e.membres > 0 }
+			R.choice = { name = e.name, group = e.members > 0 }
 		end
-		F.demander()
+		F.request()
 	end)
 end
 
--- LFRBrowseButton_OnEnter, sur les donnees relevees
-function R.infobulle(l, e)
-	local rouge = RED_FONT_COLOR or { r = 1, g = 0.1, b = 0.1 }
-	local vert = GREEN_FONT_COLOR or { r = 0.1, g = 1, b = 0.1 }
-	local blanc = HIGHLIGHT_FONT_COLOR or { r = 1, g = 1, b = 1 }
+-- LFRBrowseButton_OnEnter, on the collected data
+function R.tooltip(l, e)
+	local red = RED_FONT_COLOR or { r = 1, g = 0.1, b = 0.1 }
+	local green = GREEN_FONT_COLOR or { r = 0.1, g = 1, b = 0.1 }
+	local white = HIGHLIGHT_FONT_COLOR or { r = 1, g = 1, b = 1 }
 	local role = "Interface" .. SEP .. "LFGFrame" .. SEP .. "LFGRole"
 	GameTooltip:SetOwner(l, "ANCHOR_RIGHT", 27, -37)
-	if e.membres > 0 then
+	if e.members > 0 then
 		GameTooltip:AddLine(txt("LOOKING_FOR_RAID"))
-		GameTooltip:AddLine(e.nom)
+		GameTooltip:AddLine(e.name)
 		GameTooltip:AddTexture(role, 0, 0.25, 0, 1)
-		GameTooltip:AddLine(format(txt("LFM_NUM_RAID_MEMBER_TEMPLATE"), e.membres))
+		GameTooltip:AddLine(format(txt("LFM_NUM_RAID_MEMBER_TEMPLATE"), e.members))
 		GameTooltip:AddTexture("")
-		local titre = false
-		for _, m in ipairs(e.groupe) do
-			if m.lien then
-				if not titre then
-					titre = true
+		local title = false
+		for _, m in ipairs(e.group) do
+			if m.link then
+				if not title then
+					title = true
 					GameTooltip:AddLine("\n" .. txt("IMPORTANT_PEOPLE_IN_GROUP"))
 				end
-				if m.lien == "ignored" then
-					GameTooltip:AddDoubleLine(m.nom, txt("IGNORED"), rouge.r, rouge.g, rouge.b, rouge.r, rouge.g, rouge.b)
-				elseif m.lien == "friend" then
-					GameTooltip:AddDoubleLine(m.nom, txt("FRIEND"), vert.r, vert.g, vert.b, vert.r, vert.g, vert.b)
+				if m.link == "ignored" then
+					GameTooltip:AddDoubleLine(m.name, txt("IGNORED"), red.r, red.g, red.b, red.r, red.g, red.b)
+				elseif m.link == "friend" then
+					GameTooltip:AddDoubleLine(m.name, txt("FRIEND"), green.r, green.g, green.b, green.r, green.g, green.b)
 				end
 			end
 		end
 	else
-		GameTooltip:AddLine(e.nom)
-		GameTooltip:AddLine(format(txt("FRIENDS_LEVEL_TEMPLATE"), e.niveau or 0, e.nomClasse or ""))
+		GameTooltip:AddLine(e.name)
+		GameTooltip:AddLine(format(txt("FRIENDS_LEVEL_TEMPLATE"), e.level or 0, e.localizedClass or ""))
 	end
-	if e.commentaire and e.commentaire ~= "" then
-		GameTooltip:AddLine("\n" .. e.commentaire, blanc.r, blanc.g, blanc.b, 1)
+	if e.comment and e.comment ~= "" then
+		GameTooltip:AddLine("\n" .. e.comment, white.r, white.g, white.b, 1)
 	end
-	if e.membres == 0 then
+	if e.members == 0 then
 		GameTooltip:AddLine("\n" .. txt("LFG_TOOLTIP_ROLES"))
 		if e.tank then GameTooltip:AddLine(txt("TANK")) GameTooltip:AddTexture(role, 0.5, 0.75, 0, 1) end
-		if e.soin then GameTooltip:AddLine(txt("HEALER")) GameTooltip:AddTexture(role, 0.75, 1, 0, 1) end
-		if e.degats then GameTooltip:AddLine(txt("DAMAGER")) GameTooltip:AddTexture(role, 0.25, 0.5, 0, 1) end
+		if e.healer then GameTooltip:AddLine(txt("HEALER")) GameTooltip:AddTexture(role, 0.75, 1, 0, 1) end
+		if e.damage then GameTooltip:AddLine(txt("DAMAGER")) GameTooltip:AddTexture(role, 0.25, 0.5, 0, 1) end
 	end
-	if e.bossTues > 0 then
+	if e.bossKilled > 0 then
 		GameTooltip:AddLine("\n" .. txt("BOSSES"))
 		for _, b in ipairs(e.boss) do
-			if b.tue then
-				GameTooltip:AddDoubleLine(b.nom, txt("BOSS_DEAD"), rouge.r, rouge.g, rouge.b, rouge.r, rouge.g, rouge.b)
+			if b.killed then
+				GameTooltip:AddDoubleLine(b.name, txt("BOSS_DEAD"), red.r, red.g, red.b, red.r, red.g, red.b)
 			else
-				GameTooltip:AddDoubleLine(b.nom, txt("BOSS_ALIVE"), vert.r, vert.g, vert.b, vert.r, vert.g, vert.b)
+				GameTooltip:AddDoubleLine(b.name, txt("BOSS_ALIVE"), green.r, green.g, green.b, green.r, green.g, green.b)
 			end
 		end
-	elseif e.membres > 0 and e.bossTotal > 0 then
+	elseif e.members > 0 and e.bossTotal > 0 then
 		GameTooltip:AddLine("\n" .. txt("ALL_BOSSES_ALIVE"))
 	end
 	GameTooltip:Show()
 end
 
-local ROLES_MICRO = { "groupfinder-icon-role-micro-tank", "groupfinder-icon-role-micro-heal",
+local MICRO_ROLES = { "groupfinder-icon-role-micro-tank", "groupfinder-icon-role-micro-heal",
 	"groupfinder-icon-role-micro-dps" }
 
-local function couleurs(fs, c)
+-- Sets fs color from c, given as { r, g, b } or { r =, g =, b = }
+local function colors(fs, c)
 	fs:SetTextColor(c[1] or c.r, c[2] or c.g, c[3] or c.b)
 end
 
-local function remplirResultat(l, index)
-	local e = R.liste_inscrits[index]
-	l.donnee = e
-	local name, level, class = e.nom, e.niveau, e.classe
-	l.moi = name == UnitName("player")
-	local groupe = e.membres > 0
-	-- le nom, pose sur la ligne (et non sur l'icone du chef : voir
-	-- foreverui-reprendre-un-ecran, point 9) ; 228 au plus (NameMaxWidth)
-	l.nom:ClearAllPoints()
-	if groupe then
-		l.chef:Show()
-		l.nom:SetPoint("TOPLEFT", l, "TOPLEFT", 8 + 24, -4 - 5)
-		l.niveau:Hide()
-		l.classe:Hide()
+-- Fills result row l with R.listed_entries[index]
+local function fillResult(l, index)
+	local e = R.listed_entries[index]
+	l.record = e
+	local name, level, class = e.name, e.level, e.className
+	l.isMe = name == UnitName("player")
+	local group = e.members > 0
+	-- The name is anchored on the row, not on the leader icon; at most 228 wide (NameMaxWidth)
+	l.name:ClearAllPoints()
+	if group then
+		l.leader:Show()
+		l.name:SetPoint("TOPLEFT", l, "TOPLEFT", 8 + 24, -4 - 5)
+		l.level:Hide()
+		l.className:Hide()
 	else
-		l.chef:Hide()
-		l.nom:SetPoint("TOPLEFT", l, "TOPLEFT", 8 + 1, -4 - 5)
-		l.niveau:SetText(txt("LEVEL_ABBR") .. " " .. (level or ""))
-		l.niveau:Show()
+		l.leader:Hide()
+		l.name:SetPoint("TOPLEFT", l, "TOPLEFT", 8 + 1, -4 - 5)
+		l.level:SetText(txt("LEVEL_ABBR") .. " " .. (level or ""))
+		l.level:Show()
 		local a = class and ForeverUI.AtlasEntry("groupfinder-icon-class-" .. string.lower(class))
 		if a then
-			ForeverUI.SetAtlas(l.classe, "groupfinder-icon-class-" .. string.lower(class), true)
-			l.classe:Show()
+			ForeverUI.SetAtlas(l.className, "groupfinder-icon-class-" .. string.lower(class), true)
+			l.className:Show()
 		else
-			l.classe:Hide()
+			l.className:Hide()
 		end
 	end
-	l.nom:SetWidth(0)
-	l.nom:SetText(name or "")
-	if (l.nom:GetStringWidth() or 0) > 228 then l.nom:SetWidth(228) end
-	-- la ligne du bas : le commentaire, sinon la zone
-	l.bas:SetText((e.commentaire and e.commentaire ~= "") and e.commentaire or (e.zone or ""))
-	-- a droite
-	if groupe then
+	l.name:SetWidth(0)
+	l.name:SetText(name or "")
+	if (l.name:GetStringWidth() or 0) > 228 then l.name:SetWidth(228) end
+	-- Bottom line: the comment, else the zone
+	l.down:SetText((e.comment and e.comment ~= "") and e.comment or (e.zone or ""))
+	-- Right side
+	if group then
 		l.roles:Hide()
-		for _, t in ipairs(l.iconesRole) do t:Hide() end
-		l.attente:Show()
-		l.nombre:SetText(e.membres)
-		l.nombre:Show()
+		for _, t in ipairs(l.roleIcons) do t:Hide() end
+		l.pending:Show()
+		l.count:SetText(e.members)
+		l.count:Show()
 	else
-		l.attente:Hide()
-		l.nombre:Hide()
+		l.pending:Hide()
+		l.count:Hide()
 		l.roles:Show()
 		local n = 0
-		for i, oui in ipairs({ e.tank and true or false, e.soin and true or false, e.degats and true or false }) do
-			if oui then
+		for i, yes in ipairs({ e.tank and true or false, e.healer and true or false, e.damage and true or false }) do
+			if yes then
 				n = n + 1
-				ForeverUI.SetAtlas(l.iconesRole[n], ROLES_MICRO[i], true)
-				l.iconesRole[n]:Show()
+				ForeverUI.SetAtlas(l.roleIcons[n], MICRO_ROLES[i], true)
+				l.roleIcons[n]:Show()
 			end
 		end
-		for i = n + 1, 3 do l.iconesRole[i]:Hide() end
+		for i = n + 1, 3 do l.roleIcons[i]:Hide() end
 	end
-	-- les couleurs : de classe ; le joueur lui-meme, gris et inactif
+	-- Colors: class color; the player themself is gray and inactive
 	local cc = (class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]) or NORMAL_FONT_COLOR or { r = 1, g = 0.82, b = 0 }
-	if l.moi then
-		couleurs(l.nom, M.gris)
-		couleurs(l.niveau, M.gris)
-		couleurs(l.bas, M.gris)
-		l.classe:SetDesaturated(true)
+	if l.isMe then
+		colors(l.name, M.gray)
+		colors(l.level, M.gray)
+		colors(l.down, M.gray)
+		l.className:SetDesaturated(true)
 	else
-		couleurs(l.nom, cc)
+		colors(l.name, cc)
 		local g = GRAY_FONT_COLOR or { r = 0.5, g = 0.5, b = 0.5 }
-		couleurs(l.niveau, g)
-		couleurs(l.bas, g)
-		l.classe:SetDesaturated(false)
+		colors(l.level, g)
+		colors(l.down, g)
+		l.className:SetDesaturated(false)
 	end
-	if R.choix and R.choix.nom == name then
-		l.choisi:Show()
-		l.survol:Hide()
+	if R.choice and R.choice.name == name then
+		l.selected:Show()
+		l.hover:Hide()
 	else
-		l.choisi:Hide()
+		l.selected:Hide()
 	end
 end
 
-local function construireParcours(p)
-	local f = F.cadre
-	local encadre = F.construireEncadre(p, "ForeverUIGroupFinderBrowseInset", M.parcoursY, false)
-	R.encadreParcours = encadre
-	construireMenu(p)
-	construireRafraichir(p)
+local function buildBrowse(p)
+	local f = F.frame
+	local frameBox = F.buildFrameBox(p, "ForeverUIGroupFinderBrowseInset", M.browseY, false)
+	buildMenu(p)
+	buildRefresh(p)
 	local S = ForeverUI.Social
-	local liste = S.creerListe(p, "ForeverUIGroupFinderBrowseList", M.resultat, creerResultat, remplirResultat)
-	liste:SetFrameLevel(encadre:GetFrameLevel() + 1)
-	liste.barre:SetFrameLevel(encadre:GetFrameLevel() + 2)
-	liste:SuivreBarre({ "TOPLEFT", f, "TOPLEFT", G.listeX1, M.resultatsY },
-		{ "BOTTOMRIGHT", f, "BOTTOMRIGHT", M.resultatsX2, G.listeY2 }, M.resultatsSans)
-	liste.barre:ClearAllPoints()
-	liste.barre:SetPoint("TOPLEFT", liste, "TOPRIGHT", 2, -4)
-	liste.barre:SetPoint("BOTTOMLEFT", liste, "BOTTOMRIGHT", 2, 2)
-	R.resultats = liste
+	local list = S.createList(p, "ForeverUIGroupFinderBrowseList", M.result, createResult, fillResult)
+	list:SetFrameLevel(frameBox:GetFrameLevel() + 1)
+	list.bar:SetFrameLevel(frameBox:GetFrameLevel() + 2)
+	list:FollowBar({ "TOPLEFT", f, "TOPLEFT", G.listX1, M.resultsY },
+		{ "BOTTOMRIGHT", f, "BOTTOMRIGHT", M.resultsX2, G.listY2 }, M.resultsNoBar)
+	list.bar:ClearAllPoints()
+	list.bar:SetPoint("TOPLEFT", list, "TOPRIGHT", 2, -4)
+	list.bar:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", 2, 2)
+	R.results = list
 
-	local message = ForeverUI.CreatePanelButton(p, txt("SEND_MESSAGE"), G.backL, G.boutonH,
+	local message = ForeverUI.CreatePanelButton(p, txt("SEND_MESSAGE"), G.backL, G.buttonH,
 		"ForeverUIGroupFinderRaidMessageButton", "GameFontNormal")
-	message:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.boutonCote, G.boutonBas)
-	-- LFRBrowseFrameSendMessageButton : ChatFrame_SendTell
+	message:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", G.buttonSide, G.buttonBottom)
+	-- LFRBrowseFrameSendMessageButton: ChatFrame_SendTell
 	message:SetScript("OnClick", function()
-		if R.choix then ChatFrame_SendTell(R.choix.nom) end
+		if R.choice then ChatFrame_SendTell(R.choice.name) end
 	end)
 	R.message = message
-	local inviter = ForeverUI.CreatePanelButton(p, txt("INVITE"), G.postL, G.boutonH,
+	local inviteButton = ForeverUI.CreatePanelButton(p, txt("INVITE"), G.postW, G.buttonH,
 		"ForeverUIGroupFinderRaidInviteButton", "GameFontNormal")
-	inviter:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -G.boutonCote, G.boutonBas)
-	-- LFRBrowseFrameInviteButton : InviteUnit
-	inviter:SetScript("OnClick", function()
-		if R.choix then InviteUnit(R.choix.nom) end
+	inviteButton:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -G.buttonSide, G.buttonBottom)
+	-- LFRBrowseFrameInviteButton: InviteUnit
+	inviteButton:SetScript("OnClick", function()
+		if R.choice then InviteUnit(R.choice.name) end
 	end)
-	R.inviter = inviter
+	R.inviteButton = inviteButton
 end
 
-local function majParcours()
-	-- une recherche faite ailleurs (avant nous, ou quittee au bout de 40 s par
-	-- le client) : la notre suit celle du serveur
-	local cherche = SearchLFGGetJoinedID and SearchLFGGetJoinedID()
-	-- une recherche qu'on vient de lancer attend la reponse du serveur
-	local recente = R.recherche and R.recherche.depuis and GetTime() - R.recherche.depuis < 5
-	if not cherche and not recente then
-		R.recherche = nil
-	elseif cherche and not R.recherche then
-		R.recherche = { nom = nomDe(cherche), ids = { cherche } }
+local function updateBrowse()
+	-- A search made elsewhere (before us, or left by the client after 40 s): ours follows
+	-- the server's
+	local searching = SearchLFGGetJoinedID and SearchLFGGetJoinedID()
+	-- A search just started waits for the server answer
+	local recent = R.search and R.search.fromIndex and GetTime() - R.search.fromIndex < 5
+	if not searching and not recent then
+		R.search = nil
+	elseif searching and not R.search then
+		R.search = { name = nameOf(searching), ids = { searching } }
 	end
-	R.menu.texte:SetText(R.recherche and R.recherche.nom or txt("NONE"))
-	R.liste_inscrits = R.inscrits()
-	-- un choix qui n'est plus dans la liste s'en va, comme chez le client
-	if R.choix then
-		local la = false
-		for _, e in ipairs(R.liste_inscrits) do
-			if e.nom == R.choix.nom then la = true break end
+	R.menu.text:SetText(R.search and R.search.name or txt("NONE"))
+	R.listed_entries = R.collectListed()
+	-- A selection no longer listed is dropped, as in the client
+	if R.choice then
+		local found = false
+		for _, e in ipairs(R.listed_entries) do
+			if e.name == R.choice.name then found = true break end
 		end
-		if not la then R.choix = nil end
+		if not found then R.choice = nil end
 	end
-	R.resultats:Maj(#R.liste_inscrits)
+	R.results:Update(#R.listed_entries)
 	-- LFRBrowse_UpdateButtonStates
-	local c = R.choix
-	R.message:Activer(c ~= nil and c.nom ~= UnitName("player"))
-	R.inviter:Activer(c ~= nil and c.nom ~= UnitName("player") and not c.groupe and CanGroupInvite() and true or false)
+	local c = R.choice
+	R.message:Activate(c ~= nil and c.name ~= UnitName("player"))
+	R.inviteButton:Activate(c ~= nil and c.name ~= UnitName("player") and not c.group and CanGroupInvite() and true or false)
 end
 
--- ---------------------------------------------------------------- le panneau
+-- ---------------------------------------------------------------- Client panel
 
--- Le panneau du client se tait comme celui des donjons : son icone, ses
--- onglets, sa croix ; ses deux contenus restent affiches, transparents, sous
--- notre fenetre.
-local function etoufferClient()
+-- Silences the client panel as for dungeons: its icon, tabs and close button hide;
+-- both contents stay shown, transparent, under our window.
+local function suppressClient()
 	local p = LFRParentFrame
 	for _, r in ipairs({ p:GetRegions() }) do r:Hide() end
 	for _, c in ipairs({ p:GetChildren() }) do
-		if c ~= F.cadre and c ~= LFRQueueFrame and c ~= LFRBrowseFrame then c:Hide() end
+		if c ~= F.frame and c ~= LFRQueueFrame and c ~= LFRBrowseFrame then c:Hide() end
 	end
 	p:EnableMouse(false)
 	for _, c in ipairs({ LFRQueueFrame, LFRBrowseFrame }) do
 		c:SetAlpha(0)
 		c:ClearAllPoints()
-		c:SetPoint("TOPLEFT", F.cadre, "TOPLEFT", 0, 0)
+		c:SetPoint("TOPLEFT", F.frame, "TOPLEFT", 0, 0)
 		c:SetWidth(p:GetWidth())
 		c:SetHeight(p:GetHeight())
 	end
 end
 
--- ---------------------------------------------------------------- la page
+-- ---------------------------------------------------------------- Page
 
--- LES ONGLETS DU BAS : ceux de la fenetre Social ; chacun, un panneau et
--- l'onglet du client (1 : l'inscription, 2 : le parcours)
-local ONGLETS = {
-	{ texte = "LIST_MY_GROUP", client = 1 },
-	{ texte = "JOIN", client = 2 },
+-- Bottom tabs, as in the Social window; each maps to a panel and a client tab
+-- (1: sign-up, 2: browse)
+local TABS = {
+	{ text = "LIST_MY_GROUP", client = 1 },
+	{ text = "JOIN", client = 2 },
 }
 
--- le panneau de l'onglet du client, et les onglets du bas qui le disent
-function R.afficherPanneau()
+-- Shows the panel of the client's active tab and selects the matching bottom tab
+function R.showPanel()
 	local n = (LFRParentFrame.activeTab == 2) and 2 or 1
-	R.panneau = n
+	R.panel = n
 	local S = ForeverUI.Social
-	for i, o in ipairs(R.onglets) do
-		S.choisirOnglet(o, i == n, true)
-		o:SetWidth(S.largeurOnglet(o))
+	for i, o in ipairs(R.tabs) do
+		S.selectTab(o, i == n, true)
+		o:SetWidth(S.tabWidth(o))
 	end
 	if n == 1 then
 		R.inscription:Show()
-		R.parcours:Hide()
+		R.browser:Hide()
 	else
-		R.parcours:Show()
+		R.browser:Show()
 		R.inscription:Hide()
 	end
 end
 
-local function construirePage(f)
+local function buildPage(f)
 	local p = CreateFrame("Frame", "ForeverUIGroupFinderRaid", f)
 	p:SetAllPoints(f)
 	p:Hide()
 	R.page = p
 	R.inscription = CreateFrame("Frame", "ForeverUIGroupFinderRaidQueue", p)
 	R.inscription:SetAllPoints(f)
-	R.parcours = CreateFrame("Frame", "ForeverUIGroupFinderRaidBrowse", p)
-	R.parcours:SetAllPoints(f)
-	construireInscription(R.inscription)
-	construireParcours(R.parcours)
+	R.browser = CreateFrame("Frame", "ForeverUIGroupFinderRaidBrowse", p)
+	R.browser:SetAllPoints(f)
+	buildSignUp(R.inscription)
+	buildBrowse(R.browser)
 
 	local S = ForeverUI.Social
-	R.onglets = {}
-	local precedent
-	for i, def in ipairs(ONGLETS) do
-		local o = S.creerOnglet(p, "ForeverUIGroupFinderRaidTab" .. i, false)
-		o:SetText(txt(def.texte))
-		if precedent then
-			o:SetPoint("TOPLEFT", precedent, "TOPRIGHT", M.ongletEcart, 0)
+	R.tabs = {}
+	local previous
+	for i, def in ipairs(TABS) do
+		local o = S.createTab(p, "ForeverUIGroupFinderRaidTab" .. i, false)
+		o:SetText(txt(def.text))
+		if previous then
+			o:SetPoint("TOPLEFT", previous, "TOPRIGHT", M.tabGap, 0)
 		else
-			o:SetPoint("TOPLEFT", f, "BOTTOMLEFT", M.ongletX, M.ongletY)
+			o:SetPoint("TOPLEFT", f, "BOTTOMLEFT", M.tabX, M.tabY)
 		end
-		-- l'onglet du client fait le reste : LFRFrame_SetActiveTab
+		-- The client tab does the rest: LFRFrame_SetActiveTab
 		o:SetScript("OnClick", function()
 			PlaySound("igCharacterInfoTab")
 			LFRFrame_SetActiveTab(def.client)
 		end)
-		R.onglets[i] = o
-		precedent = o
+		R.tabs[i] = o
+		previous = o
 	end
 end
 
-local function majPage()
-	if R.panneau == 2 then majParcours() else majInscription() end
+local function updatePage()
+	if R.panel == 2 then updateBrowse() else updateSignUp() end
 end
 
-local function ouvrir()
+-- Shows our window over LFRParentFrame when the client opens it
+local function open()
 	if LFDParentFrame and LFDParentFrame:IsShown() then HideUIPanel(LFDParentFrame) end
-	F.attacher(LFRParentFrame)
-	etoufferClient()
-	-- les deux contenus du client a la fois : l'inscription et le parcours
+	F.attach(LFRParentFrame)
+	suppressClient()
+	-- Both client contents at once: sign-up and browse
 	LFRQueueFrame:Show()
 	LFRBrowseFrame:Show()
-	F.cadre:Show()
-	R.afficherPanneau()
-	F.afficher("raid")
+	F.frame:Show()
+	R.showPanel()
+	F.show("raid")
 end
 
-construirePage(F.cadre)
-F.inscrirePage("raid", R.page, majPage)
-LFRParentFrame:HookScript("OnShow", ouvrir)
+buildPage(F.frame)
+F.registerPage("raid", R.page, updatePage)
+LFRParentFrame:HookScript("OnShow", open)
 LFRParentFrame:HookScript("OnHide", function()
-	if F.cadre:GetParent() == LFRParentFrame then F.cadre:Hide() end
+	if F.frame:GetParent() == LFRParentFrame then F.frame:Hide() end
 end)
--- le client ne montre qu'un de ses deux contenus : on remontre l'autre, et
--- notre panneau suit son onglet
+-- The client shows only one of its two contents: show the other again, and our panel
+-- follows its tab
 if LFRFrame_SetActiveTab then
 	hooksecurefunc("LFRFrame_SetActiveTab", function()
 		if LFRParentFrame:IsShown() then
 			LFRQueueFrame:Show()
 			LFRBrowseFrame:Show()
-			if F.cadre:GetParent() == LFRParentFrame then
-				R.afficherPanneau()
-				F.maj()
+			if F.frame:GetParent() == LFRParentFrame then
+				R.showPanel()
+				F.update()
 			end
 		end
 	end)
 end
-for _, nom in ipairs({ "LFRQueueFrameSpecificList_Update", "LFRQueueFrameFindGroupButton_Update",
+for _, name in ipairs({ "LFRQueueFrameSpecificList_Update", "LFRQueueFrameFindGroupButton_Update",
 	"LFRBrowseFrameList_Update", "LFRBrowse_UpdateButtonStates" }) do
-	if _G[nom] then hooksecurefunc(nom, F.demander) end
+	if _G[name] then hooksecurefunc(name, F.request) end
 end
--- LA REPONSE DU SERVEUR : relevee pour le raid cherche
-local veilleur = CreateFrame("Frame")
-veilleur:RegisterEvent("UPDATE_LFG_LIST")
-veilleur:SetScript("OnEvent", function()
-	local cherche = SearchLFGGetJoinedID and SearchLFGGetJoinedID()
-	if cherche then R.relever(cherche) end
-	F.demander()
+-- Server answer: collected for the searched raid
+local listener = CreateFrame("Frame")
+listener:RegisterEvent("UPDATE_LFG_LIST")
+listener:SetScript("OnEvent", function()
+	local searching = SearchLFGGetJoinedID and SearchLFGGetJoinedID()
+	if searching then R.collect(searching) end
+	F.request()
 end)
-ForeverUI.Superposition.inscrire("chercheurRaid", LFRParentFrame, function()
-	local z = { F.cadre }
-	for _, o in ipairs(F.onglets) do z[#z + 1] = o end
-	-- les onglets du bas sortent de la fenetre
-	for _, o in ipairs(R.onglets) do z[#z + 1] = o end
+ForeverUI.WindowStack.register("raidFinder", LFRParentFrame, function()
+	local z = { F.frame }
+	for _, o in ipairs(F.tabs) do z[#z + 1] = o end
+	-- The bottom tabs lie outside the window
+	for _, o in ipairs(R.tabs) do z[#z + 1] = o end
 	return z
 end)

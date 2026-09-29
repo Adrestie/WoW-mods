@@ -14,23 +14,12 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-"""Reading MPQ archives, the format the 3.3.5 client keeps its data in.
+"""Reads MPQ archives, the 3.3.5 client's data format, and patches files into an existing one.
 
-WHY THIS EXISTS. The installer cannot decide anything about a client without
-looking inside it: which identifiers are already taken, whether a texture is
-there, whether an interface file has been modified. StormLib does that, but it
-is a 32 bit library and nothing guarantees a matching interpreter on the
-machine of whoever installs the module. So the reading is done here, in the
-language the rest of the installer is written in, and it depends on nothing.
-
-WHAT AN ARCHIVE IS. A header, a hash table and a block table, then the files.
-The two tables are encrypted with a key derived from their own name, using a
-table of numbers the format generates from a single seed. A file is found by
-hashing its path three times: once to pick a slot, twice more to confirm the
-name, because the archive does not store names at all.
-
-This module reads, writes a new archive, and writes INTO an existing one -- the
-last for a client that already carries a patch of its own in the top slot.
+Pure Python, so the installer needs no StormLib (a 32-bit library that needs a matching
+interpreter). An archive is a header, a hash table and a block table, then the files.
+Both tables are encrypted with a key derived from their name. Names are not stored: a
+path is hashed three times, once to pick a slot and twice to confirm it.
 """
 import os
 import struct
@@ -101,10 +90,9 @@ def decrypt(data, key):
 def encrypt(data, key):
     """The mirror of `decrypt`.
 
-    The two differ in one place: the running seed is fed the PLAIN value in
-    both directions -- which decryption reads after unmasking and encryption
-    reads before masking. Get that backwards and the first word still comes out
-    right, which is what makes the mistake worth naming here.
+    In both directions the running seed is fed the PLAIN value: read after unmasking when
+    decrypting, before masking when encrypting. Getting it backwards still yields a correct
+    first word.
     """
     out = bytearray(len(data))
     seed = 0xEEEEEEEE
@@ -119,11 +107,9 @@ def encrypt(data, key):
 
 
 def _explode(data, expected):
-    """PKWARE implode, the compression Blizzard used before zlib.
+    """PKWARE implode, the compression used before zlib.
 
-    Not implemented. A file compressed this way is reported as unreadable
-    rather than silently returned wrong -- an installer that mistakes garbage
-    for a DBC would write nonsense into a client.
+    Not implemented: such a file is reported as unreadable rather than returned wrong.
     """
     raise NotImplementedError("PKWARE implode is not supported")
 
@@ -153,9 +139,7 @@ class Archive(object):
         self.close()
 
     def _read_header(self):
-        # An archive does not have to start at offset zero: an executable may
-        # sit in front of it. The header is looked for on 512 byte boundaries,
-        # which is where the format says it can be.
+        # An executable may sit in front of the archive; the header is on a 512-byte boundary.
         self._file.seek(0, 2)
         size = self._file.tell()
         offset = 0
@@ -268,9 +252,8 @@ class Archive(object):
 class Chain(object):
     """The archives of a client, in the order the game reads them.
 
-    The game does not merge archives: it asks each in turn and keeps the first
-    answer, with the later patches winning over the base files. So does this --
-    which is the only way to know what a player actually sees.
+    The game does not merge archives: the highest-priority archive that has a path answers
+    for it, so later patches win over base files.
     """
 
     def __init__(self, archives):
@@ -293,11 +276,10 @@ class Chain(object):
         return archive.read(name)
 
     def names(self):
-        """Every path the archives declare, as far as they declare any.
+        """Every path the archives list in their `(listfile)`.
 
-        An archive does not have to carry a `(listfile)`, and one that does not
-        can still be read -- a path can always be asked for by name. So this
-        answers what CAN be enumerated, never what exists.
+        An archive may lack a listfile and still be read by name, so this is what can be
+        enumerated, not everything that exists.
         """
         out = set()
         for archive in self.archives:
@@ -314,20 +296,14 @@ class Chain(object):
 
 
 def priority(name):
-    """Where an archive sits in the reading order, from its file name.
+    """Sort key of an archive in the reading order, from its file name.
 
-    The client asks the archives in turn and keeps the FIRST answer, so the
-    order decides what a player sees. Three groups, lowest first:
-
-      0  the base data -- common, expansion, lichking, and their locale halves
-      1  the locale patches -- patch-enUS, patch-enUS-2 ... patch-enUS-Z
-      2  the plain patches -- patch, patch-2 ... patch-Z
-
-    A plain patch therefore beats the locale patch of the same rank, which is
-    why a server's own archive is called `patch-Z`: nothing sits above it.
-
-    Within a group: the unsuffixed archive first, then the digits, then the
-    letters. `patch-2` before `patch-9`, and both before `patch-A`.
+    Three groups, lowest first:
+      0  base data: common, expansion, lichking and their locale halves
+      1  locale patches: patch-enUS, patch-enUS-2 ... patch-enUS-Z
+      2  plain patches: patch, patch-2 ... patch-Z
+    A plain patch beats the locale patch of the same rank, so a server archive named
+    `patch-Z` sits on top. Within a group: unsuffixed first, then digits, then letters.
     """
     stem = name.lower().rsplit(".", 1)[0]
     if not stem.startswith("patch"):
@@ -347,10 +323,9 @@ def priority(name):
 def open_client(data_dir, locale=None, ignore=()):
     """Every archive of a client, ordered, ready to be asked.
 
-    `ignore` names archives to leave out, by file name. THE MODULE'S OWN
-    ARCHIVE BELONGS THERE whenever a tool is asking what the CLIENT holds: a
-    collector comparing against a stock client would find nothing left to add,
-    and an installer would read every identifier as taken -- by itself.
+    `locale`: locale subfolder of `data_dir` to include. `ignore`: archive file names to
+    leave out. Put the module's own archive there when asking what the stock client holds;
+    otherwise every identifier it adds reads as already taken.
     """
     skip = {n.lower() for n in ignore}
 
@@ -368,96 +343,20 @@ def open_client(data_dir, locale=None, ignore=()):
     return Chain(Archive(path) for _, path in found)
 
 
-# --------------------------------------------------------------- writing one
-
-def write_archive(path, files, compress=True):
-    """Writes a NEW archive holding the given files.
-
-    `files` maps a path inside the archive to its bytes. Everything is stored
-    as a single unit -- no sector table, no encryption -- which is all a patch
-    archive needs and is what makes the result easy to read back and to check.
-
-    Modifying an EXISTING archive is deliberately not offered. A module has no
-    business rewriting a client's own files: what it adds goes into an archive
-    of its own, read before them.
-    """
-    entries = list(files.items())
-    entries.append(("(listfile)",
-                    "\r\n".join(name for name, _ in entries).encode("utf-8")))
-
-    # The hash table is a power of two and never full: a table with no free
-    # slot cannot say "not here", and lookup would walk it forever.
-    slots = 4
-    while slots < len(entries) * 2:
-        slots *= 2
-
-    header_size = 32
-    blocks, blob = [], bytearray()
-    for name, raw in entries:
-        stored, flags = raw, FILE_EXISTS | FILE_SINGLE_UNIT
-        if compress:
-            packed = b"\x02" + zlib.compress(raw, 9)
-            if len(packed) < len(raw):
-                stored, flags = packed, flags | FILE_COMPRESS
-        blocks.append((header_size + len(blob), len(stored), len(raw), flags))
-        blob += stored
-
-    hash_table = [[EMPTY_NEVER_USED, EMPTY_NEVER_USED, 0xFFFF, 0xFFFF,
-                   EMPTY_NEVER_USED] for _ in range(slots)]
-    for index, (name, _) in enumerate(entries):
-        start = hash_string(name, 0) & (slots - 1)
-        for step in range(slots):
-            slot = (start + step) % slots
-            if hash_table[slot][4] == EMPTY_NEVER_USED:
-                hash_table[slot] = [hash_string(name, 1), hash_string(name, 2),
-                                    0, 0, index]
-                break
-        else:
-            raise ValueError("the hash table filled up")
-
-    raw_hash = b"".join(struct.pack("<IIHHI", *row) for row in hash_table)
-    raw_block = b"".join(struct.pack("<IIII", *row) for row in blocks)
-    hash_at = header_size + len(blob)
-    block_at = hash_at + len(raw_hash)
-
-    with open(path, "wb") as out:
-        out.write(HEADER.pack(MAGIC, header_size,
-                              block_at + len(raw_block), 0, 3,
-                              hash_at, block_at, slots, len(blocks)))
-        out.write(blob)
-        out.write(encrypt(raw_hash, hash_string(HASH_TABLE_KEY, 3)))
-        out.write(encrypt(raw_block, hash_string(BLOCK_TABLE_KEY, 3)))
-    return path
-
-
-# ------------------------------------------------------ writing into one
+# ------------------------------------------------------ Writing into an archive
 
 def patch_archive(path, files, remove=(), compress=True, keep_free=8):
-    """Adds, replaces or removes files IN an existing archive, in place.
+    """Adds, replaces or removes files in an existing archive, in place.
 
-    `files` maps a path inside the archive to its bytes: a path already there
-    is replaced, a new one added. `remove` names paths to take out. The
-    listfile is kept in step, so the archive can still be enumerated.
+    `files` maps archive paths to bytes (replaced if present, added otherwise); `remove`
+    lists paths to delete; the listfile is kept in step. `keep_free`: at least
+    slots // keep_free hash slots stay free. Returns (files written, len(remove)).
 
-    HOW. New data is appended after everything the archive holds, the block
-    of a replaced file is pointed at the new data, a new file takes a free
-    hash slot and a new block, and the two tables are written again after the
-    data. Nothing existing moves, so the archive is never in a half-written
-    state for longer than the tables take to write -- and it is the caller's
-    job to have kept a copy of what it replaces.
-
-    A HASH TABLE TOO SMALL FOR WHAT IS BEING ADDED IS REBUILT BIGGER. That
-    needs the name of every file already there -- a slot keeps a name's
-    fingerprints, never the name, and where a name belongs depends on the
-    table's size -- so the names are read from the `(listfile)`. An archive
-    whose listfile does not account for every occupied slot cannot be grown,
-    and is left alone.
-
-    WHAT IT WILL NOT DO. Cross the 4 GB line: positions are thirty-two bits,
-    and the high-word table of larger archives is not handled here. Fill the
-    hash table: a table with no free slot cannot say "not here", so at least
-    one slot in `keep_free` is left empty. Either refusal is a ValueError,
-    raised before a byte is written.
+    New data and both tables are appended; replaced blocks point at the new data and
+    nothing existing moves, so the caller keeps its own backup. A hash table that is too
+    small is rebuilt bigger from the names in `(listfile)`, which must name every occupied
+    slot. Raises ValueError before writing if the table cannot grow or the result would
+    cross 4 GB (the high-word table is not handled).
     """
     archive = Archive(path)
     try:
@@ -479,9 +378,7 @@ def patch_archive(path, files, remove=(), compress=True, keep_free=8):
 
     def grown(table, wanted):
         """The same entries in a bigger table, placed from their names."""
-        # The files an archive keeps for itself are never in its own
-        # listfile, and their names are known: they are named here so that a
-        # rebuild does not lose them.
+        # Archive-internal files are never in the listfile; name them so a rebuild keeps them.
         known = set(listed) | {"(listfile)", "(attributes)", "(signature)"}
         by_pair = {(hash_string(n, 1), hash_string(n, 2)): n for n in known}
         staying = occupied(table)

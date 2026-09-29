@@ -1,65 +1,7 @@
--- ForeverUI : les barres d'ameliorations et d'affaiblissements, a la DA de
--- camelot (demande de l'utilisateur, 2026-09-26 ; memoire foreverui-buffs).
---
--- RELEVE -- blizzard_buffframe (buffframe.lua, buffframe.xml,
--- buffframetemplates.xml : pas de variante camelot/ ni mainline/, le .toc les
--- charge tels quels), blizzard_framexmlutil (aurautil.lua et
--- mainline/aurautil.lua, [Family]), blizzard_editmode (mainline/
--- editmodepresetlayouts.lua, [Family] : la disposition « moderne ») :
---   bouton       AuraButtonArtTemplate, 30 x 40 : icone 30 x 30 a TOP, duree
---                GameFontNormalSmall sous l'icone (cachee sans duree) ;
---                OVERLAY : bordure d'affaiblissement 40 x 40 et bordure
---                d'enchantement UI-TempEnchant-Border 32 x 32 centrees sur
---                l'icone, symbole TextStatusBarText TOPLEFT (2,-2) (mode
---                daltonien), piles NumberFontNormal BOTTOMRIGHT de l'icone
---                (-2,2)
---   grille       AuraContainerMixin : de droite a gauche puis vers le bas,
---                espacement 5 entre les icones -- une colonne tous les 35,
---                une rangee tous les 45 ; chaque bouton pose son TOPRIGHT sur
---                le TOPRIGHT du conteneur
---   ameliorations  TOPRIGHT de l'ecran (-255,-10), 11 par rangee, 32 au plus ;
---                le bouton de repli (15 x 30, fleche bag-arrow 10 x 16,
---                surbrillance a 0,4 en ADD) a TOPRIGHT, le conteneur sur son
---                TOPLEFT ; taille (35 x 11 + 15) x (45 x 3)
---   affaiblissements  TOPRIGHT de l'ecran (-270,-155), 8 par rangee, 16 au
---                plus, seuls les affaiblissements presents sont ranges ;
---                bordure par type AVEC son icone (ShowDispelType = 1) :
---                ui-debuff-border-<type>-icon, et -default-noicon sans type
---   clignotement AuraContainerWarningFader : sous 31 s, l'icone va et vient
---                entre 0,3 et 1 en 1,5 s (aller 0,75 s, retour 0,75 s)
---   duree        SecondsToTimeAbbrev ; blanche sous 90 s
---                (BUFF_DURATION_WARNING_TIME de camelot), jaune au-dessus ;
---                affichee si l'option « durees » est cochee
---   repli        une amelioration sans duree, ou a plus de 90 s, se cache
---                quand la barre est repliee ; elle « retombe » dans la barre
---                a 90 s (verification toutes les 0,2 s). Le bouton ne
---                paraît que s'il y a de quoi cacher ; depliee au chargement
---   regroupement si l'option « regrouper » est cochee, le repli s'efface et
---                ces memes ameliorations passent dans une icone
---                (BuffConsolidation, coordonnees de camelot) dont le survol
---                ouvre une bulle : 5 par rangee, a l'echelle 0,8, en (16,-16),
---                marges 9 a droite et 2 en bas
---   enchantements  d'arme, AVANT les ameliorations, bordure
---                UI-TempEnchant-Border ; clic droit pour annuler
---   infobulle    ANCHOR_BOTTOMLEFT, un cran au-dessus du bouton ; clic droit
---                sur une amelioration pour l'annuler
---
--- CE QUI VIENT DE 3.3.5 : les donnees (UnitAura, GetWeaponEnchantInfo), les
--- options de l'interface (SHOW_BUFF_DURATIONS, CONSOLIDATE_BUFFS,
--- ENABLE_COLORBLIND_MODE) et leurs changements (BuffFrame_UpdatePositions,
--- BuffFrame_Update, qu'on accroche), l'annulation (CancelUnitBuff,
--- CancelItemTempEnchantment -- libres en 3.3.5, ils ne deviennent proteges
--- qu'avec 4.0). Le BuffFrame du client, ses enchantements et son
--- regroupement sont etouffes. PlayerFrame est etouffe lui aussi :
--- PlayerFrame.unit ne suit plus le vehicule, on le calcule comme le cadre
--- joueur (UnitHasVehicleUI).
---
--- ABSENT DE 3.3.5, donc absent ici : les defenses externes
--- (ExternalDefensivesFrame), les affaiblissements mortels
--- (DeadlyDebuffFrame), les auras privees, le type « Bleed ». Le bouton de
--- repli n'a pas d'option dans 3.3.5 (collapseExpandBuffs) : il est actif
--- tant que le regroupement ne l'est pas, comme dans camelot. La bulle du
--- regroupement prend le fond des infobulles de 3.3.5, comme GameTooltip.
+-- ForeverUI: buff and debuff bars in camelot style (blizzard_buffframe, AuraContainerMixin).
+-- Data and options come from 3.3.5; the client's BuffFrame, enchants and consolidation are hidden.
+-- CancelUnitBuff and CancelItemTempEnchantment are not protected in 3.3.5.
+-- Not in 3.3.5, so not here: external defensives, deadly debuffs, private auras, Bleed type.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
@@ -71,34 +13,30 @@ local SEP = string.char(92)
 local L = ForeverUI.L
 
 local G = {
-	largeur = 30, hauteur = 40, icone = 30,
-	bordure = 40, bordureEnchant = 32,
-	espace = 5,
-	repliL = 15, repliH = 30, flecheL = 10, flecheH = 16, surbrillance = 0.4,
-	alerte = 31, alerteDuree = 90,
-	periode = 1.5, alphaMin = 0.3, alphaMax = 1,
-	verifier = 0.2, infobulle = 0.2,
-	bulleParLigne = 5, bulleEchelle = 0.8, bulleMarge = 16, bulleDroite = 9, bulleBas = 2,
-	bulleSortie = 10,
+	width = 30, height = 40, icon = 30,
+	border = 40, enchantBorder = 32,
+	space = 5,
+	collapseW = 15, collapseH = 30, arrowW = 10, arrowH = 16, highlight = 0.4,
+	alert = 31, alertDuration = 90,
+	period = 1.5, alphaMin = 0.3, alphaMax = 1,
+	check = 0.2, tooltip = 0.2,
+	tooltipPerRow = 5, tooltipScale = 0.8, tooltipMargin = 16, tooltipRight = 9, tooltipBottom = 2,
+	tooltipExitMargin = 10,
 }
 
-local BARRES = {
-	buffs = { nom = "ForeverUIBuffFrame", filtre = "HELPFUL", max = 32, parLigne = 11,
-		x = -255, y = -10, libelle = L.BUFFS_EDIT_LABEL_BUFFS },
-	debuffs = { nom = "ForeverUIDebuffFrame", filtre = "HARMFUL", max = 16, parLigne = 8,
-		x = -270, y = -155, libelle = L.BUFFS_EDIT_LABEL_DEBUFFS, typeVisible = true },
+local BARS = {
+	buffs = { name = "ForeverUIBuffFrame", filter = "HELPFUL", max = 32, perRow = 11,
+		x = -255, y = -10, caption = L.BUFFS_EDIT_LABEL_BUFFS },
+	debuffs = { name = "ForeverUIDebuffFrame", filter = "HARMFUL", max = 16, perRow = 8,
+		x = -270, y = -155, caption = L.BUFFS_EDIT_LABEL_DEBUFFS, showType = true },
 }
 
--- LE DEBUFF « DESHONORE » (2026-09-28). Le serveur ne pose pas d'aura : un
--- client n'affiche une aura que si son propre Spell.dbc connait le sort, et
--- aucun sort d'origine n'a le bon nom, la bonne description et pas d'effet
--- visuel. ForeverUI le dessine donc lui-meme, a partir de l'etat que
--- mod-pvp-titles-ext envoie par le canal d'addon (PvPTab.lua,
--- ForeverUI.Deshonneur) : en tete des affaiblissements, sans type, son nom
--- (le rang « Dishonored » du client) et sa description dans l'infobulle.
-local DESHONNEUR_ICONE = "Interface" .. SEP .. "Icons" .. SEP .. "Ability_Hunter_MarkedForDeath"
+-- Dishonored debuff: the client only shows an aura its own Spell.dbc knows, and no stock spell
+-- fits. ForeverUI draws it from the state mod-pvp-titles-ext sends over the addon channel
+-- (PvPTab.lua, ForeverUI.Dishonor): first among debuffs, no type.
+local DISHONOR_ICON = "Interface" .. SEP .. "Icons" .. SEP .. "Ability_Hunter_MarkedForDeath"
 
--- la bordure par type (DEBUFF_DISPLAY_INFO de camelot)
+-- Border per type (camelot DEBUFF_DISPLAY_INFO): no icon, with icon, colorblind symbol.
 local TYPES = {
 	Magic = { "ui-debuff-border-magic-noicon", "ui-debuff-border-magic-icon", "DEBUFF_SYMBOL_MAGIC" },
 	Curse = { "ui-debuff-border-curse-noicon", "ui-debuff-border-curse-icon", "DEBUFF_SYMBOL_CURSE" },
@@ -107,46 +45,48 @@ local TYPES = {
 	None = { "ui-debuff-border-default-noicon" },
 }
 
-local ENCHANT_BORDURE = "Interface" .. SEP .. "Buttons" .. SEP .. "UI-TempEnchant-Border"
-local REGROUPEMENT = "Interface" .. SEP .. "Buttons" .. SEP .. "BuffConsolidation"
+local ENCHANT_BORDER = "Interface" .. SEP .. "Buttons" .. SEP .. "UI-TempEnchant-Border"
+local CONSOLIDATION = "Interface" .. SEP .. "Buttons" .. SEP .. "BuffConsolidation"
 
--- ------------------------------------------------------------ les options
+-- ---------- Options
 
-local function durees() return SHOW_BUFF_DURATIONS == "1" end
-local function regrouper() return CONSOLIDATE_BUFFS == "1" end
-local function daltonien() return ENABLE_COLORBLIND_MODE == "1" end
--- camelot : repli et regroupement s'excluent
-local function repliActif() return not regrouper() end
+local function durations() return SHOW_BUFF_DURATIONS == "1" end
+local function consolidateEnabled() return CONSOLIDATE_BUFFS == "1" end
+local function colorblindMode() return ENABLE_COLORBLIND_MODE == "1" end
+-- camelot: collapse and consolidation exclude each other; 3.3.5 has no collapse option.
+local function collapseEnabled() return not consolidateEnabled() end
 
--- l'unite affichee : le vehicule quand on le pilote
-function B.unite()
+-- Shown unit: the vehicle while in one. PlayerFrame is suppressed, so PlayerFrame.unit
+-- does not follow the vehicle and the unit is computed here.
+function B.unit()
 	if UnitHasVehicleUI and UnitHasVehicleUI("player") and UnitExists("vehicle") then
 		return "vehicle"
 	end
 	return "player"
 end
 
--- ------------------------------------------------------------ le clignotement
+-- ---------- Warning blink
 
--- un aller-retour de 1,5 s entre 0,3 et 1, commun a toutes les icones
-function B.alphaAlerte(reste)
-	if reste and reste < G.alerte then
-		local demi = G.periode / 2
-		local t = (GetTime() or 0) % G.periode
-		local p = (t < demi) and (t / demi) or ((G.periode - t) / demi)
+-- AuraContainerWarningFader: under 31 s, alpha goes 0.3 -> 1 -> 0.3 over 1.5 s, the same
+-- for all icons. rest: seconds left.
+function B.warningAlpha(rest)
+	if rest and rest < G.alert then
+		local half = G.period / 2
+		local t = (GetTime() or 0) % G.period
+		local p = (t < half) and (t / half) or ((G.period - t) / half)
 		return G.alphaMin + (G.alphaMax - G.alphaMin) * p
 	end
 	return G.alphaMax
 end
 
--- ------------------------------------------------------------ un bouton
+-- ---------- One button
 
-local function filtreDe(b)
+local function filterOf(b)
 	if b.auraType == "Buff" or b.auraType == "TempEnchant" then return "HELPFUL" end
 	if b.auraType == "Debuff" then return "HARMFUL" end
 end
 
-local function infobulle(b)
+local function tooltip(b)
 	if b.auraType == "TempEnchant" then
 		GameTooltip:SetOwner(b, "ANCHOR_BOTTOMLEFT")
 		GameTooltip:SetInventoryItem("player", b.info.ID)
@@ -154,21 +94,21 @@ local function infobulle(b)
 	end
 	GameTooltip:SetOwner(b, "ANCHOR_BOTTOMLEFT")
 	GameTooltip:SetFrameLevel(b:GetFrameLevel() + 2)
-	if b.info.deshonneur then
+	if b.info.dishonor then
 		local c = NORMAL_FONT_COLOR
-		GameTooltip:SetText(ForeverUI.Deshonneur.nom(), 1, 1, 1)
+		GameTooltip:SetText(ForeverUI.Dishonor.name(), 1, 1, 1)
 		GameTooltip:AddLine(L.BUFFS_DISHONORED_DESC, c.r, c.g, c.b, true)
 		GameTooltip:Show()
 		return
 	end
-	GameTooltip:SetUnitAura(b.unite, b.info.index, filtreDe(b))
+	GameTooltip:SetUnitAura(b.unit, b.info.index, filterOf(b))
 end
 
-local function majDuree(b, reste)
-	local montrer = reste and durees()
-	if montrer then
-		b.Duration:SetFormattedText(SecondsToTimeAbbrev(reste))
-		local c = (reste < G.alerteDuree) and HIGHLIGHT_FONT_COLOR or NORMAL_FONT_COLOR
+local function updateDuration(b, rest)
+	local showRegion = rest and durations()
+	if showRegion then
+		b.Duration:SetFormattedText(SecondsToTimeAbbrev(rest))
+		local c = (rest < G.alertDuration) and HIGHLIGHT_FONT_COLOR or NORMAL_FONT_COLOR
 		b.Duration:SetVertexColor(c.r, c.g, c.b)
 		b.Duration:Show()
 	else
@@ -176,23 +116,23 @@ local function majDuree(b, reste)
 	end
 end
 
-local function surMaj(b, ecoule)
+local function onUpdate(b, elapsed)
 	if not b.info then return end
-	if b.auraType == "TempEnchant" and B.unite() ~= "player" then
+	if b.auraType == "TempEnchant" and B.unit() ~= "player" then
 		b:Hide()
 		return
 	end
-	b:SetAlpha(B.alphaAlerte(b.reste))
-	b.reste = math.max((b.info.expirationTime or 0) - GetTime(), 0)
-	majDuree(b, b.reste)
-	b.tempsBulle = (b.tempsBulle or 0) - (ecoule or 0)
-	if b.tempsBulle <= 0 then
-		b.tempsBulle = G.infobulle
-		if GameTooltip:IsOwned(b) then infobulle(b) end
+	b:SetAlpha(B.warningAlpha(b.rest))
+	b.rest = math.max((b.info.expirationTime or 0) - GetTime(), 0)
+	updateDuration(b, b.rest)
+	b.tooltipTimer = (b.tooltipTimer or 0) - (elapsed or 0)
+	if b.tooltipTimer <= 0 then
+		b.tooltipTimer = G.tooltip
+		if GameTooltip:IsOwned(b) then tooltip(b) end
 	end
 end
 
-local function poserType(b, auraType)
+local function applyType(b, auraType)
 	b.auraType = auraType
 	b.Symbol:Hide()
 	if auraType == "Buff" then
@@ -208,33 +148,33 @@ local function poserType(b, auraType)
 	end
 end
 
-local function poserExpiration(b, info)
+local function applyExpiration(b, info)
 	if info.expirationTime and info.expirationTime > 0 then
-		if durees() then b.Duration:Show() else b.Duration:Hide() end
-		b.reste = info.expirationTime - GetTime()
-		b:SetScript("OnUpdate", surMaj)
+		if durations() then b.Duration:Show() else b.Duration:Hide() end
+		b.rest = info.expirationTime - GetTime()
+		b:SetScript("OnUpdate", onUpdate)
 	else
 		b.Duration:Hide()
 		b:SetScript("OnUpdate", nil)
-		b.reste = nil
+		b.rest = nil
 		b:SetAlpha(1)
 	end
 end
 
--- AuraButtonMixin:Update
-function B.remplir(b, info, typeVisible)
-	poserType(b, info.auraType)
+-- AuraButtonMixin:Update. info: aura data; showType: debuff border with its type icon.
+function B.populate(b, info, showType)
+	applyType(b, info.auraType)
 	b.info = info
-	b.unite = B.unite()
+	b.unit = B.unit()
 	if info.auraType == "Debuff" then
 		local t = TYPES[info.debuffType or ""] or TYPES.None
-		ForeverUI.SetAtlas(b.DebuffBorder, (typeVisible and t[2]) or t[1])
-		if daltonien() and t[3] then
+		ForeverUI.SetAtlas(b.DebuffBorder, (showType and t[2]) or t[1])
+		if colorblindMode() and t[3] then
 			b.Symbol:SetText(_G[t[3]] or "")
 			b.Symbol:Show()
 		end
 	end
-	poserExpiration(b, info)
+	applyExpiration(b, info)
 	b.Icon:SetTexture(info.texture)
 	if (info.count or 0) > 1 then
 		b.Count:SetText(info.count)
@@ -242,110 +182,111 @@ function B.remplir(b, info, typeVisible)
 	else
 		b.Count:Hide()
 	end
-	if GameTooltip:IsOwned(b) then infobulle(b) end
+	if GameTooltip:IsOwned(b) then tooltip(b) end
 end
 
-function B.creerBouton(parent, nom)
-	local b = CreateFrame("Button", nom, parent)
-	b:SetWidth(G.largeur)
-	b:SetHeight(G.hauteur)
+-- AuraButtonArtTemplate: 30 x 40, icon 30 on top, duration below; right-click cancels.
+function B.createButton(parent, name)
+	local b = CreateFrame("Button", name, parent)
+	b:SetWidth(G.width)
+	b:SetHeight(G.height)
 	b.Icon = b:CreateTexture(nil, "BACKGROUND")
-	b.Icon:SetWidth(G.icone)
-	b.Icon:SetHeight(G.icone)
+	b.Icon:SetWidth(G.icon)
+	b.Icon:SetHeight(G.icon)
 	b.Icon:SetPoint("TOP", b, "TOP", 0, 0)
 	b.Duration = b:CreateFontString(nil, "BACKGROUND", "GameFontNormalSmall")
 	b.Duration:SetPoint("TOP", b.Icon, "BOTTOM", 0, 0)
 	b.Duration:Hide()
 	b.DebuffBorder = b:CreateTexture(nil, "OVERLAY")
-	b.DebuffBorder:SetWidth(G.bordure)
-	b.DebuffBorder:SetHeight(G.bordure)
+	b.DebuffBorder:SetWidth(G.border)
+	b.DebuffBorder:SetHeight(G.border)
 	b.DebuffBorder:SetPoint("CENTER", b.Icon, "CENTER", 0, 0)
 	b.TempEnchantBorder = b:CreateTexture(nil, "OVERLAY")
-	b.TempEnchantBorder:SetTexture(ENCHANT_BORDURE)
-	b.TempEnchantBorder:SetWidth(G.bordureEnchant)
-	b.TempEnchantBorder:SetHeight(G.bordureEnchant)
+	b.TempEnchantBorder:SetTexture(ENCHANT_BORDER)
+	b.TempEnchantBorder:SetWidth(G.enchantBorder)
+	b.TempEnchantBorder:SetHeight(G.enchantBorder)
 	b.TempEnchantBorder:SetPoint("CENTER", b.Icon, "CENTER", 0, 0)
 	b.Symbol = b:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
 	b.Symbol:SetPoint("TOPLEFT", b, "TOPLEFT", 2, -2)
 	b.Count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
 	b.Count:SetPoint("BOTTOMRIGHT", b.Icon, "BOTTOMRIGHT", -2, 2)
-	poserType(b, nil)
+	applyType(b, nil)
 	b:RegisterForClicks("RightButtonUp")
-	b:SetScript("OnClick", function(self, bouton)
-		if bouton ~= "RightButton" or not self.info then return end
+	b:SetScript("OnClick", function(self, button)
+		if button ~= "RightButton" or not self.info then return end
 		if self.auraType == "Buff" then
-			CancelUnitBuff(self.unite, self.info.index, "HELPFUL")
+			CancelUnitBuff(self.unit, self.info.index, "HELPFUL")
 		elseif self.auraType == "TempEnchant" then
 			CancelItemTempEnchantment(self.info.ID == 16 and 1 or 2)
 		end
 	end)
-	b:SetScript("OnEnter", function(self) if self.info then infobulle(self) end end)
+	b:SetScript("OnEnter", function(self) if self.info then tooltip(self) end end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	b:Hide()
 	return b
 end
 
--- ------------------------------------------------------------ la grille
+-- ---------- Grid
 
--- de droite a gauche puis vers le bas ; ranges = les boutons a poser
-local function ranger(conteneur, boutons, parLigne)
-	for i, b in ipairs(boutons) do
-		local col, ligne = (i - 1) % parLigne, math.floor((i - 1) / parLigne)
+-- Right to left, then down (AuraContainerMixin). buttons: the buttons to place.
+local function arrange(container, buttons, perRow)
+	for i, b in ipairs(buttons) do
+		local col, row = (i - 1) % perRow, math.floor((i - 1) / perRow)
 		b:ClearAllPoints()
-		b:SetPoint("TOPRIGHT", conteneur, "TOPRIGHT",
-			-col * (G.largeur + G.espace), -ligne * (G.hauteur + G.espace))
+		b:SetPoint("TOPRIGHT", container, "TOPRIGHT",
+			-col * (G.width + G.space), -row * (G.height + G.space))
 	end
 end
 
--- ------------------------------------------------------------ une barre
+-- ---------- One bar
 
-local function creerBarre(cle)
-	local c = BARRES[cle]
-	local f = CreateFrame("Frame", c.nom, UIParent)
+local function createBar(key)
+	local c = BARS[key]
+	local f = CreateFrame("Frame", c.name, UIParent)
 	f:SetFrameStrata("LOW")
-	f.cle, f.c = cle, c
-	f.conteneur = CreateFrame("Frame", nil, f)
-	f.conteneur:SetWidth(1)
-	f.conteneur:SetHeight(1)
-	f.boutons = {}
+	f.key, f.c = key, c
+	f.container = CreateFrame("Frame", nil, f)
+	f.container:SetWidth(1)
+	f.container:SetHeight(1)
+	f.buttons = {}
 	for i = 1, c.max do
-		f.boutons[i] = B.creerBouton(f.conteneur, c.nom .. "Button" .. i)
+		f.buttons[i] = B.createButton(f.container, c.name .. "Button" .. i)
 	end
-	local lignes = math.ceil(c.max / c.parLigne)
-	local largeur = (G.largeur + G.espace) * c.parLigne
-	if cle == "buffs" then largeur = largeur + G.repliL end
-	f:SetWidth(largeur)
-	f:SetHeight((G.hauteur + G.espace) * lignes)
+	local rows = math.ceil(c.max / c.perRow)
+	local width = (G.width + G.space) * c.perRow
+	if key == "buffs" then width = width + G.collapseW end
+	f:SetWidth(width)
+	f:SetHeight((G.height + G.space) * rows)
 	f.auras = {}
 	return f
 end
 
--- le bouton de repli : bag-arrow, retourne quand la barre est depliee
-local function orienterFleche(t, retourne)
+-- Collapse button: bag-arrow, flipped when the bar is expanded. t: arrow texture.
+local function orientArrow(t, flipped)
 	local e = ForeverUI.AtlasEntry("bag-arrow")
 	if not e then return end
 	t:SetTexture(e[1])
 	local u1, u2, v1, v2 = e[2], e[3], e[4], e[5]
-	if retourne then
+	if flipped then
 		t:SetTexCoord(u2, v2, u2, v1, u1, v2, u1, v1)
 	else
 		t:SetTexCoord(u1, v1, u1, v2, u2, v1, u2, v2)
 	end
 end
 
-function B.orienterRepli()
-	local r = B.buffs.repli
-	-- les icones vont vers la gauche : depliee, la fleche est retournee (pi)
-	local deplie = r:GetChecked() and true or false
+function B.orientCollapse()
+	local r = B.buffs.collapse
+	-- Icons grow to the left: expanded, the arrow is rotated by pi.
+	local expanded = r:GetChecked() and true or false
 	for _, t in ipairs({ r:GetNormalTexture(), r:GetPushedTexture(), r:GetHighlightTexture() }) do
-		orienterFleche(t, deplie)
+		orientArrow(t, expanded)
 	end
 end
 
-local function creerRepli(f)
-	local r = CreateFrame("CheckButton", f.c.nom .. "CollapseAndExpandButton", f)
-	r:SetWidth(G.repliL)
-	r:SetHeight(G.repliH)
+local function createCollapse(f)
+	local r = CreateFrame("CheckButton", f.c.name .. "CollapseAndExpandButton", f)
+	r:SetWidth(G.collapseW)
+	r:SetHeight(G.collapseH)
 	r:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
 	local e = ForeverUI.AtlasEntry("bag-arrow")
 	r:SetNormalTexture(e and e[1] or "")
@@ -353,196 +294,196 @@ local function creerRepli(f)
 	r:SetHighlightTexture(e and e[1] or "", "ADD")
 	for _, t in ipairs({ r:GetNormalTexture(), r:GetPushedTexture(), r:GetHighlightTexture() }) do
 		t:ClearAllPoints()
-		t:SetWidth(G.flecheL)
-		t:SetHeight(G.flecheH)
+		t:SetWidth(G.arrowW)
+		t:SetHeight(G.arrowH)
 		t:SetPoint("CENTER", r, "CENTER", 0, 0)
 	end
-	r:GetHighlightTexture():SetAlpha(G.surbrillance)
+	r:GetHighlightTexture():SetAlpha(G.highlight)
 	r:SetChecked(true)
 	r:SetScript("OnClick", function(self)
-		B.deplie = self:GetChecked() and true or false
-		B.orienterRepli()
-		B.maj()
+		B.expanded = self:GetChecked() and true or false
+		B.orientCollapse()
+		B.update()
 	end)
-	f.repli = r
-	f.conteneur:SetPoint("TOPRIGHT", r, "TOPLEFT", 0, 0)
+	f.collapse = r
+	f.container:SetPoint("TOPRIGHT", r, "TOPLEFT", 0, 0)
 	return r
 end
 
--- l'icone du regroupement et sa bulle
-local function creerRegroupement(f)
-	local b = B.creerBouton(f.conteneur, f.c.nom .. "ConsolidatedBuffs")
-	poserType(b, "Buff")
-	b.Icon:SetTexture(REGROUPEMENT)
+-- Consolidation icon (BuffConsolidation) and its popup.
+local function createConsolidation(f)
+	local b = B.createButton(f.container, f.c.name .. "ConsolidatedBuffs")
+	applyType(b, "Buff")
+	b.Icon:SetTexture(CONSOLIDATION)
 	b.Icon:SetTexCoord(0.109375, 0.390625, 0.21875, 0.78125)
 	b:SetScript("OnClick", nil)
 	b:SetScript("OnLeave", nil)
-	b.nombre = 0
+	b.count = 0
 
-	local bulle = CreateFrame("Frame", f.c.nom .. "ConsolidatedBuffsTooltip", b)
-	bulle:SetFrameStrata("TOOLTIP")
-	bulle:SetClampedToScreen(true)
-	bulle:SetPoint("TOPLEFT", b.Icon, "BOTTOMLEFT", 0, 0)
-	bulle:SetBackdrop({
+	local tooltipFrame = CreateFrame("Frame", f.c.name .. "ConsolidatedBuffsTooltip", b)
+	tooltipFrame:SetFrameStrata("TOOLTIP")
+	tooltipFrame:SetClampedToScreen(true)
+	tooltipFrame:SetPoint("TOPLEFT", b.Icon, "BOTTOMLEFT", 0, 0)
+	tooltipFrame:SetBackdrop({
 		bgFile = "Interface" .. SEP .. "Tooltips" .. SEP .. "UI-Tooltip-Background",
 		edgeFile = "Interface" .. SEP .. "Tooltips" .. SEP .. "UI-Tooltip-Border",
 		tile = true, tileSize = 16, edgeSize = 16,
 		insets = { left = 4, right = 4, top = 4, bottom = 4 },
 	})
-	bulle:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b)
-	bulle:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b)
-	bulle:Hide()
-	local auras = CreateFrame("Frame", nil, bulle)
-	auras:SetScale(G.bulleEchelle)
-	auras:SetPoint("TOPLEFT", bulle, "TOPLEFT", G.bulleMarge, -G.bulleMarge)
+	tooltipFrame:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b)
+	tooltipFrame:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b)
+	tooltipFrame:Hide()
+	local auras = CreateFrame("Frame", nil, tooltipFrame)
+	auras:SetScale(G.tooltipScale)
+	auras:SetPoint("TOPLEFT", tooltipFrame, "TOPLEFT", G.tooltipMargin, -G.tooltipMargin)
 	auras:SetWidth(1)
 	auras:SetHeight(1)
-	bulle.auras = auras
-	bulle.boutons = {}
-	for i = 1, BARRES.buffs.max do
-		bulle.boutons[i] = B.creerBouton(auras, f.c.nom .. "ConsolidatedBuffsTooltipButton" .. i)
+	tooltipFrame.auras = auras
+	tooltipFrame.buttons = {}
+	for i = 1, BARS.buffs.max do
+		tooltipFrame.buttons[i] = B.createButton(auras, f.c.name .. "ConsolidatedBuffsTooltipButton" .. i)
 	end
-	bulle:SetScript("OnUpdate", function(self)
-		local m = G.bulleSortie
+	tooltipFrame:SetScript("OnUpdate", function(self)
+		local m = G.tooltipExitMargin
 		if not self:IsMouseOver(m, -m, -m, m) and not b:IsMouseOver(m, -m, -m, m) then
 			self:Hide()
 		end
 	end)
-	b:SetScript("OnEnter", function() B.remplirBulle(); bulle:Show() end)
-	b:SetScript("OnHide", function() bulle:Hide() end)
-	b.bulle = bulle
-	f.regroupement = b
+	b:SetScript("OnEnter", function() B.fillTooltip(); tooltipFrame:Show() end)
+	b:SetScript("OnHide", function() tooltipFrame:Hide() end)
+	b.tooltipFrame = tooltipFrame
+	f.consolidated = b
 	return b
 end
 
--- la bulle : les ameliorations cachees, 5 par rangee de gauche a droite
-function B.remplirBulle()
-	local b = B.buffs.regroupement
-	local bulle = b.bulle
+-- Popup: the hidden buffs, 5 per row, left to right.
+function B.fillTooltip()
+	local b = B.buffs.consolidated
+	local tooltipFrame = b.tooltipFrame
 	local n = 0
 	for _, info in ipairs(B.buffs.auras) do
-		if info.cachable then
+		if info.hideable then
 			n = n + 1
-			local bouton = bulle.boutons[n]
-			if not bouton then break end
-			B.remplir(bouton, info)
-			bouton:Show()
-			local col, ligne = (n - 1) % G.bulleParLigne, math.floor((n - 1) / G.bulleParLigne)
-			bouton:ClearAllPoints()
-			bouton:SetPoint("TOPLEFT", bulle.auras, "TOPLEFT",
-				col * (G.largeur + G.espace), -ligne * (G.hauteur + G.espace))
+			local button = tooltipFrame.buttons[n]
+			if not button then break end
+			B.populate(button, info)
+			button:Show()
+			local col, row = (n - 1) % G.tooltipPerRow, math.floor((n - 1) / G.tooltipPerRow)
+			button:ClearAllPoints()
+			button:SetPoint("TOPLEFT", tooltipFrame.auras, "TOPLEFT",
+				col * (G.width + G.space), -row * (G.height + G.space))
 		end
 	end
-	for i = n + 1, #bulle.boutons do
-		bulle.boutons[i].info = nil
-		bulle.boutons[i]:Hide()
+	for i = n + 1, #tooltipFrame.buttons do
+		tooltipFrame.buttons[i].info = nil
+		tooltipFrame.buttons[i]:Hide()
 	end
-	local l = (G.largeur + G.espace) * math.min(G.bulleParLigne, n)
-	local h = (G.hauteur + G.espace) * math.ceil(n / G.bulleParLigne)
-	bulle:SetWidth((G.bulleMarge + l) * G.bulleEchelle + G.bulleDroite)
-	bulle:SetHeight((G.bulleMarge + h) * G.bulleEchelle + G.bulleBas)
+	local l = (G.width + G.space) * math.min(G.tooltipPerRow, n)
+	local h = (G.height + G.space) * math.ceil(n / G.tooltipPerRow)
+	tooltipFrame:SetWidth((G.tooltipMargin + l) * G.tooltipScale + G.tooltipRight)
+	tooltipFrame:SetHeight((G.tooltipMargin + h) * G.tooltipScale + G.tooltipBottom)
 end
 
--- ------------------------------------------------------------ les donnees
+-- ---------- Data
 
--- les enchantements d'arme : main droite, puis main gauche
-local function enchantements(liste)
-	local maintenant = GetTime()
-	local aMain, expMain, chMain, aGauche, expGauche, chGauche = GetWeaponEnchantInfo()
-	for _, e in ipairs({ { aMain, expMain, chMain, 16 }, { aGauche, expGauche, chGauche, 17 } }) do
+-- Weapon enchants: main hand, then off hand, listed before the buffs.
+local function enchantments(list)
+	local now = GetTime()
+	local hasMain, expMain, chMain, hasOff, expOff, chOff = GetWeaponEnchantInfo()
+	for _, e in ipairs({ { hasMain, expMain, chMain, 16 }, { hasOff, expOff, chOff, 17 } }) do
 		if e[1] then
-			local reste = (e[2] or 0) / 1000
+			local rest = (e[2] or 0) / 1000
 			local info = {
 				auraType = "TempEnchant",
 				texture = GetInventoryItemTexture("player", e[4]),
 				count = e[3] or 0,
-				expirationTime = maintenant + reste,
+				expirationTime = now + rest,
 				ID = e[4],
 			}
-			info.cachable = reste > G.alerteDuree
-			table.insert(liste, info)
+			info.hideable = rest > G.alertDuration
+			table.insert(list, info)
 		end
 	end
 end
 
-local function auras(unite, filtre, max, liste)
-	local maintenant = GetTime()
+-- Appends up to max auras of unit to list. hideable: no duration or more than 90 s left.
+local function auras(unit, filter, max, list)
+	local now = GetTime()
 	for i = 1, max do
-		local nom, _, icone, piles, typeDissip, duree, expiration = UnitAura(unite, i, filtre)
-		if not nom then break end
+		local name, _, icon, stacks, dispelType, duration, expiration = UnitAura(unit, i, filter)
+		if not name then break end
 		local info = {
-			auraType = (filtre == "HELPFUL") and "Buff" or "Debuff",
+			auraType = (filter == "HELPFUL") and "Buff" or "Debuff",
 			index = i,
-			texture = icone,
-			count = piles or 0,
-			debuffType = typeDissip,
-			duration = duree or 0,
+			texture = icon,
+			count = stacks or 0,
+			debuffType = dispelType,
+			duration = duration or 0,
 			expirationTime = expiration or 0,
 		}
-		if filtre == "HELPFUL" then
-			info.cachable = (info.duration == 0) or (info.expirationTime == 0)
-				or ((info.expirationTime - maintenant) > G.alerteDuree)
+		if filter == "HELPFUL" then
+			info.hideable = (info.duration == 0) or (info.expirationTime == 0)
+				or ((info.expirationTime - now) > G.alertDuration)
 		end
-		table.insert(liste, info)
+		table.insert(list, info)
 	end
 end
 
--- le debuff « Deshonore », en tete, tant que l'etat dure (le joueur seul :
--- pas dans un vehicule)
-local function deshonneur(liste)
-	local etat = ForeverUI.Deshonneur
-	if not etat or not etat.fin or B.unite() ~= "player" or etat.fin <= GetTime() then return end
-	table.insert(liste, 1, {
+-- The Dishonored debuff, first, while the state lasts (player only, not in a vehicle).
+local function dishonor(list)
+	local state = ForeverUI.Dishonor
+	if not state or not state.finish or B.unit() ~= "player" or state.finish <= GetTime() then return end
+	table.insert(list, 1, {
 		auraType = "Debuff",
-		texture = DESHONNEUR_ICONE,
+		texture = DISHONOR_ICON,
 		count = 0,
 		duration = 0,
-		expirationTime = etat.fin,
-		deshonneur = true,
+		expirationTime = state.finish,
+		dishonor = true,
 	})
 end
 
--- ------------------------------------------------------------ la mise a jour
+-- ---------- Update
 
-B.deplie = true
+B.expanded = true
 
-local function deplie()
-	if repliActif() then return B.deplie end
+local function expanded()
+	if collapseEnabled() then return B.expanded end
 	return false
 end
 
-function B.majBuffs()
+function B.updateBuffs()
 	local f = B.buffs
-	local liste = {}
-	if B.unite() == "player" then enchantements(liste) end
-	auras(B.unite(), "HELPFUL", f.c.max, liste)
-	f.auras = liste
-	local cachables = 0
-	for _, info in ipairs(liste) do
-		if info.cachable then cachables = cachables + 1 end
+	local list = {}
+	if B.unit() == "player" then enchantments(list) end
+	auras(B.unit(), "HELPFUL", f.c.max, list)
+	f.auras = list
+	local hideableCount = 0
+	for _, info in ipairs(list) do
+		if info.hideable then hideableCount = hideableCount + 1 end
 	end
-	f.cachables = cachables
-	-- le regroupement
-	local r = f.regroupement
-	r.nombre = cachables
-	r.Count:SetText(cachables)
-	local avecRegroupement = regrouper() and cachables > 0
-	if avecRegroupement then r:Show() else r:Hide() end
-	-- les boutons
-	local ouvert = deplie()
-	local suivant = 1
-	for _, b in ipairs(f.boutons) do
+	f.hideableCount = hideableCount
+	-- Consolidation
+	local r = f.consolidated
+	r.count = hideableCount
+	r.Count:SetText(hideableCount)
+	local withConsolidation = consolidateEnabled() and hideableCount > 0
+	if withConsolidation then r:Show() else r:Hide() end
+	-- Buttons
+	local isOpen = expanded()
+	local following = 1
+	for _, b in ipairs(f.buttons) do
 		local info
-		while suivant <= #liste do
-			local candidat = liste[suivant]
-			suivant = suivant + 1
-			if ouvert or not candidat.cachable then
-				info = candidat
+		while following <= #list do
+			local candidate = list[following]
+			following = following + 1
+			if isOpen or not candidate.hideable then
+				info = candidate
 				break
 			end
 		end
 		if info then
-			B.remplir(b, info)
+			B.populate(b, info)
 			b:Show()
 		else
 			b.info = nil
@@ -550,130 +491,129 @@ function B.majBuffs()
 			b:Hide()
 		end
 	end
-	local ranges = {}
-	if avecRegroupement then table.insert(ranges, r) end
-	for _, b in ipairs(f.boutons) do table.insert(ranges, b) end
-	ranger(f.conteneur, ranges, f.c.parLigne)
-	-- le repli : seulement s'il y a de quoi cacher
-	if repliActif() and cachables > 0 then f.repli:Show() else f.repli:Hide() end
-	f.repli:SetChecked(B.deplie)
-	B.orienterRepli()
-	if r.bulle:IsShown() then B.remplirBulle() end
-	-- la verification des ameliorations qui retombent
-	f.attente = (not ouvert and cachables > 0) and G.verifier or nil
+	local toPlace = {}
+	if withConsolidation then table.insert(toPlace, r) end
+	for _, b in ipairs(f.buttons) do table.insert(toPlace, b) end
+	arrange(f.container, toPlace, f.c.perRow)
+	-- Collapse button only if something can be hidden
+	if collapseEnabled() and hideableCount > 0 then f.collapse:Show() else f.collapse:Hide() end
+	f.collapse:SetChecked(B.expanded)
+	B.orientCollapse()
+	if r.tooltipFrame:IsShown() then B.fillTooltip() end
+	-- Watch for hidden buffs that drop under 90 s and return to the bar
+	f.pending = (not isOpen and hideableCount > 0) and G.check or nil
 end
 
-function B.majDebuffs()
+function B.updateDebuffs()
 	local f = B.debuffs
-	local liste = {}
-	auras(B.unite(), "HARMFUL", f.c.max, liste)
-	deshonneur(liste)
-	f.auras = liste
-	local ranges = {}
-	for i, b in ipairs(f.boutons) do
-		local info = liste[i]
+	local list = {}
+	auras(B.unit(), "HARMFUL", f.c.max, list)
+	dishonor(list)
+	f.auras = list
+	local toPlace = {}
+	for i, b in ipairs(f.buttons) do
+		local info = list[i]
 		if info then
-			B.remplir(b, info, f.c.typeVisible)
+			B.populate(b, info, f.c.showType)
 			b:Show()
-			table.insert(ranges, b)
+			table.insert(toPlace, b)
 		else
 			b.info = nil
 			b:SetScript("OnUpdate", nil)
 			b:Hide()
 		end
 	end
-	ranger(f.conteneur, ranges, f.c.parLigne)
+	arrange(f.container, toPlace, f.c.perRow)
 end
 
-function B.maj()
-	B.majBuffs()
-	B.majDebuffs()
+function B.update()
+	B.updateBuffs()
+	B.updateDebuffs()
 end
 
--- ------------------------------------------------------------ la construction
+-- ---------- Build
 
-B.buffs = creerBarre("buffs")
-B.debuffs = creerBarre("debuffs")
-creerRepli(B.buffs)
-creerRegroupement(B.buffs)
-B.orienterRepli()
-B.debuffs.conteneur:SetPoint("TOPRIGHT", B.debuffs, "TOPRIGHT", 0, 0)
+B.buffs = createBar("buffs")
+B.debuffs = createBar("debuffs")
+createCollapse(B.buffs)
+createConsolidation(B.buffs)
+B.orientCollapse()
+B.debuffs.container:SetPoint("TOPRIGHT", B.debuffs, "TOPRIGHT", 0, 0)
 
-for _, cle in ipairs({ "buffs", "debuffs" }) do
-	local c = BARRES[cle]
-	ForeverUI.Layout.Register(B[cle], cle, c.libelle, "TOPRIGHT", "TOPRIGHT", c.x, c.y)
+for _, key in ipairs({ "buffs", "debuffs" }) do
+	local c = BARS[key]
+	ForeverUI.Layout.Register(B[key], key, c.caption, "TOPRIGHT", "TOPRIGHT", c.x, c.y)
 end
 
--- le BuffFrame du client, ses enchantements, son regroupement
-for _, nom in ipairs({ "BuffFrame", "TemporaryEnchantFrame", "ConsolidatedBuffs", "ConsolidatedBuffsTooltip" }) do
-	ForeverUI.Suppress(_G[nom])
+-- The client's BuffFrame, weapon enchants and consolidation
+for _, name in ipairs({ "BuffFrame", "TemporaryEnchantFrame", "ConsolidatedBuffs", "ConsolidatedBuffsTooltip" }) do
+	ForeverUI.Suppress(_G[name])
 end
 
--- les options de l'interface (durees, regroupement) passent par ces deux-la
-if BuffFrame_UpdatePositions then hooksecurefunc("BuffFrame_UpdatePositions", function() B.maj() end) end
-if BuffFrame_Update then hooksecurefunc("BuffFrame_Update", function() B.maj() end) end
+-- Interface options (durations, consolidation) go through these two
+if BuffFrame_UpdatePositions then hooksecurefunc("BuffFrame_UpdatePositions", function() B.update() end) end
+if BuffFrame_Update then hooksecurefunc("BuffFrame_Update", function() B.update() end) end
 
-local veille = CreateFrame("Frame")
-veille:RegisterEvent("UNIT_AURA")
-veille:RegisterEvent("PLAYER_ENTERING_WORLD")
-veille:RegisterEvent("UNIT_ENTERED_VEHICLE")
-veille:RegisterEvent("UNIT_EXITED_VEHICLE")
-veille:SetScript("OnEvent", function(self, evenement, unite)
-	if evenement == "UNIT_AURA" then
-		if unite == B.unite() then B.maj() end
-	elseif evenement == "PLAYER_ENTERING_WORLD" or unite == "player" then
-		B.maj()
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("UNIT_AURA")
+watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+watcher:RegisterEvent("UNIT_ENTERED_VEHICLE")
+watcher:RegisterEvent("UNIT_EXITED_VEHICLE")
+watcher:SetScript("OnEvent", function(self, event, unit)
+	if event == "UNIT_AURA" then
+		if unit == B.unit() then B.update() end
+	elseif event == "PLAYER_ENTERING_WORLD" or unit == "player" then
+		B.update()
 	end
 end)
 
--- toutes les 0,2 s : les enchantements d'arme (3.3.5 n'a pas d'evenement,
--- son TemporaryEnchantFrame les lit a chaque image) et les ameliorations
--- qui retombent dans la barre repliee
-local function signatureEnchants()
-	if B.unite() ~= "player" then return "" end
+-- Every 0.2 s: weapon enchants (3.3.5 has no event; its TemporaryEnchantFrame polls every
+-- frame) and hidden buffs that return to the collapsed bar.
+local function enchantsSignature()
+	if B.unit() ~= "player" then return "" end
 	local a, _, ca, g, _, cg = GetWeaponEnchantInfo()
 	return tostring(a) .. ":" .. tostring(ca) .. ":" .. tostring(GetInventoryItemTexture("player", 16))
 		.. "|" .. tostring(g) .. ":" .. tostring(cg) .. ":" .. tostring(GetInventoryItemTexture("player", 17))
 end
 
-veille.temps = 0
-veille:SetScript("OnUpdate", function(self, ecoule)
-	self.temps = self.temps - (ecoule or 0)
-	if self.temps > 0 then return end
-	self.temps = G.verifier
-	local s = signatureEnchants()
+watcher.clock = 0
+watcher:SetScript("OnUpdate", function(self, elapsed)
+	self.clock = self.clock - (elapsed or 0)
+	if self.clock > 0 then return end
+	self.clock = G.check
+	local s = enchantsSignature()
 	if s ~= self.enchants then
 		self.enchants = s
-		B.maj()
+		B.update()
 		return
 	end
 	local f = B.buffs
-	if f.attente then
-		local maintenant = GetTime()
+	if f.pending then
+		local now = GetTime()
 		for _, info in ipairs(f.auras) do
-			if info.cachable and info.expirationTime and info.expirationTime > 0
-				and (info.expirationTime - maintenant) <= G.alerteDuree then
-				B.maj()
+			if info.hideable and info.expirationTime and info.expirationTime > 0
+				and (info.expirationTime - now) <= G.alertDuration then
+				B.update()
 				return
 			end
 		end
 	end
 end)
-B.veille = veille
+B.watcher = watcher
 
-B.maj()
+B.update()
 
--- TEMOIN -- /fui buffs
+-- /fui buffs: prints the state of both bars.
 function ForeverUI.BuffsDebug()
-	local dire = function(t) DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t) end
+	local say = function(t) DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. t) end
 	local f = B.buffs
-	local montres = 0
-	for _, b in ipairs(f.boutons) do if b:IsShown() then montres = montres + 1 end end
-	dire(string.format(L.BUFFS_DEBUG_BUFFS,
-		B.unite(), #f.auras, f.cachables or 0, montres, f.repli:IsShown() and L.BUFFS_DEBUG_VISIBLE or L.BUFFS_DEBUG_HIDDEN, tostring(B.deplie),
-		f.regroupement:IsShown() and L.BUFFS_DEBUG_VISIBLE or L.BUFFS_DEBUG_HIDDEN, f.regroupement.nombre or 0, tostring(durees())))
+	local shownItems = 0
+	for _, b in ipairs(f.buttons) do if b:IsShown() then shownItems = shownItems + 1 end end
+	say(string.format(L.BUFFS_DEBUG_BUFFS,
+		B.unit(), #f.auras, f.hideableCount or 0, shownItems, f.collapse:IsShown() and L.BUFFS_DEBUG_VISIBLE or L.BUFFS_DEBUG_HIDDEN, tostring(B.expanded),
+		f.consolidated:IsShown() and L.BUFFS_DEBUG_VISIBLE or L.BUFFS_DEBUG_HIDDEN, f.consolidated.count or 0, tostring(durations())))
 	local d = B.debuffs
 	local types = {}
 	for _, info in ipairs(d.auras) do table.insert(types, tostring(info.debuffType or NONE)) end
-	dire(string.format(L.BUFFS_DEBUG_DEBUFFS, #d.auras, table.concat(types, ", ")))
+	say(string.format(L.BUFFS_DEBUG_DEBUFFS, #d.auras, table.concat(types, ", ")))
 end

@@ -1,179 +1,131 @@
--- ForeverUI : le choix d'icone d'un ensemble d'equipement.
---
--- RELEVE -- camelot, IconSelectorPopupFrameTemplate
--- (blizzard_sharedxml/mainline/SharedUIPanelTemplates.xml) :
---   fenetre            525 x 495
---   intitule du champ  TOPLEFT (24, -21)
---   champ de nom       182 x 20, TOPLEFT (29, -35), 16 lettres
---   "Choose an Icon:"  TOPLEFT (24, -79)
---   zone du choix      275 x 45, TOPRIGHT (-13, -13) ; son bouton d'icone
---                      fait 36, TOPRIGHT (-4,5 ; -3,5), avec deux lignes a
---                      sa gauche : ICON_SELECTION_TITLE_CURRENT et sa
---                      description
---   grille             494 x 361, TOPLEFT (21, -97)
---
--- RELEVE -- ScrollBoxSelectorMixin (blizzard_sharedxml/shared/selector) :
---   GetStride          10   -- dix icones par rangee
---   GetButtonHeight    36   -- et la largeur suit
---   GetPadding         haut 5, bas 5, gauche 5, droite 5, ecarts 10 et 10
---
--- CE QUE LE CLIENT PORTE. GearManagerDialogPopup, 297 x 254, avec
--- GearManagerDialogPopupButton1..NUM_GEARSET_ICONS_SHOWN poses en grille de
--- NUM_GEARSET_ICONS_PER_ROW, un FauxScrollFrame, un champ de nom de 182 x 20
--- deja limite a 16 lettres, et les boutons Okay et Cancel.
---
--- TOUT SON REMPLISSAGE PASSE PAR QUATRE GLOBALES --
--- NUM_GEARSET_ICONS_PER_ROW, NUM_GEARSET_ICON_ROWS, NUM_GEARSET_ICONS_SHOWN
--- et GEARSET_ICON_ROW_HEIGHT -- qu'on N'ECRIT PAS : ecrites par l'addon,
--- elles passeraient a l'addon, et avec elles tout le code du client qui les
--- lit (2026-09-26, le code doit etre propre). Le client remplit donc sa
--- grille de cinq, et on repasse derriere lui :
---   remplir   apres GearManagerDialogPopup_Update : nos dix par rangee, la
---             meme numerotation que lui (les objets portes, puis les icones
---             de macro, puis l'icone speciale) -- GetEquipmentSetIconInfo --
---             et le defilement compte en rangees de dix, au pas du client
---             (GEARSET_ICON_ROW_HEIGHT, qu'on lit seulement)
---   choisir   GearSetPopupButton_OnClick retient offset x 5 + GetID() :
---             chaque bouton porte donc l'identifiant qui, par ce calcul,
---             tombe sur l'icone qu'il montre -- offset x (10 - 5) + i
---   recaler   apres RecalculateGearManagerDialogPopup : le defilement
---             jusqu'a l'icone retenue, par sa regle, en rangees de dix
---
--- CE QUI DIFFERE, ET POURQUOI.
---   Le client ne cree que quinze boutons, au chargement. Il en faut quatre-
---   vingts : les soixante-cinq manquants sont crees ici, sur SON gabarit
---   (GearSetPopupButtonTemplate), et tous sont reposes en grille de dix.
---   La barre de defilement reste celle de 3.3.5 : MinimalScrollBar n'est pas
---   portee.
---   ICON_SELECTION_TITLE_CURRENT et sa description n'existent pas dans ce
---   client. Les deux lignes viennent de la table des textes, comme "New Set".
+-- Icon picker of equipment sets (GearManagerDialogPopup) in the layout of camelot
+-- IconSelectorPopupFrameTemplate (SharedUIPanelTemplates.xml) and ScrollBoxSelectorMixin.
+-- The client fills a grid of 5 per row through the NUM_GEARSET_ICON* globals. Writing them
+-- from the addon would taint every client function that reads them, so the client fills its
+-- grid and we redo it after it in rows of 10 (populate, realign).
 
 ForeverUI = ForeverUI or {}
 local L = ForeverUI.L
 
--- ECART ASSUME, sur demande : la fenetre prend la HAUTEUR DE LA FEUILLE de
--- personnage, et non les 495 de camelot. Le nombre de rangees s'en deduit :
--- de la grille (-97) au socle des boutons il reste de quoi en poser sept.
-local POPUP_L, POPUP_H = 525, 484
-local ENTETE_X, ENTETE_Y = 24, -21
-local CHAMP_X, CHAMP_Y = 29, -35
-local CHOISIR_X, CHOISIR_Y = 24, -79
+-- Positions from camelot IconSelectorPopupFrameTemplate. The window takes the character
+-- sheet's height instead of camelot's 495; from the grid (-97) to the button base, seven
+-- rows fit.
+local POPUP_W, POPUP_H = 525, 484
+local HEADER_X, HEADER_Y = 24, -21
+local FIELD_X, FIELD_Y = 29, -35
+local CHOOSE_X, CHOOSE_Y = 24, -79
 
-local ZONE_L, ZONE_H = 275, 45
+local ZONE_W, ZONE_H = 275, 45
 local ZONE_X, ZONE_Y = -13, -13
-local CHOIX_ICONE = 36
-local CHOIX_X, CHOIX_Y = -4.5, -3.5
+local CHOICE_ICON = 36
+local CHOICE_X, CHOICE_Y = -4.5, -3.5
 
-local GRILLE_X, GRILLE_Y = 21, -97
-local ICONE = 36
-local PAR_RANGEE = 10
-local RANGEES = 7
-local ECART = 10
-local MARGE = 5
-local PAS = ICONE + ECART
+-- camelot ScrollBoxSelectorMixin: stride 10, button 36, padding 5, spacing 10
+local GRID_X, GRID_Y = 21, -97
+local ICON = 36
+local PER_ROW = 10
+local ROWS = 7
+local GAP = 10
+local MARGIN = 5
+local STEP = ICON + GAP
 
--- RELEVE -- SelectionFrameTemplate, qui porte justement cet encadrement :
---   CancelButton  78 x 22, BOTTOMRIGHT (-11, 13)
---   OkayButton    78 x 22, RIGHT sur le LEFT de Cancel, x = -2
--- Ce sont les deux creux du coin bas droit de l'image : ils y tombent
--- pile, et c'est la source qui le dit -- inutile de mesurer le socle.
-local BOUTON_BAS_L, BOUTON_BAS_H = 78, 22
-local BOUTON_BAS_X, BOUTON_BAS_Y = -11, 13
-local BOUTON_BAS_ECART = -2
-local BORD_DROIT = 17                   -- la largeur de !macropopup-right
+-- camelot SelectionFrameTemplate buttons: Cancel 78 x 22 at BOTTOMRIGHT (-11, 13), Okay at
+-- its left (x = -2). They fall exactly in the two slots of the bottom right corner art.
+local BOTTOM_BUTTON_W, BOTTOM_BUTTON_H = 78, 22
+local BOTTOM_BUTTON_X, BOTTOM_BUTTON_Y = -11, 13
+local BOTTOM_BUTTON_GAP = -2
+local RIGHT_EDGE = 17                   -- width of !macropopup-right
 
--- L'habillage : fond, encadrement et barre. Declares ici parce que la pose
--- de la fenetre s'en sert pour centrer la barre dans l'espace qui reste.
-local FOND_ALPHA = 0.8
-local FOND_MARGE = 7
-local BARRE_L = 8
-local FLECHE_L, FLECHE_H = 17, 11
-local CURSEUR_H = 36                    -- minimal-scrollbar-thumb-bottom
+-- Skin sizes (background, frame, bar). Declared here because placeWindow uses them to
+-- center the bar in the remaining space.
+local BACKGROUND_ALPHA = 0.8
+local BACKGROUND_MARGIN = 7
+local BAR_W = 8
+local ARROW_W, ARROW_H = 17, 11
+local CURSOR_H = 36                    -- minimal-scrollbar-thumb-bottom
 
-local monte = false
+local built = false
 
-local AFFICHES = PAR_RANGEE * RANGEES
+local SHOWN_COUNT = PER_ROW * ROWS
 
--- Les boutons manquants, sur le gabarit du client, puis toute la grille
--- reposee en rangees de dix.
-local function poserGrille(popup)
-	for index = #popup.buttons + 1, AFFICHES do
-		local bouton = CreateFrame("CheckButton",
+-- Creates the missing buttons on the client's template (the client makes only fifteen, at
+-- load), then lays out the whole grid in rows of ten.
+local function layoutGrid(popup)
+	for index = #popup.buttons + 1, SHOWN_COUNT do
+		local button = CreateFrame("CheckButton",
 			"GearManagerDialogPopupButton" .. index, popup,
 			"GearSetPopupButtonTemplate")
-		bouton:SetID(index)
-		table.insert(popup.buttons, bouton)
+		button:SetID(index)
+		table.insert(popup.buttons, button)
 	end
 
-	for index, bouton in ipairs(popup.buttons) do
-		bouton:SetWidth(ICONE)
-		bouton:SetHeight(ICONE)
-		bouton:ClearAllPoints()
+	for index, button in ipairs(popup.buttons) do
+		button:SetWidth(ICON)
+		button:SetHeight(ICON)
+		button:ClearAllPoints()
 		if index == 1 then
-			bouton:SetPoint("TOPLEFT", popup, "TOPLEFT",
-				GRILLE_X + MARGE, GRILLE_Y - MARGE)
-		elseif math.fmod(index - 1, PAR_RANGEE) == 0 then
-			bouton:SetPoint("TOPLEFT", popup.buttons[index - PAR_RANGEE],
-				"BOTTOMLEFT", 0, -ECART)
+			button:SetPoint("TOPLEFT", popup, "TOPLEFT",
+				GRID_X + MARGIN, GRID_Y - MARGIN)
+		elseif math.fmod(index - 1, PER_ROW) == 0 then
+			button:SetPoint("TOPLEFT", popup.buttons[index - PER_ROW],
+				"BOTTOMLEFT", 0, -GAP)
 		else
-			bouton:SetPoint("TOPLEFT", popup.buttons[index - 1], "TOPRIGHT",
-				ECART, 0)
+			button:SetPoint("TOPLEFT", popup.buttons[index - 1], "TOPRIGHT",
+				GAP, 0)
 		end
 	end
 end
 
--- LA ZONE DU CHOIX COURANT. camelot y montre l'icone retenue et invite a
--- cliquer pour la retrouver dans la liste ; 3.3.5 sait deja faire ce saut,
--- c'est RecalculateGearManagerDialogPopup qui deplace le defilement jusqu'a
--- elle.
-local function poserChoixCourant(popup)
-	if popup.foreverChoix then
+-- Current choice zone. camelot shows the selected icon and a click scrolls the list to it;
+-- 3.3.5 does this jump with RecalculateGearManagerDialogPopup.
+local function placeCurrentChoice(popup)
+	if popup.foreverChoice then
 		return
 	end
 
 	local zone = CreateFrame("Frame", "ForeverUIIconChoice", popup)
-	zone:SetWidth(ZONE_L)
+	zone:SetWidth(ZONE_W)
 	zone:SetHeight(ZONE_H)
 	zone:SetPoint("TOPRIGHT", popup, "TOPRIGHT", ZONE_X, ZONE_Y)
 
-	local bouton = CreateFrame("Button", "ForeverUIIconChoiceButton", zone)
-	bouton:SetWidth(CHOIX_ICONE)
-	bouton:SetHeight(CHOIX_ICONE)
-	bouton:SetPoint("TOPRIGHT", zone, "TOPRIGHT", CHOIX_X, CHOIX_Y)
+	local button = CreateFrame("Button", "ForeverUIIconChoiceButton", zone)
+	button:SetWidth(CHOICE_ICON)
+	button:SetHeight(CHOICE_ICON)
+	button:SetPoint("TOPRIGHT", zone, "TOPRIGHT", CHOICE_X, CHOICE_Y)
 
-	local icone = bouton:CreateTexture(nil, "ARTWORK")
-	icone:SetAllPoints(bouton)
-	bouton.icone = icone
+	local icon = button:CreateTexture(nil, "ARTWORK")
+	icon:SetAllPoints(button)
+	button.icon = icon
 
-	local surlignage = bouton:CreateTexture(nil, "HIGHLIGHT")
-	surlignage:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-	surlignage:SetBlendMode("ADD")
-	surlignage:SetAllPoints(bouton)
+	local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+	highlight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+	highlight:SetBlendMode("ADD")
+	highlight:SetAllPoints(button)
 
-	-- Dans la table des textes : ICON_SELECTION_TITLE_CURRENT et sa
-	-- description n'existent pas dans ce client.
-	local titre = zone:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	titre:SetPoint("TOPRIGHT", bouton, "TOPLEFT", -6, -2)
-	titre:SetText(L.ICONPICKER_CURRENTLY_SELECTED)
+	-- From the text table: ICON_SELECTION_TITLE_CURRENT and its description are missing from
+	-- this client.
+	local title = zone:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	title:SetPoint("TOPRIGHT", button, "TOPLEFT", -6, -2)
+	title:SetText(L.ICONPICKER_CURRENTLY_SELECTED)
 
-	local aide = zone:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	aide:SetPoint("TOPRIGHT", titre, "BOTTOMRIGHT", 0, -2)
-	aide:SetText(L.ICONPICKER_CLICK_TO_VIEW)
+	local help = zone:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	help:SetPoint("TOPRIGHT", title, "BOTTOMRIGHT", 0, -2)
+	help:SetText(L.ICONPICKER_CLICK_TO_VIEW)
 
-	bouton:SetScript("OnClick", function()
+	button:SetScript("OnClick", function()
 		if RecalculateGearManagerDialogPopup then
 			RecalculateGearManagerDialogPopup()
 		end
 	end)
 
-	popup.foreverChoix = bouton
+	popup.foreverChoice = button
 	popup.foreverZone = zone
 end
 
--- L'icone montree dans la zone suit ce que le client a retenu.
-local function majChoixCourant()
+-- The icon shown in the zone follows the client's selection.
+local function updateCurrentChoice()
 	local popup = _G["GearManagerDialogPopup"]
-	if not popup or not popup.foreverChoix then
+	if not popup or not popup.foreverChoice then
 		return
 	end
 
@@ -181,82 +133,79 @@ local function majChoixCourant()
 	if not texture and popup.selectedIcon and GetEquipmentSetIconInfo then
 		texture = GetEquipmentSetIconInfo(popup.selectedIcon)
 	end
-	popup.foreverChoix.icone:SetTexture(texture or "")
+	popup.foreverChoice.icon:SetTexture(texture or "")
 end
-ForeverUI.IconPickerRefresh = majChoixCourant
 
-local function poserFenetre(popup)
-	local feuille = _G["CharacterFrame"]
-	popup:SetWidth(POPUP_L)
-	popup:SetHeight((feuille and feuille:GetHeight()) or POPUP_H)
+-- Sizes the window and places the client's name field, labels, scroll frame and buttons
+local function placeWindow(popup)
+	local sheet = _G["CharacterFrame"]
+	popup:SetWidth(POPUP_W)
+	popup:SetHeight((sheet and sheet:GetHeight()) or POPUP_H)
 
-	local champ = _G["GearManagerDialogPopupEditBox"]
-	if champ then
-		champ:ClearAllPoints()
-		champ:SetPoint("TOPLEFT", popup, "TOPLEFT", CHAMP_X, CHAMP_Y)
+	local field = _G["GearManagerDialogPopupEditBox"]
+	if field then
+		field:ClearAllPoints()
+		field:SetPoint("TOPLEFT", popup, "TOPLEFT", FIELD_X, FIELD_Y)
 	end
 
-	-- Les deux intitules du client sont des regions sans nom : on les
-	-- retrouve par leur texte, qui vient de GEARSETS_POPUP_TEXT et de
-	-- MACRO_POPUP_CHOOSE_ICON.
+	-- The two client labels are unnamed regions, found by their text (GEARSETS_POPUP_TEXT and
+	-- MACRO_POPUP_CHOOSE_ICON).
 	local regions = { popup:GetRegions() }
 	for _, region in ipairs(regions) do
 		if region.GetObjectType and region:GetObjectType() == "FontString" then
-			local texte = region:GetText()
+			local text = region:GetText()
 			region:ClearAllPoints()
-			if texte == MACRO_POPUP_CHOOSE_ICON then
-				region:SetPoint("TOPLEFT", popup, "TOPLEFT", CHOISIR_X, CHOISIR_Y)
+			if text == MACRO_POPUP_CHOOSE_ICON then
+				region:SetPoint("TOPLEFT", popup, "TOPLEFT", CHOOSE_X, CHOOSE_Y)
 			else
-				region:SetPoint("TOPLEFT", popup, "TOPLEFT", ENTETE_X, ENTETE_Y)
+				region:SetPoint("TOPLEFT", popup, "TOPLEFT", HEADER_X, HEADER_Y)
 			end
 		end
 	end
 
-	local defilement = _G["GearManagerDialogPopupScrollFrame"]
-	if defilement then
-		defilement:SetWidth(PAR_RANGEE * PAS - ECART + 2 * MARGE)
-		defilement:SetHeight(RANGEES * PAS - ECART + 2 * MARGE)
-		defilement:ClearAllPoints()
-		defilement:SetPoint("TOPLEFT", popup, "TOPLEFT", GRILLE_X, GRILLE_Y)
+	local scrolling = _G["GearManagerDialogPopupScrollFrame"]
+	if scrolling then
+		scrolling:SetWidth(PER_ROW * STEP - GAP + 2 * MARGIN)
+		scrolling:SetHeight(ROWS * STEP - GAP + 2 * MARGIN)
+		scrolling:ClearAllPoints()
+		scrolling:SetPoint("TOPLEFT", popup, "TOPLEFT", GRID_X, GRID_Y)
 	end
 
-	-- AUTANT D'ESPACE DE PART ET D'AUTRE DE LA BARRE. Sur demande : le
-	-- meme ecart entre la derniere colonne d'icones et la barre qu'entre la
-	-- barre et le bord de la fenetre. Il se calcule, il n'est pas ecrit :
-	-- si la grille ou la fenetre changent, il suit.
-	local barre = _G["GearManagerDialogPopupScrollFrameScrollBar"]
-	if barre then
-		local droiteIcones = GRILLE_X + MARGE + PAR_RANGEE * PAS - ECART
-		local libre = (POPUP_L - BORD_DROIT) - droiteIcones
-		local ecart = (libre - BARRE_L) / 2
-		barre:ClearAllPoints()
-		barre:SetPoint("TOPRIGHT", popup, "TOPRIGHT",
-			-(BORD_DROIT + ecart), GRILLE_Y - MARGE)
-		barre:SetPoint("BOTTOMRIGHT", popup, "TOPRIGHT",
-			-(BORD_DROIT + ecart), GRILLE_Y - MARGE - (RANGEES * PAS - ECART))
+	-- Same space on both sides of the bar: between the last icon column and the bar, and
+	-- between the bar and the window edge. It is computed, so it follows the grid and window.
+	local bar = _G["GearManagerDialogPopupScrollFrameScrollBar"]
+	if bar then
+		local iconsRight = GRID_X + MARGIN + PER_ROW * STEP - GAP
+		local free = (POPUP_W - RIGHT_EDGE) - iconsRight
+		local gap = (free - BAR_W) / 2
+		bar:ClearAllPoints()
+		bar:SetPoint("TOPRIGHT", popup, "TOPRIGHT",
+			-(RIGHT_EDGE + gap), GRID_Y - MARGIN)
+		bar:SetPoint("BOTTOMRIGHT", popup, "TOPRIGHT",
+			-(RIGHT_EDGE + gap), GRID_Y - MARGIN - (ROWS * STEP - GAP))
 	end
 
 	local okay = _G["GearManagerDialogPopupOkay"]
-	local annuler = _G["GearManagerDialogPopupCancel"]
-	if annuler then
-		annuler:SetWidth(BOUTON_BAS_L)
-		annuler:SetHeight(BOUTON_BAS_H)
-		annuler:ClearAllPoints()
-		annuler:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT",
-			BOUTON_BAS_X, BOUTON_BAS_Y)
+	local cancel = _G["GearManagerDialogPopupCancel"]
+	if cancel then
+		cancel:SetWidth(BOTTOM_BUTTON_W)
+		cancel:SetHeight(BOTTOM_BUTTON_H)
+		cancel:ClearAllPoints()
+		cancel:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT",
+			BOTTOM_BUTTON_X, BOTTOM_BUTTON_Y)
 	end
-	if okay and annuler then
-		okay:SetWidth(BOUTON_BAS_L)
-		okay:SetHeight(BOUTON_BAS_H)
+	if okay and cancel then
+		okay:SetWidth(BOTTOM_BUTTON_W)
+		okay:SetHeight(BOTTOM_BUTTON_H)
 		okay:ClearAllPoints()
-		okay:SetPoint("RIGHT", annuler, "LEFT", BOUTON_BAS_ECART, 0)
+		okay:SetPoint("RIGHT", cancel, "LEFT", BOTTOM_BUTTON_GAP, 0)
 	end
 end
 
--- ------------------------------------------------------------ le remplissage
+-- ------------------------------------------------------------ filling
 
--- les objets portes a icone, comme RefreshEquipmentSetIconInfo
-local function objetsPortes()
+-- Equipped items with an icon, like RefreshEquipmentSetIconInfo
+local function countEquippedItems()
 	local n = 0
 	for i = INVSLOT_FIRST_EQUIPPED, INVSLOT_LAST_EQUIPPED do
 		if GetInventoryItemTexture("player", i) then n = n + 1 end
@@ -264,132 +213,120 @@ local function objetsPortes()
 	return n
 end
 
--- le compte du client (_TotalItems) : objets, icones de macro, et l'icone
--- speciale quand RecalculateGearManagerDialogPopup en a pose une
-local function compter()
-	local base = objetsPortes() + GetNumMacroIcons()
+-- The client's count (_TotalItems): items, macro icons, and the special icon when
+-- RecalculateGearManagerDialogPopup has set one
+local function tally()
+	local base = countEquippedItems() + GetNumMacroIcons()
 	if GetEquipmentSetIconInfo(base + 1) then
 		base = base + 1
 	end
 	return base
 end
 
-local enCours = false
+local inProgress = false
 
--- apres GearManagerDialogPopup_Update : la grille de dix
-local function remplir()
+-- After GearManagerDialogPopup_Update: refill as a grid of ten. Each button's ID is set so
+-- that GearSetPopupButton_OnClick (offset x 5 + ID) lands on the icon it shows. Scrolling
+-- counts rows of ten with the client's GEARSET_ICON_ROW_HEIGHT (read only).
+local function populate()
 	local popup = _G["GearManagerDialogPopup"]
-	local defilement = _G["GearManagerDialogPopupScrollFrame"]
-	if enCours or not (monte and popup and defilement and popup.buttons) then
+	local scrolling = _G["GearManagerDialogPopupScrollFrame"]
+	if inProgress or not (built and popup and scrolling and popup.buttons) then
 		return
 	end
-	enCours = true
-	local offset = FauxScrollFrame_GetOffset(defilement) or 0
-	local total = compter()
-	local cinq = NUM_GEARSET_ICONS_PER_ROW or 5
-	for i, bouton in ipairs(popup.buttons) do
-		local index = offset * PAR_RANGEE + i
-		bouton:SetID(offset * (PAR_RANGEE - cinq) + i)
-		if i <= AFFICHES and index <= total then
+	inProgress = true
+	local offset = FauxScrollFrame_GetOffset(scrolling) or 0
+	local total = tally()
+	local clientPerRow = NUM_GEARSET_ICONS_PER_ROW or 5
+	for i, button in ipairs(popup.buttons) do
+		local index = offset * PER_ROW + i
+		button:SetID(offset * (PER_ROW - clientPerRow) + i)
+		if i <= SHOWN_COUNT and index <= total then
 			local texture = GetEquipmentSetIconInfo(index)
-			bouton.icon:SetTexture(texture)
-			bouton:Show()
+			button.icon:SetTexture(texture)
+			button:Show()
 			if index == popup.selectedIcon then
-				bouton:SetChecked(1)
+				button:SetChecked(1)
 			elseif texture and texture == popup.selectedTexture then
-				bouton:SetChecked(1)
+				button:SetChecked(1)
 				popup:SetSelection(false, index)
 			else
-				bouton:SetChecked(nil)
+				button:SetChecked(nil)
 			end
 		else
-			bouton.icon:SetTexture("")
-			bouton:Hide()
+			button.icon:SetTexture("")
+			button:Hide()
 		end
 	end
-	FauxScrollFrame_Update(defilement, math.ceil(total / PAR_RANGEE), RANGEES, GEARSET_ICON_ROW_HEIGHT)
-	enCours = false
+	FauxScrollFrame_Update(scrolling, math.ceil(total / PER_ROW), ROWS, GEARSET_ICON_ROW_HEIGHT)
+	inProgress = false
 end
 
--- apres RecalculateGearManagerDialogPopup : l'icone retenue dans la vue,
--- par la regle du client (au moins RANGEES rangees montrees, et rien a
--- deplacer si elle est dans la premiere page)
-local function recaler()
+-- After RecalculateGearManagerDialogPopup: scroll the selected icon into view with the
+-- client's rule (at least ROWS rows shown, no move if it is on the first page)
+local function realign()
 	local popup = _G["GearManagerDialogPopup"]
-	local defilement = _G["GearManagerDialogPopupScrollFrame"]
-	if not (monte and popup and defilement) then
+	local scrolling = _G["GearManagerDialogPopupScrollFrame"]
+	if not (built and popup and scrolling) then
 		return
 	end
-	local total = compter()
-	local trouve = popup.selectedIcon
-	if not trouve and popup.selectedTexture then
+	local total = tally()
+	local match = popup.selectedIcon
+	if not match and popup.selectedTexture then
 		for index = 1, total do
 			if GetEquipmentSetIconInfo(index) == popup.selectedTexture then
-				trouve = index
+				match = index
 				break
 			end
 		end
 	end
-	if trouve then
-		local derniere = math.floor((total - 1) / PAR_RANGEE)
-		local rangee = math.floor((trouve - 1) / PAR_RANGEE)
-		rangee = rangee + math.min(RANGEES - 1, derniere - rangee) - (RANGEES - 1)
-		if trouve <= AFFICHES then
-			rangee = 0
+	if match then
+		local last = math.floor((total - 1) / PER_ROW)
+		local rowLine = math.floor((match - 1) / PER_ROW)
+		rowLine = rowLine + math.min(ROWS - 1, last - rowLine) - (ROWS - 1)
+		if match <= SHOWN_COUNT then
+			rowLine = 0
 		end
-		FauxScrollFrame_OnVerticalScroll(defilement, rangee * GEARSET_ICON_ROW_HEIGHT, GEARSET_ICON_ROW_HEIGHT, nil)
+		FauxScrollFrame_OnVerticalScroll(scrolling, rowLine * GEARSET_ICON_ROW_HEIGHT, GEARSET_ICON_ROW_HEIGHT, nil)
 	end
-	remplir()
+	populate()
 end
-ForeverUI.IconPickerFill = remplir
 
-local function habiller()
+-- Builds the grid and choice zone once, then applies the skin; skipped in combat
+local function applySkin()
 	local popup = _G["GearManagerDialogPopup"]
 	if not popup or not popup.buttons or InCombatLockdown() then
 		return
 	end
 
-	if not monte then
-		poserGrille(popup)
-		poserChoixCourant(popup)
-		poserFenetre(popup)
-		monte = true
+	if not built then
+		layoutGrid(popup)
+		placeCurrentChoice(popup)
+		placeWindow(popup)
+		built = true
 	end
 
 	if ForeverUI.IconPickerSkin then
 		ForeverUI.IconPickerSkin()
 	end
-	majChoixCourant()
+	updateCurrentChoice()
 end
 
-ForeverUI.IconPicker = { Apply = habiller }
+ForeverUI.IconPicker = { Apply = applySkin }
 
--- ============================================================ l'habillage
+-- ============================================================ skin
 --
--- RELEVE -- camelot. La fenetre s'ancre en TOPLEFT sur le TOPRIGHT de ce
--- qu'elle accompagne : ici la feuille de personnage. Son fond est une
--- texture NOIRE a 80 %, de TOPLEFT (7, -7) a BOTTOMRIGHT (-7, 7). Son
--- encadrement est SelectionFrameTemplate, un neuf-tranches dont les huit
--- morceaux sont les atlas macropopup-* :
---
---   coin haut gauche / droit   18 x 71
---   coin bas gauche            18 x 39
---   coin bas droit            174 x 39   -- il porte le socle des boutons
---   bord haut                 256 x 68
---   bord bas                  256 x 39
---   bords gauche et droit      17 x 256
---
--- La barre de defilement est MinimalScrollBar : 8 de large, une glissiere
--- en trois morceaux (minimal-scrollbar-track-top / -middle / -bottom), un
--- curseur en trois morceaux (minimal-scrollbar-thumb-*) et deux fleches
--- (minimal-scrollbar-arrow-top / -bottom) de 17 x 11.
+-- camelot: black background at 80 %, inset 7; SelectionFrameTemplate frame, a nine-slice
+-- of macropopup-* atlases (the bottom right corner is 174 wide: it holds the button base);
+-- MinimalScrollBar, 8 wide, three-piece track and thumb, 17 x 11 arrows.
 
-local function habillerCadre(popup)
-	if popup.foreverCadre then
+-- Replaces the 3.3.5 window art with the camelot background and frame
+local function skinFrame(popup)
+	if popup.foreverFrame then
 		return
 	end
 
-	-- L'art de fenetre de 3.3.5 s'efface.
+	-- Hide the 3.3.5 window art.
 	local regions = { popup:GetRegions() }
 	for _, region in ipairs(regions) do
 		if region.GetObjectType and region:GetObjectType() == "Texture" then
@@ -397,10 +334,10 @@ local function habillerCadre(popup)
 		end
 	end
 
-	local fond = popup:CreateTexture(nil, "BACKGROUND")
-	fond:SetTexture(0, 0, 0, FOND_ALPHA)
-	fond:SetPoint("TOPLEFT", popup, "TOPLEFT", FOND_MARGE, -FOND_MARGE)
-	fond:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -FOND_MARGE, FOND_MARGE)
+	local background = popup:CreateTexture(nil, "BACKGROUND")
+	background:SetTexture(0, 0, 0, BACKGROUND_ALPHA)
+	background:SetPoint("TOPLEFT", popup, "TOPLEFT", BACKGROUND_MARGIN, -BACKGROUND_MARGIN)
+	background:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -BACKGROUND_MARGIN, BACKGROUND_MARGIN)
 
 	local function piece(atlas, point)
 		local t = popup:CreateTexture(nil, "BORDER")
@@ -413,131 +350,122 @@ local function habillerCadre(popup)
 		return t
 	end
 
-	local hg = piece("macropopup-topleft-c60", "TOPLEFT")
-	local hd = piece("macropopup-topright-c60", "TOPRIGHT")
-	local bg = piece("macropopup-bottomleft-c60", "BOTTOMLEFT")
-	local bd = piece("macropopup-bottomright-c60", "BOTTOMRIGHT")
+	local topLeft = piece("macropopup-topleft-c60", "TOPLEFT")
+	local topRight = piece("macropopup-topright-c60", "TOPRIGHT")
+	local bottomLeft = piece("macropopup-bottomleft-c60", "BOTTOMLEFT")
+	local bottomRight = piece("macropopup-bottomright-c60", "BOTTOMRIGHT")
 
-	local haut = piece("_macropopup-top-c60")
-	haut:SetPoint("TOPLEFT", hg, "TOPRIGHT")
-	haut:SetPoint("TOPRIGHT", hd, "TOPLEFT")
-	local bas = piece("_macropopup-bottom-c60")
-	bas:SetPoint("BOTTOMLEFT", bg, "BOTTOMRIGHT")
-	bas:SetPoint("BOTTOMRIGHT", bd, "BOTTOMLEFT")
-	-- LES BANDES LATERALES GARDENT LEUR LARGEUR D'ATLAS. Les ancrer par
-	-- leurs deux coins opposes les etirerait jusqu'au coin voisin -- et le
-	-- coin BAS DROIT fait 174 de large, puisqu'il porte le socle des
-	-- boutons : la bande droite s'etalait sur 174 au lieu de 17. Deux
-	-- points du MEME cote suffisent, la largeur vient de l'image.
-	local gauche = piece("!macropopup-left-c60")
-	gauche:SetPoint("TOPLEFT", hg, "BOTTOMLEFT")
-	gauche:SetPoint("BOTTOMLEFT", bg, "TOPLEFT")
-	local droite = piece("!macropopup-right-c60")
-	droite:SetPoint("TOPRIGHT", hd, "BOTTOMRIGHT")
-	droite:SetPoint("BOTTOMRIGHT", bd, "TOPRIGHT")
+	local top = piece("_macropopup-top-c60")
+	top:SetPoint("TOPLEFT", topLeft, "TOPRIGHT")
+	top:SetPoint("TOPRIGHT", topRight, "TOPLEFT")
+	local down = piece("_macropopup-bottom-c60")
+	down:SetPoint("BOTTOMLEFT", bottomLeft, "BOTTOMRIGHT")
+	down:SetPoint("BOTTOMRIGHT", bottomRight, "BOTTOMLEFT")
+	-- Side strips keep their atlas width: anchoring them by opposite corners would stretch them
+	-- to the next corner, and the bottom right corner is 174 wide. Two points on the same side
+	-- are enough.
+	local left = piece("!macropopup-left-c60")
+	left:SetPoint("TOPLEFT", topLeft, "BOTTOMLEFT")
+	left:SetPoint("BOTTOMLEFT", bottomLeft, "TOPLEFT")
+	local right = piece("!macropopup-right-c60")
+	right:SetPoint("TOPRIGHT", topRight, "BOTTOMRIGHT")
+	right:SetPoint("BOTTOMRIGHT", bottomRight, "TOPRIGHT")
 
-	popup.foreverCadre = { hg, hd, bg, bd, haut, bas, gauche, droite }
-	popup.foreverFond = fond
+	popup.foreverFrame = { topLeft, topRight, bottomLeft, bottomRight, top, down, left, right }
+	popup.foreverBackground = background
 end
 
--- LA BARRE DE DEFILEMENT. Celle du FauxScrollFrame garde tout son
--- comportement : seules ses textures changent.
-local function habillerBarre()
-	local barre = _G["GearManagerDialogPopupScrollFrameScrollBar"]
-	if not barre or barre.foreverBarre then
+-- Scroll bar: the FauxScrollFrame bar keeps its behavior; only its textures change.
+local function skinBar()
+	local bar = _G["GearManagerDialogPopupScrollFrameScrollBar"]
+	if not bar or bar.foreverBar then
 		return
 	end
 
-	-- L'ENCADREMENT DE LA BARRE N'EST PAS SUR LA BARRE. Le cadre de
-	-- defilement du client porte lui-meme deux textures de 30 de large --
-	-- le contour d'epoque de la glissiere -- qu'effacer les regions de la
-	-- seule barre laissait en place.
-	local cadre = _G["GearManagerDialogPopupScrollFrame"]
-	if cadre then
-		for _, region in ipairs({ cadre:GetRegions() }) do
+	-- The bar's old trim is not on the bar: the client's scroll frame holds two 30-wide
+	-- textures (the track outline), so hide them too.
+	local frame = _G["GearManagerDialogPopupScrollFrame"]
+	if frame then
+		for _, region in ipairs({ frame:GetRegions() }) do
 			if region.GetObjectType and region:GetObjectType() == "Texture" then
 				region:SetAlpha(0)
 			end
 		end
 	end
 
-	barre:SetWidth(BARRE_L)
+	bar:SetWidth(BAR_W)
 
-	-- LE CURSEUR EST UNE REGION DE LA BARRE : il ne doit pas partir avec
-	-- l'art d'epoque. Il etait efface par cette boucle, puis re-texture
-	-- sans qu'on lui rende son alpha -- donc invisible, et la barre
-	-- paraissait cassee.
-	local curseur = _G["GearManagerDialogPopupScrollFrameScrollBarThumbTexture"]
-	for _, region in ipairs({ barre:GetRegions() }) do
-		if region ~= curseur and region.GetObjectType
+	-- The thumb is a region of the bar: keep it out of this loop, or it stays invisible after
+	-- being retextured.
+	local cursor = _G["GearManagerDialogPopupScrollFrameScrollBarThumbTexture"]
+	for _, region in ipairs({ bar:GetRegions() }) do
+		if region ~= cursor and region.GetObjectType
 			and region:GetObjectType() == "Texture" then
 			region:SetAlpha(0)
 		end
 	end
 
-	local function tranche(atlas, couche)
-		local t = barre:CreateTexture(nil, couche or "BACKGROUND")
+	local function slice(atlas, layer)
+		local t = bar:CreateTexture(nil, layer or "BACKGROUND")
 		if not ForeverUI.SetAtlas(t, atlas) then
 			t:Hide()
 		end
-		t:SetWidth(BARRE_L)
+		t:SetWidth(BAR_W)
 		return t
 	end
 
-	local hautG = tranche("minimal-scrollbar-track-top-c60")
-	hautG:SetPoint("TOP", barre, "TOP", 0, 0)
-	local basG = tranche("minimal-scrollbar-track-bottom-c60")
-	basG:SetPoint("BOTTOM", barre, "BOTTOM", 0, 0)
-	local milieuG = tranche("!minimal-scrollbar-track-middle-c60")
-	milieuG:SetPoint("TOPLEFT", hautG, "BOTTOMLEFT")
-	milieuG:SetPoint("BOTTOMRIGHT", basG, "TOPRIGHT")
+	local trackTop = slice("minimal-scrollbar-track-top-c60")
+	trackTop:SetPoint("TOP", bar, "TOP", 0, 0)
+	local bottomLeft = slice("minimal-scrollbar-track-bottom-c60")
+	bottomLeft:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
+	local trackMiddle = slice("!minimal-scrollbar-track-middle-c60")
+	trackMiddle:SetPoint("TOPLEFT", trackTop, "BOTTOMLEFT")
+	trackMiddle:SetPoint("BOTTOMRIGHT", bottomLeft, "TOPRIGHT")
 
-	-- Le client n'a qu'une texture de curseur, la ou camelot en a trois.
-	-- On prend son morceau central, fait pour s'etirer, a la taille du
-	-- curseur le plus court de la source : 8 x 36.
-	if curseur then
-		ForeverUI.SetAtlas(curseur, "minimal-scrollbar-thumb-middle-c60", true)
-		curseur:SetWidth(BARRE_L)
-		curseur:SetHeight(CURSEUR_H)
-		curseur:SetAlpha(1)
+	-- The client has one thumb texture where camelot has three: use the stretchable middle
+	-- piece at the size of camelot's shortest thumb (8 x 36).
+	if cursor then
+		ForeverUI.SetAtlas(cursor, "minimal-scrollbar-thumb-middle-c60", true)
+		cursor:SetWidth(BAR_W)
+		cursor:SetHeight(CURSOR_H)
+		cursor:SetAlpha(1)
 	end
 
-	for nom, atlas in pairs({
+	for name, atlas in pairs({
 		["GearManagerDialogPopupScrollFrameScrollBarScrollUpButton"] =
 			"minimal-scrollbar-arrow-top-c60",
 		["GearManagerDialogPopupScrollFrameScrollBarScrollDownButton"] =
 			"minimal-scrollbar-arrow-bottom-c60",
 	}) do
-		local bouton = _G[nom]
-		if bouton then
-			bouton:SetWidth(FLECHE_L)
-			bouton:SetHeight(FLECHE_H)
-			for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+		local button = _G[name]
+		if button then
+			button:SetWidth(ARROW_W)
+			button:SetHeight(ARROW_H)
+			for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture",
 				"GetDisabledTexture", "GetHighlightTexture" }) do
-				local texture = bouton[methode] and bouton[methode](bouton)
+				local texture = button[method] and button[method](button)
 				if texture then
 					texture:SetAlpha(0)
 				end
 			end
-			local fleche = bouton:CreateTexture(nil, "ARTWORK")
-			ForeverUI.SetAtlas(fleche, atlas)
-			fleche:SetPoint("CENTER", bouton, "CENTER", 0, 0)
+			local arrow = button:CreateTexture(nil, "ARTWORK")
+			ForeverUI.SetAtlas(arrow, atlas)
+			arrow:SetPoint("CENTER", button, "CENTER", 0, 0)
 		end
 	end
 
-	barre.foreverBarre = true
+	bar.foreverBar = true
 end
 
--- A DROITE DE LA FEUILLE DE PERSONNAGE. camelot ancre sa fenetre en TOPLEFT
--- sur le TOPRIGHT de ce qu'elle accompagne ; 3.3.5 la posait sous le
--- gestionnaire, qui n'est plus une fenetre.
-local function poserAcote(popup)
-	local feuille = _G["CharacterFrame"]
-	if not feuille then
+-- Right of the character sheet: camelot anchors its TOPLEFT to the TOPRIGHT of the frame it
+-- accompanies. The 3.3.5 anchor, the gear manager, is no longer a window here.
+local function placeBeside(popup)
+	local sheet = _G["CharacterFrame"]
+	if not sheet then
 		return
 	end
 	popup:ClearAllPoints()
-	popup:SetPoint("TOPLEFT", feuille, "TOPRIGHT", 0, 0)
+	popup:SetPoint("TOPLEFT", sheet, "TOPRIGHT", 0, 0)
 end
 
 ForeverUI.IconPickerSkin = function()
@@ -545,27 +473,25 @@ ForeverUI.IconPickerSkin = function()
 	if not popup then
 		return
 	end
-	habillerCadre(popup)
-	habillerBarre()
-	poserAcote(popup)
+	skinFrame(popup)
+	skinBar()
+	placeBeside(popup)
 end
 
--- MONTE DES LE CHARGEMENT, ET EN DERNIER. Le client remplit sa grille des la
--- premiere ouverture et il lui faut ses quatre-vingts boutons a ce
--- moment-la ; l'appel vient apres IconPickerSkin, sinon l'habillage ne
--- serait pas encore ecrit au moment ou habiller le cherche.
-habiller()
+-- Run at load, and last: the client fills its grid on first open and needs its eighty
+-- buttons then; IconPickerSkin must already be defined when this runs.
+applySkin()
 
 if hooksecurefunc then
-	for _, nom in ipairs({ "GearManagerDialogPopup_OnShow", "GearManagerDialogPopup_Update" }) do
-		if type(_G[nom]) == "function" then
-			hooksecurefunc(nom, function() habiller() end)
+	for _, name in ipairs({ "GearManagerDialogPopup_OnShow", "GearManagerDialogPopup_Update" }) do
+		if type(_G[name]) == "function" then
+			hooksecurefunc(name, function() applySkin() end)
 		end
 	end
 	if type(GearManagerDialogPopup_Update) == "function" then
-		hooksecurefunc("GearManagerDialogPopup_Update", remplir)
+		hooksecurefunc("GearManagerDialogPopup_Update", populate)
 	end
 	if type(RecalculateGearManagerDialogPopup) == "function" then
-		hooksecurefunc("RecalculateGearManagerDialogPopup", recaler)
+		hooksecurefunc("RecalculateGearManagerDialogPopup", realign)
 	end
 end

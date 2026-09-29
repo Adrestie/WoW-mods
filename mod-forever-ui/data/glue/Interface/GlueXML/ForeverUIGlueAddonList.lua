@@ -1,126 +1,49 @@
--- ForeverUI -- la liste des AddOns de camelot, sur les donnees du client
--- 3.3.5.
---
--- RELEVE -- blizzard_addonlist/addonlist.xml et addonlist.lua (le fichier
--- commun : l'addon n'a ni camelot/ ni mainline/) ; blizzard_sharedxml :
--- mainline/shareduipaneltemplates.xml / .lua (ButtonFrameTemplate,
--- ButtonFrameTemplate_HidePortrait), shared/button/checkbuttontemplates.xml
--- (MinimalCheckbox*), shared/inputbox/inputboxtemplates.xml / .lua
--- (SearchBoxTemplate), shared/button/threeslicebuttontemplate.xml
--- (SharedButtonSmallTemplate), secureuipaneltemplates.xml / .lua
--- (UIPanelButtonTemplate), shared/scroll/* (ScrollBox, MinimalScrollBar) ;
--- blizzard_menu : mainline/menutemplates.xml / .lua (WowStyle1Dropdown,
--- MenuStyle1), menuvariants.lua et mainline/menuvariants.lua (radio,
--- surbrillance, sons) ; blizzard_gluexml/mainline/gluetooltip.xml.
---   * fenetre   ButtonFrameTemplate sans portrait, 600 x 550 a CENTER (0, 24),
---               titre ADDON_LIST ; encart (9, -60) / (-6, 26) ; croix
---               UIPanelCloseButton ;
---   * menu      WowStyle1DropdownTemplate 140 x 25 a TOPLEFT (12, -30) : fond
---               common-dropdown-textholder de (-8, 7) a (8, -9), fleche
---               common-dropdown-a-button (etats hover / pressed /
---               pressedhover / open / disabled) a RIGHT (1, -3), texte
---               GameFontHighlight de (8, -8) a la fleche ; sa liste
---               MenuStyle1 sous le bouton (TOPLEFT sur BOTTOMLEFT) : fond
---               common-dropdown-bg de (-10, 3) a (10, -3) a 0,925, marges
---               8 / 8 / 8 / 15, lignes de 20, au moins la largeur du bouton,
---               sinon texte + 16 + 20 ; radio common-dropdown-tickradial a
---               LEFT (-3, 0), choisi : common-dropdown-icon-radialtick-yellow
---               par-dessus ; texte GameFontHighlight a 1 a sa droite ;
---               surbrillance UI-QuestTitleHighlight en ADD ; ALL puis les
---               personnages ; sons de case a cocher a l'ouverture, au choix
---               et a la fermeture ;
---   * case      ForceLoad, MinimalCheckboxTemplate 30 x 29 a TOP (-80, -27),
---               ADDON_FORCE_LOAD en GameFontNormalSmall a LEFT (36, 0) ;
---   * recherche SearchBoxTemplate 160 x 22 a TOPRIGHT (-10, -31) : bord
---               common-search-border-* 8 x 20 (le gauche a -5), loupe 10 a
---               LEFT (1, -1) grise a 0,6 au repos, consigne SEARCH en
---               GameFontDisableSmall (0,35) de 16 a -20, texte
---               GameFontHighlightSmall, marges 16 / 20, effacement 17 a
---               RIGHT (-3, 0) (icone 10 a (3, -3), alpha 0,5, 1 au survol,
---               (4, -4) enfoncee) ; le titre ou le nom contient le texte,
---               sans casse ;
---   * liste     ScrollBox de LEFT 7 / TOP -65 (Performance repliee : elle ne
---               se montre jamais aux ecrans d'accueil) a BOTTOMRIGHT (-34,
---               28) ; marges 5, lignes de 16 espacees de 8 ; molette : 2 x
---               (16 + 8) ; MinimalScrollBar a (4, -3) / (4, 2) de la liste,
---               une fleche avance de 16 + 8 ;
---   * ligne     AddonListEntryTemplate : case MinimalCheckboxArtTemplate
---               24 x 24 a LEFT (5, 0) (bas du clic rentre de 8), coche grise
---               (desaturee) quand l'AddOn n'est actif que pour certains
---               personnages ; titre GameFontNormal 300 x 12 a LEFT (32, 0) ;
---               couleur dore / rouge / gris comme le client ; statut
---               GameFontNormalSmall a RIGHT (0, 0),
---               ADDON_<raison> quand l'AddOn ne se charge pas ; survol
---               UI-QuestTitleHighlight en ADD de LEFT 40 a RIGHT, 22 de haut ;
---               un clic gauche sur la ligne coche ou decoche ;
---   * infobulle celle des ecrans d'accueil (GlueTooltip, disposition
---               TooltipDefaultLayout) a ANCHOR_RIGHT (-270, 0) de la ligne :
---               titre et version (GlueFontNormal), notes en blanc et
---               dependances en dore (GlueFontNormalSmall) ; ADDON_BANNED_TOOLTIP
---               pour un AddOn banni ; sur la case, ENABLED_FOR_SOME ;
---   * boutons   SharedButtonSmallTemplate (128-RedButton, GameFontNormal /
---               Highlight / Disable) : Annuler 80 x 22 a BOTTOMRIGHT (-4, 4),
---               OK a sa gauche ; Tout activer / Tout desactiver 120 x 22 a
---               BOTTOMLEFT (4, 4) ;
---   * dialogue  AddonDialog (AddOns perimes) : DialogBorderTemplate, texte
---               GameFontNormalLarge, boutons UIPanelButtonTemplate 120 x 22
---               (UI-Panel-Button-*, fichiers identiques chez camelot, ecart
---               moyen 0,4 a 0,7 sur 255).
--- ECART (28/09, a la demande, comme la liste des royaumes) : fond noir
--- translucide a la place de la pierre et du marbre.
--- RETIRE a la demande (28/09) : l'icone de securite de 3.3.5 (jamais
--- montree par le client), et l'icone de camelot devant le titre
--- (INV_Misc_QuestionMark faute d'IconTexture, un « ? » rouge sur chaque
--- ligne). GARDE a la demande (28/09) : le bouton d'adresse de 3.3.5 et son
--- double de mise a jour, que camelot n'a pas -- 16 x 16 a droite de la
--- colonne du titre ; note UI-GuildButton-PublicNote-Up, ou etoile
--- Glues-AddOn-Icons (quatrieme quart) quand une version plus recente est
--- annoncee ; lueur du meme art en ADD ; infobulle GlueTooltip ; un clic
--- demande confirmation (CONFIRM_LAUNCH_ADDON_URL) comme le client.
--- ABSENT faute de donnees en 3.3.5 : categories et groupes (champs Category
--- et Group du .toc moderne), mesures de performance, menu du clic droit
--- (dependances, valeur par defaut : IsAddOnDefaultEnabled n'existe pas).
--- La fenetre du client (AddonListBackground) est eteinte ; sa logique reste
--- la sienne : OK et Annuler appellent AddonList_OnOk / AddonList_OnCancel,
--- le clavier reste le sien (Echap, Entree), et ses donnees passent par les
--- fonctions de 3.3.5 (GetAddOnInfo, GetAddOnEnableState, EnableAddOn...).
+-- Camelot's AddOns list on the 3.3.5 client data (glue screens).
+-- Sizes and offsets come from blizzard_addonlist/addonlist.xml and .lua; blizzard_sharedxml
+-- (ButtonFrameTemplate, MinimalCheckbox, SearchBoxTemplate, SharedButtonSmallTemplate,
+-- ScrollBox, MinimalScrollBar); blizzard_menu (WowStyle1Dropdown, MenuStyle1) and
+-- blizzard_gluexml/mainline/gluetooltip.xml.
+-- Differences: black translucent background, like the realm list; the 3.3.5 URL and update
+-- buttons are kept; no categories, groups, performance or right-click menu (no data in 3.3.5).
+-- The client window (AddonListBackground) is hidden but its logic stays: OK and Cancel call
+-- AddonList_OnOk / AddonList_OnCancel, and Esc and Enter keep working.
 
 local G = ForeverUIGlue
 local L = G.L
 
--- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes)
-local TEXTE = { SEARCH = L.GLUEADDONLIST_SEARCH }
+-- strings missing from 3.3.5: G.L (ForeverUIGlueTextes)
+local TEXT = { SEARCH = L.GLUEADDONLIST_SEARCH }
 
 local NOTE = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
-local ETOILE = "Interface\\Glues\\CharacterSelect\\Glues-AddOn-Icons"
-local SURVOL = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
-local SON = { oui = "igMainMenuOptionCheckBoxOn", non = "igMainMenuOptionCheckBoxOff" }
+local STAR = "Interface\\Glues\\CharacterSelect\\Glues-AddOn-Icons"
+local HOVER = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
+local SOUND = { yes = "igMainMenuOptionCheckBoxOn", no = "igMainMenuOptionCheckBoxOff" }
 
 local M = {
-	largeur = 600, hauteur = 550, y = 24,
-	-- listeDSans : sans barre, les lignes (a 7 + 5 = 12, 3 dans l'encart qui
-	-- commence a 9) gardent a droite de l'encart (594) cette marge de 3 :
-	-- elles finissent a 591, la liste (avec sa marge de 5) a 596 (regle du
-	-- 28/09)
-	listeG = 7, listeH = 65, listeD = 34, listeDSans = 4, listeB = 28,
-	marge = 5, ligneH = 16, ecart = 8, molette = 2,
-	menuL = 140, menuH = 25, ligneMenu = 20, menuMarges = { 8, 8, 8, 15 },
-	infobulleL = 200,
+	width = 600, height = 550, y = 24,
+	-- listRightNoBar: without the bar, rows (at 7 + 5 = 12, 3 inside the inset that starts
+	-- at 9) keep the same 3 px margin on the inset's right (594): they end at 591, the list
+	-- (with its 5 margin) at 596
+	listLeft = 7, listTop = 65, listRight = 34, listRightNoBar = 4, listBottom = 28,
+	margin = 5, rowH = 16, gap = 8, wheel = 2,
+	menuW = 140, menuH = 25, menuRowH = 20, menuMargins = { 8, 8, 8, 15 },
+	tooltipW = 200,
 }
-M.pas = M.ligneH + M.ecart
-M.listeL = M.largeur - M.listeG - M.listeD
-M.listeVue = M.hauteur - M.listeH - M.listeB
+M.step = M.rowH + M.gap
+M.listW = M.width - M.listLeft - M.listRight
+M.listView = M.height - M.listTop - M.listBottom
 
--- 3.3.5 rend 1 / nil, parfois 0 / 1 : zero est vrai en Lua
-local function vrai(v)
+-- 3.3.5 returns 1 / nil, sometimes 0 / 1: zero is true in Lua
+local function truthy(v)
 	return v and v ~= 0 and true or false
 end
 
--- un etat de bouton ou de case sur un element d'atlas, sur tout le bouton
-local function poserEtat(b, set, get, nom, mode)
-	b[set](b, G.atlas[string.lower(nom)][1])
+-- Sets a button or checkbox state texture to an atlas entry covering the whole button.
+-- set, get: texture setter and getter names; mode: optional blend mode
+local function applyState(b, set, get, name, mode)
+	b[set](b, G.atlas[string.lower(name)][1])
 	local t = b[get](b)
-	G.PoserAtlas(t, nom)
+	G.PlaceAtlas(t, name)
 	t:ClearAllPoints()
 	t:SetAllPoints(b)
 	if mode then
@@ -130,659 +53,661 @@ local function poserEtat(b, set, get, nom, mode)
 end
 
 -- MinimalCheckboxArtTemplate
-local function caseMinimale(c)
-	poserEtat(c, "SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
-	poserEtat(c, "SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
-	poserEtat(c, "SetHighlightTexture", "GetHighlightTexture", "checkbox-minimal", "ADD")
-	poserEtat(c, "SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
-	poserEtat(c, "SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal-disabled")
+local function skinMinimalCheckbox(c)
+	applyState(c, "SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
+	applyState(c, "SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
+	applyState(c, "SetHighlightTexture", "GetHighlightTexture", "checkbox-minimal", "ADD")
+	applyState(c, "SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
+	applyState(c, "SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal-disabled")
 end
 
--- ------------------------------------------------------------ la fenetre du client
+-- ------------------------------------------------------------ Client window
 
--- eteinte en entier : image, cadres fils, souris ; l'alpha est le seul
--- reglage qu'aucun code du client ne reprend
+-- fully hidden: art, child frames, mouse; alpha is the only setting no client code resets
 AddonListBackground:SetAlpha(0)
 AddonListBackground:Hide()
-G.Accrocher(AddonListBackground, "OnShow", function(self)
+G.Hook(AddonListBackground, "OnShow", function(self)
 	self:Hide()
 end)
 
--- ------------------------------------------------------------ la fenetre
+-- ------------------------------------------------------------ Window
 
 local F = CreateFrame("Frame", "ForeverUIAddonList", AddonList)
-F:SetWidth(M.largeur)
-F:SetHeight(M.hauteur)
+F:SetWidth(M.width)
+F:SetHeight(M.height)
 F:SetPoint("CENTER", AddonList, "CENTER", 0, M.y)
 F:EnableMouse(true)
-G.Fenetre(F, ADDON_LIST, true)
-local encart = CreateFrame("Frame", nil, F)
-encart:SetPoint("TOPLEFT", F, "TOPLEFT", 9, -60)
-encart:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -6, 26)
-G.Encart(F, encart, true)
+G.Window(F, ADDON_LIST, true)
+local inset = CreateFrame("Frame", nil, F)
+inset:SetPoint("TOPLEFT", F, "TOPLEFT", 9, -60)
+inset:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -6, 26)
+G.Inset(F, inset, true)
 
--- les commandes passent devant la liste : une ligne a moitie defilee
--- deborde du cadre de la liste
-local DEVANT = F:GetFrameLevel() + 10
+-- controls draw above the list: a half-scrolled row overflows the list frame
+local FRONT_LEVEL = F:GetFrameLevel() + 10
 
-local croix = CreateFrame("Button", "ForeverUIAddonListCloseButton", F)
-croix:SetFrameLevel(DEVANT + 1)
-G.CroixFenetre(croix, F)
-croix:SetScript("OnClick", function()
+local closeButton = CreateFrame("Button", "ForeverUIAddonListCloseButton", F)
+closeButton:SetFrameLevel(FRONT_LEVEL + 1)
+G.WindowCloseButton(closeButton, F)
+closeButton:SetScript("OnClick", function()
 	AddonList_OnCancel()
 end)
 
-local etat = { personnage = nil, lignes = {}, position = 0, ouvert = false }
-local maj
+local state = { character = nil, rows = {}, position = 0, isOpen = false }
+local update
 
--- ------------------------------------------------------------ l'infobulle
+-- ------------------------------------------------------------ Tooltip
 
-local bulle = CreateFrame("Frame", "ForeverUIAddonListTooltip", AddonList)
-bulle:SetFrameStrata("TOOLTIP")
-bulle:SetClampedToScreen(true)
-bulle:Hide()
-G.FondInfobulle(bulle, "TooltipDefaultLayout", G.GLUE_BACKDROP_COLOR)
-bulle.titre = bulle:CreateFontString(nil, "ARTWORK")
-bulle.titre:SetFontObject(G.Police("GlueFontNormal"))
-bulle.titre:SetJustifyH("LEFT")
-bulle.titre:SetPoint("TOPLEFT", bulle, "TOPLEFT", 10, -10)
-bulle.version = bulle:CreateFontString(nil, "ARTWORK")
-bulle.version:SetFontObject(G.Police("GlueFontNormal"))
-bulle.version:SetJustifyH("RIGHT")
-bulle.version:SetPoint("TOPRIGHT", bulle, "TOPRIGHT", -10, -10)
-bulle.notes = bulle:CreateFontString(nil, "ARTWORK")
-bulle.notes:SetFontObject(G.Police("GlueFontNormalSmall"))
-bulle.notes:SetJustifyH("LEFT")
-bulle.notes:SetTextColor(1, 1, 1)
-bulle.notes:SetPoint("TOPLEFT", bulle.titre, "BOTTOMLEFT", 0, -2)
-bulle.deps = bulle:CreateFontString(nil, "ARTWORK")
-bulle.deps:SetFontObject(G.Police("GlueFontNormalSmall"))
-bulle.deps:SetJustifyH("LEFT")
-bulle.deps:SetTextColor(1, 0.82, 0)
+local tooltipFrame = CreateFrame("Frame", "ForeverUIAddonListTooltip", AddonList)
+tooltipFrame:SetFrameStrata("TOOLTIP")
+tooltipFrame:SetClampedToScreen(true)
+tooltipFrame:Hide()
+G.TooltipBackground(tooltipFrame, "TooltipDefaultLayout", G.GLUE_BACKDROP_COLOR)
+tooltipFrame.title = tooltipFrame:CreateFontString(nil, "ARTWORK")
+tooltipFrame.title:SetFontObject(G.Font("GlueFontNormal"))
+tooltipFrame.title:SetJustifyH("LEFT")
+tooltipFrame.title:SetPoint("TOPLEFT", tooltipFrame, "TOPLEFT", 10, -10)
+tooltipFrame.version = tooltipFrame:CreateFontString(nil, "ARTWORK")
+tooltipFrame.version:SetFontObject(G.Font("GlueFontNormal"))
+tooltipFrame.version:SetJustifyH("RIGHT")
+tooltipFrame.version:SetPoint("TOPRIGHT", tooltipFrame, "TOPRIGHT", -10, -10)
+tooltipFrame.notes = tooltipFrame:CreateFontString(nil, "ARTWORK")
+tooltipFrame.notes:SetFontObject(G.Font("GlueFontNormalSmall"))
+tooltipFrame.notes:SetJustifyH("LEFT")
+tooltipFrame.notes:SetTextColor(1, 1, 1)
+tooltipFrame.notes:SetPoint("TOPLEFT", tooltipFrame.title, "BOTTOMLEFT", 0, -2)
+tooltipFrame.deps = tooltipFrame:CreateFontString(nil, "ARTWORK")
+tooltipFrame.deps:SetFontObject(G.Font("GlueFontNormalSmall"))
+tooltipFrame.deps:SetJustifyH("LEFT")
+tooltipFrame.deps:SetTextColor(1, 0.82, 0)
 
--- lignes : { titre, version, notes, deps } ; le texte plie a la largeur
--- du titre, 200 au moins (celle de l'infobulle d'AddOn de 3.3.5 : le
--- GameTooltip de camelot plie dans le moteur, sans nombre dans le code)
-local function montrerBulle(proprio, titre, version, notes, deps)
-	bulle.titre:SetText(titre or "")
-	bulle.version:SetText(version or "")
-	local l = bulle.titre:GetStringWidth()
+-- Lines: title, version, notes, deps. Text wraps at the title width, at least 200 (the
+-- 3.3.5 AddOn tooltip width; camelot's GameTooltip wraps in the engine, with no number
+-- in the code)
+local function showTooltip(owner, title, version, notes, deps)
+	tooltipFrame.title:SetText(title or "")
+	tooltipFrame.version:SetText(version or "")
+	local l = tooltipFrame.title:GetStringWidth()
 	if version and version ~= "" then
-		l = l + 20 + bulle.version:GetStringWidth()
+		l = l + 20 + tooltipFrame.version:GetStringWidth()
 	end
-	local plie = math.max(M.infobulleL, l)
-	local h = bulle.titre:GetHeight()
-	local dessous = bulle.titre
-	for _, v in ipairs({ { bulle.notes, notes }, { bulle.deps, deps } }) do
-		local fs, texte = v[1], v[2]
-		if texte and texte ~= "" then
-			fs:SetWidth(plie)
-			fs:SetText(texte)
+	local wrapWidth = math.max(M.tooltipW, l)
+	local h = tooltipFrame.title:GetHeight()
+	local below = tooltipFrame.title
+	for _, v in ipairs({ { tooltipFrame.notes, notes }, { tooltipFrame.deps, deps } }) do
+		local fs, text = v[1], v[2]
+		if text and text ~= "" then
+			fs:SetWidth(wrapWidth)
+			fs:SetText(text)
 			fs:ClearAllPoints()
-			fs:SetPoint("TOPLEFT", dessous, "BOTTOMLEFT", 0, -2)
+			fs:SetPoint("TOPLEFT", below, "BOTTOMLEFT", 0, -2)
 			fs:Show()
 			h = h + 2 + fs:GetHeight()
-			dessous = fs
+			below = fs
 		else
 			fs:SetText("")
 			fs:Hide()
 		end
 	end
 	if (notes and notes ~= "") or (deps and deps ~= "") then
-		l = plie
+		l = wrapWidth
 	end
-	bulle:SetWidth(l + 20)
-	bulle:SetHeight(h + 20)
-	bulle:ClearAllPoints()
-	bulle:SetPoint("BOTTOMLEFT", proprio, "TOPRIGHT", -270, 0)
-	bulle:Show()
+	tooltipFrame:SetWidth(l + 20)
+	tooltipFrame:SetHeight(h + 20)
+	tooltipFrame:ClearAllPoints()
+	tooltipFrame:SetPoint("BOTTOMLEFT", owner, "TOPRIGHT", -270, 0)
+	tooltipFrame:Show()
 end
 
-local function metadonnee(index, champ)
+-- TOC field of an AddOn, or nil when GetAddOnMetadata is missing or fails
+local function metadata(index, field)
 	if not GetAddOnMetadata then
 		return nil
 	end
-	local ok, v = pcall(GetAddOnMetadata, index, champ)
+	local ok, v = pcall(GetAddOnMetadata, index, field)
 	if ok then
 		return v
 	end
 end
 
--- AddonTooltip_Update de camelot
-local function bulleAddOn(ligne)
-	local index = ligne.index
-	local nom, titre, notes, _, _, _, securite = GetAddOnInfo(index)
-	if securite == "BANNED" then
-		montrerBulle(ligne, ADDON_BANNED_TOOLTIP)
+-- camelot AddonTooltip_Update
+local function showAddOnTooltip(row)
+	local index = row.index
+	local name, title, notes, _, _, _, security = GetAddOnInfo(index)
+	if security == "BANNED" then
+		showTooltip(row, ADDON_BANNED_TOOLTIP)
 	else
-		montrerBulle(ligne, titre or nom, metadonnee(index, "Version"), notes,
+		showTooltip(row, title or name, metadata(index, "Version"), notes,
 			AddonTooltip_BuildDeps(GetAddOnDependencies(index)))
 	end
 end
 
--- ------------------------------------------------------------ le menu des personnages
+-- ------------------------------------------------------------ Character menu
 
 local menu = CreateFrame("Button", "ForeverUIAddonListDropdown", F)
-menu:SetFrameLevel(DEVANT)
-menu:SetWidth(M.menuL)
+menu:SetFrameLevel(FRONT_LEVEL)
+menu:SetWidth(M.menuW)
 menu:SetHeight(M.menuH)
 menu:SetPoint("TOPLEFT", F, "TOPLEFT", 12, -30)
 menu:RegisterForClicks("LeftButtonDown")
-local fondMenu = G.AtlasEtire(menu, "common-dropdown-textholder", "BACKGROUND")
-fondMenu.rect:SetPoint("TOPLEFT", menu, "TOPLEFT", -8, 7)
-fondMenu.rect:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", 8, -9)
-menu.fleche = menu:CreateTexture(nil, "OVERLAY")
-G.PoserAtlas(menu.fleche, "common-dropdown-a-button", true)
-menu.fleche:SetPoint("RIGHT", menu, "RIGHT", 1, -3)
-menu.texte = menu:CreateFontString(nil, "OVERLAY")
-menu.texte:SetFontObject(G.Police("GameFontHighlight"))
-menu.texte:SetJustifyH("LEFT")
-menu.texte:SetHeight(10)
-menu.texte:SetPoint("TOPLEFT", menu, "TOPLEFT", 8, -8)
-menu.texte:SetPoint("TOPRIGHT", menu.fleche, "LEFT", 0, 0)
+local menuBackground = G.StretchedAtlas(menu, "common-dropdown-textholder", "BACKGROUND")
+menuBackground.rect:SetPoint("TOPLEFT", menu, "TOPLEFT", -8, 7)
+menuBackground.rect:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", 8, -9)
+menu.arrow = menu:CreateTexture(nil, "OVERLAY")
+G.PlaceAtlas(menu.arrow, "common-dropdown-a-button", true)
+menu.arrow:SetPoint("RIGHT", menu, "RIGHT", 1, -3)
+menu.text = menu:CreateFontString(nil, "OVERLAY")
+menu.text:SetFontObject(G.Font("GameFontHighlight"))
+menu.text:SetJustifyH("LEFT")
+menu.text:SetHeight(10)
+menu.text:SetPoint("TOPLEFT", menu, "TOPLEFT", 8, -8)
+menu.text:SetPoint("TOPRIGHT", menu.arrow, "LEFT", 0, 0)
 
 -- GetWowStyle1ArrowButtonState
-local function peindreMenu()
+local function paintMenu()
 	local n = "common-dropdown-a-button"
-	if not vrai(menu:IsEnabled()) then
+	if not truthy(menu:IsEnabled()) then
 		n = n .. "-disabled"
-	elseif menu.bas and menu.dessus then
+	elseif menu.down and menu.hovered then
 		n = n .. "-pressedhover"
-	elseif menu.dessus then
+	elseif menu.hovered then
 		n = n .. "-hover"
-	elseif menu.bas then
+	elseif menu.down then
 		n = n .. "-pressed"
-	elseif etat.ouvert then
+	elseif state.isOpen then
 		n = n .. "-open"
 	end
-	G.PoserAtlas(menu.fleche, n, true)
+	G.PlaceAtlas(menu.arrow, n, true)
 end
-menu:SetScript("OnEnter", function(self) self.dessus = true; peindreMenu() end)
-menu:SetScript("OnLeave", function(self) self.dessus = false; peindreMenu() end)
-menu:SetScript("OnMouseDown", function(self) self.bas = true; peindreMenu() end)
-menu:SetScript("OnMouseUp", function(self) self.bas = false; peindreMenu() end)
+menu:SetScript("OnEnter", function(self) self.hovered = true; paintMenu() end)
+menu:SetScript("OnLeave", function(self) self.hovered = false; paintMenu() end)
+menu:SetScript("OnMouseDown", function(self) self.down = true; paintMenu() end)
+menu:SetScript("OnMouseUp", function(self) self.down = false; paintMenu() end)
 
--- la liste ouverte (MenuStyle1)
-local liste = CreateFrame("Frame", "ForeverUIAddonListDropdownMenu", F)
-liste:SetFrameStrata("FULLSCREEN_DIALOG")
-liste:SetFrameLevel(20)
-liste:EnableMouse(true)
-liste:Hide()
-local fondListe = G.AtlasEtire(liste, "common-dropdown-bg", "BACKGROUND")
-fondListe.rect:SetPoint("TOPLEFT", liste, "TOPLEFT", -10, 3)
-fondListe.rect:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", 10, -3)
-fondListe.rect:SetAlpha(0.925)
-for _, t in ipairs(fondListe.pieces) do
+-- the open list (MenuStyle1)
+local list = CreateFrame("Frame", "ForeverUIAddonListDropdownMenu", F)
+list:SetFrameStrata("FULLSCREEN_DIALOG")
+list:SetFrameLevel(20)
+list:EnableMouse(true)
+list:Hide()
+local listBackground = G.StretchedAtlas(list, "common-dropdown-bg", "BACKGROUND")
+listBackground.rect:SetPoint("TOPLEFT", list, "TOPLEFT", -10, 3)
+listBackground.rect:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 10, -3)
+listBackground.rect:SetAlpha(0.925)
+for _, t in ipairs(listBackground.pieces) do
 	t:SetAlpha(0.925)
 end
--- un clic hors de la liste la referme
-local capteur = CreateFrame("Button", nil, F)
-capteur:SetFrameStrata("FULLSCREEN_DIALOG")
-capteur:SetFrameLevel(10)
-capteur:SetAllPoints(GlueParent)
-capteur:Hide()
+-- a click outside the list closes it
+local catcher = CreateFrame("Button", nil, F)
+catcher:SetFrameStrata("FULLSCREEN_DIALOG")
+catcher:SetFrameLevel(10)
+catcher:SetAllPoints(GlueParent)
+catcher:Hide()
 
-local choix = {}
+local choice = {}
 
-local function fermerListe(silence)
-	if not etat.ouvert then
+-- Closes the character list; silence: skip the close sound
+local function closeList(silence)
+	if not state.isOpen then
 		return
 	end
-	etat.ouvert = false
-	liste:Hide()
-	capteur:Hide()
+	state.isOpen = false
+	list:Hide()
+	catcher:Hide()
 	if not silence then
-		PlaySound(SON.non)
+		PlaySound(SOUND.no)
 	end
-	peindreMenu()
+	paintMenu()
 end
-capteur:SetScript("OnClick", function() fermerListe() end)
+catcher:SetScript("OnClick", function() closeList() end)
 
--- ALL, puis chaque personnage (AddonListCharacterDropDown_Initialize)
+-- ALL, then each character (AddonListCharacterDropDown_Initialize)
 local function options()
-	local o = { { texte = ALL, valeur = nil } }
+	local o = { { text = ALL, value = nil } }
 	for i = 1, GetNumCharacters() do
-		local nom = GetCharacterInfo(i)
-		o[#o + 1] = { texte = nom, valeur = nom }
+		local name = GetCharacterInfo(i)
+		o[#o + 1] = { text = name, value = name }
 	end
 	return o
 end
 
-local function texteChoisi()
-	menu.texte:SetText(etat.personnage or ALL)
+local function selectedText()
+	menu.text:SetText(state.character or ALL)
 end
 
-local function elementListe(k)
-	if choix[k] then
-		return choix[k]
+-- Returns list entry k, creating it on first use.
+local function listItem(k)
+	if choice[k] then
+		return choice[k]
 	end
-	local e = CreateFrame("Button", nil, liste)
-	e:SetHeight(M.ligneMenu)
-	e.survol = e:CreateTexture(nil, "BACKGROUND")
-	e.survol:SetTexture(SURVOL)
-	e.survol:SetBlendMode("ADD")
-	e.survol:SetAllPoints(e)
-	e.survol:Hide()
-	e.rond = e:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(e.rond, "common-dropdown-tickradial", true)
-	e.rond:SetPoint("LEFT", e, "LEFT", -3, 0)
+	local e = CreateFrame("Button", nil, list)
+	e:SetHeight(M.menuRowH)
+	e.hover = e:CreateTexture(nil, "BACKGROUND")
+	e.hover:SetTexture(HOVER)
+	e.hover:SetBlendMode("ADD")
+	e.hover:SetAllPoints(e)
+	e.hover:Hide()
+	e.circle = e:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(e.circle, "common-dropdown-tickradial", true)
+	e.circle:SetPoint("LEFT", e, "LEFT", -3, 0)
 	e.point = e:CreateTexture(nil, "OVERLAY")
-	G.PoserAtlas(e.point, "common-dropdown-icon-radialtick-yellow", true)
-	e.point:SetPoint("TOPLEFT", e.rond, "TOPLEFT")
-	e.texte = e:CreateFontString(nil, "ARTWORK")
-	e.texte:SetFontObject(G.Police("GameFontHighlight"))
-	e.texte:SetJustifyH("LEFT")
-	e.texte:SetHeight(M.ligneMenu)
-	e.texte:SetPoint("LEFT", e.rond, "RIGHT", 1, 0)
-	e:SetScript("OnEnter", function(self) self.survol:Show() end)
-	e:SetScript("OnLeave", function(self) self.survol:Hide() end)
+	G.PlaceAtlas(e.point, "common-dropdown-icon-radialtick-yellow", true)
+	e.point:SetPoint("TOPLEFT", e.circle, "TOPLEFT")
+	e.text = e:CreateFontString(nil, "ARTWORK")
+	e.text:SetFontObject(G.Font("GameFontHighlight"))
+	e.text:SetJustifyH("LEFT")
+	e.text:SetHeight(M.menuRowH)
+	e.text:SetPoint("LEFT", e.circle, "RIGHT", 1, 0)
+	e:SetScript("OnEnter", function(self) self.hover:Show() end)
+	e:SetScript("OnLeave", function(self) self.hover:Hide() end)
 	e:SetScript("OnClick", function(self)
-		PlaySound(SON.oui)
-		etat.personnage = self.valeur
-		texteChoisi()
-		fermerListe()
-		maj()
+		PlaySound(SOUND.yes)
+		state.character = self.value
+		selectedText()
+		closeList()
+		update()
 	end)
-	choix[k] = e
+	choice[k] = e
 	return e
 end
 
-local function ouvrirListe()
+local function openList()
 	local o = options()
-	local g, h, d, b = M.menuMarges[1], M.menuMarges[2], M.menuMarges[3], M.menuMarges[4]
-	-- l'etendue d'une ligne : radio (-3 .. 15), 1, texte ; plus 20
-	local large = 0
+	local g, h, d, b = M.menuMargins[1], M.menuMargins[2], M.menuMargins[3], M.menuMargins[4]
+	-- row width: radio (-3 .. 15), 1, text; plus 20
+	local wide = 0
 	for k, v in ipairs(o) do
-		local e = elementListe(k)
-		e.texte:SetText(v.texte)
-		large = math.max(large, 16 + e.texte:GetStringWidth() + 20)
+		local e = listItem(k)
+		e.text:SetText(v.text)
+		wide = math.max(wide, 16 + e.text:GetStringWidth() + 20)
 	end
-	large = math.max(large, M.menuL - g - d)
+	wide = math.max(wide, M.menuW - g - d)
 	for k, v in ipairs(o) do
-		local e = choix[k]
-		e.valeur = v.valeur
-		e:SetWidth(large)
+		local e = choice[k]
+		e.value = v.value
+		e:SetWidth(wide)
 		e:ClearAllPoints()
-		e:SetPoint("TOPLEFT", liste, "TOPLEFT", g, -(h + (k - 1) * M.ligneMenu))
-		G.Montrer(e.point, v.valeur == etat.personnage)
-		e.survol:Hide()
+		e:SetPoint("TOPLEFT", list, "TOPLEFT", g, -(h + (k - 1) * M.menuRowH))
+		G.SetShown(e.point, v.value == state.character)
+		e.hover:Hide()
 		e:Show()
 	end
-	for k = #o + 1, #choix do
-		choix[k]:Hide()
+	for k = #o + 1, #choice do
+		choice[k]:Hide()
 	end
-	liste:SetWidth(g + large + d)
-	liste:SetHeight(h + #o * M.ligneMenu + b)
-	liste:ClearAllPoints()
-	liste:SetPoint("TOPLEFT", menu, "BOTTOMLEFT", 0, 0)
-	etat.ouvert = true
-	liste:Show()
-	capteur:Show()
-	PlaySound(SON.oui)
-	peindreMenu()
+	list:SetWidth(g + wide + d)
+	list:SetHeight(h + #o * M.menuRowH + b)
+	list:ClearAllPoints()
+	list:SetPoint("TOPLEFT", menu, "BOTTOMLEFT", 0, 0)
+	state.isOpen = true
+	list:Show()
+	catcher:Show()
+	PlaySound(SOUND.yes)
+	paintMenu()
 end
 menu:SetScript("OnClick", function()
-	if etat.ouvert then
-		fermerListe()
+	if state.isOpen then
+		closeList()
 	else
-		ouvrirListe()
+		openList()
 	end
 end)
 
--- ------------------------------------------------------------ AddOns perimes
+-- ------------------------------------------------------------ Out of date AddOns
 
 local force = CreateFrame("CheckButton", "ForeverUIAddonListForceLoad", F)
-force:SetFrameLevel(DEVANT)
+force:SetFrameLevel(FRONT_LEVEL)
 force:SetWidth(30)
 force:SetHeight(29)
 force:SetPoint("TOP", F, "TOP", -80, -27)
-caseMinimale(force)
-force.texte = force:CreateFontString(nil, "ARTWORK")
-force.texte:SetFontObject(G.Police("GameFontNormalSmall"))
-force.texte:SetPoint("LEFT", force, "LEFT", 36, 0)
-force.texte:SetText(ADDON_FORCE_LOAD)
+skinMinimalCheckbox(force)
+force.text = force:CreateFontString(nil, "ARTWORK")
+force.text:SetFontObject(G.Font("GameFontNormalSmall"))
+force.text:SetPoint("LEFT", force, "LEFT", 36, 0)
+force.text:SetText(ADDON_FORCE_LOAD)
 force:SetScript("OnClick", function(self)
-	if vrai(self:GetChecked()) then
-		PlaySound(SON.oui)
+	if truthy(self:GetChecked()) then
+		PlaySound(SOUND.yes)
 		SetAddonVersionCheck(0)
 	else
-		PlaySound(SON.non)
+		PlaySound(SOUND.no)
 		SetAddonVersionCheck(1)
 	end
-	maj()
+	update()
 end)
 
--- ------------------------------------------------------------ la recherche
+-- ------------------------------------------------------------ Search
 
-local cherche = CreateFrame("EditBox", "ForeverUIAddonListSearchBox", F)
-cherche:SetFrameLevel(DEVANT)
-cherche:SetWidth(160)
-cherche:SetHeight(22)
-cherche:SetPoint("TOPRIGHT", F, "TOPRIGHT", -10, -31)
-cherche:SetAutoFocus(false)
-cherche:EnableMouse(true)
-cherche:SetFontObject(G.Police("GameFontHighlightSmall"))
-cherche:SetTextInsets(16, 20, 0, 0)
+local searching = CreateFrame("EditBox", "ForeverUIAddonListSearchBox", F)
+searching:SetFrameLevel(FRONT_LEVEL)
+searching:SetWidth(160)
+searching:SetHeight(22)
+searching:SetPoint("TOPRIGHT", F, "TOPRIGHT", -10, -31)
+searching:SetAutoFocus(false)
+searching:EnableMouse(true)
+searching:SetFontObject(G.Font("GameFontHighlightSmall"))
+searching:SetTextInsets(16, 20, 0, 0)
 do
-	local g = cherche:CreateTexture(nil, "BACKGROUND")
-	G.PoserAtlas(g, "common-search-border-left")
+	local g = searching:CreateTexture(nil, "BACKGROUND")
+	G.PlaceAtlas(g, "common-search-border-left")
 	g:SetWidth(8)
 	g:SetHeight(20)
-	g:SetPoint("LEFT", cherche, "LEFT", -5, 0)
-	local d = cherche:CreateTexture(nil, "BACKGROUND")
-	G.PoserAtlas(d, "common-search-border-right")
+	g:SetPoint("LEFT", searching, "LEFT", -5, 0)
+	local d = searching:CreateTexture(nil, "BACKGROUND")
+	G.PlaceAtlas(d, "common-search-border-right")
 	d:SetWidth(8)
 	d:SetHeight(20)
-	d:SetPoint("RIGHT", cherche, "RIGHT", 0, 0)
-	local m = cherche:CreateTexture(nil, "BACKGROUND")
-	G.PoserAtlas(m, "common-search-border-middle")
+	d:SetPoint("RIGHT", searching, "RIGHT", 0, 0)
+	local m = searching:CreateTexture(nil, "BACKGROUND")
+	G.PlaceAtlas(m, "common-search-border-middle")
 	m:SetHeight(20)
 	m:SetPoint("LEFT", g, "RIGHT")
 	m:SetPoint("RIGHT", d, "LEFT")
 end
-cherche.loupe = cherche:CreateTexture(nil, "OVERLAY")
-G.PoserAtlas(cherche.loupe, "common-search-magnifyingglass")
-cherche.loupe:SetWidth(10)
-cherche.loupe:SetHeight(10)
-cherche.loupe:SetPoint("LEFT", cherche, "LEFT", 1, -1)
-cherche.consigne = cherche:CreateFontString(nil, "ARTWORK")
-cherche.consigne:SetFontObject(G.Police("GameFontDisableSmall"))
-cherche.consigne:SetJustifyH("LEFT")
-cherche.consigne:SetJustifyV("MIDDLE")
-cherche.consigne:SetPoint("TOPLEFT", cherche, "TOPLEFT", 16, 0)
-cherche.consigne:SetPoint("BOTTOMRIGHT", cherche, "BOTTOMRIGHT", -20, 0)
-cherche.consigne:SetTextColor(0.35, 0.35, 0.35)
-cherche.consigne:SetText(TEXTE.SEARCH)
+searching.magnifier = searching:CreateTexture(nil, "OVERLAY")
+G.PlaceAtlas(searching.magnifier, "common-search-magnifyingglass")
+searching.magnifier:SetWidth(10)
+searching.magnifier:SetHeight(10)
+searching.magnifier:SetPoint("LEFT", searching, "LEFT", 1, -1)
+searching.instruction = searching:CreateFontString(nil, "ARTWORK")
+searching.instruction:SetFontObject(G.Font("GameFontDisableSmall"))
+searching.instruction:SetJustifyH("LEFT")
+searching.instruction:SetJustifyV("MIDDLE")
+searching.instruction:SetPoint("TOPLEFT", searching, "TOPLEFT", 16, 0)
+searching.instruction:SetPoint("BOTTOMRIGHT", searching, "BOTTOMRIGHT", -20, 0)
+searching.instruction:SetTextColor(0.35, 0.35, 0.35)
+searching.instruction:SetText(TEXT.SEARCH)
 
-local effacer = CreateFrame("Button", nil, cherche)
-effacer:SetWidth(17)
-effacer:SetHeight(17)
-effacer:SetPoint("RIGHT", cherche, "RIGHT", -3, 0)
-effacer.icone = effacer:CreateTexture(nil, "ARTWORK")
-G.PoserAtlas(effacer.icone, "common-search-clearbutton")
-effacer.icone:SetWidth(10)
-effacer.icone:SetHeight(10)
-effacer.icone:SetPoint("TOPLEFT", effacer, "TOPLEFT", 3, -3)
-effacer.icone:SetAlpha(0.5)
-effacer:SetScript("OnEnter", function(self) self.icone:SetAlpha(1) end)
-effacer:SetScript("OnLeave", function(self) self.icone:SetAlpha(0.5) end)
-effacer:SetScript("OnMouseDown", function(self) self.icone:SetPoint("TOPLEFT", self, "TOPLEFT", 4, -4) end)
-effacer:SetScript("OnMouseUp", function(self) self.icone:SetPoint("TOPLEFT", self, "TOPLEFT", 3, -3) end)
-effacer:SetScript("OnClick", function()
-	PlaySound(SON.oui)
-	cherche:SetText("")
-	cherche:ClearFocus()
+local clear = CreateFrame("Button", nil, searching)
+clear:SetWidth(17)
+clear:SetHeight(17)
+clear:SetPoint("RIGHT", searching, "RIGHT", -3, 0)
+clear.icon = clear:CreateTexture(nil, "ARTWORK")
+G.PlaceAtlas(clear.icon, "common-search-clearbutton")
+clear.icon:SetWidth(10)
+clear.icon:SetHeight(10)
+clear.icon:SetPoint("TOPLEFT", clear, "TOPLEFT", 3, -3)
+clear.icon:SetAlpha(0.5)
+clear:SetScript("OnEnter", function(self) self.icon:SetAlpha(1) end)
+clear:SetScript("OnLeave", function(self) self.icon:SetAlpha(0.5) end)
+clear:SetScript("OnMouseDown", function(self) self.icon:SetPoint("TOPLEFT", self, "TOPLEFT", 4, -4) end)
+clear:SetScript("OnMouseUp", function(self) self.icon:SetPoint("TOPLEFT", self, "TOPLEFT", 3, -3) end)
+clear:SetScript("OnClick", function()
+	PlaySound(SOUND.yes)
+	searching:SetText("")
+	searching:ClearFocus()
 end)
-effacer:Hide()
+clear:Hide()
 
--- SearchBoxTemplate_On* : loupe grise et effacement cache au repos
-local function peindreRecherche()
-	local vide = (cherche:GetText() or "") == ""
-	local actif = cherche.focus or not vide
-	local g = actif and 1 or 0.6
-	cherche.loupe:SetVertexColor(g, g, g)
-	G.Montrer(effacer, actif)
-	G.Montrer(cherche.consigne, vide)
+-- SearchBoxTemplate_On*: grey magnifier and hidden clear button when idle
+local function paintSearch()
+	local empty = (searching:GetText() or "") == ""
+	local active = searching.focus or not empty
+	local g = active and 1 or 0.6
+	searching.magnifier:SetVertexColor(g, g, g)
+	G.SetShown(clear, active)
+	G.SetShown(searching.instruction, empty)
 end
-cherche:SetScript("OnEditFocusGained", function(self) self.focus = true; peindreRecherche() end)
-cherche:SetScript("OnEditFocusLost", function(self) self.focus = false; peindreRecherche() end)
-cherche:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-cherche:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-cherche:SetScript("OnTextChanged", function()
-	peindreRecherche()
-	maj()
+searching:SetScript("OnEditFocusGained", function(self) self.focus = true; paintSearch() end)
+searching:SetScript("OnEditFocusLost", function(self) self.focus = false; paintSearch() end)
+searching:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+searching:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+searching:SetScript("OnTextChanged", function()
+	paintSearch()
+	update()
 end)
-peindreRecherche()
+paintSearch()
 
--- ------------------------------------------------------------ la liste
+-- ------------------------------------------------------------ List
 
-local vue = CreateFrame("ScrollFrame", "ForeverUIAddonListScrollBox", F)
-vue:SetPoint("TOPLEFT", F, "TOPLEFT", M.listeG, -M.listeH)
-vue:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -M.listeD, M.listeB)
-local contenu = CreateFrame("Frame", nil, vue)
-contenu:SetWidth(M.listeL)
-contenu:SetHeight(1)
-vue:SetScrollChild(contenu)
+local view = CreateFrame("ScrollFrame", "ForeverUIAddonListScrollBox", F)
+view:SetPoint("TOPLEFT", F, "TOPLEFT", M.listLeft, -M.listTop)
+view:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -M.listRight, M.listBottom)
+local content = CreateFrame("Frame", nil, view)
+content:SetWidth(M.listW)
+content:SetHeight(1)
+view:SetScrollChild(content)
 
-local barre = G.BarreMinimale(F, "ForeverUIAddonListScrollBar")
-barre:SetPoint("TOPLEFT", vue, "TOPRIGHT", 4, -3)
-barre:SetPoint("BOTTOMLEFT", vue, "BOTTOMRIGHT", 4, 2)
-barre.pas = M.pas
+local bar = G.MinimalBar(F, "ForeverUIAddonListScrollBar")
+bar:SetPoint("TOPLEFT", view, "TOPRIGHT", 4, -3)
+bar:SetPoint("BOTTOMLEFT", view, "BOTTOMRIGHT", 4, 2)
+bar.step = M.step
 
--- la barre seulement si elle sert ; sans elle, la liste et ses lignes
--- s'etendent (M.listeDSans), avec elle, les bornes de camelot
-barre.cacherSiInutile = true
-local function largeurLigne()
-	return M.largeur - M.listeG - (barre:IsShown() and M.listeD or M.listeDSans) - 2 * M.marge
+-- the bar only when needed; without it, the list and its rows widen (M.listRightNoBar),
+-- with it, camelot's bounds
+bar.hideIfUnneeded = true
+local function rowWidth()
+	return M.width - M.listLeft - (bar:IsShown() and M.listRight or M.listRightNoBar) - 2 * M.margin
 end
-barre.surVisibilite = function(avec)
-	local d = avec and M.listeD or M.listeDSans
-	vue:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -d, M.listeB)
-	contenu:SetWidth(M.largeur - M.listeG - d)
-	for _, l in ipairs(etat.lignes) do
-		l:SetWidth(largeurLigne())
+bar.onVisibility = function(hasBar)
+	local d = hasBar and M.listRight or M.listRightNoBar
+	view:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -d, M.listBottom)
+	content:SetWidth(M.width - M.listLeft - d)
+	for _, l in ipairs(state.rows) do
+		l:SetWidth(rowWidth())
 	end
 end
 
--- une ligne entierement hors de la vue se cache
-local function defiler(position)
-	etat.position = position
-	vue:SetVerticalScroll(position)
-	for k, l in ipairs(etat.lignes) do
-		if l.rang then
-			local haut = M.marge + (l.rang - 1) * M.pas
-			G.Montrer(l, haut + M.ligneH > position and haut < position + M.listeVue)
+-- a row fully outside the view is hidden
+local function scrollTo(position)
+	state.position = position
+	view:SetVerticalScroll(position)
+	for k, l in ipairs(state.rows) do
+		if l.rank then
+			local top = M.margin + (l.rank - 1) * M.step
+			G.SetShown(l, top + M.rowH > position and top < position + M.listView)
 		end
 	end
 end
-barre.surDefilement = defiler
+bar.onScroll = scrollTo
 
-vue:EnableMouseWheel(true)
-vue:SetScript("OnMouseWheel", function(_, sens)
-	barre:Deplacer(barre.position - sens * M.molette * M.pas)
+view:EnableMouseWheel(true)
+view:SetScript("OnMouseWheel", function(_, direction)
+	bar:MoveTo(bar.position - direction * M.wheel * M.step)
 end)
 
-local function ligne(k)
-	if etat.lignes[k] then
-		return etat.lignes[k]
+-- Returns list row k, creating it on first use.
+local function row(k)
+	if state.rows[k] then
+		return state.rows[k]
 	end
-	local l = CreateFrame("Button", nil, contenu)
-	l:SetHeight(M.ligneH)
-	l:SetWidth(largeurLigne())
-	l:SetPoint("TOPLEFT", contenu, "TOPLEFT", M.marge, -(M.marge + (k - 1) * M.pas))
+	local l = CreateFrame("Button", nil, content)
+	l:SetHeight(M.rowH)
+	l:SetWidth(rowWidth())
+	l:SetPoint("TOPLEFT", content, "TOPLEFT", M.margin, -(M.margin + (k - 1) * M.step))
 	l:RegisterForClicks("LeftButtonDown", "RightButtonDown")
 	local s = l:CreateTexture(nil, "HIGHLIGHT")
-	s:SetTexture(SURVOL)
+	s:SetTexture(HOVER)
 	s:SetBlendMode("ADD")
 	s:SetHeight(22)
 	s:SetPoint("LEFT", l, "LEFT", 40, 0)
 	s:SetPoint("RIGHT", l, "RIGHT")
-	l.titre = l:CreateFontString(nil, "BACKGROUND")
-	l.titre:SetFontObject(G.Police("GameFontNormal"))
-	l.titre:SetJustifyH("LEFT")
-	l.titre:SetWidth(300)
-	l.titre:SetHeight(12)
-	l.titre:SetPoint("LEFT", l, "LEFT", 32, 0)
-	-- le bouton d'adresse et celui de mise a jour, a la meme place
-	l.adresse = CreateFrame("Button", nil, l)
-	l.adresse:SetNormalTexture(NOTE)
-	l.adresse:SetHighlightTexture(NOTE)
-	l.adresse:GetHighlightTexture():SetBlendMode("ADD")
-	l.maj = CreateFrame("Button", nil, l)
-	l.maj:SetNormalTexture(ETOILE)
-	l.maj:GetNormalTexture():SetTexCoord(0.75, 1, 0, 1)
-	l.maj:SetHighlightTexture(ETOILE)
-	l.maj:GetHighlightTexture():SetTexCoord(0.75, 1, 0, 1)
-	l.maj:GetHighlightTexture():SetBlendMode("ADD")
-	for _, b in ipairs({ l.adresse, l.maj }) do
+	l.title = l:CreateFontString(nil, "BACKGROUND")
+	l.title:SetFontObject(G.Font("GameFontNormal"))
+	l.title:SetJustifyH("LEFT")
+	l.title:SetWidth(300)
+	l.title:SetHeight(12)
+	l.title:SetPoint("LEFT", l, "LEFT", 32, 0)
+	-- the URL button and the update button, at the same place
+	l.url = CreateFrame("Button", nil, l)
+	l.url:SetNormalTexture(NOTE)
+	l.url:SetHighlightTexture(NOTE)
+	l.url:GetHighlightTexture():SetBlendMode("ADD")
+	l.update = CreateFrame("Button", nil, l)
+	l.update:SetNormalTexture(STAR)
+	l.update:GetNormalTexture():SetTexCoord(0.75, 1, 0, 1)
+	l.update:SetHighlightTexture(STAR)
+	l.update:GetHighlightTexture():SetTexCoord(0.75, 1, 0, 1)
+	l.update:GetHighlightTexture():SetBlendMode("ADD")
+	for _, b in ipairs({ l.url, l.update }) do
 		b:SetWidth(16)
 		b:SetHeight(16)
-		b:SetPoint("LEFT", l.titre, "RIGHT", 0, 0)
+		b:SetPoint("LEFT", l.title, "RIGHT", 0, 0)
 		b:Hide()
 		b:SetScript("OnEnter", function(self)
 			GlueTooltip_SetOwner(self)
-			GlueTooltip_SetText(self.infobulle)
+			GlueTooltip_SetText(self.tooltip)
 		end)
 		b:SetScript("OnLeave", function() GlueTooltip:Hide() end)
-		-- le clic du client : AddonList.selectedID, puis la confirmation
+		-- the client's click: AddonList.selectedID, then the confirmation
 		b:SetScript("OnClick", function(self)
 			AddonList.selectedID = self:GetParent().index
 			AddonDialog_Show("CONFIRM_LAUNCH_ADDON_URL", self.url)
 		end)
 	end
-	l.statut = l:CreateFontString(nil, "BACKGROUND")
-	l.statut:SetFontObject(G.Police("GameFontNormalSmall"))
-	l.statut:SetJustifyH("LEFT")
-	l.statut:SetPoint("RIGHT", l, "RIGHT", 0, 0)
+	l.status = l:CreateFontString(nil, "BACKGROUND")
+	l.status:SetFontObject(G.Font("GameFontNormalSmall"))
+	l.status:SetJustifyH("LEFT")
+	l.status:SetPoint("RIGHT", l, "RIGHT", 0, 0)
 	local c = CreateFrame("CheckButton", nil, l)
 	c:SetWidth(24)
 	c:SetHeight(24)
 	c:SetPoint("LEFT", l, "LEFT", 5, 0)
 	c:SetHitRectInsets(0, 0, 0, 8)
-	caseMinimale(c)
-	l.case = c
+	skinMinimalCheckbox(c)
+	l.checkbox = c
 	-- AddonList_Enable
 	c:SetScript("OnClick", function(self)
 		local index = self:GetParent().index
-		if vrai(self:GetChecked()) then
-			PlaySound(SON.oui)
-			EnableAddOn(etat.personnage, index)
+		if truthy(self:GetChecked()) then
+			PlaySound(SOUND.yes)
+			EnableAddOn(state.character, index)
 		else
-			PlaySound(SON.non)
-			DisableAddOn(etat.personnage, index)
+			PlaySound(SOUND.no)
+			DisableAddOn(state.character, index)
 		end
-		maj()
+		update()
 	end)
 	c:SetScript("OnEnter", function(self)
-		if self.infobulle then
-			montrerBulle(self, self.infobulle)
+		if self.tooltip then
+			showTooltip(self, self.tooltip)
 		end
 	end)
-	c:SetScript("OnLeave", function() bulle:Hide() end)
-	l:SetScript("OnClick", function(self, bouton)
-		if bouton == "LeftButton" then
-			self.case:Click()
+	c:SetScript("OnLeave", function() tooltipFrame:Hide() end)
+	l:SetScript("OnClick", function(self, button)
+		if button == "LeftButton" then
+			self.checkbox:Click()
 		end
 	end)
-	l:SetScript("OnEnter", function(self) bulleAddOn(self) end)
-	l:SetScript("OnLeave", function() bulle:Hide() end)
-	etat.lignes[k] = l
+	l:SetScript("OnEnter", function(self) showAddOnTooltip(self) end)
+	l:SetScript("OnLeave", function() tooltipFrame:Hide() end)
+	state.rows[k] = l
 	return l
 end
 
--- AddonList_InitAddon de camelot, sur GetAddOnInfo et GetAddOnEnableState
-local function remplir(l, index)
-	local nom, titre, _, adresse, chargeable, raison, _, nouvelle = GetAddOnInfo(index)
-	local niveau = GetAddOnEnableState(etat.personnage, index) or 0
-	local actif = niveau > 0
+-- camelot AddonList_InitAddon, on GetAddOnInfo and GetAddOnEnableState
+local function populate(l, index)
+	local name, title, _, url, loadable, reason, _, newVersion = GetAddOnInfo(index)
+	local level = GetAddOnEnableState(state.character, index) or 0
+	local active = level > 0
 	l.index = index
-	local c = l.case
-	c:SetChecked(actif)
-	c:GetCheckedTexture():SetDesaturated(niveau == 1)
-	c.infobulle = (niveau == 1) and ENABLED_FOR_SOME or nil
-	if chargeable or (actif and (raison == "DEP_DEMAND_LOADED" or raison == "DEMAND_LOADED")) then
-		l.titre:SetTextColor(1.0, 0.78, 0.0)
-	elseif actif and raison ~= "DEP_DISABLED" then
-		l.titre:SetTextColor(1.0, 0.1, 0.1)
+	local c = l.checkbox
+	c:SetChecked(active)
+	c:GetCheckedTexture():SetDesaturated(level == 1)
+	c.tooltip = (level == 1) and ENABLED_FOR_SOME or nil
+	if loadable or (active and (reason == "DEP_DEMAND_LOADED" or reason == "DEMAND_LOADED")) then
+		l.title:SetTextColor(1.0, 0.78, 0.0)
+	elseif active and reason ~= "DEP_DISABLED" then
+		l.title:SetTextColor(1.0, 0.1, 0.1)
 	else
-		l.titre:SetTextColor(0.5, 0.5, 0.5)
+		l.title:SetTextColor(0.5, 0.5, 0.5)
 	end
-	l.titre:SetText(titre or nom or "")
-	-- AddonList_Update de 3.3.5 : l'etoile si une version plus recente est
-	-- annoncee, sinon la note, quand il y a une adresse
-	l.adresse:Hide()
-	l.maj:Hide()
-	if adresse then
-		local b = nouvelle and l.maj or l.adresse
-		b.url = adresse
-		b.infobulle = (nouvelle and ADDON_UPDATE_AVAILABLE or "") .. CLICK_TO_LAUNCH_ADDON_URL .. adresse
+	l.title:SetText(title or name or "")
+	-- 3.3.5 AddonList_Update: the star when a newer version is announced, else the note,
+	-- when there is a URL
+	l.url:Hide()
+	l.update:Hide()
+	if url then
+		local b = newVersion and l.update or l.url
+		b.url = url
+		b.tooltip = (newVersion and ADDON_UPDATE_AVAILABLE or "") .. CLICK_TO_LAUNCH_ADDON_URL .. url
 		b:Show()
 	end
-	if not chargeable and raison then
-		l.statut:SetText(_G["ADDON_" .. raison] or raison)
+	if not loadable and reason then
+		l.status:SetText(_G["ADDON_" .. reason] or reason)
 	else
-		l.statut:SetText("")
+		l.status:SetText("")
 	end
 end
 
--- AddonList_Update de camelot : le filtre, les lignes, l'etendue ; la
--- position est gardee (RetainScrollPosition)
-maj = function()
-	local filtre = string.lower(cherche:GetText() or "")
+-- camelot AddonList_Update: filter, rows, extent; the scroll position is kept
+-- (RetainScrollPosition)
+update = function()
+	local filter = string.lower(searching:GetText() or "")
 	local n = 0
 	for index = 1, GetNumAddOns() do
-		local nom, titre = GetAddOnInfo(index)
-		if filtre == "" or string.find(string.lower(titre or ""), filtre, 1, true)
-			or string.find(string.lower(nom or ""), filtre, 1, true) then
+		local name, title = GetAddOnInfo(index)
+		if filter == "" or string.find(string.lower(title or ""), filter, 1, true)
+			or string.find(string.lower(name or ""), filter, 1, true) then
 			n = n + 1
-			local l = ligne(n)
-			l.rang = n
-			remplir(l, index)
+			local l = row(n)
+			l.rank = n
+			populate(l, index)
 		end
 	end
-	for k = n + 1, #etat.lignes do
-		etat.lignes[k].rang = nil
-		etat.lignes[k]:Hide()
+	for k = n + 1, #state.rows do
+		state.rows[k].rank = nil
+		state.rows[k]:Hide()
 	end
 	local total = 0
 	if n > 0 then
-		total = 2 * M.marge + n * M.ligneH + (n - 1) * M.ecart
+		total = 2 * M.margin + n * M.rowH + (n - 1) * M.gap
 	end
-	contenu:SetHeight(math.max(total, 1))
-	vue:UpdateScrollChildRect()
-	barre:Regler(total, M.listeVue, etat.position)
-	defiler(barre.position)
-	force:SetChecked(not vrai(IsAddonVersionCheckEnabled()))
-	texteChoisi()
+	content:SetHeight(math.max(total, 1))
+	view:UpdateScrollChildRect()
+	bar:Configure(total, M.listView, state.position)
+	scrollTo(bar.position)
+	force:SetChecked(not truthy(IsAddonVersionCheckEnabled()))
+	selectedText()
 end
 
--- ------------------------------------------------------------ les boutons
+-- ------------------------------------------------------------ Buttons
 
-local POLICES = { "GameFontNormal", "GameFontHighlight", "GameFontDisable" }
-local annuler = G.CreerBoutonTroisTranches("ForeverUIAddonListCancelButton", F, 80, 22, "128-RedButton", POLICES, CANCEL)
-annuler:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -4, 4)
-annuler:SetScript("OnClick", function() AddonList_OnCancel() end)
-local ok = G.CreerBoutonTroisTranches("ForeverUIAddonListOkayButton", F, 80, 22, "128-RedButton", POLICES, OKAY)
-ok:SetPoint("TOPRIGHT", annuler, "TOPLEFT", 0, 0)
+local FONTS = { "GameFontNormal", "GameFontHighlight", "GameFontDisable" }
+local cancel = G.CreateThreeSliceButton("ForeverUIAddonListCancelButton", F, 80, 22, "128-RedButton", FONTS, CANCEL)
+cancel:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -4, 4)
+cancel:SetScript("OnClick", function() AddonList_OnCancel() end)
+local ok = G.CreateThreeSliceButton("ForeverUIAddonListOkayButton", F, 80, 22, "128-RedButton", FONTS, OKAY)
+ok:SetPoint("TOPRIGHT", cancel, "TOPLEFT", 0, 0)
 ok:SetScript("OnClick", function() AddonList_OnOk() end)
-local tout = G.CreerBoutonTroisTranches("ForeverUIAddonListEnableAllButton", F, 120, 22, "128-RedButton", POLICES, ENABLE_ALL_ADDONS)
-tout:SetPoint("BOTTOMLEFT", F, "BOTTOMLEFT", 4, 4)
-tout:SetScript("OnClick", function()
-	EnableAllAddOns(etat.personnage)
-	maj()
+local all = G.CreateThreeSliceButton("ForeverUIAddonListEnableAllButton", F, 120, 22, "128-RedButton", FONTS, ENABLE_ALL_ADDONS)
+all:SetPoint("BOTTOMLEFT", F, "BOTTOMLEFT", 4, 4)
+all:SetScript("OnClick", function()
+	EnableAllAddOns(state.character)
+	update()
 end)
-local aucun = G.CreerBoutonTroisTranches("ForeverUIAddonListDisableAllButton", F, 120, 22, "128-RedButton", POLICES, DISABLE_ALL_ADDONS)
-aucun:SetPoint("TOPLEFT", tout, "TOPRIGHT", 0, 0)
-aucun:SetScript("OnClick", function()
-	DisableAllAddOns(etat.personnage)
-	maj()
+local none = G.CreateThreeSliceButton("ForeverUIAddonListDisableAllButton", F, 120, 22, "128-RedButton", FONTS, DISABLE_ALL_ADDONS)
+none:SetPoint("TOPLEFT", all, "TOPRIGHT", 0, 0)
+none:SetScript("OnClick", function()
+	DisableAllAddOns(state.character)
+	update()
 end)
-for _, b in ipairs({ annuler, ok, tout, aucun }) do
-	b:SetFrameLevel(DEVANT)
+for _, b in ipairs({ cancel, ok, all, none }) do
+	b:SetFrameLevel(FRONT_LEVEL)
 end
 
--- ------------------------------------------------------------ apres le client
+-- ------------------------------------------------------------ After the client
 
-G.AccrocherFonction("AddonList_Update", function()
-	maj()
+G.HookFunction("AddonList_Update", function()
+	update()
 end)
-G.Accrocher(AddonList, "OnHide", function()
-	fermerListe(true)
-	bulle:Hide()
+G.Hook(AddonList, "OnHide", function()
+	closeList(true)
+	tooltipFrame:Hide()
 end)
 
--- ------------------------------------------------------------ le dialogue des AddOns perimes
+-- ------------------------------------------------------------ Out of date AddOns dialog
 
-local boutonPanneau = G.BoutonPanneau
+local panelButton = G.PanelButton
 
--- DialogBorderTemplate de 512 ; AddonDialog_Show du client pose les boutons
--- et la hauteur comme camelot (16 + texte + 8 + bouton + 16)
+-- 512 DialogBorderTemplate; the client's AddonDialog_Show places the buttons and the
+-- height like camelot (16 + text + 8 + button + 16)
 AddonDialogBackground:SetBackdrop(nil)
-G.CadreDialogue(AddonDialogBackground)
-AddonDialogText:SetFontObject(G.Police("GameFontNormalLarge"))
+G.DialogFrame(AddonDialogBackground)
+AddonDialogText:SetFontObject(G.Font("GameFontNormalLarge"))
 for i = 1, 2 do
 	local b = _G["AddonDialogButton" .. i]
 	b:SetWidth(120)
 	b:SetHeight(22)
-	boutonPanneau(b)
+	panelButton(b)
 end

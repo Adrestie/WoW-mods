@@ -1,169 +1,113 @@
--- ForeverUI : la fenetre du maitre (ClassTrainerFrame, Blizzard_TrainerUI
--- charge a la demande), a la DA de camelot (chantier des PNJ, etape 3,
--- demande de l'utilisateur du 2026-09-28).
---
--- RELEVE -- CAMELOT (blizzard_trainerui/mainline/blizzard_trainerui.xml et
--- .lua ; blizzard_trainerui_camelot.lua : TrainerUI_UseCategories = true) :
---   cadre          ButtonFrameTemplate 338 x 424, portrait du PNJ, titre =
---                  son nom ; encart (4, -60 / -6, 26) ; croix (-2, 1)
---   rang           ClassTrainerStatusBar 130 x 18 a (64, -35) (maitre de
---                  metier) : fond (0, 0, .75, .5), barre UI-Character-
---                  Skills-Bar (0, 0, 1, .5), bords GuildFrame (gauche et
---                  droite 18 a (-2, 0) / (2, 0), milieu entre eux), texte
---                  GameFontHighlightSmall au centre
---   filtre         WowStyle1FilterDropdownTemplate TOPRIGHT (-13, -35), 18
---                  de haut (Gb.MenuFiltre)
---   liste          ScrollBox 302 x 330 a (5, -5) de l'encart (Update) ; vue
---                  en arbre : retrait 10, marges haut 1, bas 1, droite 1 ;
---                  fond TrainerTextures (u .00195-.58594, v .00195-.65430)
---                  de (-3, 4) a (3, -4) de la liste ; barre MinimalScrollBar
---                  (5, -2 / 5, -2)
---   categorie      TrainerUICategoryTemplate, 25 : Professions-recipe-
---                  header-left / -right a leur taille (LEFT / RIGHT, y 2),
---                  -middle entre eux ; nom GameFontNormal_NoShadow LEFT
---                  (10, 2) sur 10 (Highlight au survol) ; -expand (repliee)
---                  / -collapse a RIGHT (-10, 2), le meme en ADD au survol
---   competence     ClassTrainerSkillButtonTemplate, 47 : plaque, survol
---                  (ADD) et choix (ADD) TrainerTextures ; icone 36 a LEFT
---                  (6, 0), desaturee indisponible ; nom GameFontNormal sur 12
---                  a (6, -1) de l'icone ; rang (PARENS_TEMPLATE)
---                  GameFontNormalSmall a (5, -1) du nom ; prerequis
---                  SystemFont_Shadow_Small 240 x 30 a (0, -19) du nom
---                  (REQUIRES_LABEL, TRAINER_REQ_*, ITEM_SPELL_KNOWN si
---                  connue) ; prix SmallMoneyFrame TOPRIGHT (5, -7), rouge
---                  si trop cher, cache si connue ; voile gris (.55) en MOD a
---                  2 du bord si indisponible ; infobulle SetTrainerService a
---                  ANCHOR_RIGHT (35)
---   bas            Former (TRAIN) 80 x 22 BOTTOMRIGHT (-6, 4) ; l'argent
---                  UI-MoneyFrame-Border 148 x 34 a BOTTOMLEFT (5, -9), la
---                  bourse a sa droite (8, 6)
---
--- RELEVE -- 3.3.5 (Blizzard_TrainerUI.xml / .lua) : 384 x 512 ; liste PLATE
--- de 11 lignes de 16 (les en-tetes dans l'index, GetTrainerServiceInfo :
--- nom, rang, type header / available / unavailable / used, deplie) ;
--- panneau de details sous la liste ; Tout replier ; Quitter ; texte
--- d'accueil ; ClassTrainerFrame_Update, ClassTrainer_SetSelection.
---
--- CE QUI DIFFERE, ET POURQUOI.
---   * La liste est a nous (lignes de camelot) ; le client en garde la
---     logique : un clic fait ce que fait sa ligne (ClassTrainerSkillButton_
---     OnClick), un en-tete se replie par Expand / CollapseTrainerSkillLine.
---     Ses lignes, sa liste et son panneau de details restent en place,
---     invisibles et sans souris (le panneau pilote le bouton Former).
---   * Pas de panneau de details ni de texte d'accueil, ni Tout replier ni
---     Quitter : camelot n'en a pas (la description est dans l'infobulle).
---     Un clic modifie sur une ligne fait ce que faisait l'icone du panneau
---     de 3.3.5 (HandleModifiedItemClick).
---   * La liste avance d'une ligne a la fois (3.3.5 ne rogne que dans une
---     ScrollFrame) ; la barre suit la regle de l'atelier : cachee si tout
---     tient, et sans elle la liste et son fond gardent a droite la marge
---     qu'ils ont a gauche (318 de large).
---   * Le rang : GetTrainerTradeskillRankValues n'existe pas en 3.3.5 ; il
---     est lu dans les competences du joueur (GetSkillLineInfo) par le nom
---     du metier du maitre (GetTrainerServiceSkillLine).
---   * Les polices sans ombre de camelot n'existent pas en 3.3.5 : creees.
+-- Trainer window (ClassTrainerFrame, load-on-demand Blizzard_TrainerUI) in the Camelot style
+-- (blizzard_trainerui.xml / .lua, with categories). The list is ours; clicks and headers use
+-- the client's logic, and its rows, list and detail panel stay in place, invisible and
+-- without mouse (the panel drives the Train button). Camelot has no detail panel, greeting,
+-- Collapse All or Exit: the description is in the tooltip.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 local L = ForeverUI.L
 
 local T = {}
-ForeverUI.Maitre = T
 
 local SEP = string.char(92)
 local TEXTURES = "Interface" .. SEP .. "ForeverUI" .. SEP .. "classtrainerframe" .. SEP .. "trainertextures"
 
+-- Layout from camelot blizzard_trainerui.xml
 local N = {
-	fenetre = { 338, 424 },
-	portrait = { cote = 48, x = 1, y = 1.5 },
-	encart = { 4, -60, -6, 26 },
-	rang = { 64, -35, 130, 18, bord = 18 },
-	filtre = { -13, -35, 18 },
-	liste = { 5, -5, 302, 330, sansBarre = 318, haut = 1, bas = 1, droite = 1, retrait = 10 },
-	fondListe = { -3, 4, 3, -4 },
-	barre = { 5, -2 },
-	categorie = { h = 25, nom = { 10, 2, 10 }, fleche = { -10, 2 }, bout = 2 },
-	competence = { h = 47, icone = { 36, 6 }, nom = { 6, -1, 12 }, rang = { 5, -1, 12 },
-		prerequis = { 0, -19, 240, 30 }, prix = { 5, -7 }, voile = 2, gris = 0.55, bulle = 35 },
-	former = { 80, 22, -6, 4 },
-	argent = { 148, 34, 5, -9, bourse = { 8, 6 } },
+	window = { 338, 424 },
+	portrait = { side = 48, x = 1, y = 1.5 },
+	inset = { 4, -60, -6, 26 },
+	rank = { 64, -35, 130, 18, edge = 18 },
+	filter = { -13, -35, 18 },
+	list = { 5, -5, 302, 330, noBar = 318, top = 1, down = 1, right = 1, indent = 10 },
+	listBackground = { -3, 4, 3, -4 },
+	bar = { 5, -2 },
+	category = { h = 25, name = { 10, 2, 10 }, arrow = { -10, 2 }, tip = 2 },
+	skill = { h = 47, icon = { 36, 6 }, name = { 6, -1, 12 }, rank = { 5, -1, 12 },
+		prereq = { 0, -19, 240, 30 }, price = { 5, -7 }, veil = 2, gray = 0.55, tooltipFrame = 35 },
+	train = { 80, 22, -6, 4 },
+	money = { 148, 34, 5, -9, purse = { 8, 6 } },
 }
 
+-- TrainerTextures coordinates
 local COORDS = {
-	fond = { 0.00195313, 0.5859375, 0.00195313, 0.65429688 },
-	plaque = { 0.00195313, 0.57421875, 0.65820313, 0.75 },
-	survol = { 0.00195313, 0.57421875, 0.75390625, 0.84570313 },
-	choix = { 0.00195313, 0.57421875, 0.84960938, 0.94140625 },
-	rangG = { 0.60742188, 0.625, 0.78710938, 0.82226563 },
-	rangD = { 0.60742188, 0.625, 0.82617188, 0.86132813 },
-	rangM = { 0.60742188, 0.625, 0.74804688, 0.78320313 },
+	background = { 0.00195313, 0.5859375, 0.00195313, 0.65429688 },
+	plate = { 0.00195313, 0.57421875, 0.65820313, 0.75 },
+	hover = { 0.00195313, 0.57421875, 0.75390625, 0.84570313 },
+	choice = { 0.00195313, 0.57421875, 0.84960938, 0.94140625 },
+	rankLeft = { 0.60742188, 0.625, 0.78710938, 0.82226563 },
+	rankRight = { 0.60742188, 0.625, 0.82617188, 0.86132813 },
+	rankMiddle = { 0.60742188, 0.625, 0.74804688, 0.78320313 },
 }
 
 local ART = {
-	marbre = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble",
-	guilde = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildframe",
-	barre = "Interface" .. SEP .. "PaperDollInfoFrame" .. SEP .. "UI-Character-Skills-Bar",
-	argent = "Interface" .. SEP .. "ForeverUI" .. SEP .. "moneyframe" .. SEP .. "ui-moneyframe-border",
+	marble = "interface" .. SEP .. "ForeverUI" .. SEP .. "framegeneral" .. SEP .. "ui-background-marble",
+	guild = "Interface" .. SEP .. "ForeverUI" .. SEP .. "guildframe" .. SEP .. "guildframe",
+	bar = "Interface" .. SEP .. "PaperDollInfoFrame" .. SEP .. "UI-Character-Skills-Bar",
+	money = "Interface" .. SEP .. "ForeverUI" .. SEP .. "moneyframe" .. SEP .. "ui-moneyframe-border",
 }
 
--- GameFontNormal_NoShadow et GameFontHighlight_NoShadow de camelot
-local function sansOmbre(nom, modele)
-	local p = CreateFont(nom)
-	p:SetFontObject(modele)
+-- camelot GameFontNormal_NoShadow / GameFontHighlight_NoShadow, missing from 3.3.5
+local function noShadowFont(name, model)
+	local p = CreateFont(name)
+	p:SetFontObject(model)
 	p:SetShadowOffset(0, 0)
 	p:SetShadowColor(0, 0, 0, 0)
 	return p
 end
-local POLICES = {
-	categorie = sansOmbre("ForeverUIFontNormalNoShadow", GameFontNormal),
-	categorieSurvol = sansOmbre("ForeverUIFontHighlightNoShadow", GameFontHighlight),
+local FONTS = {
+	category = noShadowFont("ForeverUIFontNormalNoShadow", GameFontNormal),
+	categoryHover = noShadowFont("ForeverUIFontHighlightNoShadow", GameFontHighlight),
 }
 
-local function poser(r, ...)
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
-local function morceau(hote, couche, fichier, c)
-	local t = hote:CreateTexture(nil, couche)
-	t:SetTexture(fichier)
+-- Texture with a file and tex coords; c: { left, right, top, bottom }
+local function piece(host, layer, file, c)
+	local t = host:CreateTexture(nil, layer)
+	t:SetTexture(file)
 	t:SetTexCoord(c[1], c[2], c[3], c[4])
 	return t
 end
 
--- ------------------------------------------------------------ les lignes
+-- ------------------------------------------------------------ rows
 
-local function creerCategorie(liste, n)
-	local C = N.categorie
-	local b = CreateFrame("Button", "ForeverUITrainerCategory" .. n, liste)
+-- TrainerUICategoryTemplate: a collapsible header row; n: pool index
+local function createCategory(list, n)
+	local C = N.category
+	local b = CreateFrame("Button", "ForeverUITrainerCategory" .. n, list)
 	b:SetHeight(C.h)
 	local g = b:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(g, "professions-recipe-header-left")
-	g:SetPoint("LEFT", b, "LEFT", 0, C.bout)
+	g:SetPoint("LEFT", b, "LEFT", 0, C.tip)
 	local d = b:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(d, "professions-recipe-header-right")
-	d:SetPoint("RIGHT", b, "RIGHT", 0, C.bout)
+	d:SetPoint("RIGHT", b, "RIGHT", 0, C.tip)
 	local m = b:CreateTexture(nil, "BACKGROUND")
 	ForeverUI.SetAtlas(m, "professions-recipe-header-middle", true)
 	m:SetPoint("TOPLEFT", g, "TOPRIGHT", 0, 0)
 	m:SetPoint("BOTTOMRIGHT", d, "BOTTOMLEFT", 0, 0)
-	local nom = b:CreateFontString(nil, "OVERLAY")
-	nom:SetFontObject(POLICES.categorie)
-	nom:SetJustifyH("LEFT")
-	nom:SetHeight(C.nom[3])
-	nom:SetPoint("LEFT", b, "LEFT", C.nom[1], C.nom[2])
-	local fleche = b:CreateTexture(nil, "ARTWORK")
-	fleche:SetPoint("RIGHT", b, "RIGHT", C.fleche[1], C.fleche[2])
-	local lueur = b:CreateTexture(nil, "HIGHLIGHT")
-	lueur:SetBlendMode("ADD")
-	lueur:SetPoint("CENTER", fleche, "CENTER", 0, 0)
-	b.nom, b.fleche, b.lueur = nom, fleche, lueur
-	b:SetScript("OnEnter", function(self) self.nom:SetFontObject(POLICES.categorieSurvol) end)
-	b:SetScript("OnLeave", function(self) self.nom:SetFontObject(POLICES.categorie) end)
+	local name = b:CreateFontString(nil, "OVERLAY")
+	name:SetFontObject(FONTS.category)
+	name:SetJustifyH("LEFT")
+	name:SetHeight(C.name[3])
+	name:SetPoint("LEFT", b, "LEFT", C.name[1], C.name[2])
+	local arrow = b:CreateTexture(nil, "ARTWORK")
+	arrow:SetPoint("RIGHT", b, "RIGHT", C.arrow[1], C.arrow[2])
+	local glow = b:CreateTexture(nil, "HIGHLIGHT")
+	glow:SetBlendMode("ADD")
+	glow:SetPoint("CENTER", arrow, "CENTER", 0, 0)
+	b.name, b.arrow, b.glow = name, arrow, glow
+	b:SetScript("OnEnter", function(self) self.name:SetFontObject(FONTS.categoryHover) end)
+	b:SetScript("OnLeave", function(self) self.name:SetFontObject(FONTS.category) end)
 	b:SetScript("OnClick", function(self)
-		if self.deplie then
+		if self.expanded then
 			CollapseTrainerSkillLine(self:GetID())
 		else
 			ExpandTrainerSkillLine(self:GetID())
@@ -172,285 +116,290 @@ local function creerCategorie(liste, n)
 	return b
 end
 
-local function creerCompetence(liste, n)
-	local C = N.competence
-	local nom = "ForeverUITrainerSkill" .. n
-	local b = CreateFrame("Button", nom, liste)
+-- ClassTrainerSkillButtonTemplate: a skill row; n: pool index. A modified click acts like
+-- the 3.3.5 detail icon (HandleModifiedItemClick).
+local function createSkill(list, n)
+	local C = N.skill
+	local name = "ForeverUITrainerSkill" .. n
+	local b = CreateFrame("Button", name, list)
 	b:SetHeight(C.h)
 	b:RegisterForClicks("LeftButtonUp")
 	b:SetNormalTexture(TEXTURES)
-	local plaque = b:GetNormalTexture()
-	plaque:SetTexCoord(COORDS.plaque[1], COORDS.plaque[2], COORDS.plaque[3], COORDS.plaque[4])
-	plaque:ClearAllPoints()
-	plaque:SetAllPoints(b)
+	local plate = b:GetNormalTexture()
+	plate:SetTexCoord(COORDS.plate[1], COORDS.plate[2], COORDS.plate[3], COORDS.plate[4])
+	plate:ClearAllPoints()
+	plate:SetAllPoints(b)
 	b:SetHighlightTexture(TEXTURES)
 	local h = b:GetHighlightTexture()
-	h:SetTexCoord(COORDS.survol[1], COORDS.survol[2], COORDS.survol[3], COORDS.survol[4])
+	h:SetTexCoord(COORDS.hover[1], COORDS.hover[2], COORDS.hover[3], COORDS.hover[4])
 	h:ClearAllPoints()
 	h:SetAllPoints(b)
 	h:SetBlendMode("ADD")
-	local voile = b:CreateTexture(nil, "BACKGROUND")
-	voile:SetTexture(C.gris, C.gris, C.gris, 1)
-	voile:SetBlendMode("MOD")
-	voile:SetPoint("TOPLEFT", b, "TOPLEFT", C.voile, -C.voile)
-	voile:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -C.voile, C.voile)
-	voile:Hide()
-	local choix = morceau(b, "OVERLAY", TEXTURES, COORDS.choix)
-	choix:SetBlendMode("ADD")
-	choix:SetAllPoints(b)
-	choix:Hide()
-	local icone = b:CreateTexture(nil, "OVERLAY")
-	icone:SetWidth(C.icone[1])
-	icone:SetHeight(C.icone[1])
-	icone:SetPoint("LEFT", b, "LEFT", C.icone[2], 0)
-	local titre = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	titre:SetJustifyH("LEFT")
-	titre:SetHeight(C.nom[3])
-	titre:SetPoint("TOPLEFT", icone, "TOPRIGHT", C.nom[1], C.nom[2])
-	local prerequis = b:CreateFontString(nil, "OVERLAY")
-	prerequis:SetFontObject(_G.SystemFont_Shadow_Small or GameFontHighlightSmall)
-	prerequis:SetJustifyH("LEFT")
-	prerequis:SetJustifyV("MIDDLE")
-	prerequis:SetWidth(C.prerequis[3])
-	prerequis:SetHeight(C.prerequis[4])
-	prerequis:SetPoint("LEFT", titre, "LEFT", C.prerequis[1], C.prerequis[2])
-	local rang = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	rang:SetJustifyH("LEFT")
-	rang:SetHeight(C.rang[3])
-	rang:SetPoint("BOTTOMLEFT", titre, "BOTTOMRIGHT", C.rang[1], C.rang[2])
-	local prix = CreateFrame("Frame", nom .. "Money", b, "SmallMoneyFrameTemplate")
-	prix:SetPoint("TOPRIGHT", b, "TOPRIGHT", C.prix[1], C.prix[2])
-	if MoneyFrame_SetType then MoneyFrame_SetType(prix, "STATIC") end
-	b.voile, b.choix, b.icone, b.titre, b.prerequis, b.rang, b.prix = voile, choix, icone, titre, prerequis, rang, prix
+	local veil = b:CreateTexture(nil, "BACKGROUND")
+	veil:SetTexture(C.gray, C.gray, C.gray, 1)
+	veil:SetBlendMode("MOD")
+	veil:SetPoint("TOPLEFT", b, "TOPLEFT", C.veil, -C.veil)
+	veil:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -C.veil, C.veil)
+	veil:Hide()
+	local choice = piece(b, "OVERLAY", TEXTURES, COORDS.choice)
+	choice:SetBlendMode("ADD")
+	choice:SetAllPoints(b)
+	choice:Hide()
+	local icon = b:CreateTexture(nil, "OVERLAY")
+	icon:SetWidth(C.icon[1])
+	icon:SetHeight(C.icon[1])
+	icon:SetPoint("LEFT", b, "LEFT", C.icon[2], 0)
+	local title = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	title:SetJustifyH("LEFT")
+	title:SetHeight(C.name[3])
+	title:SetPoint("TOPLEFT", icon, "TOPRIGHT", C.name[1], C.name[2])
+	local prereq = b:CreateFontString(nil, "OVERLAY")
+	prereq:SetFontObject(_G.SystemFont_Shadow_Small or GameFontHighlightSmall)
+	prereq:SetJustifyH("LEFT")
+	prereq:SetJustifyV("MIDDLE")
+	prereq:SetWidth(C.prereq[3])
+	prereq:SetHeight(C.prereq[4])
+	prereq:SetPoint("LEFT", title, "LEFT", C.prereq[1], C.prereq[2])
+	local rank = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	rank:SetJustifyH("LEFT")
+	rank:SetHeight(C.rank[3])
+	rank:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", C.rank[1], C.rank[2])
+	local price = CreateFrame("Frame", name .. "Money", b, "SmallMoneyFrameTemplate")
+	price:SetPoint("TOPRIGHT", b, "TOPRIGHT", C.price[1], C.price[2])
+	if MoneyFrame_SetType then MoneyFrame_SetType(price, "STATIC") end
+	b.veil, b.choice, b.icon, b.title, b.prereq, b.rank, b.price = veil, choice, icon, title, prereq, rank, price
 	b:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT", C.bulle)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT", C.tooltipFrame)
 		GameTooltip:SetTrainerService(self:GetID())
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	b:SetScript("OnClick", function(self, bouton)
+	b:SetScript("OnClick", function(self, button)
 		if IsModifiedClick() then
 			HandleModifiedItemClick(GetTrainerServiceItemLink(self:GetID()))
 			return
 		end
-		ClassTrainerSkillButton_OnClick(self, bouton)
+		ClassTrainerSkillButton_OnClick(self, button)
 	end)
 	return b
 end
 
--- les prerequis d'une competence (ClassTrainerFrame_InitServiceButton de
--- camelot, avec les fonctions de 3.3.5)
-local function prerequis(i, genre)
-	local texte, sep = "", ""
-	local niveau = GetTrainerServiceLevelReq(i)
-	if niveau and niveau > 1 then
-		if UnitLevel("player") >= niveau then
-			texte = texte .. format(TRAINER_REQ_LEVEL, niveau)
+-- Prerequisite text of service i (camelot ClassTrainerFrame_InitServiceButton, with 3.3.5
+-- functions); kind: service type. Returns the text and whether the price shows.
+local function prereq(i, kind)
+	local text, sep = "", ""
+	local level = GetTrainerServiceLevelReq(i)
+	if level and level > 1 then
+		if UnitLevel("player") >= level then
+			text = text .. format(TRAINER_REQ_LEVEL, level)
 		else
-			texte = texte .. format(TRAINER_REQ_LEVEL_RED, niveau)
+			text = text .. format(TRAINER_REQ_LEVEL_RED, level)
 		end
 		sep = PLAYER_LIST_DELIMITER
 	end
-	local competence, rangReq, aRang = GetTrainerServiceSkillReq(i)
-	if competence then
-		texte = texte .. sep .. format(aRang and TRAINER_REQ_SKILL_RANK or TRAINER_REQ_SKILL_RANK_RED, competence, rangReq)
+	local skill, rankReq, hasRank = GetTrainerServiceSkillReq(i)
+	if skill then
+		text = text .. sep .. format(hasRank and TRAINER_REQ_SKILL_RANK or TRAINER_REQ_SKILL_RANK_RED, skill, rankReq)
 		sep = PLAYER_LIST_DELIMITER
 	end
 	for j = 1, GetTrainerServiceNumAbilityReq(i) or 0 do
-		local sort, aSort = GetTrainerServiceAbilityReq(i, j)
-		if sort then
-			texte = texte .. sep .. format(aSort and TRAINER_REQ_ABILITY or TRAINER_REQ_ABILITY_RED, sort)
+		local spell, hasAbility = GetTrainerServiceAbilityReq(i, j)
+		if spell then
+			text = text .. sep .. format(hasAbility and TRAINER_REQ_ABILITY or TRAINER_REQ_ABILITY_RED, spell)
 			sep = PLAYER_LIST_DELIMITER
 		end
 	end
-	if genre == "used" then
+	if kind == "used" then
 		return ITEM_SPELL_KNOWN, false
-	elseif texte ~= "" then
-		return REQUIRES_LABEL .. " " .. texte, true
+	elseif text ~= "" then
+		return REQUIRES_LABEL .. " " .. text, true
 	end
 	return "", true
 end
 
-local function remplirCompetence(b, i, argent)
-	local nom, sousNom, genre = GetTrainerServiceInfo(i)
+-- Fills a skill row from service i; money: the player's money, to color the price
+local function fillSkill(b, i, money)
+	local name, subName, kind = GetTrainerServiceInfo(i)
 	b:SetID(i)
-	b.icone:SetTexture(GetTrainerServiceIcon(i))
-	local texte, montrerPrix = prerequis(i, genre)
-	local indisponible = genre == "unavailable"
-	b.icone:SetDesaturated(indisponible)
-	Gb.Montrer(b.voile, indisponible)
-	b.titre:SetText(nom or UNKNOWN)
-	b.prerequis:SetText(texte)
-	b.rang:SetText((sousNom and sousNom ~= "") and format(PARENS_TEMPLATE, sousNom) or "")
-	local cout = GetTrainerServiceCost(i)
-	if montrerPrix and cout and cout > 0 then
-		MoneyFrame_Update(b.prix:GetName(), cout)
-		SetMoneyFrameColor(b.prix:GetName(), argent >= cout and "white" or "red")
-		b.prix:Show()
+	b.icon:SetTexture(GetTrainerServiceIcon(i))
+	local text, showPrice = prereq(i, kind)
+	local unavailable = kind == "unavailable"
+	b.icon:SetDesaturated(unavailable)
+	Tpl.SetShown(b.veil, unavailable)
+	b.title:SetText(name or UNKNOWN)
+	b.prereq:SetText(text)
+	b.rank:SetText((subName and subName ~= "") and format(PARENS_TEMPLATE, subName) or "")
+	local cost = GetTrainerServiceCost(i)
+	if showPrice and cost and cost > 0 then
+		MoneyFrame_Update(b.price:GetName(), cost)
+		SetMoneyFrameColor(b.price:GetName(), money >= cost and "white" or "red")
+		b.price:Show()
 	else
-		b.prix:Hide()
+		b.price:Hide()
 	end
-	Gb.Montrer(b.choix, ClassTrainerFrame.selectedService == i)
+	Tpl.SetShown(b.choice, ClassTrainerFrame.selectedService == i)
 end
 
--- combien de lignes tiennent depuis la i-eme (les hauteurs different)
-local function hauteurDe(i)
-	local _, _, genre = GetTrainerServiceInfo(i)
-	return genre == "header" and N.categorie.h or N.competence.h
+-- Row height of service i (headers and skills differ)
+local function heightOf(i)
+	local _, _, kind = GetTrainerServiceInfo(i)
+	return kind == "header" and N.category.h or N.skill.h
 end
 
-local function tiennent(depuis, total, place)
-	local y, n = N.liste.haut, 0
-	for i = depuis, total do
-		local h = hauteurDe(i)
-		if y + h > place then break end
+-- How many rows from fromIndex fit in the height position
+local function fitCount(fromIndex, total, position)
+	local y, n = N.list.top, 0
+	for i = fromIndex, total do
+		local h = heightOf(i)
+		if y + h > position then break end
 		y = y + h
 		n = n + 1
 	end
 	return n
 end
 
--- la liste (et son fond) selon la barre : sa place de camelot, ou sans
--- barre la meme marge a droite qu'a gauche
-local function poserListe(avec)
-	local h = ClassTrainerFrame.foreverHabit
-	local Li = N.liste
-	h.liste:SetWidth(avec and Li[3] or Li.sansBarre)
+-- List width depending on the scroll bar: camelot's width, or without a bar the same margin
+-- on the right as on the left
+local function layoutList(hasBar)
+	local h = ClassTrainerFrame.foreverSkin
+	local Li = N.list
+	h.list:SetWidth(hasBar and Li[3] or Li.noBar)
 end
 
--- APRES ClassTrainerFrame_Update : la liste de camelot, sur les donnees du
--- client ; portrait, titre, rang
-function T.Maj()
+-- Runs after ClassTrainerFrame_Update: camelot's list on the client's data, plus portrait,
+-- title and rank. The list scrolls one row at a time (3.3.5 clips only in a ScrollFrame).
+function T.Update()
 	local f = ClassTrainerFrame
-	local h = f and f.foreverHabit
+	local h = f and f.foreverSkin
 	if not h then return end
 	SetPortraitTexture(h.portrait, "npc")
-	T.MajRang()
+	T.UpdateRank()
 	local total = GetNumTrainerServices() or 0
-	local place = N.liste[4] - N.liste.bas
-	-- le plus grand decalage : celui d'ou la fin tient
-	local maxi = 0
+	local position = N.list[4] - N.list.down
+	-- Largest offset: the one from which the end fits
+	local maxValue = 0
 	for d = 0, total do
-		if tiennent(d + 1, total, place) >= total - d then
-			maxi = d
+		if fitCount(d + 1, total, position) >= total - d then
+			maxValue = d
 			break
 		end
 	end
-	h.maxi = maxi
-	-- la selection en vue quand elle change (le client choisit la premiere
-	-- competence apprenable a l'ouverture)
-	local choisi = f.selectedService
-	if choisi and choisi ~= h.dernierChoix then
-		h.dernierChoix = choisi
-		if choisi <= h.decalage then
-			h.decalage = choisi - 1
-		elseif choisi > h.decalage + tiennent(h.decalage + 1, total, place) then
-			local d = choisi - 1
-			while d > 0 and tiennent(d, total, place) >= choisi - d + 1 do d = d - 1 end
-			h.decalage = d
+	h.maxValue = maxValue
+	-- Keep the selection in view when it changes (the client selects the first learnable skill
+	-- on open)
+	local selected = f.selectedService
+	if selected and selected ~= h.lastChoice then
+		h.lastChoice = selected
+		if selected <= h.offset then
+			h.offset = selected - 1
+		elseif selected > h.offset + fitCount(h.offset + 1, total, position) then
+			local d = selected - 1
+			while d > 0 and fitCount(d, total, position) >= selected - d + 1 do d = d - 1 end
+			h.offset = d
 		end
 	end
-	h.decalage = math.max(0, math.min(h.decalage or 0, maxi))
-	local avec = maxi > 0
-	if avec ~= h.avecBarre then
-		h.avecBarre = avec
-		poserListe(avec)
+	h.offset = math.max(0, math.min(h.offset or 0, maxValue))
+	local hasBar = maxValue > 0
+	if hasBar ~= h.hasBar then
+		h.hasBar = hasBar
+		layoutList(hasBar)
 	end
-	local largeur = h.liste:GetWidth() - N.liste.droite
-	local argent = GetMoney()
-	local y, nc, ns = N.liste.haut, 0, 0
-	local sousCategorie = false
-	-- un en-tete avant le decalage met les competences suivantes en retrait
-	for i = 1, h.decalage do
-		local _, _, genre = GetTrainerServiceInfo(i)
-		if genre == "header" then sousCategorie = true end
+	local width = h.list:GetWidth() - N.list.right
+	local money = GetMoney()
+	local y, nc, ns = N.list.top, 0, 0
+	local subCategory = false
+	-- A header before the offset indents the following skills
+	for i = 1, h.offset do
+		local _, _, kind = GetTrainerServiceInfo(i)
+		if kind == "header" then subCategory = true end
 	end
-	for i = h.decalage + 1, total do
-		local nom, _, genre, deplie = GetTrainerServiceInfo(i)
-		local ht = (genre == "header") and N.categorie.h or N.competence.h
-		if y + ht > place then break end
-		local ligne
-		if genre == "header" then
-			sousCategorie = true
+	for i = h.offset + 1, total do
+		local name, _, kind, expanded = GetTrainerServiceInfo(i)
+		local ht = (kind == "header") and N.category.h or N.skill.h
+		if y + ht > position then break end
+		local row
+		if kind == "header" then
+			subCategory = true
 			nc = nc + 1
-			ligne = h.categories[nc] or creerCategorie(h.liste, nc)
-			h.categories[nc] = ligne
-			ligne:SetID(i)
-			ligne.deplie = deplie and true or false
-			ligne.nom:SetText(nom or "")
-			local atlas = deplie and "professions-recipe-header-collapse" or "professions-recipe-header-expand"
-			ForeverUI.SetAtlas(ligne.fleche, atlas)
-			ForeverUI.SetAtlas(ligne.lueur, atlas)
-			poser(ligne, "TOPLEFT", h.liste, "TOPLEFT", 0, -y)
-			ligne:SetWidth(largeur)
+			row = h.categories[nc] or createCategory(h.list, nc)
+			h.categories[nc] = row
+			row:SetID(i)
+			row.expanded = expanded and true or false
+			row.name:SetText(name or "")
+			local atlas = expanded and "professions-recipe-header-collapse" or "professions-recipe-header-expand"
+			ForeverUI.SetAtlas(row.arrow, atlas)
+			ForeverUI.SetAtlas(row.glow, atlas)
+			place(row, "TOPLEFT", h.list, "TOPLEFT", 0, -y)
+			row:SetWidth(width)
 		else
 			ns = ns + 1
-			ligne = h.competences[ns] or creerCompetence(h.liste, ns)
-			h.competences[ns] = ligne
-			remplirCompetence(ligne, i, argent)
-			local retrait = sousCategorie and N.liste.retrait or 0
-			poser(ligne, "TOPLEFT", h.liste, "TOPLEFT", retrait, -y)
-			ligne:SetWidth(largeur - retrait)
+			row = h.skills[ns] or createSkill(h.list, ns)
+			h.skills[ns] = row
+			fillSkill(row, i, money)
+			local indent = subCategory and N.list.indent or 0
+			place(row, "TOPLEFT", h.list, "TOPLEFT", indent, -y)
+			row:SetWidth(width - indent)
 		end
-		ligne:Show()
+		row:Show()
 		y = y + ht
 	end
 	for i = nc + 1, #h.categories do h.categories[i]:Hide() end
-	for i = ns + 1, #h.competences do h.competences[i]:Hide() end
-	h.barre:Regler(maxi + 1, 1, h.decalage)
+	for i = ns + 1, #h.skills do h.skills[i]:Hide() end
+	h.bar:Configure(maxValue + 1, 1, h.offset)
 end
 
--- le rang du metier du maitre (camelot : GetTrainerTradeskillRankValues)
-function T.MajRang()
-	local h = ClassTrainerFrame.foreverHabit
-	local barre = h.rang
-	local metier
+-- Rank of the trainer's profession. GetTrainerTradeskillRankValues is missing in 3.3.5, so
+-- it is read from GetSkillLineInfo by the profession name (GetTrainerServiceSkillLine).
+function T.UpdateRank()
+	local h = ClassTrainerFrame.foreverSkin
+	local bar = h.rank
+	local profession
 	if IsTradeskillTrainer() then
 		for i = 1, GetNumTrainerServices() or 0 do
-			metier = GetTrainerServiceSkillLine(i)
-			if metier then break end
+			profession = GetTrainerServiceSkillLine(i)
+			if profession then break end
 		end
 	end
-	local rang, maxi, bonus
-	if metier then
+	local rank, maxValue, bonus
+	if profession then
 		for j = 1, GetNumSkillLines() or 0 do
-			local nom, entete, _, r, _, b, m = GetSkillLineInfo(j)
-			if not entete and nom == metier then
-				rang, bonus, maxi = r, b, m
+			local name, header, _, r, _, b, m = GetSkillLineInfo(j)
+			if not header and name == profession then
+				rank, bonus, maxValue = r, b, m
 				break
 			end
 		end
 	end
-	if not rang or not maxi or maxi <= 0 then
-		barre:Hide()
+	if not rank or not maxValue or maxValue <= 0 then
+		bar:Hide()
 		return
 	end
-	barre:SetMinMaxValues(0, maxi)
-	barre:SetValue(rang)
+	bar:SetMinMaxValues(0, maxValue)
+	bar:SetValue(rank)
 	if bonus and bonus > 0 then
-		barre.texte:SetFormattedText(L.TRAINER_RANK_BONUS, rang, bonus, maxi)
+		bar.text:SetFormattedText(L.TRAINER_RANK_BONUS, rank, bonus, maxValue)
 	else
-		barre.texte:SetFormattedText(L.TRAINER_RANK, rang, maxi)
+		bar.text:SetFormattedText(L.TRAINER_RANK, rank, maxValue)
 	end
-	barre:Show()
+	bar:Show()
 end
 
--- ------------------------------------------------------------ la fenetre
+-- ------------------------------------------------------------ window
 
--- l'ecran du client, sans souris et invisible : lignes, listes, details
-local function etouffer()
+-- Client screen made invisible and mouse-free: rows, lists, details
+local function suppress()
 	for i = 1, CLASS_TRAINER_SKILLS_DISPLAYED or 11 do
 		local b = _G["ClassTrainerSkill" .. i]
 		if b then b:SetAlpha(0) b:EnableMouse(false) end
 	end
-	for _, nom in ipairs({ "ClassTrainerListScrollFrame", "ClassTrainerDetailScrollFrame" }) do
-		local fx = _G[nom]
+	for _, name in ipairs({ "ClassTrainerListScrollFrame", "ClassTrainerDetailScrollFrame" }) do
+		local fx = _G[name]
 		if fx then
 			fx:SetAlpha(0)
 			fx:EnableMouse(false)
 			if fx.EnableMouseWheel then fx:EnableMouseWheel(false) end
 			for _, s in ipairs({ "ScrollBar", "ScrollBarScrollUpButton", "ScrollBarScrollDownButton" }) do
-				local c = _G[nom .. s]
+				local c = _G[name .. s]
 				if c then c:EnableMouse(false) end
 			end
 		end
@@ -465,11 +414,11 @@ local function etouffer()
 	end
 end
 
-function T.Habiller()
+function T.Skin()
 	local f = ClassTrainerFrame
-	if not f or f.foreverHabit then return end
-	-- l'art de 3.3.5 : les quatre UI-ClassTrainer-* (deux sans nom) et le
-	-- morceau droit sans nom de la barre horizontale
+	if not f or f.foreverSkin then return end
+	-- 3.3.5 art: the four UI-ClassTrainer-* textures (two unnamed) and the unnamed right piece
+	-- of the horizontal bar
 	for _, r in ipairs({ f:GetRegions() }) do
 		if r:GetObjectType() == "Texture" then
 			local t = r:GetTexture()
@@ -481,114 +430,114 @@ function T.Habiller()
 			end
 		end
 	end
-	etouffer()
-	f:SetWidth(N.fenetre[1])
-	f:SetHeight(N.fenetre[2])
+	suppress()
+	f:SetWidth(N.window[1])
+	f:SetHeight(N.window[2])
 	f:SetHitRectInsets(0, 0, 0, 0)
-	local habit = Gb.FenetrePortrait(f, {
-		portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = ClassTrainerNameText:GetText(),
+	local skin = Tpl.PortraitWindow(f, {
+		portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = ClassTrainerNameText:GetText(),
 	})
-	f.foreverHabit = habit
-	local function suivre() habit.titre:SetText(ClassTrainerNameText:GetText() or "") end
-	hooksecurefunc(ClassTrainerNameText, "SetText", suivre)
-	-- l'encart : marbre (BORDER) ; fond de la liste (ARTWORK) ; liseré
-	-- (OVERLAY, au-dessus du fond qu'il borde, comme chez camelot)
-	local E = N.encart
+	f.foreverSkin = skin
+	local function follow() skin.title:SetText(ClassTrainerNameText:GetText() or "") end
+	hooksecurefunc(ClassTrainerNameText, "SetText", follow)
+	-- Inset: marble (BORDER), list background (ARTWORK), trim (OVERLAY, above the background it
+	-- frames, as in camelot)
+	local E = N.inset
 	local rect = CreateFrame("Frame", nil, f)
 	rect:EnableMouse(false)
 	rect:SetPoint("TOPLEFT", f, "TOPLEFT", E[1], E[2])
 	rect:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", E[3], E[4])
-	local marbre = f:CreateTexture(nil, "BORDER")
-	marbre:SetTexture(ART.marbre, true)
-	if marbre.SetHorizTile then marbre:SetHorizTile(true) marbre:SetVertTile(true) end
-	marbre:SetAllPoints(rect)
-	habit.encart = { rect = rect, marbre = marbre, lisere = Gb.NeufTranches(f, "InsetFrameTemplate", rect, "OVERLAY") }
-	-- la liste et son fond
-	local Li = N.liste
-	local liste = CreateFrame("Frame", "ForeverUITrainerList", f)
-	liste:SetPoint("TOPLEFT", rect, "TOPLEFT", Li[1], Li[2])
-	liste:SetWidth(Li[3])
-	liste:SetHeight(Li[4])
-	habit.liste = liste
-	habit.categories, habit.competences, habit.decalage = {}, {}, 0
-	local F = N.fondListe
-	local fond = morceau(f, "ARTWORK", TEXTURES, COORDS.fond)
-	fond:SetPoint("TOPLEFT", liste, "TOPLEFT", F[1], F[2])
-	fond:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", F[3], F[4])
-	habit.fondListe = fond
-	-- la barre de camelot, a droite de la liste
-	local barre = ForeverUI.CreateScrollBar("ForeverUITrainerScrollBar", f, liste)
-	barre:ClearAllPoints()
-	barre:SetPoint("TOPLEFT", liste, "TOPRIGHT", N.barre[1], N.barre[2])
-	barre:SetPoint("BOTTOMLEFT", liste, "BOTTOMRIGHT", N.barre[1], N.barre[2])
-	barre.surDefilement = function(nouveau)
-		habit.decalage = nouveau
-		T.Maj()
+	local marble = f:CreateTexture(nil, "BORDER")
+	marble:SetTexture(ART.marble, true)
+	if marble.SetHorizTile then marble:SetHorizTile(true) marble:SetVertTile(true) end
+	marble:SetAllPoints(rect)
+	skin.inset = { rect = rect, marble = marble, trim = Tpl.NineSlice(f, "InsetFrameTemplate", rect, "OVERLAY") }
+	-- List and its background
+	local Li = N.list
+	local list = CreateFrame("Frame", "ForeverUITrainerList", f)
+	list:SetPoint("TOPLEFT", rect, "TOPLEFT", Li[1], Li[2])
+	list:SetWidth(Li[3])
+	list:SetHeight(Li[4])
+	skin.list = list
+	skin.categories, skin.skills, skin.offset = {}, {}, 0
+	local F = N.listBackground
+	local background = piece(f, "ARTWORK", TEXTURES, COORDS.background)
+	background:SetPoint("TOPLEFT", list, "TOPLEFT", F[1], F[2])
+	background:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", F[3], F[4])
+	skin.listBackground = background
+	-- camelot scroll bar, right of the list
+	local bar = ForeverUI.CreateScrollBar("ForeverUITrainerScrollBar", f, list)
+	bar:ClearAllPoints()
+	bar:SetPoint("TOPLEFT", list, "TOPRIGHT", N.bar[1], N.bar[2])
+	bar:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", N.bar[1], N.bar[2])
+	bar.onScroll = function(new)
+		skin.offset = new
+		T.Update()
 	end
-	habit.barre = barre
-	liste:EnableMouseWheel(true)
-	liste:SetScript("OnMouseWheel", function(_, sens)
-		habit.decalage = math.max(0, math.min((habit.decalage or 0) - sens, habit.maxi or 0))
-		T.Maj()
+	skin.bar = bar
+	list:EnableMouseWheel(true)
+	list:SetScript("OnMouseWheel", function(_, direction)
+		skin.offset = math.max(0, math.min((skin.offset or 0) - direction, skin.maxValue or 0))
+		T.Update()
 	end)
-	-- le rang (maitre de metier)
-	local R = N.rang
-	local rang = CreateFrame("StatusBar", "ForeverUITrainerRankBar", f)
-	rang:SetWidth(R[3])
-	rang:SetHeight(R[4])
-	rang:SetPoint("TOPLEFT", f, "TOPLEFT", R[1], R[2])
-	rang:SetStatusBarTexture(ART.barre)
-	rang:SetStatusBarColor(0, 0, 1, 0.5)
-	local fondRang = rang:CreateTexture(nil, "BACKGROUND")
-	fondRang:SetAllPoints(rang)
-	fondRang:SetTexture(0, 0, 0.75, 0.5)
-	local rg = morceau(rang, "ARTWORK", ART.guilde, COORDS.rangG)
-	rg:SetWidth(R.bord)
-	rg:SetPoint("TOPLEFT", rang, "TOPLEFT", -2, 0)
-	rg:SetPoint("BOTTOMLEFT", rang, "BOTTOMLEFT", -2, 0)
-	local rd = morceau(rang, "ARTWORK", ART.guilde, COORDS.rangD)
-	rd:SetWidth(R.bord)
-	rd:SetPoint("TOPRIGHT", rang, "TOPRIGHT", 2, 0)
-	rd:SetPoint("BOTTOMRIGHT", rang, "BOTTOMRIGHT", 2, 0)
-	local rm = morceau(rang, "ARTWORK", ART.guilde, COORDS.rangM)
+	-- Rank bar (profession trainers)
+	local R = N.rank
+	local rank = CreateFrame("StatusBar", "ForeverUITrainerRankBar", f)
+	rank:SetWidth(R[3])
+	rank:SetHeight(R[4])
+	rank:SetPoint("TOPLEFT", f, "TOPLEFT", R[1], R[2])
+	rank:SetStatusBarTexture(ART.bar)
+	rank:SetStatusBarColor(0, 0, 1, 0.5)
+	local rankBackground = rank:CreateTexture(nil, "BACKGROUND")
+	rankBackground:SetAllPoints(rank)
+	rankBackground:SetTexture(0, 0, 0.75, 0.5)
+	local rg = piece(rank, "ARTWORK", ART.guild, COORDS.rankLeft)
+	rg:SetWidth(R.edge)
+	rg:SetPoint("TOPLEFT", rank, "TOPLEFT", -2, 0)
+	rg:SetPoint("BOTTOMLEFT", rank, "BOTTOMLEFT", -2, 0)
+	local rd = piece(rank, "ARTWORK", ART.guild, COORDS.rankRight)
+	rd:SetWidth(R.edge)
+	rd:SetPoint("TOPRIGHT", rank, "TOPRIGHT", 2, 0)
+	rd:SetPoint("BOTTOMRIGHT", rank, "BOTTOMRIGHT", 2, 0)
+	local rm = piece(rank, "ARTWORK", ART.guild, COORDS.rankMiddle)
 	rm:SetPoint("TOPLEFT", rg, "TOPRIGHT", 0, 0)
 	rm:SetPoint("BOTTOMRIGHT", rd, "BOTTOMLEFT", 0, 0)
-	rang.texte = rang:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	rang.texte:SetPoint("CENTER", rang, "CENTER", 0, 0)
-	rang:Hide()
-	habit.rang = rang
-	-- le filtre
-	local Fi = N.filtre
+	rank.text = rank:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	rank.text:SetPoint("CENTER", rank, "CENTER", 0, 0)
+	rank:Hide()
+	skin.rank = rank
+	-- Filter
+	local Fi = N.filter
 	local dd = ClassTrainerFrameFilterDropDown
-	Gb.MenuFiltre(dd, Fi[3])
-	poser(dd, "TOPRIGHT", f, "TOPRIGHT", Fi[1], Fi[2])
-	-- Former, l'argent
-	local Fo = N.former
+	Tpl.FilterMenu(dd, Fi[3])
+	place(dd, "TOPRIGHT", f, "TOPRIGHT", Fi[1], Fi[2])
+	-- Train button and money
+	local Tr = N.train
 	local b = ClassTrainerTrainButton
-	b:SetWidth(Fo[1])
-	b:SetHeight(Fo[2])
-	poser(b, "BOTTOMRIGHT", f, "BOTTOMRIGHT", Fo[3], Fo[4])
-	Gb.BoutonPanneau(b)
-	local A = N.argent
-	local cadreArgent = f:CreateTexture(nil, "ARTWORK")
-	cadreArgent:SetTexture(ART.argent)
-	cadreArgent:SetWidth(A[1])
-	cadreArgent:SetHeight(A[2])
-	cadreArgent:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", A[3], A[4])
-	habit.cadreArgent = cadreArgent
-	poser(ClassTrainerMoneyFrame, "RIGHT", cadreArgent, "RIGHT", A.bourse[1], A.bourse[2])
-	Gb.Croix(ClassTrainerFrameCloseButton, f)
+	b:SetWidth(Tr[1])
+	b:SetHeight(Tr[2])
+	place(b, "BOTTOMRIGHT", f, "BOTTOMRIGHT", Tr[3], Tr[4])
+	Tpl.PanelButton(b)
+	local A = N.money
+	local moneyFrame = f:CreateTexture(nil, "ARTWORK")
+	moneyFrame:SetTexture(ART.money)
+	moneyFrame:SetWidth(A[1])
+	moneyFrame:SetHeight(A[2])
+	moneyFrame:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", A[3], A[4])
+	skin.moneyFrame = moneyFrame
+	place(ClassTrainerMoneyFrame, "RIGHT", moneyFrame, "RIGHT", A.purse[1], A.purse[2])
+	Tpl.CloseButton(ClassTrainerFrameCloseButton, f)
 	ClassTrainerFrameCloseButton:SetFrameLevel(f:GetFrameLevel() + 22)
-	hooksecurefunc("ClassTrainerFrame_Update", T.Maj)
+	hooksecurefunc("ClassTrainerFrame_Update", T.Update)
 end
 
-T.Habiller()
+T.Skin()
 
-local veille = CreateFrame("Frame")
-veille:RegisterEvent("ADDON_LOADED")
-veille:SetScript("OnEvent", function(_, _, nom)
-	if nom == "Blizzard_TrainerUI" then
-		T.Habiller()
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("ADDON_LOADED")
+watcher:SetScript("OnEvent", function(_, _, name)
+	if name == "Blizzard_TrainerUI" then
+		T.Skin()
 	end
 end)

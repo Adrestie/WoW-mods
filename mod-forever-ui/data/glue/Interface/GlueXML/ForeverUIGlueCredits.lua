@@ -1,78 +1,37 @@
--- ForeverUI -- les credits des ecrans d'accueil : le CreditsFrame de
--- camelot, sur les textes et la musique du client 3.3.5.
---
--- RELEVE -- blizzard_gluexml/mainline/creditsframe.xml et .lua ;
--- blizzard_gluexmlbase/mainline/constants.lua (CREDITS_SCROLL_RATE_*) et
--- gluebuttons.xml (GlueButtonSmallTemplate) ; blizzard_sharedxml :
--- shared/button/iconbuttontemplate.xml, shared/dialog/dialogtemplates.xml
--- (DialogBorderTranslucentTemplate, DialogHeaderTemplate).
---   * fond      CreditsScreen-Background-<extension> en mosaique sur tout
---               l'ecran (bandes comprises) ; illustration CreditsScreen-
---               KeyArt-<extension> (1425 x 966, en deux tuiles : 3.3.5
---               n'affiche pas plus de 1024) a TOP ((-(droite - gauche du
---               texte + 100) / 2), -50), a l'echelle (hauteur - 120) / 966 ;
---               degrades _CreditsScreen-Gradient-Tile de 64 en haut et en
---               bas (retourne), sur toute la largeur ; logo de l'extension
---               340 x 170 a TOPLEFT (35, -25) ;
---   * texte     colonne de 250 a RIGHT (-50) -- sur toute la hauteur de
---               l'ecran, comme les lignes de camelot -- GlueFontHighlightSmall
---               (espacement 2), titres GlueFontNormalLarge et GlueFontHighlight
---               (4) ; le premier titre part du haut ;
---   * vitesse   CreditsSpeedButtonTemplate 43 x 43 (common-button-square-
---               gray-up / -down a leur taille, icone CreditsScreen-Assets-
---               Buttons-* 22 x 22 en OVERLAY, sa copie en lueur ADD) : Rewind a
---               BOTTOM (-50, 20), Pause, Play, FastForward a 5 l'un de
---               l'autre ; -160, 0, 40, 160 par seconde ; le bouton actif garde
---               sa lueur, a 0,5 (les autres a 1 au survol) ; en arriere, le
---               debut arrete le defilement ; a la fin, retour a l'ecran de
---               connexion ;
---   * boutons   Back et Expansion, GlueButtonSmallTemplate (128-RedButton,
---               GlueFontNormalSmall / HighlightSmall / DisableSmall) 150 x 28 :
---               Back a BOTTOMLEFT (50, 50) de GlueParent, Expansion 10 au-dessus ;
---   * extensions  CreditsExpansionListTemplate : DialogBorderTranslucent
---               (noir 0,8 a 7 du bord, bord Dialog), en-tete EXPANSION ; une
---               ligne par extension, 28 de haut, 5 d'ecart, la premiere a TOP
---               (0, -35), largeur du plus long texte (200 au moins),
---               GlueFontHighlightSmall ; choisie : CreditsScreen-Selected a
---               0,8 ; survol : CreditsScreen-Highlight ; OK / Cancel de
---               max(80, texte) + 20, OK a BOTTOMRIGHT sur BOTTOM (-2, 20),
---               Cancel 4 a sa droite ; largeur max(lignes, 2 x bouton) + 60,
---               hauteur n x 33 + 100 ;
---   * Echap     ferme la liste si elle est ouverte, sinon l'ecran.
--- CHOIX DE L'UTILISATEUR (28/09) : la structure de camelot ; l'illustration
--- fixe de l'extension remplace le diaporama de 3.3.5. Les textes
--- (GetCreditsText), la musique (SetGlueScreen) et le passage d'une extension
--- a l'autre (CreditsFrame_Switch) restent ceux du client.
+-- Glue credits screen: camelot CreditsFrame (creditsframe.xml / .lua) on the 3.3.5 client's
+-- texts (GetCreditsText), music (SetGlueScreen) and expansion switch (CreditsFrame_Switch).
+-- A fixed key art per expansion replaces the 3.3.5 slideshow.
 
 local G = ForeverUIGlue
 local L = G.L
 local F = CreditsFrame
 
--- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes)
-local TEXTE = { EXTENSION = L.GLUECREDITS_EXPANSION }
+-- Texts missing from 3.3.5: G.L (ForeverUIGlueTexts)
+local TEXT = { EXPANSION = L.GLUECREDITS_EXPANSION }
 
--- creditsType du client (1, 2, 3) -> extension de camelot (0, 1, 2)
-local EXTENSIONS = {
-	{ nom = WORLD_OF_WARCRAFT, logo = "Interface\\Glues\\Common\\Glues-WoW-Logo" },
-	{ nom = BURNING_CRUSADE, logo = "Interface\\Glues\\Common\\Glues-WoW-BCLogo" },
-	{ nom = WRATH_OF_THE_LICH_KING, logo = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo" },
+-- Indexed by the client's creditsType (1, 2, 3); camelot numbers expansions 0, 1, 2
+local EXPANSIONS = {
+	{ name = WORLD_OF_WARCRAFT, logo = "Interface\\Glues\\Common\\Glues-WoW-Logo" },
+	{ name = BURNING_CRUSADE, logo = "Interface\\Glues\\Common\\Glues-WoW-BCLogo" },
+	{ name = WRATH_OF_THE_LICH_KING, logo = "Interface\\Glues\\Common\\Glues-WoW-WotLKLogo" },
 }
-local VITESSES = { recul = -160, pause = 0, lecture = 40, avance = 160 }
+-- Scroll speeds per second; camelot: CREDITS_SCROLL_RATE_* (constants.lua)
+local SPEEDS = { rewind = -160, pause = 0, reading = 40, fastForward = 160 }
 
-local etat = { position = 0, vitesse = VITESSES.lecture }
+local state = { position = 0, speed = SPEEDS.reading }
 
--- ------------------------------------------------------------ l'ecran du client
+-- ------------------------------------------------------------ client screen
 
--- tout l'art du client (parchemin, diaporama, bandes, logo) : eteint
-local function eteindreClient()
+-- Hides all client art (parchment, slideshow, strips, logo)
+local function hideClientArt()
 	for _, r in ipairs({ F:GetRegions() }) do
 		if r:GetObjectType() == "Texture" and not r.forever then
 			r:SetAlpha(0)
 			r:Hide()
 		end
 	end
-	-- les fondus du haut et du bas de la colonne (un cadre fils) ; pas le
-	-- texte, qui est aussi un fils (ScrollChild)
+	-- Top and bottom fades of the column (a child frame); not the text, which is also a child
+	-- (ScrollChild)
 	for _, c in ipairs({ CreditsScrollFrame:GetChildren() }) do
 		if c ~= CreditsText then
 			for _, r in ipairs({ c:GetRegions() }) do
@@ -85,51 +44,53 @@ local function eteindreClient()
 	CreditsFrameSwitchButton2:Hide()
 end
 
--- ------------------------------------------------------------ le fond
+-- ------------------------------------------------------------ background
 
-local function texture(couche)
-	local t = F:CreateTexture(nil, couche)
+-- Creates a texture on the frame, tagged so hideClientArt leaves it alone
+local function texture(layer)
+	local t = F:CreateTexture(nil, layer)
 	t.forever = true
 	return t
 end
 
-local fond = texture("BACKGROUND")
-local tuiles = { texture("BORDER"), texture("BORDER") }
-local degradeHaut = texture("ARTWORK")
-local degradeBas = texture("ARTWORK")
+local background = texture("BACKGROUND")
+local tiles = { texture("BORDER"), texture("BORDER") }
+local topGradient = texture("ARTWORK")
+local bottomGradient = texture("ARTWORK")
 local logo = texture("OVERLAY")
 logo:SetWidth(340)
 logo:SetHeight(170)
 logo:SetPoint("TOPLEFT", F, "TOPLEFT", 35, -25)
 
--- CreditsFrameMixin:UpdateArt ; le fond et les degrades couvrent tout
--- l'ecran, bandes comprises
-local function poserArt()
-	local genre = F.creditsType or 3
-	local extension = genre - 1
-	local bande = G.BANDE or 0
-	local largeur, hauteur = F:GetWidth() or 0, F:GetHeight() or 0
+-- CreditsFrameMixin:UpdateArt. The background and gradients cover the whole screen, side
+-- strips included. The key art (1425 x 966) is drawn in two tiles because 3.3.5 shows no
+-- texture wider than 1024; it is scaled to the screen height minus 120.
+local function placeArt()
+	local kind = F.creditsType or 3
+	local extension = kind - 1
+	local strip = G.STRIP or 0
+	local width, height = F:GetWidth() or 0, F:GetHeight() or 0
 
-	fond:ClearAllPoints()
-	fond:SetPoint("TOPLEFT", F, "TOPLEFT", -bande, 0)
-	fond:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", bande, 0)
-	G.Mosaique(fond, "CreditsScreen-Background-" .. extension, largeur + 2 * bande, hauteur)
+	background:ClearAllPoints()
+	background:SetPoint("TOPLEFT", F, "TOPLEFT", -strip, 0)
+	background:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", strip, 0)
+	G.Tile(background, "CreditsScreen-Background-" .. extension, width + 2 * strip, height)
 
 	local ill = G.illustrations[extension]
-	if ill and hauteur > 0 then
-		local k = (hauteur - 120) / ill.hauteur
+	if ill and height > 0 then
+		local k = (height - 120) / ill.height
 		local x = -((F:GetRight() or 0) - (CreditsScrollFrame:GetLeft() or 0) + 100) / 2
-		local gauche = x - ill.largeur * k / 2
-		for i, t in ipairs(tuiles) do
-			local tu = ill.tuiles[i]
+		local left = x - ill.width * k / 2
+		for i, t in ipairs(tiles) do
+			local tu = ill.tiles[i]
 			if tu then
 				t:SetTexture(tu[1])
 				t:SetTexCoord(0, tu[2], 0, tu[3])
 				t:SetWidth(tu[4] * k)
-				t:SetHeight(ill.hauteur * k)
+				t:SetHeight(ill.height * k)
 				t:ClearAllPoints()
-				t:SetPoint("TOPLEFT", F, "TOP", gauche, -50)
-				gauche = gauche + tu[4] * k
+				t:SetPoint("TOPLEFT", F, "TOP", left, -50)
+				left = left + tu[4] * k
 				t:Show()
 			else
 				t:Hide()
@@ -137,49 +98,49 @@ local function poserArt()
 		end
 	end
 
-	for _, t in ipairs({ degradeHaut, degradeBas }) do
-		G.PoserAtlas(t, "_CreditsScreen-Gradient-Tile")
+	for _, t in ipairs({ topGradient, bottomGradient }) do
+		G.PlaceAtlas(t, "_CreditsScreen-Gradient-Tile")
 		t:SetHeight(64)
 		t:ClearAllPoints()
-		t:SetPoint("LEFT", F, "LEFT", -bande, 0)
-		t:SetPoint("RIGHT", F, "RIGHT", bande, 0)
+		t:SetPoint("LEFT", F, "LEFT", -strip, 0)
+		t:SetPoint("RIGHT", F, "RIGHT", strip, 0)
 	end
-	degradeHaut:SetPoint("TOP", F, "TOP")
-	degradeBas:SetPoint("BOTTOM", F, "BOTTOM")
-	-- le degrade du bas est retourne (TexCoords top 1, bottom 0)
+	topGradient:SetPoint("TOP", F, "TOP")
+	bottomGradient:SetPoint("BOTTOM", F, "BOTTOM")
+	-- The bottom gradient is flipped (TexCoords top 1, bottom 0)
 	local e = G.atlas["_creditsscreen-gradient-tile"]
-	degradeBas:SetTexCoord(e[2], e[3], e[5], e[4])
+	bottomGradient:SetTexCoord(e[2], e[3], e[5], e[4])
 
-	logo:SetTexture(EXTENSIONS[genre] and EXTENSIONS[genre].logo or EXTENSIONS[3].logo)
+	logo:SetTexture(EXPANSIONS[kind] and EXPANSIONS[kind].logo or EXPANSIONS[3].logo)
 end
-G.surEchelle[#G.surEchelle + 1] = function()
+G.onScale[#G.onScale + 1] = function()
 	if F:IsShown() then
-		poserArt()
+		placeArt()
 	end
 end
 
--- ------------------------------------------------------------ le texte
+-- ------------------------------------------------------------ text
 
--- la colonne sur toute la hauteur de l'ecran, a 50 du bord droit
+-- Column over the whole screen height, 50 from the right edge
 CreditsScrollFrame:ClearAllPoints()
 CreditsScrollFrame:SetWidth(250)
 CreditsScrollFrame:SetPoint("TOPRIGHT", F, "TOPRIGHT", -50, 0)
 CreditsScrollFrame:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -50, 0)
 for _, v in ipairs({ { "P", "GlueFontHighlightSmall", 2 }, { "H1", "GlueFontNormalLarge", 4 },
 		{ "H2", "GlueFontHighlight", 4 } }) do
-	pcall(CreditsText.SetFontObject, CreditsText, v[1], G.Police(v[2]))
+	pcall(CreditsText.SetFontObject, CreditsText, v[1], G.Font(v[2]))
 	pcall(CreditsText.SetSpacing, CreditsText, v[1], v[3])
 end
 
--- ------------------------------------------------------------ la vitesse
+-- ------------------------------------------------------------ speed
 
-local vitesses = {}
+local speedButtons = {}
 
 -- CreditsFrameMixin:UpdateSpeedButtons
-local function peindreVitesses()
-	for _, b in ipairs(vitesses) do
-		local actif = b.vitesse == etat.vitesse
-		if actif then
+local function paintSpeedButtons()
+	for _, b in ipairs(speedButtons) do
+		local active = b.speed == state.speed
+		if active then
 			b:LockHighlight()
 			b:GetHighlightTexture():SetAlpha(0.5)
 		else
@@ -189,217 +150,218 @@ local function peindreVitesses()
 	end
 end
 
-local function reglerVitesse(v)
+local function applySpeed(v)
 	PlaySound("igMainMenuOptionCheckBoxOff")
-	etat.vitesse = v
-	peindreVitesses()
+	state.speed = v
+	paintSpeedButtons()
 end
 
-local function boutonVitesse(icone, vitesse)
+-- CreditsSpeedButtonTemplate: 43 x 43 square button with an icon and an ADD glow
+local function speedButton(icon, speed)
 	local b = CreateFrame("Button", nil, F)
 	b:SetWidth(43)
 	b:SetHeight(43)
-	b.vitesse = vitesse
+	b.speed = speed
 	b:SetNormalTexture(G.atlas["common-button-square-gray-up"][1])
 	local n = b:GetNormalTexture()
-	G.PoserAtlas(n, "common-button-square-gray-up", true)
+	G.PlaceAtlas(n, "common-button-square-gray-up", true)
 	n:ClearAllPoints()
 	n:SetPoint("CENTER", b, "CENTER")
 	b:SetPushedTexture(G.atlas["common-button-square-gray-down"][1])
 	local p = b:GetPushedTexture()
-	G.PoserAtlas(p, "common-button-square-gray-down", true)
+	G.PlaceAtlas(p, "common-button-square-gray-down", true)
 	p:ClearAllPoints()
 	p:SetPoint("CENTER", b, "CENTER")
-	b.icone = b:CreateTexture(nil, "OVERLAY")
-	G.PoserAtlas(b.icone, icone, true)
-	b.icone:SetPoint("CENTER", b, "CENTER")
-	b:SetHighlightTexture(G.atlas[string.lower(icone)][1])
+	b.icon = b:CreateTexture(nil, "OVERLAY")
+	G.PlaceAtlas(b.icon, icon, true)
+	b.icon:SetPoint("CENTER", b, "CENTER")
+	b:SetHighlightTexture(G.atlas[string.lower(icon)][1])
 	local h = b:GetHighlightTexture()
-	G.PoserAtlas(h, icone, true)
+	G.PlaceAtlas(h, icon, true)
 	h:ClearAllPoints()
-	h:SetPoint("CENTER", b.icone, "CENTER")
+	h:SetPoint("CENTER", b.icon, "CENTER")
 	h:SetBlendMode("ADD")
 	h:SetAlpha(0.4)
 	b:SetScript("OnClick", function(self)
-		reglerVitesse(self.vitesse)
+		applySpeed(self.speed)
 	end)
-	vitesses[#vitesses + 1] = b
+	speedButtons[#speedButtons + 1] = b
 	return b
 end
 
-local recul = boutonVitesse("CreditsScreen-Assets-Buttons-Rewind", VITESSES.recul)
-recul:SetPoint("BOTTOM", F, "BOTTOM", -50, 20)
-local precedent = recul
-for _, v in ipairs({ { "CreditsScreen-Assets-Buttons-Pause", VITESSES.pause },
-		{ "CreditsScreen-Assets-Buttons-Play", VITESSES.lecture },
-		{ "CreditsScreen-Assets-Buttons-FastForward", VITESSES.avance } }) do
-	local b = boutonVitesse(v[1], v[2])
-	b:SetPoint("LEFT", precedent, "RIGHT", 5, 0)
-	precedent = b
+local rewind = speedButton("CreditsScreen-Assets-Buttons-Rewind", SPEEDS.rewind)
+rewind:SetPoint("BOTTOM", F, "BOTTOM", -50, 20)
+local previous = rewind
+for _, v in ipairs({ { "CreditsScreen-Assets-Buttons-Pause", SPEEDS.pause },
+		{ "CreditsScreen-Assets-Buttons-Play", SPEEDS.reading },
+		{ "CreditsScreen-Assets-Buttons-FastForward", SPEEDS.fastForward } }) do
+	local b = speedButton(v[1], v[2])
+	b:SetPoint("LEFT", previous, "RIGHT", 5, 0)
+	previous = b
 end
 
--- ------------------------------------------------------------ le defilement
+-- ------------------------------------------------------------ scrolling
 
--- a la place de CreditsFrame_OnUpdate du client (vitesse fixe, diaporama) :
--- la vitesse choisie ; au debut en arriere, pause ; a la fin, l'ecran de
--- connexion, comme le client
-F:SetScript("OnUpdate", function(_, ecoule)
+-- Replaces the client's CreditsFrame_OnUpdate (fixed speed, slideshow): uses the chosen
+-- speed, pauses at the start when rewinding, and returns to login at the end like the client
+F:SetScript("OnUpdate", function(_, elapsed)
 	if not CreditsScrollFrame:IsShown() then
 		return
 	end
-	etat.position = etat.position + etat.vitesse * (ecoule or 0)
-	if etat.position <= 0 then
-		etat.position = 0
-		if etat.vitesse < 0 then
-			etat.vitesse = VITESSES.pause
-			peindreVitesses()
+	state.position = state.position + state.speed * (elapsed or 0)
+	if state.position <= 0 then
+		state.position = 0
+		if state.speed < 0 then
+			state.speed = SPEEDS.pause
+			paintSpeedButtons()
 		end
 	end
-	local fin = CreditsScrollFrame:GetVerticalScrollRange() + (CreditsScrollFrame:GetHeight() or 0)
-	if etat.position >= fin then
+	local finish = CreditsScrollFrame:GetVerticalScrollRange() + (CreditsScrollFrame:GetHeight() or 0)
+	if state.position >= finish then
 		SetGlueScreen("login")
 		return
 	end
-	CreditsScrollFrame:SetVerticalScroll(etat.position)
+	CreditsScrollFrame:SetVerticalScroll(state.position)
 end)
 
--- ------------------------------------------------------------ la liste des extensions
+-- ------------------------------------------------------------ expansion list
 
-local POLICES_PETITES = { "GlueFontNormalSmall", "GlueFontHighlightSmall", "GlueFontDisableSmall" }
+local SMALL_FONTS = { "GlueFontNormalSmall", "GlueFontHighlightSmall", "GlueFontDisableSmall" }
 
-local liste = CreateFrame("Frame", "ForeverUICreditsExpansionList", F)
-liste:SetFrameStrata("DIALOG")
-liste:EnableMouse(true)
-liste:SetPoint("CENTER", F, "CENTER")
-liste:Hide()
+local list = CreateFrame("Frame", "ForeverUICreditsExpansionList", F)
+list:SetFrameStrata("DIALOG")
+list:EnableMouse(true)
+list:SetPoint("CENTER", F, "CENTER")
+list:Hide()
 do
-	local noir = liste:CreateTexture(nil, "BACKGROUND")
-	noir:SetTexture(0, 0, 0, 0.8)
-	noir:SetPoint("TOPLEFT", liste, "TOPLEFT", 7, -7)
-	noir:SetPoint("BOTTOMRIGHT", liste, "BOTTOMRIGHT", -7, 7)
-	G.NeufTranches(liste, "Dialog")
+	local black = list:CreateTexture(nil, "BACKGROUND")
+	black:SetTexture(0, 0, 0, 0.8)
+	black:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -7)
+	black:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", -7, 7)
+	G.NineSlice(list, "Dialog")
 end
-G.EnTeteDialogue(liste, TEXTE.EXTENSION, "GameFontNormal")
+G.DialogHeader(list, TEXT.EXPANSION, "GameFontNormal")
 
-local lignes = {}
-local choix
+local rows = {}
+local choice
 
-local function marquer()
-	for _, b in ipairs(lignes) do
-		G.Montrer(b.choisie, b:GetID() == choix)
+-- Shows the selection mark on the chosen row
+local function mark()
+	for _, b in ipairs(rows) do
+		G.SetShown(b.selectedItem, b:GetID() == choice)
 	end
 end
 
-for i, ext in ipairs(EXTENSIONS) do
-	local b = CreateFrame("Button", nil, liste)
+for i, ext in ipairs(EXPANSIONS) do
+	local b = CreateFrame("Button", nil, list)
 	b:SetID(i)
 	b:SetHeight(28)
-	b:SetNormalFontObject(G.Police("GlueFontHighlightSmall"))
-	b:SetHighlightFontObject(G.Police("GlueFontHighlightSmall"))
-	b:SetDisabledFontObject(G.Police("GlueFontDisableSmall"))
-	b:SetText(ext.nom)
-	b.choisie = b:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(b.choisie, "CreditsScreen-Selected")
-	b.choisie:SetAllPoints(b)
-	b.choisie:SetVertexColor(1, 1, 1, 0.8)
-	b.choisie:Hide()
-	b.survol = b:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(b.survol, "CreditsScreen-Highlight")
-	b.survol:SetAllPoints(b)
-	b.survol:Hide()
+	b:SetNormalFontObject(G.Font("GlueFontHighlightSmall"))
+	b:SetHighlightFontObject(G.Font("GlueFontHighlightSmall"))
+	b:SetDisabledFontObject(G.Font("GlueFontDisableSmall"))
+	b:SetText(ext.name)
+	b.selectedItem = b:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(b.selectedItem, "CreditsScreen-Selected")
+	b.selectedItem:SetAllPoints(b)
+	b.selectedItem:SetVertexColor(1, 1, 1, 0.8)
+	b.selectedItem:Hide()
+	b.hover = b:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(b.hover, "CreditsScreen-Highlight")
+	b.hover:SetAllPoints(b)
+	b.hover:Hide()
 	b:SetScript("OnEnter", function(self)
-		if not self.choisie:IsShown() then
-			self.survol:Show()
+		if not self.selectedItem:IsShown() then
+			self.hover:Show()
 		end
 	end)
-	b:SetScript("OnLeave", function(self) self.survol:Hide() end)
+	b:SetScript("OnLeave", function(self) self.hover:Hide() end)
 	b:SetScript("OnClick", function(self)
-		choix = self:GetID()
-		marquer()
-		self.survol:Hide()
+		choice = self:GetID()
+		mark()
+		self.hover:Hide()
 	end)
 	if i == 1 then
-		b:SetPoint("TOP", liste, "TOP", 0, -35)
+		b:SetPoint("TOP", list, "TOP", 0, -35)
 	else
-		b:SetPoint("TOP", lignes[i - 1], "BOTTOM", 0, -5)
+		b:SetPoint("TOP", rows[i - 1], "BOTTOM", 0, -5)
 	end
-	lignes[i] = b
+	rows[i] = b
 end
 
-local ok = G.CreerBoutonTroisTranches("ForeverUICreditsExpansionOkay", liste, 100, 28, "128-RedButton", POLICES_PETITES, OKAY)
-ok:SetPoint("BOTTOMRIGHT", liste, "BOTTOM", -2, 20)
-local annuler = G.CreerBoutonTroisTranches("ForeverUICreditsExpansionCancel", liste, 100, 28, "128-RedButton", POLICES_PETITES, CANCEL)
-annuler:SetPoint("LEFT", ok, "RIGHT", 4, 0)
+local ok = G.CreateThreeSliceButton("ForeverUICreditsExpansionOkay", list, 100, 28, "128-RedButton", SMALL_FONTS, OKAY)
+ok:SetPoint("BOTTOMRIGHT", list, "BOTTOM", -2, 20)
+local cancel = G.CreateThreeSliceButton("ForeverUICreditsExpansionCancel", list, 100, 28, "128-RedButton", SMALL_FONTS, CANCEL)
+cancel:SetPoint("LEFT", ok, "RIGHT", 4, 0)
 ok:SetScript("OnClick", function()
 	PlaySound("igMainMenuOptionCheckBoxOff")
-	liste:Hide()
-	if choix and choix ~= F.creditsType then
-		CreditsFrame_Switch(F, choix)
+	list:Hide()
+	if choice and choice ~= F.creditsType then
+		CreditsFrame_Switch(F, choice)
 	end
 end)
-annuler:SetScript("OnClick", function()
+cancel:SetScript("OnClick", function()
 	PlaySound("igMainMenuOptionCheckBoxOff")
-	liste:Hide()
+	list:Hide()
 end)
 
 -- CreditsExpansionListMixin:OpenExpansionList
-local function ouvrirListe()
-	choix = F.creditsType or 3
-	local plusLarge = 200
-	for _, b in ipairs(lignes) do
-		plusLarge = math.max(plusLarge, b:GetTextWidth() or 0)
+local function openList()
+	choice = F.creditsType or 3
+	local widest = 200
+	for _, b in ipairs(rows) do
+		widest = math.max(widest, b:GetTextWidth() or 0)
 	end
-	for _, b in ipairs(lignes) do
-		b:SetWidth(plusLarge)
+	for _, b in ipairs(rows) do
+		b:SetWidth(widest)
 	end
-	local texteBoutons = math.max(ok:GetTextWidth() or 0, annuler:GetTextWidth() or 0)
-	local lb = math.max(80, texteBoutons) + 10 * 2
+	local buttonTextWidth = math.max(ok:GetTextWidth() or 0, cancel:GetTextWidth() or 0)
+	local lb = math.max(80, buttonTextWidth) + 10 * 2
 	ok:SetWidth(lb)
-	annuler:SetWidth(lb)
-	liste:SetWidth(math.max(plusLarge, 2 * lb) + 60)
-	liste:SetHeight(#lignes * (28 + 5) + 100)
-	marquer()
-	liste:Show()
+	cancel:SetWidth(lb)
+	list:SetWidth(math.max(widest, 2 * lb) + 60)
+	list:SetHeight(#rows * (28 + 5) + 100)
+	mark()
+	list:Show()
 end
 
--- ------------------------------------------------------------ Back et Expansion
+-- ------------------------------------------------------------ Back and Expansion
 
-local retour = G.CreerBoutonTroisTranches("ForeverUICreditsBackButton", F, 150, 28, "128-RedButton", POLICES_PETITES, BACK)
-retour:SetPoint("BOTTOMLEFT", GlueParent, "BOTTOMLEFT", 50, 50)
-retour:SetScript("OnClick", function()
+local backButton = G.CreateThreeSliceButton("ForeverUICreditsBackButton", F, 150, 28, "128-RedButton", SMALL_FONTS, BACK)
+backButton:SetPoint("BOTTOMLEFT", GlueParent, "BOTTOMLEFT", 50, 50)
+backButton:SetScript("OnClick", function()
 	SetGlueScreen("login")
 end)
-local extension = G.CreerBoutonTroisTranches("ForeverUICreditsExpansionButton", F, 150, 28, "128-RedButton", POLICES_PETITES, TEXTE.EXTENSION)
-extension:SetPoint("BOTTOM", retour, "TOP", 0, 10)
+local extension = G.CreateThreeSliceButton("ForeverUICreditsExpansionButton", F, 150, 28, "128-RedButton", SMALL_FONTS, TEXT.EXPANSION)
+extension:SetPoint("BOTTOM", backButton, "TOP", 0, 10)
 extension:SetScript("OnClick", function()
-	if liste:IsShown() then
-		liste:Hide()
+	if list:IsShown() then
+		list:Hide()
 	else
-		ouvrirListe()
+		openList()
 	end
 end)
 
-F:SetScript("OnKeyDown", function(_, touche)
-	if touche == "ESCAPE" then
-		if liste:IsShown() then
-			liste:Hide()
+F:SetScript("OnKeyDown", function(_, pressedKey)
+	if pressedKey == "ESCAPE" then
+		if list:IsShown() then
+			list:Hide()
 		else
 			SetGlueScreen("login")
 		end
-	elseif touche == "PRINTSCREEN" then
+	elseif pressedKey == "PRINTSCREEN" then
 		Screenshot()
 	end
 end)
 
--- ------------------------------------------------------------ a chaque ouverture
+-- ------------------------------------------------------------ on each show
 
--- apres CreditsFrame_OnShow du client (texte, defilement a 0)
-G.Accrocher(F, "OnShow", function()
-	eteindreClient()
-	liste:Hide()
-	etat.position = 0
-	etat.vitesse = VITESSES.lecture
-	peindreVitesses()
-	poserArt()
+-- Runs after the client's CreditsFrame_OnShow (text, scroll reset to 0)
+G.Hook(F, "OnShow", function()
+	hideClientArt()
+	list:Hide()
+	state.position = 0
+	state.speed = SPEEDS.reading
+	paintSpeedButtons()
+	placeArt()
 end)
-eteindreClient()
+hideClientArt()

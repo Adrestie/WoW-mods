@@ -57,13 +57,13 @@ from its own strings (`GlobalStrings.lua`, `GlueStrings.lua` at the login
 screens), so it follows the client's language by itself. Every other text is
 read from a language file, English being the base:
 
-    data/addon/ForeverUI/Textes_enUS.lua                 in game, English
-    data/addon/ForeverUI/Textes_frFR.lua                 in game, French
-    data/glue/Interface/GlueXML/ForeverUIGlueTextes_*.lua  login screens
+    data/addon/ForeverUI/Texts_enUS.lua                   in game, English
+    data/addon/ForeverUI/Texts_frFR.lua                   in game, French
+    data/glue/Interface/GlueXML/ForeverUIGlueTexts_*.lua  login screens
 
 A key missing from a language shows the English text, and a client whose
 language has no file reads English. To add a language, copy the `enUS` file to
-the client's locale code (`Textes_deDE.lua`...), translate the values without
+the client's locale code (`Texts_deDE.lua`...), translate the values without
 touching the keys or the `%s` / `%d` (same number, same order: Lua 5.1 cannot
 reorder them), and list the file after the English one in the `.toc` (or in
 `ForeverUIGlue.xml`). The mock client refuses a key used in the code that is
@@ -78,15 +78,15 @@ missing from English or French.
     docs/AMELIORATIONS.md     the points asked for, and nothing else
     docs/NOTES.md             working notes: departures, traps, tooling
     docs/reference/           screenshots of the real thing, to check against
-    tools/deployer.py         puts the addon in a client and the art in patch-Z
+    tools/deploy.py           puts the addon in a client and the art in patch-Z
     tools/test_addon.py       a mock client that loads the addon and checks it
-    tools/ajouter_feuilles.py brings an atlas sheet in with its preview, and
+    tools/add_sheets.py       brings an atlas sheet in with its preview, and
                               regenerates the atlas table
-    tools/cuire_masque.py     bakes a mask into an icon's alpha, for the cuts
+    tools/bake_masks.py       bakes a mask into an icon's alpha, for the cuts
                               3.3.5 cannot make on screen
-    tools/decouper_elements.py  cuts elements out of sheets too wide for 3.3.5,
+    tools/cut_elements.py     cuts elements out of sheets too wide for 3.3.5,
                               each at its own size
-    tools/cartes_instances.py generates the dungeon and raid maps by name, in
+    tools/instance_maps.py    generates the dungeon and raid maps by name, in
                               every language the client's map addon knows
 
 ## Working on it
@@ -96,18 +96,18 @@ addon in the client and the art in `patch-Z.MPQ` are copies the deployer makes;
 editing either of them directly means the work is lost the next time anything
 is deployed, and nobody can say afterwards what the game is actually showing.
 The rule holds both ways: what sits under `Interface\ForeverUI` in the patch is
-exactly what `data/art` holds, file for file, byte for byte. `--verifier`
+exactly what `data/art` holds, file for file, byte for byte. `--check`
 reports what is missing, what differs and what is left over, and a deploy
 removes from the archive anything this folder no longer carries.
 
 New art follows the same path: the `.blp` and its `.png` preview land in
 `data/art` first, then the deployer puts the `.blp` in the patch.
 
-    python tools/deployer.py --verifier      compare the client with this folder
-    python tools/deployer.py                 addon and art
-    python tools/deployer.py --addon         the addon alone, client may stay open
-    python tools/deployer.py --art           the art alone, close the client first
-    python tools/deployer.py --glue          the login screens, close the client first
+    python tools/deploy.py --check         compare the client with this folder
+    python tools/deploy.py                 addon and art
+    python tools/deploy.py --addon         the addon alone, client may stay open
+    python tools/deploy.py --art           the art alone, close the client first
+    python tools/deploy.py --glue          the login screens, close the client first
 
 The addon files are read at login: after `--addon`, a `/reload` in game is
 enough -- *unless a file was ADDED*. The client lists an addon's files when it

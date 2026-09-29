@@ -1,858 +1,760 @@
--- ForeverUI : l'onglet des monnaies.
---
--- RELEVE -- camelot/blizzard_tokenui.xml et .lua, lus en entier, plus le
--- Blizzard_TokenUI du client 3.3.5, lu dans l'archive.
---
--- TokenFrame
---   ScrollBox     TOPLEFT sur CharacterFrameLeftPaneHost (10, -40),
---                 BOTTOMRIGHT (-25, 15) -- les memes bornes que la
---                 reputation et les competences, au pixel pres
---   deux traits   UI-Character-Info-ScrollLine-Long, centres sur le TOP et
---                 le BOTTOM du ScrollBox
---   ScrollBar     MinimalScrollBar, a droite
---
--- TokenHeaderTemplate, 26 de haut
---   fond          common-button-list-collapseExpand, a sa taille d'atlas
---   survol        le meme, ADD, alpha 0,3
---   StateIcon     RIGHT (-8, -1)
---   Name          GameFontNormalLeft, LEFT (10), hauteur 15
---
--- TokenEntryTemplate, 22 de haut
---   BackgroundHighlight  trois tranches, cotes larges de 6 :
---                 charactercreate-customize-dropdown-linemouseover-side --
---                 le droit retourne -- et -middle entre les deux. Choisie
---                 0,20 ; au survol 0,10 ; au repos 0.
---   CurrencyIcon  20 x 20, RIGHT (-20, 0)
---   Count         GameFontHighlightRight, LEFT de l'icone (-5, 0)
---   Name          GameFontHighlightLeft, hauteur 11, du LEFT au Count (-10)
---   WatchedCurrencyCheck  Interface/Buttons/UI-CheckBox-Check, 16 x 16,
---                 RIGHT (-3, 0)
---
--- TokenDetailFrame, CharacterFrameSidePaneTemplate
---   titre         le nom de la monnaie
---   sous-titre    son icone et sa quantite
---   description   GetCurrencyDescriptionText
---   deux cases    InactiveCheckbox (UNUSED) et BackpackCheckbox
---                 (SHOW_ON_BACKPACK), 26 x 26, checkbox-minimal et
---                 checkmark-minimal
---
--- CE QUE 3.3.5 DONNE, ET CE QU'IL NE DONNE PAS.
---
--- GetCurrencyListSize et GetCurrencyListInfo sont dans le binaire, verifie,
--- et le client s'en sert lui-meme. GetCurrencyListInfo rend NEUF valeurs :
---   nom, enTete, deplie, inutilisee, suivie, compte, typeSpecial, icone,
---   identifiantObjet
---
--- CE QUI DIFFERE, ET POURQUOI.
---
---   * PAS DE SOUS-EN-TETE. camelot a un TokenSubHeaderTemplate ; la liste de
---     3.3.5 n'a que deux niveaux -- GetCurrencyListInfo ne rend qu'un
---     enTete, sans notion d'enfant. Il n'y a donc rien a poser.
---   * PAS DE DESCRIPTION. camelot la tire de GetCurrencyDescriptionText, qui
---     n'existe pas ici, et GetCurrencyListInfo n'en porte aucune. Le volet
---     droit montre le nom, l'icone et la quantite ; la place de la
---     description reste vide. C'est un manque, signale.
---   * PAS DE PLAFOND NI DE QUOTA HEBDOMADAIRE, pour la meme raison.
---   * DEUX MONNAIES ONT UNE ICONE A PART, et le client le dit lui-meme :
---     typeSpecial 1, les points d'arene -- Interface/PVPFrame/
---     PVP-ArenaPoints-Icon ; typeSpecial 2, les points d'honneur --
---     Interface/TargetingFrame/UI-PVP-<faction>, rogne a 0,03125 ..
---     0,59375. Releve dans TokenFrame_Update.
---   * UNE MONNAIE A ZERO S'ECRIT EN GRIS. GameFontDisable, comme le client.
---   * PAS DE BARRE DE DEFILEMENT : la molette suffit d'ici la. La liste ne
---     garde donc pas la place de la barre (regle du 28/09 : « le contenu
---     doit s'adapter a la presence ou non de la scrollbar ») : son bord
---     droit est a -10, la marge de gauche, et non a -25 comme chez camelot.
+-- Currencies tab of the character sheet, after camelot's Blizzard_TokenUI: a list on the
+-- left pane and a detail on the right pane (name, icon, count, the client's two checkboxes).
+-- 3.3.5 has no sub-headers, description, cap or weekly quota: GetCurrencyListInfo returns only
+-- name, isHeader, expanded, unused, isTracked, count, specialType, icon and itemID.
+-- No scroll bar (the mouse wheel scrolls), so the list's right edge is at -10, not -25.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 local L = ForeverUI.L
 
-local LISTE_X, LISTE_Y = 10, -40
-local LISTE_X2, LISTE_Y2 = -LISTE_X, 15
+local LIST_X, LIST_Y = 10, -40
+local LIST_X2, LIST_Y2 = -LIST_X, 15
 
-local ENTREE_H = 22                     -- TokenEntryTemplate
-local ENTETE_H = 26                     -- TokenHeaderTemplate
-local MARGE = 10
-local ECART = 3
-local RETRAIT_ENTETE = 0
-local RETRAIT_AUTRE = 2
+local ENTRY_H = 22                     -- TokenEntryTemplate
+local HEADER_H = 26                     -- TokenHeaderTemplate
+local MARGIN = 10
+local GAP = 3
+local HEADER_INDENT = 0
+local OTHER_INDENT = 2
 
-local NOM_H = 11
-local ENTETE_NOM_H = 15
-local ENTETE_NOM_X = 10
-local NOM_X = 2
-local NOM_ECART = -10                   -- du LEFT du compte
-local ICONE = 20
-local ICONE_X = -20
-local COMPTE_X = -5
-local COCHE_L = 16
-local COCHE_X = -3
-local FLECHE_X, FLECHE_Y = -8, -1
-local FLECHE_PLACE = 16
-local COTE = 6                          -- les tranches du survol
-local PLAQUE_COIN = 12                  -- le meme que la reputation
+local NAME_H = 11
+local HEADER_NAME_H = 15
+local HEADER_NAME_X = 10
+local NAME_X = 2
+local NAME_GAP = -10                   -- from the count's LEFT
+local ICON = 20
+local ICON_X = -20
+local COUNT_X = -5
+local CHECKMARK_W = 16
+local CHECKMARK_X = -3
+local ARROW_X, ARROW_Y = -8, -1
+local ARROW_SPACE = 16
+local SIDE = 6                          -- hover side slice width
+local PLATE_CORNER = 12                  -- same as the reputation tab
 
-local CHOISIE_ALPHA = 0.20
-local SURVOL_ALPHA = 0.10
+local SELECTED_ALPHA = 0.20
+local HOVER_ALPHA = 0.10
 
-local ATLAS_ENTETE = "common-button-list-collapseexpand"
+local ATLAS_HEADER = "common-button-list-collapseexpand"
 local ATLAS_PLUS = "common-button-list-plus"
-local ATLAS_MOINS = "common-button-list-minus"
-local ATLAS_TRAIT = "ui-character-info-scrollline-long"
-local ATLAS_SURVOL_COTE = "charactercreate-customize-dropdown-linemouseover-side"
-local ATLAS_SURVOL_MILIEU = "charactercreate-customize-dropdown-linemouseover-middle"
+local ATLAS_MINUS = "common-button-list-minus"
+local ATLAS_LINE = "ui-character-info-scrollline-long"
+local ATLAS_HOVER_SIDE = "charactercreate-customize-dropdown-linemouseover-side"
+local ATLAS_HOVER_MIDDLE = "charactercreate-customize-dropdown-linemouseover-middle"
 
-local CHEMIN_COCHE = "Interface\\Buttons\\UI-CheckBox-Check"
-local CHEMIN_ARENE = "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
-local CHEMIN_HONNEUR = "Interface\\TargetingFrame\\UI-PVP-%s"
-local HONNEUR_COIN = 0.03125
-local HONNEUR_COTE = 0.59375
+local CHECKMARK_PATH = "Interface\\Buttons\\UI-CheckBox-Check"
+local ARENA_PATH = "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
+local HONOR_PATH = "Interface\\TargetingFrame\\UI-PVP-%s"
+local HONOR_CORNER = 0.03125
+local HONOR_SIDE = 0.59375
 
--- La taille du volet, par construction : un contenu se batit a sa premiere
--- ouverture, qui peut preceder la pose de la fenetre. GetHeight rendrait
--- alors zero. Le meme garde-fou que la reputation.
-local VOLET_L, VOLET_H = 398, 464
+-- Pane size by construction: content is built on first open, which can come before the
+-- window is laid out, when GetHeight still returns 0. Same guard as the reputation tab.
+local PANE_W, PANE_H = 398, 464
 
-local lignes = {}
-local panneau, decalage = nil, 0
-local visibles = 0
-local choisie
+local rows = {}
+local panel, offset = nil, 0
+local visibleCount = 0
+local selectedItem
 
--- DECLAREES AVANT D'ETRE ECRITES. poserListe borne l'ecran a chaque passage
--- et il est ecrit plus haut qu'elles : sans ces deux lignes leurs noms s'y
--- resoudraient en GLOBALES, donc nil.
-local hoteGauche
-local bornerAuVolet
+-- Forward declarations: layoutList, written above clampToPane, calls it on every pass;
+-- without them these names would resolve to globals, i.e. nil.
+local leftHost
+local clampToPane
 
--- ---------------------------------------------------------------- les donnees
+-- ---------------------------------------------------------------- Data
 
-local function lireDevise(rang)
+-- Currency list row rank as a table, or nil
+local function readCurrency(rank)
 	if not GetCurrencyListInfo then
 		return nil
 	end
-	local nom, enTete, deplie, inutilisee, suivie, compte, special, icone,
-		objet = GetCurrencyListInfo(rang)
-	if not nom or nom == "" then
+	local name, isHeader, expanded, unused, isTracked, count, special, icon,
+		object = GetCurrencyListInfo(rank)
+	if not name or name == "" then
 		return nil
 	end
 	return {
-		index = rang,
-		nom = nom,
-		entete = enTete and true or false,
-		deplie = deplie and true or false,
-		inutilisee = inutilisee and true or false,
-		suivie = suivie and true or false,
-		compte = compte or 0,
+		index = rank,
+		name = name,
+		header = isHeader and true or false,
+		expanded = expanded and true or false,
+		unused = unused and true or false,
+		isTracked = isTracked and true or false,
+		count = count or 0,
 		special = special,
-		icone = icone,
-		objet = objet,
+		icon = icon,
+		object = object,
 	}
 end
 
--- L'ICONE D'UNE MONNAIE. Deux types ont la leur, en dur dans le client.
-local function poserIcone(texture, donnees)
-	if donnees.special == 1 then
-		texture:SetTexture(CHEMIN_ARENE)
+-- Currency icon. Arena and honor points have their own, hardcoded in the client.
+local function placeIcon(texture, data)
+	if data.special == 1 then
+		texture:SetTexture(ARENA_PATH)
 		texture:SetTexCoord(0, 1, 0, 1)
-	elseif donnees.special == 2 then
+	elseif data.special == 2 then
 		local faction = UnitFactionGroup and UnitFactionGroup("player")
 		if faction then
-			texture:SetTexture(string.format(CHEMIN_HONNEUR, faction))
-			texture:SetTexCoord(HONNEUR_COIN, HONNEUR_COTE, HONNEUR_COIN, HONNEUR_COTE)
+			texture:SetTexture(string.format(HONOR_PATH, faction))
+			texture:SetTexCoord(HONOR_CORNER, HONOR_SIDE, HONOR_CORNER, HONOR_SIDE)
 		else
 			texture:SetTexture("")
 			texture:SetTexCoord(0, 1, 0, 1)
 		end
 	else
-		texture:SetTexture(donnees.icone or "")
+		texture:SetTexture(data.icon or "")
 		texture:SetTexCoord(0, 1, 0, 1)
 	end
 end
 
-local function hauteurDe(donnees)
-	return donnees.entete and ENTETE_H or ENTREE_H
+local function heightOf(data)
+	return data.header and HEADER_H or ENTRY_H
 end
 
-local function retraitDe(donnees)
-	return donnees.entete and RETRAIT_ENTETE or RETRAIT_AUTRE
+local function indentOf(data)
+	return data.header and HEADER_INDENT or OTHER_INDENT
 end
 
--- ----------------------------------------------------------------- une ligne
+-- ----------------------------------------------------------------- Row
 
-local function creerLigne(index, largeur)
-	local ligne = CreateFrame("Button", "ForeverUITokenRow" .. index, panneau)
-	ligne:SetWidth(largeur)
-	ligne:SetHeight(ENTREE_H)
+local function createRow(index, width)
+	local row = CreateFrame("Button", "ForeverUITokenRow" .. index, panel)
+	row:SetWidth(width)
+	row:SetHeight(ENTRY_H)
 
-	-- LE FOND D'EN-TETE, en neuf tranches : seules celles du milieu s'etirent.
-	ligne.plaque = ForeverUI.CreateNineSlice(ligne, ATLAS_ENTETE, PLAQUE_COIN,
+	-- Header background in nine slices: only the middle ones stretch.
+	row.plate = ForeverUI.CreateNineSlice(row, ATLAS_HEADER, PLATE_CORNER,
 		{ 0, 0, 0, 0 }, "BACKGROUND") or {}
-	for _, tranche in ipairs(ligne.plaque) do
-		tranche:Hide()
+	for _, slice in ipairs(row.plate) do
+		slice:Hide()
 	end
 
-	-- LE SURVOL D'UNE ENTREE : trois tranches, les cotes larges de 6.
-	local survol = CreateFrame("Frame", nil, ligne)
-	survol:SetAllPoints(ligne)
-	survol:SetAlpha(0)
-	ligne.survol = survol
+	-- Entry hover: three slices, sides 6 wide.
+	local hover = CreateFrame("Frame", nil, row)
+	hover:SetAllPoints(row)
+	hover:SetAlpha(0)
+	row.hover = hover
 
-	local gauche = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(gauche, ATLAS_SURVOL_COTE, true)
-	gauche:SetWidth(COTE)
-	gauche:SetPoint("TOPLEFT", survol, "TOPLEFT", 0, 0)
-	gauche:SetPoint("BOTTOMLEFT", survol, "BOTTOMLEFT", 0, 0)
+	local left = hover:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(left, ATLAS_HOVER_SIDE, true)
+	left:SetWidth(SIDE)
+	left:SetPoint("TOPLEFT", hover, "TOPLEFT", 0, 0)
+	left:SetPoint("BOTTOMLEFT", hover, "BOTTOMLEFT", 0, 0)
 
-	local droite = survol:CreateTexture(nil, "BACKGROUND")
-	if ForeverUI.SetAtlas(droite, ATLAS_SURVOL_COTE, true) then
-		-- La source la retourne : TexCoords left = 1, right = 0.
-		local e = ForeverUI.AtlasEntry(ATLAS_SURVOL_COTE)
-		droite:SetTexCoord(e[3], e[2], e[4], e[5])
+	local right = hover:CreateTexture(nil, "BACKGROUND")
+	if ForeverUI.SetAtlas(right, ATLAS_HOVER_SIDE, true) then
+		-- Flipped as in the source: TexCoords left = 1, right = 0.
+		local e = ForeverUI.AtlasEntry(ATLAS_HOVER_SIDE)
+		right:SetTexCoord(e[3], e[2], e[4], e[5])
 	end
-	droite:SetWidth(COTE)
-	droite:SetPoint("TOPRIGHT", survol, "TOPRIGHT", 0, 0)
-	droite:SetPoint("BOTTOMRIGHT", survol, "BOTTOMRIGHT", 0, 0)
+	right:SetWidth(SIDE)
+	right:SetPoint("TOPRIGHT", hover, "TOPRIGHT", 0, 0)
+	right:SetPoint("BOTTOMRIGHT", hover, "BOTTOMRIGHT", 0, 0)
 
-	local milieu = survol:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(milieu, ATLAS_SURVOL_MILIEU, true)
-	milieu:SetPoint("TOPLEFT", gauche, "TOPRIGHT", 0, 0)
-	milieu:SetPoint("BOTTOMRIGHT", droite, "BOTTOMLEFT", 0, 0)
+	local middle = hover:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(middle, ATLAS_HOVER_MIDDLE, true)
+	middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
 
-	ligne.survolPieces = { gauche, droite, milieu }
+	row.hoverPieces = { left, right, middle }
 
-	-- LA COCHE d'une monnaie suivie, tout a droite.
-	local coche = ligne:CreateTexture(nil, "OVERLAY")
-	coche:SetTexture(CHEMIN_COCHE)
-	coche:SetWidth(COCHE_L)
-	coche:SetHeight(COCHE_L)
-	coche:SetPoint("RIGHT", ligne, "RIGHT", COCHE_X, 0)
-	coche:Hide()
-	ligne.coche = coche
+	-- Check mark of a tracked currency, far right.
+	local checkMark = row:CreateTexture(nil, "OVERLAY")
+	checkMark:SetTexture(CHECKMARK_PATH)
+	checkMark:SetWidth(CHECKMARK_W)
+	checkMark:SetHeight(CHECKMARK_W)
+	checkMark:SetPoint("RIGHT", row, "RIGHT", CHECKMARK_X, 0)
+	checkMark:Hide()
+	row.checkMark = checkMark
 
-	local icone = ligne:CreateTexture(nil, "BORDER")
-	icone:SetWidth(ICONE)
-	icone:SetHeight(ICONE)
-	icone:SetPoint("RIGHT", ligne, "RIGHT", ICONE_X, 0)
-	ligne.icone = icone
+	local icon = row:CreateTexture(nil, "BORDER")
+	icon:SetWidth(ICON)
+	icon:SetHeight(ICON)
+	icon:SetPoint("RIGHT", row, "RIGHT", ICON_X, 0)
+	row.icon = icon
 
-	local compte = ligne:CreateFontString(nil, "ARTWORK", "GameFontHighlightRight")
-	compte:SetJustifyH("RIGHT")
-	compte:SetPoint("RIGHT", icone, "LEFT", COMPTE_X, 0)
-	ligne.compte = compte
+	local count = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightRight")
+	count:SetJustifyH("RIGHT")
+	count:SetPoint("RIGHT", icon, "LEFT", COUNT_X, 0)
+	row.count = count
 
-	-- LE NOM. Ses deux ancrages changent selon le gabarit : ils se reposent
-	-- a chaque remplissage.
-	local nom = ligne:CreateFontString(nil, "OVERLAY", "GameFontHighlightLeft")
-	nom:SetJustifyH("LEFT")
-	ligne.nom = nom
+	-- Name: its two anchors depend on the template, so they are set on each fill.
+	local name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightLeft")
+	name:SetJustifyH("LEFT")
+	row.name = name
 
-	-- LA FLECHE d'un en-tete, a droite : StateIcon.
-	local fleche = ligne:CreateTexture(nil, "OVERLAY")
-	fleche:SetPoint("RIGHT", ligne, "RIGHT", FLECHE_X, FLECHE_Y)
-	fleche:Hide()
-	ligne.fleche = fleche
+	-- Header arrow on the right: StateIcon.
+	local arrow = row:CreateTexture(nil, "OVERLAY")
+	arrow:SetPoint("RIGHT", row, "RIGHT", ARROW_X, ARROW_Y)
+	arrow:Hide()
+	row.arrow = arrow
 
-	ligne:RegisterForClicks("LeftButtonUp")
-	return ligne
+	row:RegisterForClicks("LeftButtonUp")
+	return row
 end
 
--- -------------------------------------------------------------- l'affichage
+-- -------------------------------------------------------------- Display
 
--- L'OPACITE DU SURVOL, telle que les KeyValues du gabarit la donnent :
--- choisie 0,20 ; au survol 0,10 ; au repos 0.
-local function poserSurvol(ligne)
-	if ligne.entete then
-		ligne.survol:SetAlpha(0)
+-- Hover opacity from the template KeyValues: selected 0.20, hovered 0.10, idle 0.
+local function placeHover(row)
+	if row.header then
+		row.hover:SetAlpha(0)
 		return
 	end
-	local dessus = ligne:IsMouseOver()
-	ligne.survol:SetAlpha((ligne.choisie and CHOISIE_ALPHA)
-		or (dessus and SURVOL_ALPHA) or 0)
+	local hovered = row:IsMouseOver()
+	row.hover:SetAlpha((row.selectedItem and SELECTED_ALPHA)
+		or (hovered and HOVER_ALPHA) or 0)
 end
 
--- SetFontObject EFFACE LA JUSTIFICATION, ET IL FAUT LA REPOSER.
---
--- Un objet de police porte la SIENNE : GameFontNormalLeft est a gauche,
--- GameFontHighlight n'a aucun justifyH -- donc CENTRE, releve dans le
--- FontStyles.xml du client. SetJustifyH pose a la creation ne survit donc
--- pas au premier SetFontObject, et le nom se retrouvait centre dans sa
--- boite. Comme la boite change de largeur d'un gabarit a l'autre, le nom
--- se deplacait horizontalement au fil du defilement, selon le role que la
--- ligne reprenait.
---
--- camelot le fait exactement ainsi, et c'est ce qui le trahit :
---   <FontString parentKey="Name" inherits="GameFontHighlight" justifyH="LEFT">
--- La justification est posee PAR-DESSUS l'objet de police.
-local function remplirLigne(ligne, donnees)
-	ligne.deviseIndex = donnees.index
-	ligne.deviseNom = donnees.nom
-	ligne.entete = donnees.entete
-	ligne.deplie = donnees.deplie
-	ligne.suivie = donnees.suivie
-	ligne.choisie = (not donnees.entete) and (choisie == donnees.nom) or false
+-- SetFontObject resets the justification, so set it again afterwards. GameFontHighlight has
+-- no justifyH, i.e. CENTER (client FontStyles.xml), so the name would be centered and shift
+-- as rows are reused. camelot also sets justifyH="LEFT" on top of the font object.
+local function populateRow(row, data)
+	row.currencyIndex = data.index
+	row.currencyName = data.name
+	row.header = data.header
+	row.expanded = data.expanded
+	row.isTracked = data.isTracked
+	row.selectedItem = (not data.header) and (selectedItem == data.name) or false
 
-	ligne:SetHeight(hauteurDe(donnees))
+	row:SetHeight(heightOf(data))
 
-	ligne.nom:ClearAllPoints()
-	if donnees.entete then
-		for _, tranche in ipairs(ligne.plaque) do
-			tranche:Show()
+	row.name:ClearAllPoints()
+	if data.header then
+		for _, slice in ipairs(row.plate) do
+			slice:Show()
 		end
-		ligne.icone:Hide()
-		ligne.compte:SetText("")
-		ligne.coche:Hide()
+		row.icon:Hide()
+		row.count:SetText("")
+		row.checkMark:Hide()
 
-		ligne.nom:SetHeight(ENTETE_NOM_H)
-		ligne.nom:SetFontObject(GameFontNormalLeft or "GameFontNormal")
-		ligne.nom:SetJustifyH("LEFT")
-		ligne.nom:SetPoint("LEFT", ligne, "LEFT", ENTETE_NOM_X, 0)
-		ligne.nom:SetPoint("RIGHT", ligne, "RIGHT", -FLECHE_PLACE, 0)
-		ligne.nom:SetText(donnees.nom)
+		row.name:SetHeight(HEADER_NAME_H)
+		row.name:SetFontObject(GameFontNormalLeft or "GameFontNormal")
+		row.name:SetJustifyH("LEFT")
+		row.name:SetPoint("LEFT", row, "LEFT", HEADER_NAME_X, 0)
+		row.name:SetPoint("RIGHT", row, "RIGHT", -ARROW_SPACE, 0)
+		row.name:SetText(data.name)
 
-		ForeverUI.SetAtlas(ligne.fleche,
-			donnees.deplie and ATLAS_MOINS or ATLAS_PLUS, false)
-		ligne.fleche:Show()
+		ForeverUI.SetAtlas(row.arrow,
+			data.expanded and ATLAS_MINUS or ATLAS_PLUS, false)
+		row.arrow:Show()
 	else
-		for _, tranche in ipairs(ligne.plaque) do
-			tranche:Hide()
+		for _, slice in ipairs(row.plate) do
+			slice:Hide()
 		end
-		ligne.fleche:Hide()
+		row.arrow:Hide()
 
-		poserIcone(ligne.icone, donnees)
-		ligne.icone:Show()
-		ligne.compte:SetText(donnees.compte)
+		placeIcon(row.icon, data)
+		row.icon:Show()
+		row.count:SetText(data.count)
 
-		-- UNE MONNAIE A ZERO S'ECRIT EN GRIS : c'est ce que fait le client.
-		local police = (donnees.compte == 0) and (GameFontDisable or "GameFontDisable")
+		-- A zero count is gray, as in the client.
+		local font = (data.count == 0) and (GameFontDisable or "GameFontDisable")
 			or (GameFontHighlight or "GameFontHighlight")
-		ligne.compte:SetFontObject(police)
-		ligne.compte:SetJustifyH("RIGHT")
-		ligne.nom:SetFontObject(police)
-		ligne.nom:SetJustifyH("LEFT")
+		row.count:SetFontObject(font)
+		row.count:SetJustifyH("RIGHT")
+		row.name:SetFontObject(font)
+		row.name:SetJustifyH("LEFT")
 
-		if donnees.suivie then
-			ligne.coche:Show()
+		if data.isTracked then
+			row.checkMark:Show()
 		else
-			ligne.coche:Hide()
+			row.checkMark:Hide()
 		end
 
-		ligne.nom:SetHeight(NOM_H)
-		ligne.nom:SetPoint("LEFT", ligne, "LEFT", NOM_X, 0)
-		ligne.nom:SetPoint("RIGHT", ligne.compte, "LEFT", NOM_ECART, 0)
-		ligne.nom:SetText(donnees.nom)
+		row.name:SetHeight(NAME_H)
+		row.name:SetPoint("LEFT", row, "LEFT", NAME_X, 0)
+		row.name:SetPoint("RIGHT", row.count, "LEFT", NAME_GAP, 0)
+		row.name:SetText(data.name)
 	end
 
-	poserSurvol(ligne)
-	ligne:Show()
+	placeHover(row)
+	row:Show()
 end
 
--- LE BALAYAGE. L'art et les lignes de 3.3.5 s'en vont, a CHAQUE passage :
--- TokenFrame_Update les repose des qu'une monnaie bouge. On balaie les
--- regions ET les enfants, sauf notre panneau.
-local function etoufferEcranDuClient()
-	local cadre = _G["TokenFrame"]
-	if not cadre then
+-- Hides the 3.3.5 art and rows on EVERY pass: TokenFrame_Update restores them whenever
+-- a currency changes. Both regions and children go, except our panel.
+local function suppressClientScreen()
+	local frame = _G["TokenFrame"]
+	if not frame then
 		return
 	end
 
-	if cadre.SetBackdrop then
-		cadre:SetBackdrop(nil)
+	if frame.SetBackdrop then
+		frame:SetBackdrop(nil)
 	end
-	for _, region in ipairs({ cadre:GetRegions() }) do
+	for _, region in ipairs({ frame:GetRegions() }) do
 		if region.Hide then
 			region:Hide()
 		end
 	end
-	if cadre.GetChildren then
-		for _, fils in ipairs({ cadre:GetChildren() }) do
-			if fils ~= panneau and fils.Hide then
-				fils:Hide()
+	if frame.GetChildren then
+		for _, childFrame in ipairs({ frame:GetChildren() }) do
+			if childFrame ~= panel and childFrame.Hide then
+				childFrame:Hide()
 			end
 		end
 	end
 end
 
--- UN PASSAGE : empiler les lignes depuis le decalage, jusqu'a la marge du
--- bas. ON S'ARRETE A GetCurrencyListSize, comme le client.
-local function disposer()
+-- One pass: stack rows from the offset down to the bottom margin, stopping at
+-- GetCurrencyListSize like the client. Returns the number of rows placed.
+local function layout()
 	local total = (GetCurrencyListSize and GetCurrencyListSize()) or 0
-	local hauteurUtile = (panneau:GetHeight() or 0)
-	if hauteurUtile < 50 then
-		hauteurUtile = VOLET_H + LISTE_Y - LISTE_Y2
+	local usableHeight = (panel:GetHeight() or 0)
+	if usableHeight < 50 then
+		usableHeight = PANE_H + LIST_Y - LIST_Y2
 	end
-	local largeurUtile = (panneau:GetWidth() or 0)
-	if largeurUtile < 50 then
-		largeurUtile = VOLET_L + LISTE_X2 - LISTE_X
+	local usableWidth = (panel:GetWidth() or 0)
+	if usableWidth < 50 then
+		usableWidth = PANE_W + LIST_X2 - LIST_X
 	end
 
-	local y = MARGE
-	local posees = 0
-	for rang, ligne in ipairs(lignes) do
-		local index = decalage + rang
-		local donnees = (index <= total) and lireDevise(index) or nil
-		local hauteur = donnees and hauteurDe(donnees) or 0
-		if donnees and y + hauteur <= hauteurUtile - MARGE then
-			local retrait = retraitDe(donnees)
-			ligne:SetWidth(largeurUtile - 2 * MARGE - retrait)
-			remplirLigne(ligne, donnees)
-			ligne:ClearAllPoints()
-			ligne:SetPoint("TOPLEFT", panneau, "TOPLEFT", MARGE + retrait, -y)
-			y = y + hauteur + ECART
-			posees = posees + 1
+	local y = MARGIN
+	local placedCount = 0
+	for rank, row in ipairs(rows) do
+		local index = offset + rank
+		local data = (index <= total) and readCurrency(index) or nil
+		local height = data and heightOf(data) or 0
+		if data and y + height <= usableHeight - MARGIN then
+			local indent = indentOf(data)
+			row:SetWidth(usableWidth - 2 * MARGIN - indent)
+			populateRow(row, data)
+			row:ClearAllPoints()
+			row:SetPoint("TOPLEFT", panel, "TOPLEFT", MARGIN + indent, -y)
+			y = y + height + GAP
+			placedCount = placedCount + 1
 		else
-			ligne:Hide()
+			row:Hide()
 		end
 	end
-	return posees
+	return placedCount
 end
 
-local function poserListe()
-	if not panneau then
+local function layoutList()
+	if not panel then
 		return
 	end
 
-	bornerAuVolet()
-	etoufferEcranDuClient()
+	clampToPane()
+	suppressClientScreen()
 
 	local total = (GetCurrencyListSize and GetCurrencyListSize()) or 0
-	local posees = disposer()
+	local placedCount = layout()
 
-	-- Replier une categorie raccourcit la liste : on borne le decalage et on
-	-- repose si cela a bouge. Le meme piege que la reputation.
-	if decalage > 0 and decalage + posees > total then
-		decalage = math.max(0, total - posees)
-		posees = disposer()
+	-- Collapsing a category shortens the list: clamp the offset and lay out again if it moved.
+	-- Same trap as the reputation tab.
+	if offset > 0 and offset + placedCount > total then
+		offset = math.max(0, total - placedCount)
+		placedCount = layout()
 	end
 
-	visibles = posees
+	visibleCount = placedCount
 
 	if ForeverUI.TokensDetail then
 		ForeverUI.TokensDetail()
 	end
 end
-ForeverUI.TokensLayout = poserListe
+ForeverUI.TokensLayout = layoutList
 
--- ---------------------------------------------------------- la construction
+-- ---------------------------------------------------------- Build
 
-local function suivreSurvol()
-	for _, ligne in ipairs(lignes) do
-		if ligne:IsShown() and not ligne.entete then
-			poserSurvol(ligne)
+local function trackHover()
+	for _, row in ipairs(rows) do
+		if row:IsShown() and not row.header then
+			placeHover(row)
 		end
 	end
 end
 
--- L'ECRAN DES MONNAIES CESSE D'ETRE UN PANNEAU.
---
--- Releve a la PREMIERE ligne du Blizzard_TokenUI du client :
---   UIPanelWindows["TokenFrame"] = { area = "left", pushable = 1,
---                                    whileDead = 1 }
---
--- Il est donc inscrit au systeme de panneaux, comme la fenetre PvP. Tant
--- qu'il y est, UpdateUIPanelPositions lui rend ses ancres a l'ecran des
--- qu'il repasse, et il redevient une dalle posee sur UIParent : son art
--- etant eteint, elle ne se voit pas, mais elle prend la souris. C'est ce
--- qui rendait les onglets lateraux incliquables depuis le PvP ; le meme
--- geste vaut ici, avant que le defaut ne se montre.
-bornerAuVolet = function()
-	local cadre = _G["TokenFrame"]
-	if not cadre or not hoteGauche then
+-- Pins TokenFrame to the left pane. Blizzard_TokenUI registers it in UIPanelWindows, and
+-- while registered, UpdateUIPanelPositions re-anchors it on UIParent, where the invisible
+-- frame still catches the mouse and blocks the side tabs (as with the PvP frame). build
+-- removes it from UIPanelWindows.
+clampToPane = function()
+	local frame = _G["TokenFrame"]
+	if not frame or not leftHost then
 		return
 	end
-	cadre:ClearAllPoints()
-	cadre:SetPoint("TOPLEFT", hoteGauche, "TOPLEFT", 0, 0)
-	cadre:SetPoint("BOTTOMRIGHT", hoteGauche, "BOTTOMRIGHT", 0, 0)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", leftHost, "TOPLEFT", 0, 0)
+	frame:SetPoint("BOTTOMRIGHT", leftHost, "BOTTOMRIGHT", 0, 0)
 end
 
-local function monter(hote)
-	local cadre = _G["TokenFrame"]
-	if not cadre or not hote then
+-- Builds the currency list in host, the character sheet's left pane
+local function build(host)
+	local frame = _G["TokenFrame"]
+	if not frame or not host then
 		return nil, {}
 	end
 
-	hoteGauche = hote
+	leftHost = host
 	if UIPanelWindows then
 		UIPanelWindows["TokenFrame"] = nil
 	end
-	bornerAuVolet()
+	clampToPane()
 
-	if panneau then
-		return nil, { cadre }
+	if panel then
+		return nil, { frame }
 	end
 
-	if cadre.SetBackdrop then
-		cadre:SetBackdrop(nil)
+	if frame.SetBackdrop then
+		frame:SetBackdrop(nil)
 	end
 
-	local hauteur = hote:GetHeight() or 0
-	if hauteur < 100 then
-		hauteur = VOLET_H
+	local height = host:GetHeight() or 0
+	if height < 100 then
+		height = PANE_H
 	end
-	local largeur = hote:GetWidth() or 0
-	if largeur < 100 then
-		largeur = VOLET_L
+	local width = host:GetWidth() or 0
+	if width < 100 then
+		width = PANE_W
 	end
-	largeur = largeur + LISTE_X2 - LISTE_X
+	width = width + LIST_X2 - LIST_X
 
-	panneau = CreateFrame("Frame", "ForeverUITokenList", cadre)
-	panneau:SetPoint("TOPLEFT", hote, "TOPLEFT", LISTE_X, LISTE_Y)
-	panneau:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", LISTE_X2, LISTE_Y2)
-	panneau:SetWidth(largeur)
+	panel = CreateFrame("Frame", "ForeverUITokenList", frame)
+	panel:SetPoint("TOPLEFT", host, "TOPLEFT", LIST_X, LIST_Y)
+	panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", LIST_X2, LIST_Y2)
+	panel:SetWidth(width)
 
-	-- Assez de lignes pour le cas le plus dense -- que des entrees, les plus
-	-- courtes -- puisque poserListe s'arrete a la marge du bas.
-	local place = math.floor((hauteur + LISTE_Y - LISTE_Y2) / (ENTREE_H + ECART))
-	if place < 1 then
-		place = 1
+	-- Enough rows for the densest case (only entries, the shortest rows), since layoutList
+	-- stops at the bottom margin.
+	local position = math.floor((height + LIST_Y - LIST_Y2) / (ENTRY_H + GAP))
+	if position < 1 then
+		position = 1
 	end
-	for index = 1, place do
-		local ligne = creerLigne(index, largeur)
-		ligne:SetScript("OnClick", function(self)
-			if not self.deviseIndex then
+	for index = 1, position do
+		local row = createRow(index, width)
+		row:SetScript("OnClick", function(self)
+			if not self.currencyIndex then
 				return
 			end
-			if self.entete then
+			if self.header then
 				if ExpandCurrencyList then
-					ExpandCurrencyList(self.deviseIndex, self.deplie and 0 or 1)
+					ExpandCurrencyList(self.currencyIndex, self.expanded and 0 or 1)
 				end
-				poserListe()
+				layoutList()
 			else
-				ForeverUI.TokensSelect(self.deviseNom)
+				ForeverUI.TokensSelect(self.currencyName)
 			end
 		end)
-		lignes[index] = ligne
+		rows[index] = row
 	end
 
-	-- LES DEUX TRAITS VIVENT SUR NOTRE PANNEAU : le cadre du client voit
-	-- toutes ses regions masquees a chaque passage, et les notres y
-	-- disparaitraient avec.
-	local haut = panneau:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(haut, ATLAS_TRAIT)
-	haut:SetPoint("CENTER", panneau, "TOP", 0, 0)
+	-- Both lines live on our panel: the client frame's regions are hidden on every pass
+	-- and ours would go with them.
+	local top = panel:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(top, ATLAS_LINE)
+	top:SetPoint("CENTER", panel, "TOP", 0, 0)
 
-	local bas = panneau:CreateTexture(nil, "ARTWORK")
-	ForeverUI.SetAtlas(bas, ATLAS_TRAIT)
-	bas:SetPoint("CENTER", panneau, "BOTTOM", 0, 0)
+	local down = panel:CreateTexture(nil, "ARTWORK")
+	ForeverUI.SetAtlas(down, ATLAS_LINE)
+	down:SetPoint("CENTER", panel, "BOTTOM", 0, 0)
 
-	panneau:SetScript("OnUpdate", suivreSurvol)
-	panneau:EnableMouseWheel(true)
-	panneau:SetScript("OnMouseWheel", function(_self, sens)
+	panel:SetScript("OnUpdate", trackHover)
+	panel:EnableMouseWheel(true)
+	panel:SetScript("OnMouseWheel", function(_self, direction)
 		local total = (GetCurrencyListSize and GetCurrencyListSize()) or 0
-		decalage = math.max(0, math.min(decalage - sens, total - visibles))
-		poserListe()
+		offset = math.max(0, math.min(offset - direction, total - visibleCount))
+		layoutList()
 	end)
 
-	poserListe()
-	return nil, { cadre }
+	layoutList()
+	return nil, { frame }
 end
 
--- ------------------------------------------------------------ le volet droit
+-- ------------------------------------------------------------ Right pane
 
-local VOLET_DROIT_X, VOLET_DROIT_Y = 16, -14
-local VOLET_DROIT_X2, VOLET_DROIT_Y2 = -12, 14
-local TITRE_L = 195
-local SOUS_TITRE_Y = -3
-local SEPARATEUR_Y = -4
-local DETAIL_ICONE = 16
-local DETAIL_ICONE_X = -4
-local CASE = 26
-local CASE_X, CASE_ECART = -4, -2
-local CASE_INTITULE_L = 158
-local CASE_INTITULE_X = 2
+local RIGHT_PANE_X, RIGHT_PANE_Y = 16, -14
+local RIGHT_PANE_X2, RIGHT_PANE_Y2 = -12, 14
+local TITLE_W = 195
+local SUBTITLE_Y = -3
+local SEPARATOR_Y = -4
+local DETAIL_ICON = 16
+local DETAIL_ICON_X = -4
+local CHECKBOX = 26
+local CHECKBOX_X, CHECKBOX_GAP = -4, -2
+local CHECKBOX_LABEL_L = 158
+local CHECKBOX_LABEL_X = 2
 
-local ATLAS_CASE = "checkbox-minimal"
-local ATLAS_COCHE = "checkmark-minimal"
-local ATLAS_SEPARATEUR = "ui-character-info-scrollline"
+local ATLAS_CHECKBOX = "checkbox-minimal"
+local ATLAS_CHECKMARK = "checkmark-minimal"
+local ATLAS_SEPARATOR = "ui-character-info-scrollline"
 
 local detail
 
--- LES DEUX CASES DU CLIENT, reposees et rhabillees. Leur logique reste la
--- leur : elles appellent SetCurrencyUnused et SetCurrencyBackpack sur
--- TokenFrame.selectedID, qu'on tient a jour.
-local CASES = {
-	{ nom = "TokenFramePopupInactiveCheckBox" },
-	{ nom = "TokenFramePopupBackpackCheckBox" },
+-- The client's two checkboxes, moved and reskinned. Their logic stays theirs: they call
+-- SetCurrencyUnused and SetCurrencyBackpack on TokenFrame.selectedID, which we keep current.
+local CHECKBOXES = {
+	{ name = "TokenFramePopupInactiveCheckBox" },
+	{ name = "TokenFramePopupBackpackCheckBox" },
 }
 
-local function habillerCase(case)
-	if not case or case.foreverHabillee then
+local function skinCell(checkbox)
+	if not checkbox or checkbox.foreverSkinDone then
 		return
 	end
 
-	case:SetWidth(CASE)
-	case:SetHeight(CASE)
+	checkbox:SetWidth(CHECKBOX)
+	checkbox:SetHeight(CHECKBOX)
 
-	for _, methode in ipairs({ "GetNormalTexture", "GetPushedTexture",
+	for _, method in ipairs({ "GetNormalTexture", "GetPushedTexture",
 		"GetHighlightTexture", "GetCheckedTexture", "GetDisabledCheckedTexture" }) do
-		local texture = case[methode] and case[methode](case)
+		local texture = checkbox[method] and checkbox[method](checkbox)
 		if texture then
 			texture:SetAlpha(0)
 		end
 	end
 
-	local fond = case:CreateTexture(nil, "BACKGROUND")
-	ForeverUI.SetAtlas(fond, ATLAS_CASE)
-	fond:SetPoint("CENTER", case, "CENTER", 0, 0)
+	local background = checkbox:CreateTexture(nil, "BACKGROUND")
+	ForeverUI.SetAtlas(background, ATLAS_CHECKBOX)
+	background:SetPoint("CENTER", checkbox, "CENTER", 0, 0)
 
-	local coche = case:CreateTexture(nil, "OVERLAY")
-	ForeverUI.SetAtlas(coche, ATLAS_COCHE)
-	coche:SetPoint("CENTER", case, "CENTER", 0, 0)
-	case.foreverCoche = coche
+	local checkMark = checkbox:CreateTexture(nil, "OVERLAY")
+	ForeverUI.SetAtlas(checkMark, ATLAS_CHECKMARK)
+	checkMark:SetPoint("CENTER", checkbox, "CENTER", 0, 0)
+	checkbox.foreverCheck = checkMark
 
-	local intitule = _G[case:GetName() .. "Text"]
-	if intitule then
-		intitule:ClearAllPoints()
-		intitule:SetPoint("LEFT", case, "RIGHT", CASE_INTITULE_X, 0)
-		intitule:SetWidth(CASE_INTITULE_L)
-		intitule:SetJustifyH("LEFT")
+	local label = _G[checkbox:GetName() .. "Text"]
+	if label then
+		label:ClearAllPoints()
+		label:SetPoint("LEFT", checkbox, "RIGHT", CHECKBOX_LABEL_X, 0)
+		label:SetWidth(CHECKBOX_LABEL_L)
+		label:SetJustifyH("LEFT")
 		if GameFontNormal then
-			intitule:SetFontObject(GameFontNormal)
+			label:SetFontObject(GameFontNormal)
 		end
 	end
 
-	case.foreverHabillee = true
+	checkbox.foreverSkinDone = true
 end
 
-local function suivreCases()
-	for _, decrit in ipairs(CASES) do
-		local case = _G[decrit.nom]
-		if case and case.foreverCoche then
-			if case:GetChecked() then
-				case.foreverCoche:Show()
+-- Shows our check mark when the client checkbox is checked
+local function syncCheckboxes()
+	for _, desc in ipairs(CHECKBOXES) do
+		local checkbox = _G[desc.name]
+		if checkbox and checkbox.foreverCheck then
+			if checkbox:GetChecked() then
+				checkbox.foreverCheck:Show()
 			else
-				case.foreverCoche:Hide()
+				checkbox.foreverCheck:Hide()
 			end
 		end
 	end
 end
 
-local function montrerCases(etat)
-	for _, decrit in ipairs(CASES) do
-		local case = _G[decrit.nom]
-		if case then
-			if etat then case:Show() else case:Hide() end
+local function showCells(state)
+	for _, desc in ipairs(CHECKBOXES) do
+		local checkbox = _G[desc.name]
+		if checkbox then
+			if state then checkbox:Show() else checkbox:Hide() end
 		end
 	end
 end
 
--- LE DETAIL SUIT LE NOM, PAS L'INDICE.
---
--- Ranger une monnaie parmi les inutilisees, ou replier sa categorie, change
--- toute la numerotation : l'indice retenu designerait une autre ligne. Le
--- nom, lui, ne bouge pas. C'est la meme lecon que la reputation, et le
--- client la suit deja -- TokenFrame.selectedToken porte un NOM.
-local function indiceDe(nom)
-	if not nom then
+-- The detail follows the name, not the index: moving a currency to unused or collapsing its
+-- category renumbers the list. The client does the same (TokenFrame.selectedToken is a name).
+local function indexOf(name)
+	if not name then
 		return nil
 	end
-	for rang = 1, (GetCurrencyListSize and GetCurrencyListSize()) or 0 do
-		local devise = lireDevise(rang)
-		if devise and devise.nom == nom and not devise.entete then
-			return rang
+	for rank = 1, (GetCurrencyListSize and GetCurrencyListSize()) or 0 do
+		local currency = readCurrency(rank)
+		if currency and currency.name == name and not currency.header then
+			return rank
 		end
 	end
 	return nil
 end
 
-local function viderDetail()
-	detail.titre:SetText("")
-	detail.sousTitre:SetText("")
-	detail.icone:Hide()
-	detail.separateur:Hide()
-	montrerCases(false)
+local function clearDetail()
+	detail.title:SetText("")
+	detail.subtitle:SetText("")
+	detail.icon:Hide()
+	detail.separator:Hide()
+	showCells(false)
 end
 
-local function majDetail()
+local function updateDetail()
 	if not detail then
 		return
 	end
 
-	if not choisie then
-		viderDetail()
+	if not selectedItem then
+		clearDetail()
 		return
 	end
 
-	local index = indiceDe(choisie)
+	local index = indexOf(selectedItem)
 	if not index then
-		-- La monnaie a quitte la liste : sa categorie s'est repliee, ou elle
-		-- est passee parmi les inutilisees. C'est ce que fait
-		-- TokenFramePopup_CloseIfHidden : on ne montre plus rien.
-		choisie = nil
-		viderDetail()
+		-- The currency left the list (category collapsed, or moved to unused): show nothing, as
+		-- TokenFramePopup_CloseIfHidden does.
+		selectedItem = nil
+		clearDetail()
 		return
 	end
 
-	local donnees = lireDevise(index)
-	if not donnees then
-		viderDetail()
+	local data = readCurrency(index)
+	if not data then
+		clearDetail()
 		return
 	end
 
-	-- Le client agit sur SON indice : on le tient a jour, sinon ses deux
-	-- cases porteraient sur une autre monnaie.
-	local jeton = _G["TokenFrame"]
-	if jeton then
-		jeton.selectedToken = donnees.nom
-		jeton.selectedID = index
+	-- The client acts on its own index: keep it current, or its checkboxes would target
+	-- another currency.
+	local token = _G["TokenFrame"]
+	if token then
+		token.selectedToken = data.name
+		token.selectedID = index
 	end
 
-	detail.titre:SetText(donnees.nom)
-	detail.sousTitre:SetText(tostring(donnees.compte))
-	poserIcone(detail.icone, donnees)
-	detail.icone:Show()
-	detail.separateur:Show()
+	detail.title:SetText(data.name)
+	detail.subtitle:SetText(tostring(data.count))
+	placeIcon(detail.icon, data)
+	detail.icon:Show()
+	detail.separator:Show()
 
-	montrerCases(true)
-	for _, decrit in ipairs(CASES) do
-		local case = _G[decrit.nom]
-		if case and case.SetChecked then
-			if decrit.nom == "TokenFramePopupInactiveCheckBox" then
-				case:SetChecked(donnees.inutilisee)
+	showCells(true)
+	for _, desc in ipairs(CHECKBOXES) do
+		local checkbox = _G[desc.name]
+		if checkbox and checkbox.SetChecked then
+			if desc.name == "TokenFramePopupInactiveCheckBox" then
+				checkbox:SetChecked(data.unused)
 			else
-				case:SetChecked(donnees.suivie)
+				checkbox:SetChecked(data.isTracked)
 			end
 		end
 	end
-	suivreCases()
+	syncCheckboxes()
 end
-ForeverUI.TokensDetail = majDetail
+ForeverUI.TokensDetail = updateDetail
 
-local function choisir(nom)
-	choisie = nom
-	poserListe()
+local function choose(name)
+	selectedItem = name
+	layoutList()
 end
-ForeverUI.TokensSelect = choisir
+ForeverUI.TokensSelect = choose
 
-local function monterDetail(hote)
+-- Moves TokenFramePopup into host, the character sheet's right pane, and restyles it
+local function buildDetail(host)
 	if detail then
 		return detail, {}
 	end
 
-	local cadre = _G["TokenFramePopup"]
-	if not cadre or not hote then
+	local frame = _G["TokenFramePopup"]
+	if not frame or not host then
 		return nil, {}
 	end
 
-	cadre:SetParent(hote)
-	if cadre.SetToplevel then
-		cadre:SetToplevel(false)
+	frame:SetParent(host)
+	if frame.SetToplevel then
+		frame:SetToplevel(false)
 	end
-	cadre:ClearAllPoints()
-	cadre:SetPoint("TOPLEFT", hote, "TOPLEFT", VOLET_DROIT_X, VOLET_DROIT_Y)
-	cadre:SetPoint("BOTTOMRIGHT", hote, "BOTTOMRIGHT", VOLET_DROIT_X2, VOLET_DROIT_Y2)
-	-- Le fond de fenetre n'est pas une region : SetBackdrop(nil) seul
-	-- l'enleve. Le meme piege que ReputationDetailFrame.
-	if cadre.SetBackdrop then
-		cadre:SetBackdrop(nil)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", host, "TOPLEFT", RIGHT_PANE_X, RIGHT_PANE_Y)
+	frame:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", RIGHT_PANE_X2, RIGHT_PANE_Y2)
+	-- The backdrop is not a region: only SetBackdrop(nil) removes it (same as
+	-- ReputationDetailFrame).
+	if frame.SetBackdrop then
+		frame:SetBackdrop(nil)
 	end
 
-	-- L'INTITULE DU CLIENT S'EN VA AUSSI, ET CE N'EST PAS UNE TEXTURE.
-	--
-	-- TokenFramePopup porte un FontString, $parentTitle -- TOKEN_OPTIONS,
-	-- "Currency Options" -- ancre au TOPLEFT du popup (25, -17). Le
-	-- balayage ne prenait que les TEXTURES : cet intitule restait donc a
-	-- l'ecran, a une place qui n'a plus de sens une fois le cadre etale sur
-	-- le volet. Notre titre porte le nom de la monnaie, il n'a pas de
-	-- second intitule a cote.
-	--
-	-- On balaie les deux natures de region. Les notres sont creees APRES :
-	-- elles ne sont pas concernees.
-	for _, region in ipairs({ cadre:GetRegions() }) do
-		local nature = region.GetObjectType and region:GetObjectType()
-		if nature == "Texture" then
+	-- Hide the client's texts too: TokenFramePopup has a title FontString (TOKEN_OPTIONS) at
+	-- TOPLEFT (25, -17) that would otherwise stay on screen. Our regions are created after this.
+	for _, region in ipairs({ frame:GetRegions() }) do
+		local objectType = region.GetObjectType and region:GetObjectType()
+		if objectType == "Texture" then
 			region:SetAlpha(0)
-		elseif nature == "FontString" and region.Hide then
+		elseif objectType == "FontString" and region.Hide then
 			region:Hide()
 		end
 	end
-	local fermer = _G["TokenFramePopupCloseButton"]
-	if fermer then
-		fermer:Hide()
+	local close = _G["TokenFramePopupCloseButton"]
+	if close then
+		close:Hide()
 	end
 
-	detail = cadre
+	detail = frame
 
-	-- ECART ASSUME : camelot ecrit le titre en GameFontNormalMed3, que 3.3.5
-	-- n'a pas. GameFontNormalLarge est le plus proche qu'il porte.
-	detail.titre = cadre:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-	detail.titre:SetWidth(TITRE_L)
-	detail.titre:SetJustifyH("CENTER")
-	detail.titre:SetPoint("TOP", cadre, "TOP", 0, 0)
+	-- camelot uses GameFontNormalMed3, which 3.3.5 lacks; GameFontNormalLarge is the closest.
+	detail.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	detail.title:SetWidth(TITLE_W)
+	detail.title:SetJustifyH("CENTER")
+	detail.title:SetPoint("TOP", frame, "TOP", 0, 0)
 
-	detail.sousTitre = cadre:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	detail.sousTitre:SetJustifyH("LEFT")
-	detail.sousTitre:SetPoint("TOP", detail.titre, "BOTTOM", 0, SOUS_TITRE_Y)
+	detail.subtitle = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	detail.subtitle:SetJustifyH("LEFT")
+	detail.subtitle:SetPoint("TOP", detail.title, "BOTTOM", 0, SUBTITLE_Y)
 
-	-- L'ICONE de la monnaie, a gauche de sa quantite : c'est ce que camelot
-	-- met dans son sous-titre, par un marqueur de texture.
-	detail.icone = cadre:CreateTexture(nil, "ARTWORK")
-	detail.icone:SetWidth(DETAIL_ICONE)
-	detail.icone:SetHeight(DETAIL_ICONE)
-	detail.icone:SetPoint("RIGHT", detail.sousTitre, "LEFT", DETAIL_ICONE_X, 0)
-	detail.icone:Hide()
+	-- Currency icon left of its count: camelot puts it in the subtitle as a texture tag.
+	detail.icon = frame:CreateTexture(nil, "ARTWORK")
+	detail.icon:SetWidth(DETAIL_ICON)
+	detail.icon:SetHeight(DETAIL_ICON)
+	detail.icon:SetPoint("RIGHT", detail.subtitle, "LEFT", DETAIL_ICON_X, 0)
+	detail.icon:Hide()
 
-	detail.separateur = cadre:CreateTexture(nil, "BORDER")
-	ForeverUI.SetAtlas(detail.separateur, ATLAS_SEPARATEUR)
-	detail.separateur:SetPoint("TOP", detail.sousTitre, "BOTTOM", 0, SEPARATEUR_Y)
+	detail.separator = frame:CreateTexture(nil, "BORDER")
+	ForeverUI.SetAtlas(detail.separator, ATLAS_SEPARATOR)
+	detail.separator:SetPoint("TOP", detail.subtitle, "BOTTOM", 0, SEPARATOR_Y)
 
-	-- LE PIED : les deux cases, empilees depuis le bas du volet.
-	local precedente
-	for _, decrit in ipairs(CASES) do
-		local case = _G[decrit.nom]
-		if case then
-			habillerCase(case)
-			case:SetParent(cadre)
-			case:ClearAllPoints()
-			if precedente then
-				case:SetPoint("TOPLEFT", precedente, "BOTTOMLEFT", 0, CASE_ECART)
+	-- Footer: the two checkboxes, stacked from the bottom of the pane.
+	local prev
+	for _, desc in ipairs(CHECKBOXES) do
+		local checkbox = _G[desc.name]
+		if checkbox then
+			skinCell(checkbox)
+			checkbox:SetParent(frame)
+			checkbox:ClearAllPoints()
+			if prev then
+				checkbox:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, CHECKBOX_GAP)
 			else
-				local pied = 2 * CASE + (-CASE_ECART)
-				case:SetPoint("TOPLEFT", cadre, "BOTTOMLEFT", CASE_X, pied)
+				local footer = 2 * CHECKBOX + (-CHECKBOX_GAP)
+				checkbox:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", CHECKBOX_X, footer)
 			end
-			precedente = case
+			prev = checkbox
 		end
 	end
 
-	majDetail()
-	return cadre, {}
+	updateDetail()
+	return frame, {}
 end
 
-ForeverUI.TokensTab = { Build = monter, BuildRight = monterDetail }
+ForeverUI.TokensTab = { Build = build, BuildRight = buildDetail }
 
--- Le client refait son ecran dans TokenFrame_Update : on passe apres.
+-- The client redraws its screen in TokenFrame_Update: run after it.
 if hooksecurefunc and type(_G["TokenFrame_Update"]) == "function" then
 	hooksecurefunc("TokenFrame_Update", function()
-		poserListe()
+		layoutList()
 	end)
 end
 
--- TEMOIN -- /fui monnaie. Ce que le client rend pour chaque ligne visible,
--- et ce qu'on en fait.
+-- /fui currency: prints what the client returns for each visible row and our state.
 function ForeverUI.TokensDebug()
-	local dire = function(texte)
-		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. texte)
+	local say = function(text)
+		DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffForeverUI|r " .. text)
 	end
 
 	local total = (GetCurrencyListSize and GetCurrencyListSize()) or 0
-	dire(string.format(L.TOKENSTAB_DEBUG_SUMMARY, total, decalage, visibles,
-		tostring(choisie)))
+	say(string.format(L.TOKENSTAB_DEBUG_SUMMARY, total, offset, visibleCount,
+		tostring(selectedItem)))
 
-	for rang = 1, math.min(total, 12) do
-		local devise = lireDevise(rang)
-		if devise then
+	for rank = 1, math.min(total, 12) do
+		local currency = readCurrency(rank)
+		if currency then
 			DEFAULT_CHAT_FRAME:AddMessage(string.format(
 				L.TOKENSTAB_DEBUG_ROW,
-				rang, devise.nom,
-				devise.entete and (devise.deplie and "[-]" or "[+]") or "   ",
-				tostring(devise.compte), tostring(devise.special),
-				tostring(devise.suivie), tostring(devise.inutilisee)))
+				rank, currency.name,
+				currency.header and (currency.expanded and "[-]" or "[+]") or "   ",
+				tostring(currency.count), tostring(currency.special),
+				tostring(currency.isTracked), tostring(currency.unused)))
 		end
 	end
 
-	local jeton = _G["TokenFrame"]
-	dire(string.format(L.TOKENSTAB_DEBUG_CLIENT,
-		tostring(jeton and jeton.selectedToken),
-		tostring(jeton and jeton.selectedID),
-		tostring(jeton and jeton:IsShown())))
+	local token = _G["TokenFrame"]
+	say(string.format(L.TOKENSTAB_DEBUG_CLIENT,
+		tostring(token and token.selectedToken),
+		tostring(token and token.selectedID),
+		tostring(token and token:IsShown())))
 end

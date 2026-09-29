@@ -1,110 +1,69 @@
--- ForeverUI -- les options des ecrans d'accueil : le menu Options
--- (OptionsSelectFrame), les fenetres Video (VideoOptionsFrame) et Son
--- (AudioOptionsFrame), a la DA de camelot.
---
--- CHOIX DE L'UTILISATEUR (28/09) : « 3.3.5 rhabillee ». Camelot n'a ni ce
--- menu ni ces deux fenetres (ses ecrans d'accueil ouvrent SettingsPanel) ;
--- on garde les ecrans du client -- places, tailles, logique, reglages -- et
--- on pose l'art de camelot :
---   * menu Options : DialogBorderTemplate et DialogHeaderTemplate (OPTIONS),
---     comme le menu du jeu ; boutons rouges (128-RedButton) poses sur la
---     partie visible des boutons de 3.3.5 (Glue-Panel-Button-*, releve de
---     l'image : opaque de 8 a 140 sur 148, de 6 a 40 sur 48) : Video et Son
---     196 x 32, 3 entre eux ; Reset 196 x 27 et Close 112 x 27, 12 au-dessus
---     du bas, 20 et 15 des bords ; polices du client (GlueFont*) ;
---   * fenetres Video et Son : SettingsFrameTemplate de camelot (la fenetre
---     de ses reglages) -- cadre de metal ButtonFrameTemplateNoPortrait, titre
---     GameFontNormal a -5, croix UIPanelCloseButton a (-2, 1) (elle fait ce
---     que fait Cancel), sans les stries de ButtonFrameTemplate ; ECART (comme
---     les listes des royaumes et des AddOns, a la demande) : fond noir
---     translucide ; le cadre des panneaux devient un encart
---     (InsetFrameTemplate) ; boutons UIPanelButtonTemplate 96 x 22 (Close et
---     Apply de SettingsPanel) : Okay / Cancel / Apply colles a BOTTOMRIGHT
---     (-16, 16), 2 entre eux (ApplyButton), dans l'ordre du client ; Defaults
---     a la place miroir, BOTTOMLEFT (16, 16) ;
---   * liste des categories : SettingsCategoryListButtonTemplate -- choisie :
---     Options_List_Active a sa taille, centree, et GameFontHighlight ;
---     survolee : Options_List_Hover ; sinon GameFontNormal (sous-categorie :
---     GameFontHighlight) ; pas de cadre (la liste de camelot n'en a pas ;
---     Options_InnerFrame, 886 x 618, ne tient pas dans ces fenetres) ;
---   * cases : SettingsCheckboxTemplate (checkbox-minimal, checkmark-minimal,
---     -disabled ; pas de lueur au survol), a la taille du client (26) ;
---   * curseurs : MinimalSliderTemplate (Minimal_SliderBar_Left / Right a leur
---     taille, _Minimal_SliderBar_Middle entre eux, bouton
---     Minimal_SliderBar_Button), a la taille du client (17 de haut, celle de
---     la glissiere) ; bouton a 0,7 quand le curseur est desactive ; sans les
---     fleches de MinimalSliderWithSteppers (le client n'en a pas) ; ECART
---     (28/09, a la demande : « poignees trop grosses ») : bouton de 16 x 15
---     au lieu de 20 x 19, art affine x4 (minimalsliderbarc60-hd,
---     tools/affiner_champs.py) ;
---   * menus deroulants : WowStyle2 (celui de SettingsDropdownControl), voir
---     ForeverUIGlueMenuDeroulant.lua ; sans les fleches de
---     DropdownWithSteppers ;
---   * cadres de groupe (OptionsBoxTemplate, que camelot n'a pas) : le bord
---     des infobulles de camelot au gris du client ; infobulle a l'art des
---     infobulles ; polices de camelot a la place de celles du client (memes
---     noms).
--- Le client garde la main sur tout : ses panneaux, ses CVars, ses boutons ;
--- on ne fait que reposer l'art et les polices apres lui.
+-- Login screen options with camelot's art: the Options menu (OptionsSelectFrame) and the
+-- Video (VideoOptionsFrame) and Sound (AudioOptionsFrame) windows. Camelot has none of them
+-- (its login screens open SettingsPanel), so the client keeps its screens, panels, CVars and
+-- buttons; this file only lays camelot's art and fonts over them after the client.
+-- Templates: DialogBorderTemplate (menu), SettingsFrameTemplate with a translucent black
+-- background (windows), SettingsCheckboxTemplate, MinimalSliderTemplate, WowStyle2 dropdowns.
 
 local G = ForeverUIGlue
 
--- 3.3.5 rend 1 / nil, parfois 0 / 1 : zero est vrai en Lua
-local function vrai(v)
+-- 3.3.5 returns 1 / nil, sometimes 0 / 1: zero is true in Lua
+local function truthy(v)
 	return v and v ~= 0 and true or false
 end
 
--- une police de camelot pour une police du client, si camelot la connait
-local function policeCamelot(objet)
-	local nom = objet and objet.GetName and objet:GetName()
-	if not nom or string.find(nom, "^ForeverUIGlue_") then
+-- Camelot font with the same name as a client font, or nil
+local function camelotFont(object)
+	local name = object and object.GetName and object:GetName()
+	if not name or string.find(name, "^ForeverUIGlue_") then
 		return nil
 	end
-	return _G["ForeverUIGlue_" .. nom]
+	return _G["ForeverUIGlue_" .. name]
 end
 
-local function reposerPolice(fs)
-	local p = policeCamelot(fs:GetFontObject())
+local function swapFont(fs)
+	local p = camelotFont(fs:GetFontObject())
 	if p then
 		fs:SetFontObject(p)
 	end
 end
 
--- toutes les polices d'un cadre : ses FontString, et les polices de bouton
-local function reposerPolices(cadre)
-	for _, r in ipairs({ cadre:GetRegions() }) do
+-- All fonts of a frame: its FontStrings and its button fonts
+local function swapFonts(frame)
+	for _, r in ipairs({ frame:GetRegions() }) do
 		if r:GetObjectType() == "FontString" then
-			reposerPolice(r)
+			swapFont(r)
 		end
 	end
-	if cadre.GetNormalFontObject then
+	if frame.GetNormalFontObject then
 		for _, v in ipairs({ { "GetNormalFontObject", "SetNormalFontObject" },
 				{ "GetHighlightFontObject", "SetHighlightFontObject" },
 				{ "GetDisabledFontObject", "SetDisabledFontObject" } }) do
-			local p = policeCamelot(cadre[v[1]](cadre))
+			local p = camelotFont(frame[v[1]](frame))
 			if p then
-				cadre[v[2]](cadre, p)
+				frame[v[2]](frame, p)
 			end
 		end
 	end
 end
 
--- ------------------------------------------------------------ l'infobulle
+-- ------------------------------------------------------------ Tooltip
 
--- OptionsTooltip : celle des ecrans d'accueil (GlueTooltip, disposition
--- TooltipDefaultLayout, fond 0,09) ; lignes GlueFontNormal puis
--- GlueFontNormalSmall
+-- OptionsTooltip as the login screen tooltip (GlueTooltip: TooltipDefaultLayout, background
+-- 0.09); lines GlueFontNormal then GlueFontNormalSmall
 OptionsTooltip:SetBackdrop(nil)
-G.FondInfobulle(OptionsTooltip, "TooltipDefaultLayout", G.GLUE_BACKDROP_COLOR)
-OptionsTooltipText1:SetFontObject(G.Police("GlueFontNormal"))
-OptionsTooltipText2:SetFontObject(G.Police("GlueFontNormalSmall"))
+G.TooltipBackground(OptionsTooltip, "TooltipDefaultLayout", G.GLUE_BACKDROP_COLOR)
+OptionsTooltipText1:SetFontObject(G.Font("GlueFontNormal"))
+OptionsTooltipText2:SetFontObject(G.Font("GlueFontNormalSmall"))
 
--- ------------------------------------------------------------ les commandes
+-- ------------------------------------------------------------ Controls
 
-local function poserEtat(b, set, get, nom, mode)
-	b[set](b, G.atlas[string.lower(nom)][1])
+-- Sets a button state texture to an atlas element stretched over the button.
+-- set / get: texture setter and getter names; name: atlas element; mode: blend mode or nil
+local function applyState(b, set, get, name, mode)
+	b[set](b, G.atlas[string.lower(name)][1])
 	local t = b[get](b)
-	G.PoserAtlas(t, nom)
+	G.PlaceAtlas(t, name)
 	t:ClearAllPoints()
 	t:SetAllPoints(b)
 	if mode then
@@ -113,61 +72,62 @@ local function poserEtat(b, set, get, nom, mode)
 	return t
 end
 
--- SettingsCheckboxTemplate, a la taille de la case du client (26) : pas de
--- lueur au survol
-local function habillerCase(c)
-	poserEtat(c, "SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
-	poserEtat(c, "SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
-	local lueur = c:GetHighlightTexture()
-	if lueur then
-		lueur:SetTexture(nil)
-		lueur:SetAlpha(0)
+-- SettingsCheckboxTemplate at the client's checkbox size (26), no hover glow
+local function skinCell(c)
+	applyState(c, "SetNormalTexture", "GetNormalTexture", "checkbox-minimal")
+	applyState(c, "SetPushedTexture", "GetPushedTexture", "checkbox-minimal")
+	local glow = c:GetHighlightTexture()
+	if glow then
+		glow:SetTexture(nil)
+		glow:SetAlpha(0)
 	end
-	poserEtat(c, "SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
-	poserEtat(c, "SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal-disabled")
-	reposerPolices(c)
+	applyState(c, "SetCheckedTexture", "GetCheckedTexture", "checkmark-minimal")
+	applyState(c, "SetDisabledCheckedTexture", "GetDisabledCheckedTexture", "checkmark-minimal-disabled")
+	swapFonts(c)
 end
 
--- OptionsBoxTemplate : le bord des infobulles de camelot au gris du client
--- (0,4), sans fond (le client n'en pose pas)
-local function habillerBoite(f)
+-- OptionsBoxTemplate (not in camelot): camelot's tooltip border in the client's grey (0.4),
+-- no background (the client has none)
+local function skinBox(f)
 	f:SetBackdrop(nil)
-	local p = G.NeufTranches(f, "TooltipDefaultLayout")
-	G.CouleursNeufTranches(p, nil, { 0.4, 0.4, 0.4 })
+	local p = G.NineSlice(f, "TooltipDefaultLayout")
+	G.NineSliceColors(p, nil, { 0.4, 0.4, 0.4 })
 	p.Center:Hide()
-	reposerPolices(f)
+	swapFonts(f)
 end
 
--- MinimalSliderTemplate sur le curseur du client
-local curseurs = {}
-local function habillerCurseur(s)
+-- MinimalSliderTemplate over the client's slider, at the client's height (17). The thumb is
+-- 16 x 15 instead of 20 x 19, with art refined x4 (minimalsliderbarc60-hd). No stepper
+-- arrows: the client has none.
+local sliders = {}
+local function skinSlider(s)
 	s:SetBackdrop(nil)
 	local g = s:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(g, "minimal_sliderbar_left", true)
+	G.PlaceAtlas(g, "minimal_sliderbar_left", true)
 	g:SetPoint("LEFT", s, "LEFT")
 	local d = s:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(d, "minimal_sliderbar_right", true)
+	G.PlaceAtlas(d, "minimal_sliderbar_right", true)
 	d:SetPoint("RIGHT", s, "RIGHT")
 	local m = s:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(m, "_minimal_sliderbar_middle", true)
+	G.PlaceAtlas(m, "_minimal_sliderbar_middle", true)
 	m:SetPoint("TOPLEFT", g, "TOPRIGHT")
 	m:SetPoint("TOPRIGHT", d, "TOPLEFT")
 	s:SetThumbTexture(G.atlas["minimal_sliderbar_button"][1])
-	local bouton = s:GetThumbTexture()
-	G.PoserAtlas(bouton, "minimal_sliderbar_button")
-	bouton:SetWidth(16)
-	bouton:SetHeight(15)
-	reposerPolices(s)
-	curseurs[#curseurs + 1] = s
+	local button = s:GetThumbTexture()
+	G.PlaceAtlas(button, "minimal_sliderbar_button")
+	button:SetWidth(16)
+	button:SetHeight(15)
+	swapFonts(s)
+	sliders[#sliders + 1] = s
 end
 
--- le bouton a 0,7 quand le curseur est desactive (MinimalSliderWithSteppers :
--- ConfigureSlider) ; le client desactive ses curseurs par une fonction qu'il
--- garde sur chacun : on le lit pendant que les fenetres sont ouvertes
-local veille = CreateFrame("Frame")
-veille.t = 0
-veille:SetScript("OnUpdate", function(self, ecoule)
-	self.t = self.t + (ecoule or 0)
+-- Thumb at 0.7 when the slider is disabled (MinimalSliderWithSteppers:ConfigureSlider).
+-- The client disables its sliders through a function it keeps on each one, so their state
+-- is polled while the windows are open.
+local watcher = CreateFrame("Frame")
+watcher.t = 0
+watcher:SetScript("OnUpdate", function(self, elapsed)
+	self.t = self.t + (elapsed or 0)
 	if self.t < 0.1 then
 		return
 	end
@@ -175,197 +135,200 @@ veille:SetScript("OnUpdate", function(self, ecoule)
 	if not (VideoOptionsFrame:IsShown() or AudioOptionsFrame:IsShown()) then
 		return
 	end
-	for _, s in ipairs(curseurs) do
-		local actif = not s.IsEnabled or vrai(s:IsEnabled())
-		s:GetThumbTexture():SetAlpha(actif and 1 or 0.7)
+	for _, s in ipairs(sliders) do
+		local active = not s.IsEnabled or truthy(s:IsEnabled())
+		s:GetThumbTexture():SetAlpha(active and 1 or 0.7)
 	end
 end)
 
--- tout un panneau : ses textes, puis chaque commande selon son gabarit
-local function habillerPanneau(panneau)
-	reposerPolices(panneau)
-	for _, c in ipairs({ panneau:GetChildren() }) do
-		local nom = c:GetName()
-		local genre = c:GetObjectType()
-		if genre == "CheckButton" then
-			habillerCase(c)
-		elseif genre == "Slider" then
-			habillerCurseur(c)
-		elseif nom and _G[nom .. "Button"] and _G[nom .. "Middle"] then
-			G.HabillerMenuDeroulant(c, 2)
-			reposerPolices(c)
-		elseif (nom and _G[nom .. "Title"]) or (c.GetBackdrop and c:GetBackdrop()) then
-			habillerBoite(c)
+-- A whole panel: its texts, then each control by its template
+local function skinPanel(panel)
+	swapFonts(panel)
+	for _, c in ipairs({ panel:GetChildren() }) do
+		local name = c:GetName()
+		local kind = c:GetObjectType()
+		if kind == "CheckButton" then
+			skinCell(c)
+		elseif kind == "Slider" then
+			skinSlider(c)
+		elseif name and _G[name .. "Button"] and _G[name .. "Middle"] then
+			G.SkinDropDown(c, 2)
+			swapFonts(c)
+		elseif (name and _G[name .. "Title"]) or (c.GetBackdrop and c:GetBackdrop()) then
+			skinBox(c)
 		else
-			reposerPolices(c)
+			swapFonts(c)
 		end
 	end
 end
 
--- ------------------------------------------------------------ le menu Options
+-- ------------------------------------------------------------ Options menu
+-- Red buttons (128-RedButton) over the visible part of the 3.3.5 buttons: the
+-- Glue-Panel-Button-* art is opaque from 8 to 140 of 148 and from 6 to 40 of 48.
 
-local POLICES = { "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" }
+local FONTS = { "GlueFontNormal", "GlueFontHighlight", "GlueFontDisable" }
 
-local fond = OptionsSelectFrameBackground
-fond:SetBackdrop(nil)
-G.CadreDialogue(fond)
+local background = OptionsSelectFrameBackground
+background:SetBackdrop(nil)
+G.DialogFrame(background)
 OptionsSelectFrameBackgroundHeader:SetAlpha(0)
 OptionsSelectFrameBackgroundHeaderText:SetAlpha(0)
-G.EnTeteDialogue(fond, OPTIONS, "GlueFontNormal")
+G.DialogHeader(background, OPTIONS, "GlueFontNormal")
 local video = OptionsSelectFrameBackgroundContainerVideoOptionsButton
-local son = OptionsSelectFrameBackgroundContainerAudioOptionsButton
+local audio = OptionsSelectFrameBackgroundContainerAudioOptionsButton
 local reset = OptionsSelectResetSettingsButton
-local fermer = OptionsSelectFrameBackgroundOkayButton
-for _, b in ipairs({ video, son }) do
+local close = OptionsSelectFrameBackgroundOkayButton
+for _, b in ipairs({ video, audio }) do
 	b:SetWidth(196)
 	b:SetHeight(32)
-	G.BoutonTroisTranches(b, "128-RedButton", POLICES)
+	G.ThreeSliceButton(b, "128-RedButton", FONTS)
 end
-for _, b in ipairs({ reset, fermer }) do
+for _, b in ipairs({ reset, close }) do
 	b:SetHeight(27)
-	G.BoutonTroisTranches(b, "128-RedButton", { "GlueFontNormalSmall", "GlueFontHighlightSmall", "GlueFontDisableSmall" })
+	G.ThreeSliceButton(b, "128-RedButton", { "GlueFontNormalSmall", "GlueFontHighlightSmall", "GlueFontDisableSmall" })
 end
 reset:SetWidth(196)
-fermer:SetWidth(112)
+close:SetWidth(112)
 video:ClearAllPoints()
 video:SetPoint("TOP", OptionsSelectFrameBackgroundContainer, "TOP", 0, -16)
-son:ClearAllPoints()
-son:SetPoint("TOP", video, "BOTTOM", 0, -3)
+audio:ClearAllPoints()
+audio:SetPoint("TOP", video, "BOTTOM", 0, -3)
 reset:ClearAllPoints()
-reset:SetPoint("BOTTOMLEFT", fond, "BOTTOMLEFT", 20, 12)
-fermer:ClearAllPoints()
-fermer:SetPoint("BOTTOMRIGHT", fond, "BOTTOMRIGHT", -15, 12)
+reset:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT", 20, 12)
+close:ClearAllPoints()
+close:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT", -15, 12)
 
--- ------------------------------------------------------------ les categories
+-- ------------------------------------------------------------ Categories
+-- No list frame: camelot's list has none, and Options_InnerFrame (886 x 618) does not fit.
 
--- SettingsCategoryListButtonMixin:OnButtonStateChanged, apres le client
--- (OptionsCategoryFrame_Update et OptionsListButton_OnClick reposent ses
--- polices et sa selection)
-local function peindreCategories(liste)
-	for _, b in ipairs(liste.buttons) do
+-- SettingsCategoryListButtonMixin:OnButtonStateChanged, run after the client
+-- (OptionsCategoryFrame_Update and OptionsListButton_OnClick reset its fonts and selection)
+local function paintCategories(list)
+	for _, b in ipairs(list.buttons) do
 		local el = b.element
-		local choisi = el ~= nil and liste.selection == el
-		G.Montrer(b.foreverActif, choisi)
-		G.Montrer(b.foreverSurvol, not choisi and b.foreverDessus)
-		local police
-		if choisi or (el and el.parent) then
-			police = G.Police("GameFontHighlight")
+		local selected = el ~= nil and list.selection == el
+		G.SetShown(b.foreverActive, selected)
+		G.SetShown(b.foreverHover, not selected and b.foreverHovered)
+		local font
+		if selected or (el and el.parent) then
+			font = G.Font("GameFontHighlight")
 		else
-			police = G.Police("GameFontNormal")
+			font = G.Font("GameFontNormal")
 		end
-		b:SetNormalFontObject(police)
-		b:SetHighlightFontObject(police)
+		b:SetNormalFontObject(font)
+		b:SetHighlightFontObject(font)
 	end
 end
 
-local function habillerCategories(liste)
-	liste.foreverCategories = true
-	local nom = liste:GetName()
-	for _, suffixe in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight", "Left", "Right", "Top", "Bottom" }) do
-		local t = _G[nom .. suffixe]
+local function skinCategories(list)
+	list.foreverCategories = true
+	local name = list:GetName()
+	for _, suffix in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight", "Left", "Right", "Top", "Bottom" }) do
+		local t = _G[name .. suffix]
 		if t then
 			t:SetAlpha(0)
 		end
 	end
-	for _, b in ipairs(liste.buttons) do
-		local lueur = b:GetHighlightTexture()
-		if lueur then
-			lueur:SetTexture(nil)
-			lueur:SetAlpha(0)
+	for _, b in ipairs(list.buttons) do
+		local glow = b:GetHighlightTexture()
+		if glow then
+			glow:SetTexture(nil)
+			glow:SetAlpha(0)
 		end
-		b.foreverActif = b:CreateTexture(nil, "BACKGROUND")
-		G.PoserAtlas(b.foreverActif, "options_list_active", true)
-		b.foreverActif:SetPoint("CENTER", b, "CENTER")
-		b.foreverActif:Hide()
-		b.foreverSurvol = b:CreateTexture(nil, "BACKGROUND")
-		G.PoserAtlas(b.foreverSurvol, "options_list_hover", true)
-		b.foreverSurvol:SetPoint("CENTER", b, "CENTER")
-		b.foreverSurvol:Hide()
-		G.Accrocher(b, "OnEnter", function(self)
-			self.foreverDessus = true
-			peindreCategories(liste)
+		b.foreverActive = b:CreateTexture(nil, "BACKGROUND")
+		G.PlaceAtlas(b.foreverActive, "options_list_active", true)
+		b.foreverActive:SetPoint("CENTER", b, "CENTER")
+		b.foreverActive:Hide()
+		b.foreverHover = b:CreateTexture(nil, "BACKGROUND")
+		G.PlaceAtlas(b.foreverHover, "options_list_hover", true)
+		b.foreverHover:SetPoint("CENTER", b, "CENTER")
+		b.foreverHover:Hide()
+		G.Hook(b, "OnEnter", function(self)
+			self.foreverHovered = true
+			paintCategories(list)
 		end)
-		G.Accrocher(b, "OnLeave", function(self)
-			self.foreverDessus = false
-			peindreCategories(liste)
+		G.Hook(b, "OnLeave", function(self)
+			self.foreverHovered = false
+			paintCategories(list)
 		end)
 	end
-	peindreCategories(liste)
+	paintCategories(list)
 end
 
-G.AccrocherFonction("OptionsCategoryFrame_Update", function(liste)
-	if liste and liste.foreverCategories then
-		peindreCategories(liste)
+G.HookFunction("OptionsCategoryFrame_Update", function(list)
+	if list and list.foreverCategories then
+		paintCategories(list)
 	end
 end)
-G.AccrocherFonction("OptionsListButton_OnClick", function(b)
-	local liste = b and b:GetParent()
-	if liste and liste.foreverCategories then
-		peindreCategories(liste)
+G.HookFunction("OptionsListButton_OnClick", function(b)
+	local list = b and b:GetParent()
+	if list and list.foreverCategories then
+		paintCategories(list)
 	end
 end)
 
--- ------------------------------------------------------------ les fenetres
+-- ------------------------------------------------------------ Windows
 
-local function habillerFenetre(f, boutonsDroite, defaut)
-	local nom = f:GetName()
+-- Camelot's SettingsFrameTemplate over a client options window.
+-- rightButtons: bottom-right buttons, rightmost first; default: the Defaults button
+local function skinWindow(f, rightButtons, default)
+	local name = f:GetName()
 	f:SetBackdrop(nil)
-	_G[nom .. "Header"]:SetAlpha(0)
-	local titre = _G[nom .. "HeaderText"]
-	titre:SetAlpha(0)
-	-- la fenetre de camelot, au niveau de la fenetre du client : ses cadres
-	-- fils (liste, panneaux, boutons) passent devant
-	local fen = CreateFrame("Frame", nil, f)
-	fen:SetFrameLevel(f:GetFrameLevel())
-	fen:SetAllPoints(f)
-	local habit = G.Fenetre(fen, titre:GetText(), true)
-	habit.stries:Hide()
-	-- la croix : ce que fait Cancel
-	local croix = CreateFrame("Button", nom .. "ForeverUICloseButton", f)
-	croix:SetFrameLevel(f:GetFrameLevel() + 20)
-	G.CroixFenetre(croix, f)
-	croix:SetScript("OnClick", function()
-		boutonsDroite[#boutonsDroite == 3 and 2 or 1]:Click()
+	_G[name .. "Header"]:SetAlpha(0)
+	local title = _G[name .. "HeaderText"]
+	title:SetAlpha(0)
+	-- Camelot's window at the client window's level: its children (list, panels, buttons)
+	-- stay in front
+	local win = CreateFrame("Frame", nil, f)
+	win:SetFrameLevel(f:GetFrameLevel())
+	win:SetAllPoints(f)
+	local skin = G.Window(win, title:GetText(), true)
+	skin.stripes:Hide()
+	-- The close button does what Cancel does
+	local closeButton = CreateFrame("Button", name .. "ForeverUICloseButton", f)
+	closeButton:SetFrameLevel(f:GetFrameLevel() + 20)
+	G.WindowCloseButton(closeButton, f)
+	closeButton:SetScript("OnClick", function()
+		rightButtons[#rightButtons == 3 and 2 or 1]:Click()
 	end)
-	-- le cadre des panneaux : un encart ; la liste des categories
-	local conteneur = _G[nom .. "PanelContainer"]
-	conteneur:SetBackdrop(nil)
-	G.Encart(fen, conteneur, true)
-	local categories = _G[nom .. "CategoryFrame"]
-	habillerCategories(categories)
-	-- OptionsFrame_OnShow redessine la liste par categoryFrame:update(), une
-	-- reference prise au chargement : l'accroche sur la fonction ne la voit
-	-- pas ; on repasse apres l'ouverture de la fenetre
-	G.Accrocher(f, "OnShow", function()
-		peindreCategories(categories)
+	-- The panel frame becomes an inset; category list
+	local container = _G[name .. "PanelContainer"]
+	container:SetBackdrop(nil)
+	G.Inset(win, container, true)
+	local categories = _G[name .. "CategoryFrame"]
+	skinCategories(categories)
+	-- OptionsFrame_OnShow redraws the list through categoryFrame:update(), a reference taken at
+	-- load time, so a hook on the global function misses it; repaint after the window opens
+	G.Hook(f, "OnShow", function()
+		paintCategories(categories)
 	end)
-	-- les boutons : UIPanelButtonTemplate 96 x 22
-	local precedent
-	for _, b in ipairs(boutonsDroite) do
+	-- Buttons: UIPanelButtonTemplate 96 x 22, as SettingsPanel's Close and Apply
+	local previous
+	for _, b in ipairs(rightButtons) do
 		b:SetWidth(96)
 		b:SetHeight(22)
-		G.BoutonPanneau(b)
+		G.PanelButton(b)
 		b:ClearAllPoints()
-		if precedent then
-			b:SetPoint("RIGHT", precedent, "LEFT", -2, 0)
+		if previous then
+			b:SetPoint("RIGHT", previous, "LEFT", -2, 0)
 		else
 			b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 16)
 		end
-		precedent = b
+		previous = b
 	end
-	defaut:SetWidth(96)
-	defaut:SetHeight(22)
-	G.BoutonPanneau(defaut)
-	defaut:ClearAllPoints()
-	defaut:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, 16)
-	return habit
+	default:SetWidth(96)
+	default:SetHeight(22)
+	G.PanelButton(default)
+	default:ClearAllPoints()
+	default:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, 16)
+	return skin
 end
 
-habillerFenetre(VideoOptionsFrame, { VideoOptionsFrameApply, VideoOptionsFrameCancel, VideoOptionsFrameOkay },
+skinWindow(VideoOptionsFrame, { VideoOptionsFrameApply, VideoOptionsFrameCancel, VideoOptionsFrameOkay },
 	VideoOptionsFrameDefault)
-habillerFenetre(AudioOptionsFrame, { AudioOptionsFrameCancel, AudioOptionsFrameOkay }, AudioOptionsFrameDefault)
+skinWindow(AudioOptionsFrame, { AudioOptionsFrameCancel, AudioOptionsFrameOkay }, AudioOptionsFrameDefault)
 
 for _, p in ipairs({ VideoOptionsResolutionPanel, VideoOptionsEffectsPanel, VideoOptionsStereoPanel,
 		AudioOptionsSoundPanel }) do
-	habillerPanneau(p)
+	skinPanel(p)
 end

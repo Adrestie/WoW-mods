@@ -1,197 +1,85 @@
--- ForeverUI : le livre des metiers de camelot -- la page d'ensemble de sa
--- fenetre des metiers (ProfessionsFrame.BookPage), que le micro-bouton des
--- metiers ouvre (BottomBar.lua). Chantier des PNJ, etape 4 (demande du
--- 2026-09-28 : « ajouter le micro bouton "Professions" a cote de la feuille
--- de personnage et faire le menu »), puis ses onglets lateraux (« fais la
--- suite de l'etape 4 », voir la section des onglets).
---
--- RELEVE -- CAMELOT (blizzard_professionsbook : camelot/blizzard_professions-
--- book.lua, camelot/blizzard_professionsbooktemplates.xml, blizzard_-
--- professionsbook.lua / templates.xml / _bootstrap.lua ; blizzard_-
--- professions : camelot/blizzard_professionsframe.xml / .lua ; blizzard_-
--- professionstemplates : rankbar ; blizzard_micromenu : mainline/mainmenubar-
--- microbuttons.lua ; tables DB2 GlobalStrings, GlobalColor, UiTextureAtlas-
--- Member / ElementSliceData) :
---   fenetre        ProfessionsFrame 673 x 594, celle de la page de fabrication
---                  (TradeSkill.lua) ; SelectBookPage : portrait INV_SideTab_-
---                  Professions_c60, titre TRADE_SKILL_TITLE de TRADE_SKILLS ;
---                  fond Profession-Background-Overview sans stries ; la page
---                  couvre toute la fenetre
---   metiers        GetProfessions : deux principaux, puis cuisine, peche,
---                  secourisme
---   principal      664 x 142 : le premier a (5, -41), le second sous lui a
---                  (0, 5) ; carte Profession-overview-Card-<metier> (sinon
---                  Profession-overview-Card) sur toute la carte ; nom
---                  GameFontNormal a (20, -24) ; rang 441, RIGHT (-40, 0) ;
---                  oubli 20 x 20 a droite du rang (1, -4) : Profession-button-
---                  red-crossmark a sa taille (-pressed enfonce), infobulle
---                  UNLEARN_SKILL_TOOLTIP, clic : boite UNLEARN_SKILL ; sorts a
---                  BOTTOMLEFT (15, 46) s'il n'y en a qu'un, sinon (15, 60) et
---                  (15, 10) ; absent : PROFESSIONS_FIRST_ / _SECOND_PROFESSION
---                  a (20, -24), PROFESSIONS_MISSING_PROFESSION GameFontHighlight-
---                  Small2 485 au centre
---   secondaire     225 x 275, le premier sous le second principal (0, 4), les
---                  autres a sa droite (-6, 0) : cuisine, peche, secourisme ;
---                  carte Profession-overview-card-generic-<metier> ; nom TOP
---                  (0, -25) ; rang 190, TOP (0, -47) ; jusqu'a quatre sorts
---                  empiles depuis BOTTOMLEFT (20, 25) ; absent : le nom du
---                  metier et PROFESSIONS_<METIER>_MISSING (175, TOP sous le
---                  nom (5, -13))
---   rang           ProfessionsRankBarTemplate, 18 de haut : fond Profession-
---                  ProgressBar-BG et cadre Profession-ProgressBar-frame
---                  (decoupe 30 / 0 / 30 / 0) a la largeur de la barre et a la
---                  hauteur de l'atlas ; remplissage 441 x 18 a (2, -3), vu de
---                  1 apres son debut sur largeur x part + decalage (-7 pour
---                  un principal, -5 pour un secondaire) ; eclat au bout,
---                  eteint si plein ; texte TRADESKILL_NAME_RANK Number12Font-
---                  Outline au centre (-3)
---   sort           40 x 40 : icone sous un masque carre rentre de 3, cadre
---                  Profession-square-frame (48) au centre ; nom GameFontNormal
---                  100 a RIGHT (5, 7), dore (PASSIVE_SPELL_FONT_COLOR pour un
---                  passif), rang NewSubSpellFont 95 x 28 dessous (0, -1) ;
---                  icone a 0,4 si le sort n'est pas utilisable ; survol
---                  ButtonHilight-Square (UI-PassiveHighlight pour un passif),
---                  enfonce UI-Quickslot-Depress ; jamais coche
---   ouverture      ToggleProfessionsBook : la fenetre s'ouvre ou se ferme ;
---                  sons IG_SPELLBOOK_OPEN / IG_ABILITY_CLOSE ; UNLEARN_SKILL
---                  se ferme avec elle
---
--- RELEVE -- 3.3.5 : ni GetProfessions ni GetProfessionInfo. Les metiers se
--- lisent dans les competences (GetSkillLineInfo : nom, rang, bonus, maximum,
--- abandonnable ; l'oubli par la boite UNLEARN_SKILL et AbandonSkill, comme
--- SkillFrame), leurs sorts dans le grimoire (GetSpellLink de chaque case
--- donne l'identifiant du sort).
---
--- CE QUI DIFFERE, ET POURQUOI.
---   * La fenetre du livre est a nous : le TradeSkillFrame de 3.3.5 n'existe
---     que pendant une session de metier. Meme taille, meme place (panneau
---     "left", pushable 3, comme lui) ; elle se declare par ses attributs
---     UIPanelLayout-*, sans toucher a la table UIPanelWindows du client.
---     Ouvrir un metier (clic sur son sort) ferme le livre : la page de
---     fabrication prend sa place, comme chez camelot.
---   * Le metier est reconnu a son nom, compare a celui d'un sort qui porte
---     le meme (GetSpellInfo : la langue du client) : il choisit la carte et
---     la bande du rang.
---   * Les sorts d'une carte : ceux du grimoire que SkillLineAbility.dbc range
---     sous le metier (table SORTS), actifs seulement, dans un ordre fixe --
---     celui qui ouvre la fabrication d'abord. Minage : Fondre et Decouverte
---     de gisements ; herboristerie : Decouverte d'herbes et Sang-de-vie ;
---     depecage : son sort de rang. Camelot les tient de GetProfessionInfo.
---   * LANCER UN SORT EST PROTEGE : les boutons de sort sont securises, et la
---     fenetre qui les porte devient protegee. Elle se ferme donc a l'entree
---     en combat et ne s'ouvre pas pendant (ERR_NOT_IN_COMBAT) ; camelot
---     l'ouvre en combat.
---   * Une categorie de competences repliee est depliee le temps de la
---     lecture, puis repliee a nouveau.
---   * Les barres de rang restent dans la strate de la fenetre (camelot les
---     met en HIGH) ; leur bande est fixe (la premiere image, voir
---     TradeSkill.lua) ; pas de menu d'extension.
---   * Pas d'emplacements de barre montres a l'ouverture (MultiActionBar_-
---     ShowAllGrids toucherait aux boutons d'action proteges), pas de
---     clignotement de rappel de specialisation, pas d'aide.
---   * Joaillerie et calligraphie n'ont pas de carte chez camelot : la carte
---     generique, comme son code le prevoit.
---   * Le micro-bouton reste enfonce tant que les metiers sont ouverts (livre
---     ou fabrication), comme ses voisins ; chez camelot il ne l'est jamais
---     (il regarde ProfessionsBookFrame, que camelot ne charge pas).
---   * Le portrait est CUIT rond (tools/cuire_portrait.py) : SetPortraitTo-
---     Texture le laissait carre, hors de l'anneau (demande du 2026-09-28).
---
--- PLUS DE DEUX METIERS PRINCIPAUX (demande du 2026-09-28 : un serveur prive
--- peut en donner davantage ; camelot n'en connait que deux). Les rangees
--- sont dans une zone a defilement, au pas de camelot (142 de haut, 5 de
--- recouvrement : 137) :
---   * trois metiers : une troisieme rangee ; les colonnes cuisine, peche,
---     secourisme perdent sa hauteur (275 -> 138). Leurs sorts ne tiennent
---     plus empiles : ils passent en ligne, icones seules (le nom et le rang
---     restent dans l'infobulle) ;
---   * au-dela : la zone garde trois rangees, une barre de defilement parait
---     a droite, les rangees perdent sa place en largeur (664 -> 646), et les
---     suivantes, dessous, passent derriere les colonnes, invisibles ;
---   * une carte plus petite que son art n'est pas ecrasee : ses bords sont
---     gardes et une bande est rognee (le bord gauche d'une rangee, le bord
---     haut d'une colonne, 20).
+-- Camelot's professions book (ProfessionsFrame.BookPage): the overview page opened by the
+-- professions micro-button (BottomBar.lua), and the side tabs of the professions window.
+-- 3.3.5 has no GetProfessions: professions come from the skill lines, their spells from the
+-- spellbook. Casting is protected, so spell buttons are secure and the book closes in combat.
 
 local ForeverUI = ForeverUI or {}
 _G.ForeverUI = ForeverUI
 
-local Gb = ForeverUI.Gabarits
+local Tpl = ForeverUI.Templates
 local L = ForeverUI.L
 
-local LM = {}
-ForeverUI.LivreMetiers = LM
+local PB = {}
+ForeverUI.ProfessionsBook = PB
 
 local SEP = string.char(92)
-local POLICE = "Fonts" .. SEP .. "FRIZQT__.TTF"
-local POLICE_CHIFFRES = "Fonts" .. SEP .. "ARIALN.TTF"
-local BOUTONS = "Interface" .. SEP .. "Buttons" .. SEP
-local ICONE_LIVRE = "Interface" .. SEP .. "ForeverUI" .. SEP .. "icons" .. SEP .. "inv_sidetab_professions_c60-rond"
+local FONT = "Fonts" .. SEP .. "FRIZQT__.TTF"
+local NUMBER_FONT = "Fonts" .. SEP .. "ARIALN.TTF"
+local BUTTONS = "Interface" .. SEP .. "Buttons" .. SEP
+local BOOK_ICON = "Interface" .. SEP .. "ForeverUI" .. SEP .. "icons" .. SEP .. "inv_sidetab_professions_c60-rond"
 
 local N = {
-	fenetre = { 673, 594 },
-	portrait = { cote = 48, x = 1, y = 1.5 },
-	principal = { 664, 142, x = 5, y = -41, ecart = 5 },
-	secondaire = { 225, 275, ecart = 4, pas = -6 },
-	-- plus de deux principaux : trois rangees visibles au plus, la barre
-	-- (8, fleches de 17) dans une gouttiere de 18 a droite des rangees
-	rangees = 3,
-	gouttiere = 18,
-	rogne = 20,
-	enLigne = 5,
-	nom = { 20, -24 },
+	window = { 673, 594 },
+	portrait = { side = 48, x = 1, y = 1.5 },
+	main = { 664, 142, x = 5, y = -41, gap = 5 },
+	secondary = { 225, 275, gap = 4, step = -6 },
+	-- rowLines: most primary rows visible; gutter: room for the scroll bar (8 wide, 17 arrows);
+	-- trim: art edge kept when a card shrinks; online: gap between spells laid in a line
+	rowLines = 3,
+	gutter = 18,
+	trim = 20,
+	online = 5,
+	name = { 20, -24 },
 	absent = 485,
-	sortsPrincipal = { x = 15, seul = 46, haut = 60, bas = 10 },
-	sortsSecondaire = { x = 20, y = 25 },
-	sort = { cote = 40, masque = 3, texte = { 100, 5, 7 }, sous = { 95, 28, -1 } },
-	rangPrincipal = { 441, x = -40, decalage = -7 },
-	rangSecondaire = { 190, y = -47, decalage = -5 },
-	rang = { h = 18, fond = 23, tranche = 30, rempli = { 441, 18, 2, -3 }, masque = 1, eclat = { 53, 16 }, texte = -3 },
-	oubli = { 20, 1, -4 },
-	secondaireNom = -25,
-	secondaireTexte = { 175, 5, -13 },
-	niveaux = { contenu = 1, zone = 1, rangees = 2, colonnes = 10, croix = 22 },
+	primarySpells = { x = 15, single = 46, top = 60, down = 10 },
+	secondarySpells = { x = 20, y = 25 },
+	spell = { side = 40, mask = 3, text = { 100, 5, 7 }, sub = { 95, 28, -1 } },
+	primaryRank = { 441, x = -40, offset = -7 },
+	secondaryRank = { 190, y = -47, offset = -5 },
+	rank = { h = 18, background = 23, slice = 30, filled = { 441, 18, 2, -3 }, mask = 1, flare = { 53, 16 }, text = -3 },
+	unlearnButton = { 20, 1, -4 },
+	secondaryName = -25,
+	secondaryText = { 175, 5, -13 },
+	levels = { content = 1, zone = 1, rowLines = 2, columns = 10, closeButton = 22 },
 }
 
--- NORMAL_FONT_COLOR ; PASSIVE_SPELL_FONT_COLOR (GlobalColor de camelot,
--- 0xffc4a300)
-local COULEURS = {
+-- NORMAL_FONT_COLOR; PASSIVE_SPELL_FONT_COLOR (camelot GlobalColor 0xffc4a300)
+local COLORS = {
 	normal = { 1, 0.82, 0 },
-	passif = { 0.7686, 0.6392, 0 },
+	passive = { 0.7686, 0.6392, 0 },
 }
 
--- UIPanelWindows["TradeSkillFrame"] (Blizzard_TradeSkillUI.lua de 3.3.5),
--- plus whileDead, comme un grimoire ; la largeur de camelot, onglets
--- compris (professionsFrameWidthOverride), donnee aussi au TradeSkillFrame
-local LARGEUR_PANNEAU = 750
-local PANNEAU = { area = "left", pushable = 3, whileDead = 1, width = LARGEUR_PANNEAU }
+-- UIPanelWindows["TradeSkillFrame"] (3.3.5 Blizzard_TradeSkillUI.lua) plus whileDead;
+-- width: camelot's professionsFrameWidthOverride (tabs included), also given to TradeSkillFrame
+local PANEL_WIDTH = 750
+local PANEL = { area = "left", pushable = 3, whileDead = 1, width = PANEL_WIDTH }
 
--- LES METIERS. nom : un sort qui porte le nom du metier (Spell.dbc,
--- SkillLine.dbc) ; bande : Skillbar_Fill_Flipbook_<bande> ; secondaire :
--- sa place parmi les trois cartes du bas ; onglet : l'icone de son onglet
--- lateral (tabicons/), pour ceux qui ont une page de fabrication. SORTS : par groupe, les rangs d'un
--- meme sort (SkillLineAbility.dbc, sorts ni recettes ni caches), dans
--- l'ordre des cartes.
-local METIERS = {
-	alchemy = { nom = 2259, bande = "alchemy_c60", onglet = "trade_alchemy" },
-	blacksmithing = { nom = 2018, bande = "blacksmithing", onglet = "trade_blacksmithing" },
-	enchanting = { nom = 7411, bande = "enchanting_c60", onglet = "trade_engraving" },
-	engineering = { nom = 4036, bande = "engineering", onglet = "trade_engineering" },
-	herbalism = { nom = 9134, bande = "herbalism" },
-	inscription = { nom = 45357, bande = "inscription", onglet = "inv_inscription_tradeskill01" },
-	jewelcrafting = { nom = 25229, bande = "jewelcrafting", onglet = "inv_misc_gem_01" },
-	leatherworking = { nom = 2108, bande = "leatherworking", onglet = "trade_leatherworking" },
-	mining = { nom = 2575, bande = "mining", onglet = "trade_mining" },
-	skinning = { nom = 8613, bande = "skinning_c60" },
-	tailoring = { nom = 3908, bande = "tailoring", onglet = "trade_tailoring" },
-	cooking = { nom = 2550, bande = "cooking", secondaire = 1, absent = L.PROFESSIONSBOOK_COOKING_MISSING,
-		onglet = "inv_misc_food_15" },
-	fishing = { nom = 7620, bande = "fishing", secondaire = 2, absent = L.PROFESSIONSBOOK_FISHING_MISSING },
-	firstaid = { nom = 3273, bande = "firstaid_c60", secondaire = 3, absent = L.PROFESSIONSBOOK_FIRST_AID_MISSING,
-		onglet = "spell_holy_sealofsacrifice" },
+-- name: a spell named like the profession (Spell.dbc, SkillLine.dbc), read in the client
+-- language; strip: Skillbar_Fill_Flipbook_<strip>; secondary: slot among the three bottom
+-- cards; tab: side tab icon (tabicons/), only for professions with a crafting page
+local PROFESSIONS = {
+	alchemy = { name = 2259, strip = "alchemy_c60", tab = "trade_alchemy" },
+	blacksmithing = { name = 2018, strip = "blacksmithing", tab = "trade_blacksmithing" },
+	enchanting = { name = 7411, strip = "enchanting_c60", tab = "trade_engraving" },
+	engineering = { name = 4036, strip = "engineering", tab = "trade_engineering" },
+	herbalism = { name = 9134, strip = "herbalism" },
+	inscription = { name = 45357, strip = "inscription", tab = "inv_inscription_tradeskill01" },
+	jewelcrafting = { name = 25229, strip = "jewelcrafting", tab = "inv_misc_gem_01" },
+	leatherworking = { name = 2108, strip = "leatherworking", tab = "trade_leatherworking" },
+	mining = { name = 2575, strip = "mining", tab = "trade_mining" },
+	skinning = { name = 8613, strip = "skinning_c60" },
+	tailoring = { name = 3908, strip = "tailoring", tab = "trade_tailoring" },
+	cooking = { name = 2550, strip = "cooking", secondary = 1, absent = L.PROFESSIONSBOOK_COOKING_MISSING,
+		tab = "inv_misc_food_15" },
+	fishing = { name = 7620, strip = "fishing", secondary = 2, absent = L.PROFESSIONSBOOK_FISHING_MISSING },
+	firstaid = { name = 3273, strip = "firstaid_c60", secondary = 3, absent = L.PROFESSIONSBOOK_FIRST_AID_MISSING,
+		tab = "spell_holy_sealofsacrifice" },
 }
-local SECONDAIRES = { "cooking", "fishing", "firstaid" }
+local SECONDARY_PROFESSIONS = { "cooking", "fishing", "firstaid" }
 
-local SORTS = {
+-- Profession spells by group, each group the ranks of one spell (SkillLineAbility.dbc, no
+-- recipes or hidden spells), in card order; the first group opens the crafting page.
+local SPELLS = {
 	alchemy = { { 2259, 3101, 3464, 11611, 28596, 51304 } },
 	blacksmithing = { { 2018, 3100, 3538, 9785, 29844, 51300 } },
 	enchanting = { { 7411, 7412, 7413, 13920, 28029, 51313 }, { 13262 } },
@@ -208,23 +96,23 @@ local SORTS = {
 	firstaid = { { 3273, 3274, 7924, 10846, 27028, 45542 } },
 }
 
-local function poser(r, ...)
+local function place(r, ...)
 	r:ClearAllPoints()
 	r:SetPoint(...)
 end
 
-local function atlas(t, nom, taille)
-	return ForeverUI.SetAtlas(t, nom, not taille)
+-- size: true to also apply the atlas size
+local function atlas(t, name, size)
+	return ForeverUI.SetAtlas(t, name, not size)
 end
 
-local vrai = Gb.Vrai
+local truthy = Tpl.Truthy
 
--- les polices de camelot absentes de 3.3.5 (les memes objets que
--- TradeSkill.lua)
-local function police(nom, chemin, taille, contour, ombre, r, g, b)
-	local p = _G[nom] or CreateFont(nom)
-	p:SetFont(chemin, taille, contour or "")
-	if ombre then
+-- camelot fonts missing from 3.3.5 (same objects as TradeSkill.lua)
+local function font(name, path, size, outline, shadow, r, g, b)
+	local p = _G[name] or CreateFont(name)
+	p:SetFont(path, size, outline or "")
+	if shadow then
 		p:SetShadowOffset(1, -1)
 		p:SetShadowColor(0, 0, 0, 1)
 	else
@@ -234,251 +122,253 @@ local function police(nom, chemin, taille, contour, ombre, r, g, b)
 	p:SetTextColor(r or 1, g or 1, b or 1)
 	return p
 end
-local POLICES = {
-	small2 = police("ForeverUIFontHighlightSmall2", POLICE, 11),                           -- GameFontHighlightSmall2
-	sous = police("ForeverUIFontNewSubSpell", POLICE, 10, nil, true, 0.82, 0.7, 0.54),     -- NewSubSpellFont
-	rang = police("ForeverUIFontNumber12Outline", POLICE_CHIFFRES, 12, "OUTLINE"),         -- Number12FontOutline
+local FONTS = {
+	small2 = font("ForeverUIFontHighlightSmall2", FONT, 11),                           -- GameFontHighlightSmall2
+	sub = font("ForeverUIFontNewSubSpell", FONT, 10, nil, true, 0.82, 0.7, 0.54),     -- NewSubSpellFont
+	rank = font("ForeverUIFontNumber12Outline", NUMBER_FONT, 12, "OUTLINE"),         -- Number12FontOutline
 }
 
--- ------------------------------------------------------------ la lecture
+-- ---------- Reading
 
--- DEPLIER, LIRE, REPLIER. Replier et deplier annoncent SKILL_LINES_CHANGED :
--- le livre ne relit pas les annonces qui suivent sa propre lecture.
+-- Reading expands collapsed skill headers, then collapses them again. Both fire
+-- SKILL_LINES_CHANGED, so the book ignores that event for a moment after its own read.
 local silence = 0
 
-local function deplier()
-	local replies = {}
+-- expands every collapsed skill header; returns the set of their names
+local function expandHeaders()
+	local collapsedSet = {}
 	local i = 1
 	while i <= (GetNumSkillLines() or 0) do
-		local nom, entete, deplie = GetSkillLineInfo(i)
-		if vrai(entete) and not vrai(deplie) then
-			replies[nom] = true
+		local name, header, expanded = GetSkillLineInfo(i)
+		if truthy(header) and not truthy(expanded) then
+			collapsedSet[name] = true
 			ExpandSkillHeader(i)
 		end
 		i = i + 1
 	end
-	return replies
+	return collapsedSet
 end
 
--- le nom de chaque metier dans la langue du client -> sa cle
-local function nomsDesMetiers()
-	local parNom = {}
-	for cle, m in pairs(METIERS) do
-		local nom = GetSpellInfo(m.nom)
-		if nom then parNom[nom] = cle end
+-- profession name in the client language -> profession key
+local function professionNames()
+	local byName = {}
+	for key, m in pairs(PROFESSIONS) do
+		local name = GetSpellInfo(m.name)
+		if name then byName[name] = key end
 	end
-	return parNom
+	return byName
 end
 
--- les metiers du joueur : les principaux (deux chez camelot, davantage sur
--- un serveur prive), et les secondaires par cle
-function LM.Lire()
-	local parNom = nomsDesMetiers()
-	local replies = deplier()
-	local principaux, secondaires = {}, {}
+-- the player's professions: primaries as a list (two in camelot, more on a private server),
+-- secondaries by key
+function PB.Read()
+	local byName = professionNames()
+	local collapsedSet = expandHeaders()
+	local primaries, secondaries = {}, {}
 	for i = 1, GetNumSkillLines() or 0 do
-		local nom, entete, _, rang, _, bonus, maxi, abandon = GetSkillLineInfo(i)
-		local cle = not vrai(entete) and parNom[nom]
-		if cle then
-			local m = { cle = cle, nom = nom, rang = rang or 0, maxi = maxi or 0, bonus = bonus or 0, abandon = vrai(abandon) }
-			if METIERS[cle].secondaire then
-				secondaires[cle] = m
+		local name, header, _, rank, _, bonus, maxValue, abandon = GetSkillLineInfo(i)
+		local key = not truthy(header) and byName[name]
+		if key then
+			local m = { key = key, name = name, rank = rank or 0, maxValue = maxValue or 0, bonus = bonus or 0, abandon = truthy(abandon) }
+			if PROFESSIONS[key].secondary then
+				secondaries[key] = m
 			else
-				principaux[#principaux + 1] = m
+				primaries[#primaries + 1] = m
 			end
 		end
 	end
-	if next(replies) then
+	if next(collapsedSet) then
 		for i = GetNumSkillLines() or 0, 1, -1 do
-			local nom, entete, deplie = GetSkillLineInfo(i)
-			if vrai(entete) and vrai(deplie) and replies[nom] then
+			local name, header, expanded = GetSkillLineInfo(i)
+			if truthy(header) and truthy(expanded) and collapsedSet[name] then
 				CollapseSkillHeader(i)
 			end
 		end
 		silence = GetTime() + 0.5
 	end
-	return principaux, secondaires
+	return primaries, secondaries
 end
 
--- le grimoire : identifiant du sort -> case
-local function lireGrimoire()
-	local cases = {}
-	for onglet = 1, GetNumSpellTabs() or 0 do
-		local _, _, decalage, nombre = GetSpellTabInfo(onglet)
-		decalage = decalage or 0
-		for slot = decalage + 1, decalage + (nombre or 0) do
-			local lien = GetSpellLink(slot, BOOKTYPE_SPELL)
-			local id = lien and tonumber(string.match(lien, "spell:(%d+)"))
-			if id and not cases[id] then cases[id] = slot end
+-- spellbook: spell id -> slot
+local function readSpellbook()
+	local cells = {}
+	for tab = 1, GetNumSpellTabs() or 0 do
+		local _, _, offset, count = GetSpellTabInfo(tab)
+		offset = offset or 0
+		for slot = offset + 1, offset + (count or 0) do
+			local link = GetSpellLink(slot, BOOKTYPE_SPELL)
+			local id = link and tonumber(string.match(link, "spell:(%d+)"))
+			if id and not cells[id] then cells[id] = slot end
 		end
 	end
-	return cases
+	return cells
 end
 
--- les cases des sorts d'un metier : un par groupe, le plus haut rang present
-local function sortsDu(cle, cases, maxi)
-	local liste = {}
-	for _, groupe in ipairs(SORTS[cle]) do
-		for k = #groupe, 1, -1 do
-			local slot = cases[groupe[k]]
+-- slots of a profession's spells: one per group, the highest known rank;
+-- maxValue: most slots returned
+local function spellsOf(key, cells, maxValue)
+	local list = {}
+	for _, group in ipairs(SPELLS[key]) do
+		for k = #group, 1, -1 do
+			local slot = cells[group[k]]
 			if slot then
-				liste[#liste + 1] = slot
+				list[#list + 1] = slot
 				break
 			end
 		end
-		if #liste >= maxi then break end
+		if #list >= maxValue then break end
 	end
-	return liste
+	return list
 end
 
--- l'indice d'une competence, pour AbandonSkill : sa categorie est depliee
--- s'il le faut (et le reste, la boite ouverte)
-local function indiceDe(nom)
-	for passe = 1, 2 do
+-- skill line index for AbandonSkill; expands the headers if needed (they stay expanded
+-- while the confirmation box is open)
+local function indexOf(name)
+	for attempt = 1, 2 do
 		for i = 1, GetNumSkillLines() or 0 do
-			local n, entete = GetSkillLineInfo(i)
-			if n == nom and not vrai(entete) then return i end
+			local n, header = GetSkillLineInfo(i)
+			if n == name and not truthy(header) then return i end
 		end
-		if passe == 1 then deplier() end
+		if attempt == 1 then expandHeaders() end
 	end
 end
 
--- ------------------------------------------------------------ le rang
+-- ---------- Rank bar
 
--- un element a decoupe 30 / 30 : ses bouts a leur taille, le milieu etire
-local function troisTranches(hote, nom, largeur, hauteur, bout, couche)
-	local e = ForeverUI.AtlasEntry(nom)
+-- three-slice atlas element: both ends at their size, the middle stretched;
+-- tip: end width; layer: draw layer
+local function threeSlice(host, name, width, height, tip, layer)
+	local e = ForeverUI.AtlasEntry(name)
 	if not e then return end
-	local du = (e[3] - e[2]) * bout / e[6]
-	local morceaux = {
-		{ e[2], e[2] + du, 0, bout },
-		{ e[2] + du, e[3] - du, bout, largeur - 2 * bout },
-		{ e[3] - du, e[3], largeur - bout, bout },
+	local du = (e[3] - e[2]) * tip / e[6]
+	local pieces = {
+		{ e[2], e[2] + du, 0, tip },
+		{ e[2] + du, e[3] - du, tip, width - 2 * tip },
+		{ e[3] - du, e[3], width - tip, tip },
 	}
-	for _, m in ipairs(morceaux) do
-		local t = hote:CreateTexture(nil, couche)
+	for _, m in ipairs(pieces) do
+		local t = host:CreateTexture(nil, layer)
 		t:SetTexture(e[1])
 		t:SetTexCoord(m[1], m[2], e[4], e[5])
 		t:SetWidth(m[4])
-		t:SetHeight(hauteur)
-		t:SetPoint("TOPLEFT", hote, "TOPLEFT", m[3], 0)
+		t:SetHeight(height)
+		t:SetPoint("TOPLEFT", host, "TOPLEFT", m[3], 0)
 	end
 end
 
-local function creerRang(carte, largeur, decalage)
-	local R = N.rang
-	local r = CreateFrame("Frame", nil, carte)
-	r:SetWidth(largeur)
+-- ProfessionsRankBarTemplate. offset: added to the fill width (-7 primary, -5 secondary)
+local function createRank(map, width, offset)
+	local R = N.rank
+	local r = CreateFrame("Frame", nil, map)
+	r:SetWidth(width)
 	r:SetHeight(R.h)
-	r.largeur, r.decalage = largeur, decalage
-	local fond = r:CreateTexture(nil, "BACKGROUND")
-	atlas(fond, "profession-progressbar-bg")
-	fond:SetWidth(largeur)
-	fond:SetHeight(R.fond)
-	fond:SetPoint("TOPLEFT", r, "TOPLEFT", 0, 0)
-	local rempli = r:CreateTexture(nil, "BORDER")
-	rempli:SetHeight(R.rempli[2])
-	rempli:SetPoint("TOPLEFT", r, "TOPLEFT", R.rempli[3] + R.masque, R.rempli[4])
-	local eclat = r:CreateTexture(nil, "ARTWORK")
-	eclat:SetWidth(R.eclat[1])
-	eclat:SetHeight(R.eclat[2])
-	eclat:SetBlendMode("ADD")
-	troisTranches(r, "profession-progressbar-frame", largeur, R.fond, R.tranche, "OVERLAY")
-	local cadreTexte = CreateFrame("Frame", nil, r)
-	cadreTexte:SetHeight(R.h)
-	cadreTexte:SetPoint("LEFT", r, "LEFT", 0, R.texte)
-	cadreTexte:SetPoint("RIGHT", r, "RIGHT", 0, R.texte)
-	cadreTexte:SetFrameLevel(r:GetFrameLevel() + 1)
-	local texte = cadreTexte:CreateFontString(nil, "ARTWORK")
-	texte:SetFontObject(POLICES.rang)
-	texte:SetPoint("CENTER", cadreTexte, "CENTER", 0, 0)
-	r.fond, r.rempli, r.eclat, r.texte = fond, rempli, eclat, texte
+	r.fillWidth, r.offset = width, offset
+	local background = r:CreateTexture(nil, "BACKGROUND")
+	atlas(background, "profession-progressbar-bg")
+	background:SetWidth(width)
+	background:SetHeight(R.background)
+	background:SetPoint("TOPLEFT", r, "TOPLEFT", 0, 0)
+	local filled = r:CreateTexture(nil, "BORDER")
+	filled:SetHeight(R.filled[2])
+	filled:SetPoint("TOPLEFT", r, "TOPLEFT", R.filled[3] + R.mask, R.filled[4])
+	local flare = r:CreateTexture(nil, "ARTWORK")
+	flare:SetWidth(R.flare[1])
+	flare:SetHeight(R.flare[2])
+	flare:SetBlendMode("ADD")
+	threeSlice(r, "profession-progressbar-frame", width, R.background, R.slice, "OVERLAY")
+	local textFrame = CreateFrame("Frame", nil, r)
+	textFrame:SetHeight(R.h)
+	textFrame:SetPoint("LEFT", r, "LEFT", 0, R.text)
+	textFrame:SetPoint("RIGHT", r, "RIGHT", 0, R.text)
+	textFrame:SetFrameLevel(r:GetFrameLevel() + 1)
+	local text = textFrame:CreateFontString(nil, "ARTWORK")
+	text:SetFontObject(FONTS.rank)
+	text:SetPoint("CENTER", textFrame, "CENTER", 0, 0)
+	r.background, r.filled, r.flare, r.text = background, filled, flare, text
 	return r
 end
 
--- ProfessionsRankBarMixin:Update, sans animation : texte, bande du metier
--- (sinon DefaultBlue) vue sur largeur x part + decalage, eclat au bout
-local function majRang(r, m)
-	local R = N.rang
+-- ProfessionsRankBarMixin:Update without animation: text, profession strip (else
+-- DefaultBlue) shown over width x ratio + offset, flare at the end
+local function updateRank(r, m)
+	local R = N.rank
 	if m.bonus > 0 then
-		r.texte:SetFormattedText(L.TRADESKILL_NAME_RANK_MODIFIER, m.nom, m.rang, m.bonus, m.maxi)
+		r.text:SetFormattedText(L.TRADESKILL_NAME_RANK_MODIFIER, m.name, m.rank, m.bonus, m.maxValue)
 	else
-		r.texte:SetFormattedText(L.TRADESKILL_NAME_RANK, m.nom, m.rang, m.maxi)
+		r.text:SetFormattedText(L.TRADESKILL_NAME_RANK, m.name, m.rank, m.maxValue)
 	end
-	local bande = METIERS[m.cle].bande
-	local e = ForeverUI.AtlasEntry("skillbar_fill_flipbook_" .. bande) or ForeverUI.AtlasEntry("skillbar_fill_flipbook_defaultblue")
-	local eclat = ForeverUI.AtlasEntry("skillbar_flare_" .. bande)
-	local part = m.maxi > 0 and math.min(m.rang / m.maxi, 1) or 0
-	local vu = math.min(R.rempli[1] - R.masque, r.largeur * part + r.decalage)
-	if e and vu >= 1 then
-		r.rempli:SetTexture(e[1])
-		local du = (e[3] - e[2]) / R.rempli[1]
-		r.rempli:SetTexCoord(e[2] + du * R.masque, e[2] + du * (R.masque + vu), e[4], e[5])
-		r.rempli:SetWidth(vu)
-		r.rempli:Show()
+	local strip = PROFESSIONS[m.key].strip
+	local e = ForeverUI.AtlasEntry("skillbar_fill_flipbook_" .. strip) or ForeverUI.AtlasEntry("skillbar_fill_flipbook_defaultblue")
+	local flare = ForeverUI.AtlasEntry("skillbar_flare_" .. strip)
+	local part = m.maxValue > 0 and math.min(m.rank / m.maxValue, 1) or 0
+	local found = math.min(R.filled[1] - R.mask, r.fillWidth * part + r.offset)
+	if e and found >= 1 then
+		r.filled:SetTexture(e[1])
+		local du = (e[3] - e[2]) / R.filled[1]
+		r.filled:SetTexCoord(e[2] + du * R.mask, e[2] + du * (R.mask + found), e[4], e[5])
+		r.filled:SetWidth(found)
+		r.filled:Show()
 	else
-		r.rempli:Hide()
+		r.filled:Hide()
 	end
-	-- l'eclat, masque comme chez camelot : sa partie droite, a la largeur
-	-- visible (voir TradeSkill.lua)
-	if eclat and vu >= 1 then
-		local l = math.min(R.eclat[1], vu)
-		local du = (eclat[3] - eclat[2]) / R.eclat[1]
-		r.eclat:SetTexture(eclat[1])
-		r.eclat:SetTexCoord(eclat[3] - du * l, eclat[3], eclat[4], eclat[5])
-		r.eclat:SetWidth(l)
-		poser(r.eclat, "RIGHT", r, "TOPLEFT", R.rempli[3] + R.masque + vu, R.rempli[4] - R.rempli[2] / 2)
-		r.eclat:SetAlpha(m.maxi > 0 and m.rang >= m.maxi and 0 or 1)
-		r.eclat:Show()
+	-- flare masked as in camelot: its right part, at the visible width (see TradeSkill.lua)
+	if flare and found >= 1 then
+		local l = math.min(R.flare[1], found)
+		local du = (flare[3] - flare[2]) / R.flare[1]
+		r.flare:SetTexture(flare[1])
+		r.flare:SetTexCoord(flare[3] - du * l, flare[3], flare[4], flare[5])
+		r.flare:SetWidth(l)
+		place(r.flare, "RIGHT", r, "TOPLEFT", R.filled[3] + R.mask + found, R.filled[4] - R.filled[2] / 2)
+		r.flare:SetAlpha(m.maxValue > 0 and m.rank >= m.maxValue and 0 or 1)
+		r.flare:Show()
 	else
-		r.eclat:Hide()
+		r.flare:Hide()
 	end
 end
 
--- ------------------------------------------------------------ les sorts
+-- ---------- Spells
 
-local nombreSorts = 0
+local spellCount = 0
 
--- ProfessionButtonTemplate, en bouton SECURISE (type "spell") : lancer un
--- sort est protege
-local function creerSort(carte)
-	nombreSorts = nombreSorts + 1
-	local S = N.sort
-	local nom = "ForeverUIProfessionsBookSpell" .. nombreSorts
-	local b = CreateFrame("Button", nom, carte, "SecureActionButtonTemplate")
-	b:SetWidth(S.cote)
-	b:SetHeight(S.cote)
+-- ProfessionButtonTemplate as a SECURE button (type "spell"): casting is protected
+local function createSpell(map)
+	spellCount = spellCount + 1
+	local S = N.spell
+	local name = "ForeverUIProfessionsBookSpell" .. spellCount
+	local b = CreateFrame("Button", name, map, "SecureActionButtonTemplate")
+	b:SetWidth(S.side)
+	b:SetHeight(S.side)
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	b:RegisterForDrag("LeftButton")
 	b:SetAttribute("type", "spell")
-	-- le clic modifie donne le lien dans la discussion, pas le sort
-	b:SetAttribute("shift-type1", "lien")
-	b:SetAttribute("shift-type2", "lien")
-	local icone = b:CreateTexture(nil, "BORDER")
-	icone:SetPoint("TOPLEFT", b, "TOPLEFT", S.masque, -S.masque)
-	icone:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -S.masque, S.masque)
-	local bord = S.masque / S.cote
-	icone:SetTexCoord(bord, 1 - bord, bord, 1 - bord)
-	local cadre = b:CreateTexture(nil, "OVERLAY")
-	atlas(cadre, "profession-square-frame", true)
-	cadre:SetPoint("CENTER", icone, "CENTER", 0, 0)
-	b:SetPushedTexture(BOUTONS .. "UI-Quickslot-Depress")
-	b:SetHighlightTexture(BOUTONS .. "ButtonHilight-Square")
+	-- a modified click links the spell into chat instead of casting it
+	b:SetAttribute("shift-type1", "link")
+	b:SetAttribute("shift-type2", "link")
+	local icon = b:CreateTexture(nil, "BORDER")
+	icon:SetPoint("TOPLEFT", b, "TOPLEFT", S.mask, -S.mask)
+	icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -S.mask, S.mask)
+	local edge = S.mask / S.side
+	icon:SetTexCoord(edge, 1 - edge, edge, 1 - edge)
+	local frame = b:CreateTexture(nil, "OVERLAY")
+	atlas(frame, "profession-square-frame", true)
+	frame:SetPoint("CENTER", icon, "CENTER", 0, 0)
+	b:SetPushedTexture(BUTTONS .. "UI-Quickslot-Depress")
+	b:SetHighlightTexture(BUTTONS .. "ButtonHilight-Square")
 	b:GetHighlightTexture():SetBlendMode("ADD")
-	local recharge = CreateFrame("Cooldown", nom .. "Cooldown", b, "CooldownFrameTemplate")
-	recharge:SetAllPoints(b)
-	local texte = b:CreateFontString(nil, "BORDER", "GameFontNormal")
-	texte:SetWidth(S.texte[1])
-	texte:SetJustifyH("LEFT")
-	texte:SetPoint("LEFT", b, "RIGHT", S.texte[2], S.texte[3])
-	local sous = b:CreateFontString(nil, "BORDER")
-	sous:SetFontObject(POLICES.sous)
-	sous:SetWidth(S.sous[1])
-	sous:SetHeight(S.sous[2])
-	sous:SetJustifyH("LEFT")
-	sous:SetJustifyV("TOP")
-	sous:SetPoint("TOPLEFT", texte, "BOTTOMLEFT", 0, S.sous[3])
-	b.icone, b.cadre, b.recharge, b.texte, b.sous = icone, cadre, recharge, texte, sous
+	local cooldown = CreateFrame("Cooldown", name .. "Cooldown", b, "CooldownFrameTemplate")
+	cooldown:SetAllPoints(b)
+	local text = b:CreateFontString(nil, "BORDER", "GameFontNormal")
+	text:SetWidth(S.text[1])
+	text:SetJustifyH("LEFT")
+	text:SetPoint("LEFT", b, "RIGHT", S.text[2], S.text[3])
+	local sub = b:CreateFontString(nil, "BORDER")
+	sub:SetFontObject(FONTS.sub)
+	sub:SetWidth(S.sub[1])
+	sub:SetHeight(S.sub[2])
+	sub:SetJustifyH("LEFT")
+	sub:SetJustifyV("TOP")
+	sub:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, S.sub[3])
+	b.icon, b.frame, b.cooldown, b.text, b.sub = icon, frame, cooldown, text, sub
 	b:SetScript("OnEnter", function(self)
 		if not self.slot then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -491,70 +381,70 @@ local function creerSort(carte)
 	b:SetScript("OnDragStart", function(self)
 		if self.slot then PickupSpell(self.slot, BOOKTYPE_SPELL) end
 	end)
-	-- le lien : celui du metier s'il y en a un, sinon celui du sort
+	-- link: the trade skill link if any, else the spell link
 	b:SetScript("PostClick", function(self)
 		if self.slot and IsModifiedClick("CHATLINK") then
-			local lien, lienMetier = GetSpellLink(self.slot, BOOKTYPE_SPELL)
-			if lienMetier or lien then ChatEdit_InsertLink(lienMetier or lien) end
+			local link, tradeSkillLink = GetSpellLink(self.slot, BOOKTYPE_SPELL)
+			if tradeSkillLink or link then ChatEdit_InsertLink(tradeSkillLink or link) end
 		end
 	end)
 	b:Hide()
 	return b
 end
 
-local function majRecharge(b)
-	local debut, duree, actif = GetSpellCooldown(b.slot, BOOKTYPE_SPELL)
-	CooldownFrame_SetTimer(b.recharge, debut or 0, duree or 0, actif or 0)
-	if vrai(actif) then
-		b.icone:SetVertexColor(1, 1, 1)
+local function updateCooldown(b)
+	local start, duration, active = GetSpellCooldown(b.slot, BOOKTYPE_SPELL)
+	CooldownFrame_SetTimer(b.cooldown, start or 0, duration or 0, active or 0)
+	if truthy(active) then
+		b.icon:SetVertexColor(1, 1, 1)
 	else
-		b.icone:SetVertexColor(0.4, 0.4, 0.4)
+		b.icon:SetVertexColor(0.4, 0.4, 0.4)
 	end
 end
 
--- UpdateButton : icone, nom, rang, recharge ; le sort que le bouton lance
--- ("Nom(Rang)", ce que SecureActionButton passe a CastSpellByName)
-local function remplirSort(b, slot)
+-- UpdateButton: icon, name, rank, cooldown; the spell to cast is "Name(Rank)",
+-- which SecureActionButton passes to CastSpellByName
+local function fillSpell(b, slot)
 	b.slot = slot
-	local nom, rang = GetSpellName(slot, BOOKTYPE_SPELL)
-	local passif = IsPassiveSpell(slot, BOOKTYPE_SPELL)
-	b:GetHighlightTexture():SetTexture(BOUTONS .. (passif and "UI-PassiveHighlight" or "ButtonHilight-Square"))
-	local c = passif and COULEURS.passif or COULEURS.normal
-	b.texte:SetTextColor(c[1], c[2], c[3])
-	b.texte:SetText(nom)
-	b.sous:SetText(rang or "")
-	b.icone:SetTexture(GetSpellTexture(slot, BOOKTYPE_SPELL))
-	majRecharge(b)
-	if rang and rang ~= "" then
-		b:SetAttribute("spell", nom .. "(" .. rang .. ")")
+	local name, rank = GetSpellName(slot, BOOKTYPE_SPELL)
+	local passive = IsPassiveSpell(slot, BOOKTYPE_SPELL)
+	b:GetHighlightTexture():SetTexture(BUTTONS .. (passive and "UI-PassiveHighlight" or "ButtonHilight-Square"))
+	local c = passive and COLORS.passive or COLORS.normal
+	b.text:SetTextColor(c[1], c[2], c[3])
+	b.text:SetText(name)
+	b.sub:SetText(rank or "")
+	b.icon:SetTexture(GetSpellTexture(slot, BOOKTYPE_SPELL))
+	updateCooldown(b)
+	if rank and rank ~= "" then
+		b:SetAttribute("spell", name .. "(" .. rank .. ")")
 	else
-		b:SetAttribute("spell", nom)
+		b:SetAttribute("spell", name)
 	end
 end
 
--- ------------------------------------------------------------ l'oubli
+-- ---------- Unlearn
 
-function LM.Oublier(nom)
-	local i = indiceDe(nom)
+function PB.Unlearn(name)
+	local i = indexOf(name)
 	if not i then return end
-	local boite = StaticPopup_Show("UNLEARN_SKILL", nom)
-	if boite then boite.data = i end
+	local box = StaticPopup_Show("UNLEARN_SKILL", name)
+	if box then box.data = i end
 end
 
-local function creerOubli(carte, rang)
-	local O = N.oubli
-	local b = CreateFrame("Button", nil, carte)
+local function createUnlearn(map, rank)
+	local O = N.unlearnButton
+	local b = CreateFrame("Button", nil, map)
 	b:SetWidth(O[1])
 	b:SetHeight(O[1])
-	b:SetPoint("LEFT", rang, "RIGHT", O[2], O[3])
-	local icone = b:CreateTexture(nil, "ARTWORK")
-	atlas(icone, "profession-button-red-crossmark", true)
-	icone:SetPoint("CENTER", b, "CENTER", 0, 0)
-	local enfonce = b:CreateTexture(nil, "OVERLAY")
-	atlas(enfonce, "profession-button-red-crossmark-pressed", true)
-	enfonce:SetPoint("CENTER", b, "CENTER", 0, 0)
-	enfonce:Hide()
-	b.icone, b.enfonce = icone, enfonce
+	b:SetPoint("LEFT", rank, "RIGHT", O[2], O[3])
+	local icon = b:CreateTexture(nil, "ARTWORK")
+	atlas(icon, "profession-button-red-crossmark", true)
+	icon:SetPoint("CENTER", b, "CENTER", 0, 0)
+	local pressed = b:CreateTexture(nil, "OVERLAY")
+	atlas(pressed, "profession-button-red-crossmark-pressed", true)
+	pressed:SetPoint("CENTER", b, "CENTER", 0, 0)
+	pressed:Hide()
+	b.icon, b.pressed = icon, pressed
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:SetText(UNLEARN_SKILL_TOOLTIP)
@@ -563,285 +453,278 @@ local function creerOubli(carte, rang)
 	b:SetScript("OnLeave", function()
 		GameTooltip:Hide()
 	end)
-	b:SetScript("OnMouseDown", function(self) self.enfonce:Show() end)
-	b:SetScript("OnMouseUp", function(self) self.enfonce:Hide() end)
+	b:SetScript("OnMouseDown", function(self) self.pressed:Show() end)
+	b:SetScript("OnMouseUp", function(self) self.pressed:Hide() end)
 	b:SetScript("OnClick", function()
-		if carte.metier then LM.Oublier(carte.metier.nom) end
+		if map.profession then PB.Unlearn(map.profession.name) end
 	end)
 	return b
 end
 
--- ------------------------------------------------------------ les cartes
+-- ---------- Cards
 
--- LE FOND D'UNE CARTE. A la taille de son art : une piece. Plus etroite
--- (rangee a cote de la barre) ou plus basse (colonne sous trois rangees) :
--- l'art n'est pas ecrase, ses bords sont gardes -- le gauche d'une rangee,
--- le haut d'une colonne, sur N.rogne -- et le reste s'aligne sur le bord
--- oppose ; la bande entre les deux est rognee.
-local function poserFond(c, nom)
-	local e = ForeverUI.AtlasEntry(nom)
+-- Card background. At its art size: one piece. Narrower (row beside the scroll bar) or
+-- shorter (column under three rows): the art is not squashed. Its left edge (row) or top
+-- edge (column) is kept over N.trim, the rest aligns on the opposite edge, and the strip
+-- between them is cropped.
+local function placeBackground(c, name)
+	local e = ForeverUI.AtlasEntry(name)
 	if not e then return false end
-	c.atlasFond = nom
-	local W, H, B = e[6], e[7], N.rogne
+	c.backgroundAtlas = name
+	local W, H, B = e[6], e[7], N.trim
 	local l, h = c:GetWidth(), c:GetHeight()
 	local du, dv = (e[3] - e[2]) / W, (e[5] - e[4]) / H
-	local fond, bord = c.fond, c.fondBord
-	fond:SetTexture(e[1])
-	bord:SetTexture(e[1])
-	fond:ClearAllPoints()
+	local background, edge = c.background, c.backgroundEdge
+	background:SetTexture(e[1])
+	edge:SetTexture(e[1])
+	background:ClearAllPoints()
 	if l < W then
-		bord:ClearAllPoints()
-		bord:SetTexCoord(e[2], e[2] + du * B, e[4], e[5])
-		bord:SetWidth(B)
-		bord:SetPoint("TOPLEFT", c, "TOPLEFT", 0, 0)
-		bord:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 0, 0)
-		fond:SetTexCoord(e[3] - du * (l - B), e[3], e[4], e[5])
-		fond:SetPoint("TOPLEFT", c, "TOPLEFT", B, 0)
-		fond:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 0, 0)
-		bord:Show()
+		edge:ClearAllPoints()
+		edge:SetTexCoord(e[2], e[2] + du * B, e[4], e[5])
+		edge:SetWidth(B)
+		edge:SetPoint("TOPLEFT", c, "TOPLEFT", 0, 0)
+		edge:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 0, 0)
+		background:SetTexCoord(e[3] - du * (l - B), e[3], e[4], e[5])
+		background:SetPoint("TOPLEFT", c, "TOPLEFT", B, 0)
+		background:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 0, 0)
+		edge:Show()
 	elseif h < H then
-		bord:ClearAllPoints()
-		bord:SetTexCoord(e[2], e[3], e[4], e[4] + dv * B)
-		bord:SetHeight(B)
-		bord:SetPoint("TOPLEFT", c, "TOPLEFT", 0, 0)
-		bord:SetPoint("TOPRIGHT", c, "TOPRIGHT", 0, 0)
-		fond:SetTexCoord(e[2], e[3], e[5] - dv * (h - B), e[5])
-		fond:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -B)
-		fond:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 0, 0)
-		bord:Show()
+		edge:ClearAllPoints()
+		edge:SetTexCoord(e[2], e[3], e[4], e[4] + dv * B)
+		edge:SetHeight(B)
+		edge:SetPoint("TOPLEFT", c, "TOPLEFT", 0, 0)
+		edge:SetPoint("TOPRIGHT", c, "TOPRIGHT", 0, 0)
+		background:SetTexCoord(e[2], e[3], e[5] - dv * (h - B), e[5])
+		background:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -B)
+		background:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 0, 0)
+		edge:Show()
 	else
-		-- la bande cachee garde sa derniere place
-		fond:SetTexCoord(e[2], e[3], e[4], e[5])
-		fond:SetAllPoints(c)
-		bord:Hide()
+		-- the hidden edge keeps its last anchors
+		background:SetTexCoord(e[2], e[3], e[4], e[5])
+		background:SetAllPoints(c)
+		edge:Hide()
 	end
 	return true
 end
 
-local function creerFond(c)
-	c.fond = c:CreateTexture(nil, "BACKGROUND")
-	c.fondBord = c:CreateTexture(nil, "BACKGROUND")
-	c.fondBord:Hide()
+local function createBackground(c)
+	c.background = c:CreateTexture(nil, "BACKGROUND")
+	c.backgroundEdge = c:CreateTexture(nil, "BACKGROUND")
+	c.backgroundEdge:Hide()
 end
 
-local function creerPrincipal(parent, n)
-	local P = N.principal
+local function createPrimary(parent, n)
+	local P = N.main
 	local c = CreateFrame("Frame", nil, parent)
 	c:SetWidth(P[1])
 	c:SetHeight(P[2])
-	c.principal = true
-	creerFond(c)
-	c.nom = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	c.nom:SetJustifyH("LEFT")
-	c.nom:SetPoint("TOPLEFT", c, "TOPLEFT", N.nom[1], N.nom[2])
-	c.absentTitre = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	c.absentTitre:SetJustifyH("LEFT")
-	c.absentTitre:SetPoint("TOPLEFT", c, "TOPLEFT", N.nom[1], N.nom[2])
+	c.main = true
+	createBackground(c)
+	c.name = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	c.name:SetJustifyH("LEFT")
+	c.name:SetPoint("TOPLEFT", c, "TOPLEFT", N.name[1], N.name[2])
+	c.absentTitle = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	c.absentTitle:SetJustifyH("LEFT")
+	c.absentTitle:SetPoint("TOPLEFT", c, "TOPLEFT", N.name[1], N.name[2])
 	if n == 1 then
-		c.absentTitre:SetText(L.PROFESSIONSBOOK_FIRST_PROFESSION)
+		c.absentTitle:SetText(L.PROFESSIONSBOOK_FIRST_PROFESSION)
 	else
-		c.absentTitre:SetText(L.PROFESSIONSBOOK_SECOND_PROFESSION)
+		c.absentTitle:SetText(L.PROFESSIONSBOOK_SECOND_PROFESSION)
 	end
-	c.absentTexte = c:CreateFontString(nil, "OVERLAY")
-	c.absentTexte:SetFontObject(POLICES.small2)
-	c.absentTexte:SetWidth(N.absent)
-	c.absentTexte:SetJustifyH("LEFT")
-	c.absentTexte:SetPoint("CENTER", c, "CENTER", 0, 0)
-	c.absentTexte:SetText(L.PROFESSIONSBOOK_MISSING_PROFESSION)
-	local RP = N.rangPrincipal
-	c.rang = creerRang(c, RP[1], RP.decalage)
-	c.rang:SetPoint("RIGHT", c, "RIGHT", RP.x, 0)
-	c.oubli = creerOubli(c, c.rang)
-	c.sorts = { creerSort(c), creerSort(c) }
+	c.absentText = c:CreateFontString(nil, "OVERLAY")
+	c.absentText:SetFontObject(FONTS.small2)
+	c.absentText:SetWidth(N.absent)
+	c.absentText:SetJustifyH("LEFT")
+	c.absentText:SetPoint("CENTER", c, "CENTER", 0, 0)
+	c.absentText:SetText(L.PROFESSIONSBOOK_MISSING_PROFESSION)
+	local PR = N.primaryRank
+	c.rank = createRank(c, PR[1], PR.offset)
+	c.rank:SetPoint("RIGHT", c, "RIGHT", PR.x, 0)
+	c.unlearnButton = createUnlearn(c, c.rank)
+	c.spells = { createSpell(c), createSpell(c) }
 	return c
 end
 
--- les colonnes passent DEVANT la zone des rangees : leur niveau est pose
--- avant que leurs enfants ne naissent
-local function creerSecondaire(contenu, cle)
-	local S = N.secondaire
-	local c = CreateFrame("Frame", nil, contenu)
-	c:SetFrameLevel(contenu:GetFrameLevel() + N.niveaux.colonnes)
+-- columns are drawn IN FRONT of the rows zone: their level is set before their children
+-- are created
+local function createSecondary(content, key)
+	local S = N.secondary
+	local c = CreateFrame("Frame", nil, content)
+	c:SetFrameLevel(content:GetFrameLevel() + N.levels.columns)
 	c:SetWidth(S[1])
 	c:SetHeight(S[2])
-	c.cle = cle
-	creerFond(c)
-	poserFond(c, "profession-overview-card-generic-" .. cle)
-	c.nom = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	c.nom:SetJustifyH("LEFT")
-	c.nom:SetPoint("TOP", c, "TOP", 0, N.secondaireNom)
-	c.absentTitre = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	c.absentTitre:SetJustifyH("LEFT")
-	c.absentTitre:SetPoint("TOP", c, "TOP", 0, N.secondaireNom)
-	c.absentTitre:SetText(GetSpellInfo(METIERS[cle].nom) or "")
-	local T = N.secondaireTexte
-	c.absentTexte = c:CreateFontString(nil, "OVERLAY")
-	c.absentTexte:SetFontObject(POLICES.small2)
-	c.absentTexte:SetWidth(T[1])
-	c.absentTexte:SetJustifyH("LEFT")
-	c.absentTexte:SetJustifyV("TOP")
-	c.absentTexte:SetPoint("TOP", c.absentTitre, "BOTTOM", T[2], T[3])
-	c.absentTexte:SetText(METIERS[cle].absent)
-	local RS = N.rangSecondaire
-	c.rang = creerRang(c, RS[1], RS.decalage)
-	c.rang:SetPoint("TOP", c, "TOP", 0, RS.y)
-	c.sorts = {}
+	c.key = key
+	createBackground(c)
+	placeBackground(c, "profession-overview-card-generic-" .. key)
+	c.name = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	c.name:SetJustifyH("LEFT")
+	c.name:SetPoint("TOP", c, "TOP", 0, N.secondaryName)
+	c.absentTitle = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	c.absentTitle:SetJustifyH("LEFT")
+	c.absentTitle:SetPoint("TOP", c, "TOP", 0, N.secondaryName)
+	c.absentTitle:SetText(GetSpellInfo(PROFESSIONS[key].name) or "")
+	local T = N.secondaryText
+	c.absentText = c:CreateFontString(nil, "OVERLAY")
+	c.absentText:SetFontObject(FONTS.small2)
+	c.absentText:SetWidth(T[1])
+	c.absentText:SetJustifyH("LEFT")
+	c.absentText:SetJustifyV("TOP")
+	c.absentText:SetPoint("TOP", c.absentTitle, "BOTTOM", T[2], T[3])
+	c.absentText:SetText(PROFESSIONS[key].absent)
+	local RS = N.secondaryRank
+	c.rank = createRank(c, RS[1], RS.offset)
+	c.rank:SetPoint("TOP", c, "TOP", 0, RS.y)
+	c.spells = {}
 	for k = 1, 4 do
-		c.sorts[k] = creerSort(c)
+		c.spells[k] = createSpell(c)
 	end
 	return c
 end
 
--- les sorts d'une colonne : empiles depuis le bas (camelot) ; en ligne,
--- icones seules, quand la colonne a perdu la hauteur d'une rangee
-local function poserSortsColonne(c)
-	local SS = N.sortsSecondaire
-	for k, b in ipairs(c.sorts) do
+-- column spells: stacked from the bottom (camelot); in a line, icons only, when the column
+-- has lost a row's height
+local function placeSpellColumn(c)
+	local SS = N.secondarySpells
+	for k, b in ipairs(c.spells) do
 		if k == 1 then
-			poser(b, "BOTTOMLEFT", c, "BOTTOMLEFT", SS.x, SS.y)
-		elseif c.reduite then
-			poser(b, "LEFT", c.sorts[k - 1], "RIGHT", N.enLigne, 0)
+			place(b, "BOTTOMLEFT", c, "BOTTOMLEFT", SS.x, SS.y)
+		elseif c.compact then
+			place(b, "LEFT", c.spells[k - 1], "RIGHT", N.online, 0)
 		else
-			poser(b, "BOTTOM", c.sorts[k - 1], "TOP", 0, 0)
+			place(b, "BOTTOM", c.spells[k - 1], "TOP", 0, 0)
 		end
-		Gb.Montrer(b.texte, not c.reduite)
-		Gb.Montrer(b.sous, not c.reduite)
+		Tpl.SetShown(b.text, not c.compact)
+		Tpl.SetShown(b.sub, not c.compact)
 	end
 end
 
--- FormatProfession
-local function formater(c, m, cases)
-	if c.principal then
-		poserFond(c, "profession-overview-card")
+-- FormatProfession. c: card; m: profession or nil; cells: spellbook slots by spell id
+local function formatProfession(c, m, cells)
+	if c.main then
+		placeBackground(c, "profession-overview-card")
 	end
-	c.metier = m
+	c.profession = m
 	if not m then
-		c.absentTitre:Show()
-		c.absentTexte:Show()
-		for _, b in ipairs(c.sorts) do
+		c.absentTitle:Show()
+		c.absentText:Show()
+		for _, b in ipairs(c.spells) do
 			b.slot = nil
 			b:Hide()
 		end
-		c.rang:Hide()
-		c.nom:SetText("")
-		if c.oubli then c.oubli:Hide() end
+		c.rank:Hide()
+		c.name:SetText("")
+		if c.unlearnButton then c.unlearnButton:Hide() end
 		return
 	end
-	c.absentTitre:Hide()
-	c.absentTexte:Hide()
-	c.nom:SetText(m.nom)
-	if c.principal then
-		poserFond(c, "profession-overview-card-" .. m.cle)
-		Gb.Montrer(c.oubli, m.abandon)
+	c.absentTitle:Hide()
+	c.absentText:Hide()
+	c.name:SetText(m.name)
+	if c.main then
+		placeBackground(c, "profession-overview-card-" .. m.key)
+		Tpl.SetShown(c.unlearnButton, m.abandon)
 	end
-	majRang(c.rang, m)
-	c.rang:Show()
-	local slots = sortsDu(m.cle, cases, #c.sorts)
-	for k, b in ipairs(c.sorts) do
+	updateRank(c.rank, m)
+	c.rank:Show()
+	local slots = spellsOf(m.key, cells, #c.spells)
+	for k, b in ipairs(c.spells) do
 		if slots[k] then
-			remplirSort(b, slots[k])
+			fillSpell(b, slots[k])
 			b:Show()
 		else
 			b.slot = nil
 			b:Hide()
 		end
 	end
-	if c.principal then
-		local SP = N.sortsPrincipal
+	if c.main then
+		local PS = N.primarySpells
 		if #slots == 1 then
-			poser(c.sorts[1], "BOTTOMLEFT", c, "BOTTOMLEFT", SP.x, SP.seul)
+			place(c.spells[1], "BOTTOMLEFT", c, "BOTTOMLEFT", PS.x, PS.single)
 		else
-			poser(c.sorts[1], "BOTTOMLEFT", c, "BOTTOMLEFT", SP.x, SP.haut)
-			poser(c.sorts[2], "BOTTOMLEFT", c, "BOTTOMLEFT", SP.x, SP.bas)
+			place(c.spells[1], "BOTTOMLEFT", c, "BOTTOMLEFT", PS.x, PS.top)
+			place(c.spells[2], "BOTTOMLEFT", c, "BOTTOMLEFT", PS.x, PS.down)
 		end
 	end
 end
 
--- les rangees hors de la zone sont CACHEES, pas seulement hors champ : leurs
--- sorts sont des boutons securises, qu'aucun clic ne doit trouver sous les
--- colonnes ou au-dessus de la fenetre. Le defilement va de rangee en
--- rangee : les rangees visibles sont entieres.
-local function montrerRangees(f)
-	local visibles = math.min(f.nombre, N.rangees)
-	local d = LM.decalage or 0
-	for k, c in ipairs(f.principaux) do
-		Gb.Montrer(c, k <= f.nombre and k > d and k <= d + visibles)
+-- Rows outside the zone are HIDDEN, not just scrolled away: their spells are secure buttons
+-- that no click may reach under the columns or above the window. Scrolling moves one whole
+-- row at a time.
+local function showRowLines(f)
+	local visibleCount = math.min(f.count, N.rowLines)
+	local d = PB.offset or 0
+	for k, c in ipairs(f.primaries) do
+		Tpl.SetShown(c, k <= f.count and k > d and k <= d + visibleCount)
 	end
 end
 
--- LA DISPOSITION, selon le nombre de rangees : deux au moins (camelot) ;
--- trois visibles au plus, les colonnes perdant alors la hauteur d'une
--- rangee ; au-dela, la barre et sa gouttiere.
-local function disposer(f, nombre)
-	local P, S = N.principal, N.secondaire
-	local pas = P[2] - P.ecart
-	local visibles = math.min(nombre, N.rangees)
-	local avec = nombre > N.rangees
-	local largeur = P[1] - (avec and N.gouttiere or 0)
-	for k = #f.principaux + 1, nombre do
-		local c = creerPrincipal(f.enfant, k)
-		c:SetPoint("TOPLEFT", f.principaux[k - 1], "BOTTOMLEFT", 0, P.ecart)
-		f.principaux[k] = c
+-- Layout by row count: at least two (camelot); at most three visible, the columns then
+-- losing a row's height; beyond that, the scroll bar and its gutter.
+local function layout(f, count)
+	local P, S = N.main, N.secondary
+	local step = P[2] - P.gap
+	local visibleCount = math.min(count, N.rowLines)
+	local hasBar = count > N.rowLines
+	local width = P[1] - (hasBar and N.gutter or 0)
+	for k = #f.primaries + 1, count do
+		local c = createPrimary(f.child, k)
+		c:SetPoint("TOPLEFT", f.primaries[k - 1], "BOTTOMLEFT", 0, P.gap)
+		f.primaries[k] = c
 	end
-	for _, c in ipairs(f.principaux) do
-		c:SetWidth(largeur)
+	for _, c in ipairs(f.primaries) do
+		c:SetWidth(width)
 	end
-	f.nombre = nombre
-	f.zone:SetWidth(largeur)
-	f.zone:SetHeight(visibles * pas + P.ecart)
-	f.enfant:SetWidth(largeur)
-	f.enfant:SetHeight(nombre * pas + P.ecart)
-	local reduite = visibles > 2
-	for _, c in ipairs(f.secondaires) do
-		c.reduite = reduite
-		c:SetHeight(S[2] - (reduite and pas or 0))
-		poserFond(c, c.atlasFond)
-		poserSortsColonne(c)
+	f.count = count
+	f.zone:SetWidth(width)
+	f.zone:SetHeight(visibleCount * step + P.gap)
+	f.child:SetWidth(width)
+	f.child:SetHeight(count * step + P.gap)
+	local compact = visibleCount > 2
+	for _, c in ipairs(f.secondaries) do
+		c.compact = compact
+		c:SetHeight(S[2] - (compact and step or 0))
+		placeBackground(c, c.backgroundAtlas)
+		placeSpellColumn(c)
 	end
-	LM.decalage = math.max(0, math.min(LM.decalage or 0, nombre - visibles))
-	f.barre:Regler(nombre, visibles, LM.decalage)
-	f.zone:SetVerticalScroll(LM.decalage * pas)
-	montrerRangees(f)
+	PB.offset = math.max(0, math.min(PB.offset or 0, count - visibleCount))
+	f.bar:Configure(count, visibleCount, PB.offset)
+	f.zone:SetVerticalScroll(PB.offset * step)
+	showRowLines(f)
 end
 
--- ProfessionsBookFrameMixin:Update. Hors combat seulement : les boutons de
--- sort sont proteges (et le livre est ferme en combat).
-function LM.Maj()
-	local f = LM.livre
+-- ProfessionsBookFrameMixin:Update. Out of combat only: the spell buttons are protected
+-- (and the book is closed in combat).
+function PB.Update()
+	local f = PB.book
 	if not f or not f:IsShown() or InCombatLockdown() then return end
-	local principaux, secondaires = LM.Lire()
-	local cases = lireGrimoire()
-	disposer(f, math.max(2, #principaux))
-	for i, c in ipairs(f.principaux) do
-		if i <= f.nombre then formater(c, principaux[i], cases) end
+	local primaries, secondaries = PB.Read()
+	local cells = readSpellbook()
+	layout(f, math.max(2, #primaries))
+	for i, c in ipairs(f.primaries) do
+		if i <= f.count then formatProfession(c, primaries[i], cells) end
 	end
-	for _, c in ipairs(f.secondaires) do
-		formater(c, secondaires[c.cle], cases)
+	for _, c in ipairs(f.secondaries) do
+		formatProfession(c, secondaries[c.key], cells)
 	end
 end
 
-local function majRecharges()
-	local f = LM.livre
-	for _, liste in ipairs({ f.principaux, f.secondaires }) do
-		for _, c in ipairs(liste) do
-			for _, b in ipairs(c.sorts) do
-				if b.slot then majRecharge(b) end
+local function updateCooldowns()
+	local f = PB.book
+	for _, list in ipairs({ f.primaries, f.secondaries }) do
+		for _, c in ipairs(list) do
+			for _, b in ipairs(c.spells) do
+				if b.slot then updateCooldown(b) end
 			end
 		end
 	end
 end
 
--- ------------------------------------------------------------ le deplacement
+-- ---------- Moving
 
--- LA FENETRE SE DEPLACE PAR SA BANDE DE TITRE (demande du 2026-09-28 : « la
--- fenetre de profession doit etre deplacable » ; camelot ne le permet pas).
--- Le livre et la page de fabrication sont une seule fenetre chez camelot :
--- une seule place retenue pour les deux (ForeverUIDB.positions.metiers, le
--- haut-centre depuis celui d'UIParent, comme l'inspection). Le systeme de
--- panneaux les repose a chaque ouverture : la place revient apres lui
--- (OnShow, UpdateUIPanelPositions). Les onglets suivent pendant le glisser.
--- Le livre, protege, ne bouge que hors combat -- il est ferme pendant.
-local CLE_PLACE = "metiers"
+-- The window moves by its title banner. The book and the crafting page share one saved
+-- position (top-center relative to UIParent's). The panel system re-anchors them on every
+-- show, so the position is re-applied after it (OnShow, UpdateUIPanelPositions). The tabs
+-- follow during the drag. The protected book only moves out of combat.
+local POSITION_KEY = "professions"
 
 local function positions()
 	ForeverUIDB = ForeverUIDB or {}
@@ -849,463 +732,426 @@ local function positions()
 	return ForeverUIDB.positions
 end
 
--- le haut-centre d'un cadre, depuis celui d'UIParent (nil tant que le
--- cadre n'est pas place)
-local function hautCentre(cadre)
-	local cx, ux = cadre:GetCenter(), UIParent:GetCenter()
-	local haut, uHaut = cadre:GetTop(), UIParent:GetTop()
-	if not cx or not ux or not haut or not uHaut then return end
-	return cx - ux, haut - uHaut
+-- top-center of a frame relative to UIParent's (nil until the frame is placed)
+local function topCenter(frame)
+	local cx, ux = frame:GetCenter(), UIParent:GetCenter()
+	local top, uiTop = frame:GetTop(), UIParent:GetTop()
+	if not cx or not ux or not top or not uiTop then return end
+	return cx - ux, top - uiTop
 end
 
-local function bloque(f)
-	return f == LM.livre and InCombatLockdown()
+local function isLocked(f)
+	return f == PB.book and InCombatLockdown()
 end
 
-function LM.Reposer(f)
-	local p = positions()[CLE_PLACE]
-	if not p or not f or not f:IsShown() or bloque(f) then return end
+function PB.Reposition(f)
+	local p = positions()[POSITION_KEY]
+	if not p or not f or not f:IsShown() or isLocked(f) then return end
 	f:ClearAllPoints()
 	f:SetPoint("TOP", UIParent, "TOP", p.x, p.y)
 end
 
-local function rendreDeplacable(f, poignee)
+local function makeMovable(f, handle)
 	f:SetMovable(true)
 	f:SetClampedToScreen(true)
-	poignee:EnableMouse(true)
-	poignee:RegisterForDrag("LeftButton")
-	poignee:SetScript("OnDragStart", function()
-		if bloque(f) then return end
+	handle:EnableMouse(true)
+	handle:RegisterForDrag("LeftButton")
+	handle:SetScript("OnDragStart", function()
+		if isLocked(f) then return end
 		f:StartMoving()
-		poignee:SetScript("OnUpdate", function() LM.PoserOnglets() end)
+		handle:SetScript("OnUpdate", function() PB.PlaceTabs() end)
 	end)
-	poignee:SetScript("OnDragStop", function()
-		poignee:SetScript("OnUpdate", nil)
-		if bloque(f) then return end
+	handle:SetScript("OnDragStop", function()
+		handle:SetScript("OnUpdate", nil)
+		if isLocked(f) then return end
 		f:StopMovingOrSizing()
-		local x, y = hautCentre(f)
+		local x, y = topCenter(f)
 		if x then
 			f:ClearAllPoints()
 			f:SetPoint("TOP", UIParent, "TOP", x, y)
-			-- la place est a nous : le client ne la retient pas en plus
+			-- we save the position ourselves: the client must not save it too
 			if f.SetUserPlaced then f:SetUserPlaced(false) end
-			positions()[CLE_PLACE] = { x = x, y = y }
+			positions()[POSITION_KEY] = { x = x, y = y }
 		end
-		LM.PoserOnglets()
+		PB.PlaceTabs()
 	end)
 end
 
--- ------------------------------------------------------------ la fenetre
+-- ---------- Window
 
-function LM.Ouvert()
-	return (LM.livre and LM.livre:IsShown()) or (TradeSkillFrame and TradeSkillFrame:IsShown()) or false
+function PB.IsOpen()
+	return (PB.book and PB.book:IsShown()) or (TradeSkillFrame and TradeSkillFrame:IsShown()) or false
 end
 
-local function majMicro()
-	if ForeverUI.MajMicroMetiers then
-		ForeverUI.MajMicroMetiers(LM.Ouvert())
+local function updateMicroButton()
+	if ForeverUI.UpdateProfessionsMicro then
+		ForeverUI.UpdateProfessionsMicro(PB.IsOpen())
 	end
 end
 
--- une page s'ouvre ou se ferme : le micro-bouton et les onglets suivent
-local function actualiser()
-	majMicro()
-	if LM.MajOnglets then LM.MajOnglets() end
+-- a page opened or closed: update the micro-button and the tabs
+local function refresh()
+	updateMicroButton()
+	if PB.UpdateTabs then PB.UpdateTabs() end
 end
 
-local EVENEMENTS_OUVERT = { "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN" }
+local OPEN_EVENTS = { "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN" }
 
-function LM.Construire()
-	if LM.livre then return LM.livre end
+function PB.Build()
+	if PB.book then return PB.book end
 	local f = CreateFrame("Frame", "ForeverUIProfessionsBook", UIParent)
-	f:SetWidth(N.fenetre[1])
-	f:SetHeight(N.fenetre[2])
+	f:SetWidth(N.window[1])
+	f:SetHeight(N.window[2])
 	f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
 	f:SetToplevel(true)
 	f:EnableMouse(true)
 	f:Hide()
-	-- le panneau, declare par ses attributs (GetUIPanelWindowInfo les lit
-	-- avant la table UIPanelWindows) ; poses avant les boutons securises
-	for k, v in pairs(PANNEAU) do
+	-- panel declared by attributes (GetUIPanelWindowInfo reads them before UIPanelWindows),
+	-- set before the secure buttons are created
+	for k, v in pairs(PANEL) do
 		f:SetAttribute("UIPanelLayout-" .. k, v)
 	end
 	f:SetAttribute("UIPanelLayout-defined", true)
 	f:SetAttribute("UIPanelLayout-enabled", true)
-	local habit = Gb.FenetrePortrait(f, {
-		portrait = ICONE_LIVRE, portraitCote = N.portrait.cote, portraitX = N.portrait.x, portraitY = N.portrait.y,
-		titre = string.format(TRADE_SKILL_TITLE, TRADE_SKILLS),
+	local skin = Tpl.PortraitWindow(f, {
+		portrait = BOOK_ICON, portraitSide = N.portrait.side, portraitX = N.portrait.x, portraitY = N.portrait.y,
+		title = string.format(TRADE_SKILL_TITLE, TRADE_SKILLS),
 	})
-	-- le portrait cuit rond : pose tel quel
-	habit.portrait:SetTexCoord(0, 1, 0, 1)
-	-- OverrideArt : Profession-Background-Overview a la place de la roche,
-	-- sans stries
-	if habit.roche.SetHorizTile then
-		habit.roche:SetHorizTile(false)
-		habit.roche:SetVertTile(false)
+	-- the portrait is baked round (tools/bake_portrait.py; SetPortraitToTexture leaves it
+	-- square): use it whole
+	skin.portrait:SetTexCoord(0, 1, 0, 1)
+	-- OverrideArt: Profession-Background-Overview instead of the rock, no stripes
+	if skin.rock.SetHorizTile then
+		skin.rock:SetHorizTile(false)
+		skin.rock:SetVertTile(false)
 	end
-	atlas(habit.roche, "profession-background-overview", true)
-	habit.stries:Hide()
-	f.habit = habit
-	rendreDeplacable(f, habit.bandeau)
-	local contenu = CreateFrame("Frame", "ForeverUIProfessionsBookContent", f)
-	contenu:SetAllPoints(f)
-	contenu:SetFrameLevel(f:GetFrameLevel() + N.niveaux.contenu)
-	f.contenu = contenu
-	-- la zone des rangees : ce qui depasse ses trois rangees ne se voit pas
-	local P, S, NV = N.principal, N.secondaire, N.niveaux
-	local zone = CreateFrame("ScrollFrame", "ForeverUIProfessionsBookScroll", contenu)
-	zone:SetFrameLevel(contenu:GetFrameLevel() + NV.zone)
-	zone:SetPoint("TOPLEFT", contenu, "TOPLEFT", P.x, P.y)
-	local enfant = CreateFrame("Frame", "ForeverUIProfessionsBookRows", zone)
-	enfant:SetFrameLevel(contenu:GetFrameLevel() + NV.rangees)
-	enfant:SetWidth(P[1])
-	enfant:SetHeight(1)
-	zone:SetScrollChild(enfant)
-	f.zone, f.enfant = zone, enfant
-	-- MinimalScrollBar, contre la zone ; un cran de molette : une rangee
-	local barre = ForeverUI.CreateScrollBar("ForeverUIProfessionsBookScrollBar", contenu, zone)
-	barre:SetFrameLevel(contenu:GetFrameLevel() + NV.zone)
-	barre.surDefilement = function(pas)
-		LM.decalage = pas
-		zone:SetVerticalScroll(pas * (P[2] - P.ecart))
-		montrerRangees(f)
+	atlas(skin.rock, "profession-background-overview", true)
+	skin.stripes:Hide()
+	f.skin = skin
+	makeMovable(f, skin.banner)
+	local content = CreateFrame("Frame", "ForeverUIProfessionsBookContent", f)
+	content:SetAllPoints(f)
+	content:SetFrameLevel(f:GetFrameLevel() + N.levels.content)
+	f.content = content
+	-- rows zone: anything past its three rows is clipped
+	local P, S, NV = N.main, N.secondary, N.levels
+	local zone = CreateFrame("ScrollFrame", "ForeverUIProfessionsBookScroll", content)
+	zone:SetFrameLevel(content:GetFrameLevel() + NV.zone)
+	zone:SetPoint("TOPLEFT", content, "TOPLEFT", P.x, P.y)
+	local child = CreateFrame("Frame", "ForeverUIProfessionsBookRows", zone)
+	child:SetFrameLevel(content:GetFrameLevel() + NV.rowLines)
+	child:SetWidth(P[1])
+	child:SetHeight(1)
+	zone:SetScrollChild(child)
+	f.zone, f.child = zone, child
+	-- MinimalScrollBar against the zone; one wheel step scrolls one row
+	local bar = ForeverUI.CreateScrollBar("ForeverUIProfessionsBookScrollBar", content, zone)
+	bar:SetFrameLevel(content:GetFrameLevel() + NV.zone)
+	bar.onScroll = function(step)
+		PB.offset = step
+		zone:SetVerticalScroll(step * (P[2] - P.gap))
+		showRowLines(f)
 	end
-	barre:Hide()
-	f.barre = barre
+	bar:Hide()
+	f.bar = bar
 	zone:EnableMouseWheel(true)
-	zone:SetScript("OnMouseWheel", function(_, sens)
-		if barre:IsShown() then barre:Deplacer(barre.decalage - sens) end
+	zone:SetScript("OnMouseWheel", function(_, direction)
+		if bar:IsShown() then bar:MoveTo(bar.offset - direction) end
 	end)
-	-- les cartes
-	f.principaux = { creerPrincipal(enfant, 1), creerPrincipal(enfant, 2) }
-	f.principaux[1]:SetPoint("TOPLEFT", enfant, "TOPLEFT", 0, 0)
-	f.principaux[2]:SetPoint("TOPLEFT", f.principaux[1], "BOTTOMLEFT", 0, P.ecart)
-	f.secondaires = {}
-	for k, cle in ipairs(SECONDAIRES) do
-		local c = creerSecondaire(contenu, cle)
+	-- cards
+	f.primaries = { createPrimary(child, 1), createPrimary(child, 2) }
+	f.primaries[1]:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
+	f.primaries[2]:SetPoint("TOPLEFT", f.primaries[1], "BOTTOMLEFT", 0, P.gap)
+	f.secondaries = {}
+	for k, key in ipairs(SECONDARY_PROFESSIONS) do
+		local c = createSecondary(content, key)
 		if k == 1 then
-			c:SetPoint("TOPLEFT", zone, "BOTTOMLEFT", 0, S.ecart)
+			c:SetPoint("TOPLEFT", zone, "BOTTOMLEFT", 0, S.gap)
 		else
-			c:SetPoint("TOPLEFT", f.secondaires[k - 1], "TOPRIGHT", S.pas, 0)
+			c:SetPoint("TOPLEFT", f.secondaries[k - 1], "TOPRIGHT", S.step, 0)
 		end
-		f.secondaires[k] = c
+		f.secondaries[k] = c
 	end
-	disposer(f, 2)
-	-- la croix (UIPanelCloseButton : HideParentPanel)
-	local croix = CreateFrame("Button", "ForeverUIProfessionsBookCloseButton", f, "UIPanelCloseButton")
-	Gb.Croix(croix, f)
-	croix:SetFrameLevel(f:GetFrameLevel() + N.niveaux.croix)
-	f.croix = croix
+	layout(f, 2)
+	-- close button (UIPanelCloseButton: HideParentPanel)
+	local closeButton = CreateFrame("Button", "ForeverUIProfessionsBookCloseButton", f, "UIPanelCloseButton")
+	Tpl.CloseButton(closeButton, f)
+	closeButton:SetFrameLevel(f:GetFrameLevel() + N.levels.closeButton)
+	f.closeButton = closeButton
 	f:SetScript("OnShow", function(self)
-		LM.Reposer(self)
-		for _, ev in ipairs(EVENEMENTS_OUVERT) do self:RegisterEvent(ev) end
-		LM.Maj()
+		PB.Reposition(self)
+		for _, ev in ipairs(OPEN_EVENTS) do self:RegisterEvent(ev) end
+		PB.Update()
 		PlaySound("igSpellBookOpen")
-		actualiser()
+		refresh()
 	end)
 	f:SetScript("OnHide", function(self)
-		for _, ev in ipairs(EVENEMENTS_OUVERT) do self:UnregisterEvent(ev) end
+		for _, ev in ipairs(OPEN_EVENTS) do self:UnregisterEvent(ev) end
 		StaticPopup_Hide("UNLEARN_SKILL")
 		PlaySound("igAbilityClose")
-		actualiser()
+		refresh()
 	end)
 	f:SetScript("OnEvent", function(_, ev)
 		if ev == "SPELL_UPDATE_COOLDOWN" then
-			majRecharges()
+			updateCooldowns()
 		elseif ev ~= "SKILL_LINES_CHANGED" or GetTime() >= silence then
-			LM.Maj()
+			PB.Update()
 		end
 	end)
-	LM.livre = f
+	PB.book = f
 	return f
 end
 
--- ------------------------------------------------------------ les onglets
+-- ---------- Side tabs
 
--- LES ONGLETS LATERAUX (camelot/blizzard_professionsframe.xml / .lua,
--- blizzard_professionstemplates : ProfessionsLargeRightTabMixin ; blizzard_-
--- sharedxml : LargeSideTabButtonTemplate). Ceux de la fenetre des metiers :
--- ils se tiennent a droite de la page montree, livre ou fabrication.
---   ensemble   ProfessionsOverviewTab, TOPLEFT sur le TOPRIGHT de la
---              fenetre (0, -60) : icone INV_SideTab_Professions_c60,
---              infobulle TRADE_SKILLS ; clic : la page d'ensemble
---   metiers    Professions1..7Tab, chacun sous le precedent (0, -2) :
---              RefreshRightTabs -- les principaux, puis secourisme, peche,
---              cuisine (l'ordre de GetProfessions), seulement ceux qui ont
---              une fabrication (CanTradeSkillShowCraftingUI) ; icone de la
---              competence, infobulle son nom ; clic : son sort
---              (CastProfessionSpell, sauf s'il est deja ouvert), la page de
---              fabrication
---   onglet     55 x 55 (common-sidetab sans ses 5 du bas) ; icone 50 x 50
---              (fillToInterior) rognee de 0,03125 ; enfonce : l'icone de
---              (1, -1), son IG_CHARACTER_INFO_TAB au relachement ; choisi :
---              common-sidetab-selected ; survol common-sidetab-hover ;
---              infobulle ANCHOR_RIGHT (-4, -4)
---   panneau    largeur 750 (professionsFrameWidthOverride) : la place des
---              onglets est retenue a droite de la fenetre
---
--- CE QUI DIFFERE, ET POURQUOI.
---   * Un onglet de metier LANCE UN SORT : c'est un bouton securise, et le
---     cadre qui les porte devient protege. Il est donc a part, enfant de
---     UIParent, pose a droite de la fenetre montree -- ni enfant ni ancre
---     de TradeSkillFrame, que cela rendrait protege a son tour. Il suit la
---     fenetre a chaque placement des panneaux (UpdateUIPanelPositions), et
---     disparait en combat, comme le livre.
---   * L'icone est a (-3, 0), comme tous les onglets lateraux deja valides
---     de l'atelier, et cuite au masque (tools/cuire_masque.py). Camelot la
---     pose a (-4, 0) (camelot/shareduipaneltemplates.lua).
---   * L'onglet d'ensemble ferme la page de fabrication (la session de
---     metier de 3.3.5 prend fin avec sa fenetre) et ouvre le livre.
---   * Joaillerie et calligraphie, absentes de camelot, ont l'icone de leur
---     competence en 3.3.5.
---   * TROP D'ONGLETS POUR LA HAUTEUR DE LA FENETRE (serveur prive ; demande
---     du 2026-09-28, par anticipation) : ils retrecissent ensemble -- onglet,
---     icone, ecart, decalage de l'icone -- pour que le dernier finisse au
---     plus au bas de la fenetre. Le premier garde sa place (-60), et tous
---     restent colles au bord droit de la fenetre.
-local ONGLET = { cote = 55, y = -60, ecart = -2, icone = 50, iconeX = -3, rognage = 0.03125 }
-local ICONES_ONGLETS = "Interface" .. SEP .. "ForeverUI" .. SEP .. "tabicons" .. SEP
-local ONGLETS_SECONDAIRES = { "firstaid", "fishing", "cooking" }
+-- Side tabs (camelot ProfessionsLargeRightTabMixin, LargeSideTabButtonTemplate) right of the
+-- shown page, book or crafting: overview, then primaries, first aid, fishing, cooking (only
+-- those with a crafting page). A profession tab casts a spell: it is secure and its parent
+-- becomes protected, so the tabs live in their own UIParent child, never a child of or
+-- anchored to TradeSkillFrame; they follow it on UpdateUIPanelPositions and hide in combat.
+-- Icon at (-3, 0) like the other side tabs (camelot: -4). Too many tabs for the window
+-- height shrink together so the last one ends at the window bottom.
+local TAB = { side = 55, y = -60, gap = -2, icon = 50, iconX = -3, crop = 0.03125 }
+local TAB_ICONS = "Interface" .. SEP .. "ForeverUI" .. SEP .. "tabicons" .. SEP
+local SECONDARY_TABS = { "firstaid", "fishing", "cooking" }
 
-local function creerOnglet(parent, nom, securise)
-	local O = ONGLET
-	local b = CreateFrame("Button", nom, parent, securise and "SecureActionButtonTemplate" or nil)
-	b:SetWidth(O.cote)
-	b:SetHeight(O.cote)
+-- LargeSideTabButtonTemplate; secure: casts a spell (SecureActionButtonTemplate)
+local function createTab(parent, name, secure)
+	local O = TAB
+	local b = CreateFrame("Button", name, parent, secure and "SecureActionButtonTemplate" or nil)
+	b:SetWidth(O.side)
+	b:SetHeight(O.side)
 	b:RegisterForClicks("LeftButtonUp")
-	local fond = b:CreateTexture(nil, "BACKGROUND")
-	atlas(fond, "common-sidetab")
-	fond:SetAllPoints(b)
-	local icone = b:CreateTexture(nil, "ARTWORK")
-	icone:SetWidth(O.icone)
-	icone:SetHeight(O.icone)
-	icone:SetPoint("CENTER", b, "CENTER", O.iconeX, 0)
-	icone:SetTexCoord(O.rognage, 1 - O.rognage, O.rognage, 1 - O.rognage)
-	b.iconeX = O.iconeX
-	local choisi = b:CreateTexture(nil, "OVERLAY")
-	atlas(choisi, "common-sidetab-selected")
-	choisi:SetAllPoints(b)
-	choisi:Hide()
-	local survol = b:CreateTexture(nil, "HIGHLIGHT")
-	atlas(survol, "common-sidetab-hover")
-	survol:SetAllPoints(b)
-	b.icone, b.choisi = icone, choisi
+	local background = b:CreateTexture(nil, "BACKGROUND")
+	atlas(background, "common-sidetab")
+	background:SetAllPoints(b)
+	local icon = b:CreateTexture(nil, "ARTWORK")
+	icon:SetWidth(O.icon)
+	icon:SetHeight(O.icon)
+	icon:SetPoint("CENTER", b, "CENTER", O.iconX, 0)
+	icon:SetTexCoord(O.crop, 1 - O.crop, O.crop, 1 - O.crop)
+	b.iconX = O.iconX
+	local selected = b:CreateTexture(nil, "OVERLAY")
+	atlas(selected, "common-sidetab-selected")
+	selected:SetAllPoints(b)
+	selected:Hide()
+	local hover = b:CreateTexture(nil, "HIGHLIGHT")
+	atlas(hover, "common-sidetab-hover")
+	hover:SetAllPoints(b)
+	b.icon, b.selected = icon, selected
 	b:SetScript("OnEnter", function(self)
-		if not self.infobulle then return end
+		if not self.tooltip then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -4, -4)
-		GameTooltip:SetText(self.infobulle)
+		GameTooltip:SetText(self.tooltip)
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	b:SetScript("OnMouseDown", function(self, bouton)
-		if bouton == "LeftButton" then poser(self.icone, "CENTER", self, "CENTER", self.iconeX + 1, -1) end
+	b:SetScript("OnMouseDown", function(self, button)
+		if button == "LeftButton" then place(self.icon, "CENTER", self, "CENTER", self.iconX + 1, -1) end
 	end)
-	b:SetScript("OnMouseUp", function(self, bouton)
-		if bouton == "LeftButton" then
-			poser(self.icone, "CENTER", self, "CENTER", self.iconeX, 0)
+	b:SetScript("OnMouseUp", function(self, button)
+		if button == "LeftButton" then
+			place(self.icon, "CENTER", self, "CENTER", self.iconX, 0)
 			PlaySound("igCharacterInfoTab")
 		end
 	end)
 	return b
 end
 
--- SelectBookPage : la page de fabrication se ferme, le livre s'ouvre
-function LM.PageEnsemble()
-	if InCombatLockdown() or (LM.livre and LM.livre:IsShown()) then return end
+-- SelectBookPage: close the crafting page (the 3.3.5 trade skill session ends with it),
+-- then open the book
+function PB.OpenOverview()
+	if InCombatLockdown() or (PB.book and PB.book:IsShown()) then return end
 	if TradeSkillFrame and TradeSkillFrame:IsShown() then HideUIPanel(TradeSkillFrame) end
-	ShowUIPanel(LM.Construire())
+	ShowUIPanel(PB.Build())
 end
 
-local function creerOnglets()
+local function createTabs()
 	local c = CreateFrame("Frame", "ForeverUIProfessionsTabs", UIParent)
-	c:SetWidth(ONGLET.cote)
+	c:SetWidth(TAB.side)
 	c:SetHeight(1)
 	c:Hide()
-	local ensemble = creerOnglet(c, "ForeverUIProfessionsTab0")
-	ensemble.icone:SetTexture(ICONES_ONGLETS .. "inv_sidetab_professions_c60")
-	ensemble.infobulle = TRADE_SKILLS
-	ensemble:SetPoint("TOPLEFT", c, "TOPLEFT", 0, ONGLET.y)
-	ensemble:SetScript("OnClick", LM.PageEnsemble)
-	c.ensemble, c.metiers, c.nombre = ensemble, {}, 0
-	LM.onglets = c
+	local overview = createTab(c, "ForeverUIProfessionsTab0")
+	overview.icon:SetTexture(TAB_ICONS .. "inv_sidetab_professions_c60")
+	overview.tooltip = TRADE_SKILLS
+	overview:SetPoint("TOPLEFT", c, "TOPLEFT", 0, TAB.y)
+	overview:SetScript("OnClick", PB.OpenOverview)
+	c.overview, c.professions, c.count = overview, {}, 0
+	PB.tabs = c
 	return c
 end
 
-local function ongletMetier(c, k)
-	if not c.metiers[k] then
-		local b = creerOnglet(c, "ForeverUIProfessionsTab" .. k, true)
-		b:SetPoint("TOPLEFT", k == 1 and c.ensemble or c.metiers[k - 1], "BOTTOMLEFT", 0, ONGLET.ecart)
-		c.metiers[k] = b
+local function professionTab(c, k)
+	if not c.professions[k] then
+		local b = createTab(c, "ForeverUIProfessionsTab" .. k, true)
+		b:SetPoint("TOPLEFT", k == 1 and c.overview or c.professions[k - 1], "BOTTOMLEFT", 0, TAB.gap)
+		c.professions[k] = b
 	end
-	return c.metiers[k]
+	return c.professions[k]
 end
 
--- le sort qui ouvre la fabrication d'un metier : le premier groupe
-local function ouvreur(cle, cases)
-	local groupe = SORTS[cle][1]
-	for k = #groupe, 1, -1 do
-		if cases[groupe[k]] then return cases[groupe[k]] end
+-- spellbook slot of the spell that opens a profession's crafting page (first group)
+local function opener(key, cells)
+	local group = SPELLS[key][1]
+	for k = #group, 1, -1 do
+		if cells[group[k]] then return cells[group[k]] end
 	end
 end
 
-local function fenetreMontree()
-	if LM.livre and LM.livre:IsShown() then return LM.livre end
+local function shownWindow()
+	if PB.book and PB.book:IsShown() then return PB.book end
 	if TradeSkillFrame and TradeSkillFrame:IsShown() then return TradeSkillFrame end
 end
 
--- la taille des onglets selon leur nombre et la hauteur de la fenetre ;
--- refaite seulement quand l'un ou l'autre change (PoserOnglets tourne a
--- chaque image pendant un glisser)
-local function dimensionner(c, hauteur)
-	local O = ONGLET
-	local n = c.nombre + 1
-	local plein = n * O.cote - (n - 1) * O.ecart
-	local place = hauteur + O.y
-	local e = (place > 0 and plein > place) and place / plein or 1
-	if e == c.echelle and #c.metiers == c.dimensionnes then return e end
-	c.echelle, c.dimensionnes = e, #c.metiers
-	local liste = { c.ensemble }
-	for k = 1, #c.metiers do liste[k + 1] = c.metiers[k] end
-	for k, b in ipairs(liste) do
-		b:SetWidth(O.cote * e)
-		b:SetHeight(O.cote * e)
-		b.iconeX = O.iconeX * e
-		b.icone:SetWidth(O.icone * e)
-		b.icone:SetHeight(O.icone * e)
-		poser(b.icone, "CENTER", b, "CENTER", b.iconeX, 0)
-		if k > 1 then poser(b, "TOPLEFT", liste[k - 1], "BOTTOMLEFT", 0, O.ecart * e) end
+-- tab scale from their count and the window height; recomputed only when either changes
+-- (PlaceTabs runs every frame during a drag)
+local function resize(c, height)
+	local O = TAB
+	local n = c.count + 1
+	local full = n * O.side - (n - 1) * O.gap
+	local position = height + O.y
+	local e = (position > 0 and full > position) and position / full or 1
+	if e == c.scale and #c.professions == c.sizedCount then return e end
+	c.scale, c.sizedCount = e, #c.professions
+	local list = { c.overview }
+	for k = 1, #c.professions do list[k + 1] = c.professions[k] end
+	for k, b in ipairs(list) do
+		b:SetWidth(O.side * e)
+		b:SetHeight(O.side * e)
+		b.iconX = O.iconX * e
+		b.icon:SetWidth(O.icon * e)
+		b.icon:SetHeight(O.icon * e)
+		place(b.icon, "CENTER", b, "CENTER", b.iconX, 0)
+		if k > 1 then place(b, "TOPLEFT", list[k - 1], "BOTTOMLEFT", 0, O.gap * e) end
 	end
 	return e
 end
 
--- a droite de la fenetre montree, dans sa strate, sous son metal
-function LM.PoserOnglets()
-	local c = LM.onglets
+-- right of the shown window, in its strata, under its metal border
+function PB.PlaceTabs()
+	local c = PB.tabs
 	if not c or InCombatLockdown() then return end
-	local f = fenetreMontree()
-	local droite, haut = f and f:GetRight(), f and f:GetTop()
-	if not droite or not haut then
+	local f = shownWindow()
+	local right, top = f and f:GetRight(), f and f:GetTop()
+	if not right or not top then
 		c:Hide()
 		return
 	end
-	local e = dimensionner(c, f:GetHeight() or 0)
+	local e = resize(c, f:GetHeight() or 0)
 	c:ClearAllPoints()
-	c:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", droite, haut)
-	c:SetHeight(-ONGLET.y + (c.nombre + 1) * (ONGLET.cote - ONGLET.ecart) * e)
+	c:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", right, top)
+	c:SetHeight(-TAB.y + (c.count + 1) * (TAB.side - TAB.gap) * e)
 	c:SetFrameStrata(f:GetFrameStrata())
 	c:SetFrameLevel(f:GetFrameLevel() + 1)
 	c:Show()
 end
 
--- RefreshRightTabs et RightTabSelected. Hors combat seulement (boutons
--- securises).
-function LM.MajOnglets()
+-- RefreshRightTabs and RightTabSelected. Out of combat only (secure buttons).
+function PB.UpdateTabs()
 	if InCombatLockdown() then return end
-	local f = fenetreMontree()
+	local f = shownWindow()
 	if not f then
-		if LM.onglets then LM.onglets:Hide() end
+		if PB.tabs then PB.tabs:Hide() end
 		return
 	end
-	local c = LM.onglets or creerOnglets()
-	local principaux, secondaires = LM.Lire()
-	local cases = lireGrimoire()
-	local liste = {}
-	local function ajouter(m)
-		local slot = m and METIERS[m.cle].onglet and ouvreur(m.cle, cases)
-		if slot then liste[#liste + 1] = { m = m, slot = slot } end
+	local c = PB.tabs or createTabs()
+	local primaries, secondaries = PB.Read()
+	local cells = readSpellbook()
+	local list = {}
+	local function add(m)
+		local slot = m and PROFESSIONS[m.key].tab and opener(m.key, cells)
+		if slot then list[#list + 1] = { m = m, slot = slot } end
 	end
-	for _, m in ipairs(principaux) do ajouter(m) end
-	for _, cle in ipairs(ONGLETS_SECONDAIRES) do ajouter(secondaires[cle]) end
-	-- le metier ouvert : celui de la page de fabrication, s'il est le notre
-	local ouvert
-	if f == TradeSkillFrame and not vrai(IsTradeSkillLinked()) then
-		ouvert = nomsDesMetiers()[GetTradeSkillLine() or ""]
+	for _, m in ipairs(primaries) do add(m) end
+	for _, key in ipairs(SECONDARY_TABS) do add(secondaries[key]) end
+	-- the open profession: the crafting page's, unless it is a linked one
+	local isOpen
+	if f == TradeSkillFrame and not truthy(IsTradeSkillLinked()) then
+		isOpen = professionNames()[GetTradeSkillLine() or ""]
 	end
-	Gb.Montrer(c.ensemble.choisi, f == LM.livre)
-	for k, e in ipairs(liste) do
-		local b = ongletMetier(c, k)
-		local nom, rang = GetSpellName(e.slot, BOOKTYPE_SPELL)
-		local choisi = e.m.cle == ouvert
-		b.cle = e.m.cle
-		b.icone:SetTexture(ICONES_ONGLETS .. METIERS[e.m.cle].onglet)
-		b.infobulle = e.m.nom
-		Gb.Montrer(b.choisi, choisi)
-		if choisi then
+	Tpl.SetShown(c.overview.selected, f == PB.book)
+	for k, e in ipairs(list) do
+		local b = professionTab(c, k)
+		local name, rank = GetSpellName(e.slot, BOOKTYPE_SPELL)
+		local selected = e.m.key == isOpen
+		b.key = e.m.key
+		b.icon:SetTexture(TAB_ICONS .. PROFESSIONS[e.m.key].tab)
+		b.tooltip = e.m.name
+		Tpl.SetShown(b.selected, selected)
+		if selected then
 			b:SetAttribute("type", nil)
 		else
 			b:SetAttribute("type", "spell")
 		end
-		if rang and rang ~= "" then
-			b:SetAttribute("spell", nom .. "(" .. rang .. ")")
+		if rank and rank ~= "" then
+			b:SetAttribute("spell", name .. "(" .. rank .. ")")
 		else
-			b:SetAttribute("spell", nom)
+			b:SetAttribute("spell", name)
 		end
 		b:Show()
 	end
-	for k = #liste + 1, #c.metiers do c.metiers[k]:Hide() end
-	c.nombre = #liste
-	LM.PoserOnglets()
+	for k = #list + 1, #c.professions do c.professions[k]:Hide() end
+	c.count = #list
+	PB.PlaceTabs()
 end
 
--- ToggleProfessionsBook : le livre, ou la page de fabrication ouverte, se
--- ferme ; sinon le livre s'ouvre -- hors combat (voir plus haut)
-function LM.Basculer()
-	if LM.livre and LM.livre:IsShown() then
-		HideUIPanel(LM.livre)
+-- ToggleProfessionsBook: close the book or the open crafting page, else open the book
+-- (out of combat only)
+function PB.Toggle()
+	if PB.book and PB.book:IsShown() then
+		HideUIPanel(PB.book)
 	elseif TradeSkillFrame and TradeSkillFrame:IsShown() then
 		HideUIPanel(TradeSkillFrame)
 	elseif InCombatLockdown() then
 		UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1.0, 0.1, 0.1, 1.0)
 	else
-		ShowUIPanel(LM.Construire())
+		ShowUIPanel(PB.Build())
 	end
 end
 
--- la page de fabrication remplace le livre, et se deplace comme lui ;
--- l'entree en combat ferme le
--- livre et cache les onglets (PLAYER_REGEN_DISABLED passe AVANT le verrou du
--- combat), la sortie les rend ; le micro-bouton et les onglets suivent la
--- page de fabrication, les onglets le placement des panneaux ; la page de
--- fabrication garde a sa droite la place des onglets (largeur de camelot)
-local veille = CreateFrame("Frame")
-LM.veille = veille
-local function brancherFabrication()
-	if TradeSkillFrame and not veille.branche then
-		veille.branche = true
-		TradeSkillFrame:SetAttribute("UIPanelLayout-width", LARGEUR_PANNEAU)
-		if TradeSkillFrame.foreverHabit then
-			rendreDeplacable(TradeSkillFrame, TradeSkillFrame.foreverHabit.bandeau)
+-- The crafting page replaces the book and moves like it. Entering combat closes the book
+-- and hides the tabs (PLAYER_REGEN_DISABLED fires BEFORE the combat lockdown); leaving
+-- combat shows them again. The micro-button and tabs follow the crafting page, the tabs
+-- also follow panel placement; the crafting page keeps room for the tabs (camelot width).
+local watcher = CreateFrame("Frame")
+PB.watcher = watcher
+local function hookTradeSkill()
+	if TradeSkillFrame and not watcher.hooked then
+		watcher.hooked = true
+		TradeSkillFrame:SetAttribute("UIPanelLayout-width", PANEL_WIDTH)
+		if TradeSkillFrame.foreverSkin then
+			makeMovable(TradeSkillFrame, TradeSkillFrame.foreverSkin.banner)
 		end
 		TradeSkillFrame:HookScript("OnShow", function()
-			LM.Reposer(TradeSkillFrame)
-			actualiser()
+			PB.Reposition(TradeSkillFrame)
+			refresh()
 		end)
-		TradeSkillFrame:HookScript("OnHide", actualiser)
+		TradeSkillFrame:HookScript("OnHide", refresh)
 	end
 end
 for _, ev in ipairs({ "ADDON_LOADED", "TRADE_SKILL_SHOW", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
 	"SKILL_LINES_CHANGED", "SPELLS_CHANGED", "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED" }) do
-	veille:RegisterEvent(ev)
+	watcher:RegisterEvent(ev)
 end
-veille:SetScript("OnEvent", function(_, ev, nom)
+watcher:SetScript("OnEvent", function(_, ev, name)
 	if ev == "ADDON_LOADED" then
-		if nom == "Blizzard_TradeSkillUI" then brancherFabrication() end
+		if name == "Blizzard_TradeSkillUI" then hookTradeSkill() end
 	elseif ev == "PLAYER_REGEN_DISABLED" then
-		if LM.livre and LM.livre:IsShown() then HideUIPanel(LM.livre) end
-		if LM.onglets then LM.onglets:Hide() end
+		if PB.book and PB.book:IsShown() then HideUIPanel(PB.book) end
+		if PB.tabs then PB.tabs:Hide() end
 	elseif ev == "TRADE_SKILL_SHOW" then
-		if LM.livre and LM.livre:IsShown() then HideUIPanel(LM.livre) end
-		LM.MajOnglets()
+		if PB.book and PB.book:IsShown() then HideUIPanel(PB.book) end
+		PB.UpdateTabs()
 	elseif ev ~= "SKILL_LINES_CHANGED" or GetTime() >= silence then
-		LM.MajOnglets()
+		PB.UpdateTabs()
 	end
 end)
-brancherFabrication()
--- apres le systeme de panneaux : la place retenue, puis les onglets
+hookTradeSkill()
+-- after the panel system: re-apply the saved position, then place the tabs
 if hooksecurefunc then
 	hooksecurefunc("UpdateUIPanelPositions", function()
-		LM.Reposer(LM.livre)
-		if TradeSkillFrame then LM.Reposer(TradeSkillFrame) end
-		LM.PoserOnglets()
+		PB.Reposition(PB.book)
+		if TradeSkillFrame then PB.Reposition(TradeSkillFrame) end
+		PB.PlaceTabs()
 	end)
 end

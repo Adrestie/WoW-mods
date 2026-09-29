@@ -1,104 +1,17 @@
--- ForeverUI : la creation de personnage, copie de celle de camelot --
--- premiere etape (race, classe, corps).
---
--- RELEVE -- blizzard_charactercreate/camelot : blizzard_charactercreate.xml et
--- .lua, blizzard_charactercreate_templates.xml et .lua ;
--- blizzard_charactercustomize/camelot/blizzard_charactercustomize.xml
--- (CharCustomizeBodyTypeButtonTemplate) ; blizzard_customizationui
--- (CustomizationMaskedButtonTemplate) ; blizzard_sharedxml :
--- shared/frametemplate/ringedframetemplate.xml et .lua,
--- spacetofitlayoutframe.lua, portraitframe.lua, sharedconstants.lua.
--- Nombres de camelot :
---   * vignettes : haut 451 de haut sur toute la largeur, cotes 703 de large
---     (celui de droite retourne), bas 577 ; bandes de 89 aux bords quand
---     l'ecran depasse le 16:9 ; noir hors du cadre ; alpha 0,8 pour le
---     chevalier de la mort, sinon 0,6 pour la Horde, sinon 1 ; celle du bas
---     s'efface en 0,25 s a l'etape suivante ;
---   * colonnes de faction 168 x 794, Alliance a TOPLEFT (3, 0), Horde 20 a sa
---     droite : banniere et embleme a leur taille d'atlas en TOP, nom de la
---     faction en capitales (GameFontNormalLarge2) dont le haut est 10 au-dessus
---     du bas de l'embleme, races 10 sous le nom ;
---   * boutons de race 79 x 79, 18 d'ecart (moins si la colonne ne tient pas
---     a 20 au-dessus de Back) ; anneau character-create-icon-frame 86 x 86,
---     lueur de selection character-create-icon-selectedglow 116 x 116 ;
---     survol : l'anneau (non choisi) ou la lueur (choisi), en ADD a 0,5 ;
---     enfonce : icone, anneau et lueur decales de (1, -1) ; interdit : icone
---     desaturee sous un voile noir a 0,5 (0,75 pour une classe) ; icones de
---     la Horde retournees ;
---   * corps (BodyTypes) : cadre heavybronze en TOP, marges 20 / 20 / 25,
---     ecart 22, au moins 180 x 90 ; boutons 55 x 55, anneau 60, lueur 80,
---     fond noir rond de 56 ; icone charactercreate-gendericon-<sexe> (-selected
---     une fois choisi) ; infobulle BODY_1 / BODY_2 en ANCHOR_BOTTOMRIGHT ;
---   * classes : cadre heavybronze 900 x 140 en BOTTOM ; boutons 66 x 66, 30
---     d'ecart, anneau 73, lueur 103, nom GameFontNormalMed2 (grise :
---     GameFontDisableMed2) de 85 x 48 sous le bouton (2, 3) ; rangee a
---     (largeur - rangee) / 2 du bord gauche, (140 - 116) / 2 au-dessus du
---     milieu ; deux rangees de 50 d'ecart si la place manque entre la Horde
---     et Customize ; ordre de camelot (classLayoutIndices) ;
---   * encadres (faction, race, classe) : 390 x 260, en colonne a TOPRIGHT
---     (0, -40), 10 d'ecart ; cadre heavybronze-frame-basic, equerres
---     verticales TR / BR, fond heavybronze en mosaique de (10, -10) a
---     (-10, 10) ; portrait 62 x 62 a (-30, 12) du coin haut gauche, anneau
---     character-create-icon-circle-frame 64 x 64 ; texte defilant de
---     (44, -14) a (-35, 15), lignes de 310 a 10 d'ecart : espace de 14,
---     titre GameFontNormalLarge2 blanc, textes GameFontNormalLarge dores,
---     espace de 14 ; barre minimale, une fleche avance de 50 ;
---   * Back et Customize : 250 x 66, GameFontNormalOutline22, a BOTTOMLEFT
---     (46, 28) et BOTTOMRIGHT (-46, 28) ; fleche 8 x 13 a deux espaces du
---     texte (common-icon-backarrow / -forwardarrow, -disable si grise).
--- Les donnees et les decisions restent celles du client 3.3.5 : nos boutons
--- cliquent ses boutons caches (CharacterRace_OnClick, CharacterClass_OnClick,
--- SetCharacterGender), et se relisent apres CharacterChangeFixup.
--- ECARTS : le cadre des classes s'allonge pour la dixieme classe de 3.3.5
--- (996 au lieu de 900, meme marge de 33) ; les traits raciaux sont du texte seul (3.3.5 n'a pas leurs
--- icones) ; pas d'animation de classe, pas de fondu des bords du texte ; le
--- nom de la race sous son bouton n'est montre chez camelot qu'en mode
--- debutant, que 3.3.5 n'a pas ; l'anneau -disabled que camelot demande
--- n'existe pas dans le client moderne : l'anneau reste le meme.
---
--- SECONDE ETAPE (personnalisation) -- blizzard_charactercustomize/camelot
--- (CustomizeOptionsContainerFrame, CharacterCustomizeOptions),
--- blizzard_customizationui (CustomizationFrameBaseMixin, gabarits,
--- CustomizationDropdownWithSteppersAndLabelTemplate), blizzard_sharedxml
--- (DropdownWithSteppersLargeTemplate, SharedEditBoxTemplate), blizzard_menu
--- (WowStyle2DropdownTemplate, WowStyle2IconButtonTemplate) :
---   * panneau heavybronze de 360 de large a TOPRIGHT (0, -137), equerres
---     verticales TR / BR, haut de 20 de plus que son contenu ; de au hasard
---     (bouton carre 48 x 48, icone 24) a TOPLEFT (12, -12) ; pas de
---     categories (une seule) : les reglages a TOPRIGHT (-10, -80), 300 de
---     large, lignes de 265 x 38 a 48 d'ecart ;
---   * une ligne : la case (WowStyle2Dropdown 122 x 25 a l'echelle 1,55, fond
---     common-dropdown-c-button en trois tranches de (-7, 7) a (7, -7), texte
---     GameFontNormal dore entre 13 et -13) au centre ; fleches
---     (WowStyle2IconButton 26 x 25 a l'echelle 1,7, fond common-dropdown-
---     c-button[-hover-2|-pressed-2|-pressedhover-2] a sa taille, icone
---     common-dropdown-icon-back / -next decalee de (2, -1) enfoncee) a 5 a
---     gauche et 4 a droite de la case ;
---   * nom : cadre heavybronze 800 x 90 en TOP, equerres horizontales TL / TR,
---     « Name » (GameFontHighlightLarge2) a TOP (0, -16) ; de du nom au hasard
---     a LEFT (10, -10) ; champ SharedEditBox 343 x 48 a sa droite (gauche 13
---     et droite 314 a leur taille, milieu en mosaique ; NumberFont_Shadow_Large
---     centre) ; Echap recule, Entree avance ;
---   * petits boutons (SmallButtons) : cadre heavybronze a TOPLEFT (40, -30),
---     fond de (8, -8) a (-8, 8), marges 10, ecart -5 ; boutons carres 48 x 48
---     (icone 24 en OVERLAY) : reinitialiser (common-icon-undo : retour a
---     l'orientation par defaut en 0,25 s), puis 30 plus loin tourner a
---     gauche et a droite (common-icon-rotateleft / -right : 10 degres au
---     clic, 100 par seconde tenu plus de 0,25 s) ; infobulle en
---     ANCHOR_BOTTOMRIGHT (-5, -5). Pas de zoom avant ni arriere : la camera
---     de la creation est celle du modele du decor (une seule par decor) et
---     suit ses deplacements ; 3.3.5 n'offre rien d'autre au Lua.
--- MODE 1 (client non patche) : la case porte le nom du reglage, sans numero
--- ni echantillon (3.3.5 ne dit pas quel choix est applique) ; elle ne s'ouvre
--- pas. Les fleches cyclent par CharacterCustomization_Left / _Right.
+-- Character creation, rebuilt after camelot's Blizzard_CharacterCreate and
+-- Blizzard_CharacterCustomize: step 1 picks race, class and body; step 2 customizes and names.
+-- Data and decisions stay with the 3.3.5 client: our buttons click its hidden buttons
+-- (CharacterRace_OnClick, CharacterClass_OnClick, SetCharacterGender) and we re-read after
+-- CharacterChangeFixup. Mode 1 (unpatched client): settings show their name only and cycle
+-- through CharacterCustomization_Left / _Right; mode 2 adds numbers, swatches and lists.
 
 local G = ForeverUIGlue
 local L = G.L
-local cadre = CharacterCreateFrame
+local frame = CharacterCreateFrame
 
--- textes absents de 3.3.5 : G.L (ForeverUIGlueTextes) ; les noms des
--- factions sont ceux du client (ALLIANCE, HORDE de GlueStrings)
-local TEXTE = {
+-- Strings missing from 3.3.5 come from G.L (ForeverUIGlueTextes); faction names are the
+-- client's (ALLIANCE, HORDE from GlueStrings)
+local TEXT = {
 	CUSTOMIZE = L.GLUECHARACTERCREATE_CUSTOMIZE,
 	FINISH = L.GLUECHARACTERCREATE_FINISH,
 	RACIAL_TRAITS = L.GLUECHARACTERCREATE_RACIAL_TRAITS,
@@ -115,153 +28,155 @@ local TEXTE = {
 }
 
 local ART = "Interface\\ForeverUI\\charactercreate\\"
--- le nom de fichier des icones de race (fileString de 3.3.5 en capitales)
-local FICHIER_RACE = {
+-- Race icon file names, keyed by the 3.3.5 fileString in upper case
+local RACE_FILE = {
 	HUMAN = "human", ORC = "orc", DWARF = "dwarf", NIGHTELF = "nightelf", SCOURGE = "undead",
 	TAUREN = "tauren", GNOME = "gnome", TROLL = "troll", BLOODELF = "bloodelf", DRAENEI = "draenei",
 }
--- classLayoutIndices de camelot
-local ORDRE_CLASSE = {
+-- camelot: classLayoutIndices
+local CLASS_ORDER = {
 	WARRIOR = 1, HUNTER = 2, MAGE = 3, ROGUE = 4, PRIEST = 5, WARLOCK = 6,
 	PALADIN = 7, DRUID = 8, SHAMAN = 9, DEATHKNIGHT = 12,
 }
--- UpdateBackgroundOverlays : classe, sinon faction
-local ALPHA_FOND = { classe = { DEATHKNIGHT = 0.8 }, faction = { Horde = 0.6 } }
+-- UpdateBackgroundOverlays: class alpha first, else faction
+local BACKGROUND_ALPHA = { className = { DEATHKNIGHT = 0.8 }, faction = { Horde = 0.6 } }
 
-local etat = { mode = 1, races = {}, classes = {}, fondu = nil }
+local state = { mode = 1, races = {}, classes = {}, fade = nil }
 
--- IsEnabled rend 1 ou nil en 3.3.5
-local function actif(b)
+-- IsEnabled returns 1 or nil in 3.3.5
+local function active(b)
 	local e = b:IsEnabled()
 	return e and e ~= 0
 end
 
-local function sexe()
+local function sex()
 	return (GetSelectedSex() == SEX_FEMALE) and "female" or "male"
 end
 
--- ------------------------------------------------------------ la racine
+-- ------------------------------------------------------------ Root
 
-local racine = CreateFrame("Frame", "ForeverUICharacterCreate", cadre)
-racine:SetAllPoints(cadre)
+local root = CreateFrame("Frame", "ForeverUICharacterCreate", frame)
+root:SetAllPoints(frame)
 
--- ------------------------------------------------------------ les vignettes
+-- ------------------------------------------------------------ Vignettes
 
-local function vignette(nom, points, largeur, hauteur, retourner)
-	local t = racine:CreateTexture(nil, "BACKGROUND")
-	local e = G.PoserAtlas(t, nom)
-	if retourner then
+-- Vignette texture on root; points: anchors shared with root; flip: mirror it
+local function vignette(name, points, width, height, flip)
+	local t = root:CreateTexture(nil, "BACKGROUND")
+	local e = G.PlaceAtlas(t, name)
+	if flip then
 		t:SetTexCoord(e[3], e[2], e[4], e[5])
 	end
 	for _, p in ipairs(points) do
-		t:SetPoint(p, racine, p)
+		t:SetPoint(p, root, p)
 	end
-	if largeur then t:SetWidth(largeur) end
-	if hauteur then t:SetHeight(hauteur) end
+	if width then t:SetWidth(width) end
+	if height then t:SetHeight(height) end
 	return t
 end
 
--- BGTex : haut, gauche, droite, bas
-local fonds = {
+-- BGTex: top, left, right, bottom
+local backgrounds = {
 	vignette("charactercreate-vignette-top", { "TOPLEFT", "TOPRIGHT" }, nil, 451),
 	vignette("charactercreate-vignette-sides", { "TOPLEFT", "BOTTOMLEFT" }, 703),
 	vignette("charactercreate-vignette-sides", { "TOPRIGHT", "BOTTOMRIGHT" }, 703, nil, true),
 	vignette("charactercreate-vignette-bottom", { "BOTTOMLEFT", "BOTTOMRIGHT" }, nil, 577),
 }
-local fondBas = fonds[4]
-local larges = {
+local backgroundBottom = backgrounds[4]
+local wideVignettes = {
 	vignette("charactercreate-vignette-sides-widescreen", { "TOPLEFT", "BOTTOMLEFT" }, 89),
 	vignette("charactercreate-vignette-sides-widescreen", { "TOPRIGHT", "BOTTOMRIGHT" }, 89, nil, true),
 }
--- noir hors du cadre (LeftBlackBar, RightBlackBar)
-local noirs = {}
-for i, cote in ipairs({ { "TOPRIGHT", "TOPLEFT", "BOTTOMRIGHT", "BOTTOMLEFT" }, { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" } }) do
-	local t = racine:CreateTexture(nil, "BACKGROUND")
+-- Black outside the frame (LeftBlackBar, RightBlackBar)
+local blackBars = {}
+for i, side in ipairs({ { "TOPRIGHT", "TOPLEFT", "BOTTOMRIGHT", "BOTTOMLEFT" }, { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" } }) do
+	local t = root:CreateTexture(nil, "BACKGROUND")
 	t:SetTexture(0, 0, 0)
-	t:SetPoint(cote[1], racine, cote[2])
-	t:SetPoint(cote[3], racine, cote[4])
-	noirs[i] = t
+	t:SetPoint(side[1], root, side[2])
+	t:SetPoint(side[3], root, side[4])
+	blackBars[i] = t
 end
 
-local function poserBords()
-	local bande = G.BANDE or 0
-	for _, t in ipairs(noirs) do
-		t:SetWidth(math.max(bande, 1))
-		G.Montrer(t, bande > 0)
+-- Shows the black bars and the widescreen vignettes for the current screen shape
+local function placeEdges()
+	local strip = G.STRIP or 0
+	for _, t in ipairs(blackBars) do
+		t:SetWidth(math.max(strip, 1))
+		G.SetShown(t, strip > 0)
 	end
-	local large = (GetScreenWidth() / GetScreenHeight()) - 16 / 9 > 0.001
-	for _, t in ipairs(larges) do
-		G.Montrer(t, large)
+	local wide = (GetScreenWidth() / GetScreenHeight()) - 16 / 9 > 0.001
+	for _, t in ipairs(wideVignettes) do
+		G.SetShown(t, wide)
 	end
 end
--- une autre resolution appliquee : les bandes noires et les vignettes
--- larges suivent la nouvelle zone utile (ForeverUIGlue.lua)
-G.surEchelle[#G.surEchelle + 1] = poserBords
+-- After a resolution change, the black bars and wide vignettes follow the new usable area
+-- (ForeverUIGlue.lua)
+G.onScale[#G.onScale + 1] = placeEdges
 
--- ------------------------------------------------------------ le bouton rond
+-- ------------------------------------------------------------ Round button
 
--- RingedMaskedButtonTemplate : l'icone (cuite dans son masque rond par
--- tools/cuire_creation.py), le voile des boutons interdits, l'anneau, la
--- lueur de selection, et le survol en ADD a 0,5
-local function boutonRond(parent, taille, anneau, lueur, voile)
+-- RingedMaskedButtonTemplate: icon (baked into its round mask by tools/bake_creation.py),
+-- veil for disabled buttons, ring, selection glow, and hover in ADD at 0.5.
+-- size: button size; ring, glow: their sizes; veil: veil alpha
+local function roundButton(parent, size, ring, glow, veil)
 	local b = CreateFrame("Button", nil, parent)
-	b:SetWidth(taille)
-	b:SetHeight(taille)
-	b.icone = b:CreateTexture(nil, "ARTWORK")
-	b.icone:SetAllPoints(b)
-	b.voile = b:CreateTexture(nil, "ARTWORK")
-	b.voile:SetAllPoints(b.icone)
-	b.voile:SetVertexColor(0, 0, 0)
-	b.voile:SetAlpha(voile)
-	b.anneau = b:CreateTexture(nil, "OVERLAY")
-	G.PoserAtlas(b.anneau, "character-create-icon-frame")
-	b.anneau:SetWidth(anneau)
-	b.anneau:SetHeight(anneau)
-	b.lueur = b:CreateTexture(nil, "OVERLAY")
-	G.PoserAtlas(b.lueur, "character-create-icon-selectedglow")
-	b.lueur:SetWidth(lueur)
-	b.lueur:SetHeight(lueur)
-	b.survol = b:CreateTexture(nil, "HIGHLIGHT")
-	b.survol:SetBlendMode("ADD")
-	b.survol:SetAlpha(0.5)
-	local function placer(dx, dy)
-		b.icone:ClearAllPoints()
-		b.icone:SetPoint("TOPLEFT", b, "TOPLEFT", dx, dy)
-		b.icone:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", dx, dy)
-		b.anneau:ClearAllPoints()
-		b.anneau:SetPoint("CENTER", b, "CENTER", dx, dy)
-		b.lueur:ClearAllPoints()
-		b.lueur:SetPoint("CENTER", b, "CENTER", dx, dy)
+	b:SetWidth(size)
+	b:SetHeight(size)
+	b.icon = b:CreateTexture(nil, "ARTWORK")
+	b.icon:SetAllPoints(b)
+	b.veil = b:CreateTexture(nil, "ARTWORK")
+	b.veil:SetAllPoints(b.icon)
+	b.veil:SetVertexColor(0, 0, 0)
+	b.veil:SetAlpha(veil)
+	b.ring = b:CreateTexture(nil, "OVERLAY")
+	G.PlaceAtlas(b.ring, "character-create-icon-frame")
+	b.ring:SetWidth(ring)
+	b.ring:SetHeight(ring)
+	b.glow = b:CreateTexture(nil, "OVERLAY")
+	G.PlaceAtlas(b.glow, "character-create-icon-selectedglow")
+	b.glow:SetWidth(glow)
+	b.glow:SetHeight(glow)
+	b.hover = b:CreateTexture(nil, "HIGHLIGHT")
+	b.hover:SetBlendMode("ADD")
+	b.hover:SetAlpha(0.5)
+	local function place(dx, dy)
+		b.icon:ClearAllPoints()
+		b.icon:SetPoint("TOPLEFT", b, "TOPLEFT", dx, dy)
+		b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", dx, dy)
+		b.ring:ClearAllPoints()
+		b.ring:SetPoint("CENTER", b, "CENTER", dx, dy)
+		b.glow:ClearAllPoints()
+		b.glow:SetPoint("CENTER", b, "CENTER", dx, dy)
 	end
-	placer(0, 0)
+	place(0, 0)
 	b:SetScript("OnMouseDown", function(self)
-		if actif(self) then placer(1, -1) end
+		if active(self) then place(1, -1) end
 	end)
-	b:SetScript("OnMouseUp", function() placer(0, 0) end)
+	b:SetScript("OnMouseUp", function() place(0, 0) end)
 	-- SetChecked, SetEnabledState, UpdateHighlightTexture
-	function b:Etat(choisi, permis)
-		self.choisi = choisi
-		G.Montrer(self.lueur, choisi)
-		if permis then self:Enable() else self:Disable() end
-		self.icone:SetDesaturated(not permis)
-		G.Montrer(self.voile, not permis)
-		self.survol:ClearAllPoints()
-		if choisi then
-			G.PoserAtlas(self.survol, "character-create-icon-selectedglow")
-			self.survol:SetAllPoints(self.lueur)
+	function b:State(selected, allowed)
+		self.selected = selected
+		G.SetShown(self.glow, selected)
+		if allowed then self:Enable() else self:Disable() end
+		self.icon:SetDesaturated(not allowed)
+		G.SetShown(self.veil, not allowed)
+		self.hover:ClearAllPoints()
+		if selected then
+			G.PlaceAtlas(self.hover, "character-create-icon-selectedglow")
+			self.hover:SetAllPoints(self.glow)
 		else
-			G.PoserAtlas(self.survol, "character-create-icon-frame")
-			self.survol:SetAllPoints(self.anneau)
+			G.PlaceAtlas(self.hover, "character-create-icon-frame")
+			self.hover:SetAllPoints(self.ring)
 		end
 	end
 	return b
 end
 
--- l'icone d'un bouton rond : un fichier cuit (retourne pour la Horde)
-local function iconeFichier(b, fichier, retourner)
-	for _, t in ipairs({ b.icone, b.voile }) do
-		t:SetTexture(fichier)
-		if retourner then
+-- Icon of a round button: a baked file (flipped for the Horde)
+local function applyFileIcon(b, file, flip)
+	for _, t in ipairs({ b.icon, b.veil }) do
+		t:SetTexture(file)
+		if flip then
 			t:SetTexCoord(1, 0, 0, 1)
 		else
 			t:SetTexCoord(0, 1, 0, 1)
@@ -269,251 +184,256 @@ local function iconeFichier(b, fichier, retourner)
 	end
 end
 
--- ------------------------------------------------------------ le cadre heavybronze
+-- ------------------------------------------------------------ Heavybronze frame
 
-local function cadreBronze(f, equerres, marge)
-	marge = marge or 10
-	local fond = f:CreateTexture(nil, "BACKGROUND")
-	fond:SetPoint("TOPLEFT", f, "TOPLEFT", marge, -marge)
-	fond:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -marge, marge)
-	local bord = G.AtlasEtire(f, "heavybronze-frame-basic", "BORDER")
-	bord.rect:SetAllPoints(f)
-	for _, e in ipairs(equerres) do
+-- Adds a heavybronze border, corner brackets and tiled background to f; returns a resize
+-- function. brackets: { atlas, point } pairs; margin: background inset (default 10)
+local function bronzeFrame(f, brackets, margin)
+	margin = margin or 10
+	local background = f:CreateTexture(nil, "BACKGROUND")
+	background:SetPoint("TOPLEFT", f, "TOPLEFT", margin, -margin)
+	background:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -margin, margin)
+	local edge = G.StretchedAtlas(f, "heavybronze-frame-basic", "BORDER")
+	edge.rect:SetAllPoints(f)
+	for _, e in ipairs(brackets) do
 		local t = f:CreateTexture(nil, "BORDER")
-		G.PoserAtlas(t, e[1], true)
+		G.PlaceAtlas(t, e[1], true)
 		t:SetPoint(e[2], f, e[2])
 	end
-	return function(largeur, hauteur)
-		f:SetWidth(largeur)
-		f:SetHeight(hauteur)
-		G.Mosaique(fond, "heavybronze-frame-background", largeur - 2 * marge, hauteur - 2 * marge)
+	return function(width, height)
+		f:SetWidth(width)
+		f:SetHeight(height)
+		G.Tile(background, "heavybronze-frame-background", width - 2 * margin, height - 2 * margin)
 	end
 end
 
--- ------------------------------------------------------------ les boutons de navigation
+-- ------------------------------------------------------------ Navigation buttons
 
-local function boutonNav(nom, sens)
-	local b = G.CreerBoutonTroisTranches(nom, racine, 250, 66, "128-RedButton",
+local function navButton(name, direction)
+	local b = G.CreateThreeSliceButton(name, root, 250, 66, "128-RedButton",
 		{ "GameFontNormalOutline22", "GameFontHighlightOutline22", "GameFontDisableOutline22" })
-	b.fleche = b:CreateTexture(nil, "ARTWORK")
-	b.fleche:SetWidth(8)
-	b.fleche:SetHeight(13)
-	b.sens = sens
+	b.arrow = b:CreateTexture(nil, "ARTWORK")
+	b.arrow:SetWidth(8)
+	b.arrow:SetHeight(13)
+	b.direction = direction
 	return b
 end
 
--- UpdateText : « texte  fleche » ou « fleche  texte », centres ensemble
-local function texteNav(b, texte)
-	local avant = (b.sens == "avant")
-	b:SetText(avant and (texte .. "  ") or ("  " .. texte))
+-- UpdateText: text then arrow, or arrow then text, centered together
+local function setNavText(b, text)
+	local forward = (b.direction == "forward")
+	b:SetText(forward and (text .. "  ") or ("  " .. text))
 	local fs = b:GetFontString()
-	local grise = actif(b) and "" or "-disable"
+	local grayed = active(b) and "" or "-disable"
 	fs:ClearAllPoints()
-	b.fleche:ClearAllPoints()
-	if avant then
-		G.PoserAtlas(b.fleche, "common-icon-forwardarrow" .. grise)
+	b.arrow:ClearAllPoints()
+	if forward then
+		G.PlaceAtlas(b.arrow, "common-icon-forwardarrow" .. grayed)
 		fs:SetPoint("CENTER", b, "CENTER", -4, 0)
-		b.fleche:SetPoint("LEFT", fs, "RIGHT")
+		b.arrow:SetPoint("LEFT", fs, "RIGHT")
 	else
-		G.PoserAtlas(b.fleche, "common-icon-backarrow" .. grise)
+		G.PlaceAtlas(b.arrow, "common-icon-backarrow" .. grayed)
 		fs:SetPoint("CENTER", b, "CENTER", 4, 0)
-		b.fleche:SetPoint("RIGHT", fs, "LEFT")
+		b.arrow:SetPoint("RIGHT", fs, "LEFT")
 	end
-	b.fleche:SetWidth(8)
-	b.fleche:SetHeight(13)
+	b.arrow:SetWidth(8)
+	b.arrow:SetHeight(13)
 end
 
-local retour = boutonNav("ForeverUICharacterCreateBackButton", "arriere")
-retour:SetPoint("BOTTOMLEFT", racine, "BOTTOMLEFT", 46, 28)
-local avancer = boutonNav("ForeverUICharacterCreateForwardButton", "avant")
-avancer:SetPoint("BOTTOMRIGHT", racine, "BOTTOMRIGHT", -46, 28)
+local backButton = navButton("ForeverUICharacterCreateBackButton", "backward")
+backButton:SetPoint("BOTTOMLEFT", root, "BOTTOMLEFT", 46, 28)
+local forwardButton = navButton("ForeverUICharacterCreateForwardButton", "forward")
+forwardButton:SetPoint("BOTTOMRIGHT", root, "BOTTOMRIGHT", -46, 28)
 
--- ------------------------------------------------------------ race et classe
+-- ------------------------------------------------------------ Race and class
 
-local raceClasse = CreateFrame("Frame", nil, racine)
-raceClasse:SetAllPoints(racine)
+local raceClass = CreateFrame("Frame", nil, root)
+raceClass:SetAllPoints(root)
 
-local function colonne(faction)
-	local f = CreateFrame("Frame", nil, raceClasse)
+-- A faction column: banner, emblem, name and a holder for the race buttons
+local function column(faction)
+	local f = CreateFrame("Frame", nil, raceClass)
 	f:SetWidth(168)
 	f:SetHeight(794)
-	local cle = string.lower(faction)
-	local banniere = f:CreateTexture(nil, "BACKGROUND")
-	G.PoserAtlas(banniere, "charactercreate-factionflag-" .. cle, true)
-	banniere:SetPoint("TOP", f, "TOP")
+	local key = string.lower(faction)
+	local bannerTexture = f:CreateTexture(nil, "BACKGROUND")
+	G.PlaceAtlas(bannerTexture, "charactercreate-factionflag-" .. key, true)
+	bannerTexture:SetPoint("TOP", f, "TOP")
 	local logo = f:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(logo, "charactercreate-icon-" .. cle, true)
+	G.PlaceAtlas(logo, "charactercreate-icon-" .. key, true)
 	logo:SetPoint("TOP", f, "TOP")
-	local nom = f:CreateFontString(nil, "ARTWORK")
-	nom:SetFontObject(G.Police("GameFontNormalLarge2"))
-	nom:SetPoint("TOP", logo, "BOTTOM", 0, 10)
-	nom:SetText(string.upper(TEXTE.FACTION[faction]))
+	local name = f:CreateFontString(nil, "ARTWORK")
+	name:SetFontObject(G.Font("GameFontNormalLarge2"))
+	name:SetPoint("TOP", logo, "BOTTOM", 0, 10)
+	name:SetText(string.upper(TEXT.FACTION[faction]))
 	f.races = CreateFrame("Frame", nil, f)
 	f.races:SetWidth(79)
 	f.races:SetHeight(1)
-	f.races:SetPoint("TOP", nom, "BOTTOM", 0, -10)
-	f.boutons = {}
+	f.races:SetPoint("TOP", name, "BOTTOM", 0, -10)
+	f.buttons = {}
 	return f
 end
 
-local alliance = colonne("Alliance")
-alliance:SetPoint("TOPLEFT", raceClasse, "TOPLEFT", 3, 0)
-local horde = colonne("Horde")
+local alliance = column("Alliance")
+alliance:SetPoint("TOPLEFT", raceClass, "TOPLEFT", 3, 0)
+local horde = column("Horde")
 horde:SetPoint("TOPLEFT", alliance, "TOPRIGHT", 20, 0)
-local COLONNES = { Alliance = alliance, Horde = horde }
+local COLUMNS = { Alliance = alliance, Horde = horde }
 
-local function boutonRace(col, i)
-	local b = col.boutons[i]
+-- Race button i of a column, created on first use; it clicks the client's button
+local function raceButton(col, i)
+	local b = col.buttons[i]
 	if not b then
-		b = boutonRond(col.races, 79, 86, 116, 0.5)
+		b = roundButton(col.races, 79, 86, 116, 0.5)
 		b:SetScript("OnClick", function(self)
 			local client = _G["CharacterCreateRaceButton" .. self.index]
 			if client then client:Click() end
 		end)
-		col.boutons[i] = b
+		col.buttons[i] = b
 	end
 	return b
 end
 
--- SpaceToFitVerticalLayoutFrame : 18, ou moins si la colonne ne tient pas
--- a 20 au-dessus de Back
-local function rangerRaces(col, n)
-	local ecart = 18
-	local haut, basRetour = col.races:GetTop(), retour:GetTop()
-	if haut and basRetour and n > 0 then
-		local reste = (haut - basRetour - 20) - n * 79
-		if reste < ecart * n then
-			ecart = math.floor(reste / n)
+-- SpaceToFitVerticalLayoutFrame: gap of 18, or less if the column does not fit 20 above
+-- Back
+local function arrangeRaces(col, n)
+	local gap = 18
+	local top, backButtonTop = col.races:GetTop(), backButton:GetTop()
+	if top and backButtonTop and n > 0 then
+		local rest = (top - backButtonTop - 20) - n * 79
+		if rest < gap * n then
+			gap = math.floor(rest / n)
 		end
 	end
 	for i = 1, n do
-		local b = col.boutons[i]
+		local b = col.buttons[i]
 		b:ClearAllPoints()
-		b:SetPoint("TOP", col.races, "TOP", 0, -(i - 1) * (79 + ecart))
+		b:SetPoint("TOP", col.races, "TOP", 0, -(i - 1) * (79 + gap))
 	end
 end
 
--- les corps
-local corps = CreateFrame("Frame", nil, raceClasse)
--- ECART voulu (27/09) : decale vers la droite (camelot : au centre), pour
--- laisser la tete des grands personnages visible
-local DECALAGE_CORPS = 250
-corps:SetPoint("TOP", raceClasse, "TOP", DECALAGE_CORPS, 0)
-local dimensionnerCorps = cadreBronze(corps, { { "heavybronze-horz-cornerbracket-tr", "TOPRIGHT" }, { "heavybronze-horz-cornerbracket-tl", "TOPLEFT" } })
--- HorizontalLayoutFrame : 25 + 55 + 22 + 55 = 157 -> 180 ; 20 + 55 + 20 = 95
-dimensionnerCorps(math.max(180, 25 + 55 + 22 + 55), math.max(90, 20 + 55 + 20))
-local boutonsCorps = {}
-for i, sexeId in ipairs({ SEX_MALE, SEX_FEMALE }) do
-	local b = boutonRond(corps, 55, 60, 80, 0.75)
-	b:SetPoint("TOPLEFT", corps, "TOPLEFT", 25 + (i - 1) * (55 + 22), -20)
-	-- BlackBG : 56 x 56, noir, rond
-	local noir = b:CreateTexture(nil, "BACKGROUND")
-	G.PoserAtlas(noir, "character-create-icon-mask")
-	noir:SetVertexColor(0, 0, 0)
-	noir:SetWidth(56)
-	noir:SetHeight(56)
-	noir:SetPoint("CENTER", b, "CENTER")
-	b.sexe = sexeId
+-- Body types
+local body = CreateFrame("Frame", nil, raceClass)
+-- Deliberately shifted right (camelot: centered) so tall characters' heads stay visible
+local BODY_OFFSET = 250
+body:SetPoint("TOP", raceClass, "TOP", BODY_OFFSET, 0)
+local sizeBody = bronzeFrame(body, { { "heavybronze-horz-cornerbracket-tr", "TOPRIGHT" }, { "heavybronze-horz-cornerbracket-tl", "TOPLEFT" } })
+-- HorizontalLayoutFrame: 25 + 55 + 22 + 55 = 157 -> 180; 20 + 55 + 20 = 95
+sizeBody(math.max(180, 25 + 55 + 22 + 55), math.max(90, 20 + 55 + 20))
+local bodyButtons = {}
+for i, sexId in ipairs({ SEX_MALE, SEX_FEMALE }) do
+	local b = roundButton(body, 55, 60, 80, 0.75)
+	b:SetPoint("TOPLEFT", body, "TOPLEFT", 25 + (i - 1) * (55 + 22), -20)
+	-- BlackBG: 56 x 56, black, round
+	local black = b:CreateTexture(nil, "BACKGROUND")
+	G.PlaceAtlas(black, "character-create-icon-mask")
+	black:SetVertexColor(0, 0, 0)
+	black:SetWidth(56)
+	black:SetHeight(56)
+	black:SetPoint("CENTER", b, "CENTER")
+	b.sex = sexId
 	b:SetScript("OnClick", function(self)
-		if self.sexe == SEX_MALE then
+		if self.sex == SEX_MALE then
 			CharacterCreateGenderButtonMale:Click()
 		else
 			CharacterCreateGenderButtonFemale:Click()
 		end
 	end)
-	-- ANCHOR_BOTTOMRIGHT (10, 0) de RingedFrameWithTooltipTemplate
+	-- ANCHOR_BOTTOMRIGHT (10, 0) from RingedFrameWithTooltipTemplate
 	b:SetScript("OnEnter", function(self)
 		GlueTooltip_SetOwner(self, nil, 10, 0, "TOPLEFT", "BOTTOMRIGHT")
-		GlueTooltip_SetText(TEXTE.BODY[self.sexe], nil, 1.0, 1.0, 1.0)
+		GlueTooltip_SetText(TEXT.BODY[self.sex], nil, 1.0, 1.0, 1.0)
 	end)
 	b:SetScript("OnLeave", function() GlueTooltip:Hide() end)
-	boutonsCorps[i] = b
+	bodyButtons[i] = b
 end
 
--- les classes
-local classes = CreateFrame("Frame", nil, raceClasse)
-classes:SetFrameLevel(raceClasse:GetFrameLevel() + 4)
-classes:SetPoint("BOTTOM", raceClasse, "BOTTOM")
-local dimensionnerClasses = cadreBronze(classes, { { "heavybronze-horz-cornerbracket-br", "BOTTOMRIGHT" }, { "heavybronze-horz-cornerbracket-bl", "BOTTOMLEFT" } })
-dimensionnerClasses(900, 140)
-local boutonsClasse = {}
+-- Classes
+local classes = CreateFrame("Frame", nil, raceClass)
+classes:SetFrameLevel(raceClass:GetFrameLevel() + 4)
+classes:SetPoint("BOTTOM", raceClass, "BOTTOM")
+local sizeClasses = bronzeFrame(classes, { { "heavybronze-horz-cornerbracket-br", "BOTTOMRIGHT" }, { "heavybronze-horz-cornerbracket-bl", "BOTTOMLEFT" } })
+sizeClasses(900, 140)
+local classButtons = {}
 
-local function boutonClasse(i)
-	local b = boutonsClasse[i]
+-- Class button i, created on first use; it clicks the client's button
+local function classButton(i)
+	local b = classButtons[i]
 	if not b then
-		b = boutonRond(classes, 66, 73, 103, 0.75)
-		b.nom = b:CreateFontString(nil, "OVERLAY")
-		b.nom:SetWidth(85)
-		b.nom:SetHeight(48)
-		b.nom:SetJustifyH("CENTER")
-		b.nom:SetJustifyV("MIDDLE")
-		b.nom:SetPoint("TOP", b, "BOTTOM", 2, 3)
+		b = roundButton(classes, 66, 73, 103, 0.75)
+		b.name = b:CreateFontString(nil, "OVERLAY")
+		b.name:SetWidth(85)
+		b.name:SetHeight(48)
+		b.name:SetJustifyH("CENTER")
+		b.name:SetJustifyV("MIDDLE")
+		b.name:SetPoint("TOP", b, "BOTTOM", 2, 3)
 		b:SetScript("OnClick", function(self)
 			local client = _G["CharacterCreateClassButton" .. self.index]
 			if client then client:Click() end
 		end)
-		boutonsClasse[i] = b
+		classButtons[i] = b
 	end
 	return b
 end
 
--- UpdateClassButtons
-local function rangerClasses(n)
-	local ecartX, icone, ecartNom = 30, 66, 50
-	local largeurBouton, hauteurBouton = icone, icone + ecartNom
-	-- AvailableSpace : de 10 a droite de la Horde (3 + 168 + 20 + 168 du bord
-	-- gauche) a 10 a gauche de Customize
-	local place = 900
-	local bord, droite = racine:GetLeft(), avancer:GetLeft()
-	if bord and droite then
-		place = (droite - 10) - (bord + 3 + 168 + 20 + 168 + 10)
+-- camelot: UpdateClassButtons; n: number of classes
+local function arrangeClasses(n)
+	local gapX, icon, nameGap = 30, 66, 50
+	local buttonWidth, buttonHeight = icon, icon + nameGap
+	-- AvailableSpace: from 10 right of the Horde column (3 + 168 + 20 + 168 from the left edge)
+	-- to 10 left of Customize
+	local position = 900
+	local edge, right = root:GetLeft(), forwardButton:GetLeft()
+	if edge and right then
+		position = (right - 10) - (edge + 3 + 168 + 20 + 168 + 10)
 	end
-	local rangees = math.ceil((n * largeurBouton + (n - 1) * ecartX) / place)
-	local largeur, hauteur = 900, 140
-	if rangees <= 1 then
-		rangees = 1
-		place = largeur
+	local rowLines = math.ceil((n * buttonWidth + (n - 1) * gapX) / position)
+	local width, height = 900, 140
+	if rowLines <= 1 then
+		rowLines = 1
+		position = width
 	else
-		hauteur = 140 * 2 - 20
+		height = 140 * 2 - 20
 	end
-	if place < 900 then
-		ecartX = 20
-		place = place - 40
-		largeur = place
+	if position < 900 then
+		gapX = 20
+		position = position - 40
+		width = position
 	end
-	if rangees > 2 then
-		rangees = 2
+	if rowLines > 2 then
+		rowLines = 2
 	end
-	local pas = math.ceil(n / rangees)
-	local rangee = (pas * largeurBouton) + ((pas - 1) * ecartX)
-	-- ECART voulu (27/09) : les 900 de camelot tiennent ses 9 classes avec 33
-	-- de marge de chaque cote ; la rangee de 3.3.5 (10 classes) garde cette
-	-- marge, le cadre s'allonge d'autant
-	local marge = (900 - (9 * largeurBouton + 8 * 30)) / 2
-	if rangee + 2 * marge > largeur then
-		largeur = rangee + 2 * marge
-		place = largeur
+	local step = math.ceil(n / rowLines)
+	local rowLine = (step * buttonWidth) + ((step - 1) * gapX)
+	-- Deliberate deviation: camelot's 900 fits its 9 classes with a 33 margin on each side;
+	-- the 3.3.5 row (10 classes) keeps that margin and the frame grows to fit
+	local margin = (900 - (9 * buttonWidth + 8 * 30)) / 2
+	if rowLine + 2 * margin > width then
+		width = rowLine + 2 * margin
+		position = width
 	end
-	dimensionnerClasses(largeur, hauteur)
-	local x0 = (place - rangee) / 2
-	local y0 = (hauteur - hauteurBouton) * 0.5
+	sizeClasses(width, height)
+	local x0 = (position - rowLine) / 2
+	local y0 = (height - buttonHeight) * 0.5
 	for i = 1, n do
-		local b = boutonsClasse[i]
-		local col, lig = (i - 1) % pas, math.floor((i - 1) / pas)
+		local b = classButtons[i]
+		local col, row = (i - 1) % step, math.floor((i - 1) / step)
 		b:ClearAllPoints()
-		b:SetPoint("LEFT", classes, "LEFT", x0 + col * (largeurBouton + ecartX), y0 - lig * (icone + ecartNom))
+		b:SetPoint("LEFT", classes, "LEFT", x0 + col * (buttonWidth + gapX), y0 - row * (icon + nameGap))
 	end
 end
 
--- ------------------------------------------------------------ les encadres
+-- ------------------------------------------------------------ Detail boxes
 
-local function encadre(nom, indice)
-	local f = CreateFrame("Frame", nom, racine)
-	f:SetFrameLevel(racine:GetFrameLevel() + 4)
+-- A detail box (faction, race or class) with a portrait and scrolling text;
+-- index: position in the right column
+local function frameBox(name, index)
+	local f = CreateFrame("Frame", name, root)
+	f:SetFrameLevel(root:GetFrameLevel() + 4)
 	f:EnableMouse(true)
-	f:SetPoint("TOPRIGHT", racine, "TOPRIGHT", 0, -40 - (indice - 1) * (260 + 10))
-	local dimensionner = cadreBronze(f, { { "heavybronze-vert-cornerbracket-tr", "TOPRIGHT" }, { "heavybronze-vert-cornerbracket-br", "BOTTOMRIGHT" } })
-	dimensionner(390, 260)
+	f:SetPoint("TOPRIGHT", root, "TOPRIGHT", 0, -40 - (index - 1) * (260 + 10))
+	local resize = bronzeFrame(f, { { "heavybronze-vert-cornerbracket-tr", "TOPRIGHT" }, { "heavybronze-vert-cornerbracket-br", "BOTTOMRIGHT" } })
+	resize(390, 260)
 
 	-- PortraitContainer (frameLevel 400)
 	local p = CreateFrame("Frame", nil, f)
@@ -525,107 +445,107 @@ local function encadre(nom, indice)
 	f.portrait:SetWidth(62)
 	f.portrait:SetHeight(62)
 	f.portrait:SetPoint("TOPLEFT", p, "TOPLEFT", -5, 7)
-	local anneau = p:CreateTexture(nil, "OVERLAY")
-	G.PoserAtlas(anneau, "character-create-icon-circle-frame")
-	anneau:SetWidth(64)
-	anneau:SetHeight(64)
-	anneau:SetPoint("CENTER", f.portrait, "CENTER")
+	local ring = p:CreateTexture(nil, "OVERLAY")
+	G.PlaceAtlas(ring, "character-create-icon-circle-frame")
+	ring:SetWidth(64)
+	ring:SetHeight(64)
+	ring:SetPoint("CENTER", f.portrait, "CENTER")
 
-	-- ScrollBox et son contenu (VerticalLayoutFrame, ecart 10)
+	-- ScrollBox and its content (VerticalLayoutFrame, spacing 10)
 	local zone = CreateFrame("ScrollFrame", nil, f)
 	zone:SetPoint("TOPLEFT", f, "TOPLEFT", 44, -14)
 	zone:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -35, 15)
-	local contenu = CreateFrame("Frame", nil, zone)
-	contenu:SetWidth(310)
-	contenu:SetHeight(1)
-	zone:SetScrollChild(contenu)
-	f.zone, f.contenu, f.lignes = zone, contenu, {}
+	local content = CreateFrame("Frame", nil, zone)
+	content:SetWidth(310)
+	content:SetHeight(1)
+	zone:SetScrollChild(content)
+	f.zone, f.content, f.rows = zone, content, {}
 
-	local barre = G.BarreMinimale(f, nom .. "ScrollBar")
-	barre:SetPoint("TOP", f, "TOPRIGHT", -25.5, -14 - 16)
-	barre:SetPoint("BOTTOM", f, "BOTTOMRIGHT", -25.5, 15 + 16)
-	barre.pas = 50
-	-- la barre seulement si elle sert (regle du 28/09) ; sans elle, la zone
-	-- s'etend jusqu'au bord droit qu'elle avait (-25,5 + 4 : -21,5), le texte
-	-- avec (voir remplir)
-	barre.cacherSiInutile = true
-	barre.surVisibilite = function(avec)
-		zone:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", avec and -35 or -21.5, 15)
+	local bar = G.MinimalBar(f, name .. "ScrollBar")
+	bar:SetPoint("TOP", f, "TOPRIGHT", -25.5, -14 - 16)
+	bar:SetPoint("BOTTOM", f, "BOTTOMRIGHT", -25.5, 15 + 16)
+	bar.step = 50
+	-- The bar shows only when needed; without it the zone extends to the bar's right edge
+	-- (-25.5 + 4 = -21.5), and so does the text (see populate)
+	bar.hideIfUnneeded = true
+	bar.onVisibility = function(hasBar)
+		zone:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", hasBar and -35 or -21.5, 15)
 	end
-	barre.surDefilement = function(position)
+	bar.onScroll = function(position)
 		zone:SetVerticalScroll(position)
 	end
 	zone:EnableMouseWheel(true)
-	zone:SetScript("OnMouseWheel", function(_, sens)
-		barre:Deplacer(barre.position - sens * 50 * 2)
+	zone:SetScript("OnMouseWheel", function(_, direction)
+		bar:MoveTo(bar.position - direction * 50 * 2)
 	end)
-	f.barre = barre
+	f.bar = bar
 	return f
 end
 
--- le texte : 310 avec la barre ; sans elle, jusqu'au bord droit qu'avait la
--- barre (44 + 324,5 = 368,5), comme la zone
-local TEXTE_L, TEXTE_SANS, VUE = 310, 324.5, 260 - 14 - 15
+-- Text width: 310 with the bar; without it, up to the bar's right edge (44 + 324.5 = 368.5),
+-- like the zone
+local TEXT_W, TEXT_W_NO_BAR, VIEW_H = 310, 324.5, 260 - 14 - 15
 
--- lignes : { "espace" } | { "titre", texte } | { "texte", texte }
-local function remplir(f, lignes)
-	for _, fs in ipairs(f.lignes) do
+-- Fills a detail box; rows: { "space" } | { "title", text } | { "text", text }
+local function populate(f, rows)
+	for _, fs in ipairs(f.rows) do
 		fs:Hide()
 	end
-	-- une passe a une largeur donnee : rend la hauteur du contenu
-	local function disposer(largeur)
+	-- One pass at a given width; returns the content height
+	local function layout(width)
 		local y, n = 0, 0
-		for i, l in ipairs(lignes) do
+		for i, l in ipairs(rows) do
 			if i > 1 then
 				y = y + 10
 			end
-			if l[1] == "espace" then
+			if l[1] == "space" then
 				y = y + 14
 			else
 				n = n + 1
-				local fs = f.lignes[n]
+				local fs = f.rows[n]
 				if not fs then
-					fs = f.contenu:CreateFontString(nil, "ARTWORK")
+					fs = f.content:CreateFontString(nil, "ARTWORK")
 					fs:SetJustifyH("LEFT")
-					f.lignes[n] = fs
+					f.rows[n] = fs
 				end
-				fs:SetWidth(largeur)
-				if l[1] == "titre" then
-					fs:SetFontObject(G.Police("GameFontNormalLarge2"))
+				fs:SetWidth(width)
+				if l[1] == "title" then
+					fs:SetFontObject(G.Font("GameFontNormalLarge2"))
 					fs:SetTextColor(1, 1, 1)
 				else
-					fs:SetFontObject(G.Police("GameFontNormalLarge"))
+					fs:SetFontObject(G.Font("GameFontNormalLarge"))
 					fs:SetTextColor(1, 0.82, 0)
 				end
 				fs:SetText(l[2] or "")
 				fs:ClearAllPoints()
-				fs:SetPoint("TOPLEFT", f.contenu, "TOPLEFT", 0, -y)
+				fs:SetPoint("TOPLEFT", f.content, "TOPLEFT", 0, -y)
 				fs:Show()
 				y = y + fs:GetHeight()
 			end
 		end
-		f.contenu:SetWidth(largeur)
+		f.content:SetWidth(width)
 		return y
 	end
-	-- sans barre d'abord ; si le texte deborde, avec (plus etroit, il deborde
-	-- encore : la barre reste)
-	local y = disposer(TEXTE_SANS)
-	if y > VUE then
-		y = disposer(TEXTE_L)
+	-- Without the bar first; if the text overflows, with it (narrower text still overflows,
+	-- so the bar stays)
+	local y = layout(TEXT_W_NO_BAR)
+	if y > VIEW_H then
+		y = layout(TEXT_W)
 	end
-	f.contenu:SetHeight(math.max(1, y))
-	f.barre:Regler(y, VUE, 0)
+	f.content:SetHeight(math.max(1, y))
+	f.bar:Configure(y, VIEW_H, 0)
 	f.zone:SetVerticalScroll(0)
 end
 
-local encadreFaction = encadre("ForeverUICharacterCreateFactionDetails", 1)
-local encadreRace = encadre("ForeverUICharacterCreateRaceDetails", 2)
-local encadreClasse = encadre("ForeverUICharacterCreateClassDetails", 3)
-local ENCADRES = { encadreFaction, encadreRace, encadreClasse }
+local factionFrameBox = frameBox("ForeverUICharacterCreateFactionDetails", 1)
+local raceFrameBox = frameBox("ForeverUICharacterCreateRaceDetails", 2)
+local classFrameBox = frameBox("ForeverUICharacterCreateClassDetails", 3)
+local FRAME_BOXES = { factionFrameBox, raceFrameBox, classFrameBox }
 
--- ------------------------------------------------------------ la lecture du client
+-- ------------------------------------------------------------ Reading the client
 
-local function lireRaces()
+-- Races from GetAvailableRaces, indexed like the client's race buttons
+local function readRaces()
 	local t = { GetAvailableRaces() }
 	local races = {}
 	for i = 1, #t, 3 do
@@ -633,478 +553,470 @@ local function lireRaces()
 		local client = _G["CharacterCreateRaceButton" .. n]
 		local _, faction = GetFactionForRace(n)
 		races[n] = {
-			index = n, nom = t[i], fichier = string.upper(t[i + 1] or ""), faction = faction,
-			permis = client and client.enable and actif(client),
+			index = n, name = t[i], file = string.upper(t[i + 1] or ""), faction = faction,
+			allowed = client and client.enable and active(client),
 		}
 	end
 	return races
 end
 
-local function lireClasses()
+-- Classes from GetAvailableClasses, in camelot order
+local function readClasses()
 	local t = { GetAvailableClasses() }
-	local liste = {}
+	local list = {}
 	for i = 1, #t, 3 do
 		local n = (i + 2) / 3
 		local client = _G["CharacterCreateClassButton" .. n]
-		table.insert(liste, {
-			index = n, nom = t[i], fichier = string.upper(t[i + 1] or ""),
-			permis = client and client.enable and actif(client),
+		table.insert(list, {
+			index = n, name = t[i], file = string.upper(t[i + 1] or ""),
+			allowed = client and client.enable and active(client),
 		})
 	end
-	table.sort(liste, function(a, b)
-		return (ORDRE_CLASSE[a.fichier] or 99) < (ORDRE_CLASSE[b.fichier] or 99)
+	table.sort(list, function(a, b)
+		return (CLASS_ORDER[a.file] or 99) < (CLASS_ORDER[b.file] or 99)
 	end)
-	return liste
+	return list
 end
 
-local function mettreAJour()
+-- Mirrors the client's selection on our buttons, detail boxes and backgrounds
+local function refresh()
 	if not CharacterCreate:IsShown() then
 		return
 	end
-	local choixRace = GetSelectedRace()
-	local _, fichierClasse, choixClasse = GetSelectedClass()
-	local choixSexe = GetSelectedSex()
-	local races = lireRaces()
+	local raceChoice = GetSelectedRace()
+	local _, classFile, classChoice = GetSelectedClass()
+	local sexChoice = GetSelectedSex()
+	local races = readRaces()
 
-	-- les races, par faction, dans l'ordre du client
-	local compte = { Alliance = 0, Horde = 0 }
-	local raceChoisie
+	-- Races per faction, in client order
+	local count = { Alliance = 0, Horde = 0 }
+	local selectedRace
 	for _, r in ipairs(races) do
-		local col = COLONNES[r.faction]
+		local col = COLUMNS[r.faction]
 		if col then
-			compte[r.faction] = compte[r.faction] + 1
-			local b = boutonRace(col, compte[r.faction])
+			count[r.faction] = count[r.faction] + 1
+			local b = raceButton(col, count[r.faction])
 			b.index = r.index
-			iconeFichier(b, ART .. "bouton-raceicon128-" .. (FICHIER_RACE[r.fichier] or "human") .. "-" .. sexe(), r.faction == "Horde")
-			b:Etat(r.index == choixRace, r.permis)
+			applyFileIcon(b, ART .. "bouton-raceicon128-" .. (RACE_FILE[r.file] or "human") .. "-" .. sex(), r.faction == "Horde")
+			b:State(r.index == raceChoice, r.allowed)
 			b:Show()
 		end
-		if r.index == choixRace then
-			raceChoisie = r
+		if r.index == raceChoice then
+			selectedRace = r
 		end
 	end
-	for faction, col in pairs(COLONNES) do
-		for i = compte[faction] + 1, #col.boutons do
-			col.boutons[i]:Hide()
+	for faction, col in pairs(COLUMNS) do
+		for i = count[faction] + 1, #col.buttons do
+			col.buttons[i]:Hide()
 		end
-		rangerRaces(col, compte[faction])
+		arrangeRaces(col, count[faction])
 	end
 
-	-- les corps
-	for _, b in ipairs(boutonsCorps) do
-		local nomSexe = (b.sexe == SEX_FEMALE) and "female" or "male"
-		local choisi = (b.sexe == choixSexe)
-		G.PoserAtlas(b.icone, "charactercreate-gendericon-" .. nomSexe .. (choisi and "-selected" or ""))
-		G.PoserAtlas(b.voile, "charactercreate-gendericon-" .. nomSexe)
-		b:Etat(choisi, true)
+	-- Body types
+	for _, b in ipairs(bodyButtons) do
+		local sexName = (b.sex == SEX_FEMALE) and "female" or "male"
+		local selected = (b.sex == sexChoice)
+		G.PlaceAtlas(b.icon, "charactercreate-gendericon-" .. sexName .. (selected and "-selected" or ""))
+		G.PlaceAtlas(b.veil, "charactercreate-gendericon-" .. sexName)
+		b:State(selected, true)
 	end
 
-	-- les classes
-	local liste = lireClasses()
-	for i, c in ipairs(liste) do
-		local b = boutonClasse(i)
+	-- Classes
+	local list = readClasses()
+	for i, c in ipairs(list) do
+		local b = classButton(i)
 		b.index = c.index
-		iconeFichier(b, ART .. "bouton-classicon-" .. string.lower(c.fichier))
-		b:Etat(c.index == choixClasse, c.permis)
-		b.nom:SetFontObject(G.Police(c.permis and "GameFontNormalMed2" or "GameFontDisableMed2"))
-		b.nom:SetText(c.nom)
+		applyFileIcon(b, ART .. "bouton-classicon-" .. string.lower(c.file))
+		b:State(c.index == classChoice, c.allowed)
+		b.name:SetFontObject(G.Font(c.allowed and "GameFontNormalMed2" or "GameFontDisableMed2"))
+		b.name:SetText(c.name)
 		b:Show()
 	end
-	for i = #liste + 1, #boutonsClasse do
-		boutonsClasse[i]:Hide()
+	for i = #list + 1, #classButtons do
+		classButtons[i]:Hide()
 	end
-	rangerClasses(#liste)
+	arrangeClasses(#list)
 
-	-- les encadres
-	if raceChoisie then
-		local faction = raceChoisie.faction
-		encadreFaction.portrait:SetTexture(ART .. "portrait-charactercreate-icon-" .. string.lower(faction or "alliance") .. "bg")
-		remplir(encadreFaction, { { "espace" }, { "titre", TEXTE.FACTION[faction] }, { "texte", TEXTE.LORE[faction] }, { "espace" } })
+	-- Detail boxes
+	if selectedRace then
+		local faction = selectedRace.faction
+		factionFrameBox.portrait:SetTexture(ART .. "portrait-charactercreate-icon-" .. string.lower(faction or "alliance") .. "bottomLeft")
+		populate(factionFrameBox, { { "space" }, { "title", TEXT.FACTION[faction] }, { "text", TEXT.LORE[faction] }, { "space" } })
 
-		encadreRace.portrait:SetTexture(ART .. "portrait-raceicon128-" .. (FICHIER_RACE[raceChoisie.fichier] or "human") .. "-" .. sexe())
-		local lignes = { { "espace" }, { "titre", raceChoisie.nom }, { "texte", TEXTE.RACIAL_TRAITS } }
+		raceFrameBox.portrait:SetTexture(ART .. "portrait-raceicon128-" .. (RACE_FILE[selectedRace.file] or "human") .. "-" .. sex())
+		local rows = { { "space" }, { "title", selectedRace.name }, { "text", TEXT.RACIAL_TRAITS } }
 		local i = 1
-		while _G["ABILITY_INFO_" .. raceChoisie.fichier .. i] do
-			table.insert(lignes, { "texte", _G["ABILITY_INFO_" .. raceChoisie.fichier .. i] })
+		while _G["ABILITY_INFO_" .. selectedRace.file .. i] do
+			table.insert(rows, { "text", _G["ABILITY_INFO_" .. selectedRace.file .. i] })
 			i = i + 1
 		end
-		table.insert(lignes, { "texte", GetFlavorText("RACE_INFO_" .. raceChoisie.fichier, choixSexe) })
-		table.insert(lignes, { "espace" })
-		remplir(encadreRace, lignes)
+		table.insert(rows, { "text", GetFlavorText("RACE_INFO_" .. selectedRace.file, sexChoice) })
+		table.insert(rows, { "space" })
+		populate(raceFrameBox, rows)
 	end
-	if fichierClasse then
-		local classeNom = GetSelectedClass()
-		-- SetPortraitToClassIcon : UI-Classes-Circles et CLASS_ICON_TCOORDS
-		encadreClasse.portrait:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
-		local c = CLASS_ICON_TCOORDS[string.upper(fichierClasse)]
+	if classFile then
+		local classDisplayName = GetSelectedClass()
+		-- SetPortraitToClassIcon: UI-Classes-Circles and CLASS_ICON_TCOORDS
+		classFrameBox.portrait:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+		local c = CLASS_ICON_TCOORDS[string.upper(classFile)]
 		if c then
-			encadreClasse.portrait:SetTexCoord(c[1], c[2], c[3], c[4])
+			classFrameBox.portrait:SetTexCoord(c[1], c[2], c[3], c[4])
 		end
-		remplir(encadreClasse, { { "espace" }, { "titre", classeNom }, { "texte", GetFlavorText("CLASS_" .. string.upper(fichierClasse), choixSexe) }, { "espace" } })
+		populate(classFrameBox, { { "space" }, { "title", classDisplayName }, { "text", GetFlavorText("CLASS_" .. string.upper(classFile), sexChoice) }, { "space" } })
 	end
 
 	-- UpdateBackgroundOverlays
-	local a = ALPHA_FOND.classe[string.upper(fichierClasse or "")]
-		or (raceChoisie and ALPHA_FOND.faction[raceChoisie.faction]) or 1
-	etat.alphaFond = a
-	for _, t in ipairs(fonds) do
+	local a = BACKGROUND_ALPHA.className[string.upper(classFile or "")]
+		or (selectedRace and BACKGROUND_ALPHA.faction[selectedRace.faction]) or 1
+	state.backgroundAlpha = a
+	for _, t in ipairs(backgrounds) do
 		t:SetAlpha(a)
 	end
-	if etat.mode == 2 then
-		fondBas:SetAlpha(0)
+	if state.mode == 2 then
+		backgroundBottom:SetAlpha(0)
 	end
 end
 
--- ------------------------------------------------------------ la personnalisation
+-- ------------------------------------------------------------ Customization
 
-local perso = CreateFrame("Frame", nil, racine)
-perso:SetAllPoints(racine)
+local character = CreateFrame("Frame", nil, root)
+character:SetAllPoints(root)
 
 -- CustomizeOptionsContainerFrame
-local conteneur = CreateFrame("Frame", nil, perso)
-conteneur:SetFrameLevel(perso:GetFrameLevel() + 4)
-conteneur:EnableMouse(true)
-conteneur:SetPoint("TOPRIGHT", perso, "TOPRIGHT", 0, -137)
-local dimensionnerConteneur = cadreBronze(conteneur, { { "heavybronze-vert-cornerbracket-tr", "TOPRIGHT" }, { "heavybronze-vert-cornerbracket-br", "BOTTOMRIGHT" } })
+local container = CreateFrame("Frame", nil, character)
+container:SetFrameLevel(character:GetFrameLevel() + 4)
+container:EnableMouse(true)
+container:SetPoint("TOPRIGHT", character, "TOPRIGHT", 0, -137)
+local sizeContainer = bronzeFrame(container, { { "heavybronze-vert-cornerbracket-tr", "TOPRIGHT" }, { "heavybronze-vert-cornerbracket-br", "BOTTOMRIGHT" } })
 
--- infobulle ANCHOR_LEFT (9, -9) des petits boutons
-local function infobulleGauche(b, texte)
+-- ANCHOR_LEFT (9, -9) tooltip, as on the small buttons
+local function leftTooltip(b, text)
 	b:SetScript("OnEnter", function(self)
 		GlueTooltip_SetOwner(self, nil, 9, -9, "BOTTOMRIGHT", "TOPLEFT")
-		GlueTooltip_SetText(texte, nil, 1.0, 1.0, 1.0)
+		GlueTooltip_SetText(text, nil, 1.0, 1.0, 1.0)
 	end)
 	b:SetScript("OnLeave", function() GlueTooltip:Hide() end)
 end
 
 -- RandomizeAppearanceButton
-local hasardApparence = CreateFrame("Button", "ForeverUICharacterCreateRandomizeButton", conteneur)
-G.BoutonCarreIcone(hasardApparence, "charactercreate-icon-dice", 24, "OVERLAY")
-hasardApparence:SetPoint("TOPLEFT", conteneur, "TOPLEFT", 12, -12)
-local actualiserReglages
-hasardApparence:SetScript("OnClick", function()
+local randomAppearance = CreateFrame("Button", "ForeverUICharacterCreateRandomizeButton", container)
+G.SquareIconButton(randomAppearance, "charactercreate-icon-dice", 24, "OVERLAY")
+randomAppearance:SetPoint("TOPLEFT", container, "TOPLEFT", 12, -12)
+local refreshSettings
+randomAppearance:SetScript("OnClick", function()
 	CharacterCreate_Randomize()
-	actualiserReglages()
+	refreshSettings()
 end)
-infobulleGauche(hasardApparence, TEXTE.RANDOMIZE_APPEARANCE)
+leftTooltip(randomAppearance, TEXT.RANDOMIZE_APPEARANCE)
 
--- CharacterCustomizeOptions
--- ECART voulu (27/09) : 46 entre les lignes au lieu des 48 de camelot, le
--- panneau gardant la hauteur de camelot : le bas du cadre respire davantage
-local LIGNE_L, LIGNE_H, LIGNE_ECART, ECART_CAMELOT = 265, 38, 46, 48
-local reglages = CreateFrame("Frame", nil, conteneur)
-reglages:SetWidth(300)
-reglages:SetHeight(5 * LIGNE_H + 4 * LIGNE_ECART)
-reglages:SetPoint("TOPRIGHT", conteneur, "TOPRIGHT", -10, -80)
-dimensionnerConteneur(360, 80 + 5 * LIGNE_H + 4 * ECART_CAMELOT + 20)
+-- CharacterCustomizeOptions. Rows are 46 apart instead of camelot's 48 while the panel
+-- keeps camelot's height, leaving more room at the bottom
+local ROW_W, ROW_H, ROW_GAP, CAMELOT_GAP = 265, 38, 46, 48
+local settings = CreateFrame("Frame", nil, container)
+settings:SetWidth(300)
+settings:SetHeight(5 * ROW_H + 4 * ROW_GAP)
+settings:SetPoint("TOPRIGHT", container, "TOPRIGHT", -10, -80)
+sizeContainer(360, 80 + 5 * ROW_H + 4 * CAMELOT_GAP + 20)
 
--- WowStyle2IconButton : fond selon l'etat, icone decalee enfoncee
-local function flecheReglage(parent, sens, action)
+-- WowStyle2IconButton: background per state, icon offset when pressed.
+-- direction: "back" or "next"; action: OnClick handler
+local function settingArrow(parent, direction, action)
 	local b = CreateFrame("Button", nil, parent)
 	b:SetScale(1.7)
 	b:SetWidth(26)
 	b:SetHeight(25)
-	b.fond = b:CreateTexture(nil, "BACKGROUND")
-	b.fond:SetPoint("CENTER", b, "CENTER")
-	b.icone = b:CreateTexture(nil, "OVERLAY")
-	local function peindre()
-		local fond = "common-dropdown-c-button"
-		if b.bas and b.dessus then
-			fond = "common-dropdown-c-button-pressedhover-2"
-		elseif b.dessus then
-			fond = "common-dropdown-c-button-hover-2"
-		elseif b.bas then
-			fond = "common-dropdown-c-button-pressed-2"
+	b.background = b:CreateTexture(nil, "BACKGROUND")
+	b.background:SetPoint("CENTER", b, "CENTER")
+	b.icon = b:CreateTexture(nil, "OVERLAY")
+	local function paint()
+		local background = "common-dropdown-c-button"
+		if b.down and b.hovered then
+			background = "common-dropdown-c-button-pressedhover-2"
+		elseif b.hovered then
+			background = "common-dropdown-c-button-hover-2"
+		elseif b.down then
+			background = "common-dropdown-c-button-pressed-2"
 		end
-		G.PoserAtlas(b.fond, fond, true)
-		G.PoserAtlas(b.icone, "common-dropdown-icon-" .. sens, true)
-		b.icone:ClearAllPoints()
-		b.icone:SetPoint("CENTER", b, "CENTER", b.bas and 2 or 0, b.bas and -1 or 0)
+		G.PlaceAtlas(b.background, background, true)
+		G.PlaceAtlas(b.icon, "common-dropdown-icon-" .. direction, true)
+		b.icon:ClearAllPoints()
+		b.icon:SetPoint("CENTER", b, "CENTER", b.down and 2 or 0, b.down and -1 or 0)
 	end
-	b:SetScript("OnEnter", function() b.dessus = true; peindre() end)
-	b:SetScript("OnLeave", function() b.dessus = false; peindre() end)
-	b:SetScript("OnMouseDown", function() b.bas = true; peindre() end)
-	b:SetScript("OnMouseUp", function() b.bas = false; peindre() end)
+	b:SetScript("OnEnter", function() b.hovered = true; paint() end)
+	b:SetScript("OnLeave", function() b.hovered = false; paint() end)
+	b:SetScript("OnMouseDown", function() b.down = true; paint() end)
+	b:SetScript("OnMouseUp", function() b.down = false; paint() end)
 	b:SetScript("OnClick", action)
-	peindre()
+	paint()
 	return b
 end
 
--- une ligne : [<] [case] [>] (DropdownWithSteppersLargeTemplate)
-local lignes = {}
+-- One row: [<] [box] [>] (DropdownWithSteppersLargeTemplate)
+local rows = {}
 for i = 1, 5 do
-	local ligne = CreateFrame("Frame", nil, reglages)
-	ligne.i = i
-	ligne:SetWidth(LIGNE_L)
-	ligne:SetHeight(LIGNE_H)
-	ligne:SetPoint("TOPLEFT", reglages, "TOPLEFT", 0, -(i - 1) * (LIGNE_H + LIGNE_ECART))
-	local case = CreateFrame("Frame", nil, ligne)
-	case:SetScale(1.55)
-	case:SetWidth(122)
-	case:SetHeight(25)
-	case:SetPoint("CENTER", ligne, "CENTER")
-	local fond = G.AtlasEtire(case, "common-dropdown-c-button", "BACKGROUND")
-	fond.rect:SetPoint("TOPLEFT", case, "TOPLEFT", -7, 7)
-	fond.rect:SetPoint("BOTTOMRIGHT", case, "BOTTOMRIGHT", 7, -7)
-	ligne.case, ligne.fond = case, fond
-	ligne.texte = case:CreateFontString(nil, "OVERLAY")
-	ligne.texte:SetFontObject(G.Police("GameFontNormal"))
-	ligne.texte:SetTextColor(1, 0.82, 0)
-	ligne.texte:SetJustifyH("CENTER")
-	ligne.texte:SetHeight(20)
-	ligne.texte:SetPoint("LEFT", case, "LEFT", 13, 0)
-	ligne.texte:SetPoint("RIGHT", case, "RIGHT", -13, 0)
-	local moins = flecheReglage(ligne, "back", function()
+	local row = CreateFrame("Frame", nil, settings)
+	row.i = i
+	row:SetWidth(ROW_W)
+	row:SetHeight(ROW_H)
+	row:SetPoint("TOPLEFT", settings, "TOPLEFT", 0, -(i - 1) * (ROW_H + ROW_GAP))
+	local cell = CreateFrame("Frame", nil, row)
+	cell:SetScale(1.55)
+	cell:SetWidth(122)
+	cell:SetHeight(25)
+	cell:SetPoint("CENTER", row, "CENTER")
+	local background = G.StretchedAtlas(cell, "common-dropdown-c-button", "BACKGROUND")
+	background.rect:SetPoint("TOPLEFT", cell, "TOPLEFT", -7, 7)
+	background.rect:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 7, -7)
+	row.cell, row.background = cell, background
+	row.text = cell:CreateFontString(nil, "OVERLAY")
+	row.text:SetFontObject(G.Font("GameFontNormal"))
+	row.text:SetTextColor(1, 0.82, 0)
+	row.text:SetJustifyH("CENTER")
+	row.text:SetHeight(20)
+	row.text:SetPoint("LEFT", cell, "LEFT", 13, 0)
+	row.text:SetPoint("RIGHT", cell, "RIGHT", -13, 0)
+	local minus = settingArrow(row, "back", function()
 		CharacterCustomization_Left(i)
-		actualiserReglages(i)
+		refreshSettings(i)
 	end)
-	moins:SetPoint("RIGHT", case, "LEFT", -5, 0)
-	local plus = flecheReglage(ligne, "next", function()
+	minus:SetPoint("RIGHT", cell, "LEFT", -5, 0)
+	local plus = settingArrow(row, "next", function()
 		CharacterCustomization_Right(i)
-		actualiserReglages(i)
+		refreshSettings(i)
 	end)
-	plus:SetPoint("LEFT", case, "RIGHT", 4, 0)
-	-- mode 2 : le nom au-dessus de la ligne (Label de
-	-- DropdownWithSteppersAndLabelLargeTemplate), le numero dans la case
-	-- (SelectionNumber, 25 x 20, au centre de SelectionDetails), la fleche de
-	-- survol (12 x 5 a BOTTOM, -5) et la case qui ouvre la liste
-	ligne.titre = ligne:CreateFontString(nil, "ARTWORK")
-	ligne.titre:SetFontObject(G.Police("SystemFont_Shadow_Large"))
-	ligne.titre:SetPoint("BOTTOMLEFT", moins, "TOPLEFT", 2, 4)
-	ligne.numero = case:CreateFontString(nil, "OVERLAY")
-	ligne.numero:SetFontObject(G.Police("GameFontNormal"))
-	ligne.numero:SetTextColor(1, 0.82, 0)
-	ligne.numero:SetJustifyH("LEFT")
-	ligne.numero:SetWidth(25)
-	ligne.numero:SetHeight(20)
-	ligne.numero:SetPoint("CENTER", case, "CENTER")
-	-- ColorSwatch1 et sa lueur (ColorSwatch1Glow, ADD) : dans la case,
-	-- l'echantillon remplace le numero (hideNumber), au centre
-	ligne.echantillon = case:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(ligne.echantillon, "charactercreate-customize-palette", true)
-	ligne.echantillon:SetPoint("CENTER", case, "CENTER")
-	ligne.echantillon:Hide()
-	ligne.lueur = case:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(ligne.lueur, "charactercreate-customize-palette-glow", true)
-	ligne.lueur:SetBlendMode("ADD")
-	ligne.lueur:SetPoint("CENTER", ligne.echantillon, "CENTER")
-	ligne.lueur:Hide()
-	ligne.fleche = case:CreateTexture(nil, "OVERLAY")
-	G.PoserAtlas(ligne.fleche, "common-dropdown-c-button-hover-arrow")
-	ligne.fleche:SetWidth(12)
-	ligne.fleche:SetHeight(5)
-	ligne.fleche:SetPoint("BOTTOM", case, "BOTTOM", 0, -5)
-	ligne.fleche:Hide()
-	ligne.bouton = CreateFrame("Button", nil, case)
-	ligne.bouton:SetAllPoints(case)
-	ligne.bouton:EnableMouseWheel(true)
-	ligne.bouton:Hide()
-	lignes[i] = ligne
+	plus:SetPoint("LEFT", cell, "RIGHT", 4, 0)
+	-- Mode 2: setting name above the row (Label of DropdownWithSteppersAndLabelLargeTemplate),
+	-- choice number in the box (SelectionNumber, 25 x 20, centered in SelectionDetails),
+	-- hover arrow (12 x 5 at BOTTOM, -5) and a box button that opens the list
+	row.title = row:CreateFontString(nil, "ARTWORK")
+	row.title:SetFontObject(G.Font("SystemFont_Shadow_Large"))
+	row.title:SetPoint("BOTTOMLEFT", minus, "TOPLEFT", 2, 4)
+	row.number = cell:CreateFontString(nil, "OVERLAY")
+	row.number:SetFontObject(G.Font("GameFontNormal"))
+	row.number:SetTextColor(1, 0.82, 0)
+	row.number:SetJustifyH("LEFT")
+	row.number:SetWidth(25)
+	row.number:SetHeight(20)
+	row.number:SetPoint("CENTER", cell, "CENTER")
+	-- ColorSwatch1 and its glow (ColorSwatch1Glow, ADD): the swatch replaces the number in the
+	-- box (hideNumber), centered
+	row.swatch = cell:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(row.swatch, "charactercreate-customize-palette", true)
+	row.swatch:SetPoint("CENTER", cell, "CENTER")
+	row.swatch:Hide()
+	row.glow = cell:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(row.glow, "charactercreate-customize-palette-glow", true)
+	row.glow:SetBlendMode("ADD")
+	row.glow:SetPoint("CENTER", row.swatch, "CENTER")
+	row.glow:Hide()
+	row.arrow = cell:CreateTexture(nil, "OVERLAY")
+	G.PlaceAtlas(row.arrow, "common-dropdown-c-button-hover-arrow")
+	row.arrow:SetWidth(12)
+	row.arrow:SetHeight(5)
+	row.arrow:SetPoint("BOTTOM", cell, "BOTTOM", 0, -5)
+	row.arrow:Hide()
+	row.button = CreateFrame("Button", nil, cell)
+	row.button:SetAllPoints(cell)
+	row.button:EnableMouseWheel(true)
+	row.button:Hide()
+	rows[i] = row
 end
 
--- ------------------------------------------------------------ mode 2 : les choix
+-- ------------------------------------------------------------ Mode 2: choices
 
--- Un client patche (tools/patcheur, ForeverUIPatcher) fait rendre a
--- CycleCharCustomization(reglage, decalage) l'indice du reglage ; un
--- decalage de 0 ne change rien. Le numero est le rang du choix parmi les
--- choix valides, le plus petit indice valide etant 1. Client non patche (ou
--- objet d'apparence pas encore cree) : aucun nombre, mode 1.
--- LES CHOIX VALIDES SE CALCULENT (calculer) sur les donnees du client
--- (ForeverUIGlueChoix.lua), aux regles du moteur que reprend
--- tools/choix_personnalisation.py. Les faire recenser au moteur, cran par
--- cran, redessinait le personnage a chaque cran : les visages defilaient en
--- changeant la peau et les FPS chutaient (constate le 2026-09-27). Le moteur
--- ne recense plus qu'en secours (lister), si sa valeur manque a la liste
--- calculee.
-local listes = {}
+-- A patched client (tools/patcher, ForeverUIPatcher) makes CycleCharCustomization(setting,
+-- offset) return the setting's index; an offset of 0 changes nothing. The number shown is
+-- the choice's rank among valid choices, from 1. Unpatched client (or no appearance object
+-- yet): no number, mode 1. Valid choices are computed (compute) from client data
+-- (ForeverUIGlueChoices.lua) with the engine rules mirrored in tools/customization_choices.py.
+-- Stepping the engine through them redraws the character at each step (skins flicker, FPS
+-- drops), so the engine is only enumerated as a fallback, when its value is missing.
+local lists = {}
 
-local function indice(i)
+-- Current engine index of setting i (patched client only), or nil
+local function index(i)
 	local v = CycleCharCustomization(i, 0)
 	if type(v) == "number" then
 		return v
 	end
 end
 
-local function rang(liste, v)
-	for k, x in ipairs(liste) do
+local function rank(list, v)
+	for k, x in ipairs(list) do
 		if x == v then
 			return k
 		end
 	end
 end
 
--- le tour complet d'un reglage : il s'arrete au retour sur le choix de
--- depart, le reglage est alors revenu ou il etait
-local function lister(i)
-	local depart = indice(i)
-	if not depart then
+-- Full cycle of a setting: it stops back on the starting choice, so the setting ends
+-- where it was
+local function enumerate(i)
+	local origin = index(i)
+	if not origin then
 		return nil
 	end
-	local tour, place = { depart }, { [depart] = 1 }
+	local loop, position = { origin }, { [origin] = 1 }
 	for _ = 1, 255 do
 		local v = CycleCharCustomization(i, 1)
-		if type(v) ~= "number" or v == depart then
+		if type(v) ~= "number" or v == origin then
 			break
 		end
-		if place[v] then
-			-- depart hors du cycle (ne devrait pas arriver) : le cycle seul
+		if position[v] then
+			-- Start outside the cycle (should not happen): keep the cycle only
 			local cycle = {}
-			for k = place[v], #tour do
-				cycle[#cycle + 1] = tour[k]
+			for k = position[v], #loop do
+				cycle[#cycle + 1] = loop[k]
 			end
-			tour = cycle
+			loop = cycle
 			break
 		end
-		tour[#tour + 1] = v
-		place[v] = #tour
+		loop[#loop + 1] = v
+		position[v] = #loop
 	end
-	-- dans l'ordre du moteur, a partir du plus petit indice
-	local premier = 1
-	for k = 2, #tour do
-		if tour[k] < tour[premier] then
-			premier = k
+	-- In engine order, from the lowest index
+	local first = 1
+	for k = 2, #loop do
+		if loop[k] < loop[first] then
+			first = k
 		end
 	end
-	local liste = {}
-	for k = 0, #tour - 1 do
-		liste[#liste + 1] = tour[(premier - 1 + k) % #tour + 1]
+	local list = {}
+	for k = 0, #loop - 1 do
+		list[#list + 1] = loop[(first - 1 + k) % #loop + 1]
 	end
-	return liste
+	return list
 end
 
--- les choix valides d'un reglage, calcules : les cases [section][variation]
--- [couleur] de CharSections (section 0 peau, 1 visage, 2 pilosite, 3
--- cheveux, 4 sous-vetements) et les regles du moteur (Wow.exe 0x4EB150,
--- 0x4EB710, 0x4F0490, 0x4EB500, 0x4EBCA0), en ordre croissant comme le
--- moteur les parcourt
-local function calculer(i)
-	local race = G.choix and lireRaces()[GetSelectedRace()]
-	local d = race and G.choix[race.fichier]
+-- Valid choices of setting i (1 skin, 2 face, 3 hair style, 4 hair color, 5 facial hair),
+-- computed from the CharSections cells [section][variation][color] (section 0 skin, 1 face,
+-- 2 facial hair, 3 hair, 4 underwear) and the engine rules (Wow.exe 0x4EB150, 0x4EB710,
+-- 0x4F0490, 0x4EB500, 0x4EBCA0), in ascending order as the engine walks them
+local function compute(i)
+	local race = G.choice and readRaces()[GetSelectedRace()]
+	local d = race and G.choice[race.file]
 	d = d and d[(GetSelectedSex() == SEX_FEMALE) and 1 or 0]
 	if not d then
 		return nil
 	end
-	-- drapeaux : un poids pour les classes, un autre pour le chevalier de la mort
-	local _, classe = GetSelectedClass()
-	local poids = (classe == "DEATHKNIGHT") and 2 or 1
-	local function nb(section, var)
+	-- Flags: one bit for regular classes, another for the death knight
+	local _, className = GetSelectedClass()
+	local weight = (className == "DEATHKNIGHT") and 2 or 1
+	local function count(section, var)
 		local s = var and d[section][var]
 		return s and string.len(s) or 0
 	end
-	local function bonne(section, var, col)
+	local function isAvailable(section, var, col)
 		local s = var and d[section][var]
 		local c = s and string.byte(s, col + 1)
-		c = c and c - 48                -- "0".."3" ; "." (pas de ligne) < 0
-		return c ~= nil and c >= 0 and math.floor(c / poids) % 2 == 1
+		c = c and c - 48                -- "0".."3"; "." (no row) gives < 0
+		return c ~= nil and c >= 0 and math.floor(c / weight) % 2 == 1
 	end
-	local function uneCouleur(section, var, test)
-		for c = 0, nb(section, var) - 1 do
+	local function hasColor(section, var, test)
+		for c = 0, count(section, var) - 1 do
 			if test(c) then
 				return true
 			end
 		end
 		return false
 	end
-	local liste = {}
+	local list = {}
 	if i == 1 then
-		-- peau : avec le visage courant et les sous-vetements
-		local visage = indice(2)
-		for c = 0, nb(0, 0) - 1 do
-			if bonne(0, 0, c) and bonne(1, visage, c) and bonne(4, 0, c) then
-				liste[#liste + 1] = c
+		-- Skin: must fit the current face and the underwear
+		local face = index(2)
+		for c = 0, count(0, 0) - 1 do
+			if isAvailable(0, 0, c) and isAvailable(1, face, c) and isAvailable(4, 0, c) then
+				list[#list + 1] = c
 			end
 		end
 	elseif i == 2 then
-		-- visage : une couleur de peau au moins lui convient
+		-- Face: at least one skin color fits it
 		for v = 0, d[1].n - 1 do
-			if uneCouleur(1, v, function(c) return bonne(1, v, c) and bonne(0, 0, c) and bonne(4, 0, c) end) then
-				liste[#liste + 1] = v
+			if hasColor(1, v, function(c) return isAvailable(1, v, c) and isAvailable(0, 0, c) and isAvailable(4, 0, c) end) then
+				list[#list + 1] = v
 			end
 		end
 	elseif i == 3 then
-		-- coiffure : une couleur au moins
+		-- Hair style: at least one color
 		for s = 0, d[3].n - 1 do
-			if uneCouleur(3, s, function(c) return bonne(3, s, c) end) then
-				liste[#liste + 1] = s
+			if hasColor(3, s, function(c) return isAvailable(3, s, c) end) then
+				list[#list + 1] = s
 			end
 		end
 	elseif i == 4 then
-		-- couleur des cheveux : celles de la coiffure courante
-		local coiffure = indice(3)
-		for c = 0, nb(3, coiffure) - 1 do
-			if bonne(3, coiffure, c) then
-				liste[#liste + 1] = c
+		-- Hair color: those of the current hair style
+		local hairStyle = index(3)
+		for c = 0, count(3, hairStyle) - 1 do
+			if isAvailable(3, hairStyle, c) then
+				list[#list + 1] = c
 			end
 		end
 	else
-		-- pilosite : si la case (pilosite, couleur des cheveux) existe, les
-		-- styles qui ont une couleur au moins ; sinon tous les styles
-		local poil, couleur = indice(5), indice(4)
-		if poil and couleur and poil < d[2].n and couleur < nb(2, poil) then
+		-- Facial hair: if the (facial hair, hair color) cell exists, the styles with at least one
+		-- color; otherwise all styles
+		local facialHair, color = index(5), index(4)
+		if facialHair and color and facialHair < d[2].n and color < count(2, facialHair) then
 			for v = 0, d[2].n - 1 do
-				if uneCouleur(2, v, function(c) return bonne(2, v, c) end) then
-					liste[#liste + 1] = v
+				if hasColor(2, v, function(c) return isAvailable(2, v, c) end) then
+					list[#list + 1] = v
 				end
 			end
 		else
-			for v = 0, (d.barbes or 0) - 1 do
-				liste[#liste + 1] = v
+			for v = 0, (d.facialHairs or 0) - 1 do
+				list[#list + 1] = v
 			end
 		end
 	end
-	return liste
+	return list
 end
 
--- amener un reglage sur un choix par le plus court chemin
-local function allerA(i, cible)
-	local liste = listes[i]
-	if not liste then
+-- Moves setting i to choice target (an engine index) by the shortest path
+local function goTo(i, target)
+	local list = lists[i]
+	if not list then
 		return
 	end
-	local n, p, q = #liste, rang(liste, indice(i)), rang(liste, cible)
+	local n, p, q = #list, rank(list, index(i)), rank(list, target)
 	if not p or not q then
 		return
 	end
-	local avant, arriere = (q - p) % n, (p - q) % n
-	if avant <= arriere then
-		for _ = 1, avant do
+	local forward, backward = (q - p) % n, (p - q) % n
+	if forward <= backward then
+		for _ = 1, forward do
 			CycleCharCustomization(i, 1)
 		end
 	else
-		for _ = 1, arriere do
+		for _ = 1, backward do
 			CycleCharCustomization(i, -1)
 		end
 	end
 end
 
--- La couleur d'un choix (ColorSwatch1 : swatchColor1 du choix chez
--- camelot) : celle que tools/couleurs_personnalisation.py a lue dans la
--- texture du choix (ForeverUIGlueCouleurs.lua). Peau (1) et couleur des
--- cheveux (4) ; les autres reglages n'en ont pas, comme chez camelot.
-local ECHANTILLONS = { [1] = "peau", [4] = "cheveux" }
+-- Swatch color of a choice (camelot: the choice's swatchColor1), read from the choice's
+-- texture by tools/customization_colors.py (ForeverUIGlueColors.lua). Only skin (1) and
+-- hair color (4) have one, as in camelot.
+local SWATCHES = { [1] = "skinColor", [4] = "hair" }
 
--- LA LUMIERE DU DECOR. Chaque decor eclaire le personnage de ses lumieres
--- (RaceLights du client, que pose SetLighting) : celui du chevalier de la
--- mort n'a qu'une ambiante bleu-cyan, ou une peau pale parait bleutee ;
--- celui de l'orc, une directionnelle orangee qui fait virer le cyan au vert.
--- Sans elle, la teinte de l'echantillon de peau ne correspondait pas au
--- personnage (constate le 2026-09-27, surtout en chevalier de la mort).
--- Teinte : ambiante entiere, directionnelle a moitie (un corps n'en recoit
--- qu'une part), ramenee a 1 sur sa plus forte composante.
-local PART_DIRECTIONNELLE = 0.5
-local function teinteDuDecor()
-	local nom = GetCreateBackgroundModel and GetCreateBackgroundModel()
-	local lumieres = nom and RaceLights and RaceLights[string.upper(nom)]
-	if not lumieres then
+-- Scenery lighting: each scenery lights the character with its RaceLights (set by
+-- SetLighting). The death knight's has only a blue-cyan ambient that makes pale skin bluish;
+-- the orc's has an orange directional that turns cyan green. The skin swatch is tinted to
+-- match: full ambient, half directional (a body gets only part of it), normalized to 1 on
+-- the strongest component.
+local DIRECTIONAL_SHARE = 0.5
+local function sceneryTint()
+	local name = GetCreateBackgroundModel and GetCreateBackgroundModel()
+	local lights = name and RaceLights and RaceLights[string.upper(name)]
+	if not lights then
 		return nil
 	end
 	local r, g, b = 0, 0, 0
-	for _, l in ipairs(lumieres) do
-		-- { allumee, omni, direction x3, ambiante (intensite, r, g, b),
-		--   directionnelle (intensite, r, g, b) }
+	for _, l in ipairs(lights) do
+		-- { enabled, omni, direction x3, ambient (intensity, r, g, b),
+		-- directional (intensity, r, g, b) }
 		if l[1] == 1 then
-			r = r + l[6] * l[7] + l[10] * l[11] * PART_DIRECTIONNELLE
-			g = g + l[6] * l[8] + l[10] * l[12] * PART_DIRECTIONNELLE
-			b = b + l[6] * l[9] + l[10] * l[13] * PART_DIRECTIONNELLE
+			r = r + l[6] * l[7] + l[10] * l[11] * DIRECTIONAL_SHARE
+			g = g + l[6] * l[8] + l[10] * l[12] * DIRECTIONAL_SHARE
+			b = b + l[6] * l[9] + l[10] * l[13] * DIRECTIONAL_SHARE
 		end
 	end
 	local m = math.max(r, g, b)
@@ -1114,15 +1026,16 @@ local function teinteDuDecor()
 	return r / m, g / m, b / m
 end
 
-local function couleurDe(i, v)
-	local genre = ECHANTILLONS[i]
-	local race = genre and v and G.couleurs and lireRaces()[GetSelectedRace()]
-	local t = race and G.couleurs[race.fichier]
+-- Swatch color { r, g, b } of choice v of setting i, or nil
+local function colorOf(i, v)
+	local kind = SWATCHES[i]
+	local race = kind and v and G.colors and readRaces()[GetSelectedRace()]
+	local t = race and G.colors[race.file]
 	t = t and t[(GetSelectedSex() == SEX_FEMALE) and 1 or 0]
-	t = t and t[genre]
+	t = t and t[kind]
 	local c = t and t[v]
-	if c and genre == "peau" then
-		local r, g, b = teinteDuDecor()
+	if c and kind == "skinColor" then
+		local r, g, b = sceneryTint()
 		if r then
 			return { c[1] * r, c[2] * g, c[3] * b }
 		end
@@ -1130,590 +1043,581 @@ local function couleurDe(i, v)
 	return c
 end
 
--- Le nom d'un choix (demande du 2026-09-29 : dans la case et dans la liste) :
--- le client patche rend, par CycleCharCustomization(reglage, 0, n), apres
--- l'indice, le nom du choix n (BarberShopStyle.dbc, dans la langue du
--- client), ou nil. Un client patche avant cette piece ne rend que l'indice :
--- on ne se fie qu'a une reponse de deux valeurs. Seules la coiffure, la
--- pilosite et la peau ont des noms (les peaux des taurens, vides).
-local NOMMES = { [1] = true, [3] = true, [5] = true }
+-- Name of a choice (in the box and the list): the patched client returns, from
+-- CycleCharCustomization(setting, 0, n), the index then the name of choice n
+-- (BarberShopStyle.dbc, client language) or nil. Older patches return only the index, so
+-- only a two-value answer counts. Only skin, hair style and facial hair have names
+-- (tauren skins are empty).
+local NAMED = { [1] = true, [3] = true, [5] = true }
 local function second(...)
 	if select("#", ...) == 2 then
 		return (select(2, ...))
 	end
 end
-local function nomDe(i, v)
-	if not (NOMMES[i] and v) then
+local function nameOf(i, v)
+	if not (NAMED[i] and v) then
 		return nil
 	end
-	local nom = second(CycleCharCustomization(i, 0, v))
-	if type(nom) == "string" and nom ~= "" then
-		return nom
+	local name = second(CycleCharCustomization(i, 0, v))
+	if type(name) == "string" and name ~= "" then
+		return name
 	end
 end
 
--- ------------------------------------------------------------ mode 2 : la liste ouverte
+-- ------------------------------------------------------------ Mode 2: open list
 
--- MenuStyle2 : fond common-dropdown-c-bg de (-17, 12) a (17, -22), marges
--- 3 / 6 / 3 / 7, a l'echelle de la case, TOPRIGHT sur son BOTTOMRIGHT ; grille
--- verticale, 1 colonne jusqu'a 10 choix, 2 jusqu'a 24, 3 jusqu'a 36, 4
--- au-dela, et plus de colonnes si la liste descendrait a moins de 100 du bas ;
--- elements de 20 (DarkMenuElement : details a 14 du bord, 116 de large sur
--- une colonne, 42 sur plusieurs -- 108 avec des noms --, plus 14) ;
--- SelectionName a droite du numero, borne a la largeur de l'element moins 2
--- et le numero ; survol : common-dropdown-customize-mouseover a 0,15 et
--- apercu du choix sur le personnage ; choix en cours dore, les autres gris ;
--- un clic choisit et referme.
-local menu = CreateFrame("Frame", "ForeverUICharacterCreateChoiceMenu", perso)
+-- MenuStyle2: common-dropdown-c-bg from (-17, 12) to (17, -22), margins 3 / 6 / 3 / 7, at
+-- the box's scale, TOPRIGHT on its BOTTOMRIGHT. Vertical grid: 1 column up to 10 choices,
+-- 2 up to 24, 3 up to 36, 4 beyond, more if the list would come within 100 of the bottom.
+-- Entries are 20 high (DarkMenuElement: details 14 from the edge, 116 wide on one column,
+-- 42 on several, 108 with names, plus 14); SelectionName right of the number, capped to the
+-- entry width minus 2 and the number. Hover: common-dropdown-customize-mouseover at 0.15 and
+-- a preview on the character; current choice gold, others gray; a click selects and closes.
+local menu = CreateFrame("Frame", "ForeverUICharacterCreateChoiceMenu", character)
 menu:SetFrameStrata("FULLSCREEN_DIALOG")
 menu:SetFrameLevel(20)
 menu:SetScale(1.55)
 menu:EnableMouse(true)
 menu:Hide()
-local fondMenu = G.AtlasEtire(menu, "common-dropdown-c-bg", "BACKGROUND")
-fondMenu.rect:SetPoint("TOPLEFT", menu, "TOPLEFT", -17, 12)
-fondMenu.rect:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", 17, -22)
--- un clic hors de la liste la referme sans rien choisir
-local capteur = CreateFrame("Button", nil, perso)
-capteur:SetFrameStrata("FULLSCREEN_DIALOG")
-capteur:SetFrameLevel(10)
-capteur:SetAllPoints(GlueParent)
-capteur:Hide()
--- la largeur d'un nom, mesuree sur un texte jamais borne (un element
--- reutilise mesurerait dans la largeur posee pour le precedent)
-local mesure = menu:CreateFontString(nil, "OVERLAY")
-mesure:SetFontObject(G.Police("GameFontNormal"))
-mesure:SetAlpha(0)
+local menuBackground = G.StretchedAtlas(menu, "common-dropdown-c-bg", "BACKGROUND")
+menuBackground.rect:SetPoint("TOPLEFT", menu, "TOPLEFT", -17, 12)
+menuBackground.rect:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", 17, -22)
+-- A click outside the list closes it without choosing
+local catcher = CreateFrame("Button", nil, character)
+catcher:SetFrameStrata("FULLSCREEN_DIALOG")
+catcher:SetFrameLevel(10)
+catcher:SetAllPoints(GlueParent)
+catcher:Hide()
+-- Measures name widths on a never-constrained string (a reused entry would measure within
+-- the width set for the previous one)
+local measure = menu:CreateFontString(nil, "OVERLAY")
+measure:SetFontObject(G.Font("GameFontNormal"))
+measure:SetAlpha(0)
 
-local ouvert        -- { ligne, choisi } tant qu'une liste est ouverte
-local entrees = {}
-local peindreCase
+local isOpen        -- { row, selected } while a list is open
+local entries = {}
+local paintDropdown
 
--- ECART voulu (27/09) : camelot montre l'apercu des le survol d'une ligne ;
--- ici apres un arret de APERCU_DELAI sur elle. Chaque apercu fait
--- recomposer au moteur les textures du personnage, ce qui gele en haute
--- definition : balayer la liste n'en declenche ainsi qu'un.
--- LE TEMPS COMPTE. Un apercu gele le moteur, et l'image d'apres recoit le
--- gel entier comme temps ecoule : compte tel quel, il vidait d'un coup le
--- delai de la ligne suivante, et chaque gel relancait un apercu (constate le
--- 2026-09-27). L'image du survol ne compte donc pas, et une image ne compte
--- jamais plus de APERCU_PAS_MAX.
-local APERCU_DELAI = 0.1
-local APERCU_PAS_MAX = 0.05
-local apercu        -- { k, attente, neuf } : la ligne survolee, pas encore montree
-menu:SetScript("OnUpdate", function(_, ecoule)
-	if not apercu then
+-- Deliberate deviation: camelot previews on hover; here only after resting PREVIEW_DELAY on
+-- a row. Each preview makes the engine rebuild the character textures, which stalls at high
+-- resolution, so sweeping the list triggers only one. The frame after a stall gets the whole
+-- stall as elapsed time and would empty the next row's delay at once, so the hover frame
+-- does not count and a frame never counts more than PREVIEW_MAX_STEP.
+local PREVIEW_DELAY = 0.1
+local PREVIEW_MAX_STEP = 0.05
+local preview        -- { k, pending, fresh }: hovered entry, not shown yet
+menu:SetScript("OnUpdate", function(_, elapsed)
+	if not preview then
 		return
 	end
-	if apercu.neuf then
-		apercu.neuf = false
+	if preview.fresh then
+		preview.fresh = false
 		return
 	end
-	apercu.attente = apercu.attente - math.min(ecoule, APERCU_PAS_MAX)
-	if apercu.attente <= 0 then
-		local k = apercu.k
-		apercu = nil
-		if ouvert then
-			allerA(ouvert.ligne.i, listes[ouvert.ligne.i][k])
+	preview.pending = preview.pending - math.min(elapsed, PREVIEW_MAX_STEP)
+	if preview.pending <= 0 then
+		local k = preview.k
+		preview = nil
+		if isOpen then
+			goTo(isOpen.row.i, lists[isOpen.row.i][k])
 		end
 	end
 end)
 
-local function oublierMenu()
-	ouvert = nil
-	apercu = nil
+local function forgetMenu()
+	isOpen = nil
+	preview = nil
 	menu:Hide()
-	capteur:Hide()
+	catcher:Hide()
 end
 
--- garder : le choix survole est retenu ; sinon retour au choix en cours
-local function fermerMenu(garder)
-	local o = ouvert
+-- keep: retain the hovered choice; otherwise go back to the current choice
+local function closeMenu(keep)
+	local o = isOpen
 	if not o then
 		return
 	end
-	oublierMenu()
-	if garder then
-		actualiserReglages(o.ligne.i)
+	forgetMenu()
+	if keep then
+		refreshSettings(o.row.i)
 	else
-		allerA(o.ligne.i, o.choisi)
-		peindreCase(o.ligne)
+		goTo(o.row.i, o.selected)
+		paintDropdown(o.row)
 	end
 end
-capteur:SetScript("OnClick", function() fermerMenu(false) end)
+catcher:SetScript("OnClick", function() closeMenu(false) end)
 
-local function entree(k)
-	if entrees[k] then
-		return entrees[k]
+-- List entry k, created on first use
+local function entry(k)
+	if entries[k] then
+		return entries[k]
 	end
 	local e = CreateFrame("Button", nil, menu)
 	e:SetHeight(20)
-	e.survol = G.AtlasEtire(e, "common-dropdown-customize-mouseover", "BACKGROUND")
-	e.survol.rect:SetAllPoints(e)
-	e.survol.rect:SetAlpha(0.15)
-	for _, t in ipairs(e.survol.pieces) do
+	e.hover = G.StretchedAtlas(e, "common-dropdown-customize-mouseover", "BACKGROUND")
+	e.hover.rect:SetAllPoints(e)
+	e.hover.rect:SetAlpha(0.15)
+	for _, t in ipairs(e.hover.pieces) do
 		t:SetAlpha(0.15)
 	end
-	e.survol:Montrer(false)
-	e.numero = e:CreateFontString(nil, "OVERLAY")
-	e.numero:SetFontObject(G.Police("GameFontNormal"))
-	e.numero:SetJustifyH("LEFT")
-	e.numero:SetWidth(25)
-	e.numero:SetHeight(20)
-	e.numero:SetPoint("TOPLEFT", e, "TOPLEFT", 14, 0)
-	e.nom = e:CreateFontString(nil, "OVERLAY")
-	e.nom:SetFontObject(G.Police("GameFontNormal"))
-	e.nom:SetJustifyH("LEFT")
-	e.nom:SetHeight(20)
-	e.nom:SetPoint("LEFT", e.numero, "RIGHT", 0, 0)
-	-- ColorSwatch1 a droite du numero, sa lueur, et ColorSelected (le
-	-- choix en cours) a 4 a gauche de l'echantillon
-	e.echantillon = e:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(e.echantillon, "charactercreate-customize-palette", true)
-	e.echantillon:SetPoint("LEFT", e.numero, "RIGHT", 0, 0)
-	e.lueur = e:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(e.lueur, "charactercreate-customize-palette-glow", true)
-	e.lueur:SetBlendMode("ADD")
-	e.lueur:SetPoint("CENTER", e.echantillon, "CENTER")
-	e.choisi = e:CreateTexture(nil, "ARTWORK")
-	G.PoserAtlas(e.choisi, "charactercreate-customize-palette-selected", true)
-	e.choisi:SetPoint("LEFT", e.echantillon, "LEFT", -4, 0)
+	e.hover:SetShown(false)
+	e.number = e:CreateFontString(nil, "OVERLAY")
+	e.number:SetFontObject(G.Font("GameFontNormal"))
+	e.number:SetJustifyH("LEFT")
+	e.number:SetWidth(25)
+	e.number:SetHeight(20)
+	e.number:SetPoint("TOPLEFT", e, "TOPLEFT", 14, 0)
+	e.name = e:CreateFontString(nil, "OVERLAY")
+	e.name:SetFontObject(G.Font("GameFontNormal"))
+	e.name:SetJustifyH("LEFT")
+	e.name:SetHeight(20)
+	e.name:SetPoint("LEFT", e.number, "RIGHT", 0, 0)
+	-- ColorSwatch1 right of the number, its glow, and ColorSelected (the current choice)
+	-- 4 left of the swatch
+	e.swatch = e:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(e.swatch, "charactercreate-customize-palette", true)
+	e.swatch:SetPoint("LEFT", e.number, "RIGHT", 0, 0)
+	e.glow = e:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(e.glow, "charactercreate-customize-palette-glow", true)
+	e.glow:SetBlendMode("ADD")
+	e.glow:SetPoint("CENTER", e.swatch, "CENTER")
+	e.selected = e:CreateTexture(nil, "ARTWORK")
+	G.PlaceAtlas(e.selected, "charactercreate-customize-palette-selected", true)
+	e.selected:SetPoint("LEFT", e.swatch, "LEFT", -4, 0)
 	e:SetScript("OnEnter", function(self)
-		self.survol:Montrer(true)
-		if ouvert then
-			apercu = { k = self.k, attente = APERCU_DELAI, neuf = true }
+		self.hover:SetShown(true)
+		if isOpen then
+			preview = { k = self.k, pending = PREVIEW_DELAY, fresh = true }
 		end
 	end)
 	e:SetScript("OnLeave", function(self)
-		self.survol:Montrer(false)
-		if apercu and apercu.k == self.k then
-			apercu = nil
+		self.hover:SetShown(false)
+		if preview and preview.k == self.k then
+			preview = nil
 		end
 	end)
 	e:SetScript("OnClick", function(self)
-		if ouvert then
-			apercu = nil
+		if isOpen then
+			preview = nil
 			PlaySound("gsCharacterCreationLook")
-			allerA(ouvert.ligne.i, listes[ouvert.ligne.i][self.k])
-			fermerMenu(true)
+			goTo(isOpen.row.i, lists[isOpen.row.i][self.k])
+			closeMenu(true)
 		end
 	end)
-	entrees[k] = e
+	entries[k] = e
 	return e
 end
 
-local function ouvrirMenu(ligne)
-	local liste = listes[ligne.i]
-	if not liste then
+local function openMenu(row)
+	local list = lists[row.i]
+	if not list then
 		return
 	end
-	local n = #liste
-	local choisi = rang(liste, indice(ligne.i)) or 1
-	local colonnes = (n > 36 and 4) or (n > 24 and 3) or (n > 10 and 2) or 1
-	local rangees = math.ceil(n / colonnes)
-	-- compactionMargin : le haut de la liste est le bas de la case
-	local haut = ligne.case:GetBottom()
-	if haut then
-		local maxi = math.max(1, math.floor((haut - 100) / 20))
-		if rangees > maxi then
-			colonnes = math.ceil(n / maxi)
-			rangees = math.ceil(n / colonnes)
+	local n = #list
+	local selected = rank(list, index(row.i)) or 1
+	local columns = (n > 36 and 4) or (n > 24 and 3) or (n > 10 and 2) or 1
+	local rowLines = math.ceil(n / columns)
+	-- compactionMargin: the list's top is the box's bottom
+	local top = row.cell:GetBottom()
+	if top then
+		local maxValue = math.max(1, math.floor((top - 100) / 20))
+		if rowLines > maxValue then
+			columns = math.ceil(n / maxValue)
+			rowLines = math.ceil(n / columns)
 		end
 	end
-	-- AdjustWidth : sur plusieurs colonnes, numero (25) + ColorSwatch2 (36)
-	-- + 18 quand les choix ont une couleur, 42 sinon
-	local couleurs = couleurDe(ligne.i, liste[1]) and true
-	local noms = {}
-	local nommes = false
-	if not couleurs then
+	-- AdjustWidth: on several columns, number (25) + ColorSwatch2 (36) + 18 when choices have
+	-- a color, 42 otherwise
+	local colors = colorOf(row.i, list[1]) and true
+	local names = {}
+	local anyNamed = false
+	if not colors then
 		for k = 1, n do
-			noms[k] = nomDe(ligne.i, liste[k])
-			nommes = nommes or noms[k] ~= nil
+			names[k] = nameOf(row.i, list[k])
+			anyNamed = anyNamed or names[k] ~= nil
 		end
 	end
 	local details = 116
-	if colonnes > 1 then
-		details = (couleurs and (25 + 36 + 18)) or (nommes and 108) or 42
+	if columns > 1 then
+		details = (colors and (25 + 36 + 18)) or (anyNamed and 108) or 42
 	end
-	local largeur = 14 + details + 14
+	local width = 14 + details + 14
 	menu:ClearAllPoints()
-	menu:SetPoint("TOPRIGHT", ligne.case, "BOTTOMRIGHT")
-	menu:SetWidth(3 + colonnes * largeur + 3)
-	menu:SetHeight(6 + rangees * 20 + 7)
+	menu:SetPoint("TOPRIGHT", row.cell, "BOTTOMRIGHT")
+	menu:SetWidth(3 + columns * width + 3)
+	menu:SetHeight(6 + rowLines * 20 + 7)
 	for k = 1, n do
-		local e = entree(k)
+		local e = entry(k)
 		e.k = k
-		e:SetWidth(largeur)
+		e:SetWidth(width)
 		e:ClearAllPoints()
-		e:SetPoint("TOPLEFT", menu, "TOPLEFT", 3 + math.floor((k - 1) / rangees) * largeur, -(6 + ((k - 1) % rangees) * 20))
-		e.numero:SetText(k)
-		local nom = noms[k]
-		if nom then
-			mesure:SetText(nom)
-			e.nom:SetWidth(math.min(mesure:GetStringWidth(), largeur - 2 - 25))
-			e.nom:SetText(nom)
+		e:SetPoint("TOPLEFT", menu, "TOPLEFT", 3 + math.floor((k - 1) / rowLines) * width, -(6 + ((k - 1) % rowLines) * 20))
+		e.number:SetText(k)
+		local name = names[k]
+		if name then
+			measure:SetText(name)
+			e.name:SetWidth(math.min(measure:GetStringWidth(), width - 2 - 25))
+			e.name:SetText(name)
 		end
-		G.Montrer(e.nom, nom)
-		if k == choisi then
-			e.numero:SetTextColor(1, 0.82, 0)
-			e.nom:SetTextColor(1, 0.82, 0)
+		G.SetShown(e.name, name)
+		if k == selected then
+			e.number:SetTextColor(1, 0.82, 0)
+			e.name:SetTextColor(1, 0.82, 0)
 		else
-			e.numero:SetTextColor(0.5, 0.5, 0.5)
-			e.nom:SetTextColor(0.5, 0.5, 0.5)
+			e.number:SetTextColor(0.5, 0.5, 0.5)
+			e.name:SetTextColor(0.5, 0.5, 0.5)
 		end
-		e.survol:Montrer(false)
-		local couleur = couleurDe(ligne.i, liste[k])
-		if couleur then
-			e.echantillon:SetVertexColor(couleur[1], couleur[2], couleur[3])
+		e.hover:SetShown(false)
+		local color = colorOf(row.i, list[k])
+		if color then
+			e.swatch:SetVertexColor(color[1], color[2], color[3])
 		end
-		G.Montrer(e.echantillon, couleur)
-		G.Montrer(e.lueur, couleur)
-		G.Montrer(e.choisi, couleur and k == choisi)
+		G.SetShown(e.swatch, color)
+		G.SetShown(e.glow, color)
+		G.SetShown(e.selected, color and k == selected)
 		e:Show()
 	end
-	for k = n + 1, #entrees do
-		entrees[k]:Hide()
+	for k = n + 1, #entries do
+		entries[k]:Hide()
 	end
-	ouvert = { ligne = ligne, choisi = liste[choisi] }
+	isOpen = { row = row, selected = list[selected] }
 	menu:Show()
-	capteur:Show()
-	peindreCase(ligne)
+	catcher:Show()
+	paintDropdown(row)
 end
 
--- WowStyle2Dropdown : fond selon l'etat (enfonce, survole, ouvert), fleche
--- au survol, details decales de (1, -1) enfonces
-peindreCase = function(ligne)
-	local b = ligne.bouton
-	local nom = "common-dropdown-c-button"
-	if b.bas and b.dessus then
-		nom = "common-dropdown-c-button-pressedhover-1"
-	elseif b.bas then
-		nom = "common-dropdown-c-button-pressed-1"
-	elseif b.dessus then
-		nom = "common-dropdown-c-button-hover-1"
-	elseif ouvert and ouvert.ligne == ligne then
-		nom = "common-dropdown-c-button-open"
+-- WowStyle2Dropdown: background per state (pressed, hovered, open), arrow on hover,
+-- details offset by (1, -1) when pressed
+paintDropdown = function(row)
+	local b = row.button
+	local name = "common-dropdown-c-button"
+	if b.down and b.hovered then
+		name = "common-dropdown-c-button-pressedhover-1"
+	elseif b.down then
+		name = "common-dropdown-c-button-pressed-1"
+	elseif b.hovered then
+		name = "common-dropdown-c-button-hover-1"
+	elseif isOpen and isOpen.row == row then
+		name = "common-dropdown-c-button-open"
 	end
-	ligne.fond:Poser(nom)
-	G.Montrer(ligne.fleche, b.dessus)
-	local dx, dy = b.bas and 1 or 0, b.bas and -1 or 0
-	ligne.numero:ClearAllPoints()
-	ligne.numero:SetPoint("CENTER", ligne.case, "CENTER", dx, dy)
-	ligne.echantillon:ClearAllPoints()
-	ligne.echantillon:SetPoint("CENTER", ligne.case, "CENTER", dx, dy)
-	ligne.texte:ClearAllPoints()
-	ligne.texte:SetPoint("LEFT", ligne.case, "LEFT", 13 + dx, dy)
-	ligne.texte:SetPoint("RIGHT", ligne.case, "RIGHT", -13 + dx, dy)
+	row.background:Place(name)
+	G.SetShown(row.arrow, b.hovered)
+	local dx, dy = b.down and 1 or 0, b.down and -1 or 0
+	row.number:ClearAllPoints()
+	row.number:SetPoint("CENTER", row.cell, "CENTER", dx, dy)
+	row.swatch:ClearAllPoints()
+	row.swatch:SetPoint("CENTER", row.cell, "CENTER", dx, dy)
+	row.text:ClearAllPoints()
+	row.text:SetPoint("LEFT", row.cell, "LEFT", 13 + dx, dy)
+	row.text:SetPoint("RIGHT", row.cell, "RIGHT", -13 + dx, dy)
 end
 
-for _, ligne in ipairs(lignes) do
-	local b, i = ligne.bouton, ligne.i
-	b:SetScript("OnEnter", function(self) self.dessus = true; peindreCase(ligne) end)
-	b:SetScript("OnLeave", function(self) self.dessus = nil; peindreCase(ligne) end)
-	b:SetScript("OnMouseDown", function(self) self.bas = true; peindreCase(ligne) end)
-	b:SetScript("OnMouseUp", function(self) self.bas = nil; peindreCase(ligne) end)
-	b:SetScript("OnHide", function(self) self.dessus, self.bas = nil, nil end)
+for _, row in ipairs(rows) do
+	local b, i = row.button, row.i
+	b:SetScript("OnEnter", function(self) self.hovered = true; paintDropdown(row) end)
+	b:SetScript("OnLeave", function(self) self.hovered = nil; paintDropdown(row) end)
+	b:SetScript("OnMouseDown", function(self) self.down = true; paintDropdown(row) end)
+	b:SetScript("OnMouseUp", function(self) self.down = nil; paintDropdown(row) end)
+	b:SetScript("OnHide", function(self) self.hovered, self.down = nil, nil end)
 	b:SetScript("OnClick", function()
-		if ouvert and ouvert.ligne == ligne then
-			fermerMenu(false)
+		if isOpen and isOpen.row == row then
+			closeMenu(false)
 		else
-			fermerMenu(false)
-			ouvrirMenu(ligne)
+			closeMenu(false)
+			openMenu(row)
 		end
 	end)
-	-- la molette sur la case : vers le bas le choix suivant
-	b:SetScript("OnMouseWheel", function(_, sens)
-		fermerMenu(false)
-		if sens < 0 then
+	-- Mouse wheel on the box: down selects the next choice
+	b:SetScript("OnMouseWheel", function(_, direction)
+		closeMenu(false)
+		if direction < 0 then
 			CharacterCustomization_Right(i)
 		else
 			CharacterCustomization_Left(i)
 		end
-		actualiserReglages(i)
+		refreshSettings(i)
 	end)
 end
 
--- les noms des reglages : ceux du client (CharacterCreate_OnLoad et
--- CharacterCreate_UpdateHairCustomization) ; en mode 2, le numero du choix.
--- Les listes se recalculent toutes a chaque fois : sans le moteur, c'est
--- immediat.
-actualiserReglages = function()
-	local cheveux, poils = GetHairCustomization(), GetFacialHairCustomization()
-	local noms = {
+-- Setting names are the client's (CharacterCreate_OnLoad and
+-- CharacterCreate_UpdateHairCustomization); in mode 2, the choice number.
+-- All lists are recomputed each time: without the engine this is instant.
+refreshSettings = function()
+	local hair, facialHair = GetHairCustomization(), GetFacialHairCustomization()
+	local names = {
 		CHAR_CUSTOMIZATION1_DESC, CHAR_CUSTOMIZATION2_DESC,
-		_G["HAIR_" .. cheveux .. "_STYLE"], _G["HAIR_" .. cheveux .. "_COLOR"],
-		_G["FACIAL_HAIR_" .. poils],
+		_G["HAIR_" .. hair .. "_STYLE"], _G["HAIR_" .. hair .. "_COLOR"],
+		_G["FACIAL_HAIR_" .. facialHair],
 	}
-	for i, ligne in ipairs(lignes) do
-		local v = indice(i)
+	for i, row in ipairs(rows) do
+		local v = index(i)
 		if not v then
-			listes[i] = nil
+			lists[i] = nil
 		else
-			listes[i] = calculer(i)
-			-- secours : la valeur du moteur manque a la liste calculee
-			if not (listes[i] and rang(listes[i], v)) then
-				listes[i] = lister(i)
+			lists[i] = compute(i)
+			-- Fallback: the engine value is missing from the computed list
+			if not (lists[i] and rank(lists[i], v)) then
+				lists[i] = enumerate(i)
 			end
 		end
-		local position = v and listes[i] and rang(listes[i], v)
-		local couleur = position and couleurDe(i, v)
-		if couleur then
-			ligne.echantillon:SetVertexColor(couleur[1], couleur[2], couleur[3])
+		local position = v and lists[i] and rank(lists[i], v)
+		local color = position and colorOf(i, v)
+		if color then
+			row.swatch:SetVertexColor(color[1], color[2], color[3])
 		end
-		G.Montrer(ligne.echantillon, couleur)
-		G.Montrer(ligne.lueur, couleur)
-		-- le nom du choix dans la case (peau : l'echantillon d'abord)
-		local nom = position and not couleur and nomDe(i, v)
+		G.SetShown(row.swatch, color)
+		G.SetShown(row.glow, color)
+		-- Choice name in the box (skin: the swatch takes precedence)
+		local name = position and not color and nameOf(i, v)
 		if position then
-			ligne.titre:SetText(noms[i] or "")
-			ligne.numero:SetText(position)
-			ligne.texte:SetText(nom or "")
-			G.Montrer(ligne.texte, nom)
-			ligne.titre:Show()
-			G.Montrer(ligne.numero, not couleur and not nom)
-			ligne.bouton:Show()
+			row.title:SetText(names[i] or "")
+			row.number:SetText(position)
+			row.text:SetText(name or "")
+			G.SetShown(row.text, name)
+			row.title:Show()
+			G.SetShown(row.number, not color and not name)
+			row.button:Show()
 		else
-			ligne.texte:SetText(noms[i] or "")
-			ligne.texte:Show()
-			ligne.titre:Hide()
-			ligne.numero:Hide()
-			ligne.bouton:Hide()
+			row.text:SetText(names[i] or "")
+			row.text:Show()
+			row.title:Hide()
+			row.number:Hide()
+			row.button:Hide()
 		end
-		peindreCase(ligne)
+		paintDropdown(row)
 	end
 end
 
 -- NameChoiceFrame
-local choixNom = CreateFrame("Frame", "ForeverUICharacterCreateNameChoice", perso)
-choixNom:SetFrameLevel(perso:GetFrameLevel() + 4)
--- ECART voulu (27/09) : en BAS de l'ecran (camelot : en haut) et retourne
--- en miroir -- equerres en bas, titre sous le champ, de et champ remontes
-choixNom:SetPoint("BOTTOM", perso, "BOTTOM", 0, 0)
-local dimensionnerNom = cadreBronze(choixNom, { { "heavybronze-horz-cornerbracket-br", "BOTTOMRIGHT" }, { "heavybronze-horz-cornerbracket-bl", "BOTTOMLEFT" } })
--- ECART voulu (27/09) : les 800 de camelot logent le nom et le nom de
--- famille ; 3.3.5 n'a que le nom : 10 + 48 (de) + 343 (champ) + 48 + 10, le
--- champ centre sous le titre
-dimensionnerNom(10 + 48 + 343 + 48 + 10, 90)
-local titreNom = choixNom:CreateFontString(nil, "ARTWORK")
-titreNom:SetFontObject(G.Police("GameFontHighlightLarge2"))
-titreNom:SetPoint("BOTTOM", choixNom, "BOTTOM", 0, 16)
-titreNom:SetText(NAME)
+local nameChoice = CreateFrame("Frame", "ForeverUICharacterCreateNameChoice", character)
+nameChoice:SetFrameLevel(character:GetFrameLevel() + 4)
+-- Deliberate deviation: at the BOTTOM of the screen (camelot: top) and mirrored:
+-- brackets at the bottom, title under the field, dice and field raised
+nameChoice:SetPoint("BOTTOM", character, "BOTTOM", 0, 0)
+local sizeName = bronzeFrame(nameChoice, { { "heavybronze-horz-cornerbracket-br", "BOTTOMRIGHT" }, { "heavybronze-horz-cornerbracket-bl", "BOTTOMLEFT" } })
+-- Deliberate deviation: camelot's 800 holds first and last name; 3.3.5 has only a name:
+-- 10 + 48 (dice) + 343 (field) + 48 + 10, the field centered under the title
+sizeName(10 + 48 + 343 + 48 + 10, 90)
+local nameTitle = nameChoice:CreateFontString(nil, "ARTWORK")
+nameTitle:SetFontObject(G.Font("GameFontHighlightLarge2"))
+nameTitle:SetPoint("BOTTOM", nameChoice, "BOTTOM", 0, 16)
+nameTitle:SetText(NAME)
 
--- RandomNameButton : le nom au hasard du client, quand il le permet
-local hasardNom = CreateFrame("Button", "ForeverUICharacterCreateRandomNameButton", choixNom)
-G.BoutonCarreIcone(hasardNom, "charactercreate-icon-dice", 24, "OVERLAY")
-hasardNom:SetPoint("LEFT", choixNom, "LEFT", 10, 10)
-hasardNom:SetScript("OnClick", function()
+-- RandomNameButton: the client's random name, when it allows it
+local randomName = CreateFrame("Button", "ForeverUICharacterCreateRandomNameButton", nameChoice)
+G.SquareIconButton(randomName, "charactercreate-icon-dice", 24, "OVERLAY")
+randomName:SetPoint("LEFT", nameChoice, "LEFT", 10, 10)
+randomName:SetScript("OnClick", function()
 	CharacterCreateNameEdit:SetText(GetRandomName())
 	PlaySound("gsCharacterCreationLook")
 end)
-infobulleGauche(hasardNom, RANDOMIZE)
+leftTooltip(randomName, RANDOMIZE)
 
--- le champ du client, habille en SharedEditBoxTemplate et pose dans le cadre
--- (ancre, sans changer de parent)
-local champNom = CharacterCreateNameEdit
-champNom:SetBackdrop(nil)
--- seule l'etiquette « Name » du client s'efface : GetRegions rend aussi le
--- texte meme du champ
-for _, r in ipairs({ champNom:GetRegions() }) do
+-- The client's name field, styled as SharedEditBoxTemplate and anchored in the frame
+-- (without changing its parent)
+local nameField = CharacterCreateNameEdit
+nameField:SetBackdrop(nil)
+-- Hide only the client's "Name" label: GetRegions also returns the field's own text
+for _, r in ipairs({ nameField:GetRegions() }) do
 	if r:GetObjectType() == "FontString" and r:GetText() == NAME then
 		r:SetAlpha(0)
 		r:Hide()
 	end
 end
-local bordG = champNom:CreateTexture(nil, "BACKGROUND")
-G.PoserAtlas(bordG, "common-gray-button-entrybox-left", true)
-bordG:SetPoint("LEFT", champNom, "LEFT")
-local bordD = champNom:CreateTexture(nil, "BACKGROUND")
-G.PoserAtlas(bordD, "common-gray-button-entrybox-right", true)
-bordD:SetPoint("RIGHT", champNom, "RIGHT")
-local bordM = champNom:CreateTexture(nil, "BACKGROUND")
-G.PoserAtlas(bordM, "common-gray-button-entrybox-center")
-bordM:SetPoint("TOPLEFT", bordG, "TOPRIGHT")
-bordM:SetPoint("BOTTOMRIGHT", bordD, "BOTTOMLEFT")
-champNom:SetWidth(343)
-champNom:SetHeight(48)
-champNom:SetFontObject(G.Police("NumberFont_Shadow_Large"))
-champNom:SetJustifyH("CENTER")
-champNom:SetTextInsets(0, 0, 0, 0)
-champNom:SetFrameLevel(choixNom:GetFrameLevel() + 2)
-champNom:ClearAllPoints()
-champNom:SetPoint("LEFT", hasardNom, "RIGHT", 0, 0)
--- CharacterCreateEditBoxMixin : Echap recule, Entree avance
-champNom:SetScript("OnEscapePressed", function() retour:Click() end)
-champNom:SetScript("OnEnterPressed", function() avancer:Click() end)
+local edgeLeft = nameField:CreateTexture(nil, "BACKGROUND")
+G.PlaceAtlas(edgeLeft, "common-gray-button-entrybox-left", true)
+edgeLeft:SetPoint("LEFT", nameField, "LEFT")
+local edgeRight = nameField:CreateTexture(nil, "BACKGROUND")
+G.PlaceAtlas(edgeRight, "common-gray-button-entrybox-right", true)
+edgeRight:SetPoint("RIGHT", nameField, "RIGHT")
+local middleEdge = nameField:CreateTexture(nil, "BACKGROUND")
+G.PlaceAtlas(middleEdge, "common-gray-button-entrybox-center")
+middleEdge:SetPoint("TOPLEFT", edgeLeft, "TOPRIGHT")
+middleEdge:SetPoint("BOTTOMRIGHT", edgeRight, "BOTTOMLEFT")
+nameField:SetWidth(343)
+nameField:SetHeight(48)
+nameField:SetFontObject(G.Font("NumberFont_Shadow_Large"))
+nameField:SetJustifyH("CENTER")
+nameField:SetTextInsets(0, 0, 0, 0)
+nameField:SetFrameLevel(nameChoice:GetFrameLevel() + 2)
+nameField:ClearAllPoints()
+nameField:SetPoint("LEFT", randomName, "RIGHT", 0, 0)
+-- CharacterCreateEditBoxMixin: Escape goes back, Enter goes forward
+nameField:SetScript("OnEscapePressed", function() backButton:Click() end)
+nameField:SetScript("OnEnterPressed", function() forwardButton:Click() end)
 
--- SmallButtons, sans le zoom (3.3.5 n'en a pas a la creation : la camera du
--- decor appartient a son modele et le suit)
-local FACE_DEFAUT = -15    -- CharacterCreate_OnShow du client
-local petits = CreateFrame("Frame", nil, perso)
-petits:SetFrameLevel(perso:GetFrameLevel() + 4)
-petits:SetPoint("TOPLEFT", perso, "TOPLEFT", 40, -30)
-local dimensionnerPetits = cadreBronze(petits, {}, 8)
--- HorizontalLayoutFrame : 10, 48 par bouton a -5 d'ecart, 30 de plus avant
--- la rotation, 10
-local X_PETITS = { 10, 10 + 43 + 30, 10 + 86 + 30 }
-dimensionnerPetits(X_PETITS[3] + 48 + 10, 10 + 48 + 10)
+-- SmallButtons without zoom (3.3.5 has none at creation: the scenery camera belongs to its
+-- model and follows it)
+local DEFAULT_FACING = -15    -- client's CharacterCreate_OnShow
+local smallButtons = CreateFrame("Frame", nil, character)
+smallButtons:SetFrameLevel(character:GetFrameLevel() + 4)
+smallButtons:SetPoint("TOPLEFT", character, "TOPLEFT", 40, -30)
+local sizeSmallButtons = bronzeFrame(smallButtons, {}, 8)
+-- HorizontalLayoutFrame: 10, 48 per button with -5 spacing, 30 more before rotation, 10
+local SMALL_BUTTONS_X = { 10, 10 + 43 + 30, 10 + 86 + 30 }
+sizeSmallButtons(SMALL_BUTTONS_X[3] + 48 + 10, 10 + 48 + 10)
 
-local function petitBouton(icone, x, texte)
-	local b = CreateFrame("Button", nil, petits)
-	G.BoutonCarreIcone(b, icone, 24, "OVERLAY")
-	b:SetPoint("TOPLEFT", petits, "TOPLEFT", x, -10)
+-- Square button in the small-button frame; x: left offset; text: tooltip
+local function smallButton(icon, x, text)
+	local b = CreateFrame("Button", nil, smallButtons)
+	G.SquareIconButton(b, icon, 24, "OVERLAY")
+	b:SetPoint("TOPLEFT", smallButtons, "TOPLEFT", x, -10)
 	b:SetScript("OnEnter", function(self)
 		GlueTooltip_SetOwner(self, nil, -5, -5, "TOPLEFT", "BOTTOMRIGHT")
-		GlueTooltip_SetText(texte, nil, 1.0, 1.0, 1.0)
+		GlueTooltip_SetText(text, nil, 1.0, 1.0, 1.0)
 	end)
 	b:SetScript("OnLeave", function() GlueTooltip:Hide() end)
 	return b
 end
 
--- ResetSubjectRotation : vers l'orientation par defaut en 0,25 s
-local reinit = petitBouton("common-icon-undo", X_PETITS[1], TEXTE.RESET_CAMERA)
-reinit:SetScript("OnClick", function(self)
+-- ResetSubjectRotation: back to the default facing in 0.25 s
+local resetButton = smallButton("common-icon-undo", SMALL_BUTTONS_X[1], TEXT.RESET_CAMERA)
+resetButton:SetScript("OnClick", function(self)
 	PlaySound("igMainMenuOptionCheckBoxOn")
-	local depart, t = GetCharacterCreateFacing(), 0
-	local ecart = ((FACE_DEFAUT - depart + 180) % 360) - 180
-	self:SetScript("OnUpdate", function(soi, ecoule)
-		t = t + ecoule
+	local origin, t = GetCharacterCreateFacing(), 0
+	local gap = ((DEFAULT_FACING - origin + 180) % 360) - 180
+	self:SetScript("OnUpdate", function(me, elapsed)
+		t = t + elapsed
 		local p = math.min(1, t / 0.25)
-		SetCharacterCreateFacing(depart + ecart * p)
+		SetCharacterCreateFacing(origin + gap * p)
 		if p >= 1 then
-			soi:SetScript("OnUpdate", nil)
+			me:SetScript("OnUpdate", nil)
 		end
 	end)
 end)
 
--- CustomizationClickOrHoldButton : un clic tourne de pas, tenu plus de
--- 0,25 s tourne de parSeconde
-local function tourner(b, pas, parSeconde)
-	G.Accrocher(b, "OnMouseDown", function(self)
-		self.tenu = false
-		self.attente = 0.25
-		self:SetScript("OnUpdate", function(soi, ecoule)
-			if soi.attente then
-				soi.attente = soi.attente - ecoule
-				if soi.attente >= 0 then
+-- CustomizationClickOrHoldButton: a click turns by step, holding over 0.25 s turns by
+-- perSecond degrees per second
+local function rotate(b, step, perSecond)
+	G.Hook(b, "OnMouseDown", function(self)
+		self.held = false
+		self.pending = 0.25
+		self:SetScript("OnUpdate", function(me, elapsed)
+			if me.pending then
+				me.pending = me.pending - elapsed
+				if me.pending >= 0 then
 					return
 				end
-				ecoule = ecoule + soi.attente
-				soi.attente = nil
+				elapsed = elapsed + me.pending
+				me.pending = nil
 			end
-			soi.tenu = true
-			SetCharacterCreateFacing(GetCharacterCreateFacing() + parSeconde * ecoule)
+			me.held = true
+			SetCharacterCreateFacing(GetCharacterCreateFacing() + perSecond * elapsed)
 		end)
 	end)
-	G.Accrocher(b, "OnMouseUp", function(self)
-		self.attente = nil
+	G.Hook(b, "OnMouseUp", function(self)
+		self.pending = nil
 		self:SetScript("OnUpdate", nil)
 	end)
-	G.Accrocher(b, "OnHide", function(self)
-		self.attente = nil
+	G.Hook(b, "OnHide", function(self)
+		self.pending = nil
 		self:SetScript("OnUpdate", nil)
 	end)
 	b:SetScript("OnClick", function(self)
 		PlaySound("igMainMenuOptionCheckBoxOn")
-		if not self.tenu then
-			SetCharacterCreateFacing(GetCharacterCreateFacing() + pas)
+		if not self.held then
+			SetCharacterCreateFacing(GetCharacterCreateFacing() + step)
 		end
 	end)
 end
-tourner(petitBouton("common-icon-rotateleft", X_PETITS[2], TEXTE.ROTATE_LEFT), -10, -100)
-tourner(petitBouton("common-icon-rotateright", X_PETITS[3], TEXTE.ROTATE_RIGHT), 10, 100)
+rotate(smallButton("common-icon-rotateleft", SMALL_BUTTONS_X[2], TEXT.ROTATE_LEFT), -10, -100)
+rotate(smallButton("common-icon-rotateright", SMALL_BUTTONS_X[3], TEXT.ROTATE_RIGHT), 10, 100)
 
--- ------------------------------------------------------------ les etapes
+-- ------------------------------------------------------------ Steps
 
--- ce que le client montre et que camelot n'a pas ; ses boutons de race, de
--- classe et de sexe, caches avec leur panneau, restent cliquables par :Click()
-local CLIENT_CACHE = {
+-- Client elements camelot does not have; its race, class and sex buttons, hidden with
+-- their panel, stay clickable through :Click()
+local CLIENT_HIDDEN = {
 	CharacterCreateWoWLogo, CharacterCreateCharacterRace, CharacterCreateCharacterClass,
 	CharacterCreateConfigurationFrame, CharacterCreateRandomName,
 	CharacterCreateRotateLeft, CharacterCreateRotateRight, CharCreateOkayButton, CharCreateBackButton,
 }
 
--- le fondu de la vignette du bas (FadeOut / FadeIn, 0,25 s)
-local function fondre(vers)
-	etat.fondu = { depart = fondBas:GetAlpha(), vers = vers, t = 0 }
-	racine:SetScript("OnUpdate", function(_, ecoule)
-		local f = etat.fondu
-		f.t = f.t + ecoule
+-- Fade of the bottom vignette (FadeOut / FadeIn, 0.25 s)
+local function fadeTo(to)
+	state.fade = { origin = backgroundBottom:GetAlpha(), to = to, t = 0 }
+	root:SetScript("OnUpdate", function(_, elapsed)
+		local f = state.fade
+		f.t = f.t + elapsed
 		local p = math.min(1, f.t / 0.25)
-		fondBas:SetAlpha(f.depart + (f.vers - f.depart) * p)
+		backgroundBottom:SetAlpha(f.origin + (f.to - f.origin) * p)
 		if p >= 1 then
-			racine:SetScript("OnUpdate", nil)
+			root:SetScript("OnUpdate", nil)
 		end
 	end)
 end
 
-local function montrerMode(mode)
-	local avant = etat.mode
-	etat.mode = mode
-	local un = (mode == 1)
-	oublierMenu()
-	for _, f in ipairs(CLIENT_CACHE) do
+-- Switches step; mode: 1 race and class, 2 customization
+local function showMode(mode)
+	local forward = state.mode
+	state.mode = mode
+	local one = (mode == 1)
+	forgetMenu()
+	for _, f in ipairs(CLIENT_HIDDEN) do
 		f:Hide()
 	end
-	G.Montrer(raceClasse, un)
-	for _, f in ipairs(ENCADRES) do
-		G.Montrer(f, un)
+	G.SetShown(raceClass, one)
+	for _, f in ipairs(FRAME_BOXES) do
+		G.SetShown(f, one)
 	end
-	G.Montrer(perso, not un)
-	G.Montrer(CharacterCreateNameEdit, not un)
-	G.Montrer(hasardNom, ALLOW_RANDOM_NAME_BUTTON and true or false)
-	if un then
+	G.SetShown(character, not one)
+	G.SetShown(CharacterCreateNameEdit, not one)
+	G.SetShown(randomName, ALLOW_RANDOM_NAME_BUTTON and true or false)
+	if one then
 		CharacterCreateNameEdit:ClearFocus()
 	else
-		actualiserReglages()
+		refreshSettings()
 	end
-	texteNav(retour, BACK)
-	texteNav(avancer, un and TEXTE.CUSTOMIZE or TEXTE.FINISH)
-	if avant ~= mode then
-		fondre(un and (etat.alphaFond or 1) or 0)
+	setNavText(backButton, BACK)
+	setNavText(forwardButton, one and TEXT.CUSTOMIZE or TEXT.FINISH)
+	if forward ~= mode then
+		fadeTo(one and (state.backgroundAlpha or 1) or 0)
 	end
 end
 
 -- NavBack / NavForward
-retour:SetScript("OnClick", function()
+backButton:SetScript("OnClick", function()
 	PlaySound("igMainMenuOptionCheckBoxOn")
-	if etat.mode == 1 then
+	if state.mode == 1 then
 		CharacterCreate_Back()
 	else
 		PlaySound("gsCharacterCreationCancel")
-		montrerMode(1)
+		showMode(1)
 	end
 end)
-avancer:SetScript("OnClick", function()
+forwardButton:SetScript("OnClick", function()
 	PlaySound("igMainMenuOptionCheckBoxOn")
-	if etat.mode == 1 then
+	if state.mode == 1 then
 		PlaySound("gsCharacterSelectionCreateNew")
-		montrerMode(2)
+		showMode(2)
 	else
 		CharacterCreate_Okay()
 	end
 end)
 
--- OnKeyDown de camelot : Echap recule, Entree avance
-CharacterCreate:SetScript("OnKeyDown", function(_, touche)
-	if touche == "ESCAPE" and ouvert then
-		fermerMenu(false)
-	elseif touche == "ESCAPE" then
-		retour:Click()
-	elseif touche == "ENTER" then
-		avancer:Click()
-	elseif touche == "PRINTSCREEN" then
+-- camelot OnKeyDown: Escape goes back, Enter goes forward
+CharacterCreate:SetScript("OnKeyDown", function(_, pressedKey)
+	if pressedKey == "ESCAPE" and isOpen then
+		closeMenu(false)
+	elseif pressedKey == "ESCAPE" then
+		backButton:Click()
+	elseif pressedKey == "ENTER" then
+		forwardButton:Click()
+	elseif pressedKey == "PRINTSCREEN" then
 		Screenshot()
 	end
 end)
 
--- ------------------------------------------------------------ apres le client
+-- ------------------------------------------------------------ After the client
 
-G.AccrocherFonction("CharacterChangeFixup", mettreAJour)
-G.Accrocher(CharacterCreate, "OnShow", function()
-	poserBords()
-	etat.mode = 0
-	mettreAJour()
-	montrerMode(1)
-	fondBas:SetAlpha(etat.alphaFond or 1)
-	racine:SetScript("OnUpdate", nil)
-	-- les places des colonnes et des classes se lisent une fois posees
-	mettreAJour()
+G.HookFunction("CharacterChangeFixup", refresh)
+G.Hook(CharacterCreate, "OnShow", function()
+	placeEdges()
+	state.mode = 0
+	refresh()
+	showMode(1)
+	backgroundBottom:SetAlpha(state.backgroundAlpha or 1)
+	root:SetScript("OnUpdate", nil)
+	-- Column and class positions can be read only once laid out, so refresh again
+	refresh()
 end)
