@@ -1,0 +1,35 @@
+-- Extrait de acore_world_hard.creature_questender, tel quel, le 2026-09-28.
+-- Clause : quest BETWEEN 84002 AND 84034
+DELETE FROM `creature_questender` WHERE quest BETWEEN 84002 AND 84034;
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84002,84002);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84003,84003);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84004,84004);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84005,84005);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84006,84006);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84007,84007);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84008,84008);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84009,84009);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84010,84010);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84011,84011);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84012,84012);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84013,84013);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84014,84014);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84015,84015);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84016,84016);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84017,84017);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84018,84018);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84019,84019);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84020,84020);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84021,84021);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84022,84022);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84023,84023);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84024,84024);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84025,84025);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84026,84026);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84027,84027);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84028,84028);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84029,84029);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84030,84030);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84031,84031);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84032,84032);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (84034,84034);
