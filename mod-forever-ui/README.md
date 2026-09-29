@@ -46,10 +46,15 @@ archives: it locks them while it runs.
    `Interface\AddOns`, which gives `Interface\AddOns\ForeverUI\ForeverUI.toc`.
 2. **The art.** The addon draws with its own textures, read from an archive.
    Open `Data\patch-Z.MPQ` in the client folder, or create an empty archive
-   with that name if there is none. Add every `.blp` found under `data/art`,
-   at the same path as under `data/art`: for example
-   `data/art/interface/foreverui/editmode/editmodeui.blp` goes to
-   `interface\foreverui\editmode\editmodeui.blp`.
+   with that name if there is none. At the root of the archive, create a folder
+   `interface`, then drop into it the folders `foreverui` and `Minimap`
+   themselves (not their content), taken from `data/art/interface`.
+   At the end the archive shows, under `interface`:
+   - `foreverui\`, and in it 58 folders (`auctionframe`, `bankframe`, `bars`...
+     `unknown`) holding 645 `.blp` files, for example
+     `interface\foreverui\editmode\editmodeui.blp`;
+   - `Minimap\ROTATING-MINIMAPGROUPARROW.blp`, the arrow of a group member at
+     the edge of the minimap, resized for the larger map.
 3. Start the game and check that **ForeverUI** is enabled in the AddOns list of
    the character selection screen.
 
