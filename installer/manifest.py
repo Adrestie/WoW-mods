@@ -165,6 +165,19 @@ def _game_files(root, entry):
     return files, owned
 
 
+def _replaced(files, entry):
+    """Lower-case names of the module's game files that replace, on purpose, the version another
+    custom archive provides: `replaces` lists files or folders, each naming at least one of them."""
+    out = set()
+    for item in (entry or {}).get("replaces", []):
+        wanted = item.replace("/", "\\").strip("\\").lower()
+        matched = {n.lower() for n in files if n.lower() == wanted or n.lower().startswith(wanted + "\\")}
+        if not matched:
+            _error("game_files", '"replaces": %r names none of the module\'s game files' % item)
+        out |= matched
+    return out
+
+
 def _addons(root, entry):
     """{addon name: package folder}: folders copied as they are into Interface\\AddOns of the
     game; each holds the .toc named after it."""
@@ -270,6 +283,7 @@ def load(root):
     if len({d.file.lower() for d in M.dbc}) != len(M.dbc):
         _error("dbc", "a DBC file declared twice")
     M.game_files, M.owned_folders = _game_files(M.root, m.get("game_files"))
+    M.replaced = _replaced(M.game_files, m.get("game_files"))
     M.addons = _addons(M.root, m.get("addons"))
     M.backups = list(m.get("backups", []))
     M.databases = _databases(M.root, M, m.get("database"))
