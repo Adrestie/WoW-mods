@@ -61,45 +61,6 @@ ItemUpgrade.SendUpgradedItemsPackets = 1
 ItemUpgrade.SendUpgradedItemsPacketsPrioritization = 0
 
 #
-#    ItemUpgrade.AllowUpgradesPurge
-#        Description: Allows the players to purge upgrades from their items.
-#        Default:     0 - Disabled
-#                     1 - Enabled
-#
-
-ItemUpgrade.AllowUpgradesPurge = 0
-
-#
-#    ItemUpgrade.UpgradePurgeToken
-#        Description: Give the player a token (item) when purging an upgrade. This is just an item entry, can be anything. Only active when
-#                     ItemUpgrade.AllowUpgradesPurge = 1
-#        Default:     0 - No token
-#                     Item Entry - the entry of token
-#
-
-ItemUpgrade.UpgradePurgeToken = 0
-
-#
-#    ItemUpgrade.UpgradePurgeTokenCount
-#        Description: How many ItemUpgrade.UpgradePurgeToken to give when players purge an upgrade. Only active when ItemUpgrade.AllowUpgradesPurge = 1
-#                     and ItemUpgrade.UpgradePurgeToken is a valid item entry
-#        Default:     0 - No effect
-#                     1+ - count
-#
-
-ItemUpgrade.UpgradePurgeTokenCount = 0
-
-#
-#    ItemUpgrade.RefundAllOnPurge
-#        Description: Refund all items/gold/honor/arena when purging that were used to upgrade the item. EVERYTHING is refunded, meaning if the item
-#                     has rank 3 stamina for example, it will refund everything from rank 1 to 3. Only active when
-#                     ItemUpgrade.AllowUpgradesPurge = 1
-#        Default:     1 - Refund everything that was used to upgrade the item
-#
-
-ItemUpgrade.RefundAllOnPurge = 0
-
-#
 #    ItemUpgrade.RandomUpgradesOnLoot
 #        Description: Whether looted items (including from party loot, quest items) can be automatically upgraded. Titanforging-like system.
 #        Default:     0 - No
@@ -109,13 +70,15 @@ ItemUpgrade.RefundAllOnPurge = 0
 ItemUpgrade.RandomUpgradesOnLoot = 1
 
 #
-#    ItemUpgrade.RandomUpgradesBroadcastLoginMsg
-#        Description: Let players know that random item upgrades are ON via a message that will be sent when player logs in.
-#                     Only has effect when ItemUpgrade.RandomUpgradesOnLoot = 1. Just set to "" (double quotes) if you don't want to broadcast anything.
-#        Default:     |cffeb891a[ITEM UPGRADES SYSTEM]:|r Random item upgrades are active. You have a chance to gain stat upgrades on loot for eligible items.
+#    ItemUpgrade.RandomUpgradesLoginMessage
+#        Description: Tell players at login that random item upgrades are on. Only has effect when
+#                     ItemUpgrade.RandomUpgradesOnLoot = 1. The message is text 11 of the module
+#                     (data/sql/db-world/base/02_item_upgrade_strings.sql), in the language of each client.
+#        Default:     1 - Enabled
+#                     0 - Disabled
 #
 
-ItemUpgrade.RandomUpgradesBroadcastLoginMsg = |cffeb891a[ITEM UPGRADES SYSTEM]:|r Random item upgrades are active. You have a chance to gain stat upgrades on loot for eligible items.
+ItemUpgrade.RandomUpgradesLoginMessage = 1
 
 #
 #    ItemUpgrade.RandomUpgradeChance

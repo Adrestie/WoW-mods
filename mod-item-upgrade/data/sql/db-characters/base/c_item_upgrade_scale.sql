@@ -115,11 +115,11 @@ SELECT n FROM series;
 DROP TEMPORARY TABLE IF EXISTS tmp_tokens;
 CREATE TEMPORARY TABLE tmp_tokens (rank_min INT, rank_max INT, item INT);
 INSERT INTO tmp_tokens (rank_min, rank_max, item) VALUES
-  ( 4,  7, 801050),   -- Shard of Power    : 1, 2, 3 then 4
-  ( 8, 11, 801051),   -- Fragment of Power : 1, 2, 3 then 4
-  (12, 15, 801052),   -- Core of Power     : 1, 2, 3 then 4
-  (16, 19, 801053),   -- Gem of Power      : 1, 2, 3 then 4
-  (20, 20, 801054);   -- Crown of Power    : 1
+  ( 4,  7, 83050),   -- Shard of Power    : 1, 2, 3 then 4
+  ( 8, 11, 83051),   -- Fragment of Power : 1, 2, 3 then 4
+  (12, 15, 83052),   -- Core of Power     : 1, 2, 3 then 4
+  (16, 19, 83053),   -- Gem of Power      : 1, 2, 3 then 4
+  (20, 20, 83054);   -- Crown of Power    : 1
 
 -- --- 4. Putting purchased upgrades aside ------------------------------------
 -- The scale is about to be destroyed and rebuilt. First we note, for every
