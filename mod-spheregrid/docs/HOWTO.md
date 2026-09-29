@@ -16,15 +16,15 @@ Two words are worth learning first, because they are not the same thing:
 
 ## Put the module on a server
 
-1. Clone the repository and copy `mod-spheregrid` beside the other modules, or
-   clone it straight into `<core>/modules/mod-spheregrid`.
-2. Run `install.bat` (Windows) or `install.sh` (elsewhere). It asks where the
-   server is, where the core sources are, where a client is, where to keep the
-   copies it takes, and what to do.
-3. Start with **Look only**: it reads and writes nothing, and says whether this
-   server has room for the module.
-4. Then run it again and let it install.
-5. **Rebuild the core** so the module is compiled in, and install
+1. Stop the world server and close the game.
+2. Run `installer.exe`, the WoW-mods installer (`installer/` folder of the
+   repository), and give it the module's folder, or drop the folder on it. Its
+   window asks for the world server folder and the game folder, and finds the
+   rest.
+3. It shows what it found of the module. Nothing: press **Install**. It puts
+   the sources, the configuration, the interface, the workbench and the
+   client's rows and art in place, then reads everything back.
+4. **Rebuild the core** with the commands it prints, and install
    [AIO](https://github.com/Rochet2/AIO) on the server and on the client.
 
 It worked when the world starts without complaint and `.spheregrid info` in
@@ -32,34 +32,22 @@ game answers with the number of cells and links it has loaded.
 
 ## Patch a client that is not on the server
 
-Most servers have no client on them. Patch the client where it lives:
-
-```
-python tools/install.py --client-only --client "<client>\Data"
-```
-
-That mode needs no server and touches no database: it merges the module's rows
-into the client's own DBC files and writes them, with the module's art, into
-`patch-Z.MPQ`.
+The installer patches the game folder it is given, on the machine where the
+world server is. Another client needs the same rows and art: give it the
+archive the installer wrote -- a new `Data\patch-Z.MPQ` when the game had no
+archive of its own -- by copying it to the same place in that client.
 
 It worked when the module's spells have a name and an icon in game instead of
 a red question mark.
 
 ## Make room when the identifiers are taken
 
-Another module may already use numbers this one wants. The survey says so, table
-by table. Let the installer move them:
+The module's numbers sit in tranches 85 and 86 of the repository's register,
+`ID_RANGES.md`. When something else on the server uses one of them, the
+installer lists each one and installs nothing: the numbers of one of the two
+have to change.
 
-```
-python tools/install.py --server <server> --core <core> --client <Data> --shift
-```
-
-It picks, for every family in clash, the smallest step that puts the whole
-family on numbers nobody holds, and rewrites every file of the module — DBC
-rows, SQL, C++ and Lua alike — **in the copy it lays under `modules/`**. The
-checkout you installed from keeps the numbers it was written with.
-
-It worked when the survey, run again, finds nothing taken.
+It worked when the installer, run again, offers to install.
 
 ## Draw a grid of my own
 
@@ -117,7 +105,7 @@ statistics again to lay the new qualities down.
 
 ### 5. Into the game
 
-**Export SQL** writes `08_grid.sql` beside the layout and applies it to the
+**Export SQL** writes `spheregrid_08_grid.sql` beside the layout and applies it to the
 world database of the server the layout belongs to. Then, in game:
 
 ```
@@ -125,7 +113,7 @@ world database of the server the layout belongs to. Then, in game:
 ```
 
 To ship that grid with the module, copy the file over
-`data/sql/world/08_grid.sql`.
+`data/sql/world/spheregrid_08_grid.sql`.
 
 ## Change what a stone or a rune grants
 
@@ -141,7 +129,7 @@ SphereGrid.StatRune.Percent           = 10     of what the grid already gives
 the same file, so what it announces is what the module charges.
 
 The text a stone shows in its tooltip is another matter: it lives in the spell
-the item carries (`data/sql/world/05_spells.sql`), and changing it means
+the item carries (`data/sql/world/spheregrid_05_spells.sql`), and changing it means
 replaying that file and restarting the world.
 
 ## Change what a cell costs, and what content awards
@@ -210,7 +198,7 @@ built-in table. `.spheregrid reload` picks up a change.
 ## Add a language
 
 Every message lives in `module_string`, and every language other than English
-in `module_string_locale` (`data/sql/world/02_strings.sql`). Add your rows with
+in `module_string_locale` (`data/sql/world/spheregrid_02_strings.sql`). Add your rows with
 your locale, replay the file, restart the world.
 
 The items and the spells carry their own texts: `item_template_locale` and the
@@ -220,23 +208,20 @@ called `_Lang_koKR` is the one the client reads as French.
 ## Update the module
 
 Run the installer on a server that already has it: it does not install, it
-**removes**. Then run it again to install the new version.
+offers to **remove**. Then run it again to install the new version.
 
-```
-python tools/install.py --server <server> --core <core> --client <Data> --keep-characters
-python tools/install.py --server <server> --core <core> --client <Data> --shift
-```
-
-`--keep-characters` leaves the Spherite and the cells your players bought. The
-spells the grid taught are taken back at the removal and taught again at the
-next login, from the cells they still own.
+The removal takes what players earned with it -- the Spherite and the cells
+they bought. To keep it, save the four `mod_spheregrid_*` tables of the
+characters database before the removal, and put them back after the new
+installation. The spells the grid taught are taught again at the next login,
+from the cells they own.
 
 ## Take the module off
 
-The same removal, with `--drop-characters` if you want what players earned gone
-as well. It puts the client's own files back into `patch-Z`, deletes the module's
-tables, its sources, its interface and its configuration, and leaves the
-fifteen DBC files row-identical to what they were.
+The same removal. It deletes the module's tables, its rows in the core's
+tables, its sources, its interface and its configuration, takes its rows out
+of the fifteen DBC files, and its art out of the game's archives. The workbench
+goes with the last module that uses it. Then rebuild the core.
 
 ---
 
@@ -294,15 +279,18 @@ The module ships the object and no spawn. Put one down with
 `item_template` is read when the world starts. Replay the SQL, then restart the
 world; `.spheregrid reload` will not do it.
 
-### The installer stops, saying identifiers are taken
+### The installer says CONFLICT
 
-Run it again with `--shift`. Without that word it refuses to move anything,
-which is deliberate: moving a family rewrites every file of the module.
+Something on the server carries the module's numbers without being the module:
+see [Make room](#make-room-when-the-identifiers-are-taken). If it is what is
+left of an earlier installation of this module, **Remove leftovers** takes
+its database and DBC rows away.
 
 ### The installer cannot find a worldserver.conf
 
-It looks for `configs/worldserver.conf` under the folder you gave it. Give it
-the folder that holds `worldserver.exe`, `configs` and `lua_scripts`.
+It looks for `configs/worldserver.conf`, or `worldserver.conf` beside
+`worldserver.exe`, under the folder you gave it. Give it the folder that holds
+`worldserver.exe`.
 
 ### The layout editor says a class has no start
 

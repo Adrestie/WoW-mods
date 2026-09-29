@@ -6,34 +6,32 @@ relative to the module's folder unless it says otherwise.
 
 ## Put the module on a server
 
-1. Copy the folder into `modules/` of the AzerothCore source tree.
-2. Run `cmake .` in the build tree, then build `worldserver`.
-3. Run `install.bat` (or `python tools\install.py`) from the module's folder.
-   It reads `worldserver.conf` to find the databases and the client, checks
-   that the module's identifiers are free (`--survey` does only that), applies
-   the SQL, copies the configuration, places the shared workbench under
-   `lua_scripts/Workbench/` if no other module did, and writes the module's
-   DBC rows and art into the client's `patch-Z.MPQ` -- into an existing one if
-   the client already has it. Everything it replaces is copied aside first,
-   under `Backups/`, with a receipt.
+1. Stop the world server and close the game.
+2. Run `installer.exe`, the WoW-mods installer (`installer/` folder of the
+   repository), on the module's folder, or drop the folder on it. Its window
+   asks for the world server folder and the game folder and finds the rest.
+   **Install** copies the module into `modules/`, the configuration, the
+   interface, the shared workbench under `lua_scripts/Workbench/` if no newer
+   one is there, and writes the module's DBC rows and art into the game's
+   archives.
+3. Run `cmake .` in the build tree, then build `worldserver`.
 4. Start the server. The world updater applies `data/sql/world/` and
-   `data/sql/characters/` by itself at every start; `.tarot info` lists the
-   catalogue loaded.
-
-The client must be closed while its archive is written.
+   `data/sql/characters/`; `.tarot info` lists the catalogue loaded.
 
 ## Patch a client that is not on the server
 
-`python tools\install.py --client-only --client "D:\World of Warcraft\Data"`
-on the machine where the client lives. Nothing else is touched.
+The installer patches the game folder it is given, on the machine where the
+world server is. Give another client the archive the installer wrote -- a new
+`Data\patch-Z.MPQ` when the game had no archive of its own -- by copying it to
+the same place.
 
 ## Make room when the identifiers are taken
 
-`python tools\install.py --survey` says which of the module's items, spells
-and displays a server already uses. `python tools\shift.py --list` prints the
-families and their ranges; `install.py --shift` moves a family in one block to
-the first free range and rewrites the SQL, the DBC rows and the Lua that name
-them. The rule inside a family never changes: card N stays item base + N.
+The module's numbers are tranches 87 and 88 of the repository's register,
+`ID_RANGES.md`. When something else on the server uses one of them, the
+installer lists each one and installs nothing: the numbers of one of the two
+have to change. The rule inside a family never changes: card N stays item
+base + N.
 
 ## Hand a card or a board to a player
 
@@ -151,18 +149,19 @@ English and French, keyed by `GetLocale()`.
 
 ## Update the module
 
-Replace the folder, `cmake .`, rebuild, run `install.bat` again: it takes its
-earlier rows out of the client's archive before merging the new ones, and the
-world updater applies changed SQL files at the next start.
+Run the installer on the module's folder: finding the module, it offers to
+remove it; run it again to install the new version, then rebuild. The removal
+takes what players collected with it: to keep it, save the six
+`mod_stellar_tarot_*` tables of the characters database before, and put them
+back after.
 
 ## Take the module off
 
-`install.bat` offers the removal; it is `python tools\uninstall.py`. It drops
-the module's tables, takes its rows out of the shared tables, removes its
-configuration, takes the shared workbench folder and object away only if no
-other module still registers a provider, and takes the module's files out of
-the client's archive, putting back the client's own files from the receipt of
-the run that replaced them. Then rebuild the core without the folder.
+The same removal. It drops the module's tables, takes its rows out of the
+shared tables, removes its sources, configuration and interface, takes the
+shared workbench folder and object away only if no other module still
+registers a provider, and takes the module's rows and art out of the game's
+archives. Then rebuild the core.
 
 ## When something is wrong
 

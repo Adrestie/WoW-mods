@@ -326,7 +326,7 @@ MODULE_OWN = (
 )
 
 
-# The archive the installer writes; see `install.py`.
+# The archive the WoW-mods installer creates in a client that has none of its own.
 ARCHIVE = "patch-Z.MPQ"
 
 GAME_OBJECT_DISPLAYS = {8500: 85100}
@@ -821,7 +821,7 @@ def main():
     # module's spells name, that a stock client has not.
     columns = None
     for names, _ in sqlrows.insertions(
-            os.path.join(SQL, "05_spells.sql"), "spell_dbc"):
+            os.path.join(SQL, "spheregrid_05_spells.sql"), "spell_dbc"):
         if len(names) == 234:
             columns = {name: i for i, name in enumerate(names)}
     indexed = []

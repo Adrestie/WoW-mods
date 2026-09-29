@@ -89,7 +89,7 @@ folder, or drop the folder on `installer.exe`. Keep the package where you
 downloaded it: the installer refuses to run from your server's `modules`
 folder.
 
-The first time, it asks for two folders, then remembers them:
+Its window asks for two folders the first time, then remembers them:
 
 * the world server folder, the one holding `worldserver.exe`;
 * the game folder, the one holding `Wow.exe` and `Data`.
@@ -97,10 +97,10 @@ The first time, it asks for two folders, then remembers them:
 It finds the rest from there: the configuration folder and the databases in
 `worldserver.conf`, the Lua script folder in `mod_ale.conf` (`lua_scripts` by
 default), your AzerothCore sources in the build folder's `CMakeCache.txt`, and
-`mysql.exe`. It asks only for what it cannot find. It lists every path, and
-whatever it found of the module, before changing anything.
+`mysql.exe`. It shows whatever it found of the module before changing
+anything.
 
-Finding nothing of the module, it installs it:
+Finding nothing of the module, it offers **Install**, which puts in place:
 
 * the module is copied to `modules/mod-attriboost` in your sources;
 * `attriboost.conf`, with `Attriboost.Enable = 1`, and `attriboost.conf.dist`
@@ -358,7 +358,7 @@ Every texture used comes from the stock 3.3.5 client.
 
 Stop the world server, close the game, and run the installer again on this
 folder. Finding the module, even in part, it lists what it found and, once you
-type `YES`, removes all of it:
+confirm **Remove**, removes all of it:
 
 * in the characters database, the talent points the Books of Talents granted
   are taken back first, then the saved auras and the points table go;

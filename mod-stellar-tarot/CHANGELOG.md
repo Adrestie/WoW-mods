@@ -1,10 +1,12 @@
 # Changelog
 
-The version is the first word of the newest heading; the installer writes it
-into the mark it leaves in the client's archive.
+The version is the first word of the newest heading.
 
 ## 0.1.0 (unreleased)
 
+- Installed and removed by the WoW-mods installer, from `installer.json`. The
+  module's own installer, remover and identifier shift are gone, and `tools/`
+  with them.
 - The catalogue: cards with four edges, boards with a number per row and per
   column, tags, and the effect of a card at each of its four levels. Loaded
   before the world opens, reloaded by `.tarot reload`.

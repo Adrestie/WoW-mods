@@ -131,7 +131,7 @@ folder, or drop the folder on `installer.exe`. Keep the package where you
 downloaded it: the installer refuses to run from your server's `modules`
 folder.
 
-The first time, it asks for two folders, then remembers them:
+Its window asks for two folders the first time, then remembers them:
 
 - the world server folder, the one holding `worldserver.exe`;
 - the game folder, the one holding `Wow.exe` and `Data`.
@@ -139,11 +139,10 @@ The first time, it asks for two folders, then remembers them:
 It finds the rest from there: the configuration folder, the `Data\dbc` folder
 and the databases in `worldserver.conf`, the Lua script folder in
 `mod_ale.conf` (`lua_scripts` by default), your AzerothCore sources in the
-build folder's `CMakeCache.txt`, and `mysql.exe`. It asks only for what it
-cannot find. It lists every path, and whatever it found of the module, before
-changing anything.
+build folder's `CMakeCache.txt`, and `mysql.exe`. It shows whatever it found
+of the module before changing anything.
 
-Finding nothing of the module, it installs it:
+Finding nothing of the module, it offers **Install**, which puts in place:
 
 - the module is copied to `modules/mod-item-upgrade` in your sources;
 - `mod_item_upgrade.conf` and `mod_item_upgrade.conf.dist` are written to the
@@ -717,7 +716,7 @@ stats apply all the same.
 
 Stop the world server, close the game, and run the installer again on this
 folder. Finding the module, even in part, it lists what it found and, once you
-type `YES`, removes all of it:
+confirm **Remove**, removes all of it:
 
 - in the characters database, the module's ten tables, purchased upgrades
   included, and the updater's record of its files in `updates`;

@@ -25,25 +25,30 @@ of twelve. **[How to do things with it](docs/HOWTO.md).**
 | [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) | 3.3.5a, built with the module in `modules/` |
 | [ALE](https://github.com/azerothcore/mod-ale) or Eluna | the Lua engine that will run the interface |
 | [AIO](https://github.com/Rochet2/AIO) | server AND client -- the interface is sent over it |
-| Python 3 and the `mysql` client | for the installer |
+| the WoW-mods installer | `installer.exe`, from the `installer/` folder of this repository; MySQL running |
 
 ## Installing
 
-`install.bat` asks where the server is, where the core sources are, where the
-client is and where to keep the copies, then does the rest and prints every
-step (`python tools/install.py --help` is the same, one flag at a time, on any
-system). Three ways to run: **look only** (reads and reports, writes nothing),
-**rehearse** (announces every step, writes nothing), **install**.
+Stop the world server and close the game, then run `installer.exe`, the
+WoW-mods installer (`installer/` folder of this repository), and give it this
+folder, or drop the folder on `installer.exe`. Its window asks for the world
+server folder and the game folder, finds the rest, shows what it found of the
+module, and offers **Install** or **Remove**. `installer.json` declares
+everything it puts in place: the sources in `modules/`, the configuration, the
+interface in `lua_scripts/StellarTarot/`, the shared workbench (see below),
+and the module's rows of four DBC files and its art in the game's archives.
+Then rebuild the core; on first start, the core updater applies
+`data/sql/world/` and `data/sql/characters/`.
 
-Nothing is written before a copy of it exists. Run again on a server that
-already has the module, the installer removes it instead; to update, remove
-then install again.
+Run again on a server that already has the module, the installer removes it,
+what players collected included; to update, remove then install again.
 
 By hand: copy the module into `modules/`, apply `data/sql/world/` then
 `data/sql/characters/` in order, copy `conf/mod-stellar-tarot.conf.dist` to
-`configs/modules/mod-stellar-tarot.conf`, rebuild the core. The client half --
-merging the module's rows into the client's `Item.dbc` -- is what
-`tools/install.py --client-only --client <Data dir>` is for.
+`configs/modules/mod-stellar-tarot.conf`, copy `data/lua/StellarTarot/` and
+`data/lua/Workbench/` into `lua_scripts/`, rebuild the core. The client half --
+merging the module's rows into the client's DBC files -- is what the installer
+is for.
 
 ## Commands
 
@@ -228,9 +233,10 @@ makes them is the author's; the guide gives the formats.
 
 ## The identifiers
 
-One block, 87000 to 88999, one number per asset. They are not settings;
-`python tools/shift.py --list` prints them as they stand, and the installer
-moves them when a server has taken them.
+One block, 87000 to 88999 (tranches 87 and 88 of the repository's register,
+`ID_RANGES.md`), one number per asset. They are not settings; when a server
+already uses one of them for something else, the installer says so and
+installs nothing.
 
 | family | range | rule |
 |---|---|---|
@@ -243,7 +249,7 @@ moves them when a server has taken them.
 ## What is in the repository
 
 ```
-install.bat               the installer, which is also the remover
+installer.json            what the WoW-mods installer puts in place, and removes
 conf/                     the one configuration file
 data/art/                 the textures, laid out as they sit in the client's archive
 data/dbc/                 the module's own DBC rows, merged into the client's files
@@ -252,7 +258,6 @@ data/lua/Workbench/       the shared workbench, identical in every module that u
 data/sql/                 world and characters
 docs/HOWTO.md             how to do things with the module
 src/                      the C++: core, effects, loot
-tools/                    install.py, uninstall.py, shift.py
 ```
 
 ## Licence

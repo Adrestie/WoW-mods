@@ -44,6 +44,8 @@ import copy
 import math
 import os
 import random
+import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -120,6 +122,39 @@ def worldserver_conf(server):
         if os.path.isfile(path):
             return path
     return None
+
+
+# Where the mysql client usually is, when it is not on the PATH.
+MYSQL_GUESSES = [
+    r"C:\Program Files\MySQL\MySQL Server 8.4\bin",
+    r"C:\Program Files\MySQL\MySQL Server 8.0\bin",
+    r"C:\Program Files\MariaDB 10.6\bin",
+    r"C:\xampp\mysql\bin",
+]
+
+
+def apply_world_sql(server, path):
+    """Hands an SQL file to the world database of this server, as its
+    worldserver.conf declares it; returns the database's name."""
+    conf = worldserver_conf(server)
+    info = None
+    for line in open(conf, encoding="utf-8", errors="replace"):
+        if line.split("=")[0].strip() == "WorldDatabaseInfo" and '"' in line:
+            info = line.split('"')[1].split(";")
+    if not info or len(info) != 5:
+        raise RuntimeError("%s declares no world database" % conf)
+    host, port, user, password, name = info
+    mysql = next((p for p in (os.path.join(d, "mysql.exe") for d in MYSQL_GUESSES) if os.path.isfile(p)),
+                 None) or shutil.which("mysql")
+    if not mysql:
+        raise RuntimeError("mysql client not found")
+    with open(path, "rb") as handle:
+        done = subprocess.run([mysql, "-h", host, "-P", port, "-u", user, "--default-character-set=utf8mb4",
+                               name], stdin=handle, stderr=subprocess.PIPE,
+                              env=dict(os.environ, MYSQL_PWD=password))
+    if done.returncode:
+        raise RuntimeError(done.stderr.decode("utf-8", "replace")[:600])
+    return name
 
 
 def server_of(path):
@@ -1001,9 +1036,7 @@ class Editor(object):
         remember_that(server=os.path.abspath(server))
 
         try:
-            import install
-            target = install.Target(server, MODULE, None)
-            target.run_sql("world", source=out)
+            database = apply_world_sql(server, out)
         except Exception as trouble:
             messagebox.showwarning(
                 "Export",
@@ -1011,11 +1044,11 @@ class Editor(object):
                 % (out, str(trouble)[:600]))
             return
         self.say("applied to %s -- now type .spheregrid reload in game"
-                 % target.databases["world"]["name"])
+                 % database)
         messagebox.showinfo(
             "Applied. One thing left: .spheregrid reload",
             NEWLINE.join((
-                "The grid is in %s." % target.databases["world"]["name"],
+                "The grid is in %s." % database,
                 "",
                 "ONE THING LEFT, in game:",
                 "",
