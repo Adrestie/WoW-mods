@@ -1,7 +1,7 @@
 # The workbench
 
 A component shared by the modules of this repository: ONE object in the
-world (game object 803700), ONE window, and any number of modules bringing
+world (game object 810000), ONE window, and any number of modules bringing
 their recipes to it. None of them owns it.
 
 `Workbench.ext` is the server side -- the Lua engine loads `.ext` files

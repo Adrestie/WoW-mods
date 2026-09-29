@@ -19,6 +19,9 @@ object in the world and one window, to which each installed module brings its
 recipes. Every module that uses it ships an identical copy under
 `data/lua/Workbench/`; `workbench/` is where it is edited.
 
+Every module takes its identifiers from the registry in
+[ID_RANGES.md](ID_RANGES.md).
+
 The `installer/` folder is not a module either: one program that installs, and
 removes, any module carrying an `installer.json`. See its README.
 
