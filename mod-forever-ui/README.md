@@ -100,9 +100,8 @@ server:
 3. Add both files to `patch-Z.MPQ` under `DBFilesClient\`, and copy them into
    the server's `dbc` folder (in the `DataDir` of `worldserver.conf`): the
    server must read the same files as the client.
-4. In the world database, for each `data` entry of a criterion:
-   `INSERT INTO achievement_criteria_data (criteria_id, type, value1, value2, ScriptName) VALUES (<criterion id>, <type>, <value1>, <value2>, '');`
-   Without these rows the server does not count the boss kills.
+4. Run `sql/foreverui_statistics.sql` on the world database: without its
+   rows the server does not count the boss kills.
 5. Restart the server.
 
 **PvP ranks.** The PvP tab reads its rank thresholds and the Dishonored state
