@@ -99,9 +99,15 @@ local L = ForeverUI.L
 -- camelot, juste apres la feuille de personnage. 3.3.5 n'en a pas : le
 -- bouton est cree ici (creer), a l'image de ceux du client ; il ouvre le
 -- livre des metiers (ProfessionsBook.lua).
+--
+-- UN AUTRE ADDON PEUT Y AJOUTER SON BOUTON (ForeverUI.AjouterMicroBouton,
+-- plus bas) sans que ForeverUI le connaisse.
+--
+-- creer : le role du bouton cree, qui choisit son infobulle et son clic
+-- (ROLES_MICRO).
 local MICRO = {
 	{ nom = "CharacterMicroButton", portrait = true },
-	{ nom = "ForeverUIProfessionMicroButton", jeu = "professions", creer = true },
+	{ nom = "ForeverUIProfessionMicroButton", jeu = "professions", creer = "metiers" },
 	{ nom = "SpellbookMicroButton", jeu = "spellbookabilities" },
 	{ nom = "TalentMicroButton", jeu = "spectalents" },
 	{ nom = "AchievementMicroButton", jeu = "achievements" },
@@ -246,7 +252,25 @@ end
 -- et les images sont posees comme celles des boutons du client (OnEnter de
 -- MainMenuBarMicroButton, GameTooltip_AddNewbieTip) ; habillerMicro les
 -- reprend ensuite.
+--
+-- Un bouton ajoute par un autre addon porte lui-meme son infobulle (un texte,
+-- ou une fonction qui le rend) et son clic.
+local ROLES_MICRO = {
+	metiers = {
+		infobulle = function() return MicroButtonTooltipText(TRADE_SKILLS, "TOGGLEPROFESSIONBOOK") end,
+		clic = function()
+			if ForeverUI.LivreMetiers then ForeverUI.LivreMetiers.Basculer() end
+		end,
+	},
+}
+
 local function creerMicro(definition)
+	local role = ROLES_MICRO[definition.creer] or definition
+	local infobulle = role.infobulle
+	if type(infobulle) ~= "function" then
+		local texte = infobulle
+		infobulle = function() return texte end
+	end
 	local parent = (CharacterMicroButton and CharacterMicroButton:GetParent()) or micro
 	local bouton = CreateFrame("Button", definition.nom, parent)
 	for etat, methode in pairs(ETATS_MICRO) do
@@ -256,18 +280,15 @@ local function creerMicro(definition)
 		end
 	end
 	bouton:RegisterForClicks("AnyUp")
-	bouton.tooltipText = MicroButtonTooltipText(TRADE_SKILLS, "TOGGLEPROFESSIONBOOK")
+	bouton.tooltipText = infobulle()
 	bouton:SetScript("OnEnter", function(self)
+		self.tooltipText = infobulle()
 		GameTooltip_AddNewbieTip(self, self.tooltipText, 1.0, 1.0, 1.0, self.newbieText)
 	end)
 	bouton:SetScript("OnLeave", function()
 		GameTooltip:Hide()
 	end)
-	bouton:SetScript("OnClick", function()
-		if ForeverUI.LivreMetiers then
-			ForeverUI.LivreMetiers.Basculer()
-		end
-	end)
+	bouton:SetScript("OnClick", role.clic)
 	return bouton
 end
 
@@ -598,11 +619,11 @@ local function poserMicro()
 end
 ForeverUI.MicroLayout = poserMicro
 
--- l'etat du bouton des metiers : enfonce tant que les metiers sont ouverts
--- (le livre ou la page de fabrication) -- voir ProfessionsBook.lua
-function ForeverUI.MajMicroMetiers(ouvert)
+-- l'etat d'un bouton cree, par son role (pour un bouton ajoute par un autre
+-- addon : son nom) : enfonce tant que sa fenetre est ouverte
+function ForeverUI.MajMicro(role, ouvert)
 	for _, entree in ipairs(boutonsMicro) do
-		if entree.cree then
+		if entree.cree == role then
 			if ouvert then
 				entree.bouton:SetButtonState("PUSHED", 1)
 			else
@@ -611,6 +632,12 @@ function ForeverUI.MajMicroMetiers(ouvert)
 			etatMicro(entree)
 		end
 	end
+end
+
+-- le bouton des metiers : enfonce tant que les metiers sont ouverts (le
+-- livre ou la page de fabrication) -- voir ProfessionsBook.lua
+function ForeverUI.MajMicroMetiers(ouvert)
+	ForeverUI.MajMicro("metiers", ouvert)
 end
 
 poserMicro()
@@ -917,6 +944,82 @@ positionsParDefaut()
 mesurerRangee()
 poserEmbouts()
 toutPoser()
+
+-- UN MICRO-BOUTON AJOUTE PAR UN AUTRE ADDON (regle de l'utilisateur,
+-- 2026-09-29 : « si un module ou un addon veut mettre un bouton dans la
+-- micro barre, il doit pouvoir le faire sans que "Forever-ui" ait
+-- connaissance de ce module ou addon » ; et « il est prevu que la barre des
+-- micro boutons se redimensionne »).
+--
+-- ForeverUI.AjouterMicroBouton(def), def :
+--   nom        le nom global du bouton ; si la barre porte deja un bouton de
+--              ce nom, il est rendu tel quel : jamais de doublon
+--   jeu        son jeu d'icones de camelot (ui-hud-micromenu-<jeu>-<etat>,
+--              la variante c60 d'abord), habille comme ceux du client
+--   apres      le nom du bouton apres lequel il se range ; sans lui (ou s'il
+--              manque), juste avant le menu du jeu
+--   infobulle  son texte, ou une fonction qui le rend (lue au survol)
+--   clic       son clic
+--   pret       (facultatif) appelee avec le bouton une fois pose
+-- Rend le bouton, ou nil tant qu'il attend la sortie du combat : la barre
+-- d'action porte des boutons securises et ne se deplace pas en combat.
+-- Le bandeau prend la largeur d'un bouton de plus ; la barre d'action et les
+-- sacs s'en ecartent (positions par defaut recalculees -- une place choisie
+-- par le joueur reste la sienne), les embouts et les barres d'etat suivent la
+-- rangee. ForeverUI.MajMicro(nom, ouvert) l'enfonce ou le relache.
+local attenteMicro = CreateFrame("Frame")
+local enAttente = {}
+
+local function boutonNomme(nom)
+	for _, entree in ipairs(boutonsMicro) do
+		if entree.bouton:GetName() == nom then return entree.bouton end
+	end
+end
+
+function ForeverUI.AjouterMicroBouton(def)
+	if type(def) ~= "table" or type(def.nom) ~= "string" then return nil end
+	local deja = boutonNomme(def.nom)
+	if deja then return deja end
+	if InCombatLockdown() then
+		enAttente[def.nom] = def
+		attenteMicro:RegisterEvent("PLAYER_REGEN_ENABLED")
+		return nil
+	end
+	local definition = { nom = def.nom, jeu = def.jeu, creer = def.nom, infobulle = def.infobulle, clic = def.clic }
+	local rang, menu
+	for index, entree in ipairs(boutonsMicro) do
+		local nom = entree.bouton:GetName()
+		if def.apres and nom == def.apres then rang = index + 1 end
+		if nom == "MainMenuMicroButton" then menu = index end
+	end
+	rang = rang or menu or (#boutonsMicro + 1)
+	local entree = habillerMicro(definition, rang)
+	if not entree then return nil end
+	table.insert(boutonsMicro, rang, entree)
+	-- les suivants passent d'un cran : celui de droite reste devant
+	for index = rang + 1, #boutonsMicro do
+		local e = boutonsMicro[index]
+		if not e.cree and MainMenuBarArtFrame then
+			e.bouton:SetFrameLevel(MainMenuBarArtFrame:GetFrameLevel() + index)
+		end
+	end
+	local n = #boutonsMicro
+	micro:SetWidth(n * MICRO_W + (n - 1) * MICRO_PADDING)
+	positionsParDefaut()
+	mesurerRangee()
+	poserEmbouts()
+	toutPoser()
+	if ForeverUI.StatusBarsPoser then ForeverUI.StatusBarsPoser() end
+	if type(def.pret) == "function" then def.pret(entree.bouton) end
+	return entree.bouton
+end
+
+attenteMicro:SetScript("OnEvent", function(self)
+	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	local liste = enAttente
+	enAttente = {}
+	for _, def in pairs(liste) do ForeverUI.AjouterMicroBouton(def) end
+end)
 
 if hooksecurefunc then
 	hooksecurefunc("UpdateMicroButtons", function()

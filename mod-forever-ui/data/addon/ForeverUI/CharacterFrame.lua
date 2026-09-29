@@ -1662,13 +1662,13 @@ local function declarerContenus()
 		end,
 	})
 
-	-- LES STATISTIQUES. L'ecran reste a definir : 3.3.5 met les siennes dans
-	-- AchievementFrameStats, une fenetre a part que Blizzard_AchievementUI
-	-- charge a la demande, et rien n'a encore ete decide. L'onglet existe,
-	-- son volet gauche est vide.
+	-- LES STATISTIQUES : le StatisticsFrame de camelot (StatisticsTab.lua),
+	-- sur les statistiques de hauts faits du client.
 	Panes.Register({
 		hote = "gauche", groupe = ECRAN_STATS, id = "stats",
-		construire = function() return nil, {} end,
+		construire = function(hote)
+			return ForeverUI.StatisticsTab.Build(hote)
+		end,
 	})
 
 	-- Le PvP porte le detail de son rang a droite ; les statistiques

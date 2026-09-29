@@ -8477,7 +8477,7 @@ def main():
              "PlayerFrameExtras.lua", "PlayerRunes.lua", "PetFrame.lua", "TargetFrame.lua", "PartyFrame.lua", "RaidFrame.lua",
              "CastBar.lua", "ActionBar.lua", "StanceBar.lua", "PetBar.lua",
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
-             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
+             "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "StatisticsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua",
              "Trainer.lua", "Taxi.lua", "Stable.lua", "Socketing.lua", "Dialogues.lua", "TradeSkill.lua", "ProfessionsBook.lua", "BarberShopData.lua", "BarberShopColors.lua", "BarberShop.lua"]
 
@@ -11609,12 +11609,130 @@ def main():
     assert not g.PVPParentFrame.shown, "et le PvP s en va"
     pvp.scripts.OnClick(pvp)
 
-    # CLIQUER SUR LES STATISTIQUES : l ecran est vide, mais l onglet marche.
+    # CLIQUER SUR LES STATISTIQUES : le StatisticsFrame de camelot, sur les
+    # statistiques de hauts faits du client (StatisticsTab.lua). Le client :
+    # GetStatisticsCategoryList, GetCategoryInfo (nom, parent -1 en haut),
+    # GetCategoryNumAchievements, GetAchievementInfo(categorie, rang),
+    # GetStatistic(id) -> quantite, a passer.
+    lua.execute("""
+        STATS_CATEGORIES = { 130, 140, 141, 142 }
+        STATS_CAT = { [130] = { "Character", -1 }, [140] = { "Wealth", 130 },
+                      [141] = { "Combat", -1 }, [142] = { "Kills", -1 } }
+        STATS_LISTE = { [130] = { 349 }, [140] = { 328, 329, 330, 1299 }, [141] = { 1000 }, [142] = {} }
+        STATS_NOM = { [349] = "Talent tree respecs", [328] = "Total gold acquired",
+                      [329] = "Auctions posted", [330] = "Gold spent", [1299] = "Health potion used most",
+                      [1000] = "Damage done" }
+        STATS_OR = "12|TInterface" .. string.char(92) .. "MoneyFrame" .. string.char(92) .. "UI-GoldIcon:0:0:2:0|t"
+        STATS_VALEUR = { [349] = "3", [328] = STATS_OR, [329] = nil, [330] = "7",
+                         [1299] = "Runic Healing Potion", [1000] = "42" }
+        STATS_PASSER = { [330] = true }
+        for k = 1, 40 do
+            STATS_LISTE[142][k] = 2000 + k
+            STATS_NOM[2000 + k] = "Kill " .. k
+            STATS_VALEUR[2000 + k] = tostring(k)
+        end
+        function GetStatisticsCategoryList() return STATS_CATEGORIES end
+        function GetCategoryInfo(id) local c = STATS_CAT[id] return c[1], c[2], 0 end
+        function GetCategoryNumAchievements(id) return #(STATS_LISTE[id] or {}), 0 end
+        STATS_AVANT = GetAchievementInfo
+        function GetAchievementInfo(a, b)
+            if b then return STATS_LISTE[a][b] end
+            if STATS_NOM[a] then return a, STATS_NOM[a] end
+            return STATS_AVANT(a)
+        end
+        function GetStatistic(id) return STATS_VALEUR[id], STATS_PASSER[id] end
+    """)
     stat.scripts.OnClick(stat)
     print("   clic statistiques : PvP visible=%s, volet droit=%s" % (
         g.PVPParentFrame.shown, droit.shown))
     assert not g.PVPParentFrame.shown, "le PvP s en va"
     assert droit.shown, "le volet droit reste"
+    st = g.ForeverUI.StatisticsTab
+    stf, stl = g.ForeverUIStatisticsFrame, g.ForeverUIStatisticsList
+    def st_pt(r, k=1):
+        return list(r.points[k].values())
+    # la derniere ancre de ce nom (le faux client ajoute, le vrai remplace)
+    def st_ancre(r, nom):
+        pts_ = [list(v.values()) for v in r.points.values()]
+        return [q for q in pts_ if q[0] == nom][-1]
+    def st_art(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    lignes_st = [st.Rows[k] for k in range(1, len(list(st.Rows.values())) + 1)]
+    montrees = [l for l in lignes_st if l.shown]
+    resume = [(l.genre, l.nom.text, l.valeur.text) for l in montrees]
+    print("   statistiques : %d lignes montrees, %s" % (len(montrees), resume[:6]))
+    assert stf.shown and stf.parent.name == "ForeverUICharacterLeftPane"
+    # la liste : (10, -40) et (-25, 15) de l'hote (ScrollBox de camelot)
+    assert st_pt(stl, 1)[2:] == ["TOPLEFT", 10, -40]
+    # la hierarchie : categorie, ses statistiques, puis ses sous-categories ;
+    # « skip » omis ; les valeurs du client telles quelles (un nom, un montant
+    # avec ses pieces), « -- » sans valeur (choix du 2026-09-29)
+    assert resume[:9] == [("entete", "Character", ""), ("stat", "Talent tree respecs", "3"),
+                          ("sous", "Wealth", ""), ("stat", "Total gold acquired", g.STATS_OR),
+                          ("stat", "Auctions posted", "--"), ("stat", "Health potion used most", "Runic Healing Potion"),
+                          ("entete", "Combat", ""), ("stat", "Damage done", "42"), ("entete", "Kills", "")], resume[:9]
+    # la colonne de la valeur : 50, ou ce qu'elle porte, jusqu'a la moitie de la ligne
+    potion = montrees[5]
+    assert potion.valeur.width == len("Runic Healing Potion") * 6 and potion.valeur.width <= potion.width / 2, (potion.valeur.width, potion.width)
+    assert montrees[3].valeur.width == int(montrees[3].width // 2), "le montant avec ses pieces, plafonne"
+    assert montrees[1].valeur.width == 50
+    l1, l2, l3, l4 = montrees[0], montrees[1], montrees[2], montrees[3]
+    # retraits de 20 par niveau, marges de 10, ecart de 3 ; hauteurs 26 / 24 / 22
+    assert st_pt(l1)[2:] == ["TOPLEFT", 10, -10] and l1.height == 26
+    assert st_pt(l2)[2:] == ["TOPLEFT", 30, -(10 + 26 + 3)] and l2.height == 24
+    assert st_pt(l3)[2:] == ["TOPLEFT", 30, -(10 + 26 + 3 + 24 + 3)] and l3.height == 22
+    assert st_pt(l4)[2:4] == ["TOPLEFT", 50]
+    # l'en-tete : plaque, nom a 10, moins a (-8, -1) ; l'entree : valeur a -12
+    assert l1.plaque[1].shown and l1.fleche.shown and st_art(l1.fleche, "common-button-list-minus")
+    assert st_pt(l1.fleche)[2:] == ["RIGHT", -8, -1] and not l2.plaque[1].shown
+    assert st_pt(l2.valeur)[2:] == ["RIGHT", -12, 0] and l2.valeur.width == 50
+    # le sous-en-tete : son bouton ouvert a gauche, le nom a 2 + 20 + 4
+    assert l3.bouton.shown and st_art(l3.bouton._normal, "campaign_headericon_open")
+    assert st_art(l3.bouton._pushed, "campaign_headericon_openpressed")
+    assert st_pt(l3.bouton)[2:] == ["LEFT", 2, 0] and (l3.bouton.width, l3.bouton.height) == (20, 20)
+    assert st_pt(l3.nom)[2:] == ["LEFT", 26, 0]
+    # la barre : 40 statistiques de plus, la liste defile
+    assert stl.barre.shown, "la barre, puisque tout ne tient pas"
+    avant = montrees[0].nom.text
+    stl.scripts.OnMouseWheel(stl, -1)
+    apres = [l for l in lignes_st if l.shown][0].nom.text
+    assert avant == "Character" and apres == "Talent tree respecs", (avant, apres)
+    stl.scripts.OnMouseWheel(stl, 1)
+    # replier la sous-categorie, puis la categorie
+    l3.scripts.OnClick(l3)
+    resume = [(l.genre, l.nom.text) for l in lignes_st if l.shown]
+    assert resume[:4] == [("entete", "Character"), ("stat", "Talent tree respecs"),
+                          ("sous", "Wealth"), ("entete", "Combat")], resume[:4]
+    assert st_art(l3.bouton._normal, "campaign_headericon_closed")
+    l1.scripts.OnClick(l1)
+    resume = [(l.genre, l.nom.text) for l in lignes_st if l.shown]
+    assert resume[:3] == [("entete", "Character"), ("entete", "Combat"), ("stat", "Damage done")], resume[:3]
+    assert st_art(l1.fleche, "common-button-list-plus")
+    # CRITERIA_UPDATE : les valeurs suivent, l'etat replie reste
+    lua.execute("STATS_VALEUR[1000] = '43'")
+    stf.scripts.OnEvent(stf, "CRITERIA_UPDATE")
+    resume = [(l.genre, l.nom.text, l.valeur.text) for l in lignes_st if l.shown]
+    assert resume[:3] == [("entete", "Character", ""), ("entete", "Combat", ""), ("stat", "Damage done", "43")], resume[:3]
+    # le survol d'une entree : 0,10 ; jamais sur un en-tete
+    ent = [l for l in lignes_st if l.shown][2]
+    ent.souris = True
+    ent.scripts.OnEnter(ent)
+    assert ent.survol.alpha == 0.10
+    ent.souris = False
+    ent.scripts.OnLeave(ent)
+    assert ent.survol.alpha == 0
+    # enfonce : le contenu se decale de (1, -1)
+    ent.scripts.OnMouseDown(ent)
+    assert st_ancre(ent.contenu, "TOPLEFT")[2:] == ["TOPLEFT", 1, -1]
+    ent.scripts.OnMouseUp(ent)
+    assert st_ancre(ent.contenu, "TOPLEFT")[2:] == ["TOPLEFT", 0, 0]
+    # l'ecoute : seulement onglet montre
+    assert "CRITERIA_UPDATE" in stf.events
+    stf.scripts.OnHide(stf)
+    assert "CRITERIA_UPDATE" not in stf.events
+    stf.scripts.OnShow(stf)
+    lua.execute("GetAchievementInfo = STATS_AVANT")
 
     # REVENIR AU PERSONNAGE par un onglet du client : nos ecrans s en vont.
     g.CharacterFrame_ShowSubFrame("PaperDollFrame")
@@ -11667,7 +11785,8 @@ def main():
     print("micro-menu : %d x %d pour %d boutons" % (
         micro.width, micro.height, len(list(g.ForeverUI.MicroButtons.values()))))
     # neuf boutons depuis le 2026-09-28 : celui des metiers, apres la feuille
-    # de personnage
+    # de personnage (un autre addon peut en ajouter : voir la section du
+    # micro-bouton d'un autre addon)
     assert micro.width == 9 * 32 + 8 * (-5), "le bandeau a la largeur de ses neuf boutons (248), sans rallonge"
     # LES BOUTONS JcJ ET AIDE SONT RETIRES (2026-09-26) : neuf boutons, et
     # ceux du client restent caches meme quand le client les reprend
@@ -20446,6 +20565,99 @@ def main():
         print("   SANS TAILLE %s" % x)
     assert not fautives, "%d texture(s) d'atlas sans taille" % len(fautives)
     print("   %d textures d'atlas posees : toutes ont largeur et hauteur" % vues)
+
+    # ------------------------------------------------- UN MICRO-BOUTON D'UN AUTRE ADDON
+    # (regle de l'utilisateur, 2026-09-29 : un module ou un addon met son
+    # bouton dans la micro-barre sans que ForeverUI le connaisse) :
+    # ForeverUI.AjouterMicroBouton. Il se range ou il le demande, au jeu
+    # d'icones de camelot qu'il donne ; jamais en double ; le bandeau
+    # s'elargit et la rangee suit (barre d'action, sacs, barres d'etat) ; en
+    # combat, tout attend la sortie du combat. ForeverUI.MajMicro(nom)
+    # l'enfonce.
+    print("\nmicro-bouton d'un autre addon :")
+    def mb_pts(r):
+        return [list(v.values()) for v in r.points.values()]
+    def mb_atlas(t, nom):
+        e = g.ForeverUI.AtlasEntry(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    def mb_defaut(nom):
+        d = g.ForeverUI.Layout.systems[nom].defaults
+        return (d.x, d.y)
+    def mb_noms():
+        return [e.bouton.name for e in g.ForeverUI.MicroButtons.values()]
+    micro = g.ForeverUIMicroMenu
+    assert len(mb_noms()) == 9 and micro.width == 248
+    assert mb_defaut("actionbar") == (-12, 2) and mb_defaut("sacs") == (247.5, 2)
+    xp_avant = g.ForeverUIExperienceBar.width
+    lua.execute("""
+        STATE.inLockdown = true
+        CLICS_ESSAI, PRETS_ESSAI = 0, 0
+        DEF_ESSAI = { nom = "EssaiMicroButton", jeu = "legacy", apres = "TalentMicroButton",
+            infobulle = function() return "Essai" end,
+            clic = function() CLICS_ESSAI = CLICS_ESSAI + 1 end,
+            pret = function(b) PRETS_ESSAI = PRETS_ESSAI + 1 end }
+        RENDU_COMBAT = ForeverUI.AjouterMicroBouton(DEF_ESSAI)
+    """)
+    assert g.RENDU_COMBAT is None and g.EssaiMicroButton is None and micro.width == 248, "en combat, rien ne bouge"
+    lua.execute("""
+        STATE.inLockdown = false
+        for _, c in ipairs(FRAMES) do
+            if c.events and c.events["PLAYER_REGEN_ENABLED"] and c.scripts and c.scripts.OnEvent then
+                c.scripts.OnEvent(c, "PLAYER_REGEN_ENABLED")
+            end
+        end
+    """)
+    mp = g.EssaiMicroButton
+    noms = mb_noms()
+    assert mp is not None and len(noms) == 10 and g.PRETS_ESSAI == 1, noms
+    assert noms.index("EssaiMicroButton") == noms.index("TalentMicroButton") + 1, noms
+    assert mb_pts(mp)[-1][1].name == "ForeverUIMicroMenu" and mb_pts(mp)[-1][2:] == ["LEFT", 4 * 27, 0], mb_pts(mp)[-1]
+    ach = g.AchievementMicroButton
+    assert mb_pts(ach)[-1][2:] == ["LEFT", 5 * 27, 0] and mb_pts(g.MainMenuMicroButton)[-1][2:] == ["LEFT", 9 * 27, 0]
+    assert g.TalentMicroButton.GetFrameLevel(g.TalentMicroButton) < mp.GetFrameLevel(mp) < ach.GetFrameLevel(ach), "celui de droite passe devant"
+    for cle, etat in (("_normal", "up"), ("_pushed", "down")):
+        assert mb_atlas(mp[cle], "ui-hud-micromenu-legacy-%s-c60-2x" % etat), cle
+    assert micro.width == 10 * 32 + 9 * (-5), "le bandeau s'elargit d'un bouton (275)"
+    assert mb_defaut("actionbar") == (-25.5, 2) and mb_defaut("sacs") == (261, 2), (mb_defaut("actionbar"), mb_defaut("sacs"))
+    assert g.ForeverUIExperienceBar.width == xp_avant + 27, (xp_avant, g.ForeverUIExperienceBar.width)
+    mp.scripts.OnEnter(mp)
+    assert g.GameTooltip.text == "Essai"
+    mp.scripts.OnLeave(mp)
+    mp.scripts.OnClick(mp, "LeftButton")
+    assert g.CLICS_ESSAI == 1
+    g.ForeverUI.MajMicro("EssaiMicroButton", True)
+    assert mp.buttonState == "PUSHED"
+    g.ForeverUI.MajMicro("EssaiMicroButton", False)
+    assert mp.buttonState == "NORMAL"
+    # demande a nouveau (le second module) : le meme bouton, aucun doublon
+    lua.execute("DEUXIEME = ForeverUI.AjouterMicroBouton(DEF_ESSAI)")
+    assert lua.eval("rawequal")(g.DEUXIEME, mp) and len(mb_noms()) == 10 and micro.width == 275 and g.PRETS_ESSAI == 1
+    print("   apres les talents (%d), bandeau 275, barre d'action -25.5, sacs 261 ; en combat : a la sortie ; pas de doublon" % (noms.index("EssaiMicroButton") + 1))
+    # sans « apres » : juste avant le menu du jeu ; une infobulle en texte
+    lua.execute('ForeverUI.AjouterMicroBouton({ nom = "EssaiMicroButton2", jeu = "questlog", infobulle = "Deux", clic = function() end })')
+    noms = mb_noms()
+    assert noms[-2:] == ["EssaiMicroButton2", "MainMenuMicroButton"] and micro.width == 11 * 32 + 10 * (-5), noms
+    b2 = g.EssaiMicroButton2
+    b2.scripts.OnEnter(b2)
+    assert g.GameTooltip.text == "Deux"
+    b2.scripts.OnLeave(b2)
+    print("   sans place demandee : avant le menu du jeu ; bandeau 302")
+    # LA JAUGE CIRCULAIRE DE L'ONGLET PvP, pour les autres addons
+    # (ForeverUI.PvPJauge) : ses quarts sur un cadran de 154, aux textures de
+    # l'honneur par defaut ou a celles qu'on lui donne
+    lua.execute("""
+        CADRAN_ESSAI = CreateFrame("Frame", nil, UIParent)
+        QUARTS_HONNEUR = ForeverUI.PvPJauge.monter(CADRAN_ESSAI)
+        QUARTS_BLEUS = ForeverUI.PvPJauge.monter(CADRAN_ESSAI, "a" .. string.char(92) .. "bleu", "a" .. string.char(92) .. "demi")
+        ForeverUI.PvPJauge.maj(QUARTS_BLEUS, 0.625)
+    """)
+    assert g.ForeverUI.PvPJauge.cote == 154
+    etats = [("plein" if q.plein.shown else "arc" if q.arc.shown else "vide") for q in g.QUARTS_BLEUS.values()]
+    # rotation 180 : depuis le bas, par la gauche -- bas-gauche, haut-gauche, puis haut-droit
+    assert etats == ["arc", "vide", "plein", "plein"], etats
+    assert all(q.plein.texture == "a" + chr(92) + "bleu" and q.arc.texture == "a" + chr(92) + "demi" for q in g.QUARTS_BLEUS.values())
+    assert all(q.plein.texture.lower().endswith("pvp" + chr(92) + "honorfill") for q in g.QUARTS_HONNEUR.values())
+    print("   jauge circulaire pretee : textures au choix (l'honneur par defaut), a 0,625 %s" % etats)
 
     print("\nmessages du chat :")
     for msg in g.RECORDED.messages.values():

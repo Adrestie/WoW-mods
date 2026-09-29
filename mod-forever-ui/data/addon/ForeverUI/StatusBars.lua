@@ -236,6 +236,12 @@ ForeverUI.StatusBarsUpdate = function()
 	majExperience()
 	majReputation()
 end
+-- la rangee a change de largeur (BottomBar.lua : un micro-bouton ajoute)
+ForeverUI.StatusBarsPoser = function()
+	poser()
+	majExperience()
+	majReputation()
+end
 
 ForeverUI.StatusBarsDebug = function()
 	local rangee = ForeverUI.BottomRow or {}

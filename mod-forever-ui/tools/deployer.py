@@ -35,6 +35,21 @@ CE QU'IL FAIT.
           Interface\\GlueXML : les ecrans d'accueil, ou aucun addon ne tourne.
           Meme regle que l'art : sous ce chemin, l'archive porte exactement le
           depot, rien de plus.
+  dbc   : ajoute aux hauts faits (Achievement.dbc, Achievement_Criteria.dbc)
+          les statistiques de data/dbc/statistiques.json, que l'onglet
+          Statistics montre et que le coeur suit de lui-meme. Le DBC du jeu
+          (celui que la chaine d'archives rend) recoit ces lignes, les siennes
+          d'abord retirees, et va dans patch-Z ; puis le DBC du serveur en
+          devient la copie octet pour octet (le client est la source de
+          verite) -- seulement s'il etait deja la copie de celui du client.
+          --retirer-dbc retire ces seules lignes des deux cotes ; une copie de
+          patch-Z revenue a la version d'origine est retiree de l'archive.
+          Les criteres qui en demandent (une creature tuee n'est comptee que
+          si son critere y a une ligne) ont aussi leurs lignes dans
+          achievement_criteria_data (base world, par le client mysql et les
+          identifiants de worldserver.conf), effacees et reposees par
+          identifiant de critere. Le serveur lit tout cela au demarrage : le
+          redemarrer ensuite.
 
 LA REGLE. Ce qui est sous Interface\\ForeverUI et sous Interface\\Glues\\Models
 dans le patch doit etre le calque exact de data/art : ni fichier en plus, ni
@@ -54,8 +69,11 @@ RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, "tools"))
 
 from foreverui import mpq  # noqa: E402
+from foreverui import dbc  # noqa: E402
 
 CLIENT_DEFAUT = r"E:\world of warcraft 3.3.5a hd"
+SERVEUR_DEFAUT = r"E:\Serveur\bin\RelWithDebInfo"     # le dossier de worldserver.exe
+STATISTIQUES = os.path.join(RACINE, "data", "dbc", "statistiques.json")
 NOM_ADDON = "ForeverUI"
 PREFIXE_ARCHIVE = "interface" + os.sep + "ForeverUI" + os.sep
 PREFIXE_GLUE = "Interface" + os.sep + "GlueXML" + os.sep
@@ -222,7 +240,256 @@ def _verser(client, art, prefixe, titre, bavard=True):
     return len(a_verser) + len(a_retirer)
 
 
-def verifier(client):
+# ------------------------------------------------------------------ les statistiques
+
+NB_LANGUES = 16
+MASQUE_TEXTE = 0xFF01FE            # celui des lignes du 3.3.5
+MASQUE_RECOMPENSE = 0xFF01EE
+ICONE = 1                          # celle des statistiques du 3.3.5 sans icone propre
+FICHIERS_DBC = ("Achievement.dbc", "Achievement_Criteria.dbc")
+
+
+def _textes(t):
+    # dans les seize colonnes de langue : un client d'une autre langue lit la
+    # sienne, et y trouve le nom plutot qu'un vide
+    return [t] * NB_LANGUES
+
+
+def lignes_statistiques():
+    """{fichier: dbc.Lignes} d'apres data/dbc/statistiques.json."""
+    import json
+    d = json.load(io.open(STATISTIQUES, encoding="utf-8"))
+    if d.get("_format") != "foreverui-statistiques-dbc-1":
+        raise SystemExit("%s : format inconnu" % STATISTIQUES)
+    hauts, criteres = [], []
+    for s in d["statistiques"]:
+        # Achievement.dbc (62 champs) : ID, faction, carte, prerequis, titre x16
+        # + masque, description x16 + masque, categorie, points, ordre,
+        # drapeaux, icone, recompense x16 + masque, criteres minimum, partage
+        hauts.append([s["id"], -1, s["carte"], 0] + _textes(s["nom"]) + [MASQUE_TEXTE] +
+                     _textes(s["nom"]) + [MASQUE_TEXTE] +
+                     [s["categorie"], s["points"], s["ordre"], s["drapeaux"], ICONE] +
+                     _textes("") + [MASQUE_RECOMPENSE, 0, 0])
+        for c in s["criteres"]:
+            # Achievement_Criteria.dbc (31 champs) : ID, haut fait, type, cible,
+            # quantite, debut (evenement, cible), echec (evenement, cible),
+            # description x16 + masque, drapeaux, chronometre (evenement,
+            # cible, duree), ordre
+            criteres.append([c["id"], s["id"], c["type"], c["cible"], c["quantite"], 0, 0, 0, 0] +
+                            _textes(c["texte"]) + [MASQUE_TEXTE, 0, 0, 0, 0, 1])
+    return {"Achievement.dbc": dbc.Lignes(62, list(range(4, 20)) + list(range(21, 37)) + list(range(43, 59)),
+                                          hauts),
+            "Achievement_Criteria.dbc": dbc.Lignes(31, list(range(9, 25)), criteres)}
+
+
+def _dossier_data(client):
+    for n in os.listdir(client):
+        if n.lower() == "data" and os.path.isdir(os.path.join(client, n)):
+            return os.path.join(client, n)
+    raise SystemExit("pas de dossier Data dans %s" % client)
+
+
+def _langue(data):
+    """le dossier de langue du client : celui de Data qui porte des archives"""
+    for n in sorted(os.listdir(data)):
+        d = os.path.join(data, n)
+        if os.path.isdir(d) and any(f.lower().endswith(".mpq") for f in os.listdir(d)):
+            return n
+    return None
+
+
+def dbc_serveur(serveur):
+    """le dossier des DBC du serveur : DataDir de son worldserver.conf, + dbc"""
+    conf = next((c for c in (os.path.join(serveur, "configs", "worldserver.conf"),
+                             os.path.join(serveur, "worldserver.conf")) if os.path.isfile(c)), None)
+    if not conf:
+        raise SystemExit("worldserver.conf introuvable dans %s" % serveur)
+    donnees = "."
+    for ligne in io.open(conf, encoding="utf-8", errors="replace"):
+        ligne = ligne.strip()
+        if ligne.startswith("DataDir") and "=" in ligne:
+            donnees = ligne.split("=", 1)[1].strip().strip('"')
+    if not os.path.isabs(donnees):
+        donnees = os.path.join(serveur, donnees)
+    return os.path.join(os.path.normpath(donnees), "dbc")
+
+
+def _fermer(chaine):
+    for a in chaine.archives:
+        a.close()
+
+
+def poser_dbc(client, serveur, retirer=False, bavard=True):
+    """Les statistiques dans les DBC du client (patch-Z) puis du serveur."""
+    lignes = lignes_statistiques()
+    data = _dossier_data(client)
+    langue = _langue(data)
+    archive_z = _archive_z(client)
+    dossier_serveur = dbc_serveur(serveur)
+    chaine = mpq.open_client(data, langue)
+    dessous = mpq.open_client(data, langue, ignore=(os.path.basename(archive_z),))
+    z = mpq.Archive(archive_z)
+    a_verser, a_retirer, pour_serveur = {}, [], {}
+    try:
+        for fichier in FICHIERS_DBC:
+            nom = "DBFilesClient\\" + fichier
+            actuel = chaine.read(nom)
+            d = lignes[fichier]
+            if retirer:
+                neuf, n = dbc.retirer(actuel, nom, d)
+            else:
+                neuf, n = dbc.ajouter(actuel, nom, d), len(d.ids)
+            if neuf == dessous.read(nom):
+                # rien de plus que la version d'origine : la copie de patch-Z
+                # n'a plus lieu d'etre
+                if z.has(nom):
+                    a_retirer.append(nom)
+            elif neuf != actuel:
+                a_verser[nom] = neuf
+            pour_serveur[fichier] = (actuel, neuf)
+            if bavard:
+                print("dbc : %s, %d ligne(s) %s" % (fichier, n, "retiree(s)" if retirer else "posee(s)"))
+    finally:
+        _fermer(chaine)
+        _fermer(dessous)
+        z.close()
+    if a_verser or a_retirer:
+        try:
+            mpq.patch_archive(archive_z, a_verser, remove=a_retirer)
+        except PermissionError:
+            raise SystemExit("patch-Z.MPQ est verrouille : fermer le client avant de verser.")
+        if bavard:
+            print("dbc : patch-Z, %d ecrit(s), %d retire(s)" % (len(a_verser), len(a_retirer)))
+    elif bavard:
+        print("dbc : patch-Z deja conforme")
+    # le serveur, copie du client : seulement s'il l'etait deja
+    for fichier, (avant, apres) in pour_serveur.items():
+        p = os.path.join(dossier_serveur, fichier)
+        actuel = io.open(p, "rb").read() if os.path.isfile(p) else None
+        if actuel == apres:
+            continue
+        if actuel != avant:
+            print("dbc : %s n'est pas la copie de celui du client : laisse tel quel" % p)
+            continue
+        io.open(p + ".foreverui-tmp", "wb").write(apres)
+        os.replace(p + ".foreverui-tmp", p)
+        if bavard:
+            print("dbc : %s recopie du client (redemarrer le worldserver)" % p)
+    poser_donnees(serveur, retirer, bavard)
+
+
+def _conf_serveur(serveur):
+    conf = next((c for c in (os.path.join(serveur, "configs", "worldserver.conf"),
+                             os.path.join(serveur, "worldserver.conf")) if os.path.isfile(c)), None)
+    if not conf:
+        raise SystemExit("worldserver.conf introuvable dans %s" % serveur)
+    valeurs = {}
+    for ligne in io.open(conf, encoding="utf-8", errors="replace"):
+        ligne = ligne.strip()
+        if "=" in ligne and not ligne.startswith("#"):
+            cle, valeur = ligne.split("=", 1)
+            valeurs[cle.strip()] = valeur.strip().strip('"')
+    return valeurs
+
+
+def _mysql(serveur):
+    """le client mysql : celui de worldserver.conf, celui qu'ont retenu les
+    installeurs du depot, ou celui du PATH"""
+    import json
+    import shutil
+    candidats = [_conf_serveur(serveur).get("MySQLExecutable")]
+    try:
+        memoire = os.path.join(os.environ.get("APPDATA") or "", "WoW-mods", "installeur.json")
+        candidats.append(json.load(io.open(memoire, encoding="utf-8")).get("mysql"))
+    except (OSError, ValueError):
+        pass
+    candidats.append(shutil.which("mysql"))
+    for c in candidats:
+        if c and os.path.isfile(c):
+            return c
+    raise SystemExit("client mysql introuvable (MySQLExecutable dans worldserver.conf)")
+
+
+def _sql(serveur, requete):
+    """une requete sur la base world du serveur ; rend les lignes (texte)"""
+    import subprocess
+    info = _conf_serveur(serveur).get("WorldDatabaseInfo", "").split(";")
+    if len(info) != 5:
+        raise SystemExit("WorldDatabaseInfo illisible dans worldserver.conf")
+    hote, port, utilisateur, mot_de_passe, base = info
+    env = dict(os.environ, MYSQL_PWD=mot_de_passe)
+    r = subprocess.run([_mysql(serveur), "-h", hote, "-P", port, "-u", utilisateur, base, "-N", "-B",
+                        "-e", requete], capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        raise SystemExit("mysql : %s" % r.stderr.strip())
+    return [l.split("\t") for l in r.stdout.splitlines() if l]
+
+
+def donnees_statistiques():
+    """[(critere, type, valeur1, valeur2)] : les lignes d'achievement_criteria_data"""
+    import json
+    d = json.load(io.open(STATISTIQUES, encoding="utf-8"))
+    lignes = []
+    for s in d["statistiques"]:
+        for c in s["criteres"]:
+            for x in c.get("donnees", []):
+                lignes.append((c["id"], x["type"], x["valeur1"], x["valeur2"]))
+    return lignes
+
+
+def _criteres_statistiques():
+    import json
+    d = json.load(io.open(STATISTIQUES, encoding="utf-8"))
+    return [c["id"] for s in d["statistiques"] for c in s["criteres"]]
+
+
+def poser_donnees(serveur, retirer=False, bavard=True):
+    """Les lignes d'achievement_criteria_data de nos criteres : les notres
+    d'abord effacees (par identifiant de critere), puis posees, sauf au
+    retrait. Le coeur les lit au demarrage (ou par .reload
+    achievement_criteria_data)."""
+    ids = ", ".join(str(i) for i in _criteres_statistiques())
+    lignes = [] if retirer else donnees_statistiques()
+    requete = "DELETE FROM achievement_criteria_data WHERE criteria_id IN (%s);" % ids
+    if lignes:
+        requete += " INSERT INTO achievement_criteria_data (criteria_id, type, value1, value2, ScriptName) VALUES %s;" % (
+            ", ".join("(%d, %d, %d, %d, '')" % l for l in lignes))
+    _sql(serveur, requete)
+    if bavard:
+        print("dbc : achievement_criteria_data, %d ligne(s) %s" % (
+            len(donnees_statistiques()) if retirer else len(lignes), "retiree(s)" if retirer else "posee(s)"))
+
+
+def verifier_donnees(serveur):
+    ids = ", ".join(str(i) for i in _criteres_statistiques())
+    lues = sorted(tuple(int(v) for v in l) for l in _sql(
+        serveur, "SELECT criteria_id, type, value1, value2 FROM achievement_criteria_data WHERE criteria_id IN (%s)" % ids))
+    if lues != sorted(donnees_statistiques()):
+        return ["achievement_criteria_data : lignes des statistiques absentes ou differentes"]
+    return []
+
+
+def verifier_dbc(client, serveur):
+    """Les statistiques sont-elles dans les DBC du client, et le serveur en est-il la copie ?"""
+    ecarts = []
+    lignes = lignes_statistiques()
+    data = _dossier_data(client)
+    chaine = mpq.open_client(data, _langue(data))
+    try:
+        for fichier in FICHIERS_DBC:
+            nom = "DBFilesClient\\" + fichier
+            actuel = chaine.read(nom)
+            if dbc.ajouter(actuel, nom, lignes[fichier]) != actuel:
+                ecarts.append("statistiques absentes ou differentes dans le DBC du client : %s" % fichier)
+            p = os.path.join(dbc_serveur(serveur), fichier)
+            if not os.path.isfile(p) or io.open(p, "rb").read() != actuel:
+                ecarts.append("DBC du serveur different de celui du client : %s" % fichier)
+    finally:
+        _fermer(chaine)
+    return ecarts + verifier_donnees(serveur)
+
+
+def verifier(client, serveur=SERVEUR_DEFAUT):
     """Ce qui est pose correspond-il encore au depot ?"""
     source = os.path.join(RACINE, "data", "addon", NOM_ADDON)
     cible = os.path.join(client, "Interface", "AddOns", NOM_ADDON)
@@ -256,6 +523,8 @@ def verifier(client):
         finally:
             archive.close()
 
+    ecarts += verifier_dbc(client, serveur)
+
     if ecarts:
         print("ecarts entre le depot et le client : %d" % len(ecarts))
         for e in ecarts:
@@ -271,21 +540,31 @@ def main():
     analyseur.add_argument("--addon", action="store_true", help="ne poser que l'addon")
     analyseur.add_argument("--art", action="store_true", help="ne verser que l'art")
     analyseur.add_argument("--glue", action="store_true", help="ne verser que les ecrans d'accueil")
+    analyseur.add_argument("--dbc", action="store_true",
+                           help="ne poser que les statistiques dans les DBC du client et du serveur")
+    analyseur.add_argument("--retirer-dbc", action="store_true",
+                           help="retirer les statistiques des DBC du client et du serveur")
+    analyseur.add_argument("--serveur", default=SERVEUR_DEFAUT, help="dossier du worldserver")
     analyseur.add_argument("--verifier", action="store_true",
                            help="ne rien ecrire, seulement comparer")
     options = analyseur.parse_args()
 
     if options.verifier:
-        verifier(options.client)
+        verifier(options.client, options.serveur)
+        return
+    if options.retirer_dbc:
+        poser_dbc(options.client, options.serveur, retirer=True)
         return
 
-    tout = not (options.addon or options.art or options.glue)
+    tout = not (options.addon or options.art or options.glue or options.dbc)
     if tout or options.addon:
         poser_addon(options.client)
     if tout or options.art:
         poser_art(options.client)
     if tout or options.glue:
         poser_glue(options.client)
+    if tout or options.dbc:
+        poser_dbc(options.client, options.serveur)
 
 
 if __name__ == "__main__":
