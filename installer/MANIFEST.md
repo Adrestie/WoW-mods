@@ -112,6 +112,15 @@ are written (`[".blp", ".m2"]`); previews or notes kept beside them stay out.
 `owned_folders`: game folders (at least two levels) that only the module
 uses: whatever a custom archive holds in them is the module's.
 
+`replaces` (optional): files or folders of the module's game files that
+replace ON PURPOSE the version another custom archive provides (a pack of
+the player's, for instance): `["Interface/Glues/Models"]`. Such a file is no
+conflict: it is written into the archive the game reads last, which shadows
+the other version without touching it, and on removal the other version is
+what the game reads again. It is still a conflict when the other version sits
+in that very archive, since writing would overwrite it. Each entry must name
+at least one of the module's game files.
+
 ### addons
 
 ```json
@@ -178,7 +187,7 @@ What proves the module is there, and what only carries its identifiers:
 | a server DBC row identical to the module's | a server DBC row with the same identifier and other content |
 | a receipt in a custom archive | |
 | a client DBC row identical to the module's, or named by the receipt | a client DBC row with the same identifier and other content (Blizzard's rows included) |
-| a game file named by the receipt, or under an owned folder | a game file the game reads, from a custom archive, in another version |
+| a game file named by the receipt, or under an owned folder | a game file the game reads, from a custom archive, in another version (unless listed in `replaces`) |
 | an addon folder of the module in `Interface\AddOns` | |
 | a backup | |
 | a module table; a row of `updates` | a row of another shared table |
@@ -190,5 +199,8 @@ the database rows and DBC rows go (game files never do).
 
 In each archive it writes to, the installer leaves a receipt,
 `WoW-mods\<module>.receipt`, listing what it put there (`file <name>`,
-`dbc <File.dbc> <ids>`). An archive left holding only DBC files identical to
-the ones the game would read without it is deleted.
+`dbc <File.dbc> <ids>`, and `added <File.dbc>` for a DBC file it copied whole
+into an archive that had none). On removal, such a copy goes too once its rows
+are out, if it says again what the game reads below it. An archive left empty,
+or holding only DBC files identical to the ones the game would read without
+it, is deleted.

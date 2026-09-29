@@ -591,26 +591,31 @@ def receipt_name(M):
     return RECEIPT_FOLDER + "\\" + M.name + ".receipt"
 
 
-def receipt_text(M, files, dbc):
-    """The receipt of one archive: files ([names]) and dbc ({file: [ids]}) the installer put there."""
+def receipt_text(M, files, dbc, added=()):
+    """The receipt of one archive: files ([names]) and dbc ({file: [ids]}) the installer put there, and
+    added: the DBC files it copied whole into this archive, which had none of them."""
     lines = ["# WoW-mods installer: what %s wrote into this archive" % M.name]
     lines += ["file %s" % n for n in sorted(files)]
     lines += ["dbc %s %s" % (f, ",".join(str(i) for i in sorted(ids))) for f, ids in sorted(dbc.items())]
+    lines += ["added %s" % f for f in sorted(added)]
     return ("\r\n".join(lines) + "\r\n").encode("utf-8")
 
 
 def read_receipt(M, a):
-    """{"files": [...], "dbc": {file: [ids]}} if archive a carries a receipt of the module, else None."""
+    """{"files": [...], "dbc": {file: [ids]}, "added": [...]} if archive a carries a receipt of the
+    module, else None."""
     name = receipt_name(M)
     if not a.contains(name):
         return None
-    receipt = {"files": [], "dbc": {}}
+    receipt = {"files": [], "dbc": {}, "added": []}
     for line in a.read(name).decode("utf-8", "replace").splitlines():
         parts = line.strip().split(" ", 2)
         if len(parts) >= 2 and parts[0] == "file":
             receipt["files"].append(line.strip()[5:])
         elif len(parts) == 3 and parts[0] == "dbc":
             receipt["dbc"][parts[1]] = [int(x) for x in parts[2].split(",") if x.strip()]
+        elif len(parts) == 2 and parts[0] == "added":
+            receipt["added"].append(parts[1])
     return receipt
 
 
@@ -788,6 +793,17 @@ def module_files_in(M, a, receipt):
     return sorted(found.values())
 
 
+def game_files_target(M, client):
+    """Where the module's game files go: the last custom archive read -- or a new patch-Z read after
+    it when that archive itself holds a file the module replaces, which writing would overwrite."""
+    target = client.write_target(None)
+    if os.path.basename(target).lower() != NEW_ARCHIVE_NAME.lower() and os.path.exists(target):
+        a = client.open(target)
+        if a is not None and any(a.contains(n) for n in M.game_files if n.lower() in M.replaced):
+            return os.path.join(client.data, NEW_ARCHIVE_NAME)
+    return target
+
+
 def survey(M, server, client, dbs):
     """The State of the module on this server, game and databases."""
     s = State()
@@ -856,9 +872,14 @@ def survey(M, server, client, dbs):
             if others:
                 s.client_conflicts.append((w, d.file, others))
     mine = {(c.lower(), n.lower()) for c, n in s.files}
+    target = os.path.normcase(game_files_target(M, client))
     for name, source in M.game_files.items():
         w = client.winner(name)
         if not w or archive_rank(os.path.basename(w))[1] or (w.lower(), name.lower()) in mine:
+            continue
+        # Replaced on purpose: the other archive's version is shadowed, never overwritten --
+        # unless it sits in the very archive the module writes into.
+        if name.lower() in M.replaced and os.path.normcase(w) != target:
             continue
         with open(source, "rb") as f:
             if client.open(w).read(name) != f.read():
@@ -884,20 +905,25 @@ def remove_tree(d):
 
 
 def archive_is_redundant(client, path):
-    """True if the archive holds only DBC files, each identical to the one the
-    game would read without it: it no longer changes anything (the archive an
-    install created on a client that had none)."""
+    """True if the archive holds nothing, or only DBC files each identical to the
+    one the game would read without it: it no longer changes anything (the
+    archive an install created on a client that had none). Only an archive
+    whose listfile names everything it stores is judged."""
     a = client.open(path)
     if a is None or not a.contains("(listfile)"):
         return False
     names = [n.strip() for n in a.read("(listfile)").decode("latin-1").replace(";", "\n").splitlines()
              if n.strip()]
-    if not names or len(names) > 50 or \
-            any(not n.replace("/", "\\").lower().startswith("dbfilesclient\\") for n in names):
+    present = sorted({n for n in names if a.contains(n) and n.lower() not in ("(listfile)", "(attributes)")},
+                     key=str.lower)
+    special = sum(1 for n in ("(listfile)", "(attributes)") if a.contains(n))
+    stored = sum(1 for b in a.block_table if b[3] & mpq_archive.FILE_EXISTS)
+    if stored != len({n.lower() for n in present}) + special:
         return False
-    for n in names:
-        if not a.contains(n):
-            continue
+    if len(present) > 50 or \
+            any(not n.replace("/", "\\").lower().startswith("dbfilesclient\\") for n in present):
+        return False
+    for n in present:
         below = client.winner(n, below=path)
         if below is None or client.open(below).read(n) != a.read(n):
             return False
@@ -954,13 +980,21 @@ def remove(M, server, client, dbs, state, leftovers=False):
         by_archive.setdefault(path, ({}, set()))[1].add(name)
     for path, r in state.receipts:
         by_archive.setdefault(path, ({}, set()))[1].add(receipt_name(M))
+    added_by = {path: {f.lower() for f in r.get("added", [])} for path, r in state.receipts}
     for path, (rows, names) in sorted(by_archive.items()):
         a = client.open(path)
         written = {}
         for f, ids in sorted(rows.items()):
             name = "DBFilesClient\\" + f
             new, n = dbc_remove(a.read(name), name, ids, defs[f].text)
-            if n:
+            if not n:
+                continue
+            # A file the install copied whole goes, once it says again what the game reads below.
+            below = client.winner(name, below=path)
+            if f.lower() in added_by.get(path, ()) and below and client.open(below).read(name) == new:
+                names.add(name)
+                say("  %s, %s: %d row(s) removed, and the copy the install added" % (path, f, n))
+            else:
                 written[name] = new
                 say("  %s, %s: %d row(s) removed" % (path, f, n))
         leaving = sorted(n for n in names if a.contains(n))
@@ -1030,9 +1064,11 @@ def install(M, server, client, dbs):
         w = client.winner(name)
         target = client.write_target(w)
         writes.setdefault(target, {})[name] = dbc_add(client.open(w).read(name), name, d, d.client)
-        receipts.setdefault(target, ([], {}))[1][d.file] = d.client_ids
+        receipts.setdefault(target, ([], {}, set()))[1][d.file] = d.client_ids
+        if target != w:                         # the file is read from below: it is copied whole
+            receipts[target][2].add(d.file)
     if M.game_files:
-        target = client.write_target(None)
+        target = game_files_target(M, client)
         a = client.open(target) if os.path.exists(target) else None
         for name, source in sorted(M.game_files.items()):
             # already in that archive (identical, or it would be a conflict): not ours
@@ -1040,12 +1076,12 @@ def install(M, server, client, dbs):
                 continue
             with open(source, "rb") as f:
                 writes.setdefault(target, {})[name] = f.read()
-            receipts.setdefault(target, ([], {}))[0].append(name)
+            receipts.setdefault(target, ([], {}, set()))[0].append(name)
     for target in writes:
         if not os.path.exists(target):
             created.add(target)
-        files, dbc = receipts.get(target, ([], {}))
-        writes[target][receipt_name(M)] = receipt_text(M, files, dbc)
+        files, dbc, added = receipts.get(target, ([], {}, set()))
+        writes[target][receipt_name(M)] = receipt_text(M, files, dbc, added)
     for target, files in writes.items():
         if target in created:
             mpq_archive.create_archive(target, files, hash_entries=max(1024, 1 << (2 * len(files) + 16).bit_length()))
