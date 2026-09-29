@@ -19,7 +19,7 @@
 The .NET Framework 4 compiler (csc.exe) ships with Windows: no Visual Studio is needed,
 and the executable runs on any Windows 10 or 11 without installation.
 
-Output: tools/patcher/bin/ForeverUIPatcher.exe
+Output: tools/patcher/ForeverUIPatcher.exe, beside its source.
 """
 import os
 import subprocess
@@ -27,11 +27,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSC = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Microsoft.NET", "Framework", "v4.0.30319", "csc.exe")
-OUTPUT = os.path.join(HERE, "bin", "ForeverUIPatcher.exe")
+OUTPUT = os.path.join(HERE, "ForeverUIPatcher.exe")
 
 
 def main():
-    os.makedirs(os.path.dirname(OUTPUT), exist_ok=True)
     command = [CSC, "/nologo", "/target:winexe", "/platform:anycpu", "/optimize+", "/codepage:65001",
                 "/r:System.Windows.Forms.dll", "/r:System.Drawing.dll",
                 "/out:" + OUTPUT, os.path.join(HERE, "ForeverUIPatcher.cs")]
