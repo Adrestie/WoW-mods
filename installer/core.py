@@ -65,41 +65,24 @@ def sql_list(values):
     return ", ".join(("'%s'" % v.replace("'", "''")) if isinstance(v, str) else str(int(v)) for v in values)
 
 
-# ------------------------------------------------------------------ console
+# ------------------------------------------------------------------ output
+
+def print_line(text):
+    print(text, flush=True)
+
+
+# Where say() sends each line: the console, or the window's log.
+output = print_line
+
 
 def say(text=""):
-    print(text, flush=True)
+    output(text)
 
 
 def heading(text):
     say()
     say(text)
     say("-" * len(text))
-
-
-def ask_path(prompt, folder=True, initial=None):
-    """Asks for a folder (folder=True) or for mysql.exe through a dialog, or on
-    the keyboard when no dialog can open. Returns None if the user gives up."""
-    say(prompt)
-    try:
-        import tkinter
-        from tkinter import filedialog
-        window = tkinter.Tk()
-        window.withdraw()
-        window.attributes("-topmost", True)
-        if folder:
-            path = filedialog.askdirectory(title=prompt, initialdir=initial or "", mustexist=True, parent=window)
-        else:
-            path = filedialog.askopenfilename(title=prompt, initialdir=initial or "", parent=window,
-                                              filetypes=[("mysql.exe", "mysql.exe"), ("*.exe", "*.exe")])
-        window.destroy()
-    except Exception:
-        path = input("  path: ").strip().strip('"')
-    if not path:
-        return None
-    path = os.path.normpath(path)
-    say("  -> %s" % path)
-    return path
 
 
 # ------------------------------------------------------------------ remembered paths
@@ -141,6 +124,15 @@ def read_conf(path):
                     v = v[1:-1]
                 values[m.group(1)] = v
     return values
+
+
+def read_version(folder, name):
+    """The whole number written in folder/name, or None."""
+    try:
+        with open(os.path.join(folder, name), encoding="utf-8") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
 
 
 def is_inside(path, folder):
@@ -339,19 +331,23 @@ class Client(object):
 # ------------------------------------------------------------------ DBC
 
 def dbc_split(raw, name):
-    """(field count, [row bytes], string block) of a DBC file."""
+    """(field count, record size, [row bytes], string block) of a DBC file.
+
+    Most files hold 4-byte fields only (record size = fields x 4); a few hold
+    byte fields too (SpellChainEffects.dbc: 48 fields in 177 bytes). A row is
+    then read as 4-byte words, followed by the bytes left over."""
     if raw[:4] != b"WDBC":
         raise InstallerError("%s is not a DBC file (no WDBC signature)" % name)
     count, fields, size, string_size = struct.unpack_from("<4I", raw, 4)
-    if size != fields * 4 or len(raw) < 20 + count * size + string_size:
+    if size < 4 or size > fields * 4 or len(raw) < 20 + count * size + string_size:
         raise InstallerError("%s: inconsistent DBC header" % name)
     rows = [raw[20 + i * size:20 + (i + 1) * size] for i in range(count)]
     start = 20 + count * size
-    return fields, rows, bytearray(raw[start:start + string_size])
+    return fields, size, rows, bytearray(raw[start:start + string_size])
 
 
-def dbc_join(fields, rows, strings):
-    return b"WDBC" + struct.pack("<4I", len(rows), fields, fields * 4, len(strings)) + \
+def dbc_join(fields, size, rows, strings):
+    return b"WDBC" + struct.pack("<4I", len(rows), fields, size, len(strings)) + \
         b"".join(rows) + bytes(strings)
 
 
@@ -367,11 +363,38 @@ def read_string(strings, offset):
     return bytes(strings[offset:end if end >= 0 else len(strings)]).decode("utf-8", "surrogateescape")
 
 
-def row_values(row, strings, fields, text):
+def row_values(row, strings, text):
     """The values of a DBC row, in the form of the module's rows: text fields
-    (indices in text) read from the string block, the others as unsigned integers."""
-    values = struct.unpack_from("<%dI" % fields, row)
-    return [read_string(strings, v) if i in text else v for i, v in enumerate(values)]
+    (indices in text) read from the string block, the others as unsigned
+    integers; the bytes left over after the last 4-byte word, if any, as a
+    last value (bytes)."""
+    words = len(row) // 4
+    values = [read_string(strings, v) if i in text else v
+              for i, v in enumerate(struct.unpack_from("<%dI" % words, row))]
+    if len(row) % 4:
+        values.append(bytes(row[words * 4:]))
+    return values
+
+
+def row_bytes(values, strings, text, size, name):
+    """A DBC row from its values (row_values' form); its strings are appended to the string block."""
+    out = bytearray()
+    for i, v in enumerate(values):
+        if isinstance(v, bytes):
+            out += v
+        elif i in text:
+            if not v:
+                out += struct.pack("<I", 0)
+                continue
+            if not strings:
+                strings.extend(b"\0")          # offset 0 is the empty string
+            out += struct.pack("<I", len(strings))
+            strings.extend(v.encode("utf-8", "surrogateescape") + b"\0")
+        else:
+            out += struct.pack("<I", int(v) & 0xFFFFFFFF)
+    if len(out) != size:
+        raise InstallerError("%s: a module row is %d bytes long, the file's rows %d" % (name, len(out), size))
+    return bytes(out)
 
 
 def dbc_survey(raw, name, d, rows):
@@ -379,7 +402,7 @@ def dbc_survey(raw, name, d, rows):
     identifiers, identical to the module's rows or not.
 
     d: the manifest's DBC entry; rows: the module's rows for this side."""
-    fields, recs, strings = dbc_split(raw, name)
+    fields, size, recs, strings = dbc_split(raw, name)
     if fields != d.fields:
         raise InstallerError("%s has %d fields, %d expected: unexpected client version" % (name, fields, d.fields))
     expected = {r[0]: r for r in rows}
@@ -387,33 +410,20 @@ def dbc_survey(raw, name, d, rows):
     for r in recs:
         i = _row_id(r)
         if i in expected:
-            (ours if row_values(r, strings, fields, d.text) == expected[i] else others).append(i)
+            (ours if row_values(r, strings, d.text) == expected[i] else others).append(i)
     return sorted(ours), sorted(others)
 
 
 def dbc_add(raw, name, d, rows):
     """The DBC with the module's rows appended (rows already carrying their
     identifiers removed first); their strings appended to the string block."""
-    fields, recs, strings = dbc_split(raw, name)
+    fields, size, recs, strings = dbc_split(raw, name)
     if fields != d.fields:
         raise InstallerError("%s has %d fields, %d expected: unexpected client version" % (name, fields, d.fields))
     ids = set(r[0] for r in rows)
     recs = [r for r in recs if _row_id(r) not in ids]
-    for values in rows:
-        rec = []
-        for i, v in enumerate(values):
-            if i in d.text:
-                if not v:
-                    rec.append(0)
-                    continue
-                if not strings:
-                    strings.extend(b"\0")          # offset 0 is the empty string
-                rec.append(len(strings))
-                strings.extend(v.encode("utf-8", "surrogateescape") + b"\0")
-            else:
-                rec.append(int(v) & 0xFFFFFFFF)
-        recs.append(struct.pack("<%dI" % fields, *rec))
-    return dbc_join(fields, recs, strings)
+    recs += [row_bytes(values, strings, d.text, size, name) for values in rows]
+    return dbc_join(fields, size, recs, strings)
 
 
 def dbc_remove(raw, name, ids, text):
@@ -425,32 +435,33 @@ def dbc_remove(raw, name, ids, text):
     the manifest would not declare). Strings the install appended at the end
     go; nothing still in use does. With nothing removed, the original bytes
     are returned."""
-    fields, recs, strings = dbc_split(raw, name)
+    fields, size, recs, strings = dbc_split(raw, name)
+    words = size // 4
     ids = set(ids)
     kept = [r for r in recs if _row_id(r) not in ids]
     n = len(recs) - len(kept)
     if not n:
         return raw, 0
     if strings:
-        size = len(strings)
+        length = len(strings)
 
         def end_of(offset):
             zero = strings.find(b"\0", offset)
-            return (zero if zero >= 0 else size - 1) + 1
+            return (zero if zero >= 0 else length - 1) + 1
 
         end = 1
         for r in kept:
-            values = struct.unpack_from("<%dI" % fields, r)
+            values = struct.unpack_from("<%dI" % words, r)
             for c in text:
-                if 0 < values[c] < size:
+                if c < words and 0 < values[c] < length:
                     end = max(end, end_of(values[c]))
         all_values = array.array("I")
-        all_values.frombytes(b"".join(kept))
-        for v in {x for x in all_values if end <= x < size}:
+        all_values.frombytes(b"".join(r[:words * 4] for r in kept))
+        for v in {x for x in all_values if end <= x < length}:
             if strings[v - 1] == 0:
                 end = max(end, end_of(v))
-        strings = strings[:min(end, size)]
-    return dbc_join(fields, kept, strings), n
+        strings = strings[:min(end, length)]
+    return dbc_join(fields, size, kept, strings), n
 
 
 def write_file_atomic(path, content):
@@ -720,14 +731,52 @@ def addon_folder(client, name):
 
 
 def module_lua_files(M, server):
-    """The module's Lua files, wherever they are under the scripts folder."""
+    """The module's Lua files present: each at its place in the module's folder, and the ones the
+    manifest lists in `files` wherever they are under the scripts folder."""
     if not M.lua:
         return []
-    names = {os.path.basename(p).lower() for p in M.lua["files"]}
-    found = []
-    if os.path.isdir(server.lua):
+    found = {}
+    base = os.path.join(server.lua, M.lua["folder"])
+    for rel in M.lua["files"]:
+        p = os.path.join(base, rel)
+        if os.path.isfile(p):
+            found.setdefault(os.path.normcase(p), p)
+    anywhere = {os.path.basename(p).lower() for p in M.lua["anywhere"]}
+    if anywhere and os.path.isdir(server.lua):
         for d, _, files in os.walk(server.lua):
-            found += [os.path.join(d, f) for f in files if f.lower() in names]
+            for f in files:
+                if f.lower() in anywhere:
+                    found.setdefault(os.path.normcase(os.path.join(d, f)), os.path.join(d, f))
+    return sorted(found.values())
+
+
+def files_under(folder):
+    """Paths, relative to folder, of every file under it."""
+    return [os.path.relpath(os.path.join(d, n), folder) for d, _, names in os.walk(folder) for n in names]
+
+
+def shared_version(component, folder):
+    """The version of a copy of the shared component (None: unreadable)."""
+    return read_version(folder, component["version_file"])
+
+
+def shared_providers(component, server):
+    """Scripts, outside the component's own folder, of the modules that use it (relative paths)."""
+    own = os.path.normcase(os.path.join(server.lua, component["folder"]))
+    found = []
+    for d, folders, names in os.walk(server.lua):
+        if is_inside(d, own):
+            folders[:] = []
+            continue
+        for n in names:
+            if not n.lower().endswith((".lua", ".ext")):
+                continue
+            try:
+                with open(os.path.join(d, n), encoding="utf-8", errors="replace") as f:
+                    if component["provider_mark"] in f.read():
+                        found.append(os.path.relpath(os.path.join(d, n), server.lua))
+            except OSError:
+                continue
     return sorted(found)
 
 
@@ -819,8 +868,8 @@ def survey(M, server, client, dbs):
         # The module's folder is a trace only if it holds nothing but its scripts:
         # a file of the user's stored there makes it theirs.
         d = os.path.join(server.lua, M.lua["folder"])
-        names = {os.path.basename(p).lower() for p in M.lua["files"]}
-        if os.path.isdir(d) and all(n.lower() in names for n in os.listdir(d)):
+        names = {rel.lower() for rel in M.lua["files"]}
+        if os.path.isdir(d) and all(rel.lower() in names for rel in files_under(d)):
             s.lua_dir = d
 
     # Server DBC: rows identical to the module's, or same identifier and other content.
@@ -983,7 +1032,7 @@ def remove(M, server, client, dbs, state, leftovers=False):
     added_by = {path: {f.lower() for f in r.get("added", [])} for path, r in state.receipts}
     for path, (rows, names) in sorted(by_archive.items()):
         a = client.open(path)
-        written = {}
+        written, copies = {}, set()
         for f, ids in sorted(rows.items()):
             name = "DBFilesClient\\" + f
             new, n = dbc_remove(a.read(name), name, ids, defs[f].text)
@@ -992,15 +1041,17 @@ def remove(M, server, client, dbs, state, leftovers=False):
             # A file the install copied whole goes, once it says again what the game reads below.
             below = client.winner(name, below=path)
             if f.lower() in added_by.get(path, ()) and below and client.open(below).read(name) == new:
-                names.add(name)
+                copies.add(name)
                 say("  %s, %s: %d row(s) removed, and the copy the install added" % (path, f, n))
             else:
                 written[name] = new
                 say("  %s, %s: %d row(s) removed" % (path, f, n))
-        leaving = sorted(n for n in names if a.contains(n))
-        for name in leaving:
-            if name != receipt_name(M):
-                say("  %s: %s removed" % (path, name))
+        leaving = sorted(n for n in names | copies if a.contains(n))
+        files = [n for n in leaving if n not in copies and n != receipt_name(M)]
+        if len(files) > 5:
+            say("  %s: %d game file(s) removed" % (path, len(files)))
+        for name in files if len(files) <= 5 else []:
+            say("  %s: %s removed" % (path, name))
         if written or leaving:
             mpq_archive.write_into_archive(path, written, remove=leaving)
             client.forget(path)
@@ -1015,20 +1066,54 @@ def remove(M, server, client, dbs, state, leftovers=False):
         say("  deleted: %s" % d)
     for p in state.confs + state.lua + state.backups:
         os.remove(p)
+    for p in state.confs + state.backups + (state.lua if len(state.lua) <= 5 else []):
         say("  deleted: %s" % p)
+    if len(state.lua) > 5:
+        say("  deleted: %d Lua script(s) of the module" % len(state.lua))
     for d in state.addons:
         remove_tree(d)
         say("  deleted: %s" % d)
     if M.lua:
         d = os.path.join(server.lua, M.lua["folder"])
         if os.path.isdir(d):
-            if os.listdir(d):
+            for folder, _, _ in sorted(os.walk(d), key=lambda w: -len(w[0])):
+                if folder != d and not os.listdir(folder):
+                    os.rmdir(folder)
+            left = files_under(d)
+            if left:
                 say("  kept: %s, which holds files foreign to the module:" % d)
-                for n in sorted(os.listdir(d)):
+                for n in sorted(left):
                     say("      %s" % n)
             else:
-                os.rmdir(d)
+                remove_tree(d)
                 say("  deleted: %s" % d)
+
+    # Shared components go with the last module that uses them (never on a removal of leftovers).
+    if not leftovers:
+        for c in M.shared:
+            remove_shared(c, server, dbs)
+
+
+def remove_shared(component, server, dbs):
+    """Deletes a shared component, folder and database rows, if no module uses it any more."""
+    d = os.path.join(server.lua, component["folder"])
+    users = shared_providers(component, server)
+    if users:
+        if os.path.isdir(d):
+            say("  kept: %s, still used by %s" % (d, ", ".join(users)))
+        return
+    if os.path.isdir(d):
+        remove_tree(d)
+        say("  deleted: %s (no module uses it any more)" % d)
+    for key, desc in sorted(component["databases"].items()):
+        if key not in dbs:
+            continue
+        existing = dbs[key].existing_tables([t for t, _ in desc["rows"]])
+        script = ["DELETE FROM `%s` WHERE %s" % (t, w) for t, w in desc["rows"] if t.lower() in existing]
+        if script:
+            dbs[key].run(";\n".join(script) + ";\n")
+            say("  database %s: rows of %s deleted (%d statement(s))" % (dbs[key].name, component["folder"],
+                                                                       len(script)))
 
 
 # ------------------------------------------------------------------ installation
@@ -1107,20 +1192,31 @@ def install(M, server, client, dbs):
         write_file_atomic(p, dbc_add(raw, p, d, d.server))
         say("  %s: %d row(s) added" % (p, len(d.server)))
 
-    # 3. Lua scripts.
+    # 3. Lua scripts, then the shared components: each copied unless the same or a newer
+    #    version is there already.
     if M.lua:
         d = os.path.join(server.lua, M.lua["folder"])
-        os.makedirs(d, exist_ok=True)
-        for p in M.lua["files"]:
-            with open(os.path.join(M.root, p), "rb") as f:
+        cp = M.lua.get("config_path")
+        for rel, source in sorted(M.lua["files"].items()):
+            with open(source, "rb") as f:
                 content = f.read()
-            name = os.path.basename(p)
-            cp = M.lua.get("config_path")
-            if cp and cp["file"] == name:
+            if cp and cp["file"].lower() == rel.lower():
                 content = set_conf_path(M, server, content)
-            with open(os.path.join(d, name), "wb") as f:
+            os.makedirs(os.path.dirname(os.path.join(d, rel)), exist_ok=True)
+            with open(os.path.join(d, rel), "wb") as f:
                 f.write(content)
-            say("  written: %s" % os.path.join(d, name))
+        say("  written: %s (%d script(s))" % (d, len(M.lua["files"])))
+    for c in M.shared:
+        d = os.path.join(server.lua, c["folder"])
+        mine = shared_version(c, c["source"])
+        there = shared_version(c, d) if os.path.isdir(d) else None
+        if os.path.isdir(d) and there is not None and there >= mine:
+            say("  kept: %s, version %d already there" % (d, there))
+            continue
+        if os.path.isdir(d):
+            remove_tree(d)
+        shutil.copytree(c["source"], d, ignore=lambda folder, names: [n for n in names if n in NEVER_COPIED])
+        say("  copied: %s (version %d%s)" % (d, mine, "" if there is None else ", replaces %d" % there))
 
     # 4. Configuration: the .dist as is, the .conf with the manifest's values.
     if M.conf:
@@ -1151,14 +1247,26 @@ def install(M, server, client, dbs):
 
     # 7. SQL: the core updater applies it on start; when it is off for a
     #    database, the installer applies it itself.
-    for key, bit, folder in (("characters", 2, "db-characters"), ("world", 4, "db-world")):
+    for key, bit in (("characters", 2), ("world", 4)):
         if server.updates_mask & bit or key not in dbs:
             continue
-        for sub in ("base", "updates", "custom"):
-            for p in sorted(glob.glob(os.path.join(M.root, "data", "sql", folder, sub, "*.sql"))):
-                with open(p, encoding="utf-8") as f:
-                    dbs[key].run(f.read())
-                say("  applied (updater off): %s" % os.path.relpath(p, M.root))
+        for p in module_sql_files(M, key):
+            with open(p, encoding="utf-8") as f:
+                dbs[key].run(f.read())
+            say("  applied (updater off): %s" % os.path.relpath(p, M.root))
+
+
+def module_sql_files(M, key):
+    """The module's SQL files for one database, in the order the core updater applies them: every
+    .sql under the folders of data/sql whose name holds the database's name ("world" for db-world,
+    world...), sorted by file name."""
+    base = os.path.join(M.root, "data", "sql")
+    found = []
+    if os.path.isdir(base):
+        for n in os.listdir(base):
+            if key in n and os.path.isdir(os.path.join(base, n)):
+                found += glob.glob(os.path.join(base, n, "**", "*.sql"), recursive=True)
+    return sorted(found, key=lambda p: os.path.basename(p))
 
 
 def set_conf_path(M, server, content):
@@ -1202,9 +1310,14 @@ def missing_after_install(M, server, client):
             if not os.path.isfile(os.path.join(server.module_confs, n)):
                 missing.append(n)
     if M.lua:
-        for p in M.lua["files"]:
-            if not os.path.isfile(os.path.join(server.lua, M.lua["folder"], os.path.basename(p))):
-                missing.append(os.path.basename(p))
+        for rel in M.lua["files"]:
+            if not os.path.isfile(os.path.join(server.lua, M.lua["folder"], rel)):
+                missing.append(os.path.join(M.lua["folder"], rel))
+    for c in M.shared:
+        d = os.path.join(server.lua, c["folder"])
+        there = shared_version(c, d) if os.path.isdir(d) else None
+        if there is None or there < shared_version(c, c["source"]):
+            missing.append("%s, version %d or newer" % (d, shared_version(c, c["source"])))
     for dd in M.dbc:
         if dd.server is not None:
             p = os.path.join(server.dbc, dd.file)
@@ -1239,121 +1352,53 @@ def print_conflicts(state):
         say("  %-19s %s" % (area, text))
 
 
-def print_build_steps(server):
-    say("The server must now be rebuilt, with the worldserver stopped:")
+def build_steps(server):
+    """The lines that say how to rebuild the server."""
+    lines = ["The server must now be rebuilt, with the worldserver stopped:"]
     if server.build_dir:
-        say('    cd /d "%s"' % server.build_dir)
-        say("    cmake .")
-        say("    cmake --build . --config %s --target worldserver" % (server.build_config or "RelWithDebInfo"))
+        lines += ['    cd /d "%s"' % server.build_dir, "    cmake .",
+                  "    cmake --build . --config %s --target worldserver" % (server.build_config or "RelWithDebInfo")]
     else:
-        say("    run the CMake configuration again, then build worldserver")
+        lines.append("    run the CMake configuration again, then build worldserver")
+    return lines
 
 
-def prepare(M, args, settings, interactive):
-    """(server, client, databases), from the options, the remembered paths or the user."""
-    change = False
-    while True:
-        server = client = None
-        folder = None if change else (args.server or settings.get("server"))
-        while server is None:
-            if folder:
-                try:
-                    server = Server(folder, args.sources)
-                    break
-                except InstallerError as e:
-                    say("  %s" % e)
-            if not interactive:
-                raise InstallerError("the worldserver folder must be given (--server)")
-            folder = ask_path("Worldserver folder (the one that contains worldserver.exe)?",
-                              initial=settings.get("server"))
-            if folder is None:
-                raise InstallerError("no worldserver folder chosen")
-        if M.server_module and not server.has_valid_sources() and settings.get("sources") and not change:
-            server.sources = settings["sources"]
-        while M.server_module and not server.has_valid_sources():
-            if not interactive:
-                raise InstallerError("AzerothCore sources not found (--sources)")
-            d = ask_path("AzerothCore sources folder (the one that contains modules and src)?")
-            if d is None:
-                raise InstallerError("no sources folder chosen")
-            server.sources = d
-        folder = None if change else (args.client or settings.get("client"))
-        while client is None:
-            if folder:
-                try:
-                    client = Client(folder)
-                    break
-                except InstallerError as e:
-                    say("  %s" % e)
-            if not interactive:
-                raise InstallerError("the game folder must be given (--client)")
-            folder = ask_path("Game folder (the one that contains Wow.exe and Data)?", initial=settings.get("client"))
-            if folder is None:
-                raise InstallerError("no game folder chosen")
-        heading("Folders")
-        say("  worldserver      %s" % server.bin)
-        if M.server_module:
-            say("  sources          %s" % server.sources)
-            say("  configuration    %s" % server.module_confs)
-            say("  Lua scripts      %s" % server.lua)
-        say("  server DBC       %s" % server.dbc)
-        say("  game             %s" % client.folder)
-        if M.server_module:
-            say("  databases        %s, %s" % (server.databases["world"]["name"],
-                                                server.databases["characters"]["name"]))
-        if interactive:
-            r = input("Enter: continue; C then Enter: change folders. ").strip().lower()
-            if r == "c":
-                change = True
-                continue
-        break
-    settings.update({"server": server.bin, "client": client.folder})
-    if not M.server_module:
-        return server, client, {}
-    settings["sources"] = server.sources
+def print_build_steps(server):
+    for line in build_steps(server):
+        say(line)
 
-    mysql = find_mysql(server, settings, args.mysql)
-    while mysql is None:
-        if not interactive:
-            raise InstallerError("mysql client not found (--mysql)")
-        mysql = ask_path("mysql.exe program (MySQL client, in the bin folder of MySQL Server)?", folder=False)
-        if mysql is None:
-            raise InstallerError("mysql client not given: the database can be neither read nor cleaned")
-    settings["mysql"] = mysql
+
+def open_server(M, bin_dir, sources):
+    """The Server of this worldserver folder, with its sources checked when the module needs them."""
+    if not bin_dir:
+        raise InstallerError("no worldserver folder given")
+    server = Server(bin_dir, sources or None)
+    if M.server_module and not server.has_valid_sources():
+        raise InstallerError("AzerothCore sources not found (the folder that contains modules and src)%s"
+                             % (": %s" % server.sources if server.sources else ""))
+    return server
+
+
+def open_databases(server, mysql):
+    """{"world": Database, "characters": Database}, once the world database answers."""
+    if not mysql or not os.path.isfile(mysql):
+        raise InstallerError("mysql client not found (mysql.exe, in the bin folder of MySQL Server)")
     dbs = {key: Database(mysql, info) for key, info in server.databases.items()}
     try:
         dbs["world"].run("SELECT 1;")
     except InstallerError as e:
         raise InstallerError("the database does not answer (is MySQL running?) - %s" % e)
-    return server, client, dbs
+    return dbs
 
 
-def run_module(M, args, settings):
-    """Installs or removes module M; returns the exit code."""
-    interactive = not args.yes
-    say("%s - WoW-mods installer" % M.title)
-    say("=" * 60)
-    say("First run: installs the module. Run again while the module (or part of it)")
-    say("is present: removes everything that is left.")
-    server, client, dbs = prepare(M, args, settings, interactive)
-    save_settings(settings)
+def check_package_place(M, server):
     if M.server_module and is_inside(M.root, server.modules):
         raise InstallerError("this package is stored in the server's modules folder (%s): put it somewhere else, "
                              "for example in Downloads, and run the installer from there" % M.root)
 
-    heading("Current state")
-    say("  (reading the game archives, a few seconds)")
-    state = survey(M, server, client, dbs)
-    print_state(state)
-    if state.has_conflicts():
-        say("  Carry its identifiers without proof that they are its own:")
-        print_conflicts(state)
-    for path, message in client.unreadable:
-        say("  archive ignored, unreadable: %s (%s)" % (path, message))
-    if args.status:
-        return 0
 
-    # Nothing is written while the worldserver or the game runs.
+def refuse_while_running(server, client):
+    """Nothing is written while the worldserver or the game runs."""
     ws = running_worldservers(server)
     if ws:
         raise InstallerError("the worldserver is running (%s): stop it, then run the installer again"
@@ -1363,42 +1408,9 @@ def run_module(M, args, settings):
         raise InstallerError("the game is open (%s): close it, then run the installer again"
                              % ", ".join(p for n, p in game))
 
-    say()
-    if state.strong():
-        say("The module is present, in whole or in part: this run will REMOVE everything that is")
-        if M.server_module:
-            say("left of it: files, DBC rows and database data (players' data included).")
-        else:
-            say("left of it: game files, addons and DBC rows.")
-        if state.server_conflicts or state.client_conflicts or state.file_conflicts:
-            say("DBC rows and game files that carry its identifiers without being its own stay in place.")
-        if interactive:
-            r = input("Type YES then Enter to remove everything; anything else to cancel. ").strip()
-            if r.upper() != "YES":
-                say("Cancelled: nothing was changed.")
-                return 0
-        remove(M, server, client, dbs, state)
-        return check_removal(M, server, client, dbs)
-    if state.weak():
-        say("CONFLICT: these items carry the module's identifiers, but nothing proves they are")
-        say("its own. Installation is impossible while they are there.")
-        say("If they are LEFTOVERS of an installation of the module, they can be removed (the")
-        say("database rows and DBC rows; never a game file provided by another archive). If they")
-        say("belong to other content, its identifiers or the module's have to change.")
-        if interactive:
-            r = input("Type LEFTOVERS then Enter to remove them; anything else to stop. ").strip()
-            leftovers = r.upper() == "LEFTOVERS"
-        else:
-            leftovers = args.leftovers
-        if not leftovers:
-            say("Stopped: nothing was changed.")
-            return 1
-        remove(M, server, client, dbs, state, leftovers=True)
-        return check_removal(M, server, client, dbs)
 
-    say("No trace of the module: this run will INSTALL it.")
-    if interactive:
-        input("Enter: install; close the window to cancel. ")
+def install_and_check(M, server, client, dbs):
+    """Installs, then reads everything back from disk; says what is left to do."""
     try:
         install(M, server, client, dbs)
     except Exception:
@@ -1406,8 +1418,7 @@ def run_module(M, args, settings):
         say("The installation stopped midway. Run the installer again: it removes what was put")
         say("in place; run it once more to install.")
         raise
-    client = Client(client.folder)
-    missing = missing_after_install(M, server, client)
+    missing = missing_after_install(M, server, Client(client.folder))
     heading("Check")
     if missing:
         raise InstallerError("after installation, missing: %s" % "; ".join(missing))
@@ -1417,14 +1428,18 @@ def run_module(M, args, settings):
     if not M.server_module:
         if any(d.server is not None for d in M.dbc):
             say("The worldserver reads its DBC files when it starts.")
-        return 0
+        return
     print_build_steps(server)
     if server.updates_mask & 6 == 6:
         say("On first start, the core updater applies the module's SQL.")
     else:
         say("The installer applied the module's SQL itself: the core updater is off")
         say("(Updates.EnableDatabases in worldserver.conf).")
-    return 0
+
+
+def remove_and_check(M, server, client, dbs, state, leftovers=False):
+    remove(M, server, client, dbs, state, leftovers)
+    check_removal(M, server, client, dbs)
 
 
 def check_removal(M, server, client, dbs):
@@ -1442,70 +1457,139 @@ def check_removal(M, server, client, dbs):
     if M.server_module:
         print_build_steps(server)
         say("Then the module is gone from the worldserver.")
+
+
+def run_console(M, args, settings):
+    """The run without window (--status, --yes): paths from the options or remembered; returns the
+    exit code."""
+    say("%s - WoW-mods installer" % M.title)
+    say("=" * 60)
+    server = open_server(M, args.server or settings.get("server"), args.sources or settings.get("sources"))
+    client = Client(args.client or settings.get("client") or "")
+    dbs = {}
+    if M.server_module:
+        dbs = open_databases(server, find_mysql(server, settings, args.mysql))
+    heading("Folders")
+    for label, value in folder_lines(M, server, client, dbs):
+        say("  %-16s %s" % (label, value))
+    remember(settings, M, server, client, dbs)
+    check_package_place(M, server)
+
+    heading("Current state")
+    say("  (reading the game archives, a few seconds)")
+    state = survey(M, server, client, dbs)
+    print_state(state)
+    if state.has_conflicts():
+        say("  Carry its identifiers without proof that they are its own:")
+        print_conflicts(state)
+    for path, message in client.unreadable:
+        say("  archive ignored, unreadable: %s (%s)" % (path, message))
+    if args.status:
+        return 0
+    refuse_while_running(server, client)
+    say()
+    if state.strong():
+        say("The module is present, in whole or in part: this run REMOVES everything that is left of it.")
+        remove_and_check(M, server, client, dbs, state)
+        return 0
+    if state.weak():
+        say("CONFLICT: these items carry the module's identifiers, but nothing proves they are its own.")
+        if not args.leftovers:
+            say("Stopped: nothing was changed (--leftovers removes them, if they are leftovers of the module).")
+            return 1
+        remove_and_check(M, server, client, dbs, state, leftovers=True)
+        return 0
+    say("No trace of the module: this run INSTALLS it.")
+    install_and_check(M, server, client, dbs)
     return 0
 
 
-def choose_module(args, settings, interactive):
-    """The module folder: from the command line (a folder dropped on
-    installer.exe arrives that way), otherwise asked."""
-    folder = args.module
-    while True:
-        if folder:
-            folder = os.path.normpath(os.path.abspath(folder))
-            if os.path.isfile(folder) and os.path.basename(folder).lower() == MANIFEST_NAME:
-                folder = os.path.dirname(folder)
-            if os.path.isfile(os.path.join(folder, MANIFEST_NAME)):
-                return folder
-            say("  no %s in %s" % (MANIFEST_NAME, folder))
-        if not interactive:
-            raise InstallerError("the module folder must be given (the one that contains %s)" % MANIFEST_NAME)
-        folder = ask_path("Module folder to install or remove (the one that contains %s)?" % MANIFEST_NAME,
-                          initial=settings.get("module"))
-        if folder is None:
-            raise InstallerError("no module folder chosen")
+def folder_lines(M, server, client, dbs):
+    """[(label, path)] of the places the installer works in."""
+    lines = [("worldserver", server.bin)]
+    if M.server_module:
+        lines += [("sources", server.sources), ("configuration", server.module_confs), ("Lua scripts", server.lua)]
+    lines += [("server DBC", server.dbc), ("game", client.folder)]
+    if dbs:
+        lines.append(("databases", "%s, %s" % (dbs["world"].name, dbs["characters"].name)))
+    return lines
+
+
+def remember(settings, M, server, client, dbs):
+    """Keeps the folders that worked, for the next run."""
+    settings.update({"module": M.root, "server": server.bin, "client": client.folder})
+    if M.server_module:
+        settings["sources"] = server.sources
+    if dbs:
+        settings["mysql"] = dbs["world"].mysql
+    save_settings(settings)
+
+
+def module_folder(path):
+    """The module folder of this path (installer.json itself accepted), or None."""
+    if not path:
+        return None
+    folder = os.path.normpath(os.path.abspath(path))
+    if os.path.isfile(folder) and os.path.basename(folder).lower() == MANIFEST_NAME:
+        folder = os.path.dirname(folder)
+    return folder if os.path.isfile(os.path.join(folder, MANIFEST_NAME)) else None
+
+
+def describe_failure(e):
+    """(message, unexpected) for an exception that stopped a run."""
+    if isinstance(e, InstallerError):
+        return str(e), False
+    if isinstance(e, mpq_archive.MpqError):
+        return "MPQ archive: %s" % e, False
+    if isinstance(e, PermissionError):
+        return "access denied to %s (file open in another program?)" % e.filename, False
+    return "unexpected error: %s" % e, True
+
+
+def run_guarded(action):
+    """Runs action(); returns its exit code, or says why it failed."""
+    try:
+        return action()
+    except KeyboardInterrupt:
+        say()
+        say("Interrupted.")
+        return 1
+    except Exception as e:
+        message, unexpected = describe_failure(e)
+        say()
+        say("FAILED: %s" % message)
+        if unexpected:
+            say(traceback.format_exc())
+            return 2
+        return 1
 
 
 def main(load_manifest):
-    """Entry point. load_manifest(folder) returns the module description."""
-    if not sys.stdout.isatty():
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    p = argparse.ArgumentParser(description="Installs a module, or removes it if it is present.")
+    """Entry point: the window, or the console with --status or --yes.
+    load_manifest(folder) returns the module description."""
+    p = argparse.ArgumentParser(description="Installs a module, or removes it if it is present. Without "
+                                            "--status or --yes, the installer opens its window.")
     p.add_argument("module", nargs="?", help="module folder (the one that contains %s)" % MANIFEST_NAME)
     p.add_argument("--server", help="worldserver folder (the one that contains worldserver.exe)")
     p.add_argument("--sources", help="AzerothCore sources folder")
     p.add_argument("--client", help="game folder")
     p.add_argument("--mysql", help="path of mysql.exe")
     p.add_argument("--status", action="store_true", help="show the current state, change nothing")
-    p.add_argument("--yes", action="store_true", help="ask nothing (paths from the options or remembered)")
+    p.add_argument("--yes", action="store_true", help="install or remove without window "
+                                                      "(paths from the options or remembered)")
     p.add_argument("--leftovers", action="store_true",
                    help="with --yes: the conflicting items are leftovers of the module, remove them")
     args = p.parse_args()
-    code = 1
     settings = load_settings()
-    try:
-        folder = choose_module(args, settings, not args.yes)
-        settings["module"] = folder
-        code = run_module(load_manifest(folder), args, settings)
-    except InstallerError as e:
-        say()
-        say("FAILED: %s" % e)
-    except mpq_archive.MpqError as e:
-        say()
-        say("FAILED (MPQ archive): %s" % e)
-    except PermissionError as e:
-        say()
-        say("FAILED: access denied to %s (file open in another program?)" % e.filename)
-    except KeyboardInterrupt:
-        say()
-        say("Interrupted.")
-    except Exception:
-        say()
-        say("UNEXPECTED ERROR:")
-        say(traceback.format_exc())
-        code = 2
-    if not args.yes:
-        try:
-            input("\nEnter to close. ")
-        except (EOFError, KeyboardInterrupt):
-            pass
-    sys.exit(code)
+    if not (args.status or args.yes):
+        import window
+        window.run(module_folder(args.module) or args.module, settings, load_manifest)
+        return
+
+    def action():
+        folder = module_folder(args.module)
+        if folder is None:
+            raise InstallerError("the module folder must be given (the one that contains %s)" % MANIFEST_NAME)
+        return run_console(load_manifest(folder), args, settings)
+
+    sys.exit(run_guarded(action))
