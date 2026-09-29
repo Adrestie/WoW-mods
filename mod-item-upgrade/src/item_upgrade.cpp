@@ -5,14 +5,15 @@
 #include <numeric>
 #include <iomanip>
 #include <cmath>
+#include <limits>
 #include "Item.h"
 #include "Config.h"
 #include "Tokenize.h"
 #include "StringConvert.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
-#include "ScriptedGossip.h"
 #include "Chat.h"
+#include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "WorldSessionMgr.h"
 #include "item_upgrade.h"
@@ -24,8 +25,6 @@ ItemUpgrade::ItemUpgrade()
 
 ItemUpgrade::~ItemUpgrade()
 {
-    for (auto& pageData : playerPagedData)
-        pageData.second.Reset();
 }
 
 ItemUpgrade* ItemUpgrade::instance()
@@ -39,12 +38,36 @@ bool ItemUpgrade::IsAllowedStatType(uint32 statType) const
     return FindInContainer(allowedStats, statType) != nullptr;
 }
 
+// One value of a comma-separated list of the configuration, without the
+// spaces around it.
+static std::string_view TrimConfigValue(std::string_view value)
+{
+    while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
+        value.remove_prefix(1);
+    while (!value.empty() && (value.back() == ' ' || value.back() == '\t' || value.back() == '\r'))
+        value.remove_suffix(1);
+    return value;
+}
+
+// A mistyped value of the configuration is reported and skipped, never used.
 void ItemUpgrade::LoadAllowedStats(const std::string& stats)
 {
     allowedStats.clear();
-    std::vector<std::string_view> tokenized = Acore::Tokenize(stats, ',', false);
-    std::transform(tokenized.begin(), tokenized.end(), std::back_inserter(allowedStats),
-        [](const std::string_view& str) { return *Acore::StringTo<uint32>(str); });
+    for (std::string_view token : Acore::Tokenize(stats, ',', false))
+    {
+        std::string_view value = TrimConfigValue(token);
+        if (value.empty())
+            continue;
+
+        Optional<uint32> statType = Acore::StringTo<uint32>(value);
+        if (!statType || !IsValidStatType(*statType))
+        {
+            LOG_ERROR("server.loading", "ItemUpgrade.AllowedStats: `{}` is not a stat type (ItemModType), skipped", value);
+            continue;
+        }
+
+        allowedStats.push_back(*statType);
+    }
 }
 
 bool ItemUpgrade::GetBoolConfig(ItemUpgradeBoolConfigs index) const
@@ -71,8 +94,11 @@ void ItemUpgrade::LoadConfig(bool reload)
 {
     cfg.Initialize();
     LoadAllowedStats(cfg.GetStringConfig(CONFIG_ITEM_UPGRADE_ALLOWED_STATS));
-    LoadWeaponUpgradePercents(weaponUpgradeStats, characterWeaponUpgradeData, cfg.GetStringConfig(CONFIG_ITEM_UPGRADE_WEAPON_DAMAGE_PERCENTS));
-    LoadWeaponUpgradePercents(weaponSpeedUpgradeStats, characterWeaponSpeedUpgradeData, cfg.GetStringConfig(CONFIG_ITEM_UPGRADE_WEAPON_SPEED_PERCENTS));
+    // Damage: any gain above 0 %. Speed: below 100 %, which would leave no time between swings.
+    LoadWeaponUpgradePercents(weaponUpgradeStats, characterWeaponUpgradeData, cfg.GetStringConfig(CONFIG_ITEM_UPGRADE_WEAPON_DAMAGE_PERCENTS),
+        "ItemUpgrade.UpgradeWeaponDamagePercents", 0.0f);
+    LoadWeaponUpgradePercents(weaponSpeedUpgradeStats, characterWeaponSpeedUpgradeData, cfg.GetStringConfig(CONFIG_ITEM_UPGRADE_WEAPON_SPEED_PERCENTS),
+        "ItemUpgrade.UpgradeWeaponSpeedPercents", 100.0f);
     if (reload)
     {
         BuildWeaponUpgradeReqs();
@@ -569,28 +595,6 @@ bool ItemUpgrade::ValidateReq(uint32 id, UpgradeStatReqType reqType, float val1,
     return false;
 }
 
-/*static*/ std::string ItemUpgrade::ItemIcon(const ItemTemplate* proto, uint32 width, uint32 height, int x, int y)
-{
-    std::ostringstream ss;
-    ss << "|TInterface";
-    const ItemDisplayInfoEntry* dispInfo = nullptr;
-    if (proto)
-    {
-        dispInfo = sItemDisplayInfoStore.LookupEntry(proto->DisplayInfoID);
-        if (dispInfo)
-            ss << "/ICONS/" << dispInfo->inventoryIcon;
-    }
-    if (!dispInfo)
-        ss << "/InventoryItems/WoWUnknownItem01";
-    ss << ":" << width << ":" << height << ":" << x << ":" << y << "|t";
-    return ss.str();
-}
-
-/*static*/ std::string ItemUpgrade::ItemIcon(const ItemTemplate* proto)
-{
-    return ItemIcon(proto, 30, 30, 0, 0);
-}
-
 /*static*/ std::string ItemUpgrade::ItemNameWithLocale(const Player* player, const ItemTemplate* itemTemplate, int32 randomPropertyId)
 {
     LocaleConstant loc_idx = player->GetSession()->GetSessionDbLocaleIndex();
@@ -663,84 +667,25 @@ bool ItemUpgrade::ValidateReq(uint32 id, UpgradeStatReqType reqType, float val1,
     ChatHandler(player->GetSession()).SendSysMessage(message);
 }
 
-void ItemUpgrade::PagedData::Reset()
+/*static*/ std::string ItemUpgrade::Text(const WorldSession* session, uint32 id)
 {
-    totalPages = 0;
-    for (Identifier* identifier : data)
-        delete identifier;
-    data.clear();
+    // Asked for a row it does not have, the core hands back a pointer that
+    // must not be read: look for the row first.
+    if (!sObjectMgr->GetModuleString(ITEM_UPGRADE_MODULE, id))
+        return Acore::StringFormat("[" ITEM_UPGRADE_MODULE "] missing text {}", id);
+
+    LocaleConstant locale = session ? session->GetSessionDbLocaleIndex() : DEFAULT_LOCALE;
+    return *sObjectMgr->GetModuleString(ITEM_UPGRADE_MODULE, id, locale);
 }
 
-void ItemUpgrade::PagedData::CalculateTotals()
+/*static*/ std::string ItemUpgrade::StatName(const WorldSession* session, uint32 statType)
 {
-    totalPages = data.size() / PAGE_SIZE;
-    if (data.size() % PAGE_SIZE != 0)
-        totalPages++;
+    return Text(session, IU_TEXT_STAT + statType);
 }
 
-void ItemUpgrade::PagedData::SortAndCalculateTotals()
+/*static*/ std::string ItemUpgrade::SlotName(const WorldSession* session, uint8 slot)
 {
-    if (data.size() > 0)
-    {
-        std::sort(data.begin(), data.end(), CompareIdentifier);
-        CalculateTotals();
-    }
-}
-
-bool ItemUpgrade::PagedData::IsEmpty() const
-{
-    return data.empty();
-}
-
-const ItemUpgrade::Identifier* ItemUpgrade::PagedData::FindIdentifierById(uint32 id) const
-{
-    std::vector<Identifier*>::const_iterator citer = std::find_if(data.begin(), data.end(), [&](const Identifier* idnt) { return idnt->id == id; });
-    if (citer != data.end())
-        return *citer;
-    return nullptr;
-}
-
-void ItemUpgrade::BuildUpgradableItemCatalogue(const Player* player, PagedDataType type)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.item.guid = ObjectGuid::Empty;
-    pagedData.upgradeStat = nullptr;
-    pagedData.type = type;
-
-    std::vector<Item*> playerItems = GetPlayerItems(player, false);
-    std::vector<Item*>::iterator iter = playerItems.begin();
-    for (iter; iter != playerItems.end(); ++iter)
-    {
-        bool valid = type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS ? IsValidWeaponForUpgrade(*iter, player) : IsValidItemForUpgrade(*iter, player);
-        if (valid)
-            AddItemToPagedData(*iter, player, pagedData);
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildUpgradableWeaponSpeedItemCatalogue(const Player* player)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.item.guid = ObjectGuid::Empty;
-    pagedData.upgradeStat = nullptr;
-    pagedData.type = PAGED_DATA_TYPE_WEAPON_SPEED_ITEMS;
-
-    Item* mainHandItem = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
-    if (IsValidWeaponForSpeedUpgrade(mainHandItem, player))
-        AddItemToPagedData(mainHandItem, player, pagedData);
-
-    Item* offHandItem = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-    if (IsValidWeaponForSpeedUpgrade(offHandItem, player))
-        AddItemToPagedData(offHandItem, player, pagedData);
-
-    Item* rangedItem = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-    if (IsValidWeaponForSpeedUpgrade(rangedItem, player))
-        AddItemToPagedData(rangedItem, player, pagedData);
-
-    pagedData.SortAndCalculateTotals();
+    return Text(session, IU_TEXT_SLOT + slot);
 }
 
 bool ItemUpgrade::IsValidItemForUpgrade(const Item* item, const Player* player) const
@@ -801,6 +746,9 @@ bool ItemUpgrade::IsValidWeaponForSpeedUpgrade(const Item* item, const Player* p
     if (!proto->Delay)
         return false;
 
+    if (!item->IsEquipped() || Player::GetAttackBySlot(item->GetSlot()) == MAX_ATTACK)
+        return false;
+
     if (!player->GetWeaponDamageRange(WeaponAttackType(Player::GetAttackBySlot(item->GetSlot())), MAXDAMAGE))
         return false;
 
@@ -808,780 +756,6 @@ bool ItemUpgrade::IsValidWeaponForSpeedUpgrade(const Item* item, const Player* p
         return false;
 
     return true;
-}
-
-void ItemUpgrade::AddItemToPagedData(const Item* item, const Player* player, PagedData& pagedData)
-{
-    const ItemTemplate* proto = item->GetTemplate();
-
-    ItemIdentifier* itemIdentifier = new ItemIdentifier();
-    itemIdentifier->id = pagedData.data.size();
-    itemIdentifier->guid = item->GetGUID();
-    itemIdentifier->name = ItemNameWithLocale(player, proto, item->GetItemRandomPropertyId());
-    itemIdentifier->uiName = ItemLinkForUI(item, player) + " - [" + FormatItemLocation(player, item) + "]";
-
-    pagedData.data.push_back(itemIdentifier);
-}
-
-ItemUpgrade::PagedData& ItemUpgrade::GetPagedData(const Player* player)
-{
-    return playerPagedData[player->GetGUID().GetCounter()];
-}
-
-ItemUpgrade::PagedDataMap& ItemUpgrade::GetPagedDataMap()
-{
-    return playerPagedData;
-}
-
-bool ItemUpgrade::_AddPagedData(Player* player, const PagedData& pagedData, uint32 page) const
-{
-    const std::vector<Identifier*>& data = pagedData.data;
-    if (data.size() == 0 || (page + 1) > pagedData.totalPages)
-        return false;
-
-    uint32 lowIndex = page * PagedData::PAGE_SIZE;
-    if (data.size() <= lowIndex)
-        return false;
-
-    uint32 highIndex = lowIndex + PagedData::PAGE_SIZE - 1;
-    if (highIndex >= data.size())
-        highIndex = data.size() - 1;
-
-    std::unordered_map<uint32, const UpgradeStat*> upgrades;
-    Item* item = nullptr;
-    if (pagedData.type == PAGED_DATA_TYPE_STATS || pagedData.type == PAGED_DATA_TYPE_REQS || pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS_STATS
-        || pagedData.type == PAGED_DATA_TYPE_STATS_BULK || pagedData.type == PAGED_DATA_TYPE_STAT_UPGRADE_BULK || pagedData.type == PAGED_DATA_TYPE_REQS_BULK
-        || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO
-        || pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERCS || pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO || pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO)
-    {
-        item = player->GetItemByGuid(pagedData.item.guid);
-        bool validItem = false;
-        if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS
-            || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO
-            || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO)
-            validItem = IsValidWeaponForUpgrade(item, player);
-        else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERCS
-            || pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO
-            || pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO)
-            validItem = IsValidWeaponForSpeedUpgrade(item, player);
-        else
-            validItem = IsValidItemForUpgrade(item, player);
-        if (!validItem)
-            return false;
-
-        AddGossipItemFor(player, GOSSIP_ICON_VENDOR, ItemLinkForUI(item, player), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-
-        if (pagedData.type == PAGED_DATA_TYPE_STATS)
-        {
-            std::vector<_ItemStat> statTypes = LoadItemStatInfo(item);
-            std::ostringstream ossStatTypes;
-            ossStatTypes << "";
-            for (uint32 i = 0; i < statTypes.size(); i++)
-            {
-                if (IsAllowedStatType(statTypes[i].ItemStatType))
-                    ossStatTypes << StatTypeToString(statTypes[i].ItemStatType);
-                else
-                    ossStatTypes << "|cffb50505" << StatTypeToString(statTypes[i].ItemStatType) << "|r";
-                if (i < statTypes.size() - 1)
-                    ossStatTypes << ", ";
-            }
-            //AddGossipItemFor(player, GOSSIP_ICON_CHAT, ossStatTypes.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-        }
-        else if (pagedData.type == PAGED_DATA_TYPE_REQS)
-        {
-            const UpgradeStat* upgradeStat = pagedData.upgradeStat;
-            std::vector<_ItemStat> statInfoList = LoadItemStatInfo(item);
-            const _ItemStat* statInfo = GetStatByType(statInfoList, upgradeStat->statType);
-            if (!statInfo)
-                return false;
-
-            std::ostringstream oss;
-            oss << "" << StatTypeToString(upgradeStat->statType) << " Rang " << upgradeStat->statRank << "";
-            oss << " " << "+" << upgradeStat->statModPct << "% (";
-            oss << "|cffb50505" << statInfo->ItemStatValue << "|r -> ";
-            oss << "|cff056e3a" << CalculateModPct(statInfo->ItemStatValue, upgradeStat) << "|r)";
-
-            const UpgradeStat* currentUpgrade = FindUpgradeForItem(player, item, upgradeStat->statType);
-            //if (currentUpgrade != nullptr)
-            //    oss << " [actuel : " << CalculateModPct(statInfo->ItemStatValue, currentUpgrade) << "|r";
-
-            std::pair<uint32, uint32> itemLevel = CalculateItemLevel(player, item, upgradeStat);
-            std::ostringstream ilvloss;
-            ilvloss << "iLvl ";
-            ilvloss << "|cffb50505" << itemLevel.first << "|r -> ";
-            ilvloss << "|cff056e3a" << itemLevel.second << "|r";
-            itemLevel = CalculateItemLevel(player, item);
-            //ilvloss << " Actuel: " << itemLevel.second << "";
-
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, oss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, ilvloss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-        }
-        else if (pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS_STATS)
-        {
-            std::pair<uint32, uint32> itemLevel = CalculateItemLevel(player, item);
-            uint32 diff = itemLevel.second - itemLevel.first;
-
-            std::ostringstream oss;
-            oss << "iLvl augmenté de " << diff;
-            oss << " |cffb50505" << itemLevel.first << "|r -> ";
-            oss << " |cff056e3a" << itemLevel.second << "|r";
-
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, oss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-
-            const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(characterWeaponUpgradeData, player, item);
-            if (weaponUpgrade != nullptr)
-            {
-                std::ostringstream wuoss;
-                wuoss << "|cff056e3aDégat de l'arme augmenté de " << FormatFloat(weaponUpgrade->statModPct) << "%|r";
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, wuoss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-            }
-
-            const UpgradeStat* weaponSpeedUpgrade = FindUpgradeForWeapon(characterWeaponSpeedUpgradeData, player, item);
-            if (weaponSpeedUpgrade)
-            {
-                std::ostringstream wuoss;
-                wuoss << "|cff056e3aVitesse de l'arme augmenté de " << FormatFloat(weaponSpeedUpgrade->statModPct) << "%|r";
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, wuoss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-            }
-
-            if (!item->IsEquipped())
-                AddGossipItemFor(player, GOSSIP_ICON_BATTLE, "[EQUIP ITEM]", GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1);
-        }
-        else if (pagedData.type == PAGED_DATA_TYPE_STAT_UPGRADE_BULK)
-        {
-            upgrades = FindAllUpgradeableRanks(player, item, pagedData.pct);
-            std::ostringstream oss;
-            if (upgrades.empty())
-                oss << "|cffb50505Pas d'amélioration disponible|r";
-            else
-            {
-                std::pair<uint32, uint32> ilvl = CalculateItemLevel(player, item, upgrades);
-                std::pair<uint32, uint32> currentIlvl = CalculateItemLevel(player, item);
-                oss << "iLvl |cffb50505" << ilvl.first << "|r -> " << "|cff056e3a" << ilvl.second << "|r";
-                oss << " (Actuel: " << currentIlvl.second << ")";
-            }
-
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, oss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS)
-    {
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Nombre d'objets améliorés: " + Acore::ToString(pagedData.data.size()), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-
-        uint32 totalUpgrades = 0;
-        for (const Identifier* idnt : pagedData.data)
-        {
-            ItemIdentifier* itemIdnt = (ItemIdentifier*)idnt;
-            Item* item = player->GetItemByGuid(itemIdnt->guid);
-            if (item)
-                totalUpgrades += FindUpgradesForItem(player, item).size();
-        }
-
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Nombre total d'amélioration: " + Acore::ToString(totalUpgrades), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_ITEMS_FOR_PURGE)
-    {
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "|cffb50505Supprimer les améliorations|r", GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-        const ItemTemplate* proto = sObjectMgr->GetItemTemplate((uint32)GetIntConfig(CONFIG_ITEM_UPGRADE_PURGE_TOKEN));
-        if (proto != nullptr)
-        {
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Sera remboursé:", GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-
-            std::ostringstream oss;
-            oss << ItemIcon(proto);
-            oss << ItemLink(player, proto, 0);
-            oss << " " << (uint32)GetIntConfig(CONFIG_ITEM_UPGRADE_PURGE_TOKEN_COUNT) << "x";
-            AddGossipItemFor(player, GOSSIP_ICON_VENDOR, oss.str(), GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-        }
-        if (GetBoolConfig(CONFIG_ITEM_UPGRADE_REFUND_ALL_ON_PURGE))
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, "|cff056e3aTout sera remboursé|r", GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Choisissez un objet à purger:", GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page);
-    }
-
-    for (uint32 i = lowIndex; i <= highIndex; i++)
-    {
-        const Identifier* identifier = data[i];
-        if (pagedData.type != PAGED_DATA_TYPE_ITEMS_FOR_PURGE)
-            AddGossipItemFor(player, identifier->optionIcon, identifier->uiName, GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + identifier->id);
-        else
-            AddGossipItemFor(player, identifier->optionIcon, identifier->uiName, GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + identifier->id, "Voulez-vous vraiment retirer toutes les améliorations ?", 0, false);
-    }
-
-    if (pagedData.type == PAGED_DATA_TYPE_REQS)
-        AddGossipItemFor(player, GOSSIP_ICON_TRAINER, (MeetsRequirement(player, pagedData.upgradeStat, item) ? "|cff056e3aAméliorer|r" : "|cffb50505Améliorer|r"), GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1, "Voulez-vous vraiment améliorer cet objet ?", 0, false);
-
-    if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO)
-        AddGossipItemFor(player, GOSSIP_ICON_TRAINER, (MeetsWeaponUpgradeRequirement(player) ? "|cff056e3aAméliorer|r" : "|cffb50505Améliorer|r"), GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1, "Voulez-vous vraiment améliorer cette arme ?", 0, false);
-
-    if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO)
-        AddGossipItemFor(player, GOSSIP_ICON_TRAINER, (MeetsWeaponSpeedUpgradeRequirement(player) ? "|cff056e3aAméliorer|r" : "|cffb50505Améliorer|r"), GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1, "Voulez-vous vraiment améliorer cette arme ?", 0, false);
-
-    if (!upgrades.empty())
-    {
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Prérequis", GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1);
-        StatRequirementContainer reqs = BuildBulkRequirements(upgrades, item);
-        AddGossipItemFor(player, GOSSIP_ICON_TRAINER, (MeetsRequirement(player, &reqs) ? "|cff056e3aTout acheter|r" : "|cffb50505Tout acheter|r"), GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 2, "Voulez-vous vraiment tout améliorer ?", 0, false);
-    }
-
-    if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO)
-        AddGossipItemFor(player, GOSSIP_ICON_INTERACT_1, "|cffb50505Retirer|r", GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1, "Voulez-vous vraiment retirer l'amélioration ?", 0, false);
-
-    if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO)
-        AddGossipItemFor(player, GOSSIP_ICON_INTERACT_1, "|cffb50505Retirer|r", GOSSIP_SENDER_MAIN + 1, GOSSIP_ACTION_INFO_DEF + 1, "Voulez-vous vraiment retirer l'amélioration ?", 0, false);
-
-    if (page + 1 < pagedData.totalPages)
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Suivant ->", GOSSIP_SENDER_MAIN + 2, GOSSIP_ACTION_INFO_DEF + page + 1);
-
-    uint32 pageZeroSender = GOSSIP_SENDER_MAIN;
-    if (pagedData.type == PAGED_DATA_TYPE_STATS)
-        pageZeroSender += 9;
-    else if (pagedData.type == PAGED_DATA_TYPE_REQS)
-        pageZeroSender += 10;
-    else if (pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS_STATS)
-        pageZeroSender += 11;
-    else if (pagedData.type == PAGED_DATA_TYPE_STATS_BULK)
-        pageZeroSender += 12;
-    else if (pagedData.type == PAGED_DATA_TYPE_STAT_UPGRADE_BULK)
-        pageZeroSender += 13;
-    else if (pagedData.type == PAGED_DATA_TYPE_REQS_BULK)
-        pageZeroSender += 14;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS)
-        pageZeroSender += 15;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS)
-        pageZeroSender += 16;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO)
-        pageZeroSender += 17;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK)
-        pageZeroSender += 18;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO)
-        pageZeroSender += 19;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_ITEMS)
-        pageZeroSender += 20;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERCS)
-        pageZeroSender += 21;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO)
-        pageZeroSender += 22;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK)
-        pageZeroSender += 23;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO)
-        pageZeroSender += 24;
-
-    AddGossipItemFor(player, GOSSIP_ICON_CHAT, "<- Retour", page == 0 ? pageZeroSender : GOSSIP_SENDER_MAIN + 2, page == 0 ? GOSSIP_ACTION_INFO_DEF : GOSSIP_ACTION_INFO_DEF + page - 1);
-
-    return true;
-}
-
-bool ItemUpgrade::AddPagedData(Player* player, Creature* creature, uint32 page)
-{
-    ClearGossipMenuFor(player);
-    PagedData& pagedData = GetPagedData(player);
-    while (!_AddPagedData(player, pagedData, page))
-    {
-        if (page == 0)
-        {
-            NoPagedData(player, pagedData);
-            break;
-        }
-        else
-            page--;
-    }
-
-    pagedData.currentPage = page;
-
-    SendGossipMenuFor(player, DEFAULT_GOSSIP_MESSAGE, creature->GetGUID());
-    return true;
-}
-
-void ItemUpgrade::NoPagedData(Player* player, const PagedData& pagedData) const
-{
-    if (pagedData.type == PAGED_DATA_TYPE_ITEMS || pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS || pagedData.type == PAGED_DATA_TYPE_ITEMS_BULK || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS
-        || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO)
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "|cffb50505Vide|r", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
-    else if (pagedData.type == PAGED_DATA_TYPE_STATS || pagedData.type == PAGED_DATA_TYPE_STATS_BULK || pagedData.type == PAGED_DATA_TYPE_STAT_UPGRADE_BULK
-        || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        bool validItem = pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO ? IsValidWeaponForUpgrade(item, player) : IsValidItemForUpgrade(item, player);
-        if (validItem)
-            AddGossipItemFor(player, GOSSIP_ICON_VENDOR, ItemLinkForUI(item, player), GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "|cffb50505L'objet ne peut pas être amélioré|r", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_ITEMS_FOR_PURGE)
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "|cffb50505Rien à purger|r", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_ITEMS)
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "|cffb50505NOTHING Objets équipés|r", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
-    AddGossipItemFor(player, GOSSIP_ICON_CHAT, "<- Début", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
-}
-
-bool ItemUpgrade::TakePagedDataAction(Player* player, Creature* creature, uint32 action)
-{
-    PagedData& pagedData = GetPagedData(player);
-    if (pagedData.type == PAGED_DATA_TYPE_ITEMS)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            BuildStatsUpgradeCatalogue(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_STATS)
-    {
-        const Identifier* identifier = pagedData.FindIdentifierById(action);
-        if (identifier != nullptr)
-        {
-            Item* item = player->GetItemByGuid(pagedData.item.guid);
-            if (!IsValidItemForUpgrade(item, player))
-                SendMessage(player, "L'objet n'est plus disponible.");
-            else
-            {
-                const UpgradeStat* upgradeStat = FindUpgradeStat(identifier->id);
-                if (upgradeStat == nullptr)
-                    SendMessage(player, "L'amélioration n'est plus disponible.");
-                else
-                {
-                    const UpgradeStat* playerUpgrade = FindUpgradeForItem(player, item, upgradeStat->statType);
-                    if (playerUpgrade != nullptr)
-                    {
-                        if (!FindUpgradeStat(upgradeStat->statType, playerUpgrade->statRank + 1))
-                        {
-                            SendMessage(player, "Rang maximum atteint.");
-                            BuildStatsUpgradeCatalogue(player, item);
-                            return AddPagedData(player, creature, pagedData.currentPage);
-                        }
-                    }
-
-                    if (!CanApplyUpgradeForItem(item, upgradeStat))
-                    {
-                        SendMessage(player, "Ce rang n'est pas disponible pour " + ItemLink(player, item));
-                        BuildStatsUpgradeCatalogue(player, item);
-                        return AddPagedData(player, creature, pagedData.currentPage);
-                    }
-
-                    BuildStatsRequirementsCatalogue(player, upgradeStat, item);
-                    return AddPagedData(player, creature, 0);
-                }
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_REQS)
-    {
-        if (action == 0)
-        {
-            Item* item = player->GetItemByGuid(pagedData.item.guid);
-            if (!IsValidItemForUpgrade(item, player))
-                SendMessage(player, "L'objet n'est plus disponible.");
-            else
-            {
-                BuildStatsRequirementsCatalogue(player, pagedData.upgradeStat, item);
-                return AddPagedData(player, creature, pagedData.currentPage);
-            }
-        }
-        else
-        {
-            if (!PurchaseUpgrade(player))
-                SendMessage(player, "L'objet n'est plus disponible.");
-            else
-            {
-                CloseGossipMenuFor(player);
-                return true;
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            BuildItemUpgradeStatsCatalogue(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_UPGRADED_ITEMS_STATS)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidItemForUpgrade(item, player))
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            if (action == 1)
-                EquipItem(player, item);
-
-            BuildItemUpgradeStatsCatalogue(player, item);
-            return AddPagedData(player, creature, pagedData.currentPage);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_ITEMS_FOR_PURGE)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            if (PurgeUpgrade(player, item))
-                VisualFeedback(player);
-
-            BuildAlreadyUpgradedItemsCatalogue(player, ItemUpgrade::PAGED_DATA_TYPE_ITEMS_FOR_PURGE);
-            return AddPagedData(player, creature, pagedData.currentPage);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_ITEMS_BULK)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            BuildStatsUpgradeCatalogueBulk(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_STATS_BULK)
-    {
-        const Identifier* identifier = pagedData.FindIdentifierById(action);
-        if (identifier != nullptr && identifier->GetType() == FLOAT_IDENTIFIER)
-        {
-            Item* item = player->GetItemByGuid(pagedData.item.guid);
-            if (!IsValidItemForUpgrade(item, player))
-                SendMessage(player, "L'objet n'est plus disponible.");
-            else
-            {
-                const FloatIdentifier* bulkIdentifier = (FloatIdentifier*)identifier;
-                BuildStatsUpgradeByPctCatalogueBulk(player, item, bulkIdentifier->modPct);
-                return AddPagedData(player, creature, 0);
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_STAT_UPGRADE_BULK)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidItemForUpgrade(item, player))
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            if (action == 0)
-            {
-                BuildStatsUpgradeByPctCatalogueBulk(player, item, pagedData.pct);
-                return AddPagedData(player, creature, 0);
-            }
-            else if (action == 1)
-            {
-                BuildStatsRequirementsCatalogueBulk(player, item, pagedData.pct);
-                return AddPagedData(player, creature, 0);
-            }
-            else if (action == 2)
-            {
-                if (!PurchaseUpgradeBulk(player))
-                    SendMessage(player, "L'amélioration a échoué.");
-                else
-                {
-                    CloseGossipMenuFor(player);
-                    return true;
-                }
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_REQS_BULK)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidItemForUpgrade(item, player))
-            SendMessage(player, "L'objet n'est plus disponible.");
-        else
-        {
-            BuildStatsRequirementsCatalogueBulk(player, item, pagedData.pct);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            BuildWeaponPercentUpgradesCatalogue(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS)
-    {
-        const Identifier* identifier = pagedData.FindIdentifierById(action);
-        if (identifier != nullptr && identifier->GetType() == FLOAT_IDENTIFIER)
-        {
-            Item* item = player->GetItemByGuid(pagedData.item.guid);
-            if (!IsValidWeaponForUpgrade(item, player))
-                SendMessage(player, "L'arme n'est plus disponible.");
-            else
-            {
-                auto rebuildPage = [&]()
-                    {
-                        BuildWeaponPercentUpgradesCatalogue(player, item);
-                        return AddPagedData(player, creature, pagedData.currentPage);
-                    };
-
-                const FloatIdentifier* floatIdentifier = (FloatIdentifier*)identifier;
-                const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(characterWeaponUpgradeData, player, item);
-                if (weaponUpgrade != nullptr)
-                {
-                    if (weaponUpgrade->statModPct >= floatIdentifier->modPct)
-                    {
-                        SendMessage(player, "Amélioration déjà appliquée.");
-                        return rebuildPage();
-                    }
-                    else
-                    {
-                        const UpgradeStat* nextWeaponUpgrade = FindNextWeaponUpgradeStat(weaponUpgradeStats, weaponUpgrade->statModPct);
-                        if (nextWeaponUpgrade != nullptr)
-                        {
-                            if (floatIdentifier->modPct > nextWeaponUpgrade->statModPct)
-                            {
-                                SendMessage(player, "Rang précédent nécéssaire.");
-                                return rebuildPage();
-                            }
-                            else
-                            {
-                                BuildWeaponUpgradesPercentInfoCatalogue(player, item, floatIdentifier->modPct);
-                                return AddPagedData(player, creature, 0);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (floatIdentifier->modPct > weaponUpgradeStats[0].statModPct)
-                    {
-                        SendMessage(player, "Rang précédent nécéssaire.");
-                        return rebuildPage();
-                    }
-                    else
-                    {
-                        BuildWeaponUpgradesPercentInfoCatalogue(player, item, floatIdentifier->modPct);
-                        return AddPagedData(player, creature, 0);
-                    }
-                }
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidWeaponForUpgrade(item, player))
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            if (action == 0)
-            {
-                BuildWeaponUpgradesPercentInfoCatalogue(player, item, pagedData.upgradeStat->statModPct);
-                return AddPagedData(player, creature, 0);
-            }
-            else if (action == 1)
-            {
-                if (!PurchaseWeaponUpgrade(player))
-                    SendMessage(player, "L'amélioration a échoué.");
-                else
-                {
-                    CloseGossipMenuFor(player);
-                    return true;
-                }
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            BuildWeaponUpgradeInfoCatalogue(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidWeaponForUpgrade(item, player))
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            if (action == 0)
-            {
-                BuildWeaponUpgradeInfoCatalogue(player, item);
-                return AddPagedData(player, creature, pagedData.currentPage);
-            }
-            else if (action == 1)
-            {
-                if (PurgeWeaponUpgrade(player, item))
-                    VisualFeedback(player);
-
-                CloseGossipMenuFor(player);
-                return true;
-            }
-            else if (action == 2)
-            {
-                EquipItem(player, item);
-
-                BuildWeaponUpgradeInfoCatalogue(player, item);
-                return AddPagedData(player, creature, pagedData.currentPage);
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_ITEMS)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            BuildWeaponSpeedPercentUpgradesCatalogue(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERCS)
-    {
-        const Identifier* identifier = pagedData.FindIdentifierById(action);
-        if (identifier != nullptr && identifier->GetType() == FLOAT_IDENTIFIER)
-        {
-            Item* item = player->GetItemByGuid(pagedData.item.guid);
-            if (!IsValidWeaponForSpeedUpgrade(item, player))
-                SendMessage(player, "L'arme n'est plus disponible.");
-            else
-            {
-                auto rebuildPage = [&]()
-                    {
-                        BuildWeaponSpeedPercentUpgradesCatalogue(player, item);
-                        return AddPagedData(player, creature, pagedData.currentPage);
-                    };
-
-                const FloatIdentifier* floatIdentifier = (FloatIdentifier*)identifier;
-                const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(characterWeaponSpeedUpgradeData, player, item);
-                if (weaponUpgrade != nullptr)
-                {
-                    if (weaponUpgrade->statModPct >= floatIdentifier->modPct)
-                    {
-                        SendMessage(player, "Amélioration déjà appliquée.");
-                        return rebuildPage();
-                    }
-                    else
-                    {
-                        const UpgradeStat* nextWeaponUpgrade = FindNextWeaponUpgradeStat(weaponSpeedUpgradeStats, weaponUpgrade->statModPct);
-                        if (nextWeaponUpgrade != nullptr)
-                        {
-                            if (floatIdentifier->modPct > nextWeaponUpgrade->statModPct)
-                            {
-                                SendMessage(player, "Rang précédent nécéssaire.");
-                                return rebuildPage();
-                            }
-                            else
-                            {
-                                BuildWeaponSpeedUpgradesPercentInfoCatalogue(player, item, floatIdentifier->modPct);
-                                return AddPagedData(player, creature, 0);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (floatIdentifier->modPct > weaponSpeedUpgradeStats[0].statModPct)
-                    {
-                        SendMessage(player, "Rang précédent nécéssaire.");
-                        return rebuildPage();
-                    }
-                    else
-                    {
-                        BuildWeaponSpeedUpgradesPercentInfoCatalogue(player, item, floatIdentifier->modPct);
-                        return AddPagedData(player, creature, 0);
-                    }
-                }
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidWeaponForSpeedUpgrade(item, player))
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            if (action == 0)
-            {
-                BuildWeaponSpeedUpgradesPercentInfoCatalogue(player, item, pagedData.upgradeStat->statModPct);
-                return AddPagedData(player, creature, 0);
-            }
-            else if (action == 1)
-            {
-                if (!PurchaseWeaponSpeedUpgrade(player))
-                    SendMessage(player, "L'amélioration a échoué.");
-                else
-                {
-                    CloseGossipMenuFor(player);
-                    return true;
-                }
-            }
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK)
-    {
-        Item* item = FindItemIdentifierFromPage(pagedData, action, player);
-        if (item == nullptr)
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            BuildWeaponSpeedUpgradeInfoCatalogue(player, item);
-            return AddPagedData(player, creature, 0);
-        }
-    }
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO)
-    {
-        Item* item = player->GetItemByGuid(pagedData.item.guid);
-        if (!IsValidWeaponForSpeedUpgrade(item, player))
-            SendMessage(player, "L'arme n'est plus disponible.");
-        else
-        {
-            if (action == 0)
-            {
-                BuildWeaponSpeedUpgradeInfoCatalogue(player, item);
-                return AddPagedData(player, creature, pagedData.currentPage);
-            }
-            else if (action == 1)
-            {
-                if (PurgeWeaponSpeedUpgrade(player, item))
-                    VisualFeedback(player);
-
-                CloseGossipMenuFor(player);
-                return true;
-            }
-        }
-    }
-
-    CloseGossipMenuFor(player);
-    return false;
-}
-
-Item* ItemUpgrade::FindItemIdentifierFromPage(const PagedData& pagedData, uint32 id, Player* player) const
-{
-    const Identifier* identifier = pagedData.FindIdentifierById(id);
-    if (identifier != nullptr && identifier->GetType() == ITEM_IDENTIFIER)
-    {
-        const ItemIdentifier* itemIdentifier = (ItemIdentifier*)identifier;
-        Item* item = player->GetItemByGuid(itemIdentifier->guid);
-        bool valid = false;
-        if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS || pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK)
-            valid = IsValidWeaponForUpgrade(item, player);
-        else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_ITEMS || pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK)
-            valid = IsValidWeaponForSpeedUpgrade(item, player);
-        else
-            valid = IsValidItemForUpgrade(item, player);
-
-        if (valid)
-            return item;
-    }
-
-    return nullptr;
 }
 
 bool ItemUpgrade::HandlePurchaseRank(Player* player, Item* item, const UpgradeStat* upgrade)
@@ -1627,147 +801,6 @@ bool ItemUpgrade::HandlePurchaseWeaponUpgrade(Player* player, Item* item, const 
     newUpgrade.upgradeStat = upgrade;
     newUpgrade.upgradeStatModPct = upgrade->statModPct;
     upgrades.push_back(newUpgrade);
-
-    return true;
-}
-
-bool ItemUpgrade::PurchaseUpgrade(Player* player)
-{
-    PagedData& pagedData = GetPagedData(player);
-    if (!pagedData.upgradeStat)
-        return false;
-
-    Item* item = player->GetItemByGuid(pagedData.item.guid);
-    if (!item)
-        return false;
-
-    if (!MeetsRequirement(player, pagedData.upgradeStat, item))
-    {
-        SendMessage(player, "Vous ne remplissez pas les conditions pour effectuer cette amélioration.");
-        return true;
-    }
-
-    if (item->IsEquipped())
-        player->_ApplyItemMods(item, item->GetSlot(), false);
-
-    HandlePurchaseRank(player, item, pagedData.upgradeStat);
-
-    if (item->IsEquipped())
-        player->_ApplyItemMods(item, item->GetSlot(), true);
-
-    TakeRequirements(player, pagedData.upgradeStat, item);
-
-    VisualFeedback(player);
-    SendMessage(player, "Amélioration réussie !");
-
-    SendItemPacket(player, item);
-
-    RefreshWeaponSpeed(player);
-
-    return true;
-}
-
-bool ItemUpgrade::PurchaseWeaponUpgrade(Player* player)
-{
-    PagedData& pagedData = GetPagedData(player);
-    if (!pagedData.upgradeStat)
-        return false;
-
-    Item* item = player->GetItemByGuid(pagedData.item.guid);
-    if (!IsValidWeaponForUpgrade(item, player))
-        return false;
-
-    if (!MeetsWeaponUpgradeRequirement(player))
-    {
-        SendMessage(player, "Vous ne remplissez pas les conditions pour effectuer cette amélioration.");
-        return true;
-    }
-
-    if (item->IsEquipped())
-        player->_ApplyItemMods(item, item->GetSlot(), false);
-
-    HandlePurchaseWeaponUpgrade(player, item, pagedData.upgradeStat, false);
-
-    if (item->IsEquipped())
-        player->_ApplyItemMods(item, item->GetSlot(), true);
-
-    TakeWeaponUpgradeRequirements(player);
-
-    VisualFeedback(player);
-    SendMessage(player, "Amélioration de l'arme réussie !");
-
-    SendItemPacket(player, item);
-
-    RefreshWeaponSpeed(player);
-
-    return true;
-}
-
-bool ItemUpgrade::PurchaseWeaponSpeedUpgrade(Player* player)
-{
-    PagedData& pagedData = GetPagedData(player);
-    if (!pagedData.upgradeStat)
-        return false;
-
-    Item* item = player->GetItemByGuid(pagedData.item.guid);
-    if (!IsValidWeaponForSpeedUpgrade(item, player))
-        return false;
-
-    if (!MeetsWeaponSpeedUpgradeRequirement(player))
-    {
-        SendMessage(player, "Vous ne remplissez pas les conditions pour effectuer cette amélioration.");
-        return true;
-    }
-
-    HandlePurchaseWeaponUpgrade(player, item, pagedData.upgradeStat, true);
-
-    TakeWeaponSpeedUpgradeRequirements(player);
-
-    VisualFeedback(player);
-    SendMessage(player, "Amélioration de la vitesse de l'arme réussie !");
-
-    SendItemPacket(player, item);
-
-    RefreshWeaponSpeed(player);
-
-    return true;
-}
-
-bool ItemUpgrade::PurchaseUpgradeBulk(Player* player)
-{
-    PagedData& pagedData = GetPagedData(player);
-    Item* item = player->GetItemByGuid(pagedData.item.guid);
-    if (!item)
-        return false;
-
-    std::unordered_map<uint32, const UpgradeStat*> upgrades = FindAllUpgradeableRanks(player, item, pagedData.pct);
-    if (upgrades.empty())
-        return false;
-
-    StatRequirementContainer reqs = BuildBulkRequirements(upgrades, item);
-    if (!MeetsRequirement(player, &reqs))
-    {
-        SendMessage(player, "Vous ne remplissez pas les conditions pour effectuer cette amélioration.");
-        return true;
-    }
-
-    if (item->IsEquipped())
-        player->_ApplyItemMods(item, item->GetSlot(), false);
-
-    for (const auto& upair : upgrades)
-        HandlePurchaseRank(player, item, upair.second);
-
-    if (item->IsEquipped())
-        player->_ApplyItemMods(item, item->GetSlot(), true);
-
-    TakeRequirements(player, &reqs);
-
-    VisualFeedback(player);
-    SendMessage(player, "Amélioration réussie !");
-
-    SendItemPacket(player, item);
-
-    RefreshWeaponSpeed(player);
 
     return true;
 }
@@ -1902,442 +935,6 @@ void ItemUpgrade::HandleCharacterRemove(uint32 guid)
     characterWeaponSpeedUpgradeData[guid].clear();
 }
 
-void ItemUpgrade::BuildRequirementsPage(const Player* player, PagedData& pagedData, const StatRequirementContainer* reqs) const
-{
-    if (EmptyRequirements(reqs))
-    {
-        Identifier* identifier = new Identifier();
-        identifier->id = 0;
-        identifier->name = "0";
-        identifier->uiName = "Pas de prérequis";
-        pagedData.data.push_back(identifier);
-    }
-    else
-    {
-        for (const auto& req : *reqs)
-        {
-            if (req.reqType == REQ_TYPE_NONE)
-                continue;
-
-            std::ostringstream oss;
-            switch (req.reqType)
-            {
-            case REQ_TYPE_COPPER:
-                oss << "Argent: " << CopperToMoneyStr((uint32)req.reqVal1, true);
-                break;
-            case REQ_TYPE_HONOR:
-                oss << "Point d'honneur: " << (uint32)req.reqVal1 << " points";
-                break;
-            case REQ_TYPE_ARENA:
-                oss << "Points d'arène: " << (uint32)req.reqVal1 << " points";
-                break;
-            case REQ_TYPE_ITEM:
-            {
-                const ItemTemplate* proto = sObjectMgr->GetItemTemplate((uint32)req.reqVal1);
-                oss << ItemIcon(proto);
-                oss << ItemLink(player, proto, 0);
-                if (req.reqVal2 > 1.0f)
-                    oss << " - " << (uint32)req.reqVal2 << "x";
-                break;
-            }
-            }
-
-            std::string missing;
-            if (!MeetsRequirement(player, req))
-            {
-                switch (req.reqType)
-                {
-                case REQ_TYPE_COPPER:
-                    missing = "(|cffb50505 " + CopperToMoneyStr((uint32)req.reqVal1 - player->GetMoney(), true) + " manquants|r)";
-                    break;
-                case REQ_TYPE_HONOR:
-                    missing = "(|cffb50505 " + Acore::ToString<uint32>((uint32)req.reqVal1 - player->GetHonorPoints()) + " points manquants|r)";
-                    break;
-                case REQ_TYPE_ARENA:
-                    missing = "(|cffb50505 " + Acore::ToString<uint32>((uint32)req.reqVal1 - player->GetArenaPoints()) + " points manquants|r)";
-                    break;
-                case REQ_TYPE_ITEM:
-                    missing = "(|cffb50505" + Acore::ToString<uint32>((uint32)req.reqVal2 - player->GetItemCount((uint32)req.reqVal1, true)) + " manquants|r)";
-                    break;
-                }
-            }
-
-            //oss << " - ";
-            if (missing.empty())
-                oss << "|cff056e3a|r";
-            else
-                oss << "|cffb50505|r" << missing;
-
-            Identifier* identifier = new Identifier();
-            identifier->id = 0;
-            identifier->name = Acore::ToString<uint32>((uint32)req.reqType);
-            identifier->uiName = oss.str();
-            pagedData.data.push_back(identifier);
-        }
-    }
-}
-
-void ItemUpgrade::BuildStatsRequirementsCatalogue(const Player* player, const UpgradeStat* upgradeStat, const Item* item)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = upgradeStat;
-    pagedData.type = PAGED_DATA_TYPE_REQS;
-
-    BuildRequirementsPage(player, pagedData, GetStatRequirements(upgradeStat, item));
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildAlreadyUpgradedItemsCatalogue(const Player* player, PagedDataType type)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = nullptr;
-    pagedData.item.guid = ObjectGuid::Empty;
-    pagedData.type = type;
-
-    for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; i++)
-        if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            AddUpgradedItemToPagedData(item, player, pagedData, "sac");
-
-    for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; i++)
-        if (Bag* bag = player->GetBagByPos(i))
-            for (uint32 j = 0; j < bag->GetBagSize(); j++)
-                if (Item* item = player->GetItemByPos(i, j))
-                    AddUpgradedItemToPagedData(item, player, pagedData, "sac");
-
-    for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; i++)
-        if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            AddUpgradedItemToPagedData(item, player, pagedData, "équipé");
-
-    for (uint8 i = BANK_SLOT_ITEM_START; i < BANK_SLOT_ITEM_END; i++)
-        if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            AddUpgradedItemToPagedData(item, player, pagedData, "banque");
-
-    for (uint8 i = BANK_SLOT_BAG_START; i < BANK_SLOT_BAG_END; i++)
-        if (Bag* bag = player->GetBagByPos(i))
-            for (uint32 j = 0; j < bag->GetBagSize(); j++)
-                if (Item* item = player->GetItemByPos(i, j))
-                    AddUpgradedItemToPagedData(item, player, pagedData, "banque");
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::AddUpgradedItemToPagedData(const Item* item, const Player* player, PagedData& pagedData, const std::string& from)
-{
-    bool shouldAdd = false;
-    if (pagedData.type == PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK)
-        shouldAdd = FindUpgradeForWeapon(characterWeaponUpgradeData, player, item) != nullptr;
-    else if (pagedData.type == PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK)
-        shouldAdd = FindUpgradeForWeapon(characterWeaponSpeedUpgradeData, player, item) != nullptr;
-    else
-        shouldAdd = !FindUpgradesForItem(player, item).empty();
-
-    if (shouldAdd)
-    {
-        const ItemTemplate* proto = item->GetTemplate();
-
-        ItemIdentifier* itemIdentifier = new ItemIdentifier();
-        itemIdentifier->id = pagedData.data.size();
-        itemIdentifier->guid = item->GetGUID();
-        itemIdentifier->name = ItemNameWithLocale(player, proto, item->GetItemRandomPropertyId());
-        itemIdentifier->uiName = ItemLinkForUI(item, player) + " [" + from + "]";
-
-        if (pagedData.type != PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK && pagedData.type != PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK)
-        {
-            if (!IsAllowedItem(item) || IsBlacklistedItem(item))
-                itemIdentifier->uiName += " [|cffb50505INACTIVE|r]";
-        }
-
-        pagedData.data.push_back(itemIdentifier);
-    }
-}
-
-void ItemUpgrade::BuildItemUpgradeStatsCatalogue(const Player* player, const Item* item)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = nullptr;
-    pagedData.item.guid = item->GetGUID();
-    pagedData.type = PAGED_DATA_TYPE_UPGRADED_ITEMS_STATS;
-
-    std::vector<const UpgradeStat*> itemUpgrades = FindUpgradesForItem(player, item);
-    if (!itemUpgrades.empty())
-    {
-        std::vector<_ItemStat> statInfo = LoadItemStatInfo(item);
-        for (const UpgradeStat* upgradeStat : itemUpgrades)
-        {
-            const _ItemStat* foundStat = GetStatByType(statInfo, upgradeStat->statType);
-            if (!foundStat)
-                continue;
-
-            std::string statTypeStr = StatTypeToString(upgradeStat->statType);
-
-            std::ostringstream oss;
-            oss << "Amélioré " << statTypeStr << " Rang " << upgradeStat->statRank << "";
-            oss << " " << "[" << upgradeStat->statModPct << "% - ";
-            oss << "|cffb50505" << foundStat->ItemStatValue << "|r -> ";
-            oss << "|cff056e3a" << CalculateModPct(foundStat->ItemStatValue, upgradeStat) << "|r";
-
-            if (!IsAllowedItem(item)
-                || IsBlacklistedItem(item)
-                || !IsAllowedStatType(upgradeStat->statType)
-                || !CanApplyUpgradeForItem(item, upgradeStat))
-                oss << " [|cffb50505INACTIVE|r]";
-
-            Identifier* identifier = new Identifier();
-            identifier->id = 0;
-            identifier->name = statTypeStr;
-            identifier->uiName = oss.str();
-            pagedData.data.push_back(identifier);
-        }
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::_BuildWeaponPercentUpgradesCatalogue(const Player* player, const Item* item, PagedDataType type, std::string text)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = nullptr;
-    pagedData.item.guid = item->GetGUID();
-    pagedData.type = type;
-
-    const CharacterUpgradeContainer& weaponUpgradeData = type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS ? characterWeaponUpgradeData : characterWeaponSpeedUpgradeData;
-    const UpgradeStatContainer& upgradeStats = type == PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS ? weaponUpgradeStats : weaponSpeedUpgradeStats;
-
-    const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(weaponUpgradeData, player, item);
-    bool nextRankSet = false;
-
-    for (size_t i = 0; i < upgradeStats.size(); i++)
-    {
-        FloatIdentifier* identifier = new FloatIdentifier();
-        identifier->id = pagedData.data.size();
-        identifier->name = "";
-        identifier->modPct = upgradeStats[i].statModPct;
-
-        bool toPurchase = false;
-        bool purchased = false;
-        if (weaponUpgrade == nullptr)
-        {
-            if (i == 0)
-                toPurchase = true;
-        }
-        else
-        {
-            if (weaponUpgrade->statModPct >= identifier->modPct)
-                purchased = true;
-            else
-            {
-                if (!nextRankSet)
-                {
-                    nextRankSet = true;
-                    toPurchase = true;
-                }
-            }
-
-        }
-        std::ostringstream oss;
-        if (toPurchase)
-            oss << "|cff056e3a";
-        else if (purchased)
-            oss << "|cff5c5b57";
-        else
-            oss << "|cffb50505";
-        oss << "Augmenter " << text << " de " << identifier->modPct << " % |r";
-        if (toPurchase)
-            oss << " Disponible";
-        else if (purchased)
-            oss << " Actif";
-        identifier->uiName = oss.str();
-
-        pagedData.data.push_back(identifier);
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildWeaponPercentUpgradesCatalogue(const Player* player, const Item* item)
-{
-    _BuildWeaponPercentUpgradesCatalogue(player, item, PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS, "les dégats");
-}
-
-void ItemUpgrade::BuildWeaponSpeedPercentUpgradesCatalogue(const Player* player, const Item* item)
-{
-    _BuildWeaponPercentUpgradesCatalogue(player, item, PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERCS, "la vitesse");
-}
-
-void ItemUpgrade::BuildWeaponUpgradesPercentInfoCatalogue(const Player* player, const Item* item, float pct)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = FindWeaponUpgradeStat(weaponUpgradeStats, pct);
-    pagedData.item.guid = item->GetGUID();
-    pagedData.type = PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO;
-
-    Identifier* pctIdnt = new Identifier();
-    pctIdnt->id = 0;
-    pctIdnt->uiName = "Augmenté les dégats de " + FormatFloat(pct) + "%";
-    pagedData.data.push_back(pctIdnt);
-
-    Identifier* identifier = new Identifier();
-    identifier->id = 0;
-    identifier->uiName = "Prérequis:";
-    pagedData.data.push_back(identifier);
-
-    BuildRequirementsPage(player, pagedData, &weaponUpgradeReqs);
-
-    std::pair<float, float> dmgInfo = GetItemProtoDamage(item);
-    std::pair<float, float> upgradedDmgInfo = HandleWeaponModifier(player, item, dmgInfo.first, dmgInfo.second);
-    float currentMinDamage = upgradedDmgInfo.first;
-    float currentMaxDamage = upgradedDmgInfo.second;
-    float nextMinDamage = std::floor(CalculateModPctF(dmgInfo.first, pagedData.upgradeStat));
-    float nextMaxDamage = std::ceil(CalculateModPctF(dmgInfo.second, pagedData.upgradeStat));
-
-    Identifier* minDmgIdnt = new Identifier();
-    minDmgIdnt->id = 0;
-    minDmgIdnt->uiName = "Dégats Min " + FormatIncrease(currentMinDamage, nextMinDamage);
-    pagedData.data.push_back(minDmgIdnt);
-
-    Identifier* maxDmgIdnt = new Identifier();
-    maxDmgIdnt->id = 0;
-    maxDmgIdnt->uiName = "Dégats Max " + FormatIncrease(currentMaxDamage, nextMaxDamage);
-    pagedData.data.push_back(maxDmgIdnt);
-
-    for (uint32 i = 0; i < pagedData.data.size(); i++)
-        pagedData.data[i]->name = Acore::ToString(i);
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildWeaponSpeedUpgradesPercentInfoCatalogue(const Player* player, const Item* item, float pct)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = FindWeaponUpgradeStat(weaponSpeedUpgradeStats, pct);
-    pagedData.item.guid = item->GetGUID();
-    pagedData.type = PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO;
-
-    Identifier* pctIdnt = new Identifier();
-    pctIdnt->id = 0;
-    pctIdnt->uiName = "Augmenté la vitesse de " + FormatFloat(pct) + "%";
-    pagedData.data.push_back(pctIdnt);
-
-    Identifier* identifier = new Identifier();
-    identifier->id = 0;
-    identifier->uiName = "Prérequis:";
-    pagedData.data.push_back(identifier);
-
-    BuildRequirementsPage(player, pagedData, &weaponSpeedUpgradeReqs);
-
-    uint32 originalDelay = GetItemProtoDelay(item);
-
-    Identifier* origDelayIdnt = new Identifier();
-    origDelayIdnt->id = 0;
-    origDelayIdnt->uiName = "Vitesse de base: " + FormatDelay(originalDelay);
-    pagedData.data.push_back(origDelayIdnt);
-
-    uint32 currentDelay = HandleWeaponSpeedModifier(player, item);
-    Identifier* currentDelayIdnt = new Identifier();
-    currentDelayIdnt->id = 0;
-    currentDelayIdnt->uiName = "Vitesse actuelle: |cffb50505" + FormatDelay(currentDelay) + "|r";
-    pagedData.data.push_back(currentDelayIdnt);
-
-    uint32 nextDelay = CalculatePctDecrease(originalDelay, pct);
-    Identifier* nextDelayIdnt = new Identifier();
-    nextDelayIdnt->id = 0;
-    nextDelayIdnt->uiName = "Réduira à: |cff056e3a" + FormatDelay(nextDelay) + "|r";
-    pagedData.data.push_back(nextDelayIdnt);
-
-    for (uint32 i = 0; i < pagedData.data.size(); i++)
-        pagedData.data[i]->name = Acore::ToString(i);
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildWeaponUpgradeInfoCatalogue(const Player* player, const Item* item)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = nullptr;
-    pagedData.item.guid = item->GetGUID();
-    pagedData.type = PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO;
-
-    const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(characterWeaponUpgradeData, player, item);
-    if (weaponUpgrade == nullptr)
-        return;
-
-    Identifier* idnt = new Identifier();
-    idnt->id = 0;
-    idnt->name = "0";
-    idnt->uiName = "Dégats augmentés de " + FormatFloat(weaponUpgrade->statModPct) + "%";
-    pagedData.data.push_back(idnt);
-
-    std::pair<float, float> dmgInfo = GetItemProtoDamage(item);
-    std::pair<float, float> upgradedDmgInfo = HandleWeaponModifier(player, item, dmgInfo.first, dmgInfo.second);
-
-    Identifier* minDmgIdnt = new Identifier();
-    minDmgIdnt->id = 0;
-    minDmgIdnt->name = "1";
-    minDmgIdnt->uiName = "Dégats Min " + FormatIncrease(dmgInfo.first, upgradedDmgInfo.first);
-    pagedData.data.push_back(minDmgIdnt);
-
-    Identifier* maxDmgIdnt = new Identifier();
-    maxDmgIdnt->id = 0;
-    maxDmgIdnt->name = "2";
-    maxDmgIdnt->uiName = "dégats Max " + FormatIncrease(dmgInfo.second, upgradedDmgInfo.second);
-    pagedData.data.push_back(maxDmgIdnt);
-
-    if (!item->IsEquipped())
-    {
-        Identifier* equipIdnt = new Identifier();
-        equipIdnt->id = 2;
-        equipIdnt->name = "3";
-        equipIdnt->uiName = "Equipé";
-        equipIdnt->optionIcon = GOSSIP_ICON_BATTLE;
-        pagedData.data.push_back(equipIdnt);
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildWeaponSpeedUpgradeInfoCatalogue(const Player* player, const Item* item)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.upgradeStat = nullptr;
-    pagedData.item.guid = item->GetGUID();
-    pagedData.type = PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO;
-
-    const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(characterWeaponSpeedUpgradeData, player, item);
-    if (weaponUpgrade == nullptr)
-        return;
-
-    Identifier* speedIdnt = new Identifier();
-    speedIdnt->id = 0;
-    speedIdnt->name = "0";
-    speedIdnt->uiName = "Vitesse augmentée de " + FormatFloat(weaponUpgrade->statModPct) + "%";
-    pagedData.data.push_back(speedIdnt);
-
-    uint32 originalDelay = GetItemProtoDelay(item);
-    Identifier* origDelayIdnt = new Identifier();
-    origDelayIdnt->id = 0;
-    origDelayIdnt->name = "1";
-    origDelayIdnt->uiName = "Vitesse de base: " + FormatDelay(originalDelay);
-    pagedData.data.push_back(origDelayIdnt);
-
-    uint32 newDelay = HandleWeaponSpeedModifier(player, item);
-    Identifier* newDelayIdnt = new Identifier();
-    newDelayIdnt->id = 0;
-    newDelayIdnt->name = "2";
-    newDelayIdnt->uiName = "Vitesse actuelle: " + FormatDelay(newDelay);
-    pagedData.data.push_back(newDelayIdnt);
-
-    pagedData.SortAndCalculateTotals();
-}
-
 bool ItemUpgrade::MeetsRequirement(const Player* player, const UpgradeStatReq& req) const
 {
     switch (req.reqType)
@@ -2414,90 +1011,6 @@ void ItemUpgrade::TakeWeaponSpeedUpgradeRequirements(Player* player)
     TakeRequirements(player, &weaponSpeedUpgradeReqs);
 }
 
-void ItemUpgrade::BuildStatsUpgradeCatalogue(const Player* player, const Item* item)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.item.guid = item->GetGUID();
-    pagedData.upgradeStat = nullptr;
-    pagedData.type = PAGED_DATA_TYPE_STATS;
-
-    if (IsAllowedItem(item) && !IsBlacklistedItem(item))
-    {
-        std::vector<_ItemStat> statInfoList = LoadItemStatInfo(item);
-        std::unordered_map<uint32, bool> processed;
-        for (const UpgradeStat& stat : upgradeStatList)
-        {
-            if (processed.find(stat.statType) != processed.end())
-                continue;
-
-            if (!IsAllowedStatType(stat.statType))
-                continue;
-
-            const _ItemStat* statInfo = GetStatByType(statInfoList, stat.statType);
-            if (!statInfo)
-                continue;
-
-            processed[stat.statType] = true;
-
-            const UpgradeStat* foundUpgrade = FindUpgradeForItem(player, item, stat.statType);
-            const UpgradeStat* currentUpgrade = nullptr;
-            bool atMaxRank = false;
-            Identifier* identifier = new Identifier();
-            std::ostringstream oss;
-            oss << "" << StatTypeToString(statInfo->ItemStatType) << " ";
-            if (foundUpgrade != nullptr)
-            {
-                currentUpgrade = foundUpgrade;
-
-                const UpgradeStat* nextUpgrade = FindUpgradeStat(stat.statType, foundUpgrade->statRank + 1);
-                if (nextUpgrade == nullptr)
-                {
-                    oss << "Rang |cff056e3a" << foundUpgrade->statRank << " |cffb50505MAX|r";
-                    identifier->id = foundUpgrade->statId;
-                    atMaxRank = true;
-                }
-                else
-                {
-                    oss << "Rang " << "|cff056e3a" << foundUpgrade->statRank + 1 << "|r" << "";
-                    identifier->id = nextUpgrade->statId;
-                    foundUpgrade = nextUpgrade;
-                }
-            }
-            else
-            {
-                foundUpgrade = FindUpgradeStat(stat.statType, 1);
-                if (foundUpgrade == nullptr)
-                    continue;
-
-                oss << "Rang 1";
-                identifier->id = foundUpgrade->statId;
-            }
-
-            oss << " " << "+" << foundUpgrade->statModPct << "% - ";
-            oss << "|cffb50505" << statInfo->ItemStatValue << "|r -> ";
-            oss << "|cff056e3a" << CalculateModPct(statInfo->ItemStatValue, foundUpgrade) << "|r";
-            if (currentUpgrade != nullptr)
-            {
-                oss << " Actuelle : " << CalculateModPct(statInfo->ItemStatValue, currentUpgrade);
-                if (!CanApplyUpgradeForItem(item, currentUpgrade))
-                    oss << ", |cffb50505Inactive|r" << "";
-                else
-                    oss << "]";
-            }
-
-            if (!atMaxRank && !CanApplyUpgradeForItem(item, foundUpgrade))
-                oss << " |cffb50505Amélioration refusée|r";
-
-            identifier->uiName = oss.str();
-            identifier->name = StatTypeToString(stat.statType);
-            pagedData.data.push_back(identifier);
-        }
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
 void ItemUpgrade::CreateUpgradesPctMap()
 {
     upgradesPctMap.clear();
@@ -2505,132 +1018,11 @@ void ItemUpgrade::CreateUpgradesPctMap()
         upgradesPctMap[ustat.statModPct].push_back(&ustat);
 }
 
-void ItemUpgrade::BuildStatsUpgradeCatalogueBulk(const Player* player, const Item* item)
+ItemUpgrade::TotalCost ItemUpgrade::SumRequirements(const std::vector<const StatRequirementContainer*>& parts) const
 {
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.item.guid = item->GetGUID();
-    pagedData.upgradeStat = nullptr;
-    pagedData.type = PAGED_DATA_TYPE_STATS_BULK;
-
-    if (IsAllowedItem(item) && !IsBlacklistedItem(item))
+    TotalCost total;
+    for (const StatRequirementContainer* ureq : parts)
     {
-        for (const auto& upair : upgradesPctMap)
-        {
-            FloatIdentifier* identifier = new FloatIdentifier();
-            identifier->id = pagedData.data.size();
-            identifier->name = "";
-            identifier->modPct = upair.first;
-            identifier->uiName = "Améliorer toutes les stats de " + FormatFloat(upair.first) + "%";
-            pagedData.data.push_back(identifier);
-        }
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildStatsUpgradeByPctCatalogueBulk(const Player* player, const Item* item, float pct)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.item.guid = item->GetGUID();
-    pagedData.upgradeStat = nullptr;
-    pagedData.type = PAGED_DATA_TYPE_STAT_UPGRADE_BULK;
-    pagedData.pct = pct;
-
-    if (upgradesPctMap.find(pct) != upgradesPctMap.end())
-    {
-        const std::vector<const UpgradeStat*>& upgrades = upgradesPctMap.at(pct);
-        std::vector<_ItemStat> statInfoList = LoadItemStatInfo(item);
-        for (const UpgradeStat* stat : upgrades)
-        {
-            const _ItemStat* foundStat = GetStatByType(statInfoList, stat->statType);
-            if (foundStat == nullptr)
-                continue;
-
-            std::ostringstream oss;
-            std::string statTypeStr = StatTypeToString(stat->statType);
-            if (!IsAllowedStatType(stat->statType))
-                oss << "|cffb50505Erreur|r " << statTypeStr << ": statistique incompatible.";
-            else if (!CanApplyUpgradeForItem(item, stat))
-                oss << "|cffb50505Erreur|r " << statTypeStr << ": rang incompatible.";
-            else
-            {
-                const UpgradeStat* currentUpgrade = FindUpgradeForItem(player, item, stat->statType);
-                bool willUpgrade = false;
-                if (currentUpgrade != nullptr)
-                {
-                    const UpgradeStat* nextUpgrade = FindUpgradeStat(stat->statType, currentUpgrade->statRank + 1);
-                    if (nextUpgrade == nullptr)
-                        oss << "|cffb50505Erreur|r " << statTypeStr << ": rang max atteint.";
-                    else
-                    {
-                        if (currentUpgrade->statRank == stat->statRank - 1)
-                            willUpgrade = true;
-                        else if (currentUpgrade->statRank >= stat->statRank)
-                            oss << "|cffb50505Erreur|r " << statTypeStr << ": rang déjà actif.";
-                        else
-                            oss << "|cffb50505Erreur|r " << statTypeStr << ": rang précédent nécéssaire.";
-                    }
-                }
-                else
-                {
-                    if (stat->statRank == 1)
-                        willUpgrade = true;
-                    else
-                        oss << "|cffb50505Erreur|r " << statTypeStr << ": rang précédent nécéssaire.";
-                }
-
-                if (willUpgrade)
-                {
-                    oss << "" << statTypeStr << " rank " << stat->statRank;
-                    oss << " +" << FormatFloat(stat->statModPct) << "% ";
-                    oss << "(|cffb50505" << foundStat->ItemStatValue << "|r -> ";
-                    oss << "|cff056e3a" << CalculateModPct(foundStat->ItemStatValue, stat) << "|r)";
-
-                    if (currentUpgrade != nullptr)
-                        oss << " Actuel: " << CalculateModPct(foundStat->ItemStatValue, currentUpgrade) << "";
-                }
-            }
-
-            Identifier* identifier = new Identifier();
-            identifier->id = 0;
-            identifier->name = statTypeStr;
-            identifier->uiName = oss.str();
-            pagedData.data.push_back(identifier);
-        }
-    }
-
-    pagedData.SortAndCalculateTotals();
-}
-
-void ItemUpgrade::BuildStatsRequirementsCatalogueBulk(const Player* player, const Item* item, float pct)
-{
-    PagedData& pagedData = GetPagedData(player);
-    pagedData.Reset();
-    pagedData.item.guid = item->GetGUID();
-    pagedData.upgradeStat = nullptr;
-    pagedData.type = PAGED_DATA_TYPE_REQS_BULK;
-
-    StatRequirementContainer reqs = BuildBulkRequirements(FindAllUpgradeableRanks(player, item, pct), item);
-    BuildRequirementsPage(player, pagedData, &reqs);
-
-    pagedData.SortAndCalculateTotals();
-}
-
-ItemUpgrade::StatRequirementContainer ItemUpgrade::BuildBulkRequirements(const std::unordered_map<uint32, const UpgradeStat*>& upgrades, const Item* item) const
-{
-    StatRequirementContainer reqs;
-    if (upgrades.empty())
-        return reqs;
-
-    uint64 copper = 0;
-    uint32 arena = 0;
-    uint32 honor = 0;
-    std::unordered_map<uint32, uint32> itemMap;
-    for (const auto& upair : upgrades)
-    {
-        const StatRequirementContainer* ureq = GetStatRequirements(upair.second, item);
         if (EmptyRequirements(ureq))
             continue;
 
@@ -2639,75 +1031,60 @@ ItemUpgrade::StatRequirementContainer ItemUpgrade::BuildBulkRequirements(const s
             switch (statReq.reqType)
             {
             case REQ_TYPE_COPPER:
-                copper += (uint32)statReq.reqVal1;
+                total.copper += (uint32)statReq.reqVal1;
                 break;
             case REQ_TYPE_HONOR:
-                honor += (uint32)statReq.reqVal1;
+                total.honor += (uint32)statReq.reqVal1;
                 break;
             case REQ_TYPE_ARENA:
-                arena += (uint32)statReq.reqVal1;
+                total.arena += (uint32)statReq.reqVal1;
                 break;
             case REQ_TYPE_ITEM:
-                itemMap[(uint32)statReq.reqVal1] += (uint32)statReq.reqVal2;
+                total.items[(uint32)statReq.reqVal1] += (uint32)statReq.reqVal2;
+                break;
+            case REQ_TYPE_NONE:
+                break;
+            default:
+                // Unknown requirement: never read as free.
+                total.invalid = true;
                 break;
             }
         }
     }
 
-    if (copper != 0)
-    {
-        if (copper > MAX_MONEY_AMOUNT)
-            copper = MAX_MONEY_AMOUNT;
-
-        reqs.push_back(UpgradeStatReq(0, REQ_TYPE_COPPER, (float)copper));
-    }
-
-    if (honor != 0)
-        reqs.push_back(UpgradeStatReq(0, REQ_TYPE_HONOR, (float)honor));
-
-    if (arena != 0)
-        reqs.push_back(UpgradeStatReq(0, REQ_TYPE_ARENA, (float)arena));
-
-    for (const auto& ipair : itemMap)
-        reqs.push_back(UpgradeStatReq(0, REQ_TYPE_ITEM, (float)ipair.first, (float)ipair.second));
-
-    return reqs;
+    return total;
 }
 
-std::unordered_map<uint32, const ItemUpgrade::UpgradeStat*> ItemUpgrade::FindAllUpgradeableRanks(const Player* player, const Item* item, float pct) const
+bool ItemUpgrade::MeetsCost(const Player* player, const TotalCost& cost) const
 {
-    std::unordered_map<uint32, const UpgradeStat*> possibleUpgrades;
-    if (upgradesPctMap.find(pct) != upgradesPctMap.end())
-    {
-        const std::vector<const UpgradeStat*>& upgrades = upgradesPctMap.at(pct);
-        std::vector<_ItemStat> statInfoList = LoadItemStatInfo(item);
-        for (const UpgradeStat* stat : upgrades)
-        {
-            const _ItemStat* foundStat = GetStatByType(statInfoList, stat->statType);
-            if (foundStat == nullptr)
-                continue;
+    if (cost.invalid)
+        return false;
 
-            if (!IsAllowedStatType(stat->statType))
-                continue;
+    // A sum above what a player can ever hold is refused, never lowered.
+    if (cost.copper > MAX_MONEY_AMOUNT || !player->HasEnoughMoney(uint32(cost.copper)))
+        return false;
 
-            if (!CanApplyUpgradeForItem(item, stat))
-                continue;
+    if (cost.honor > player->GetHonorPoints() || cost.arena > player->GetArenaPoints())
+        return false;
 
-            const UpgradeStat* currentUpgrade = FindUpgradeForItem(player, item, stat->statType);
-            if (currentUpgrade != nullptr)
-            {
-                const UpgradeStat* nextUpgrade = FindUpgradeStat(stat->statType, currentUpgrade->statRank + 1);
-                if (nextUpgrade != nullptr && currentUpgrade->statRank == stat->statRank - 1)
-                    possibleUpgrades[stat->statType] = stat;
-            }
-            else
-            {
-                if (stat->statRank == 1)
-                    possibleUpgrades[stat->statType] = stat;
-            }
-        }
-    }
-    return possibleUpgrades;
+    for (const auto& [entry, count] : cost.items)
+        if (count > std::numeric_limits<uint32>::max() || !player->HasItemCount(entry, uint32(count)))
+            return false;
+
+    return true;
+}
+
+void ItemUpgrade::TakeCost(Player* player, const TotalCost& cost)
+{
+    // Only after MeetsCost: every amount fits what the core takes.
+    if (cost.copper)
+        player->ModifyMoney(-int32(cost.copper));
+    if (cost.honor)
+        player->ModifyHonorPoints(-int32(cost.honor));
+    if (cost.arena)
+        player->ModifyArenaPoints(-int32(cost.arena));
+    for (const auto& [entry, count] : cost.items)
+        player->DestroyItemCount(entry, uint32(count), true);
 }
 
 /*static*/ int32 ItemUpgrade::CalculateModPct(int32 value, const UpgradeStat* upgradeStat)
@@ -2729,14 +1106,6 @@ std::unordered_map<uint32, const ItemUpgrade::UpgradeStat*> ItemUpgrade::FindAll
 
     float newAmount = value - (pct / 100.0f * value);
     return static_cast<uint32>(std::trunc(newAmount));
-}
-
-/*static*/ bool ItemUpgrade::CompareIdentifier(const Identifier* a, const Identifier* b)
-{
-    if (a->GetType() == FLOAT_IDENTIFIER && b->GetType() == FLOAT_IDENTIFIER)
-        return ((FloatIdentifier*)a)->modPct < ((FloatIdentifier*)b)->modPct;
-
-    return a->name < b->name;
 }
 
 /*static*/ const _ItemStat* ItemUpgrade::GetStatByType(const std::vector<_ItemStat>& statInfo, uint32 statType)
@@ -2811,76 +1180,36 @@ std::unordered_map<uint32, const ItemUpgrade::UpgradeStat*> ItemUpgrade::FindAll
     return statInfo;
 }
 
-/*static*/ std::string ItemUpgrade::StatTypeToString(uint32 statType)
-{
-    static std::unordered_map<uint32, std::string> statTypeToStrMap =
-    {
-        {ITEM_MOD_MANA, "Mana"}, {ITEM_MOD_HEALTH, "PV"}, {ITEM_MOD_AGILITY, "Agilité"},
-        {ITEM_MOD_STRENGTH, "Force"}, {ITEM_MOD_INTELLECT, "Intelligence"}, {ITEM_MOD_SPIRIT, "Esprit"},
-        {ITEM_MOD_STAMINA, "Endurance"}, {ITEM_MOD_DEFENSE_SKILL_RATING, "Defense"}, {ITEM_MOD_DODGE_RATING, "Esquive"},
-        {ITEM_MOD_PARRY_RATING, "Parade"}, {ITEM_MOD_BLOCK_RATING, "Blocage"}, {ITEM_MOD_HIT_MELEE_RATING, "Touché"},
-        {ITEM_MOD_HIT_RANGED_RATING, "Touché (Distance)"}, {ITEM_MOD_HIT_SPELL_RATING, "Touché (Sort)"}, {ITEM_MOD_CRIT_MELEE_RATING, "Critique (Mélée)"},
-        {ITEM_MOD_CRIT_RANGED_RATING, "Critique (Distance)"}, {ITEM_MOD_CRIT_SPELL_RATING, "Critique (Sort)"}, {ITEM_MOD_HIT_TAKEN_MELEE_RATING, "Melee Hit Taken Rating"},
-        {ITEM_MOD_HIT_TAKEN_RANGED_RATING, "Ranged Hit Taken Rating"}, {ITEM_MOD_HIT_TAKEN_SPELL_RATING, "Spell Hit Taken Rating"}, {ITEM_MOD_CRIT_TAKEN_MELEE_RATING, "Melee Crit Taken Rating"},
-        {ITEM_MOD_CRIT_TAKEN_RANGED_RATING, "Ranged Crit Taken Rating"}, {ITEM_MOD_CRIT_TAKEN_SPELL_RATING, "Spell Crit Taken Rating"}, {ITEM_MOD_HASTE_MELEE_RATING, "Hâte (Melée)"},
-        {ITEM_MOD_HASTE_RANGED_RATING, "Hâte (Distance)"}, {ITEM_MOD_HASTE_SPELL_RATING, "Hâte (Sort)"}, {ITEM_MOD_HIT_RATING, "Touché"},
-        {ITEM_MOD_CRIT_RATING, "Critique"}, {ITEM_MOD_HIT_TAKEN_RATING, "Hit Taken Rating"}, {ITEM_MOD_CRIT_TAKEN_RATING, "Crit Taken Rating"},
-        {ITEM_MOD_RESILIENCE_RATING, "Résillence"}, {ITEM_MOD_HASTE_RATING, "Hâte"}, {ITEM_MOD_EXPERTISE_RATING, "Expertise"},
-        {ITEM_MOD_ATTACK_POWER, "Puissance d'attaque"}, {ITEM_MOD_RANGED_ATTACK_POWER, "Puissance d'attaque (Distance)"}, {ITEM_MOD_MANA_REGENERATION, "Regen Mana"},
-        {ITEM_MOD_ARMOR_PENETRATION_RATING, "Pénétration d'armure"}, {ITEM_MOD_SPELL_POWER, "Puissance des Sorts"}, {ITEM_MOD_HEALTH_REGEN, "HP Regen"},
-        {ITEM_MOD_SPELL_PENETRATION, "Pénétration des sorts"}, {ITEM_MOD_BLOCK_VALUE, "Valeur de blocage"}
-    };
-
-    if (statTypeToStrMap.find(statType) != statTypeToStrMap.end())
-        return statTypeToStrMap.at(statType);
-
-    return "unknown";
-}
-
-/*static*/ std::string ItemUpgrade::EquipmentSlotToString(EquipmentSlots slot)
-{
-    static std::unordered_map<EquipmentSlots, std::string> equipmentSlotToStrMap =
-    {
-        {EQUIPMENT_SLOT_START, "Tête"},
-        {EQUIPMENT_SLOT_HEAD, "Tête"},
-        {EQUIPMENT_SLOT_NECK, "Collier"},
-        {EQUIPMENT_SLOT_SHOULDERS, "Epaule"},
-        {EQUIPMENT_SLOT_BODY, "Chemise"},
-        {EQUIPMENT_SLOT_CHEST, "Torse"},
-        {EQUIPMENT_SLOT_WAIST, "Ceinture"},
-        {EQUIPMENT_SLOT_LEGS, "Jambes"},
-        {EQUIPMENT_SLOT_FEET, "Pieds"},
-        {EQUIPMENT_SLOT_WRISTS, "Bracelets"},
-        {EQUIPMENT_SLOT_HANDS, "Gants"},
-        {EQUIPMENT_SLOT_FINGER1, "Anneau 1"},
-        {EQUIPMENT_SLOT_FINGER2, "Anneau 2"},
-        {EQUIPMENT_SLOT_TRINKET1, "Bijou 1"},
-        {EQUIPMENT_SLOT_TRINKET2, "Bijou 2"},
-        {EQUIPMENT_SLOT_BACK, "Cape"},
-        {EQUIPMENT_SLOT_MAINHAND, "Main Droite"},
-        {EQUIPMENT_SLOT_OFFHAND, "Main Gauche"},
-        {EQUIPMENT_SLOT_RANGED, "Arme à distance"},
-        {EQUIPMENT_SLOT_TABARD, "Tabard"}
-    };
-
-    if (equipmentSlotToStrMap.find(slot) != equipmentSlotToStrMap.end())
-        return equipmentSlotToStrMap.at(slot);
-
-    return "unknown";
-}
-
 bool ItemUpgrade::IsValidStatType(uint32 statType) const
 {
-    return StatTypeToString(statType) != "unknown";
+    // The stats an item carries in 3.3.5, without the two deprecated spell
+    // healing / spell damage values. Their names: rows 1000 + stat type.
+    static const std::set<uint32> validStatTypes =
+    {
+        ITEM_MOD_MANA, ITEM_MOD_HEALTH, ITEM_MOD_AGILITY, ITEM_MOD_STRENGTH, ITEM_MOD_INTELLECT, ITEM_MOD_SPIRIT,
+        ITEM_MOD_STAMINA, ITEM_MOD_DEFENSE_SKILL_RATING, ITEM_MOD_DODGE_RATING, ITEM_MOD_PARRY_RATING,
+        ITEM_MOD_BLOCK_RATING, ITEM_MOD_HIT_MELEE_RATING, ITEM_MOD_HIT_RANGED_RATING, ITEM_MOD_HIT_SPELL_RATING,
+        ITEM_MOD_CRIT_MELEE_RATING, ITEM_MOD_CRIT_RANGED_RATING, ITEM_MOD_CRIT_SPELL_RATING,
+        ITEM_MOD_HIT_TAKEN_MELEE_RATING, ITEM_MOD_HIT_TAKEN_RANGED_RATING, ITEM_MOD_HIT_TAKEN_SPELL_RATING,
+        ITEM_MOD_CRIT_TAKEN_MELEE_RATING, ITEM_MOD_CRIT_TAKEN_RANGED_RATING, ITEM_MOD_CRIT_TAKEN_SPELL_RATING,
+        ITEM_MOD_HASTE_MELEE_RATING, ITEM_MOD_HASTE_RANGED_RATING, ITEM_MOD_HASTE_SPELL_RATING, ITEM_MOD_HIT_RATING,
+        ITEM_MOD_CRIT_RATING, ITEM_MOD_HIT_TAKEN_RATING, ITEM_MOD_CRIT_TAKEN_RATING, ITEM_MOD_RESILIENCE_RATING,
+        ITEM_MOD_HASTE_RATING, ITEM_MOD_EXPERTISE_RATING, ITEM_MOD_ATTACK_POWER, ITEM_MOD_RANGED_ATTACK_POWER,
+        ITEM_MOD_MANA_REGENERATION, ITEM_MOD_ARMOR_PENETRATION_RATING, ITEM_MOD_SPELL_POWER, ITEM_MOD_HEALTH_REGEN,
+        ITEM_MOD_SPELL_PENETRATION, ITEM_MOD_BLOCK_VALUE
+    };
+
+    return validStatTypes.find(statType) != validStatTypes.end();
 }
 
-std::string ItemUpgrade::ItemLinkForUI(const Item* item, const Player* player) const
+uint16 ItemUpgrade::MaxRankForStat(uint32 statType) const
 {
-    const ItemTemplate* proto = item->GetTemplate();
-    std::ostringstream oss;
-    oss << ItemIcon(proto);
-    oss << ItemLink(player, proto, item->GetItemRandomPropertyId());
-    return oss.str();
+    uint16 maxRank = 0;
+    for (const UpgradeStat& stat : upgradeStatList)
+        if (stat.statType == statType && stat.statRank > maxRank)
+            maxRank = stat.statRank;
+
+    return maxRank;
 }
 
 const ItemUpgrade::UpgradeStat* ItemUpgrade::FindUpgradeStat(uint32 statId) const
@@ -2975,38 +1304,6 @@ const ItemUpgrade::UpgradeStat* ItemUpgrade::FindUpgradeForWeaponDamage(const Pl
 const ItemUpgrade::UpgradeStat* ItemUpgrade::FindUpgradeForWeaponSpeed(const Player* player, const Item* item) const
 {
     return FindUpgradeForWeapon(characterWeaponSpeedUpgradeData, player, item);
-}
-
-/*static*/ std::string ItemUpgrade::CopperToMoneyStr(uint32 money, bool colored)
-{
-    uint32 gold = money / GOLD;
-    uint32 silver = (money % GOLD) / SILVER;
-    uint32 copper = (money % GOLD) % SILVER;
-
-    std::ostringstream oss;
-    if (gold > 0)
-    {
-        if (colored)
-            oss << gold << " po";
-        else
-            oss << gold << " po";
-    }
-    if (silver > 0)
-    {
-        if (colored)
-            oss << silver << " pa";
-        else
-            oss << silver << " pa";
-    }
-    if (copper > 0)
-    {
-        if (colored)
-            oss << copper << " pc";
-        else
-            oss << copper << " pc";
-    }
-
-    return oss.str();
 }
 
 /*static*/ std::string ItemUpgrade::FormatFloat(float val, uint32 decimals)
@@ -3401,190 +1698,6 @@ std::pair<uint32, uint32> ItemUpgrade::CalculateItemLevel(const Player* player, 
     return std::make_pair(proto->ItemLevel, (upgradedSum * proto->ItemLevel) / originalSum);
 }
 
-bool ItemUpgrade::TryAddItem(Player* player, uint32 entry, uint32 count, bool add)
-{
-    const ItemTemplate* proto = sObjectMgr->GetItemTemplate(entry);
-    if (proto != nullptr)
-    {
-        ItemPosCountVec dest;
-        InventoryResult msg = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, entry, count);
-        if (msg != EQUIP_ERR_OK)
-        {
-            std::ostringstream oss;
-            oss << "La tentative d'ajouté " << count << "x " << ItemLink(player, proto, 0);
-            oss << " a échoué, faites de la place dans l'inventaire et réessayez.";
-            SendMessage(player, oss.str());
-            return false;
-        }
-
-        if (add)
-        {
-            Item* tokenItem = player->StoreNewItem(dest, entry, true);
-            player->SendNewItem(tokenItem, count, true, false);
-        }
-    }
-    return true;
-}
-
-bool ItemUpgrade::PurgeUpgrade(Player* player, Item* item)
-{
-    std::vector<const ItemUpgrade::UpgradeStat*> upgrades = FindUpgradesForItem(player, item);
-    if (!upgrades.empty())
-    {
-        if (!TryAddItem(player, (uint32)GetIntConfig(CONFIG_ITEM_UPGRADE_PURGE_TOKEN), (uint32)GetIntConfig(CONFIG_ITEM_UPGRADE_PURGE_TOKEN_COUNT), true))
-            return false;
-
-        if (!RefundEverything(player, item, upgrades))
-            return false;
-
-        if (item->IsEquipped())
-            player->_ApplyItemMods(item, item->GetSlot(), false);
-
-        RemoveItemUpgrade(player, item);
-
-        if (item->IsEquipped())
-            player->_ApplyItemMods(item, item->GetSlot(), true);
-
-        RefreshWeaponSpeed(player);
-        SendItemPacket(player, item);
-
-        return true;
-    }
-    else
-        return false;
-}
-
-bool ItemUpgrade::PurgeWeaponUpgrade(Player* player, Item* item)
-{
-    const UpgradeStat* weaponUpgrade = FindUpgradeForWeapon(characterWeaponUpgradeData, player, item);
-    if (weaponUpgrade != nullptr)
-    {
-        StatRequirementContainer allReqs;
-        for (const UpgradeStat& upgrade : weaponUpgradeStats)
-        {
-            if (weaponUpgrade->statModPct >= upgrade.statModPct)
-            {
-                for (const UpgradeStatReq& req : weaponUpgradeReqs)
-                    allReqs.push_back(req);
-            }
-        }
-        std::unordered_map<uint32, StatRequirementContainer> statRequirementMap;
-        statRequirementMap[0] = allReqs;
-        MergeStatRequirements(statRequirementMap, false);
-        if (!TryRefundRequirements(player, statRequirementMap.at(0)))
-            return false;
-
-        if (item->IsEquipped())
-            player->_ApplyItemMods(item, item->GetSlot(), false);
-
-        RemoveWeaponUpgrade(player, item);
-
-        if (item->IsEquipped())
-            player->_ApplyItemMods(item, item->GetSlot(), true);
-
-        SendItemPacket(player, item);
-
-        RefreshWeaponSpeed(player);
-
-        return true;
-    }
-    else
-        return false;
-}
-
-bool ItemUpgrade::PurgeWeaponSpeedUpgrade(Player* player, Item* item)
-{
-    const UpgradeStat* weaponUpgrade = FindUpgradeForWeaponSpeed(player, item);
-    if (weaponUpgrade != nullptr)
-    {
-        StatRequirementContainer allReqs;
-        for (const UpgradeStat& upgrade : weaponSpeedUpgradeStats)
-        {
-            if (weaponUpgrade->statModPct >= upgrade.statModPct)
-            {
-                for (const UpgradeStatReq& req : weaponSpeedUpgradeReqs)
-                    allReqs.push_back(req);
-            }
-        }
-        std::unordered_map<uint32, StatRequirementContainer> statRequirementMap;
-        statRequirementMap[0] = allReqs;
-        MergeStatRequirements(statRequirementMap, false);
-        if (!TryRefundRequirements(player, statRequirementMap.at(0)))
-            return false;
-
-        RemoveWeaponSpeedUpgrade(player, item);
-        SendItemPacket(player, item);
-        RefreshWeaponSpeed(player);
-
-        return true;
-    }
-    else
-        return false;
-}
-
-bool ItemUpgrade::TryRefundRequirements(Player* player, const StatRequirementContainer& reqs)
-{
-    for (const UpgradeStatReq& r : reqs)
-    {
-        switch (r.reqType)
-        {
-        case REQ_TYPE_COPPER:
-            if (player->GetMoney() + (uint32)r.reqVal1 > MAX_MONEY_AMOUNT)
-            {
-                SendMessage(player, "Limite d'or atteinte.");
-                return false;
-            }
-            break;
-        case REQ_TYPE_ITEM:
-            if (!TryAddItem(player, (uint32)r.reqVal1, (uint32)r.reqVal2, false))
-                return false;
-            break;
-        }
-    }
-
-    for (const UpgradeStatReq& r : reqs)
-    {
-        switch (r.reqType)
-        {
-        case REQ_TYPE_COPPER:
-            player->ModifyMoney((int32)r.reqVal1);
-            break;
-        case REQ_TYPE_HONOR:
-            player->ModifyHonorPoints((int32)r.reqVal1);
-            break;
-        case REQ_TYPE_ARENA:
-            player->ModifyArenaPoints((int32)r.reqVal1);
-            break;
-        case REQ_TYPE_ITEM:
-            TryAddItem(player, (uint32)r.reqVal1, (uint32)r.reqVal2, true);
-            break;
-        }
-    }
-
-    return true;
-}
-
-bool ItemUpgrade::RefundEverything(Player* player, Item* item, const std::vector<const UpgradeStat*>& upgrades)
-{
-    if (!GetBoolConfig(CONFIG_ITEM_UPGRADE_REFUND_ALL_ON_PURGE))
-        return true;
-
-    uint32 index = 0;
-    std::unordered_map<uint32, const UpgradeStat*> bulkUpgrades;
-    for (const UpgradeStat* stat : upgrades)
-    {
-        uint16 rank = stat->statRank;
-        while (rank >= 1)
-        {
-            bulkUpgrades[index++] = FindUpgradeStat(stat->statType, rank);
-            rank--;
-        }
-    }
-
-    StatRequirementContainer reqs = BuildBulkRequirements(bulkUpgrades, item);
-    return TryRefundRequirements(player, reqs);
-}
-
 bool ItemUpgrade::ChooseRandomUpgrade(Player* player, Item* item)
 {
     if (!GetBoolConfig(CONFIG_ITEM_UPGRADE_ENABLED))
@@ -3651,14 +1764,9 @@ bool ItemUpgrade::AddUpgradeForNewItem(Player* player, Item* item, const Upgrade
     newUpgrade.upgradeStat = upgrade;
     upgrades.push_back(newUpgrade);
 
-    std::ostringstream oss;
-    oss << "" << ItemLink(player, item);
-    oss << ", " << StatTypeToString(upgrade->statType) << " amélioré au rang " << upgrade->statRank << ".";
-    oss << "+ " << upgrade->statModPct << "% ";
-    oss << stat->ItemStatValue << " -> " << CalculateModPct(stat->ItemStatValue, upgrade) << "";
     std::pair<uint32, uint32> itemLevel = CalculateItemLevel(player, item);
-    oss << " iLvl : " << itemLevel.second << "";
-    SendMessage(player, oss.str());
+    Notify(player, IU_TEXT_LOOT, ItemLink(player, item), StatName(player->GetSession(), upgrade->statType), upgrade->statRank,
+        FormatFloat(upgrade->statModPct), stat->ItemStatValue, CalculateModPct(stat->ItemStatValue, upgrade), itemLevel.second);
 
     SendItemPacket(player, item);
 
@@ -3790,30 +1898,31 @@ bool ItemUpgrade::EmptyRequirements(const StatRequirementContainer* reqs) const
     return false;
 }
 
-void ItemUpgrade::EquipItem(Player* player, Item* item)
-{
-    if (!item || item->IsEquipped())
-        return;
-
-    uint16 pos;
-    InventoryResult res = player->CanEquipItem(NULL_SLOT, pos, item, true);
-    if (res != EQUIP_ERR_OK)
-    {
-        player->SendEquipError(res, item, nullptr);
-        return;
-    }
-
-    player->SwapItem(item->GetPos(), pos);
-}
-
-void ItemUpgrade::LoadWeaponUpgradePercents(UpgradeStatContainer& upgradeStats, CharacterUpgradeContainer& characterUpgradeContainer, const std::string& percents)
+void ItemUpgrade::LoadWeaponUpgradePercents(UpgradeStatContainer& upgradeStats, CharacterUpgradeContainer& characterUpgradeContainer, const std::string& percents,
+    const char* option, float maxPct)
 {
     upgradeStats.clear();
 
+    // A mistyped value of the configuration is reported and skipped, never used.
     std::vector<float> weaponUpgradePercents;
-    std::vector<std::string_view> tokenized = Acore::Tokenize(percents, ',', false);
-    std::transform(tokenized.begin(), tokenized.end(), std::back_inserter(weaponUpgradePercents),
-        [](const std::string_view& str) { return *Acore::StringTo<float>(str); });
+    for (std::string_view token : Acore::Tokenize(percents, ',', false))
+    {
+        std::string_view value = TrimConfigValue(token);
+        if (value.empty())
+            continue;
+
+        Optional<float> pct = Acore::StringTo<float>(value);
+        if (!pct || !std::isfinite(*pct) || *pct <= 0.0f || (maxPct > 0.0f && *pct >= maxPct))
+        {
+            if (maxPct > 0.0f)
+                LOG_ERROR("server.loading", "{}: `{}` is not a percentage above 0 and below {}, skipped", option, value, maxPct);
+            else
+                LOG_ERROR("server.loading", "{}: `{}` is not a percentage above 0, skipped", option, value);
+            continue;
+        }
+
+        weaponUpgradePercents.push_back(*pct);
+    }
     std::sort(weaponUpgradePercents.begin(), weaponUpgradePercents.end());
     weaponUpgradePercents.erase(std::unique(weaponUpgradePercents.begin(), weaponUpgradePercents.end()), weaponUpgradePercents.end());
 
@@ -3927,30 +2036,6 @@ ItemUpgrade::ItemVisualsPriority ItemUpgrade::GetItemVisualsPriority() const
     default:
         return PRIORITIZE_STATS;
     }
-}
-
-/*static*/ std::string ItemUpgrade::FormatItemLocation(const Player* player, const Item* item)
-{
-    uint8 bagSlot = item->GetBagSlot();
-    uint8 itemSlot = item->GetSlot();
-    if (bagSlot == INVENTORY_SLOT_BAG_0)
-    {
-        if (itemSlot < EQUIPMENT_SLOT_END)
-            return "équipé";
-        if (itemSlot >= INVENTORY_SLOT_ITEM_START && itemSlot < INVENTORY_SLOT_ITEM_END)
-            return "sacs";
-        if (itemSlot >= BANK_SLOT_ITEM_START && itemSlot < BANK_SLOT_ITEM_END)
-            return "banque";
-    }
-    else
-    {
-        if (bagSlot >= INVENTORY_SLOT_BAG_START && bagSlot < INVENTORY_SLOT_BAG_END)
-            return "sacs";
-        if (bagSlot >= BANK_SLOT_BAG_START && bagSlot < BANK_SLOT_BAG_END)
-            return "banque";
-    }
-
-    return "unknown";
 }
 
 bool ItemUpgrade::IsInactiveStatUpgrade(const Item* item, const UpgradeStat* upgradeStat) const

@@ -1,5 +1,6 @@
-DROP TABLE IF EXISTS `mod_item_upgrade_stats_req_override`;
-CREATE TABLE `mod_item_upgrade_stats_req_override` (
+-- Replayable: the core's updater replays this file alone when it changes, so
+-- it creates the table only when missing and empties nothing.
+CREATE TABLE IF NOT EXISTS `mod_item_upgrade_stats_req_override` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `stat_id` int unsigned NOT NULL,
   `item_entry` int unsigned NOT NULL,

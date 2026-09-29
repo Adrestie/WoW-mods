@@ -18,13 +18,7 @@ public:
     void OnAfterConfigLoad(bool reload) override
     {
         if (reload)
-        {
-            ItemUpgrade::PagedDataMap& pagedData = sItemUpgrade->GetPagedDataMap();
-            for (auto& itr : pagedData)
-                itr.second.reloaded = true;
-
             sItemUpgrade->HandleDataReload(false);
-        }
 
         sItemUpgrade->LoadConfig(reload);
 

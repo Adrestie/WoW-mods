@@ -43,7 +43,8 @@ public:
             PLAYERHOOK_ON_CREATE_ITEM,
             PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM,
             PLAYERHOOK_ON_APPLY_WEAPON_DAMAGE,
-            PLAYERHOOK_ON_EQUIP
+            PLAYERHOOK_ON_EQUIP,
+            PLAYERHOOK_ON_AFTER_UPDATE_ATTACK_POWER_AND_DAMAGE
         }) {}
 
     void OnPlayerApplyItemModsBefore(Player* player, uint8 slot, bool /*apply*/, uint8 /*itemProtoStatNumber*/, uint32 statType, int32& val) override
@@ -73,12 +74,9 @@ public:
     {
         new SendUpgradePackets(player);
 
-        if (sItemUpgrade->GetBoolConfig(CONFIG_ITEM_UPGRADE_ENABLED) && sItemUpgrade->GetBoolConfig(CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES))
-        {
-            const std::string& loginMsg = sItemUpgrade->GetStringConfig(CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_LOGIN_MSG);
-            if (!loginMsg.empty())
-                ItemUpgrade::SendMessage(player, loginMsg);
-        }
+        if (sItemUpgrade->GetBoolConfig(CONFIG_ITEM_UPGRADE_ENABLED) && sItemUpgrade->GetBoolConfig(CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES)
+            && sItemUpgrade->GetBoolConfig(CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_LOGIN_MSG))
+            ItemUpgrade::Notify(player, IU_TEXT_LOGIN);
     }
 
     void OnPlayerLootItem(Player* player, Item* item, uint32 /*count*/, ObjectGuid /*lootguid*/) override
@@ -141,6 +139,11 @@ public:
                     player->UpdateDamagePhysical(WeaponAttackType(attType));
             }
         }
+    }
+
+    void OnPlayerAfterUpdateAttackPowerAndDamage(Player* player, float& /*level*/, float& /*base_attPower*/ , float& /*attPowerMod*/, float& /*attPowerMultiplier*/, bool /*ranged*/) override
+    {
+        sItemUpgrade->RefreshWeaponSpeed(player);
     }
 };
 

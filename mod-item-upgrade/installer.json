@@ -1,0 +1,82 @@
+{
+  "format": "wow-mods-installer/1",
+  "module": "mod-item-upgrade",
+  "title": "Item Upgrade",
+  "signature": ["src/item_upgrade.cpp", "src/mod_item_upgrade_loader.cpp"],
+  "configuration": {
+    "file": "mod_item_upgrade.conf",
+    "template": "conf/mod_item_upgrade.conf.dist",
+    "values": {}
+  },
+  "lua": {
+    "folder": "ItemUpgrade",
+    "files": ["data/lua/ItemUpgrade_Client.lua", "data/lua/ItemUpgrade_Serveur.lua"]
+  },
+  "dbc": [
+    {
+      "file": "Item.dbc",
+      "fields": 8,
+      "client": true,
+      "server": true,
+      "rows": [
+        [83050, 15, 4, -1, 1, 24572, 0, 0],
+        [83051, 15, 4, -1, 1, 25054, 0, 0],
+        [83052, 15, 4, -1, 1, 45849, 0, 0],
+        [83053, 15, 4, -1, 1, 40051, 0, 0],
+        [83054, 15, 4, -1, 1, 43759, 0, 0]
+      ]
+    }
+  ],
+  "game_files": {
+    "sources": ["data/art"],
+    "owned_folders": ["Interface/ItemUpgrade"]
+  },
+  "backups": [".avant_item_upgrade"],
+  "database": {
+    "characters": {
+      "tables": ["character_item_upgrade", "character_weapon_upgrade", "character_weapon_speed_upgrade", "mod_item_upgrade_stats", "mod_item_upgrade_stats_req", "mod_item_upgrade_stats_req_override", "mod_item_upgrade_allowed_items", "mod_item_upgrade_blacklisted_items", "mod_item_upgrade_allowed_stats_items", "mod_item_upgrade_blacklisted_stats_items"],
+      "rows": [
+        {
+          "table": "updates",
+          "where": "name IN ({sql_files:db-characters})"
+        }
+      ]
+    },
+    "world": {
+      "rows": [
+        {
+          "table": "item_template",
+          "where": "entry IN ({ids:Item.dbc})"
+        },
+        {
+          "table": "item_template_locale",
+          "where": "ID IN ({ids:Item.dbc})"
+        },
+        {
+          "table": "item_dbc",
+          "where": "ID IN ({ids:Item.dbc})"
+        },
+        {
+          "table": "module_string_locale",
+          "where": "module = 'mod-item-upgrade'"
+        },
+        {
+          "table": "module_string",
+          "where": "module = 'mod-item-upgrade'"
+        },
+        {
+          "table": "command",
+          "where": "name = 'item_upgrade' OR name LIKE 'item\\_upgrade %'"
+        },
+        {
+          "table": "updates",
+          "where": "name IN ({sql_files:db-world}, 'u_MIU_2024_03_29_00.sql', 'u_MIU_2024_03_30_00.sql', 'u_MIU_2024_04_04_00.sql', 'u_MIU_2025_03_08_00.sql')"
+        },
+        {
+          "table": "world_mythic_loot",
+          "where": "itemid IN ({ids:Item.dbc})"
+        }
+      ]
+    }
+  }
+}

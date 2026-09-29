@@ -18,9 +18,8 @@ void ItemUpgradeConfig::Initialize()
 {
     boolConfigs[CONFIG_ITEM_UPGRADE_ENABLED] = sConfigMgr->GetOption<bool>("ItemUpgrade.Enable", true);
     boolConfigs[CONFIG_ITEM_UPGRADE_SEND_PACKETS] = sConfigMgr->GetOption<bool>("ItemUpgrade.SendUpgradedItemsPackets", false);
-    boolConfigs[CONFIG_ITEM_UPGRADE_ALLOW_PURGE] = sConfigMgr->GetOption<bool>("ItemUpgrade.AllowUpgradesPurge", false);
-    boolConfigs[CONFIG_ITEM_UPGRADE_REFUND_ALL_ON_PURGE] = sConfigMgr->GetOption<bool>("ItemUpgrade.RefundAllOnPurge", true);
     boolConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES] = sConfigMgr->GetOption<bool>("ItemUpgrade.RandomUpgradesOnLoot", false);
+    boolConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_LOGIN_MSG] = sConfigMgr->GetOption<bool>("ItemUpgrade.RandomUpgradesLoginMessage", true);
     boolConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_BUY] = sConfigMgr->GetOption<bool>("ItemUpgrade.RandomUpgradeWhenBuying", false);
     boolConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_LOOT] = sConfigMgr->GetOption<bool>("ItemUpgrade.RandomUpgradeWhenLooting", true);
     boolConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_WIN] = sConfigMgr->GetOption<bool>("ItemUpgrade.RandomUpgradeWhenWinning", true);
@@ -30,7 +29,6 @@ void ItemUpgradeConfig::Initialize()
     boolConfigs[CONFIG_ITEM_UPGRADE_WEAPON_SPEED] = sConfigMgr->GetOption<bool>("ItemUpgrade.UpgradeWeaponSpeed", true);
 
     stringConfigs[CONFIG_ITEM_UPGRADE_ALLOWED_STATS] = sConfigMgr->GetOption<std::string>("ItemUpgrade.AllowedStats", "0,3,4,5,6,7,32,36,45");
-    stringConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_LOGIN_MSG] = sConfigMgr->GetOption<std::string>("ItemUpgrade.RandomUpgradesBroadcastLoginMsg", "");
     stringConfigs[CONFIG_ITEM_UPGRADE_WEAPON_DAMAGE_PERCENTS] = sConfigMgr->GetOption<std::string>("ItemUpgrade.UpgradeWeaponDamagePercents", "5,10,15");
     stringConfigs[CONFIG_ITEM_UPGRADE_WEAPON_SPEED_PERCENTS] = sConfigMgr->GetOption<std::string>("ItemUpgrade.UpgradeWeaponSpeedPercents", "10,20,30");
 
@@ -41,12 +39,6 @@ void ItemUpgradeConfig::Initialize()
         floatConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_CHANCE] = 100.0f;
 
     intConfigs[CONFIG_ITEM_UPGRADE_SEND_PACKETS_PRIORITY] = sConfigMgr->GetOption<int32>("ItemUpgrade.SendUpgradedItemsPacketsPrioritization", 0);
-    intConfigs[CONFIG_ITEM_UPGRADE_PURGE_TOKEN] = sConfigMgr->GetOption<int32>("ItemUpgrade.UpgradePurgeToken", 0);
-    if (intConfigs[CONFIG_ITEM_UPGRADE_PURGE_TOKEN] < 0)
-        intConfigs[CONFIG_ITEM_UPGRADE_PURGE_TOKEN] = 0;
-    intConfigs[CONFIG_ITEM_UPGRADE_PURGE_TOKEN_COUNT] = sConfigMgr->GetOption<int32>("ItemUpgrade.UpgradePurgeTokenCount", 1);
-    if (intConfigs[CONFIG_ITEM_UPGRADE_PURGE_TOKEN_COUNT] < 1)
-        intConfigs[CONFIG_ITEM_UPGRADE_PURGE_TOKEN_COUNT] = 1;
     intConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_MAX_STATS] = sConfigMgr->GetOption<int32>("ItemUpgrade.RandomUpgradeMaxStatCount", 2);
     if (intConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_MAX_STATS] <= 0)
         intConfigs[CONFIG_ITEM_UPGRADE_RANDOM_UPGRADES_MAX_STATS] = 2;

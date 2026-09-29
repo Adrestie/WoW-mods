@@ -6,9 +6,43 @@
 #define _ITEM_UPGRADE_H_
 
 #include <vector>
-#include "GossipDef.h"
 #include "Player.h"
 #include "item_upgrade_config.h"
+#include "StringFormat.h"
+#include "WorldSession.h"
+
+#define ITEM_UPGRADE_MODULE "mod-item-upgrade"
+
+// Ids of the rows of `module_string` the C++ reads (module "mod-item-upgrade").
+enum ItemUpgradeTexts
+{
+    IU_TEXT_DISABLED        = 1,
+    IU_TEXT_LOCKED          = 2,
+    IU_TEXT_WINDOW_ONLY     = 3,
+    IU_TEXT_ITEM_GONE       = 4,
+    IU_TEXT_NOT_UPGRADABLE  = 5,
+    IU_TEXT_NOTHING_CHOSEN  = 6,
+    IU_TEXT_UNAVAILABLE     = 7,
+    IU_TEXT_REQUIREMENTS    = 8,
+    IU_TEXT_SUCCESS         = 9,
+    IU_TEXT_LOOT            = 10,
+    IU_TEXT_LOGIN           = 11,
+    IU_TEXT_RELOADED        = 12,
+    IU_TEXT_LOCK_SET        = 13,
+    IU_TEXT_LIST_WAIT       = 14,
+    IU_TEXT_LIST_STATS      = 15,
+    IU_TEXT_LIST_STAT       = 16,
+    IU_TEXT_ACTIVE          = 17,
+    IU_TEXT_INACTIVE        = 18,
+    IU_TEXT_LIST_DAMAGE     = 19,
+    IU_TEXT_LIST_SPEED      = 20,
+    IU_TEXT_LIST_SEPARATOR  = 21,
+    IU_TEXT_LIST_NONE       = 22,
+    IU_TEXT_LIST_TOTAL      = 23,
+    // 101-199: the upgrade window (read by the addon, not by the C++)
+    IU_TEXT_STAT            = 1000, // + stat type (ItemModType)
+    IU_TEXT_SLOT            = 1100  // + equipment slot (EquipmentSlots)
+};
 
 class ItemUpgrade
 {
@@ -16,102 +50,11 @@ private:
     ItemUpgrade();
     ~ItemUpgrade();
 public:
-    enum PagedDataType
-    {
-        PAGED_DATA_TYPE_ITEMS,
-        PAGED_DATA_TYPE_STATS,
-        PAGED_DATA_TYPE_REQS,
-        PAGED_DATA_TYPE_UPGRADED_ITEMS,
-        PAGED_DATA_TYPE_UPGRADED_ITEMS_STATS,
-        PAGED_DATA_TYPE_ITEMS_FOR_PURGE,
-        PAGED_DATA_TYPE_ITEMS_BULK,
-        PAGED_DATA_TYPE_STATS_BULK,
-        PAGED_DATA_TYPE_STAT_UPGRADE_BULK,
-        PAGED_DATA_TYPE_REQS_BULK,
-        PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS,
-        PAGED_DATA_TYPE_WEAPON_UPGRADE_PERCS,
-        PAGED_DATA_TYPE_WEAPON_UPGRADE_PERC_INFO,
-        PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK,
-        PAGED_DATA_TYPE_WEAPON_UPGRADE_ITEMS_CHECK_INFO,
-        PAGED_DATA_TYPE_WEAPON_SPEED_ITEMS,
-        PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERCS,
-        PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_PERC_INFO,
-        PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK,
-        PAGED_DATA_TYPE_WEAPON_SPEED_UPGRADE_ITEMS_CHECK_INFO,
-        MAX_PAGED_DATA_TYPE
-    };
-
-    enum IdentifierType
-    {
-        BASE_IDENTIFIER,
-        ITEM_IDENTIFIER,
-        FLOAT_IDENTIFIER
-    };
-
     enum ItemVisualsPriority
     {
         PRIORITIZE_STATS,
         PRIORITIZE_WEAPON_DAMAGE
     };
-
-    struct Identifier
-    {
-        uint32 id;
-        std::string name;
-        std::string uiName;
-        GossipOptionIcon optionIcon;
-
-        Identifier() : id(0), optionIcon(GOSSIP_ICON_INTERACT_1) {}
-
-        virtual IdentifierType GetType() const
-        {
-            return BASE_IDENTIFIER;
-        }
-    };
-
-    struct ItemIdentifier : public Identifier
-    {
-        ObjectGuid guid;
-
-        IdentifierType GetType() const override
-        {
-            return ITEM_IDENTIFIER;
-        }
-    };
-
-    struct FloatIdentifier : public Identifier
-    {
-        float modPct;
-
-        IdentifierType GetType() const override
-        {
-            return FLOAT_IDENTIFIER;
-        }
-    };
-
-    struct UpgradeStat;
-    struct PagedData
-    {
-        static constexpr int PAGE_SIZE = 12;
-
-        uint32 totalPages;
-        uint32 currentPage;
-        bool reloaded;
-        PagedDataType type;
-        const UpgradeStat* upgradeStat;
-        ItemIdentifier item;
-        std::vector<Identifier *> data;
-        float pct;
-
-        PagedData() : totalPages(0), currentPage(0), reloaded(false), type(MAX_PAGED_DATA_TYPE), upgradeStat(nullptr), pct(0.0f) {}
-
-        void Reset();
-        void CalculateTotals();
-        void SortAndCalculateTotals();
-        bool IsEmpty() const;
-        const Identifier* FindIdentifierById(uint32 id) const;
-    };
-    typedef std::unordered_map<uint32, PagedData> PagedDataMap;
 
     enum UpgradeStatReqType
     {
@@ -216,21 +159,6 @@ public:
     void LoadConfig(bool reload);
     void LoadFromDB(bool reload = false);
 
-    void BuildUpgradableItemCatalogue(const Player* player, PagedDataType type);
-    void BuildUpgradableWeaponSpeedItemCatalogue(const Player* player);
-    void BuildStatsUpgradeCatalogue(const Player* player, const Item* item);
-    void BuildStatsUpgradeCatalogueBulk(const Player* player, const Item* item);
-    void BuildStatsUpgradeByPctCatalogueBulk(const Player* player, const Item* item, float pct);
-    void BuildStatsRequirementsCatalogueBulk(const Player* player, const Item* item, float pct);
-    void BuildStatsRequirementsCatalogue(const Player* player, const UpgradeStat* upgradeStat, const Item* item);
-    void BuildAlreadyUpgradedItemsCatalogue(const Player* player, PagedDataType type);
-    void BuildItemUpgradeStatsCatalogue(const Player* player, const Item* item);
-    void BuildWeaponPercentUpgradesCatalogue(const Player* player, const Item* item);
-    void BuildWeaponSpeedPercentUpgradesCatalogue(const Player* player, const Item* item);
-    void BuildWeaponUpgradesPercentInfoCatalogue(const Player* player, const Item* item, float pct);
-    void BuildWeaponSpeedUpgradesPercentInfoCatalogue(const Player* player, const Item* item, float pct);
-    void BuildWeaponUpgradeInfoCatalogue(const Player* player, const Item* item);
-    void BuildWeaponSpeedUpgradeInfoCatalogue(const Player* player, const Item* item);
     bool CanApplyUpgradeForItem(const Item* item, const UpgradeStat* upgrade) const;
     const StatRequirementContainer* GetStatRequirements(const UpgradeStat* upgrade, const Item* item) const;
     bool MeetsRequirement(const Player* player, const UpgradeStat* upgradeStat, const Item* item) const;
@@ -242,10 +170,6 @@ public:
     const UpgradeStat* FindUpgradeForItem(const Player* player, const Item* item, uint32 statType) const;
 
 
-    PagedData& GetPagedData(const Player* player);
-    PagedDataMap& GetPagedDataMap();
-    bool AddPagedData(Player* player, Creature* creature, uint32 page);
-    bool TakePagedDataAction(Player* player, Creature* creature, uint32 action);
 
     bool IsValidItemForUpgrade(const Item* item, const Player* player) const;
     bool IsValidWeaponForUpgrade(const Item* item, const Player* player) const;
@@ -272,8 +196,6 @@ public:
     void BuildWeaponUpgradeReqs();
     void BuildWeaponSpeedUpgradeReqs();
 
-    static std::string StatTypeToString(uint32 statType);
-    static std::string EquipmentSlotToString(EquipmentSlots slot);
     static std::vector<_ItemStat> LoadItemStatInfo(const Item* item);
     static const _ItemStat* GetStatByType(const std::vector<_ItemStat>& statInfo, uint32 statType);
     static std::pair<float, float> GetItemProtoDamage(const ItemTemplate* proto);
@@ -300,8 +222,6 @@ public:
 
     void RefreshWeaponSpeed(Player* player);
 public:
-    static std::string ItemIcon(const ItemTemplate* proto, uint32 width, uint32 height, int x, int y);
-    static std::string ItemIcon(const ItemTemplate* proto);
     static std::string ItemNameWithLocale(const Player* player, const ItemTemplate* itemTemplate, int32 randomPropertyId);
     static std::string ItemLink(const Player* player, const ItemTemplate* itemTemplate, int32 randomPropertyId);
     static std::string ItemLink(const Player* player, const Item* item);
@@ -314,7 +234,6 @@ public:
     bool reloading;
     std::vector<uint32> allowedStats;
     UpgradeStatContainer upgradeStatList;
-    PagedDataMap playerPagedData;
     CharacterUpgradeContainer characterUpgradeData;
     ItemEntryContainer allowedItems;
     ItemEntryContainer blacklistedItems;
@@ -334,9 +253,6 @@ public:
     CharacterUpgradeContainer characterWeaponSpeedUpgradeData;
     StatRequirementContainer weaponSpeedUpgradeReqs;
 
-    static bool CompareIdentifier(const Identifier* a, const Identifier* b);
-    static std::string CopperToMoneyStr(uint32 money, bool colored);
-    static std::string FormatItemLocation(const Player* player, const Item* item);
 
     void CleanupDB(bool reload);
     void LoadStatRequirements();
@@ -351,10 +267,6 @@ public:
     void LoadBlacklistedStatsItems();
     bool IsValidReqType(uint8 reqType) const;
     bool ValidateReq(uint32 id, UpgradeStatReqType reqType, float val1, float val2, const std::string& table) const;
-    void AddItemToPagedData(const Item* item, const Player* player, PagedData& pagedData);
-    bool _AddPagedData(Player* player, const PagedData& pagedData, uint32 page) const;
-    void NoPagedData(Player* player, const PagedData& pagedData) const;
-    std::string ItemLinkForUI(const Item* item, const Player* player) const;
     void MergeStatRequirements(std::unordered_map<uint32, StatRequirementContainer>& statRequirementMap, bool validate = true);
 
     template <typename Func>
@@ -376,10 +288,6 @@ public:
     void TakeRequirements(Player* player, const StatRequirementContainer* reqs);
     void TakeWeaponUpgradeRequirements(Player* player);
     void TakeWeaponSpeedUpgradeRequirements(Player* player);
-    bool PurchaseUpgrade(Player* player);
-    bool PurchaseWeaponUpgrade(Player* player);
-    bool PurchaseWeaponSpeedUpgrade(Player* player);
-    void AddUpgradedItemToPagedData(const Item* item, const Player* player, PagedData& pagedData, const std::string &from);
     void HandleDataReload(Player* player, bool apply);
     std::vector<Item*> GetPlayerItems(const Player* player, bool inBankAlso) const;
     bool IsAllowedItem(const Item* item) const;
@@ -395,36 +303,71 @@ public:
     const UpgradeStat* FindNearestUpgradeStat(uint32 statType, uint16 rank, const Item* item) const;
     bool IsAllowedStatForItem(const Item* item, const UpgradeStat* upgrade) const;
     bool IsBlacklistedStatForItem(const Item* item, const UpgradeStat* upgrade) const;
-    Item* FindItemIdentifierFromPage(const PagedData& pagedData, uint32 id, Player* player) const;
     void CreateUpgradesPctMap();
-    std::unordered_map<uint32, const UpgradeStat*> FindAllUpgradeableRanks(const Player* player, const Item* item, float pct) const;
-    StatRequirementContainer BuildBulkRequirements(const std::unordered_map<uint32, const UpgradeStat*>& upgrades, const Item* item) const;
-    void BuildRequirementsPage(const Player* player, PagedData& pagedData, const StatRequirementContainer* reqs) const;
-    bool PurchaseUpgradeBulk(Player* player);
+    // What several upgrades bought together cost: amounts added up, items
+    // grouped by entry, in exact integers (a single rank's columns are floats).
+    struct TotalCost
+    {
+        uint64 copper = 0;
+        uint64 honor = 0;
+        uint64 arena = 0;
+        std::map<uint32, uint64> items;
+        bool invalid = false;
+    };
+    TotalCost SumRequirements(const std::vector<const StatRequirementContainer*>& parts) const;
+    bool MeetsCost(const Player* player, const TotalCost& cost) const;
+    void TakeCost(Player* player, const TotalCost& cost);
     bool HandlePurchaseWeaponUpgrade(Player* player, Item* item, const UpgradeStat* upgrade, bool speedUpgrade);
     bool CheckDataValidity() const;
     bool IsValidStatType(uint32 statType) const;
     bool EmptyRequirements(const StatRequirementContainer* reqs) const;
-    void EquipItem(Player* player, Item* item);
-    bool TryRefundRequirements(Player* player, const StatRequirementContainer& reqs);
-    bool RefundEverything(Player* player, Item* item, const std::vector<const ItemUpgrade::UpgradeStat*>& upgrades);
-    bool TryAddItem(Player* player, uint32 entry, uint32 count, bool add);
     bool IsAllowedStatType(uint32 statType) const;
     void LoadAllowedStats(const std::string& stats);
 
-    void LoadWeaponUpgradePercents(UpgradeStatContainer& upgradeStats, CharacterUpgradeContainer& characterUpgradeContainer, const std::string& percents);
+    // maxPct: the value a percentage must stay below, 0 for no limit.
+    void LoadWeaponUpgradePercents(UpgradeStatContainer& upgradeStats, CharacterUpgradeContainer& characterUpgradeContainer, const std::string& percents,
+        const char* option, float maxPct);
     bool MeetsWeaponUpgradeRequirement(const Player* player) const;
     bool MeetsWeaponSpeedUpgradeRequirement(const Player* player) const;
 
-    bool PurgeUpgrade(Player* player, Item* item);
-    bool PurgeWeaponUpgrade(Player* player, Item* item);
-    bool PurgeWeaponSpeedUpgrade(Player* player, Item* item);
 
     ItemVisualsPriority GetItemVisualsPriority() const;
 
-    void _BuildWeaponPercentUpgradesCatalogue(const Player* player, const Item* item, PagedDataType type, std::string text);
 
     void RefreshWeaponSpeed(Player* player, EquipmentSlots slot);
+
+    // --- Texts ---------------------------------------------------------------
+    // Every text the module shows lives in `module_string` (English) and
+    // `module_string_locale` (every other language), module "mod-item-upgrade":
+    // data/sql/db-world/base/02_item_upgrade_strings.sql. Each player gets the
+    // row of their client's language. Numbers: 1-99 messages, 101-199 the
+    // interface, 1000 + stat type the statistics, 1100 + slot the equipment.
+    static std::string Text(const WorldSession* session, uint32 id);
+    template <typename... Args>
+    static std::string Format(const WorldSession* session, uint32 id, Args&&... args)
+    {
+        return Acore::StringFormat(Text(session, id), std::forward<Args>(args)...);
+    }
+    template <typename... Args>
+    static void Notify(const Player* player, uint32 id, Args&&... args)
+    {
+        SendMessage(player, Format(player->GetSession(), id, std::forward<Args>(args)...));
+    }
+    static std::string StatName(const WorldSession* session, uint32 statType);
+    static std::string SlotName(const WorldSession* session, uint8 slot);
+
+    // --- Operations of the upgrade window (item_upgrade_addon.cpp) -----------
+    // The window names an item by where it sits: containers 0-4 as the client
+    // counts its bags, ADDON_EQUIPMENT for the equipment (slots 1-19 as the
+    // client counts them). Nothing the window sends is trusted beyond that.
+    static constexpr uint8 ADDON_EQUIPMENT = 100;
+    static Item* FindItemForAddon(Player* player, uint8 container, uint8 slot);
+    // Lines describing the item, one per statistic and per weapon upgrade.
+    std::vector<std::string> DescribeItemForAddon(Player* player, Item* item) const;
+    // Buys the next rank of every target at once, for the sum of their costs:
+    // all of them or none. Returns the id of the text to show the player.
+    uint32 UpgradeForAddon(Player* player, Item* item, const std::vector<uint32>& statTypes, bool damage, bool speed);
+    uint16 MaxRankForStat(uint32 statType) const;
 };
 
 #define sItemUpgrade ItemUpgrade::instance()
