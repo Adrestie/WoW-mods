@@ -53,6 +53,16 @@ local ART = {
 	-- le cadre de la fiche des metiers (SchematicFormCraftingTemplate), decoupe
 	-- 53 / 53 / 53 / 53 (UiTextureAtlasElementSliceData), variante c60
 	["common-insideframe"] = { "interface\\ForeverUI\\common\\commoninsideframec60", 0.007812, 0.843750, 0.007812, 0.843750, 107, 107, false, false, { 53, 53, 53, 53, 0 } },
+	-- le cadre heavybronze (CharCustomizeFrame : le coiffeur), decoupe 32,
+	-- variante c60 -- celui de la creation de personnage (ForeverUIGlueAtlas)
+	["heavybronze-frame-basic"] = { "interface\\ForeverUI\\unknown\\8203429", 0.003906, 0.316406, 0.007812, 0.632812, 80, 80, false, false, { 32, 32, 32, 32, 0 } },
+	-- la liste des choix du coiffeur : le survol des elements et les
+	-- echantillons de couleur, aux tailles de la creation de personnage
+	-- (ForeverUIGlueAtlas ; UIAtlas porte ces echantillons en double densite)
+	["common-dropdown-customize-mouseover"] = { "interface\\ForeverUI\\common\\commondropdown", 0.138672, 0.177734, 0.363281, 0.441406, 20, 20, false, false, { 4, 4, 4, 4, 0 } },
+	["charactercreate-customize-palette"] = { "interface\\ForeverUI\\glues\\charactercreate-customize-palette", 0.000000, 0.656250, 0.000000, 0.625000, 42, 10 },
+	["charactercreate-customize-palette-glow"] = { "interface\\ForeverUI\\glues\\charactercreate-customize-palette-glow", 0.000000, 0.656250, 0.000000, 0.625000, 42, 10 },
+	["charactercreate-customize-palette-selected"] = { "interface\\ForeverUI\\glues\\charactercreate-customize-palette-selected", 0.000000, 0.796875, 0.000000, 0.625000, 51, 20 },
 	-- la bordure des boites de dialogue (GameDialogBackgroundTop), variante c60
 	["ui-diamonddialogbox-border"] = { "interface\\ForeverUI\\dialogframe\\uiframediamondmetalborder2xc60", 0.003906, 0.550781, 0.003906, 0.550781, 70, 70, false, false, { 32, 32, 32, 32, 0 } },
 	["redbutton-exit"] = { "interface\\ForeverUI\\buttons\\redbuttonsc60", 0.136719, 0.261719, 0.007812, 0.257812, 32, 32 },

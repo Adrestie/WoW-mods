@@ -1130,6 +1130,28 @@ local function couleurDe(i, v)
 	return c
 end
 
+-- Le nom d'un choix (demande du 2026-09-29 : dans la case et dans la liste) :
+-- le client patche rend, par CycleCharCustomization(reglage, 0, n), apres
+-- l'indice, le nom du choix n (BarberShopStyle.dbc, dans la langue du
+-- client), ou nil. Un client patche avant cette piece ne rend que l'indice :
+-- on ne se fie qu'a une reponse de deux valeurs. Seules la coiffure, la
+-- pilosite et la peau ont des noms (les peaux des taurens, vides).
+local NOMMES = { [1] = true, [3] = true, [5] = true }
+local function second(...)
+	if select("#", ...) == 2 then
+		return (select(2, ...))
+	end
+end
+local function nomDe(i, v)
+	if not (NOMMES[i] and v) then
+		return nil
+	end
+	local nom = second(CycleCharCustomization(i, 0, v))
+	if type(nom) == "string" and nom ~= "" then
+		return nom
+	end
+end
+
 -- ------------------------------------------------------------ mode 2 : la liste ouverte
 
 -- MenuStyle2 : fond common-dropdown-c-bg de (-17, 12) a (17, -22), marges
@@ -1137,9 +1159,11 @@ end
 -- verticale, 1 colonne jusqu'a 10 choix, 2 jusqu'a 24, 3 jusqu'a 36, 4
 -- au-dela, et plus de colonnes si la liste descendrait a moins de 100 du bas ;
 -- elements de 20 (DarkMenuElement : details a 14 du bord, 116 de large sur
--- une colonne, 42 sur plusieurs, plus 14) ; survol : common-dropdown-
--- customize-mouseover a 0,15 et apercu du choix sur le personnage ; choix en
--- cours dore, les autres gris ; un clic choisit et referme.
+-- une colonne, 42 sur plusieurs -- 108 avec des noms --, plus 14) ;
+-- SelectionName a droite du numero, borne a la largeur de l'element moins 2
+-- et le numero ; survol : common-dropdown-customize-mouseover a 0,15 et
+-- apercu du choix sur le personnage ; choix en cours dore, les autres gris ;
+-- un clic choisit et referme.
 local menu = CreateFrame("Frame", "ForeverUICharacterCreateChoiceMenu", perso)
 menu:SetFrameStrata("FULLSCREEN_DIALOG")
 menu:SetFrameLevel(20)
@@ -1155,6 +1179,11 @@ capteur:SetFrameStrata("FULLSCREEN_DIALOG")
 capteur:SetFrameLevel(10)
 capteur:SetAllPoints(GlueParent)
 capteur:Hide()
+-- la largeur d'un nom, mesuree sur un texte jamais borne (un element
+-- reutilise mesurerait dans la largeur posee pour le precedent)
+local mesure = menu:CreateFontString(nil, "OVERLAY")
+mesure:SetFontObject(G.Police("GameFontNormal"))
+mesure:SetAlpha(0)
 
 local ouvert        -- { ligne, choisi } tant qu'une liste est ouverte
 local entrees = {}
@@ -1232,6 +1261,11 @@ local function entree(k)
 	e.numero:SetWidth(25)
 	e.numero:SetHeight(20)
 	e.numero:SetPoint("TOPLEFT", e, "TOPLEFT", 14, 0)
+	e.nom = e:CreateFontString(nil, "OVERLAY")
+	e.nom:SetFontObject(G.Police("GameFontNormal"))
+	e.nom:SetJustifyH("LEFT")
+	e.nom:SetHeight(20)
+	e.nom:SetPoint("LEFT", e.numero, "RIGHT", 0, 0)
 	-- ColorSwatch1 a droite du numero, sa lueur, et ColorSelected (le
 	-- choix en cours) a 4 a gauche de l'echantillon
 	e.echantillon = e:CreateTexture(nil, "ARTWORK")
@@ -1289,9 +1323,17 @@ local function ouvrirMenu(ligne)
 	-- AdjustWidth : sur plusieurs colonnes, numero (25) + ColorSwatch2 (36)
 	-- + 18 quand les choix ont une couleur, 42 sinon
 	local couleurs = couleurDe(ligne.i, liste[1]) and true
+	local noms = {}
+	local nommes = false
+	if not couleurs then
+		for k = 1, n do
+			noms[k] = nomDe(ligne.i, liste[k])
+			nommes = nommes or noms[k] ~= nil
+		end
+	end
 	local details = 116
 	if colonnes > 1 then
-		details = couleurs and (25 + 36 + 18) or 42
+		details = (couleurs and (25 + 36 + 18)) or (nommes and 108) or 42
 	end
 	local largeur = 14 + details + 14
 	menu:ClearAllPoints()
@@ -1305,10 +1347,19 @@ local function ouvrirMenu(ligne)
 		e:ClearAllPoints()
 		e:SetPoint("TOPLEFT", menu, "TOPLEFT", 3 + math.floor((k - 1) / rangees) * largeur, -(6 + ((k - 1) % rangees) * 20))
 		e.numero:SetText(k)
+		local nom = noms[k]
+		if nom then
+			mesure:SetText(nom)
+			e.nom:SetWidth(math.min(mesure:GetStringWidth(), largeur - 2 - 25))
+			e.nom:SetText(nom)
+		end
+		G.Montrer(e.nom, nom)
 		if k == choisi then
 			e.numero:SetTextColor(1, 0.82, 0)
+			e.nom:SetTextColor(1, 0.82, 0)
 		else
 			e.numero:SetTextColor(0.5, 0.5, 0.5)
+			e.nom:SetTextColor(0.5, 0.5, 0.5)
 		end
 		e.survol:Montrer(false)
 		local couleur = couleurDe(ligne.i, liste[k])
@@ -1350,6 +1401,9 @@ peindreCase = function(ligne)
 	ligne.numero:SetPoint("CENTER", ligne.case, "CENTER", dx, dy)
 	ligne.echantillon:ClearAllPoints()
 	ligne.echantillon:SetPoint("CENTER", ligne.case, "CENTER", dx, dy)
+	ligne.texte:ClearAllPoints()
+	ligne.texte:SetPoint("LEFT", ligne.case, "LEFT", 13 + dx, dy)
+	ligne.texte:SetPoint("RIGHT", ligne.case, "RIGHT", -13 + dx, dy)
 end
 
 for _, ligne in ipairs(lignes) do
@@ -1408,12 +1462,15 @@ actualiserReglages = function()
 		end
 		G.Montrer(ligne.echantillon, couleur)
 		G.Montrer(ligne.lueur, couleur)
+		-- le nom du choix dans la case (peau : l'echantillon d'abord)
+		local nom = position and not couleur and nomDe(i, v)
 		if position then
 			ligne.titre:SetText(noms[i] or "")
 			ligne.numero:SetText(position)
-			ligne.texte:Hide()
+			ligne.texte:SetText(nom or "")
+			G.Montrer(ligne.texte, nom)
 			ligne.titre:Show()
-			G.Montrer(ligne.numero, not couleur)
+			G.Montrer(ligne.numero, not couleur and not nom)
 			ligne.bouton:Show()
 		else
 			ligne.texte:SetText(noms[i] or "")
