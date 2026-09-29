@@ -20,6 +20,9 @@
     ],
     "owned_folders": [
       "Interface/ForeverUI"
+    ],
+    "replaces": [
+      "Interface/Glues/Models"
     ]
   },
   "dbc": [
