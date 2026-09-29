@@ -66,7 +66,6 @@ screens keep the client's look. In `patch-Z.MPQ`, add:
 
 - every file of `data/glue/Interface/GlueXML` to `Interface\GlueXML\` (its
   `GlueXML.toc` replaces the client's list of login screen files);
-- `data/addon/ForeverUI/ScrollBar.lua` as `Interface\GlueXML\ForeverUIScrollBar.lua`;
 - every `.m2` of `data/art/interface/Glues/Models` at the same path
   (`Interface\Glues\Models\UI_Human\UI_Human.m2`...). These screens show a wider
   scene than the client's, which would enlarge the characters; these scenery
@@ -80,10 +79,7 @@ shows its name and changes with its arrows. Run
 `tools/patcher/ForeverUIPatcher.exe` (Windows; it proposes the `Wow.exe` found
 beside it), choose the client's `Wow.exe` and click **Patch**. It changes only a
 `Wow.exe` 12340 it recognizes byte for byte, saves `Wow.exe.foreverui.bak`
-first, and **Restore** gives back the original file. From a command line:
-`ForeverUIPatcher.exe --status|--patch|--restore <Wow.exe>`.
-`tools/patcher/build.py` rebuilds the executable with the C# compiler shipped
-with Windows.
+first, and **Restore** gives back the original file.
 
 **More statistics.** The Statistics tab of the character sheet lists the
 client's statistics. `data/dbc/statistics.json` adds 18 that the camelot client
