@@ -17,8 +17,11 @@ if it cannot find it, `mysql.exe`; it remembers them in
 - **No trace of the module**: it INSTALLS. It copies the module into the
   server sources (`modules/`), puts its configuration and Lua scripts in
   place, adds its rows to the server DBC files, writes its rows and game files
-  directly into the game's MPQ archives. The server must then be recompiled;
-  on first start, the core updater applies the module's SQL.
+  directly into the game's MPQ archives, and copies its addons into the game's
+  `Interface\AddOns`. The server must then be recompiled; on first start, the
+  core updater applies the module's SQL. A package without server module
+  (`"server_module": false`) only writes the game files, the addons and the DBC
+  rows: no sources, no configuration, no scripts, no SQL, no rebuild.
 - **Any trace of the module**: it REMOVES everything that is left, wherever it
   is, database included (read and cleaned through `mysql.exe`, with the
   credentials of `worldserver.conf`). An uninstall started by hand is finished

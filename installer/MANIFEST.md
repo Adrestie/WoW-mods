@@ -13,14 +13,16 @@ Paths inside the package are relative to the module folder, with `/`.
 | Key | Required | Content |
 |---|---|---|
 | `format` | yes | `"wow-mods-installer/1"` |
-| `module` | yes | name of the module folder under `modules/` in the server sources (letters, digits, `_`, `.`, `-`) |
+| `module` | yes | name of the module folder under `modules/` in the server sources (letters, digits, `_`, `.`, `-`); the name its receipts carry |
 | `title` | no | display name |
-| `signature` | yes | package files that identify the module: a folder of `modules/` that contains all of them is the module, whatever its name |
+| `server_module` | no | `false`: a package without server module, see below (`true` by default) |
+| `signature` | yes, unless `server_module` is `false` | package files that identify the module: a folder of `modules/` that contains all of them is the module, whatever its name |
 | `exclude_from_sources` | no | package folders or files not copied into `modules/` (client data, for instance); `.git` and `__pycache__` never are |
 | `configuration` | no | the module's `.conf`, see below |
 | `lua` | no | the module's Lua scripts, see below |
 | `dbc` | no | the module's DBC rows, see below |
 | `game_files` | no | files written into the game archives, see below |
+| `addons` | no | addon folders copied into the game's `Interface\AddOns`, see below |
 | `backups` | no | suffixes of backup files left by older tools (e.g. `".avant_item_upgrade"`), deleted on removal |
 | `database` | no | what the module leaves in the database, see below |
 
@@ -104,8 +106,32 @@ files are written into the last custom archive read (a new
 `Data\patch-Z.MPQ` when there is none). A file that archive
 already holds is left alone and is not the module's.
 
+`extensions` (optional): only the files of `sources` with these extensions
+are written (`[".blp", ".m2"]`); previews or notes kept beside them stay out.
+
 `owned_folders`: game folders (at least two levels) that only the module
 uses: whatever a custom archive holds in them is the module's.
+
+### addons
+
+```json
+"addons": ["data/addon/ForeverUI"]
+```
+
+Package folders copied as they are into `Interface\AddOns` of the game folder
+(`Interface\AddOns\ForeverUI`); each holds the `.toc` named after it. On
+removal the folder is deleted.
+
+### Package without server module
+
+With `"server_module": false`, the package is for the game only: the
+installer writes its game files and its addons, and adds its DBC rows (game
+side, and server side for the entries whose `server` is set). Nothing goes into
+the server's sources, configuration, Lua scripts or databases, no SQL is run,
+and the server needs no rebuild; the sources folder and `mysql.exe` are not
+asked. `signature`, `exclude_from_sources`, `configuration`, `lua` and
+`database` are refused. The worldserver folder is still asked: it gives the
+server DBC folder, and nothing is written while the worldserver runs.
 
 ### database
 
@@ -153,6 +179,7 @@ What proves the module is there, and what only carries its identifiers:
 | a receipt in a custom archive | |
 | a client DBC row identical to the module's, or named by the receipt | a client DBC row with the same identifier and other content (Blizzard's rows included) |
 | a game file named by the receipt, or under an owned folder | a game file the game reads, from a custom archive, in another version |
+| an addon folder of the module in `Interface\AddOns` | |
 | a backup | |
 | a module table; a row of `updates` | a row of another shared table |
 
