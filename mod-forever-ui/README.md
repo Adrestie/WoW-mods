@@ -38,22 +38,76 @@ combat closes the editor and cancels its changes.
 
 ## Installation
 
-Needs Python 3 on the machine that holds the client.
+Needs a 3.3.5a client (build 12340) and an MPQ editor that adds files to an
+archive, such as Ladik's MPQ Editor. Close the game before touching its
+archives: it locks them while it runs.
 
-    python tools/deploy.py                  addon, art, login screens, statistics
-    python tools/deploy.py --addon          the addon alone (the game may stay open)
-    python tools/deploy.py --check          compare the client with this folder
+1. **The addon.** Copy the folder `data/addon/ForeverUI` into the client's
+   `Interface\AddOns`, which gives `Interface\AddOns\ForeverUI\ForeverUI.toc`.
+2. **The art.** The addon draws with its own textures, read from an archive.
+   Open `Data\patch-Z.MPQ` in the client folder, or create an empty archive
+   with that name if there is none. Add every `.blp` found under `data/art`,
+   at the same path as under `data/art`: for example
+   `data/art/interface/foreverui/editmode/editmodeui.blp` goes to
+   `interface\foreverui\editmode\editmodeui.blp`.
+3. Start the game and check that **ForeverUI** is enabled in the AddOns list of
+   the character selection screen.
 
-`--client <folder>` and `--server <folder>` (the folder of `worldserver.exe`)
-point to other installs. Close the game before deploying the art, the login
-screens or the statistics (`--art`, `--glue`, `--dbc`): the client locks
-`patch-Z.MPQ` while it runs. The statistics also write to the server's DBC and
-database: restart the server afterwards. After `--addon` alone, `/reload` is
-enough, except when a file was added: then restart the game.
+### Optional
 
-The PvP tab reads its rank thresholds and the Dishonored state from a server
-running [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext);
-without it, it shows the kill count alone.
+**Login screens.** Login, character selection and creation, realm list, AddOns
+list, options, cinematics and credits in the camelot style; without them these
+screens keep the client's look. In `patch-Z.MPQ`, add:
+
+- every file of `data/glue/Interface/GlueXML` to `Interface\GlueXML\` (its
+  `GlueXML.toc` replaces the client's list of login screen files);
+- `data/addon/ForeverUI/ScrollBar.lua` as `Interface\GlueXML\ForeverUIScrollBar.lua`;
+- every `.m2` of `data/art/interface/Glues/Models` at the same path
+  (`Interface\Glues\Models\UI_Human\UI_Human.m2`...). These screens show a wider
+  scene than the client's, which would enlarge the characters; these scenery
+  models are scaled down so the characters keep their size.
+
+**Numbered appearance choices.** The 3.3.5 interface cannot know which skin,
+face, hair or facial hair is applied. With `Wow.exe` patched, character
+creation and the barber number the choices, show the color swatches and open
+each setting as a list of its choices by name; without the patch, each setting
+shows its name and changes with its arrows. Run
+`tools/patcher/ForeverUIPatcher.exe` (Windows; it proposes the `Wow.exe` found
+beside it), choose the client's `Wow.exe` and click **Patch**. It changes only a
+`Wow.exe` 12340 it recognizes byte for byte, saves `Wow.exe.foreverui.bak`
+first, and **Restore** gives back the original file. From a command line:
+`ForeverUIPatcher.exe --status|--patch|--restore <Wow.exe>`.
+`tools/patcher/build.py` rebuilds the executable with the C# compiler shipped
+with Windows.
+
+**More statistics.** The Statistics tab of the character sheet lists the
+client's statistics. `data/dbc/statistics.json` adds 18 that the camelot client
+has and 3.3.5 lacks, on content 3.3.5 has: boss kills in classic dungeons, raids
+entered by size, deaths in 20 and 40 player raids. It needs a DBC editor and the
+server:
+
+1. Take `DBFilesClient\Achievement.dbc` and `DBFilesClient\Achievement_Criteria.dbc`
+   as the client reads them now (from the last archive that holds them).
+2. For each statistic of the file, add a row to `Achievement.dbc`: its `id`,
+   faction -1, its `map`, no previous achievement, title and description set to
+   its `name` in every locale, its `category`, `points`, `order` and `flags`,
+   icon 1, no reward, minimum criteria 0, no shared criteria. For each of its
+   `criteria`, add a row to `Achievement_Criteria.dbc`: its `id`, the
+   statistic's id, its `type`, its `target` as asset, its `quantity`, its
+   `text` as description in every locale, order 1, every other field 0. Fill
+   the locale mask columns as in the client's own statistics.
+3. Add both files to `patch-Z.MPQ` under `DBFilesClient\`, and copy them into
+   the server's `dbc` folder (in the `DataDir` of `worldserver.conf`): the
+   server must read the same files as the client.
+4. In the world database, for each `data` entry of a criterion:
+   `INSERT INTO achievement_criteria_data (criteria_id, type, value1, value2, ScriptName) VALUES (<criterion id>, <type>, <value1>, <value2>, '');`
+   Without these rows the server does not count the boss kills.
+5. Restart the server.
+
+**PvP ranks.** The PvP tab reads its rank thresholds and the Dishonored state
+from a server running
+[mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext); without it,
+it shows the kill count alone.
 
 ## Languages
 
@@ -63,23 +117,6 @@ its own strings; the others come from `data/addon/ForeverUI/Texts_<locale>.lua`
 base, French is provided. To add a language, copy the `enUS` file to the
 client's locale, translate the values only, and list it after the English one
 in the `.toc` (or in `ForeverUIGlue.xml`).
-
-## Working on it
-
-This folder is the only place anything is edited: the client's addon folder
-and `patch-Z.MPQ` are copies made by `tools/deploy.py`.
-
-    data/addon/ForeverUI/   the addon
-    data/glue/              the login screens
-    data/art/               the .blp packed into patch-Z, each with a .png preview
-    data/dbc/               the statistics added to the DBC
-    tools/test_addon.py     a mock client that loads the addon and checks it
-    tools/add_sheets.py     imports an atlas sheet (tools/extra_sheets.txt) through
-                            wow.export and regenerates the atlas table
-
-Run `python tools/test_addon.py` before any delivery; how a screen looks is
-settled in the game. Another addon adds its own micro-menu button with
-`ForeverUI.AddMicroButton`; ForeverUI knows no module.
 
 ## Licence
 
