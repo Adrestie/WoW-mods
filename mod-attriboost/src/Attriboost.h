@@ -10,36 +10,57 @@
 
 enum AttriboostConstants
 {
-    ATTR_ITEM = 890010,
-    TALENT_ITEM = 890011,
+    ATTR_ITEM = 82010,
+    TALENT_ITEM = 82011,
     ATTR_POINTS_PER_BOOK = 3,
     ATTR_SPELL = 18282,
-    ATTR_QUEST = 441153,
-    TALENT_QUEST = 441154,
 
+    // Default of the `settings` column, inherited from the original module.
+    // Nothing reads it any more; it is kept so the table keeps its layout.
     ATTR_SETTING_PROMPT = 1,
 
-    ATTR_GOSSIP_ALLOCATE = 1,
-    ATTR_GOSSIP_ALLOCATE_RETURN = 2,
-    ATTR_GOSSIP_ALLOCATE_RESET = 3,
-    ATTR_GOSSIP_SETTINGS = 4,
-    ATTR_GOSSIP_SETTINGS_PROMPT = 5,
-    ATTR_GOSSIP_SETTINGS_RETURN = 6,
+    ATTR_SPELL_STAMINA = 82007,
+    ATTR_SPELL_AGILITY = 82000,
+    ATTR_SPELL_INTELLECT = 82001,
+    ATTR_SPELL_STRENGTH = 82002,
+    ATTR_SPELL_SPIRIT = 82003,
+    ATTR_SPELL_SPELL_POWER = 82006,
+    ATTR_SPELL_CRITICAL_STRIKE_DAMAGE = 82004,
+    ATTR_SPELL_ALL_RESISTS = 82008,
+    ATTR_SPELL_PENETRATION = 82009,
+    ATTR_SPELL_HEALING_POWER = 82005,
 
-    ATTR_NPC_TEXT_HAS_ATTRIBUTES = 441191,
-    ATTR_NPC_TEXT_GENERIC = 441190,
-    ATTR_NPC_TEXT_DISABLED = 441192,
+    // The ten auras above are hidden from the player (no aura icon, no combat
+    // log). The one aura the player sees, "Attributes", does nothing: it is there
+    // while any point is spent, and the interface lists the bonuses in its
+    // tooltip.
+    ATTR_SPELL_SUMMARY = 82012
+};
 
-    ATTR_SPELL_STAMINA = 890007,
-    ATTR_SPELL_AGILITY = 890000,
-    ATTR_SPELL_INTELLECT = 890001,
-    ATTR_SPELL_STRENGTH = 890002,
-    ATTR_SPELL_SPIRIT = 890003,
-    ATTR_SPELL_SPELL_POWER = 890006,
-    ATTR_SPELL_CRITICAL_STRIKE_DAMAGE = 890004,
-    ATTR_SPELL_ALL_RESISTS = 890008,
-    ATTR_SPELL_PENETRATION = 890009,
-    ATTR_SPELL_HEALING_POWER = 890005
+// Texts shown to the player, one row each in `module_string` (English) and
+// `module_string_locale` (every other language), keyed by this module name:
+// data/sql/db-world/base/03_attriboost_strings.sql, the single source of every
+// text of the module. The core picks the row matching the client's language and
+// falls back on English. Ids 15-99 belong to the server-side Lua script, 101 and
+// up to the interface. An id is never reused once retired.
+#define ATTRIBOOST_MODULE "mod-attriboost"
+
+enum AttriboostStrings
+{
+    ATTR_STR_DISABLED           = 1,
+    ATTR_STR_BAD_BOOK_COUNT     = 2,
+    ATTR_STR_NOT_ENOUGH_TOMES   = 3,
+    ATTR_STR_ATTRIBUTE_POINTS   = 4,
+    ATTR_STR_NOT_ENOUGH_TALENT_BOOKS = 5,
+    ATTR_STR_TALENT_POINTS      = 6,
+    ATTR_STR_UNKNOWN_STAT       = 7,
+    ATTR_STR_BAD_POINT_COUNT    = 8,
+    ATTR_STR_NOT_ENOUGH_POINTS  = 9,
+    ATTR_STR_ALREADY_MAXED      = 10,
+    ATTR_STR_PARTLY_ALLOCATED   = 11,
+    ATTR_STR_NOTHING_TO_RESET   = 12,
+    ATTR_STR_NOT_ENOUGH_MONEY   = 13,
+    ATTR_STR_RESET_DONE         = 14
 };
 
 struct Attriboosts
@@ -62,8 +83,6 @@ struct Attriboosts
 
 std::unordered_map<uint64, Attriboosts> attriboostsMap;
 
-void AddAttributePoint(Player* /*player*/);
-void AddTalentPoint(Player* /*player*/);
 Attriboosts* GetAttriboosts(Player* /*player*/);
 void ClearAttriboosts();
 void LoadAttriboosts();
@@ -82,10 +101,6 @@ uint32 GetAttributesToSpend(Player* /*player*/);
 uint32 GetTotalAttributes(Player* /*player*/);
 uint32 GetTotalAttributes(Attriboosts* /*attributes*/);
 uint32 GetResetCost();
-bool HasSetting(Player* /*player*/, uint32 /*setting*/);
-void ToggleSetting(Player* /*player*/, uint32 /*setting*/);
-void SendAllocateMenu(Player* /*player*/, Creature* /*creature*/);
-void SendSettingsMenu(Player* /*player*/, Creature* /*creature*/);
 
 class AttriboostPlayerScript : public PlayerScript
 {
@@ -94,7 +109,6 @@ public:
 
     virtual void OnPlayerLogin(Player* /*player*/) override;
     virtual void OnPlayerLogout(Player* /*player*/) override;
-    virtual void OnPlayerCompleteQuest(Player* /*player*/, Quest const* /*quest*/) override;
     virtual void OnPlayerLeaveCombat(Player* /*player*/) override;
 
     uint32 GetRandomAttributeForClass(Player* /*player*/);
@@ -107,17 +121,6 @@ public:
     AttriboostUnitScript() : UnitScript("AttriboostUnitScript") { }
 
     void OnDamage(Unit* /*attacker*/, Unit* /*victim*/, uint32& /*damage*/);
-};
-
-class AttriboostCreatureScript : public CreatureScript
-{
-public:
-    AttriboostCreatureScript() : CreatureScript("AttriboostCreatureScript") { }
-
-    virtual bool OnGossipHello(Player* /*player*/, Creature* /*creature*/) override;
-    virtual bool OnGossipSelect(Player* /*player*/, Creature* /*creature*/, uint32 /*sender*/, uint32 /*action*/) override;
-
-    void HandleAttributeAllocation(Player* /*player*/, uint32 /*attribute*/, bool /*reset*/);
 };
 
 class AttriboostWorldScript : public WorldScript

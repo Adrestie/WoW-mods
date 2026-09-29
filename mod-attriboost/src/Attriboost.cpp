@@ -1,10 +1,9 @@
 #include "Attriboost.h"
 
 #include "Chat.h"
+#include "ObjectMgr.h"
 #include "Config.h"
 #include "Spell.h"
-
-#include <AI/ScriptedAI/ScriptedGossip.h>
 
 void AttriboostPlayerScript::OnPlayerLogin(Player* player)
 {
@@ -40,56 +39,6 @@ void AttriboostPlayerScript::OnPlayerLogout(Player* player)
     }
 
     SaveAttriboostsForPlayer(player);
-}
-
-void AttriboostPlayerScript::OnPlayerCompleteQuest(Player* player, Quest const* quest)
-{
-    if (!sConfigMgr->GetOption<bool>("Attriboost.Enable", false))
-    {
-        return;
-    }
-
-    if (!player)
-    {
-        return;
-    }
-
-    switch (quest->GetQuestId())
-    {
-    case ATTR_QUEST:
-        AddAttributePoint(player);
-        break;
-
-    case TALENT_QUEST:
-        AddTalentPoint(player);
-        break;
-    }
-
-    if (quest->GetQuestId() != ATTR_QUEST &&
-        quest->GetQuestId() != TALENT_QUEST)
-    {
-        return;
-    }
-
-    SaveAttriboostsForPlayer(player);
-}
-
-void AddAttributePoint(Player* player)
-{
-    auto attributes = GetAttriboosts(player);
-    if (!attributes)
-    {
-        LOG_INFO("module", "Failed to get attriboosts for player '{}' with guid '{}'. !!!REPORT THIS!!!", player->GetName(), player->GetGUID().GetRawValue());
-        return;
-    }
-
-    attributes->Unallocated += 3;
-}
-
-void AddTalentPoint(Player* player)
-{
-    player->RewardExtraBonusTalentPoints(1);
-    player->InitTalentForLevel();
 }
 
 void AttriboostPlayerScript::OnPlayerLeaveCombat(Player* player)
@@ -615,6 +564,18 @@ void ApplyAttributes(Player* player, Attriboosts* attributes)
         }
     }
 
+    // The visible summary aura: there while any point is spent, gone otherwise.
+    if (GetTotalAttributes(attributes) > 0)
+    {
+        if (!player->GetAura(ATTR_SPELL_SUMMARY))
+        {
+            player->AddAura(ATTR_SPELL_SUMMARY, player);
+        }
+    }
+    else if (player->GetAura(ATTR_SPELL_SUMMARY))
+    {
+        player->RemoveAura(ATTR_SPELL_SUMMARY);
+    }
 }
 
 void DisableAttributes(Player* player)
@@ -673,6 +634,11 @@ void DisableAttributes(Player* player)
     if (player->GetAura(ATTR_SPELL_HEALING_POWER))
     {
         player->RemoveAura(ATTR_SPELL_HEALING_POWER);
+    }
+
+    if (player->GetAura(ATTR_SPELL_SUMMARY))
+    {
+        player->RemoveAura(ATTR_SPELL_SUMMARY);
     }
 }
 
@@ -913,44 +879,6 @@ uint32 GetResetCost()
     return sConfigMgr->GetOption<uint32>("Attriboost.ResetCost", 2500000);
 }
 
-bool HasSetting(Player* player, uint32 setting)
-{
-    if (!player)
-    {
-        return false;
-    }
-
-    auto attributes = GetAttriboosts(player);
-    if (!attributes)
-    {
-        return false;
-    }
-
-    return (attributes->Settings & setting) == setting;
-}
-void ToggleSetting(Player* player, uint32 setting)
-{
-    if (!player)
-    {
-        return;
-    }
-
-    auto attributes = GetAttriboosts(player);
-    if (!attributes)
-    {
-        return;
-    }
-
-    if (HasSetting(player, setting))
-    {
-        attributes->Settings -= setting;
-    }
-    else
-    {
-        attributes->Settings += setting;
-    }
-}
-
 void AttriboostWorldScript::OnAfterConfigLoad(bool reload)
 {
     if (reload)
@@ -960,243 +888,6 @@ void AttriboostWorldScript::OnAfterConfigLoad(bool reload)
     }
 
     LoadAttriboosts();
-}
-
-bool AttriboostCreatureScript::OnGossipHello(Player* player, Creature* creature)
-{
-    ClearGossipMenuFor(player);
-
-    if (!sConfigMgr->GetOption<bool>("Attriboost.Enable", false))
-    {
-        SendGossipMenuFor(player, ATTR_NPC_TEXT_DISABLED, creature);
-
-        return true;
-    }
-
-    player->PrepareQuestMenu(creature->GetGUID());
-
-    AddGossipItemFor(player, GOSSIP_ICON_DOT, "|TInterface\\GossipFrame\\TrainerGossipIcon:16|t Allouer des points", GOSSIP_SENDER_MAIN, ATTR_GOSSIP_ALLOCATE);
-    AddGossipItemFor(player, GOSSIP_ICON_DOT, "|TInterface\\GossipFrame\\HealerGossipIcon:16|t Options", GOSSIP_SENDER_MAIN, ATTR_GOSSIP_SETTINGS);
-
-    SendGossipMenuFor(player, ATTR_NPC_TEXT_GENERIC, creature);
-
-    return true;
-}
-
-bool AttriboostCreatureScript::OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
-{
-    if (action == ATTR_GOSSIP_ALLOCATE)
-    {
-        SendAllocateMenu(player, creature);
-        return true;
-    }
-
-    if (action == ATTR_GOSSIP_ALLOCATE_RETURN)
-    {
-        OnGossipHello(player, creature);
-        return true;
-    }
-
-    if (action == ATTR_GOSSIP_SETTINGS)
-    {
-        SendSettingsMenu(player, creature);
-        return true;
-    }
-
-    if (action == ATTR_GOSSIP_SETTINGS_PROMPT)
-    {
-        ToggleSetting(player, ATTR_SETTING_PROMPT);
-        SendSettingsMenu(player, creature);
-        return true;
-    }
-
-    if (action == ATTR_GOSSIP_SETTINGS_RETURN)
-    {
-        OnGossipHello(player, creature);
-        return true;
-    }
-
-    if (action == ATTR_GOSSIP_ALLOCATE_RESET)
-    {
-        HandleAttributeAllocation(player, action, true);
-        SendAllocateMenu(player, creature);
-        return true;
-    }
-
-    if (action > 5000)
-    {
-        HandleAttributeAllocation(player, action, false);
-        SendAllocateMenu(player, creature);
-        return true;
-    }
-
-    return true;
-}
-
-void SendAllocateMenu(Player* player, Creature* creature)
-{
-    ClearGossipMenuFor(player);
-
-    auto attributes = GetAttriboosts(player);
-    if (!attributes)
-    {
-        CloseGossipMenuFor(player);
-        return;
-    }
-
-    player->PrepareQuestMenu(creature->GetGUID());
-
-    AddGossipItemFor(player, GOSSIP_ICON_DOT, Acore::StringFormat("|TInterface\\GossipFrame\\TrainerGossipIcon:16|t |cffFF0000{} |rPoint(s) disponible(s).", GetAttributesToSpend(player)), GOSSIP_SENDER_MAIN, 0);
-
-    std::string optStamina = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Endurance ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_STAMINA, attributes->Stamina) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->Stamina, sConfigMgr->GetOption<uint32>("Attriboost.Max.Stamina", 100)),
-        IsAttributeAtMax(ATTR_SPELL_STAMINA, attributes->Stamina) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optStrength = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Force ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_STRENGTH, attributes->Strength) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->Strength, sConfigMgr->GetOption<uint32>("Attriboost.Max.Strength", 100)),
-        IsAttributeAtMax(ATTR_SPELL_STRENGTH, attributes->Strength) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optAgility = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Agilité ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_AGILITY, attributes->Agility) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->Agility, sConfigMgr->GetOption<uint32>("Attriboost.Max.Agility", 100)),
-        IsAttributeAtMax(ATTR_SPELL_AGILITY, attributes->Agility) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optIntellect = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Intelligence ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_INTELLECT, attributes->Intellect) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->Intellect, sConfigMgr->GetOption<uint32>("Attriboost.Max.Intellect", 100)),
-        IsAttributeAtMax(ATTR_SPELL_INTELLECT, attributes->Intellect) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optSpirit = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Esprit ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_SPIRIT, attributes->Spirit) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->Spirit, sConfigMgr->GetOption<uint32>("Attriboost.Max.Spirit", 100)),
-        IsAttributeAtMax(ATTR_SPELL_SPIRIT, attributes->Spirit) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optSpellPower = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Dégâts des sorts ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_SPELL_POWER, attributes->SpellPower) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->SpellPower, sConfigMgr->GetOption<uint32>("Attriboost.Max.SpellPower", 100)),
-        IsAttributeAtMax(ATTR_SPELL_SPELL_POWER, attributes->SpellPower) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optCriticalStrikeDamage = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Dégats des coups critiques ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_CRITICAL_STRIKE_DAMAGE, attributes->CriticalStrikeDamage) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->CriticalStrikeDamage, sConfigMgr->GetOption<uint32>("Attriboost.Max.CriticalStrikeDamage", 100)),
-        IsAttributeAtMax(ATTR_SPELL_CRITICAL_STRIKE_DAMAGE, attributes->CriticalStrikeDamage) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optAllResists = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Toutes les résistances ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_ALL_RESISTS, attributes->AllResists) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->AllResists, sConfigMgr->GetOption<uint32>("Attriboost.Max.AllResists", 100)),
-        IsAttributeAtMax(ATTR_SPELL_ALL_RESISTS, attributes->AllResists) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optSpellPenetration = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Pénétration des sorts ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_PENETRATION, attributes->SpellPenetration) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->SpellPenetration, sConfigMgr->GetOption<uint32>("Attriboost.Max.SpellPenetration", 100)),
-        IsAttributeAtMax(ATTR_SPELL_PENETRATION, attributes->SpellPenetration) ? "|cffFF0000(MAXED)|r" : "");
-
-    std::string optHealingPower = Acore::StringFormat("|TInterface\\MINIMAP\\UI-Minimap-ZoomInButton-Up:16|t {}Puissance des soins ({}) {}",
-        IsAttributeAtMax(ATTR_SPELL_HEALING_POWER, attributes->HealingPower) ? "|cff777777" : "|cff000000",
-        Acore::StringFormat("{}/{}", attributes->HealingPower, sConfigMgr->GetOption<uint32>("Attriboost.Max.HealingPower", 100)),
-        IsAttributeAtMax(ATTR_SPELL_HEALING_POWER, attributes->HealingPower) ? "|cffFF0000(MAXED)|r" : "");
-
-    if (HasSetting(player, ATTR_SETTING_PROMPT))
-    {
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optStamina, GOSSIP_SENDER_MAIN, ATTR_SPELL_STAMINA);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optStrength, GOSSIP_SENDER_MAIN, ATTR_SPELL_STRENGTH);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optAgility, GOSSIP_SENDER_MAIN, ATTR_SPELL_AGILITY);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optIntellect, GOSSIP_SENDER_MAIN, ATTR_SPELL_INTELLECT);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optSpirit, GOSSIP_SENDER_MAIN, ATTR_SPELL_SPIRIT);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optSpellPower, GOSSIP_SENDER_MAIN, ATTR_SPELL_SPELL_POWER);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optCriticalStrikeDamage, GOSSIP_SENDER_MAIN, ATTR_SPELL_CRITICAL_STRIKE_DAMAGE);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optAllResists, GOSSIP_SENDER_MAIN, ATTR_SPELL_ALL_RESISTS);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optSpellPenetration, GOSSIP_SENDER_MAIN, ATTR_SPELL_PENETRATION);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optHealingPower, GOSSIP_SENDER_MAIN, ATTR_SPELL_HEALING_POWER);
-    }
-    else
-    {
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optStamina, GOSSIP_SENDER_MAIN, ATTR_SPELL_STAMINA);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optStrength, GOSSIP_SENDER_MAIN, ATTR_SPELL_STRENGTH);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optAgility, GOSSIP_SENDER_MAIN, ATTR_SPELL_AGILITY);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optIntellect, GOSSIP_SENDER_MAIN, ATTR_SPELL_INTELLECT);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optSpirit, GOSSIP_SENDER_MAIN, ATTR_SPELL_SPIRIT);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optSpellPower, GOSSIP_SENDER_MAIN, ATTR_SPELL_SPELL_POWER);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optCriticalStrikeDamage, GOSSIP_SENDER_MAIN, ATTR_SPELL_CRITICAL_STRIKE_DAMAGE);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optAllResists, GOSSIP_SENDER_MAIN, ATTR_SPELL_ALL_RESISTS);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optSpellPenetration, GOSSIP_SENDER_MAIN, ATTR_SPELL_PENETRATION);
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, optHealingPower, GOSSIP_SENDER_MAIN, ATTR_SPELL_HEALING_POWER);
-    }
-
-    if (HasAttributes(player))
-    {
-        uint32 resetCost = GetResetCost();
-        AddGossipItemFor(player, GOSSIP_ICON_DOT, "|TInterface\\GossipFrame\\UnlearnGossipIcon:16|t Réinitialiser les attributs", GOSSIP_SENDER_MAIN, ATTR_GOSSIP_ALLOCATE_RESET, "Voulez-vous réinitialiser les attributs et récupérer vos points ?", resetCost, false);
-    }
-
-    AddGossipItemFor(player, GOSSIP_ICON_DOT, "|TInterface\\MONEYFRAME\\Arrow-Left-Down:16|t Retour", GOSSIP_SENDER_MAIN, ATTR_GOSSIP_ALLOCATE_RETURN);
-
-    if (HasAttributesToSpend(player))
-    {
-        SendGossipMenuFor(player, ATTR_NPC_TEXT_HAS_ATTRIBUTES, creature);
-    }
-    else
-    {
-        SendGossipMenuFor(player, ATTR_NPC_TEXT_GENERIC, creature);
-    }
-}
-
-void SendSettingsMenu(Player* player, Creature* creature)
-{
-    ClearGossipMenuFor(player);
-
-    player->PrepareQuestMenu(creature->GetGUID());
-
-    auto hasPromptSetting = HasSetting(player, ATTR_SETTING_PROMPT);
-    AddGossipItemFor(player, GOSSIP_ICON_DOT, Acore::StringFormat("|TInterface\\GossipFrame\\HealerGossipIcon:16|t Prompt 'Êtes-vous certain ?': {}", hasPromptSetting ? "|cff00FF00Enabled|r" : "|cffFF0000Disabled"), GOSSIP_SENDER_MAIN, ATTR_GOSSIP_SETTINGS_PROMPT);
-
-    AddGossipItemFor(player, GOSSIP_ICON_DOT, "|TInterface\\MONEYFRAME\\Arrow-Left-Down:16|t Retour", GOSSIP_SENDER_MAIN, ATTR_GOSSIP_SETTINGS_RETURN);
-
-    SendGossipMenuFor(player, ATTR_NPC_TEXT_GENERIC, creature);
-}
-
-void AttriboostCreatureScript::HandleAttributeAllocation(Player* player, uint32 attribute, bool reset)
-{
-    if (!player)
-    {
-        return;
-    }
-
-    auto attributes = GetAttriboosts(player);
-    if (!attributes)
-    {
-        return;
-    }
-
-    if (reset)
-    {
-        auto cost = GetResetCost();
-        if (player->HasEnoughMoney(cost))
-        {
-            player->SetMoney(player->GetMoney() - cost);
-            ResetAttributes(attributes);
-        }
-    }
-    else
-    {
-        if (attributes->Unallocated < 1)
-        {
-            ChatHandler(player->GetSession()).SendSysMessage("Vous n'avez pas de points à dépenser.");
-            return;
-        }
-
-        auto result = TryAddAttribute(attributes, attribute);
-        if (!result)
-        {
-            ChatHandler(player->GetSession()).SendSysMessage("Cet attribut ne peut pas être amélioré d'avantage.");
-            return;
-        }
-    }
-
-    ApplyAttributes(player, attributes);
-    SaveAttriboosts();
 }
 
 void AttriboostWorldScript::OnShutdownInitiate(ShutdownExitCode /*code*/, ShutdownMask /*mask*/)
@@ -1238,6 +929,23 @@ void AttriboostUnitScript::OnDamage(Unit* attacker, Unit* victim, uint32& /*dama
 // ---------------------------------------------------------------------------
 using namespace Acore::ChatCommands;
 
+// Every message goes through the core's module strings, in the language of
+// the player's client (see AttriboostStrings in Attriboost.h).
+template<typename... Args>
+static void Say(ChatHandler* handler, uint32 id, Args&&... args)
+{
+    // Without its row (03_attriboost_strings.sql not applied), the core hands
+    // back a pointer that must not be read (ObjectMgr::GetModuleString with a
+    // locale returns a cast of "error", never null): look for the row itself.
+    if (!sObjectMgr->GetModuleString(ATTRIBOOST_MODULE, id))
+    {
+        handler->PSendSysMessage("[mod-attriboost] missing text {}", id);
+        return;
+    }
+
+    handler->PSendModuleSysMessage(ATTRIBOOST_MODULE, id, std::forward<Args>(args)...);
+}
+
 static Player* JoueurDeCommande(ChatHandler* handler)
 {
     if (!handler->GetSession())
@@ -1247,7 +955,7 @@ static Player* JoueurDeCommande(ChatHandler* handler)
 
     if (!sConfigMgr->GetOption<bool>("Attriboost.Enable", false))
     {
-        handler->SendSysMessage("Le système d'attributs est désactivé.");
+        Say(handler, ATTR_STR_DISABLED);
         return nullptr;
     }
 
@@ -1287,7 +995,7 @@ ChatCommandTable AttriboostCommandScript::GetCommands() const
     return commandTable;
 }
 
-// .attriboost exchange N : N Livres de connaissance -> 3N points d'attribut.
+// .attriboost exchange N : N Tomes du Savoir -> 3N points d'attribut.
 bool AttriboostCommandScript::HandleExchangeCommand(ChatHandler* handler, uint32 count)
 {
     Player* player = JoueurDeCommande(handler);
@@ -1298,13 +1006,13 @@ bool AttriboostCommandScript::HandleExchangeCommand(ChatHandler* handler, uint32
 
     if (count < 1 || count > 200)
     {
-        handler->SendSysMessage("Nombre de livres invalide.");
+        Say(handler, ATTR_STR_BAD_BOOK_COUNT);
         return true;
     }
 
     if (player->GetItemCount(ATTR_ITEM) < count)
     {
-        handler->SendSysMessage("Vous n'avez pas assez de Livres de connaissance.");
+        Say(handler, ATTR_STR_NOT_ENOUGH_TOMES);
         return true;
     }
 
@@ -1318,7 +1026,7 @@ bool AttriboostCommandScript::HandleExchangeCommand(ChatHandler* handler, uint32
     attributes->Unallocated += ATTR_POINTS_PER_BOOK * count;
     SaveAttriboostsForPlayerDirect(player);
 
-    handler->PSendSysMessage("Vous obtenez {} point(s) d'attribut.", ATTR_POINTS_PER_BOOK * count);
+    Say(handler, ATTR_STR_ATTRIBUTE_POINTS, ATTR_POINTS_PER_BOOK * count);
     return true;
 }
 
@@ -1333,13 +1041,13 @@ bool AttriboostCommandScript::HandleTalentsCommand(ChatHandler* handler, uint32 
 
     if (count < 1 || count > 200)
     {
-        handler->SendSysMessage("Nombre de livres invalide.");
+        Say(handler, ATTR_STR_BAD_BOOK_COUNT);
         return true;
     }
 
     if (player->GetItemCount(TALENT_ITEM) < count)
     {
-        handler->SendSysMessage("Vous n'avez pas assez de Livres des talents.");
+        Say(handler, ATTR_STR_NOT_ENOUGH_TALENT_BOOKS);
         return true;
     }
 
@@ -1347,7 +1055,14 @@ bool AttriboostCommandScript::HandleTalentsCommand(ChatHandler* handler, uint32 
     player->RewardExtraBonusTalentPoints(count);
     player->InitTalentForLevel();
 
-    handler->PSendSysMessage("Vous obtenez {} point(s) de talent.", count);
+    // The core keeps a single counter of extra talent points
+    // (characters.extraBonusTalentCount), which other modules may feed too.
+    // What this module grants is recorded here, so that uninstalling it takes
+    // back exactly that much and nothing else (README, section 6.8).
+    CharacterDatabase.DirectExecute("INSERT INTO `attriboost_attributes` (guid, talentpoints) VALUES ({}, {}) ON DUPLICATE KEY UPDATE talentpoints = talentpoints + {}",
+        player->GetGUID().GetRawValue(), count, count);
+
+    Say(handler, ATTR_STR_TALENT_POINTS, count);
     return true;
 }
 
@@ -1363,13 +1078,13 @@ bool AttriboostCommandScript::HandleAllocateCommand(ChatHandler* handler, std::s
     uint32 attribute = AttributDepuisNom(stat);
     if (!attribute)
     {
-        handler->SendSysMessage("Statistique inconnue.");
+        Say(handler, ATTR_STR_UNKNOWN_STAT);
         return true;
     }
 
     if (count < 1 || count > 250)
     {
-        handler->SendSysMessage("Nombre de points invalide.");
+        Say(handler, ATTR_STR_BAD_POINT_COUNT);
         return true;
     }
 
@@ -1381,7 +1096,7 @@ bool AttriboostCommandScript::HandleAllocateCommand(ChatHandler* handler, std::s
 
     if (attributes->Unallocated < count)
     {
-        handler->SendSysMessage("Vous n'avez pas assez de points disponibles.");
+        Say(handler, ATTR_STR_NOT_ENOUGH_POINTS);
         return true;
     }
 
@@ -1396,7 +1111,7 @@ bool AttriboostCommandScript::HandleAllocateCommand(ChatHandler* handler, std::s
 
     if (fait == 0)
     {
-        handler->SendSysMessage("Cet attribut est déjà au maximum.");
+        Say(handler, ATTR_STR_ALREADY_MAXED);
         return true;
     }
 
@@ -1405,7 +1120,7 @@ bool AttriboostCommandScript::HandleAllocateCommand(ChatHandler* handler, std::s
 
     if (fait < count)
     {
-        handler->PSendSysMessage("{} point(s) attribué(s) : le maximum est atteint.", fait);
+        Say(handler, ATTR_STR_PARTLY_ALLOCATED, fait);
     }
 
     return true;
@@ -1428,14 +1143,14 @@ bool AttriboostCommandScript::HandleResetCommand(ChatHandler* handler)
 
     if (GetTotalAttributes(attributes) == 0)
     {
-        handler->SendSysMessage("Aucun point à réinitialiser.");
+        Say(handler, ATTR_STR_NOTHING_TO_RESET);
         return true;
     }
 
     uint32 cost = GetResetCost();
     if (!player->HasEnoughMoney(cost))
     {
-        handler->SendSysMessage("Vous n'avez pas assez d'argent.");
+        Say(handler, ATTR_STR_NOT_ENOUGH_MONEY);
         return true;
     }
 
@@ -1444,7 +1159,7 @@ bool AttriboostCommandScript::HandleResetCommand(ChatHandler* handler)
     ApplyAttributes(player, attributes);
     SaveAttriboostsForPlayerDirect(player);
 
-    handler->SendSysMessage("Attributs réinitialisés.");
+    Say(handler, ATTR_STR_RESET_DONE);
     return true;
 }
 
@@ -1452,7 +1167,6 @@ void SC_AddAttriboostScripts()
 {
     new AttriboostWorldScript();
     new AttriboostPlayerScript();
-    new AttriboostCreatureScript();
     new AttriboostUnitScript();
     new AttriboostCommandScript();
 }
