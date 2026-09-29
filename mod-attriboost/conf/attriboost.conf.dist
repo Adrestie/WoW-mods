@@ -9,7 +9,7 @@
 ########################################
 #
 #    Attriboost.Enable
-#        Description: Enable/Disable the librarian/bonus attributes.
+#        Description: Enable/Disable the bonus attributes.
 #        Default:     0 - Disabled
 #                     1 - Enabled
 #
