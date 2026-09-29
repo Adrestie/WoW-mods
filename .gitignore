@@ -1,2 +1,6 @@
 # Sortie du patcheur de DBC client
 mod-attriboost/tools/out/
+# Built by installer/build.cmd
+installer/installer.exe
+installer/build/
+__pycache__/

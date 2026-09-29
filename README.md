@@ -19,6 +19,9 @@ object in the world and one window, to which each installed module brings its
 recipes. Every module that uses it ships an identical copy under
 `data/lua/Workbench/`; `workbench/` is where it is edited.
 
+The `installer/` folder is not a module either: one program that installs, and
+removes, any module carrying an `installer.json`. See its README.
+
 Each module keeps the licence of the project it forks, or MIT when original; see
 the `LICENSE` file in its folder. mod-stellar-tarot and mod-limit-break are
 GPL-2.0-or-later, the licence of AzerothCore they are compiled into; the others
