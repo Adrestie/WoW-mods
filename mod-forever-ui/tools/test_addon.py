@@ -20124,7 +20124,6 @@ def main():
     """)
     print("   micro-bouton apres la feuille de personnage, livre 673 x 594 (panneau de gauche), cartes de camelot, rangs, sorts securises, oubli, combat, onglets lateraux")
 
-    # ------------------------------------------------- LA TAILLE DES TEXTURES
     print("\nle coiffeur :")
     # l'ouverture : le client charge son ecran et le montre, puis
     # BARBER_SHOP_OPEN ; l'interface se cache, l'ecran de camelot la remplace
@@ -20394,6 +20393,7 @@ def main():
     print("   indice rendu par le client patche : cases (nom, echantillon), listes calculees (coiffure, couleur, pilosite, peau selon le visage), noms du client par numero, apercu, Echap, clic, molette, fermeture")
 
     # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
+    # ------------------------------------------------- LA TAILLE DES TEXTURES
     # 3.3.5 : un morceau d'atlas pose par une seule ancre, ou par deux ancres
     # d'un seul axe, deborde (echange, banque de guilde, 28/09 -- SetAtlas(t,
     # nom, true) LAISSE la taille). Le banc ne regardait que l'atlas et les
