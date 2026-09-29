@@ -162,10 +162,10 @@ the conditions of the design workbook:
 
 The events a hook of the core cannot see (critical hits, dodges, parries,
 blocks, misses) go through the core's proc system: the script carries a
-passive trigger aura (`trigger:<spell>`, 903820 and up, their conditions in
-`stellar_tarot_11_procs.sql`) that casts a marker spell (903810..903817)
-the module recognises. The engine's own controls are 903800 (root), 903801
-(stun) and 903802 (bleed). `StellarTarotEngine.cpp` lists every state,
+passive trigger aura (`trigger:<spell>`, 88820 and up, their conditions in
+`stellar_tarot_11_procs.sql`) that casts a marker spell (88810..88817)
+the module recognises. The engine's own controls are 88800 (root), 88801
+(stun) and 88802 (bleed). `StellarTarotEngine.cpp` lists every state,
 event and action.
 
 ## The loot
@@ -196,7 +196,7 @@ Three cards, any of them, become one card drawn at random from the whole
 catalogue, the account's known ones included; three boards become one board.
 This happens at the WORKBENCH, an object shared with the other modules of
 this repository that have recipes (`mod-spheregrid` among them): one object
-in the world (803700), one window, and each module's recipes on it. The first
+in the world (810000), one window, and each module's recipes on it. The first
 item placed decides which craft the bench is locked to; taking everything off
 frees it.
 
@@ -207,7 +207,7 @@ when no other provider remains. The object is shipped the same way -- inserted
 only when absent -- and placed in the world by hand, as a game master:
 
 ```
-.gobject add 803700
+.gobject add 810000
 ```
 
 `.tarot fuse <a> <b> <c>` is the command the bench relays to; it can be typed
@@ -228,16 +228,16 @@ makes them is the author's; the guide gives the formats.
 
 ## The identifiers
 
-One block, 902000 to 903999, one number per asset. They are not settings;
+One block, 87000 to 88999, one number per asset. They are not settings;
 `python tools/shift.py --list` prints them as they stand, and the installer
 moves them when a server has taken them.
 
 | family | range | rule |
 |---|---|---|
-| cards (items) | 902001 – 902499 | card N is item 902000 + N |
-| boards (items) | 902501 – 902599 | board B is item 902500 + B |
+| cards (items) | 87001 – 87499 | card N is item 87000 + N |
+| boards (items) | 87501 – 87599 | board B is item 87500 + B |
 | item displays, spell icons | same number as the item | |
-| spells | 903000 – 903999 | 903000 studies a card, 903001 a board; the aura of card N at level L is 903000 + 4·N + (L − 1) |
+| spells | 88000 – 88999 | 88000 studies a card, 88001 a board; the aura of card N at level L is 88000 + 4·N + (L − 1) |
 | module strings | keyed by the module's name | never in clash |
 
 ## What is in the repository

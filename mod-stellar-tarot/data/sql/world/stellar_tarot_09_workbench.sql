@@ -3,7 +3,7 @@
 --
 -- One template, the same in every module, inserted ONLY WHEN ABSENT: whoever
 -- installs first puts it down, and nobody rewrites it. Where it stands in the
--- world is placed by hand, as a game master: `.gobject add 803700`.
+-- world is placed by hand, as a game master: `.gobject add 810000`.
 --
 -- NO DELETE HERE, on purpose: the module's remover replays the deletes of its
 -- SQL, and this object must outlive the module when another provider still
@@ -12,7 +12,7 @@
 INSERT IGNORE INTO `gameobject_template`
   (`entry`, `type`, `displayId`, `name`, `IconName`, `castBarCaption`, `unk1`,
    `size`, `Data0`, `Data1`, `Data2`, `Data3`, `ScriptName`) VALUES
-(803700, 3, 8176, 'Workbench', '', '', '', 1.6, 0, 0, 0, 0, '');
+(810000, 3, 8176, 'Workbench', '', '', '', 1.6, 0, 0, 0, 0, '');
 
 INSERT IGNORE INTO `gameobject_template_locale` (`entry`, `locale`, `name`, `castBarCaption`) VALUES
-(803700, 'frFR', 'Établi', '');
+(810000, 'frFR', 'Établi', '');

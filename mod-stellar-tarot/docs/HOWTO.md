@@ -46,7 +46,7 @@ A card is one row of `mod_stellar_tarot_card`, plus its item, plus the
 spells its levels apply. The test catalogue is written by a generator that is
 not shipped; by hand:
 
-1. Pick a number N that is free (1 to 499). The item is `902000 + N`, in
+1. Pick a number N that is free (1 to 499). The item is `87000 + N`, in
    `item_template` (a copy of a shipped card's row does), with a row in the
    module's `Item.dbc` data for the client.
 2. Insert the card: its four edges (1 to 9), its one `tag_id`, `cumulative`,
@@ -64,7 +64,7 @@ not shipped; by hand:
 
 ## Add a board
 
-A row of `mod_stellar_tarot_board` -- number B (1 to 99, item `902500 + B`),
+A row of `mod_stellar_tarot_board` -- number B (1 to 99, item `87500 + B`),
 `row_count` and `col_count` (2 to 4) -- and its numbers in
 `mod_stellar_tarot_board_line`: one row per row-or-column, per side (`axis`
 1 rows / 2 columns, `idx` from 1, `side` 1 first / 2 second, `number` 1 to
@@ -109,8 +109,8 @@ again). `.reload config` after a change, then `.tarot reload`.
 ## Put a workbench in the world
 
 The workbench is shared with the other modules of the repository: one game
-object, 803700, whose template the installer inserts when absent. Where it
-stands is your decision: as a game master, at the spot, `.gobject add 803700`.
+object, 810000, whose template the installer inserts when absent. Where it
+stands is your decision: as a game master, at the spot, `.gobject add 810000`.
 The tarot brings two recipes to it: three cards become one drawn at random,
 three boards likewise -- known cards included, so that duplicates have a use.
 With mod-spheregrid installed as well, the same bench serves both: the first

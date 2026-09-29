@@ -1102,10 +1102,10 @@ namespace
     };
     std::map<ObjectGuid, std::vector<Owed>> gOwed;
 
-    // La carte d'un sort de niveau : 903000 + 4 x carte + (niveau - 1).
+    // La carte d'un sort de niveau : 88000 + 4 x carte + (niveau - 1).
     uint32 CardOfSpell(uint32 spellId)
     {
-        return spellId > 903000 ? (spellId - 903000) / 4 : 0;
+        return spellId > 88000 ? (spellId - 88000) / 4 : 0;
     }
 
     void FlushOwed(ObjectGuid who)
@@ -1459,7 +1459,7 @@ namespace
         if (CostPair(but.kind) && !r.Int(1, 3600, but.n2))
             return (error = but.kind + " expects the figure then the seconds", false);
         if (CostMarks(but.kind))
-            r.OptInt(902000, 903999, but.spell);
+            r.OptInt(87000, 88999, but.spell);
         // `stacks:<k>` : LA PLAIE S'EMPILE D'ELLE-MEME. Le cas ordinaire est
         // qu'elle suive les cumuls du bienfait ; quand celui-ci n'en a pas --
         // un soin, par exemple -- la ligne dit les siens.
@@ -1686,7 +1686,7 @@ namespace
             else if (_state == "hp_below" || _state == "hp_above" || _state == "mana_below")
                 ok = r.Int(1, 100, _n) || (error = _state + " expects a percentage", false);
             else if (_state == "aura")
-                ok = r.Int(902000, 903999, _n) || (error = "aura expects a spell of the module", false);
+                ok = r.Int(87000, 88999, _n) || (error = "aura expects a spell of the module", false);
             else if (_state == "gold_above")
                 ok = r.Int(1, 2000000000, _n) || (error = "gold_above expects an amount of copper", false);
             else if (_state == "hour")
@@ -2182,7 +2182,7 @@ namespace
                 if (!r.Int(1, 10, _a)) { error = A + " expects its count"; return false; }
             }
             else if (A == "loot_item")
-                ok = r.Int(902000, 902999, _a);
+                ok = r.Int(87000, 87999, _a);
             else if (A == "gold_level" || A == "silver_level" || A == "gold" || A == "loot_gold_level")
                 ok = r.Int(1, 100000000, _a);
             else if (A == "loot_gold_rand" || A == "loot_gold_boss")
@@ -2192,13 +2192,13 @@ namespace
             else if (A == "loot_gold_scale")
                 ok = r.Int(1, 2000000000, _a) && r.Int(1, 2000000000, _b);
             else if (A == "summon")
-                ok = r.Int(902000, 903999, _a) && r.Int(1, 3600, _b);
+                ok = r.Int(87000, 88999, _a) && r.Int(1, 3600, _b);
             else if (A == "shield_self" || A == "shield_target" || A == "shield_other"
                      || A == "splash" || A == "cleave" || A == "explode"
                      || A == "heal_group" || A == "heal_ally_amount" || A == "heal_pet" || A == "bleed" || A == "blink")
                 ok = r.Int(1, 10000, _a) && r.Int(0, 10000, _b);
             else if (A == "bleed_hit")
-                ok = r.Int(1, 3600, _a) && r.Int(1, 100, _b) && r.Int(902000, 903999, _c);
+                ok = r.Int(1, 3600, _a) && r.Int(1, 100, _b) && r.Int(87000, 88999, _c);
             else if (A == "turn" || A == "turn_ally")
                 ok = r.Int(1, 3600, _a) && (r.OptInt(1, 100, _b) || true);
             else if (A == "shield_ally" || A == "shield_group" || A == "damage_sp" || A == "damage_ap" || A == "extra"
@@ -2241,21 +2241,21 @@ namespace
                     // Un sort propre a la seconde phase, s'il en a un : la
                     // premiere est un bienfait, la seconde une plaie, et un
                     // meme sort ne peut pas etre les deux.
-                    r.OptInt(902000, 903999, _thenSpell);
+                    r.OptInt(87000, 88999, _thenSpell);
                     continue;
                 }
                 // count:<sort> : l'aura qui COMPTE la serie, un cumul par
                 // evenement, retiree des que la ligne paie ou que la serie tombe.
-                if (word == "count" && r.Int(902000, 903999, _countSpell))
+                if (word == "count" && r.Int(87000, 88999, _countSpell))
                     continue;
                 // sign:<sort> : l'aura qui DIT que la ligne est armee, posee des
                 // que la condition tient, retiree quand la ligne paie.
-                if (word == "sign" && r.Int(902000, 903999, _signSpell))
+                if (word == "sign" && r.Int(87000, 88999, _signSpell))
                     continue;
                 // debuff:<sort> : LE REVERS EN AURA A LUI, pose a cote du
                 // bienfait -- meme duree, memes cumuls -- mais range parmi les
                 // plaies et portant SON texte.
-                if (word == "debuff" && r.Int(902000, 903999, _debuffSpell))
+                if (word == "debuff" && r.Int(87000, 88999, _debuffSpell))
                     continue;
                 // sp:<pct> : l'aura que l'action pose porte une puissance des
                 // sorts lue sur celle du joueur, comme chez « cond ».
@@ -2309,7 +2309,7 @@ namespace
                 if (word == "spend")
                 {
                     int32 sort = 0;
-                    while (r.OptInt(902000, 903999, sort))
+                    while (r.OptInt(87000, 88999, sort))
                         _depense.push_back(uint32(sort));
                     if (_depense.empty()) { error = "spend expects at least one spell"; return false; }
                     continue;
@@ -2387,7 +2387,7 @@ namespace
             return true;
         }
         // LES EVENEMENTS QUE LE SYSTEME DE PROCS DU COEUR ANNONCE, chacun par
-        // son marqueur (903810 et suivants, dans cet ordre). Une ligne qui les
+        // son marqueur (88810 et suivants, dans cet ordre). Une ligne qui les
         // guette porte OBLIGATOIREMENT une aura trigger : c'est elle qui la
         // designe quand le marqueur part.
         static bool FromProcSystem(std::string const& event)
@@ -4577,7 +4577,7 @@ namespace
             // LA COURSE OU LA HATE : la course n'est pas une statistique
             // d'objet, le coeur ne la connait que par une aura. La ligne nomme
             // donc le sort qui la porte, et le module y met le chiffre.
-            if (_vitesse && !r.Int(902000, 903999, _sortVitesse))
+            if (_vitesse && !r.Int(87000, 88999, _sortVitesse))
                 return (error = "randstat speed expects its spell", false);
             r.OptInt(1, 1000, _bas);
             // UN NIVEAU PLUS HAUT RELEVE LES CHIFFRES : « les bonus passent a
@@ -4587,9 +4587,9 @@ namespace
             while (!r.End())
             {
                 std::string const mot = r.Word();
-                if (mot == "up" && r.Int(902000, 903999, _sortHaut) && r.Int(1, 1000, _hautPlus))
+                if (mot == "up" && r.Int(87000, 88999, _sortHaut) && r.Int(1, 1000, _hautPlus))
                     continue;
-                if (mot == "down" && r.Int(902000, 903999, _sortBas) && r.Int(1, 1000, _basPlus))
+                if (mot == "down" && r.Int(87000, 88999, _sortBas) && r.Int(1, 1000, _basPlus))
                     continue;
                 // `pulse:<sec>` : EN COMBAT, le tirage recommence tous les tant
                 // de secondes. Hors combat, rien ne tient.
@@ -4893,7 +4893,7 @@ namespace
             {
                 if (r.Word() != "then")
                     return (error = "after the cooldown, only then:<spell>:<sec> may follow", false);
-                if (!r.Int(902000, 903999, _apres) || !r.Int(1, 3600, _apresSec))
+                if (!r.Int(87000, 88999, _apres) || !r.Int(1, 3600, _apresSec))
                     return (error = "then expects its spell then the seconds", false);
             }
             return r.End() || (error = "too many parameters", false);
@@ -5110,7 +5110,7 @@ namespace
         {
             Reader r(params);
             return (r.Int(1, 3600, _sec) && r.Int(1, 1000, _pct) && r.Int(2, 100, _n)
-                    && r.Int(902000, 903999, _mark) && r.End())
+                    && r.Int(87000, 88999, _mark) && r.End())
                 || (error = "expects the seconds, the percentage, the number of strikes then the mark spell", false);
         }
         void OnDamageDealt(Player* player, Unit* victim, uint32& damage, bool spell, uint32 /*school*/,
@@ -5291,7 +5291,7 @@ namespace
             while (!r.End())
             {
                 int32 id = 0;
-                if (!r.Int(902000, 903999, id))
+                if (!r.Int(87000, 88999, id))
                     return (error = "after the percentage, only companion spells", false);
                 _more.push_back(uint32(id));
             }
@@ -5689,13 +5689,13 @@ namespace
             for (uint8 i = 0; i < 4; ++i)
             {
                 int32 id = 0;
-                if (!r.Int(902000, 903999, id))
+                if (!r.Int(87000, 88999, id))
                     return (error = "expects four fever spells", false);
                 _spells[i] = uint32(id);
                 gFeverSpells.insert(uint32(id));
             }
             int32 aggrave = 0, accelere = 0;
-            if (!r.Int(902000, 903999, aggrave) || !r.Int(902000, 903999, accelere))
+            if (!r.Int(87000, 88999, aggrave) || !r.Int(87000, 88999, accelere))
                 return (error = "expects the spells of the levels that change the fever", false);
             _worse = uint32(aggrave);
             _faster = uint32(accelere);
@@ -6323,7 +6323,7 @@ namespace
         bool Parse(std::vector<std::string> const& params, std::string& error) override
         {
             Reader r(params);
-            if (!r.Int(902000, 903999, _sort))
+            if (!r.Int(87000, 88999, _sort))
                 return (error = "expects the companion spell", false);
             // `all` : toute la maisonnee -- la bete, les gardiens, les totems.
             if (!r.End())
@@ -6608,7 +6608,7 @@ namespace
                 return (error = "phase expects the seconds, or night", false);
             if (!r.Int(1, 1000, _groupe))
                 return (error = "phase expects the card it belongs to", false);
-            if (!r.Int(0, 903999, _haut) || !r.Int(0, 903999, _bas))
+            if (!r.Int(0, 88999, _haut) || !r.Int(0, 88999, _bas))
                 return (error = "phase expects its two spells (0 for none)", false);
             while (!r.End())
             {
@@ -6904,7 +6904,7 @@ namespace
                 r.Word();
                 _sien = true;
             }
-            else if (!r.Int(0, 903999, _sort))
+            else if (!r.Int(0, 88999, _sort))
                 return (error = "focus expects self, a spell, or 0", false);
             while (!r.End())
             {
@@ -7129,10 +7129,10 @@ namespace
         bool Parse(std::vector<std::string> const& params, std::string& error) override
         {
             Reader r(params);
-            if (!r.Int(1, 1000, _groupe) || !r.Int(0, 902999, _objet))
+            if (!r.Int(1, 1000, _groupe) || !r.Int(0, 87999, _objet))
                 return (error = "cardtool expects the card and its item", false);
             for (int32& sort : _voies)
-                if (!r.Int(0, 903999, sort))
+                if (!r.Int(0, 88999, sort))
                     return (error = "cardtool expects three spells (0 for none)", false);
             while (!r.End())
             {
@@ -7310,7 +7310,7 @@ namespace
             while (!r.End())
             {
                 int32 sort = 0;
-                if (!r.Int(902000, 903999, sort))
+                if (!r.Int(87000, 88999, sort))
                     return (error = "after the seconds, only spells of the module", false);
                 _sorts.push_back(uint32(sort));
             }
@@ -7592,7 +7592,7 @@ namespace
         bool Parse(std::vector<std::string> const& params, std::string& error) override
         {
             Reader r(params);
-            return (r.Int(902000, 903999, _sort) && r.End())
+            return (r.Int(87000, 88999, _sort) && r.End())
                 || (error = "lockpick expects its spell", false);
         }
         void Apply(Player* player) override
@@ -7625,7 +7625,7 @@ namespace
             Reader r(params);
             if (!r.Int(1, 100, _pct) || !r.Int(1, 3600, _sec) || !r.Int(1, 100, _chance))
                 return (error = "bridge expects the share, the seconds and the chance", false);
-            r.OptInt(902000, 903999, _marque);
+            r.OptInt(87000, 88999, _marque);
             return r.End() || (error = "too many parameters", false);
         }
 

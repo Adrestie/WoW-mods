@@ -5,8 +5,8 @@
 -- cards edits these tables and types `.tarot reload`.
 --
 -- NO ROW STORES AN IDENTIFIER THE MODULE ALLOCATES. A card is known by its
--- number, and its item entry FOLLOWS from that number (902000 + card_id, see
--- StellarTarotMgr.h); a board likewise (902500 + board_id). The installer may
+-- number, and its item entry FOLLOWS from that number (87000 + card_id, see
+-- StellarTarotMgr.h); a board likewise (87500 + board_id). The installer may
 -- move the base; the numbers do not move.
 --
 -- A CARD IS ONE ROW. Its four edges, and what it does at each of its four
@@ -16,23 +16,35 @@
 -- unknown spell or an unknown script is an error at load time: the card is
 -- refused and cannot be laid.
 --
--- Idempotent: the file may be replayed, it creates nothing that already exists.
+-- Idempotent: the file may be replayed, it creates nothing that already exists
+-- and empties nothing. The core's updater replays it ALONE whenever it
+-- changes: a table dropped here would stay empty, the file that fills it
+-- not being replayed with it.
 
 -- The one-row-per-level tables of the first versions, never published.
 DROP TABLE IF EXISTS `mod_stellar_tarot_card_effect_locale`;
 DROP TABLE IF EXISTS `mod_stellar_tarot_card_effect`;
--- The card table changed shape with them: rebuilt, and filled again by
--- stellar_tarot_05_cards.sql which follows. A card carries ONE tag, in its
--- own row: the link table of the first versions goes too.
-DROP TABLE IF EXISTS `mod_stellar_tarot_card`;
+-- A card carries ONE tag, in its own row: the link table of the first
+-- versions goes too.
 DROP TABLE IF EXISTS `mod_stellar_tarot_card_tag`;
+-- The card table changed shape with them. Only a table still in that first
+-- shape (no `tag_id`) is rebuilt; stellar_tarot_05_cards.sql fills it again.
+SET @stellar_tarot_ddl := (SELECT IF(COUNT(*) > 0, 'DROP TABLE `mod_stellar_tarot_card`', 'DO 0')
+  FROM information_schema.tables t
+  WHERE t.table_schema = DATABASE() AND t.table_name = 'mod_stellar_tarot_card'
+    AND NOT EXISTS (SELECT 1 FROM information_schema.columns c
+                    WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name
+                      AND c.column_name = 'tag_id'));
+PREPARE stellar_tarot_ddl FROM @stellar_tarot_ddl;
+EXECUTE stellar_tarot_ddl;
+DEALLOCATE PREPARE stellar_tarot_ddl;
 
 -- ---------------------------------------------------------------------------
 -- The cards
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_card` (
-  `card_id` INT UNSIGNED NOT NULL COMMENT 'the card number, 1..499; its item is 902000 + card_id',
+  `card_id` INT UNSIGNED NOT NULL COMMENT 'the card number, 1..499; its item is 87000 + card_id',
   `name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'the English name of reference; the item carries the one the player reads',
   `edge_top` TINYINT UNSIGNED NOT NULL COMMENT '1..9',
   `edge_right` TINYINT UNSIGNED NOT NULL COMMENT '1..9',
@@ -107,7 +119,7 @@ CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_tag_locale` (
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_board` (
-  `board_id` INT UNSIGNED NOT NULL COMMENT 'the board number, 1..99; its item is 902500 + board_id',
+  `board_id` INT UNSIGNED NOT NULL COMMENT 'the board number, 1..99; its item is 87500 + board_id',
   `row_count` TINYINT UNSIGNED NOT NULL COMMENT '2..4',
   `col_count` TINYINT UNSIGNED NOT NULL COMMENT '2..4',
   `art` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'texture of the board, client side, under Interface\\mod-Tarot\\Boards',
@@ -120,8 +132,17 @@ CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_board` (
 -- its last -- and two per column -- on top, faced by the top edge of the
 -- column's first card, and at the bottom, faced by the bottom edge of its
 -- last. Every one of them may differ.
--- Rebuilt: the first versions had one number per row and per column.
-DROP TABLE IF EXISTS `mod_stellar_tarot_board_line`;
+-- The first versions had one number per row and per column (no `side`): only
+-- a table still in that shape is rebuilt; stellar_tarot_04_boards.sql fills it.
+SET @stellar_tarot_ddl := (SELECT IF(COUNT(*) > 0, 'DROP TABLE `mod_stellar_tarot_board_line`', 'DO 0')
+  FROM information_schema.tables t
+  WHERE t.table_schema = DATABASE() AND t.table_name = 'mod_stellar_tarot_board_line'
+    AND NOT EXISTS (SELECT 1 FROM information_schema.columns c
+                    WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name
+                      AND c.column_name = 'side'));
+PREPARE stellar_tarot_ddl FROM @stellar_tarot_ddl;
+EXECUTE stellar_tarot_ddl;
+DEALLOCATE PREPARE stellar_tarot_ddl;
 CREATE TABLE IF NOT EXISTS `mod_stellar_tarot_board_line` (
   `board_id` INT UNSIGNED NOT NULL,
   `axis` TINYINT UNSIGNED NOT NULL COMMENT '0 = row, 1 = column',

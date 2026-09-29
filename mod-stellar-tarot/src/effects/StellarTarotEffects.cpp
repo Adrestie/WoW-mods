@@ -640,7 +640,7 @@ namespace
     }
 
     // L'evenement d'une ligne -> le marqueur qui l'annonce, dans l'ordre des
-    // marqueurs (903810 et suivants).
+    // marqueurs (88810 et suivants).
     int32 MarqueurDe(std::string const& event)
     {
         static char const* const events[] = { "crit", "spell_crit", "heal_crit", "dodge", "parry",
