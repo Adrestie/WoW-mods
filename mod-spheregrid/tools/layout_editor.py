@@ -64,10 +64,10 @@ MODULE = os.path.dirname(HERE)
 
 # THE CLASS SPELLS THE GRID CAN TEACH. Four per class -- one of mobility and
 # one per specialisation -- allocated in the order the module lists its
-# classes: 8600000 + ten per class, plus the slot. What the cells may hold is
+# classes: 85000 + ten per class, plus the slot. What the cells may hold is
 # therefore known without asking anybody, and their names are read from the
 # module's own Spell.dbc.
-SPELL_BASE = 8600000
+SPELL_BASE = 85000
 SPELLS_PER_CLASS = 4
 
 

@@ -263,10 +263,10 @@ INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 INSERT IGNORE INTO `gameobject_template`
   (`entry`, `type`, `displayId`, `name`, `IconName`, `castBarCaption`, `unk1`,
    `size`, `Data0`, `Data1`, `Data2`, `Data3`, `ScriptName`) VALUES
-(803700, 3, 8176, 'Workbench', '', '', '', 1.6, 0, 0, 0, 0, '');
+(810000, 3, 8176, 'Workbench', '', '', '', 1.6, 0, 0, 0, 0, '');
 
 INSERT IGNORE INTO `gameobject_template_locale` (`entry`, `locale`, `name`, `castBarCaption`) VALUES
-(803700, 'frFR', 'Établi', '');
+(810000, 'frFR', 'Établi', '');
 
 -- ------------------------------------------------------------------
 -- The wording of the spell counts

@@ -43,8 +43,8 @@ end
 -- The identifiers the module allocates (SphereGridMgr.h): a stone is
 -- STONE_BASE + (statistic - 1) x qualities + (quality - 1), a statistic rune
 -- STAT_RUNE_BASE + (statistic - 1).
-local STONE_BASE = 803100
-local STAT_RUNE_BASE = 803600
+local STONE_BASE = 85000
+local STAT_RUNE_BASE = 85500
 local QUALITY_COUNT = 5
 local STAT_COUNT = 16
 

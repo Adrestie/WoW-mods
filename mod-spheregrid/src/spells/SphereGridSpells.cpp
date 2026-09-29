@@ -65,7 +65,7 @@
 namespace
 {
     // --- the leap ----------------------------------------------------------
-    constexpr uint32 GUST = 8600060;   // the shaman's leap
+    constexpr uint32 GUST = 85060;   // the shaman's leap
     constexpr float GUST_FACTOR = 1.5f;  // 30 m: twice the ordinary leap,
                                                 // less a quarter
     constexpr float GUST_SPEED = 1.2f;  // +20 %
@@ -96,7 +96,7 @@ namespace
     {
         uint32 visual, flight, impact;
     };
-    constexpr LeapDressing LEAP_H_DRESSINGS[] = { { 30028, 30026, 30027 } };
+    constexpr LeapDressing LEAP_H_DRESSINGS[] = { { 85028, 85026, 85027 } };
     // The animations live INSIDE the kits (a ready stance during the flight, a
     // special attack folded into the impact): timing them to end on the impact is
     // impossible, every strike lasts 900-1500 ms (measured in the M2) against
@@ -110,10 +110,10 @@ namespace
     // dummy — a copy of the rogue teleport, which replaced a charge: MoveCharge
     // suffered the spline cap (four times the run speed, server AND client) and
     // the speed acknowledgement; 6 smoke on the dummy; 7 he reappears.
-    constexpr uint32 DASH_DUMMY = 803804;       // clone trigger, display 802102
+    constexpr uint32 DASH_DUMMY = 85804;       // clone trigger, display 85102
     constexpr uint32 DASH_SMOKE_KIT = 404;      // the Vanish cast kit
-    constexpr uint32 DASH_INVISIBLE = 802102;   // a display at opacity 0 (every race)
-    constexpr uint32 DASH_STEP = 8600039;        // a copy of the heart of the
+    constexpr uint32 DASH_INVISIBLE = 85102;   // a display at opacity 0 (every race)
+    constexpr uint32 DASH_STEP = 85039;        // a copy of the heart of the
                                                 // shadow step (36563), a
                                                 // triggered cast
     // Between the teleport and the reappearance: the time for the client to take
@@ -127,9 +127,9 @@ namespace
     // and their figures without their past; their own AI gives them the faction
     // of the summoner and the target of his master.
     constexpr uint32 SEDUCTION = 6358;   // the succubus's NATIVE Seduction
-    constexpr uint32 GHOUL = 803801;
-    constexpr uint32 GUARD_DEATH = 803802;
-    constexpr uint32 TOTEM = 803803;
+    constexpr uint32 GHOUL = 85801;
+    constexpr uint32 GUARD_DEATH = 85802;
+    constexpr uint32 TOTEM = 85803;
 
     constexpr uint32 STEED_ASPECT = 14584;   // the paladin charger's look
 
@@ -142,12 +142,12 @@ namespace
     // the cooldown the core has just applied (it is sent BEFORE the effects, see
     // Spell::cast); the return leaves it to fall naturally; the expiry of the
     // marker applies it by hand.
-    constexpr uint32 SHIMMER_MARKER = 803810;    // display 802107, a rune on the ground
-    constexpr uint32 SHIMMER_WITNESS = 8600058;   // the 5 s aura
+    constexpr uint32 SHIMMER_MARKER = 85810;    // display 85107, a rune on the ground
+    constexpr uint32 SHIMMER_WITNESS = 85058;   // the 5 s aura
     constexpr uint32 SHIMMER_WINDOW = 5000;     // ms -- the window to return in
     constexpr uint32 SHIMMER_COOLDOWN = 20000;   // ms -- a mirror of the DBC
-    constexpr uint32 SHIMMER = 8600070;
-    constexpr uint32 ORB_CREATURE = 803806;    // the visible orb (display 802158)
+    constexpr uint32 SHIMMER = 85070;
+    constexpr uint32 ORB_CREATURE = 85806;    // the visible orb (display 85158)
     constexpr int32 ORB_DAMAGE = 750;          // a mirror of the DBC's $s1
     constexpr float ORB_RANGE = 30.0f;        // how far the orb runs
     constexpr float ORB_SPEED = 16.0f;       // m/s — speed d'origine
@@ -156,7 +156,7 @@ namespace
     constexpr float ORB_SPEED_SLOW = 1.0f;  // the DRASTIC brake once a
                                                 // target is within the radius
     constexpr float ORB_RADIUS = 3.0f;          // the radius it strikes in
-    constexpr uint32 ORB_KIT_IMPACT = 30033;   // the exported impact sound
+    constexpr uint32 ORB_KIT_IMPACT = 85033;   // the exported impact sound
     constexpr uint32 ORB_TICK = 250;            // ms -- the sweep's pace
                                                 // (a reactive brake); the
                                                 // DAMAGE lands every
@@ -166,7 +166,7 @@ namespace
     // sequence is retagged as a run in the model); decay (333 ms) fires on
     // arrival through a custom emote.
     constexpr uint32 ORB_DECAY = 333;          // ms -- how long Decay lasts
-    constexpr uint32 ORB_EMOTE_DECAY = 990001; // Emotes.dbc custom (anim 159)
+    constexpr uint32 ORB_EMOTE_DECAY = 85001; // Emotes.dbc custom (anim 159)
 
 
     /*
@@ -590,7 +590,7 @@ namespace
             if (waited < 1000)
                 return;
             waited = 0;
-            SpellInfo const* info = sSpellMgr->GetSpellInfo(8600071);
+            SpellInfo const* info = sSpellMgr->GetSpellInfo(85071);
             if (!info)
                 return;
             for (Unit* victim : nearby)
@@ -833,7 +833,7 @@ namespace
     // (ProcEventInfo) and replays it through the sweeping strike (a spell never
     // learned) on a second enemy near the victim — or on the victim herself.
     // Anti-recursion guard: the sweeping strike never sweeps.
-    constexpr uint32 STRIKE_SWEEPING = 8600055;
+    constexpr uint32 STRIKE_SWEEPING = 85055;
     constexpr float SWEEP_RANGE = 8.0f;
 
     class spell_spheregrid_sweeping_strikes : public AuraScript
@@ -903,7 +903,7 @@ namespace
     // press, and nothing in the protocol lets the server ask it for a second
     // one. A cast can therefore designate only ONE position; the other gate
     // rises at the caster's feet.
-    constexpr uint32 GATE_ITEM = 803820;   // both gates, the same object
+    constexpr uint32 GATE_ITEM = 850820;   // both gates, the same object
     constexpr uint32 GATE_LIFE = 45;         // s -- SummonGameObject counts
                                              // in seconds, not in ms
     constexpr float GATE_LOOT = 100.0f;  // m -- enough to find the pair again
@@ -1072,7 +1072,7 @@ namespace
     // THE TOGGLE: casting the rush again cancels it. The SpellScript intercepts
     // the cast, removes the aura when it is there and interrupts the spell with
     // no error message — no cost and no cooldown, the rush has neither.
-    constexpr uint32 RUSH_BURNING = 8600080;
+    constexpr uint32 RUSH_BURNING = 85080;
     // ---------------------------------------------------------------------
     // Cataclysm
     // ---------------------------------------------------------------------
@@ -1085,7 +1085,7 @@ namespace
     // best rank the warlock knows — his spell book has to be read — and applying
     // the charge aura, which is not an effect of the spell goal a spell of its
     // own.
-    constexpr uint32 CATACLYSM_HASTE = 8610012;
+    constexpr uint32 CATACLYSM_HASTE = 85112;
     constexpr uint32 IMMOLATION_MASK = 0x4;   // famille warlock, word 0
 
     // The same method as the other "best rank" helpers: the highest rank the
@@ -1302,7 +1302,7 @@ namespace
     // 3.3.5 the combo points live on the rogue's target: the DBC stays a spell
     // on self, the script reads them and clears them (CheckCast demands at
     // least one).
-    constexpr uint32 BUFFS[] = { 8600034, 8600035, 8600036, 8600037, 8600038 };
+    constexpr uint32 BUFFS[] = { 85034, 85035, 85036, 85037, 85038 };
     constexpr int32 DICE_DURATION_BASE = 15000;
 
     class spell_spheregrid_roll_the_bones : public SpellScript
@@ -1374,10 +1374,10 @@ namespace
     // healing one.
     // La forme d'Ombre du jeu. Un sort sacre l'annule : Halo en est un.
     constexpr uint32 SHADOWFORM = 15473;
-    constexpr uint32 HALO_RING_OPEN = 803814;
-    constexpr uint32 HALO_RING_CLOSED = 803815;
-    constexpr uint32 HALO_WAVE_DAMAGE = 8600044;
-    constexpr uint32 HALO_WAVE_HEAL = 8600045;
+    constexpr uint32 HALO_RING_OPEN = 85814;
+    constexpr uint32 HALO_RING_CLOSED = 85815;
+    constexpr uint32 HALO_WAVE_DAMAGE = 85044;
+    constexpr uint32 HALO_WAVE_HEAL = 85045;
     constexpr uint32 HALO_SECOND_BEAT = 3000;   // ms - the second beat
     // The stand animation of both models carries 3334 ms in the file, goal in
     // game the ring had finished its course a second earlier and set off for a
@@ -1533,12 +1533,12 @@ namespace
     // ghoul. Its visual only carries the native impact of a raise-dead spell.
     // The raw packet sent to the creature showed NOTHING — the client does not
     // have the creature yet at the tick of the summon.
-    constexpr uint32 APOCALYPSE_RAISE = 8600048;
+    constexpr uint32 APOCALYPSE_RAISE = 85048;
     // The ghoul TEARS ITSELF OUT OF THE GROUND: the birth animation, found in
     // the ghoul model — its bones go down more than two yards then come back up,
     // which really is a rise from the earth. An "emerge from ground" animation,
     // tried first, moves the model by a few inches only.
-    constexpr uint32 GHOUL_EMOTE_EMERGE = 990004;   // 0 to cut it off
+    constexpr uint32 GHOUL_EMOTE_EMERGE = 85004;   // 0 to cut it off
     constexpr uint32 GHOUL_EMERGE_MS = 4166;
     // The dash margin: neither an emote nor a spell bears on a creature the
     // client has not received yet — that is what left the ghouls "summoned
@@ -1913,7 +1913,7 @@ namespace
     // only: a chance, at each blow struck, of knocking the victim off her feet.
     // The fall is a one-second stun of the "knocked out" mechanic, the one that
     // lays down instead of freezing.
-    constexpr uint32 EARTHQUAKE_FALL = 8600068;
+    constexpr uint32 EARTHQUAKE_FALL = 85068;
     constexpr uint32 EARTHQUAKE_CHANCE = 10;     // % per beat and per victim
 
     class spell_spheregrid_earthquake : public AuraScript
@@ -1959,13 +1959,13 @@ namespace
     // their three replaceable textures. Any entry added here must exist in the
     // generator that writes the CreatureDisplayInfo rows, both in the client
     // patch and in the server DBC.
-    constexpr uint32 ASCENDANCE_FORMS[] = { 802120, 802121, 802122 };
-    constexpr uint32 ASCENDANCE = 8600062;
+    constexpr uint32 ASCENDANCE_FORMS[] = { 85120, 85121, 85122 };
+    constexpr uint32 ASCENDANCE = 85062;
     // WHAT A CAST GRANTS UNDER ASCENDANCE: two stacking buffs of the module's
     // own, one per school -- a Fire spell feeds the critical one, a Nature
     // spell the haste one, 3 % a stack -- both taken away with the ascendance.
-    constexpr uint32 ASCENDANCE_FIRE_STACK = 8610038;
-    constexpr uint32 ASCENDANCE_NATURE_STACK = 8610039;
+    constexpr uint32 ASCENDANCE_FIRE_STACK = 85138;
+    constexpr uint32 ASCENDANCE_NATURE_STACK = 85139;
 
     uint32 AscendanceBestRank(Player* shaman, uint8 word, uint32 mask)
     {
@@ -2112,10 +2112,10 @@ namespace
     constexpr uint32 LINK_DURATION = 16000;  // ms
     constexpr uint32 LINK_SHARE = 10;      // % of CURRENT health poured per beat
     constexpr uint32 LINK_FLOOR = 10;  // % of MAX health below which nothing is taken
-    constexpr uint32 LINK_VISUAL = 8600069;  // carries the effect, laid on the totem
+    constexpr uint32 LINK_VISUAL = 85069;  // carries the effect, laid on the totem
     // The shaman block of spell ids runs from 60 to 69; 70 already belongs to
     // the mage.
-    constexpr uint32 LINK_MARKER = 8600064;  // marks the members within range
+    constexpr uint32 LINK_MARKER = 85064;  // marks the members within range
 
     // Shares `total` in proportion to the `weights`, WITHOUT loss or creation:
     // the remainder of the integer divisions is handed out along the way, so that
@@ -2344,25 +2344,25 @@ namespace
     // aura of the spell serves both: removing it sends the tyrant away AND takes
     // every bonus back, and the tyrant AI removes that aura when it dies. A
     // single path for both cases.
-    constexpr uint32 TYRANT = 8600082;
+    constexpr uint32 TYRANT = 85082;
     // THE TYRANT'S HASTE replaces the fire area it used to carry: the channel
     // meant for it, which DIVIDES the attack time instead of rewriting it — so
     // the template keeps its reference cadence.
     constexpr float TYRANT_HASTE = 15.0f;         // %
-    constexpr uint32 TYRANT_IMP = 8610000;
-    constexpr uint32 TYRANT_HUNTER = 8610001;
-    constexpr uint32 TYRANT_SUCCUBUS = 8610002;
-    constexpr uint32 TYRANT_WALKER = 8610003;
-    constexpr uint32 TYRANT_ENSLAVED = 8610004;
-    constexpr uint32 TYRANT_CHAINS = 8610005;   // Xer'thul's demons, stacking
-    constexpr uint32 TYRANT_BROKEN = 8610006;   // Xer'thul's demons, fixed
-    constexpr uint32 TYRANT_SIZE = 8610007;
-    constexpr uint32 TYRANT_GUARD = 8610008;       // felguard: damage, fixed
-    constexpr uint32 TYRANT_GUARD_HASTE = 8610009;  // felguard: haste, stacking
+    constexpr uint32 TYRANT_IMP = 85100;
+    constexpr uint32 TYRANT_HUNTER = 85101;
+    constexpr uint32 TYRANT_SUCCUBUS = 85102;
+    constexpr uint32 TYRANT_WALKER = 85103;
+    constexpr uint32 TYRANT_ENSLAVED = 85104;
+    constexpr uint32 TYRANT_CHAINS = 85105;   // Xer'thul's demons, stacking
+    constexpr uint32 TYRANT_BROKEN = 85106;   // Xer'thul's demons, fixed
+    constexpr uint32 TYRANT_SIZE = 85107;
+    constexpr uint32 TYRANT_GUARD = 85108;       // felguard: damage, fixed
+    constexpr uint32 TYRANT_GUARD_HASTE = 85109;  // felguard: haste, stacking
     // THE WARLOCK HIMSELF, in metamorphosis. These two do not go on a demon goal
     // on the master: the clean-up must therefore take them back separately.
-    constexpr uint32 TYRANT_META_STACK = 8610010;  // haste + crit, cumulables
-    constexpr uint32 TYRANT_META_FIXED = 8610011;   // speed + mana, fixes
+    constexpr uint32 TYRANT_META_STACK = 85110;  // haste + crit, cumulables
+    constexpr uint32 TYRANT_META_FIXED = 85111;   // speed + mana, fixes
     constexpr uint32 METAMORPHOSIS = 47241;        // the NATIVE demonic form
 
     // Everything the tyrant may have applied, for the final clean-up.
@@ -2382,8 +2382,8 @@ namespace
     constexpr uint32 DEMON_SUCCUBUS = 1863;
     constexpr uint32 DEMON_FELGUARD = 17252;
     // The five guardians of a custom summoning spell of the module.
-    constexpr uint32 DEMON_XERTHUL_FIRST = 808000;
-    constexpr uint32 DEMON_XERTHUL_LAST = 808004;
+    constexpr uint32 DEMON_XERTHUL_FIRST = 84200;
+    constexpr uint32 DEMON_XERTHUL_LAST = 84204;
 
     constexpr uint32 TYRANT_SHARE_SHIELD = 50;   // % of the demon's max health
     // TWO INSTANT VISUALS, played on the TARGET struck and not on the demon: an
@@ -2678,7 +2678,7 @@ namespace
     constexpr uint32 RUSH_DURATION = 30000;         // ms -- a mirror of the DBC (D_30S,
                                                  // the duration of the pack)
     constexpr float RUSH_RADIUS = 4.0f;           // the ring around the prey
-    constexpr uint32 RUSH_FRENZY = 8600095;    // the proc aura applied to
+    constexpr uint32 RUSH_FRENZY = 85095;    // the proc aura applied to
                                                  // the beasts: every blow
                                                  // triggers the stacking
                                                  // bleed
@@ -2688,7 +2688,7 @@ namespace
     // DoMeleeAttackIfReady, hence NO attack at all, neither through AttackStart
     // nor through Unit::Attack. This AI attacks the master's target and TAKES ITS
     // OWN BACK as soon as the prey falls.
-    constexpr uint32 RUSH_BEAST = 803811;
+    constexpr uint32 RUSH_BEAST = 85811;
     constexpr float RUSH_DIVISOR = 2.5f;        // the beasts' weapon damage:
                                                  // a fraction of the pet's
     class spell_spheregrid_wild_rush : public SpellScript
@@ -2763,14 +2763,14 @@ namespace
     // stays still — a triggered cast does not replay the animation). What is left
     // is the KIT channel, proven on the heroic leap: a bare kit carrying ONLY the
     // animation, sent at every tick and chosen according to the weapon held.
-    constexpr uint32 SHOT_KIT_BOW = 30040;      // AttackBow 46
-    constexpr uint32 SHOT_KIT_GUN = 30041;    // AttackRifle 49
-    constexpr uint32 SHOT_KIT_THROW = 30042;      // AttackThrown 107
+    constexpr uint32 SHOT_KIT_BOW = 85040;      // AttackBow 46
+    constexpr uint32 SHOT_KIT_GUN = 85041;    // AttackRifle 49
+    constexpr uint32 SHOT_KIT_THROW = 85042;      // AttackThrown 107
 
     // The EMBEDDED BOLTS: every volley stacks the debuff carried by the shot;
     // on its EXPIRY ONLY, the bolts detonate around the target for an amount
     // proportional to the number of stacks.
-    constexpr uint32 SHOT_DETONATION = 8600098;
+    constexpr uint32 SHOT_DETONATION = 85098;
     // THE CHANNEL FIRES SIX VOLLEYS over three seconds. So six stacks at most
     // on the target.
     constexpr int32 SHOT_VOLLEYS = 6;
@@ -2860,12 +2860,12 @@ namespace
     // The spell is GROUND-TARGETED for every form: bear and cat are aimed at
     // theirs, and a reticle cannot be conditional. The sprint and the return to
     // a star therefore ignore the point.
-    constexpr uint32 CHARGE_WILD = 8600090;
+    constexpr uint32 CHARGE_WILD = 85090;
     // The five form spells, tuned with the grid spell: a node only teaches one,
     // and the numeric block of the class is full.
-    constexpr uint32 CHARGE_FORMS[] = { 8610016, 8610017, 8610018,
-                                         8610019, 8610020 };
-    constexpr uint32 CHARGE_TRAIL = 8610014;        // l'aura who seme
+    constexpr uint32 CHARGE_FORMS[] = { 85116, 85117, 85118,
+                                         85119, 85120 };
+    constexpr uint32 CHARGE_TRAIL = 85114;        // l'aura who seme
     // THE THREE COLOURS, in order of RANK from the end of the trail: the most
     // recent star is green, the middle one yellow, the oldest red. The index in
     // this table IS the rank, which makes the repaint immediate at every change.
@@ -2874,14 +2874,14 @@ namespace
     // model through an aura with a state kit and nothing showed: the star
     // creature wore the invisible stalker display — the client had no body to
     // hang the kit on. The creature IS the star now.
-    constexpr uint32 CHARGE_STAR_DISPLAYS[3] = { 802105, 802104, 802103 };
-    constexpr uint32 CHARGE_STAR_COUNT = 8610024;  // the counter, visible
+    constexpr uint32 CHARGE_STAR_DISPLAYS[3] = { 85105, 85104, 85103 };
+    constexpr uint32 CHARGE_STAR_COUNT = 85124;  // the counter, visible
 
     // THE START MARKER: laid down where the druid stood, before he left, and
     // fading after a couple of seconds.
-    constexpr uint32 CHARGE_START_CREATURE = 803817;
+    constexpr uint32 CHARGE_START_CREATURE = 85817;
     constexpr uint32 CHARGE_START_DURATION = 2000;      // ms
-    constexpr uint32 CHARGE_STAR_CREATURE = 803816;
+    constexpr uint32 CHARGE_STAR_CREATURE = 85816;
     constexpr float CHARGE_TREE_RANGE = 40.0f;      // for the ally
     constexpr float CHARGE_STAR_SPACING = 20.0f;      // between two stars
     // THE TRAVELLER'S DASH goes TWICE as far and twice as fast as the common
@@ -3241,9 +3241,9 @@ namespace
     // The DBC cannot hook onto combo points: the spell carries its damage effect
     // only, and the whole tiering lives here. The points are CONSUMED, as for any
     // finishing move.
-    constexpr uint32 FRENZY_WOUND = 8610026;
-    constexpr uint32 FRENZY_HASTE = 8610027;
-    constexpr uint32 FRENZY_CRIT = 8610028;
+    constexpr uint32 FRENZY_WOUND = 85126;
+    constexpr uint32 FRENZY_HASTE = 85127;
+    constexpr uint32 FRENZY_CRIT = 85128;
 
     struct FrenzyTier
     {
@@ -3353,14 +3353,14 @@ namespace
     // THEY MUST STAY VISIBLE. Marked SPELL_ATTR1_NO_AURA_ICON to unclutter the
     // buff bar, they stopped being returned by UnitBuff on the client side and
     // the cursor froze at the centre. The hiding was reverted.
-    constexpr uint32 SOLSTICE = 8600092;
-    constexpr uint32 SOLSTICE_SUN = 8610029;    // the sun's end
-    constexpr uint32 SOLSTICE_MOON = 8610030;      // the moon's end
-    constexpr uint32 SOLSTICE_WINDOW = 8610031;   // five seconds to act
-    constexpr uint32 SOLSTICE_USE_SUN = 8610034; // the sun is spent
-    constexpr uint32 SOLSTICE_USE_MOON = 8610035;   // the moon is spent
-    constexpr uint32 SOLSTICE_GAUGE_MOON = 8610032;   // 1 to 6 towards the moon
-    constexpr uint32 SOLSTICE_GAUGE_SUN = 8610033; // 1 to 6 towards the sun
+    constexpr uint32 SOLSTICE = 85092;
+    constexpr uint32 SOLSTICE_SUN = 85129;    // the sun's end
+    constexpr uint32 SOLSTICE_MOON = 85130;      // the moon's end
+    constexpr uint32 SOLSTICE_WINDOW = 85131;   // five seconds to act
+    constexpr uint32 SOLSTICE_USE_SUN = 85134; // the sun is spent
+    constexpr uint32 SOLSTICE_USE_MOON = 85135;   // the moon is spent
+    constexpr uint32 SOLSTICE_GAUGE_MOON = 85132;   // 1 to 6 towards the moon
+    constexpr uint32 SOLSTICE_GAUGE_SUN = 85133; // 1 to 6 towards the sun
     constexpr int8 SOLSTICE_END = 3;              // notches on either half
     constexpr int8 SOLSTICE_STEP = 1;              // one notch per spell
 
@@ -3553,7 +3553,7 @@ namespace
     // Bloom — every heal in progress lasts longer
     // =======================================================================
     // THE HEALING AREA, laid at the feet of the target.
-    constexpr uint32 BLOOM_ZONE = 8610036;
+    constexpr uint32 BLOOM_ZONE = 85136;
 
     class spell_spheregrid_bloom : public SpellScript
     {
@@ -3677,9 +3677,9 @@ namespace
     // it. The common pot is the principle of the anti-magic shield, extended here
     // to all damage and to the whole group. The dome CASTS the protection itself:
     // the AuraScript thus finds the reserve through its caster.
-    constexpr uint32 BARRIER_CREATURE = 803813;
-    constexpr uint32 BARRIER_PROTECTION = 8600059;
-    constexpr uint32 BARRIER_KIT_SOUND = 30045;
+    constexpr uint32 BARRIER_CREATURE = 85813;
+    constexpr uint32 BARRIER_PROTECTION = 85059;
+    constexpr uint32 BARRIER_KIT_SOUND = 85045;
     // THE DOME TIGHTENS: from its full radius down to half, reached at the
     // removal mark and held for the last seconds; the model follows, through the
     // object scale. No reserve is absorbed any more: those sheltered simply take
@@ -3706,8 +3706,8 @@ namespace
     // well past the disappearance. The cut therefore follows the dome to within
     // two seconds.
     constexpr uint32 BARRIER_SOUND_DURATION = 2000;
-    constexpr uint32 BARRIER_EMOTE_BIRTH = 990003;   // Emotes.dbc custom
-    constexpr uint32 BARRIER_EMOTE_DECAY = 990001;   // (anim 159, partagee)
+    constexpr uint32 BARRIER_EMOTE_BIRTH = 85003;   // Emotes.dbc custom
+    constexpr uint32 BARRIER_EMOTE_DECAY = 85001;   // (anim 159, partagee)
     constexpr uint32 BARRIER_DECAY_MS = 1000;   // the dome's Decay sequence
 
     // The dome hum, as a free function: AddEventAtOffset wants an RVALUE
@@ -3850,14 +3850,14 @@ namespace
     // =======================================================================
     // Angelic feather — laid on the ground, picked up in passing
     // =======================================================================
-    constexpr uint32 FEATHER_CREATURE = 803812;    // display 802108
-    constexpr uint32 FEATHER_BUFF = 8600097;   // the speed it gives, and for how long,
+    constexpr uint32 FEATHER_CREATURE = 85812;    // display 85108
+    constexpr uint32 FEATHER_BUFF = 85097;   // the speed it gives, and for how long,
                                                // are the buff's own: see its row
     constexpr uint32 FEATHER_LIFE = 6000;           // ms au sol
     constexpr float FEATHER_RADIUS = 2.0f;          // the step that picks it up
     constexpr uint32 FEATHER_TICK = 200;            // ms -- the watch's pace
-    constexpr uint32 FEATHER_SPELL = 8600040;
-    constexpr uint32 FEATHER_RESERVE = 8600099;    // the aura that holds the charges
+    constexpr uint32 FEATHER_SPELL = 85040;
+    constexpr uint32 FEATHER_RESERVE = 85099;    // the aura that holds the charges
     constexpr uint8 FEATHER_CHARGES = 3;
     constexpr uint32 FEATHER_COOLDOWN = 20000;     // ms -- per charge
 

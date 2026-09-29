@@ -261,7 +261,8 @@ class Target(object):
 DB_KEYS = {
     "spells": (("spell_dbc", "ID"),),
     "items": (("item_template", "entry"), ("item_dbc", "ID")),
-    "templates": (("creature_template", "entry"), ("gameobject_template", "entry")),
+    "templates": (("creature_template", "entry"),),
+    "gameobjects": (("gameobject_template", "entry"),),
     "displays": (("creature_model_info", "DisplayID"),
                  ("creaturedisplayinfo_dbc", "ID"), ("creaturemodeldata_dbc", "ID")),
 }

@@ -189,23 +189,23 @@ CORRECTIONS = {
     "Spell.dbc": {
         # Shunpo: RangeIndex (field 46) said 11, "Fifteen yards", where the
         # spell's own text and its use want thirty metres -- index 4.
-        8600030: {46: 4},
+        85030: {46: 4},
         # Divine Steed: EffectBasePoints_1 (field 80) is the speed bonus less
         # one; 149 is the +150 % the spell is meant to give.
-        8600010: {80: 149},
+        85010: {80: 149},
         # Meteor: SpellVisualID_1/_2 (fields 131, 132) said 7479, the game's
-        # meteor, which has no cast in front of it. 30154 is that visual with
+        # meteor, which has no cast in front of it. 85154 is that visual with
         # the fire cast kits -- a DERIVED row below.
-        8600056: {131: 30154, 132: 30154},
+        85056: {131: 85154, 132: 85154},
         # The feather reserve: the aura whose stack is the number of
         # feathers left is an INDICATOR, kept on the priest at all times by
         # the module's own code. A player dismissing it with a right click
         # would be left blind until his next cast, so the row is given the
         # attribute that refuses a cancellation (0x80000000).
-        8600099: {4: 0x80000000},
+        85099: {4: 0x80000000},
         # Ascendance: its texts, once "cast while moving" left it for the two
         # stacks. A correction that is a STRING goes to the string block.
-        8600062: texts(
+        85062: texts(
             block(170,
                   'Your magic damage is increased by $s1% for $d. Each Fire spell you cast raises your critical strike chance by 3% and each Nature spell your haste by 3%, stacking until Ascendance ends. In addition, five foes before you are struck by Flame Shock followed by a Lava Burst.',
                   "Vos dégâts magiques augmentent de $s1% pendant $d. Chaque sort de Feu que vous lancez augmente vos chances de coup critique de 3% et chaque sort de Nature votre hâte de 3%, cumulables jusqu'à la fin de l'Ascendance. De plus, cinq ennemis devant vous subissent un Horion de flammes puis une Explosion de lave."),
@@ -228,10 +228,10 @@ CORRECTIONS = {
     # Despair's two effects strike once and leave nothing, so it is
     # Shadowfury's instant slot that fires.
     "SpellVisualKit.dbc": {
-        30044: {5: 0, 15: 0},       # base effect and sound leave the priest
+        85044: {5: 0, 15: 0},       # base effect and sound leave the priest
     },
     "SpellVisual.dbc": {
-        30044: {23: 30212},         # ... for the ground kit, at the point aimed at
+        85044: {23: 85212},         # ... for the ground kit, at the point aimed at
     },
 }
 
@@ -241,18 +241,18 @@ CORRECTIONS = {
 # index, strings by index, and -- a sixth element, for a table whose fields
 # are not all four bytes wide -- single bytes by offset. They are added after
 # the corrections, so a correction can point at one.
-#   SpellVisual 30154        the game's meteor (7479) with the classic fire
+#   SpellVisual 85154        the game's meteor (7479) with the classic fire
 #                            cast kits (precast 30, cast 38) -- Meteor's
-#   CreatureModelData 802158 the orb's own model; CreatureDisplayInfo 802158
-#                            wears it. 802103 -- what the orb wore in the
+#   CreatureModelData 85158 the orb's own model; CreatureDisplayInfo 85158
+#                            wears it. 85103 -- what the orb wore in the
 #                            source -- is the druid's red star.
-#   SpellChainEffects 2001   the beam Ray of Frost's kit asks for (its
-#                            CharParamZero says 2001): Mind Flay's beam (750)
+#   SpellChainEffects 85001  the beam Ray of Frost's kit asks for (its
+#                            CharParamZero says 85001): Mind Flay's beam (750)
 #                            with the frost texture. The source never had the
 #                            row; the kit pointed at nothing.
-#   SpellVisualKit 30212     Shadow Word: Despair's ground kit -- see the
+#   SpellVisualKit 85212     Shadow Word: Despair's ground kit -- see the
 #                            correction above.
-#   Spell 8610038, 8610039   Ascendance's two stacks, derived from Ascendance
+#   Spell 85138, 85139   Ascendance's two stacks, derived from Ascendance
 #                            but with TWELVE SECONDS of their own (duration 29):
 #                            they outlive the ascendance that granted them,
 #                            itself: an aura of their own, no second effect,
@@ -262,16 +262,16 @@ CORRECTIONS = {
 # tab a spell sits in is a decision per spell, taken once; the module's
 # spells are fixed, so the file is a shipped asset like the art, and each
 # of its rows already says the skill line it gives its spell. Identifiers
-# 25001 and up, above the game's highest (21980).
+# 85001 and up, above the game's highest (21980).
 DERIVED = {
     "Spell.dbc": [
-        (8610038, "module", 8600062, {40: 29, 71: 6, 95: 57, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 678, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
+        (85138, "module", 85062, {40: 29, 71: 6, 95: 57, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 678, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
          texts(block(136, 'Ascendance: Fire', 'Ascendance : Feu'),
                block(170, 'Critical strike chance increased by $s1% per stack, for $d.',
                      "Chances de coup critique augmentées de $s1% par cumul, pendant $d."),
                block(187, 'Critical strike chance increased by $s1%.',
                      'Chances de coup critique augmentées de $s1%.'))),
-        (8610039, "module", 8600062, {40: 29, 71: 6, 95: 216, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 62, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
+        (85139, "module", 85062, {40: 29, 71: 6, 95: 216, 80: 2, 72: 0, 96: 0, 81: 0, 110: 0, 86: 1, 87: 0, 49: 99, 133: 62, 131: 0, 132: 0, 208: 0, 225: 1, 42: 0, 29: 0, 30: 0},
          texts(block(136, 'Ascendance: Nature', 'Ascendance : Nature'),
                block(170, 'Haste increased by $s1% per stack, for $d.',
                      "Hâte augmentée de $s1% par cumul, pendant $d."),
@@ -279,23 +279,23 @@ DERIVED = {
                      'Hâte augmentée de $s1%.'))),
     ],
     "SpellVisual.dbc": [
-        (30154, "stock", 7479, {1: 30, 2: 38}, {}),
+        (85154, "stock", 7479, {1: 30, 2: 38}, {}),
     ],
     "SpellVisualKit.dbc": [
         # Despair's ground kit: no animation (an area kit animates nothing),
         # the shadow model and the sound the caster's kit gave up. The values
         # are said outright rather than copied, because the row it derives
         # from has just been emptied of them by the correction above.
-        (30212, "module", 30044, {2: 0xFFFFFFFF, 5: 8200221, 15: 990112}, {}),
+        (85212, "module", 85044, {2: 0xFFFFFFFF, 5: 85221, 15: 85112}, {}),
     ],
     "CreatureModelData.dbc": [
-        (802158, "module", 802103, {}, {2: "spells\\11fx_arcaneorb02.mdx"}),
+        (85158, "module", 85103, {}, {2: "spells\\11fx_arcaneorb02.mdx"}),
     ],
     "CreatureDisplayInfo.dbc": [
         # half the model's size: the orb is a fist, not a head
-        (802158, "module", 802103, {1: 802158, 4: 0x3F000000}, {}),   # 4 = CreatureModelScale, 0.5f
+        (85158, "module", 85103, {1: 85158, 4: 0x3F000000}, {}),   # 4 = CreatureModelScale, 0.5f
     ],
-    # NOTHING TO DERIVE. Chain 2001 -- the beam the kit's CharParamZero
+    # NOTHING TO DERIVE. Chain 85001 -- the beam the kit's CharParamZero
     # names -- EXISTS in the source, with a texture of its own,
     # 8fx_jaina_glacialraybeam.blp, Jaina's glacial ray. It is not a texture
     # of 3.3.5 and the source ships it; it is listed among the extra files
@@ -311,7 +311,7 @@ DERIVED = {
 EXTRA_FILES = (
     "spells\\11fx_arcaneorb02.mdx",
     "spells\\11fx_phaseportal01.mdx",
-    # The texture chain 2001 names: Jaina's glacial ray, not a texture of
+    # The texture chain 85001 names: Jaina's glacial ray, not a texture of
     # 3.3.5, which the source ships itself.
     "Textures\\SpellChainEffects\\8fx_jaina_glacialraybeam.blp",
 )
@@ -329,12 +329,12 @@ MODULE_OWN = (
 # The archive the installer writes; see `install.py`.
 ARCHIVE = "patch-Z.MPQ"
 
-GAME_OBJECT_DISPLAYS = {8500: 802100}
+GAME_OBJECT_DISPLAYS = {8500: 85100}
 
 CPP_RANGES = {
-    "kit": (30000, 30099),
-    "display": (802100, 802199),
-    "emote": (990000, 990999),
+    "kit": (85000, 85099),
+    "display": (85100, 85199),
+    "emote": (85000, 85099),
 }
 
 
@@ -370,9 +370,9 @@ def named_by_cpp(kind):
 # and our rows are made to point at the copy. Each block is free in a stock
 # client and clear of the ranges the module already uses.
 BORROWED_BASE = {
-    "SpellVisual.dbc": 30100,
-    "SpellVisualKit.dbc": 30200,
-    "SpellVisualEffectName.dbc": 8200300,
+    "SpellVisual.dbc": 85100,
+    "SpellVisualKit.dbc": 85200,
+    "SpellVisualEffectName.dbc": 85300,
 }
 SPELL_VISUAL_FIELDS = (131, 132)        # Spell.dbc: SpellVisualID_1, _2
 
@@ -534,7 +534,7 @@ def main():
     # on a previous run of itself.
     spell_table = read_dbc(source, "Spell.dbc")
     spells = dbc.subset(spell_table,
-                        owned.identifiers(SQL, 8500000, 8619999),
+                        owned.identifiers(SQL, 85000, 86999),
                         dbc.string_fields(spell_table))
     wanted = set()
     for record in spells.records:
@@ -639,7 +639,7 @@ def main():
     creature_models = read_dbc(source, "CreatureModelData.dbc").by_id()
     creature_displays = read_dbc(source, "CreatureDisplayInfo.dbc")
     ours_displays = set(owned.identifiers(
-        SQL, 802001, 802999,
+        SQL, 85001, 802999,
         tables=("creature_template_model", "creature_model_info")))
     # A shape a spell turns a player into wears no creature: no SQL row names
     # it, and only the C++ does -- the three forms of Ascendance among them.
@@ -780,7 +780,7 @@ def main():
     print()
     print("THE ROWS")
     # Only the models that do not already exist. An appearance may well point
-    # at one of the game's own -- display 802102 wears the invisible stalker --
+    # at one of the game's own -- display 85102 wears the invisible stalker --
     # and shipping a row for it would mean overwriting something that is not
     # ours. The installer refuses that, and it is right to.
     display_table = read_dbc(source, "CreatureDisplayInfo.dbc")
@@ -798,10 +798,10 @@ def main():
     # as well. A server does not read these either, and where the two had been
     # kept apart they had drifted: fifteen fields on the spells, and a whole
     # locale slot the rebuild from SQL left empty.
-    spell_ids = sorted(set(owned.identifiers(SQL, 8500000, 8619999))
+    spell_ids = sorted(set(owned.identifiers(SQL, 85000, 86999))
                        & set(read_dbc(source, "Spell.dbc").ids()))
     item_table = read_dbc(source, "Item.dbc")
-    item_ids = sorted(set(owned.identifiers(SQL, 803100, 803699))
+    item_ids = sorted(set(owned.identifiers(SQL, 85000, 85599))
                       & set(item_table.ids()))
 
     icon_table = read_dbc(source, "SpellIcon.dbc")
