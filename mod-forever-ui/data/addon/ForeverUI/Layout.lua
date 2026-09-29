@@ -30,9 +30,11 @@ end
 local Layout = {}
 ForeverUI.Layout = Layout
 
-Layout.systems = {}   -- id -> { frame, label, defaults }
+Layout.systems = {}   -- id -> { frame, label, defaults, baseScale }
 Layout.order = {}     -- ids, in registration order
 Layout.editing = false
+Layout.work = nil     -- working copy of the positions during a Customize UI session
+Layout.onRegister = nil  -- set by Customize UI: called with an id registered while editing
 
 local PREFIX = "|cff66ccffForeverUI|r : "
 local L = ForeverUI.L
@@ -40,6 +42,7 @@ local L = ForeverUI.L
 local function say(message)
 	DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. message)
 end
+Layout.Say = say
 
 local function positions()
 	ForeverUIDB = ForeverUIDB or {}
@@ -47,21 +50,55 @@ local function positions()
 	return ForeverUIDB.positions
 end
 
--- Place the frame at its saved position, or at its default position.
+-- Positions in effect: the working copy while editing, the saved ones otherwise.
+local function current()
+	return Layout.work or positions()
+end
+
+-- A saved entry: an anchor (point, relativePoint, x, y), a size (scale), or both. Offsets are
+-- in the frame's units at 100 %; an entry without anchor keeps the default one.
+local function copy(p)
+	return { point = p.point, relativePoint = p.relativePoint, x = p.x, y = p.y, scale = p.scale }
+end
+
+-- Anchor in effect: the saved one, or the default one.
+function Layout.Anchor(id)
+	local system = Layout.systems[id]
+	local p = current()[id]
+	if p and p.point then
+		return p
+	end
+	return system and system.defaults
+end
+
+-- Size in effect, 1 for 100 %.
+function Layout.Scale(id)
+	local p = current()[id]
+	return p and p.scale or 1
+end
+
+-- Ratio of the frame's units at 100 % to UIParent's.
+local function unit(system, scale)
+	return system.frame:GetEffectiveScale() / UIParent:GetEffectiveScale() / scale
+end
+
+-- Place the frame at its saved position and size, or at the default ones. The offsets shrink
+-- with the size, so the anchor stays at the same place on screen.
 function Layout.Apply(id)
 	local system = Layout.systems[id]
 	if not system then
 		return false
 	end
 
-	local saved = positions()[id]
-	local p = saved or system.defaults
-
+	local p = Layout.Anchor(id)
+	local scale = Layout.Scale(id)
+	system.frame:SetScale(system.baseScale * scale)
 	system.frame:ClearAllPoints()
-	system.frame:SetPoint(p.point, UIParent, p.relativePoint, p.x, p.y)
+	system.frame:SetPoint(p.point, UIParent, p.relativePoint, p.x / scale, p.y / scale)
 	return true
 end
 
+-- Records the frame's current anchor (in the working copy while editing).
 function Layout.Save(id)
 	local system = Layout.systems[id]
 	if not system then
@@ -73,39 +110,103 @@ function Layout.Save(id)
 		return false
 	end
 
-	positions()[id] = {
+	local scale = Layout.Scale(id)
+	current()[id] = {
 		point = point,
 		relativePoint = relativePoint or point,
-		x = x or 0,
-		y = y or 0,
+		x = (x or 0) * scale,
+		y = (y or 0) * scale,
+		scale = current()[id] and current()[id].scale,
 	}
 	return true
 end
 
+-- Moves the element, keeping its anchor. x, y: offsets in UIParent units.
+function Layout.SetPosition(id, x, y)
+	local system = Layout.systems[id]
+	if not system then
+		return false
+	end
+	local anchor = Layout.Anchor(id)
+	local k = unit(system, Layout.Scale(id))
+	local p = current()[id] or {}
+	p.point, p.relativePoint, p.x, p.y = anchor.point, anchor.relativePoint, x / k, y / k
+	current()[id] = p
+	Layout.Apply(id)
+	return true
+end
+
+-- Resizes the element around its anchor; scale: 1 for 100 %.
+function Layout.SetScale(id, scale)
+	if not Layout.systems[id] then
+		return false
+	end
+	local p = current()[id] or {}
+	p.scale = (scale ~= 1) and scale or nil
+	current()[id] = next(p) and p or nil
+	Layout.Apply(id)
+	return true
+end
+
+-- Back to the default position: one element, or all of them when id is nil.
 function Layout.Reset(id)
 	if id then
 		if not Layout.systems[id] then
 			return false
 		end
-		positions()[id] = nil
+		current()[id] = nil
 		Layout.Apply(id)
 		return true
 	end
 
 	for _, systemID in ipairs(Layout.order) do
-		positions()[systemID] = nil
+		current()[systemID] = nil
 		Layout.Apply(systemID)
 	end
 	return true
 end
 
--- Make the frame movable, place it, and show its overlay in edit mode.
--- id: saved-position key; label: overlay text; point..y: default anchor on UIParent
+-- Customize UI session: moves go to a working copy; Commit saves it, Revert drops it and
+-- puts every element back where it was.
+-- The working copy holds every entry, so an element registered during the session finds its
+-- own; only the elements' entries go back (windows keep theirs, even moved meanwhile).
+function Layout.BeginEdit()
+	local work = {}
+	for id, p in pairs(positions()) do
+		work[id] = copy(p)
+	end
+	Layout.work = work
+	Layout.editing = true
+end
+
+function Layout.Commit()
+	local work = Layout.work
+	if work then
+		local saved = positions()
+		for id in pairs(Layout.systems) do
+			saved[id] = work[id]
+		end
+	end
+	Layout.work = nil
+	Layout.editing = false
+end
+
+function Layout.Revert()
+	Layout.work = nil
+	Layout.editing = false
+	for _, id in ipairs(Layout.order) do
+		Layout.Apply(id)
+	end
+end
+
+-- Make the frame movable and place it.
+-- id: saved-position key; label: edit mode label; point..y: default anchor on UIParent
 function Layout.Register(frame, id, label, point, relativePoint, x, y)
 	Layout.systems[id] = {
 		frame = frame,
 		label = label,
 		defaults = { point = point, relativePoint = relativePoint, x = x, y = y },
+		baseScale = frame:GetScale(),
 	}
 	table.insert(Layout.order, id)
 
@@ -113,8 +214,8 @@ function Layout.Register(frame, id, label, point, relativePoint, x, y)
 	frame:SetClampedToScreen(true)
 	Layout.Apply(id)
 
-	if Layout.editing then
-		Layout.ShowOverlay(id)
+	if Layout.editing and Layout.onRegister then
+		Layout.onRegister(id)
 	end
 	return frame
 end
@@ -129,97 +230,19 @@ function Layout.SetDefaults(id, point, relativePoint, x, y)
 	end
 
 	system.defaults = { point = point, relativePoint = relativePoint, x = x, y = y }
-	if not positions()[id] then
+	local p = current()[id]
+	if not (p and p.point) then
 		Layout.Apply(id)
 	end
 	return true
 end
 
-local function buildOverlay(id, system)
-	local overlay = CreateFrame("Frame", nil, system.frame)
-	overlay:SetAllPoints(system.frame)
-	overlay:SetFrameStrata("DIALOG")
-	overlay:EnableMouse(true)
-	overlay:RegisterForDrag("LeftButton")
-
-	local background = overlay:CreateTexture(nil, "BACKGROUND")
-	background:SetAllPoints(overlay)
-	background:SetTexture(0.1, 0.6, 1, 0.35)
-
-	local text = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	text:SetPoint("CENTER")
-	text:SetText(system.label)
-
-	overlay:SetScript("OnDragStart", function()
-		if InCombatLockdown() then
-			say(L.LAYOUT_NO_MOVE_IN_COMBAT)
-			return
-		end
-		system.frame:StartMoving()
-	end)
-
-	overlay:SetScript("OnDragStop", function()
-		system.frame:StopMovingOrSizing()
-		Layout.Save(id)
-	end)
-
-	system.overlay = overlay
-	return overlay
-end
-
-function Layout.ShowOverlay(id)
-	local system = Layout.systems[id]
-	if not system then
-		return
-	end
-
-	local overlay = system.overlay or buildOverlay(id, system)
-	overlay:Show()
-end
-
-function Layout.HideOverlay(id)
-	local system = Layout.systems[id]
-	if system and system.overlay then
-		system.overlay:Hide()
-	end
-end
-
-function Layout.SetEditMode(enabled)
-	if enabled and InCombatLockdown() then
-		say(L.LAYOUT_EDIT_MODE_COMBAT)
-		return false
-	end
-
-	Layout.editing = enabled and true or false
-
-	for _, id in ipairs(Layout.order) do
-		if Layout.editing then
-			Layout.ShowOverlay(id)
-		else
-			Layout.HideOverlay(id)
-		end
-	end
-
-	if Layout.editing then
-		say(L.LAYOUT_EDIT_MODE_ON)
-	else
-		say(L.LAYOUT_EDIT_MODE_OFF)
-	end
-	return true
-end
-
--- Edit mode turns itself off on entering combat: secure frames can no longer be moved, and
--- the blue overlays would suggest otherwise.
+-- Places every element once saved variables are loaded.
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_LOGIN")
-watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
-watcher:SetScript("OnEvent", function(_self, event)
-	if event == "PLAYER_LOGIN" then
-		for _, id in ipairs(Layout.order) do
-			Layout.Apply(id)
-		end
-	elseif event == "PLAYER_REGEN_DISABLED" and Layout.editing then
-		Layout.SetEditMode(false)
+watcher:SetScript("OnEvent", function()
+	for _, id in ipairs(Layout.order) do
+		Layout.Apply(id)
 	end
 end)
 
@@ -282,7 +305,7 @@ SlashCmdList["FOREVERUI"] = function(message)
 	command = string.lower(command or "")
 
 	if command == "" or command == "edit" then
-		Layout.SetEditMode(not Layout.editing)
+		ForeverUI.CustomizeUI.Toggle()
 	elseif command == "reset" then
 		if argument ~= "" then
 			if Layout.Reset(argument) then

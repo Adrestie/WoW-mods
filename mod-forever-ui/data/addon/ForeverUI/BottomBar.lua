@@ -794,17 +794,22 @@ local function measureRow()
 	}
 end
 
--- The end caps frame the whole row: left one on the action bar, right one on the bags
--- bar.
+-- Default positions of the end caps (gryphons), which frame the whole row: the left one on
+-- the action bar's left edge, the right one on the bags bar's right edge, each overlapping its
+-- bar and dropped like it (ActionBar.lua). A gryphon the player has moved stays where it is.
 local function placeEndCaps()
 	local endCaps = ForeverUI.ActionBarEndCaps
-	if not endCaps or not endCaps.right then
+	local bar = ForeverUI.ActionBarHolder
+	if not endCaps or not bar then
 		return
 	end
-
-	endCaps.right:ClearAllPoints()
-	-- Same 2 px drop as the left end cap (see ActionBar.lua).
-	endCaps.right:SetPoint("BOTTOMLEFT", bags, "BOTTOMRIGHT", -30, -2)
+	local half = micro:GetWidth() / 2
+	local barLeft = MICRO_X - half + BAR_OFFSET_X - bar:GetWidth()
+	local bagsRight = MICRO_X + half + BAGS_OFFSET_X + bags:GetWidth()
+	ForeverUI.Layout.SetDefaults("leftgryphon", "BOTTOMRIGHT", "BOTTOM",
+		barLeft + endCaps.inset, MICRO_Y + BAR_OFFSET_Y + endCaps.drop)
+	ForeverUI.Layout.SetDefaults("rightgryphon", "BOTTOMLEFT", "BOTTOM",
+		bagsRight - endCaps.inset, MICRO_Y + BAGS_OFFSET_Y + endCaps.drop)
 end
 
 local function layoutAll()

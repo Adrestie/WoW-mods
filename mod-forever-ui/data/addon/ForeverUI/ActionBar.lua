@@ -199,15 +199,16 @@ page:SetFrameLevel(holder:GetFrameLevel() + 11)
 -- Dividers between buttons: RIGHT on the button's LEFT, offset 5.
 local dividers = {}
 
--- End caps: two 154 x 95 frames filled by their texture.
--- point, relPoint, offsetX: anchor on the bar
-local function createEndCap(name, atlas, point, relPoint, offsetX)
-	local cap = CreateFrame("Frame", name, holder)
+-- End caps (gryphons): two 154 x 95 frames filled by their texture, movable on their own
+-- (Customize UI); BottomBar.lua gives their default positions.
+local END_CAP_INSET = 30       -- each cap overlaps its bar by 30 px
+local function createEndCap(name, atlas)
+	local cap = CreateFrame("Frame", name, UIParent)
 	cap:SetWidth(END_CAP_WIDTH)
 	cap:SetHeight(END_CAP_HEIGHT)
-	cap:SetPoint(point, holder, relPoint, offsetX, END_CAP_DROP)
 	-- camelot/MainMenuBarEndCaps.xml: frameLevel 100. The end cap is drawn IN FRONT of the
 	-- buttons, whose level is the client frame's.
+	cap:SetFrameStrata(holder:GetFrameStrata())
 	cap:SetFrameLevel(holder:GetFrameLevel() + 10)
 
 	local texture = cap:CreateTexture(nil, "OVERLAY")
@@ -223,8 +224,8 @@ end
 -- cap on the bag bar's RIGHT edge, each 30 px inward (BottomBar.lua re-anchors it to the
 -- bags). Camelot drops the cap 20 px below the bar, off screen for a bar 2 px above the
 -- screen bottom, so the art bottom is aligned on the bar bottom, then 2 px lower.
-local leftCap = createEndCap("ForeverUIActionBarLeftCap", "ui-hud-actionbar-gryphon-left", "BOTTOMRIGHT", "BOTTOMLEFT", 30)
-local rightCap = createEndCap("ForeverUIActionBarRightCap", "ui-hud-actionbar-gryphon-right", "BOTTOMLEFT", "BOTTOMRIGHT", -30)
+local leftCap = createEndCap("ForeverUIActionBarLeftCap", "ui-hud-actionbar-gryphon-left")
+local rightCap = createEndCap("ForeverUIActionBarRightCap", "ui-hud-actionbar-gryphon-right")
 
 -- The bonus bar takes the same place. On a stance change 3.3.5 shows BonusActionBarFrame
 -- over the main bar at its own position, so its buttons are anchored like the main ones and
@@ -453,9 +454,13 @@ end
 
 ForeverUI.ActionBarHolder = holder
 ForeverUI.ActionBarBorder = border
-ForeverUI.ActionBarEndCaps = { left = leftCap, right = rightCap }
+ForeverUI.ActionBarEndCaps = { left = leftCap, right = rightCap, inset = END_CAP_INSET, drop = END_CAP_DROP }
 -- camelot/EditModePresetLayoutConstants.lua: BOTTOMRIGHT on the micro-menu's BOTTOMLEFT at
 -- (-4.5, -4); the micro-menu at BOTTOM (116.5, 6), 275 wide, puts the bar's right edge at
 -- -25.5 from the screen center, 2 from the bottom. BottomBar.lua redoes this with the real
 -- micro-menu width.
 ForeverUI.Layout.Register(holder, "actionbar", L.ACTIONBAR_EDIT_LABEL, "BOTTOMRIGHT", "BOTTOM", -25.5, 2)
+ForeverUI.Layout.Register(leftCap, "leftgryphon", L.ACTIONBAR_EDIT_LABEL_LEFT_GRYPHON, "BOTTOMRIGHT", "BOTTOM",
+	-25.5 - holder:GetWidth() + END_CAP_INSET, 2 + END_CAP_DROP)
+ForeverUI.Layout.Register(rightCap, "rightgryphon", L.ACTIONBAR_EDIT_LABEL_RIGHT_GRYPHON, "BOTTOMLEFT", "BOTTOM",
+	0, 2 + END_CAP_DROP)

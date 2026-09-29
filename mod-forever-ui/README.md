@@ -1,148 +1,86 @@
 # mod-forever-ui
 
-The modern World of Warcraft interface, rebuilt for a 3.3.5a client.
+The modern World of Warcraft interface (the "camelot" client), rebuilt for a
+3.3.5a client: a client addon, the art it needs in `patch-Z.MPQ`, the login
+screens, and a small server part for the statistics.
 
-This is not a module the server loads: it is a client addon plus the art it
-needs. The art comes from a modern client, read sheet by sheet, and is served
-to 3.3.5 the way the modern client serves it -- one texture, a rectangle read
-inside it -- because 3.3.5 has no `SetAtlas`.
+## What it covers
 
-One section is one whole piece of the interface. A section is `done` when the
-game has shown it right and it has been accepted, which also makes it a piece
-nothing else is allowed to disturb.
+- **On screen:** player, target, party and raid frames, cast bar, action,
+  stance and pet bars, micro menu and bags bar, experience and reputation
+  bars, buffs, minimap, quest tracker, chat, tooltips.
+- **Windows:** bags and bank, character sheet (with every tab), spellbook,
+  talents and glyphs, world map and quest log, social, group finder, merchant,
+  trade, mail, guild bank, auction house, trainers and NPC dialogs, professions,
+  barber shop, guild tabard, inspection, dressing room, game menu and settings.
+- **Login screens:** login, character select and creation, realm list, AddOns
+  list, options, cinematics and credits.
 
-| Section | What it holds | State |
-|---|---|---|
-| Player frame | Frame and portrait, health and power bars, rest and combat states, threat, vehicle art, PvP icon, raid subgroup indicator, play time, incoming damage, and the death knight rune bar. | done |
-| Target frame | Frame and portrait, health and power bars, the reputation band, and the art each classification calls for: ordinary, minus, rare, elite and rare elite dragons, world boss ring. | done |
-| Cast bar | Standard, channelled and uninterruptable casts, the interrupted state and the shield. | done |
-| Action bar | The button and all of its states, the page number block, the two gryphon end caps. The button art reaches every action button the client carries, the secondary bars included. | done |
-| Stance bar | Forms, auras and aspects, on the smaller button they share with the pet bar. | done |
-| Pet bar | The familiar's buttons and their states. | done |
-| Micro menu and bags bar | The micro buttons, and beside them the backpack, the bag slots and the keyring. | done |
-| Experience and reputation bars | Both bars, their fills, and the reputation colour per standing. | done |
-| Bags | Panel, slots, search box, sort button, round portrait in its ring, and under the money the currencies the player has chosen to watch. | done |
-| Character sheet | The window and its two panes, the 3D model, the equipment slots, the side tabs, the level and class line, resistances, and the stat lines -- now on a banded background under a framed category header. The right pane opens on three tabs: character stats, the equipment manager (set cards in the player's own order, the worn-set check, rename and delete, `New Set`, and the icon picker beside the sheet), and the titles the character has earned, the worn one ticked. The right pane folds away, and the side tabs stay where they are. | done |
-| Reputation | The factions the player knows, their blocks folded and unfolded, a standing bar per faction, and beside it the faction's own description with its three switches. A faction at war wears its own colour. | done |
-| Skills | The skill lines the player knows, their blocks folded and unfolded, a bar per skill, and beside it the skill's description. | done |
-| PvP | The season, the rank and its badge, and the ring filling towards the next rank. The ranks come from the titles the server awards, the honourable kills being what moves the ring; the thresholds, and the Dishonored state with its broken crest, are read from a server running [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) -- without it, the kill count alone. Beside it, what the client still knows of honour. | done |
-| Currency | Everything the player carries, by category, folded and unfolded, with the icon each currency uses, and beside it the two switches the client offers. | done |
-| Pet | The familiar in three dimensions, turned with the same arrows as the player, and beside it its level and name, its general statistics and its resistances as icons. | done |
-| Statistics | -- | the tab exists, its screen is left empty on request |
-| Dropdown lists | The list a dropdown opens, which is one and the same for every menu in the game: background, rows, font, check box and tick, and a width that follows the menu that opened it. | done |
-| Minimap | The map in its modern frame, the clock and the calendar, the player's coordinates, and the arrows on the edge. | done |
-| World map and quest log | The map in a window the player can move, the quest log as a pane beside it with the list and each quest's page, the maximized map, and the floor selector of dungeons. | done |
-| Quest tracker | Quests and achievements under their headers, folded and unfolded, the objectives ticked as they are met, the sort and filter menu, a left click opening the quest on the map. | done |
-| Chat | The window on its background, the button column, the thin scroll bar and the flashing return-to-bottom button, the friends button, the tabs and the dock, the input box. At rest only the messages remain; the window lights up under the mouse. Holding Alt and dragging selects text as in an editor, Ctrl+C copies it, and any other action clears the selection. | done |
-| Tooltips | The reference's tooltip frame, cut in nine, in the colours each tooltip asks for -- the add-ons' tooltips built on the client's templates included -- the header of a comparison, and the red cross of a linked item. | done |
-| Game menu and settings | The Escape menu, the video, sound and interface options, key bindings, macros and their icon picker, chat settings, the colour picker and the opacity slider. | done |
-| Secondary windows | The clock and the zone map in the reference's frames. The achievements window keeps the client's look -- the reference has none -- and moves by its header. The tutorial is hidden: it does not fit this interface. The dressing room, and the inspection of another player -- equipment, PvP rank, and the talents in a compact window of their own. | done; the calendar and help keep the client's look, on request |
-| Buffs and debuffs | The buff and debuff bars with their timers, weapon enchants, and consolidated buffs, and the Dishonored debuff the server announces. | done |
-| Party and raid frames | The party frames beside the screen edge, and the compact raid frames in groups. | done |
-| Spellbook | The book on one page or two, a category per tab, the spells in a grid under the category's name, passives round, similar spells grouped on flyouts, the settings menu, and the search with its preview. Pages, categories, flyouts, the size and the settings all work in combat. | done |
-| Talents | The talent trees, the specializations, the pet's talents, the glyphs and the search. | done |
-| Social | Contacts (friends and ignored), who, guild, chat channels and raid, in one window with its bottom tabs; the micro button wears the guild tabard. | done |
-| Guild tabard | The window where a guild designs its tabard, the character standing in it. | done |
-| Trade and banking | The merchant with its repairs and buyback, the trade window, the mailbox and the open letter, the bank and its bags on one grid, the guild bank, and the auction house -- its three 3.3.5 tabs in the reference's frame. | done |
-| Group finder | The dungeon finder and the raid browser in one movable window with side tabs. Dungeons: roles, the dungeon types as buttons with the chosen one's description and rewards below, the specific dungeons list. Raids: a bottom tab to list the group -- the raids under folding categories like the character sheet's, and a comment -- and one to join, a raid's players and groups with their tooltip. | done |
-| Login screens | Login, the main menu, character select and creation, the dialogs, the realm list, the AddOns list, the options (video and sound), the cinematics and the credits. | done; the other login screens are left as they are, on request |
+The calendar, the help window and the other login screens keep the client's
+look.
 
-Everything ForeverUI places is a movable system: `/fui` opens the edit mode,
-`/fui reset` puts a piece -- or all of them -- back where the reference puts it.
+## Customize UI
+
+**Esc > Customize UI** (or `/fui`) shows a grid and puts every element of the
+interface under a blue veil:
+
+- drag an element to move it; click it to select it: nine handles appear on
+  its box, and the one held is the reference while dragging;
+- the window beside the selected element sets its size, 50 to 200 %;
+- the main window sets the grid spacing and origin, and two toggles: **Snap on
+  Grid** (attracted by nearby grid lines) and **Sticky UI** (attracted by the
+  edges of nearby elements);
+- **Validate** saves, **Cancel** (or Esc) restores the layout found on opening,
+  **Reset** puts everything back to default after a confirmation.
+
+`/fui reset` puts every element back to default outside the editor. Entering
+combat closes the editor and cancels its changes.
+
+## Installation
+
+Needs Python 3 on the machine that holds the client.
+
+    python tools/deploy.py                  addon, art, login screens, statistics
+    python tools/deploy.py --addon          the addon alone (the game may stay open)
+    python tools/deploy.py --check          compare the client with this folder
+
+`--client <folder>` and `--server <folder>` (the folder of `worldserver.exe`)
+point to other installs. Close the game before deploying the art, the login
+screens or the statistics (`--art`, `--glue`, `--dbc`): the client locks
+`patch-Z.MPQ` while it runs. The statistics also write to the server's DBC and
+database: restart the server afterwards. After `--addon` alone, `/reload` is
+enough, except when a file was added: then restart the game.
+
+The PvP tab reads its rank thresholds and the Dishonored state from a server
+running [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext);
+without it, it shows the kill count alone.
 
 ## Languages
 
-No text is written in the code. A text the 3.3.5 client already knows is read
-from its own strings (`GlobalStrings.lua`, `GlueStrings.lua` at the login
-screens), so it follows the client's language by itself. Every other text is
-read from a language file, English being the base:
-
-    data/addon/ForeverUI/Texts_enUS.lua                   in game, English
-    data/addon/ForeverUI/Texts_frFR.lua                   in game, French
-    data/glue/Interface/GlueXML/ForeverUIGlueTexts_*.lua  login screens
-
-A key missing from a language shows the English text, and a client whose
-language has no file reads English. To add a language, copy the `enUS` file to
-the client's locale code (`Texts_deDE.lua`...), translate the values without
-touching the keys or the `%s` / `%d` (same number, same order: Lua 5.1 cannot
-reorder them), and list the file after the English one in the `.toc` (or in
-`ForeverUIGlue.xml`). The mock client refuses a key used in the code that is
-missing from English or French.
-
-## Layout of this folder
-
-    data/addon/ForeverUI/     the addon itself, .lua and .toc -- the source
-    data/glue/                the login screens, which go into patch-Z
-    data/art/interface/       the .blp that go into the client patch, each with
-                              a .png beside it to see what it holds
-    docs/AMELIORATIONS.md     the points asked for, and nothing else
-    docs/NOTES.md             working notes: departures, traps, tooling
-    docs/reference/           screenshots of the real thing, to check against
-    tools/deploy.py           puts the addon in a client and the art in patch-Z
-    tools/test_addon.py       a mock client that loads the addon and checks it
-    tools/add_sheets.py       brings an atlas sheet in with its preview, and
-                              regenerates the atlas table
-    tools/bake_masks.py       bakes a mask into an icon's alpha, for the cuts
-                              3.3.5 cannot make on screen
-    tools/cut_elements.py     cuts elements out of sheets too wide for 3.3.5,
-                              each at its own size
-    tools/instance_maps.py    generates the dungeon and raid maps by name, in
-                              every language the client's map addon knows
+No text is written in the code. Texts the 3.3.5 client already knows come from
+its own strings; the others come from `data/addon/ForeverUI/Texts_<locale>.lua`
+(and `ForeverUIGlueTexts_<locale>.lua` for the login screens). English is the
+base, French is provided. To add a language, copy the `enUS` file to the
+client's locale, translate the values only, and list it after the English one
+in the `.toc` (or in `ForeverUIGlue.xml`).
 
 ## Working on it
 
-**This folder is the workspace, and the only place anything is edited.** The
-addon in the client and the art in `patch-Z.MPQ` are copies the deployer makes;
-editing either of them directly means the work is lost the next time anything
-is deployed, and nobody can say afterwards what the game is actually showing.
-The rule holds both ways: what sits under `Interface\ForeverUI` in the patch is
-exactly what `data/art` holds, file for file, byte for byte. `--check`
-reports what is missing, what differs and what is left over, and a deploy
-removes from the archive anything this folder no longer carries.
+This folder is the only place anything is edited: the client's addon folder
+and `patch-Z.MPQ` are copies made by `tools/deploy.py`.
 
-New art follows the same path: the `.blp` and its `.png` preview land in
-`data/art` first, then the deployer puts the `.blp` in the patch.
+    data/addon/ForeverUI/   the addon
+    data/glue/              the login screens
+    data/art/               the .blp packed into patch-Z, each with a .png preview
+    data/dbc/               the statistics added to the DBC
+    tools/test_addon.py     a mock client that loads the addon and checks it
+    tools/add_sheets.py     imports an atlas sheet (tools/extra_sheets.txt) through
+                            wow.export and regenerates the atlas table
 
-    python tools/deploy.py --check         compare the client with this folder
-    python tools/deploy.py                 addon and art
-    python tools/deploy.py --addon         the addon alone, client may stay open
-    python tools/deploy.py --art           the art alone, close the client first
-    python tools/deploy.py --glue          the login screens, close the client first
-
-The addon files are read at login: after `--addon`, a `/reload` in game is
-enough -- *unless a file was ADDED*. The client lists an addon's files when it
-starts, and `/reload` replays the ones it already knows without discovering a
-new one: a new `.lua` needs the game closed and reopened, however plainly it
-sits in the `.toc`. The art lives in `patch-Z.MPQ`, which the client keeps locked while it
-runs: close the game before `--art`, and start it again afterwards.
-
-Before delivering anything, run the mock client -- it loads the whole addon and
-checks the measurements taken from the reference:
-
-    python tools/test_addon.py
-
-It checks numbers, nothing else. **What a thing looks like is settled in the
-game, and only there.** Composing the art in Python and looking at the picture
-was tried and thrown away: such a picture only proves the arithmetic, since it
-knows nothing of draw order, of what the client draws over it, or of the scale
-it ends up at -- it showed windows as correct that the game showed wrong. The
-screenshots under `docs/reference/` are the other half: they are the real
-client, and they are what a result is compared against.
-
-## Where the reference comes from
-
-Every size, offset and texture name is read from the interface code of a modern
-client, not guessed. Each file of the addon opens with the survey it was built
-from: the file, the template and the line that gives each number. When this
-addon departs from that reference -- because 3.3.5 cannot do it, or because the
-result was wrong on screen -- the departure is written down at that spot, with
-what was measured.
-
-The art set is the one that client actually displays: sheets whose names carry
-the `c60` suffix, and the `camelot` suffix for the status bars.
+Run `python tools/test_addon.py` before any delivery; how a screen looks is
+settled in the game. Another addon adds its own micro-menu button with
+`ForeverUI.AddMicroButton`; ForeverUI knows no module.
 
 ## Licence
 
-GPL-2.0-or-later, see `LICENSE`. `tools/foreverui/mpq.py` reads and writes MPQ
-archives; it is the copy this module carries, as each module in this repository
-carries its own.
+GPL-2.0-or-later, see `LICENSE`.
