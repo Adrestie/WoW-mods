@@ -194,6 +194,9 @@ ELEMENTS = {
     # les metiers : l'ombre du nombre fabrique sur l'icone du resultat
     # (ProfessionsOutputButtonTemplate, CountShadow)
     "interface/petbattles/petbattlehudatlas.blp": ["battlebar-swappetshadow"],
+    # le portrait de LegacySystemFrame (Legacy-up-c60, 198 x 273, feuille de
+    # 2048)
+    "interface/hud/uiradialmenuc60.blp": ["legacy-up-c60"],
 }
 
 

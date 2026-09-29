@@ -486,7 +486,8 @@ local function poserQuart(tex, cadran, u1, u2, v1, v2)
 	tex:SetPoint("BOTTOMRIGHT", cadran, "TOPLEFT", u2 * CADRAN, -v2 * CADRAN)
 end
 
-local function monterJauge(cadran)
+-- entier, moitie : les deux morceaux cuits (ceux de l'honneur par defaut)
+local function monterJauge(cadran, entier, moitie)
 	local quarts = {}
 	for i = 1, 4 do
 		local quart = QUADRANTS[i]
@@ -498,14 +499,14 @@ local function monterJauge(cadran)
 
 		-- Le quart DEPASSE : l'anneau entier, lu sur ce quart.
 		q.plein = cadran:CreateTexture(nil, "ARTWORK")
-		q.plein:SetTexture(JAUGE_ENTIER)
+		q.plein:SetTexture(entier or JAUGE_ENTIER)
 		q.plein:SetTexCoord(u1, u2, v1, v2)
 		poserQuart(q.plein, cadran, u1, u2, v1, v2)
 		q.plein:Hide()
 
 		-- Le quart OU LA JAUGE S'ARRETE : le demi anneau, tourne.
 		q.arc = cadran:CreateTexture(nil, "ARTWORK")
-		q.arc:SetTexture(JAUGE_MOITIE)
+		q.arc:SetTexture(moitie or JAUGE_MOITIE)
 		poserQuart(q.arc, cadran, u1, u2, v1, v2)
 		q.arc:Hide()
 
@@ -514,11 +515,8 @@ local function monterJauge(cadran)
 	return quarts
 end
 
-local function majJauge(fraction)
-	if not bloc or not bloc.jauge then
-		return
-	end
-
+-- les quatre quarts d'une jauge (monterJauge) a la part fraction
+local function majQuarts(quarts, fraction)
 	fraction = fraction or 0
 	if fraction < 0 then
 		fraction = 0
@@ -528,7 +526,7 @@ local function majJauge(fraction)
 	local parcouru = fraction * 360
 
 	for i = 1, 4 do
-		local q = bloc.jauge[i]
+		local q = quarts[i]
 		if parcouru >= q.depart + 90 then
 			q.arc:Hide()
 			q.plein:Show()
@@ -553,7 +551,18 @@ local function majJauge(fraction)
 		end
 	end
 end
+
+local function majJauge(fraction)
+	if not bloc or not bloc.jauge then
+		return
+	end
+	majQuarts(bloc.jauge, fraction)
+end
 ForeverUI.PvPGauge = majJauge
+-- la meme jauge hors de cet onglet, pour les autres addons : les quarts
+-- poses sur un cadran de CADRAN de cote (textures au choix, l'honneur par
+-- defaut), et leur mise a jour
+ForeverUI.PvPJauge = { monter = monterJauge, maj = majQuarts, cote = CADRAN }
 
 -- --------------------------------------------------------------- l'affichage
 

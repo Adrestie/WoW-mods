@@ -143,6 +143,10 @@ ICONES += ["%s.blp" % n for n in (
     "trade_engineering", "trade_leatherworking", "trade_mining", "trade_tailoring",
     "inv_misc_food_15", "spell_holy_sealofsacrifice", "inv_misc_gem_01")]
 
+# INV_Misc_Book_09 (2026-09-29), cuite comme les autres pour les onglets
+# lateraux qu'un autre addon pose
+ICONES += ["inv_misc_book_09.blp"]
+
 ONGLET_L, ONGLET_H = 55.0, 55.0
 MASQUE_L, MASQUE_H = 55.0, 60.0
 ICONE = 50.0
@@ -537,7 +541,54 @@ def cuire_jauge_pvp():
         cible = os.path.join(SORTIE_PVP, nom + ".blp")
         _ecrire(cible, taille, taille, pixels)
         faits.append(cible)
+
+    # LE MEME ANNEAU EN BLEU (demande du 2026-09-29 : « la jauge circulaire
+    # doit etre du meme bleu que les jauges rectilignes »), pour un cadran
+    # qu'un autre addon pose. Le bleu est la teinte MOYENNE du
+    # remplissage bleu cuit plus haut (bars/statbarfillblue, ponderee par
+    # l'alpha) : la barre est un degrade de gauche a droite, que l'anneau ne
+    # peut pas suivre -- son demi anneau tourne avec la tete de la jauge. Les
+    # nuances de l'anneau sont gardees : chaque texel prend le bleu a
+    # proportion de sa luminance sur celle de l'anneau moyen.
+    bleu = _teinte_moyenne(os.path.join(SORTIE_JAUGE, "statbarfillblue.blp"))
+    orange = _teinte_moyenne(os.path.join(SORTIE_PVP, "honorfill.blp"))
+    for nom, pixels in (("honorfillblue", entier), ("honorfillhalfblue", moitie)):
+        cible = os.path.join(SORTIE_PVP, nom + ".blp")
+        _ecrire(cible, taille, taille, _recolorer(pixels, bleu, orange))
+        faits.append(cible)
     return faits
+
+
+def _luminance(r, v, b):
+    return 0.299 * r + 0.587 * v + 0.114 * b
+
+
+def _teinte_moyenne(chemin):
+    """La couleur moyenne d'une image, ponderee par l'alpha."""
+    _, _, pixels = _lire(chemin)
+    somme = [0.0, 0.0, 0.0]
+    poids = 0.0
+    for k in range(0, len(pixels), 4):
+        a = pixels[k + 3]
+        if a:
+            for c in range(3):
+                somme[c] += pixels[k + c] * a
+            poids += a
+    return tuple(s / poids for s in somme) if poids else (0.0, 0.0, 0.0)
+
+
+def _recolorer(pixels, teinte, reference):
+    """Chaque texel prend la teinte, a proportion de sa luminance sur celle de
+    la reference ; l'alpha ne change pas."""
+    lref = _luminance(*reference) or 1.0
+    sortie = bytearray(pixels)
+    for k in range(0, len(pixels), 4):
+        if not pixels[k + 3]:
+            continue
+        f = _luminance(pixels[k], pixels[k + 1], pixels[k + 2]) / lref
+        for c in range(3):
+            sortie[k + c] = max(0, min(255, int(teinte[c] * f + 0.5)))
+    return sortie
 
 
 # --------------------------------------------------------------------------

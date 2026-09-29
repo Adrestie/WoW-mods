@@ -54,6 +54,7 @@ CharacterFrame.lua
 EquipmentManager.lua
 ReputationTab.lua
 SkillsTab.lua
+StatisticsTab.lua
 PvPTab.lua
 PvPArena.lua
 PvPBattlegrounds.lua

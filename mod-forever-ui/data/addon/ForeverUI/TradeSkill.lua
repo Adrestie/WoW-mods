@@ -304,6 +304,10 @@ local function tuilerEntete(b, largeur)
 	end
 end
 
+-- pour les autres addons qui reprennent cette page : les en-tetes de la
+-- liste et les polices
+M.FondEntete, M.TuilerEntete, M.Polices = fondEntete, tuilerEntete, POLICES
+
 local function creerCategorie(n)
 	local h = M.habit
 	local C = N.categorie

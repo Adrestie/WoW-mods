@@ -89,9 +89,75 @@ def cuire(nom):
         nom, largeur, hauteur, COTE, COTE, len(mips)))
 
 
+# LE PORTRAIT DE LegacySystemFrame (2026-09-29). Cette fenetre de
+# camelot pose l'atlas Legacy-up-c60 a 45 x 62 dans le portrait de
+# PortraitFrameTemplate, dont le CircleMask (TempPortraitAlphaMask : un disque
+# inscrit dans son image, verifie a l'export) le suit de (2, 0) a (-2, 4) --
+# une ellipse de 41 x 58. 3.3.5 n'a pas de masque : l'ellipse est cuite dans
+# l'element que decouper_elements.py a pose en haut a gauche de sa toile, et
+# le resultat va a cote, suffixe -masque, sur une toile de meme taille (la
+# table d'atlas de l'element vaut pour lui).
+#   element : (dossier/nom, largeur, hauteur de la region utile)
+#   boite   : la taille a l'ecran ; ancres : gauche, haut, droite, bas du
+#             masque, comme les ancres de camelot (x, y des coins)
+MASQUES = [
+    {"element": ("hud", "legacy-up-c60", 198, 273), "boite": (45, 62), "ancres": (2, 0, -2, 4)},
+]
+ART = os.path.dirname(ICONES)
+
+
+def ellipse(largeur, hauteur, x0, y0, x1, y1):
+    """L'alpha de l'ellipse inscrite dans (x0, y0)-(x1, y1), en texels, lisse."""
+    cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    rx, ry = (x1 - x0) / 2.0, (y1 - y0) / 2.0
+    pas = 1.0 / ECHANTILLONS
+    valeurs = bytearray(largeur * hauteur)
+    for y in range(hauteur):
+        for x in range(largeur):
+            dedans = 0
+            for sy in range(ECHANTILLONS):
+                for sx in range(ECHANTILLONS):
+                    dx = (x + (sx + 0.5) * pas - cx) / rx
+                    dy = (y + (sy + 0.5) * pas - cy) / ry
+                    if dx * dx + dy * dy <= 1.0:
+                        dedans += 1
+            valeurs[y * largeur + x] = round(255 * dedans / (ECHANTILLONS * ECHANTILLONS))
+    return Image.frombytes("L", (largeur, hauteur), bytes(valeurs))
+
+
+def masquer(m):
+    dossier, nom, w, h = m["element"]
+    bw, bh = m["boite"]
+    g, hh, d, b = m["ancres"]
+    base = os.path.join(ART, dossier, nom)
+    with io.open(base + ".blp", "rb") as f:
+        W, H, rgba, _ = blp.decoder(f.read())
+    toile = Image.frombytes("RGBA", (W, H), bytes(rgba))
+    sx, sy = w / float(bw), h / float(bh)
+    masque = ellipse(w, h, g * sx, -hh * sy, (bw + d) * sx, (bh - b) * sy)
+    element = toile.crop((0, 0, w, h))
+    rouge, vert, bleu, alpha = element.split()
+    alpha = Image.frombytes("L", (w, h), bytes(a * k // 255 for a, k in zip(alpha.tobytes(), masque.tobytes())))
+    sortie = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    sortie.paste(Image.merge("RGBA", (rouge, vert, bleu, alpha)), (0, 0))
+    plein = sortie.convert("RGBa")
+    mips = []
+    mw, mh = W, H
+    while mw > 1 or mh > 1:
+        mw, mh = max(1, mw // 2), max(1, mh // 2)
+        mips.append((mw, mh, plein.resize((mw, mh), Image.LANCZOS).convert("RGBA").tobytes()))
+    with io.open(base + "-masque.blp", "wb") as f:
+        f.write(blp.encoder(W, H, sortie.tobytes(), mips))
+    sortie.save(base + "-masque.png")
+    print("%s/%s : ellipse %d x %d de la boite %d x %d cuite, toile %d x %d + %d mipmaps" % (
+        dossier, nom, bw - g + d, bh + hh - b, bw, bh, W, H, len(mips)))
+
+
 def main():
     for nom in PORTRAITS:
         cuire(nom)
+    for m in MASQUES:
+        masquer(m)
 
 
 if __name__ == "__main__":
