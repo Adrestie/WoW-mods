@@ -36,11 +36,11 @@
     WHAT WE PUT IN ITS PLACE:
 
       * the cursor follows OUR gauge, xPos = 38 x notch / 3, the notch coming
-        from the stacks of "Lunar gauge" (8610032) and "Solar gauge" (8610033).
+        from the stacks of "Lunar gauge" (85132) and "Solar gauge" (85133).
         THOSE AURAS MUST STAY VISIBLE: marked as having no icon, they stopped
         being returned by UnitBuff and the cursor froze in the middle.
       * a half lights when AN END IS REACHED -- that is, when the player
-        carries Solstice (8610029, sun) or Equinox (8610030, moon);
+        carries Solstice (85129, sun) or Equinox (85130, moon);
       * and the bar is put away for a druid who does NOT know the spell: the
         addon shows for any moonkin, which is one condition short of ours.
 
@@ -62,10 +62,10 @@ end
 -- ---------------------------------------------------------------------------
 -- What the server tells us
 -- ---------------------------------------------------------------------------
-local ID_SPELL = 8600092                                  -- the spell itself
-local ID_LUNAR_GAUGE, ID_SOLAR_GAUGE = 8610032, 8610033   -- 1 to 3 stacks
-local ID_EQUINOX, ID_SOLSTICE = 8610030, 8610029          -- an end reached
-local ID_SUN_SPENT, ID_MOON_SPENT = 8610034, 8610035      -- that body is spent
+local ID_SPELL = 85092                                  -- the spell itself
+local ID_LUNAR_GAUGE, ID_SOLAR_GAUGE = 85132, 85133   -- 1 to 3 stacks
+local ID_EQUINOX, ID_SOLSTICE = 85130, 85129          -- an end reached
+local ID_SUN_SPENT, ID_MOON_SPENT = 85134, 85135      -- that body is spent
 local END_NOTCH = 3                                       -- notches per half
 local TRAVEL = 38                                         -- pixels, as the addon has it
 

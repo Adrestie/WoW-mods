@@ -187,7 +187,7 @@ that have recipes: one object, one window, each module's recipes on it. As a
 game master, stand where you want one:
 
 ```
-.gobject add 803700
+.gobject add 810000
 ```
 
 As many as you like — a capital of each faction is the usual choice. The object
@@ -287,7 +287,7 @@ writes them: see [Patch a client](#patch-a-client-that-is-not-on-the-server).
 ### The workbench is nowhere in the world
 
 The module ships the object and no spawn. Put one down with
-`.gobject add 803700`.
+`.gobject add 810000`.
 
 ### An item's tooltip has not changed
 

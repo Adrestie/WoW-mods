@@ -25,13 +25,14 @@ the same number. So they are not moved one file at a time: a family -- the
 spells, the items, the displays -- is moved as a block, by one offset, in every
 file of the module, and the module is then what it was, one block over.
 
-WHY A FAMILY CAN BE MOVED BY LOOKING AT NUMBERS ALONE. Each family owns a
-range no other number in the module falls into: a seven-digit spell, a
-six-digit item. A number in that range, wherever it stands, is one of ours. Two
-families this is NOT true of: the visual kits (30000-30299), whose numbers are
-the size of a duration in milliseconds, and the spell icons (8002-8099), whose
-numbers are the size of anything. Those are moved only where one is known to
-be -- the DBC fields that hold one, the columns of a `spell_dbc` row, the C++
+THE MODULE'S NUMBERS FOLLOW THE REGISTRY OF RANGES (ID_RANGES.md, at the
+root of the repository): tranches 85-86, and every kind of identifier in the
+same thousands -- a spell, an item and a display may wear the same number. A
+family moved by sight moves EVERY number of its range, wherever it stands, so
+a family whose range meets another's cannot be moved on its own: `shift`
+refuses it rather than carry the other family's numbers along. The kits, the
+beams, the skill lines and the icons are moved only where one is known to be
+-- the DBC fields that hold one, the columns of a `spell_dbc` row, the C++
 constants named for one -- and never by sight.
 
 The installer calls this when its survey finds an identifier taken and it was
@@ -78,34 +79,31 @@ def use(root):
 # whatever column list the INSERT declares), and a word in the name of a C++
 # constant (`constant`).
 FAMILIES = {
-    "spells": dict(low=8500000, high=8699999, size=200000,
+    "spells": dict(low=85000, high=86999, size=2000,
                    tables=("Spell.dbc",),
                    sql_tables=("spell_dbc", "spell_ranks", "spell_script_names",
                                "spell_bonus_data", "spell_custom_attr")),
-    "items": dict(low=803100, high=803699, size=600,
+    "items": dict(low=85000, high=85599, size=600,
                   tables=("Item.dbc",), sql_tables=("item_template", "item_dbc")),
-    # THE WORKBENCH SITS A HUNDRED BELOW THE CREATURES. It is a gameobject
-    # template like the death tunnel's gate, so it belongs here; it was given
-    # 803700 when the creatures were given 803800, and the hundred between
-    # the two was declared by nobody. A number in no family is never surveyed
-    # and never moved: the module wrote its workbench over whatever a server
-    # already kept at 803700, and said nothing of it. The family owns both
-    # hundreds, and moves as one.
-    "templates": dict(low=803700, high=803899, size=200,
-                      tables=(), sql_tables=("creature_template",
-                                             "gameobject_template")),
-    "displays": dict(low=802001, high=802199, size=200,
+    # The creatures. The gameobjects -- the death tunnel's gates -- sit at the
+    # tranche times ten, as the registry wants. The workbench (810000) is
+    # common to every module that ships it, and no family of this one owns it.
+    "templates": dict(low=85700, high=85899, size=200,
+                      tables=(), sql_tables=("creature_template",)),
+    "gameobjects": dict(low=850000, high=850999, size=1000,
+                        tables=(), sql_tables=("gameobject_template",)),
+    "displays": dict(low=85001, high=85199, size=200,
                      tables=("CreatureDisplayInfo.dbc", "CreatureModelData.dbc",
                              "ItemDisplayInfo.dbc", "GameObjectDisplayInfo.dbc"),
                      sql_tables=("creaturedisplayinfo_dbc",
                                  "creaturemodeldata_dbc", "creature_model_info")),
-    "effects": dict(low=8200206, high=8200399, size=200,
+    "effects": dict(low=85206, high=85399, size=200,
                     tables=("SpellVisualEffectName.dbc",), sql_tables=()),
-    "sounds": dict(low=990001, high=990199, size=200,
+    "sounds": dict(low=85001, high=85199, size=200,
                    tables=("SoundEntries.dbc", "Emotes.dbc"), sql_tables=()),
-    "durations": dict(low=900019, high=900099, size=100,
+    "durations": dict(low=85019, high=85099, size=100,
                       tables=("SpellDuration.dbc",), sql_tables=()),
-    "kits": dict(low=30000, high=30299, size=300,
+    "kits": dict(low=85000, high=85299, size=300,
                  tables=("SpellVisual.dbc", "SpellVisualKit.dbc"), sql_tables=(),
                  by_position=dict(
                      fields={"Spell.dbc": (131, 132),     # SpellVisualID_1, _2
@@ -115,7 +113,7 @@ FAMILIES = {
                      constant="KIT|VISUAL|DRESSING")),
     # A beam is named by a visual kit as a FLOAT: CharProc 0 in one of the
     # four slots, and the chain's identifier in the matching CharParamZero.
-    "chains": dict(low=2000, high=2099, size=100,
+    "chains": dict(low=85000, high=85099, size=100,
                    tables=("SpellChainEffects.dbc",), sql_tables=(),
                    by_position=dict(
                        fields={},
@@ -126,11 +124,11 @@ FAMILIES = {
     # the C++, not in the Lua -- so the family moves by position and its rule
     # for text matches nothing on purpose: the identifier lives in field 0 of
     # its own table, which every family moves anyway.
-    "abilities": dict(low=25001, high=25999, size=1000,
+    "abilities": dict(low=85001, high=85999, size=1000,
                       tables=("SkillLineAbility.dbc",), sql_tables=(),
                       by_position=dict(fields={}, sql_columns=(),
                                        constant="SKILLLINEABILITY")),
-    "icons": dict(low=8002, high=8099, size=100,
+    "icons": dict(low=85002, high=85099, size=100,
                   tables=("SpellIcon.dbc",), sql_tables=(),
                   by_position=dict(
                       fields={"Spell.dbc": (133, 134)},   # SpellIconID, ActiveIconID
@@ -211,8 +209,8 @@ def shift_text(path, family, by):
     """Every number of the family, wherever it stands in the file.
 
     A NUMBER GLUED TO A LETTER IS NOT ONE OF OURS -- except after a `$`, which
-    is how a spell's tooltip names ANOTHER spell: `$8600097s1` reads that
-    spell's value, `$8600097d` its duration. Those move with the rest, or the
+    is how a spell's tooltip names ANOTHER spell: `$85097s1` reads that
+    spell's value, `$85097d` its duration. Those move with the rest, or the
     text would point at a spell that no longer exists and the client would
     show whatever it could make of it.
 
@@ -253,8 +251,8 @@ def shift_positional_text(path, family, by):
         return match.group(0)
 
     # A CONSTANT IS KNOWN BY ITS NAME, and everything it is given is read --
-    # `constexpr uint32 X_KIT = 30026;` as much as
-    # `constexpr Dressing X_KITS[] = { { 30028, 30026, 30027 } };`. Reading
+    # `constexpr uint32 X_KIT = 85026;` as much as
+    # `constexpr Dressing X_KITS[] = { { 85028, 85026, 85027 } };`. Reading
     # only the first form once left a table of kits behind while the data it
     # named moved: the numbers of a positional family carry no sign of their
     # own, and the name of what holds them is the only thing that says so.
@@ -428,6 +426,11 @@ def shift(family, by, dry_run):
         raise SystemExit("no family called %r; try --list" % family)
     if by % FAMILIES[family]["size"]:
         raise SystemExit("%s moves by multiples of %d" % (family, FAMILIES[family]["size"]))
+    me = FAMILIES[family]
+    for name, other in FAMILIES.items():
+        if name != family and other["low"] <= me["high"] and me["low"] <= other["high"]:
+            raise SystemExit("%s shares numbers with %s (%d-%d): it cannot be moved on its own"
+                             % (family, name, other["low"], other["high"]))
     positional = FAMILIES[family].get("by_position", False)
     print("shifting %s by %+d%s" % (family, by, " (dry run)" if dry_run else ""))
 

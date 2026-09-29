@@ -95,7 +95,7 @@ and each module brings its own recipes to it. Stand where you want one, as a
 game master:
 
 ```
-.gobject add 803700
+.gobject add 810000
 ```
 
 As many as you like, wherever you like — a capital of each faction is the
@@ -306,15 +306,16 @@ archive. Everything else the interface draws is borrowed from the game.
 
 | family | range | |
 |---|---|---|
-| spells | 8 500 001 – 8 610 037 | class spells, Nexus spells, rank spells |
-| items | 803 100 – 803 615 | stones, Nexuses, the pin, runes |
-| creatures and objects | 803 800 – 803 821 | summons, props, the gate |
-| displays | 802 001 – 802 157 | item, creature and object displays |
-| visuals and kits | 30 014 – 30 211 | moved by position, never by sight |
-| spell icons | 8 002 – 8 076 | moved by position, never by sight |
-| beams | 2 001 | named by a kit as a float; moved by position |
-| effect names | 8 200 206 – 8 200 302 | |
-| sounds and emotes | 990 001 – 990 125 | |
+| spells | 85 000 – 86 508 | class spells, Nexus spells, rank spells |
+| items | 85 000 – 85 515 | stones, Nexuses, the pin, runes |
+| creatures | 85 800 – 85 817 | summons, props |
+| objects | 850 820 – 850 821 | the gate |
+| displays | 85 001 – 85 157 | item, creature and object displays |
+| visuals and kits | 85 014 – 85 211 | moved by position, never by sight |
+| spell icons | 85 002 – 85 076 | moved by position, never by sight |
+| beams | 85 001 | named by a kit as a float; moved by position |
+| effect names | 85 206 – 85 302 | |
+| sounds and emotes | 85 001 – 85 125 | |
 | module strings | 1 – 73 | keyed by the module's name, never in clash |
 
 `python tools/shift.py --list` prints them as they stand, shifts included.

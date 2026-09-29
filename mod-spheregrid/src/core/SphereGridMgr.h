@@ -52,10 +52,10 @@ constexpr uint8 SPHEREGRID_QUALITY_COUNT = 5;
 //   a stone         = STONE_BASE + (statistic - 1) x qualities + (quality - 1)
 //   a node stone    = NODE_STONE_BASE, laid out the same way
 //   a statistic rune = STAT_RUNE_BASE + (statistic - 1)
-constexpr uint32 SPHEREGRID_STONE_BASE = 803100;
-constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 803310;
-constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 803600;
-constexpr uint32 SPHEREGRID_PIN_ENTRY = 803300;
+constexpr uint32 SPHEREGRID_STONE_BASE = 85000;
+constexpr uint32 SPHEREGRID_NODE_STONE_BASE = 85210;
+constexpr uint32 SPHEREGRID_STAT_RUNE_BASE = 85500;
+constexpr uint32 SPHEREGRID_PIN_ENTRY = 85200;
 
 // THE SOUNDS ARE THE GAME'S OWN. Not one is shipped: each is a row of the
 // client's SoundEntries, and what a gesture sounds like is taken from what the
@@ -72,12 +72,12 @@ constexpr uint32 SPHEREGRID_SOUND_FORGET  = 846;    // a quest given up
 
 // The Nexuses, the items that grant Spherite. Five qualities, plus the
 // prismatic one, which boosts every gain instead of granting any.
-constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 803200;
-constexpr uint32 SPHEREGRID_NEXUS_FLICKERING = 803201;
-constexpr uint32 SPHEREGRID_NEXUS_LUMINOUS = 803202;
-constexpr uint32 SPHEREGRID_NEXUS_IRRADIANT = 803203;
-constexpr uint32 SPHEREGRID_NEXUS_SOLAR = 803204;
-constexpr uint32 SPHEREGRID_NEXUS_PRISMATIC = 803205;
+constexpr uint32 SPHEREGRID_NEXUS_DEPLETED = 85100;
+constexpr uint32 SPHEREGRID_NEXUS_FLICKERING = 85101;
+constexpr uint32 SPHEREGRID_NEXUS_LUMINOUS = 85102;
+constexpr uint32 SPHEREGRID_NEXUS_IRRADIANT = 85103;
+constexpr uint32 SPHEREGRID_NEXUS_SOLAR = 85104;
+constexpr uint32 SPHEREGRID_NEXUS_PRISMATIC = 85105;
 
 enum SphereGridCellType : uint8
 {
