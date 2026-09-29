@@ -140,12 +140,18 @@ def _game_files(root, entry):
     files, owned = {}, []
     if not entry:
         return files, owned
+    # extensions: only these files of the source folders (previews and notes stay out)
+    extensions = tuple(e.lower() for e in entry.get("extensions", []))
+    if any(not e.startswith(".") for e in extensions):
+        _error("game_files", '"extensions": file extensions such as ".blp"')
     for source in entry.get("sources", []):
         base = os.path.join(root, source)
         if not os.path.isdir(base):
             _error("game_files", "folder missing from the package: %s" % source)
         for d, _, names in os.walk(base):
             for n in names:
+                if extensions and not n.lower().endswith(extensions):
+                    continue
                 path = os.path.join(d, n)
                 name = os.path.relpath(path, base).replace("/", "\\")
                 if name.lower() in {k.lower() for k in files}:
@@ -157,6 +163,21 @@ def _game_files(root, entry):
             _error("game_files", '"owned_folders": a folder of the module only, such as Interface\\Module, not %r' % d)
         owned.append(d.lower() + "\\")
     return files, owned
+
+
+def _addons(root, entry):
+    """{addon name: package folder}: folders copied as they are into Interface\\AddOns of the
+    game; each holds the .toc named after it."""
+    addons = {}
+    for source in entry or []:
+        base = os.path.normpath(os.path.join(root, source))
+        name = os.path.basename(base)
+        if not os.path.isfile(os.path.join(base, name + ".toc")):
+            _error("addons", "%s is not an addon folder (no %s.toc in it)" % (source, name))
+        if name.lower() in {n.lower() for n in addons}:
+            _error("addons", "addon %s declared twice" % name)
+        addons[name] = base
+    return addons
 
 
 def _substitute(text, M, root, where):
@@ -214,8 +235,18 @@ def load(root):
     if not isinstance(M.name, str) or not re.match(r"^[A-Za-z0-9_.-]+$", M.name):
         _error("module", "the name of the module folder in modules/")
     M.title = m.get("title") or M.name
+    # server_module false: a package for the game only (plus the server DBC rows); nothing goes
+    # into the server's sources, configuration, scripts or databases
+    M.server_module = m.get("server_module", True)
+    if not isinstance(M.server_module, bool):
+        _error("server_module", "true or false")
+    if not M.server_module:
+        server_keys = [k for k in ("signature", "exclude_from_sources", "configuration", "lua", "database")
+                       if k in m]
+        if server_keys:
+            _error(server_keys[0], "a package without server module has no %s" % ", ".join(server_keys))
     M.signature = m.get("signature") or []
-    if not M.signature:
+    if M.server_module and not M.signature:
         _error("signature", "at least one file that identifies the module in modules/")
     M.excluded = list(m.get("exclude_from_sources", []))
     M.conf = None
@@ -239,6 +270,7 @@ def load(root):
     if len({d.file.lower() for d in M.dbc}) != len(M.dbc):
         _error("dbc", "a DBC file declared twice")
     M.game_files, M.owned_folders = _game_files(M.root, m.get("game_files"))
+    M.addons = _addons(M.root, m.get("addons"))
     M.backups = list(m.get("backups", []))
     M.databases = _databases(M.root, M, m.get("database"))
     missing = [p for p in list(M.signature) + ([M.conf["template"]] if M.conf else []) +

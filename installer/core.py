@@ -7,8 +7,11 @@ One program installs and removes any module that carries a manifest
 No trace of the module: it installs. It copies the module into the server
 sources (modules/), puts its configuration and Lua scripts in place, adds its
 rows to the server DBC files and writes them, with its game files, directly
-into the game's MPQ archives. The server is then rebuilt; on first start the
-core updater applies the module's SQL.
+into the game's MPQ archives, and copies its addons into Interface\AddOns.
+The server is then rebuilt; on first start the core updater applies the
+module's SQL. A package without server module (server_module false) only
+writes the game files, the addons and the DBC rows: nothing goes into the
+server's sources, configuration, scripts or databases, and no SQL is run.
 
 Any trace: it removes everything that is left, wherever it is (sources,
 configuration, Lua scripts anywhere in the scripts folder, server DBC rows,
@@ -628,6 +631,7 @@ class State(object):
         self.client_dbc = []         # (archive, file, ids to remove: identical, or named by the receipt)
         self.files = []              # (archive, name): named by the receipt, or under an owned folder
         self.backups = []            # backups left by older tools
+        self.addons = []             # the module's addon folders in Interface\AddOns
         self.db_strong = {}          # {database: [(text, count)]}: module tables, updater rows
         # weak items
         self.server_conflicts = []   # (path, file, ids with other content)
@@ -637,7 +641,8 @@ class State(object):
 
     def strong(self):
         return bool(self.sources or self.confs or self.lua or self.lua_dir or self.server_dbc or
-                    self.receipts or self.client_dbc or self.files or self.backups or self.db_strong)
+                    self.receipts or self.client_dbc or self.files or self.backups or self.addons or
+                    self.db_strong)
 
     def weak(self):
         return bool(self.server_conflicts or self.client_conflicts or self.file_conflicts or self.db_weak)
@@ -659,6 +664,7 @@ class State(object):
             detail = names[0] if len(names) == 1 else "%d files (%s, ...)" % (len(names), names[0])
             out.append(("game files", "%s: %s" % (a, detail)))
         out += [("backup", s) for s in self.backups]
+        out += [("addon", d) for d in self.addons]
         for db, traces in sorted(self.db_strong.items()):
             out += [("database %s" % db, "%s: %s" % (t, n)) for t, n in traces]
         # the module is there: the database rows in its name go with it
@@ -701,6 +707,11 @@ def module_source_dirs(M, server):
         if n.lower() == M.name.lower() or all(os.path.isfile(os.path.join(d, s)) for s in M.signature):
             found.append(d)
     return found
+
+
+def addon_folder(client, name):
+    """Where the game reads the addon of this name."""
+    return os.path.join(client.folder, "Interface", "AddOns", name)
 
 
 def module_lua_files(M, server):
@@ -780,7 +791,9 @@ def module_files_in(M, a, receipt):
 def survey(M, server, client, dbs):
     """The State of the module on this server, game and databases."""
     s = State()
-    s.sources = module_source_dirs(M, server)
+    if M.server_module:
+        s.sources = module_source_dirs(M, server)
+    s.addons = [d for d in (addon_folder(client, n) for n in M.addons) if os.path.isdir(d)]
     if M.conf:
         s.confs = [p for p in (os.path.join(server.module_confs, M.conf["file"]),
                                os.path.join(server.module_confs, M.conf["file"] + ".dist"))
@@ -969,6 +982,9 @@ def remove(M, server, client, dbs, state, leftovers=False):
     for p in state.confs + state.lua + state.backups:
         os.remove(p)
         say("  deleted: %s" % p)
+    for d in state.addons:
+        remove_tree(d)
+        say("  deleted: %s" % d)
     if M.lua:
         d = os.path.join(server.lua, M.lua["folder"])
         if os.path.isdir(d):
@@ -1079,7 +1095,15 @@ def install(M, server, client, dbs):
             f.write(configured_conf(M))
         say("  written: %s (and .dist)" % os.path.join(server.module_confs, M.conf["file"]))
 
-    # 5. Sources: the package, minus what the manifest excludes.
+    # 5. Addons, copied as they are into Interface\AddOns.
+    for name, source in sorted(M.addons.items()):
+        destination = addon_folder(client, name)
+        shutil.copytree(source, destination, ignore=lambda folder, names: [n for n in names if n in NEVER_COPIED])
+        say("  copied: %s" % destination)
+    if not M.server_module:
+        return
+
+    # 6. Sources: the package, minus what the manifest excludes.
     destination = os.path.join(server.modules, M.name)
     excluded = {os.path.normcase(os.path.join(M.root, x)) for x in M.excluded}
 
@@ -1089,7 +1113,7 @@ def install(M, server, client, dbs):
     shutil.copytree(M.root, destination, ignore=ignore)
     say("  copied: %s" % destination)
 
-    # 6. SQL: the core updater applies it on start; when it is off for a
+    # 7. SQL: the core updater applies it on start; when it is off for a
     #    database, the installer applies it itself.
     for key, bit, folder in (("characters", 2, "db-characters"), ("world", 4, "db-world")):
         if server.updates_mask & bit or key not in dbs:
@@ -1121,9 +1145,22 @@ def set_conf_path(M, server, content):
 def missing_after_install(M, server, client):
     """What is missing after an install (empty if everything is in place)."""
     missing = []
-    d = os.path.join(server.modules, M.name)
-    if not all(os.path.isfile(os.path.join(d, s)) for s in M.signature):
-        missing.append("sources in %s" % d)
+    if M.server_module:
+        d = os.path.join(server.modules, M.name)
+        if not all(os.path.isfile(os.path.join(d, s)) for s in M.signature):
+            missing.append("sources in %s" % d)
+    for name, source in M.addons.items():
+        target = addon_folder(client, name)
+        for folder, _, files in os.walk(source):
+            for n in files:
+                p = os.path.join(folder, n)
+                q = os.path.join(target, os.path.relpath(p, source))
+                if not os.path.isfile(q):
+                    missing.append(q)
+                    continue
+                with open(p, "rb") as a, open(q, "rb") as b:
+                    if a.read() != b.read():
+                        missing.append(q)
     if M.conf:
         for n in (M.conf["file"], M.conf["file"] + ".dist"):
             if not os.path.isfile(os.path.join(server.module_confs, n)):
@@ -1195,9 +1232,9 @@ def prepare(M, args, settings, interactive):
                               initial=settings.get("server"))
             if folder is None:
                 raise InstallerError("no worldserver folder chosen")
-        if not server.has_valid_sources() and settings.get("sources") and not change:
+        if M.server_module and not server.has_valid_sources() and settings.get("sources") and not change:
             server.sources = settings["sources"]
-        while not server.has_valid_sources():
+        while M.server_module and not server.has_valid_sources():
             if not interactive:
                 raise InstallerError("AzerothCore sources not found (--sources)")
             d = ask_path("AzerothCore sources folder (the one that contains modules and src)?")
@@ -1219,19 +1256,25 @@ def prepare(M, args, settings, interactive):
                 raise InstallerError("no game folder chosen")
         heading("Folders")
         say("  worldserver      %s" % server.bin)
-        say("  sources          %s" % server.sources)
-        say("  configuration    %s" % server.module_confs)
-        say("  Lua scripts      %s" % server.lua)
+        if M.server_module:
+            say("  sources          %s" % server.sources)
+            say("  configuration    %s" % server.module_confs)
+            say("  Lua scripts      %s" % server.lua)
         say("  server DBC       %s" % server.dbc)
         say("  game             %s" % client.folder)
-        say("  databases        %s, %s" % (server.databases["world"]["name"], server.databases["characters"]["name"]))
+        if M.server_module:
+            say("  databases        %s, %s" % (server.databases["world"]["name"],
+                                                server.databases["characters"]["name"]))
         if interactive:
             r = input("Enter: continue; C then Enter: change folders. ").strip().lower()
             if r == "c":
                 change = True
                 continue
         break
-    settings.update({"server": server.bin, "sources": server.sources, "client": client.folder})
+    settings.update({"server": server.bin, "client": client.folder})
+    if not M.server_module:
+        return server, client, {}
+    settings["sources"] = server.sources
 
     mysql = find_mysql(server, settings, args.mysql)
     while mysql is None:
@@ -1258,7 +1301,7 @@ def run_module(M, args, settings):
     say("is present: removes everything that is left.")
     server, client, dbs = prepare(M, args, settings, interactive)
     save_settings(settings)
-    if is_inside(M.root, server.modules):
+    if M.server_module and is_inside(M.root, server.modules):
         raise InstallerError("this package is stored in the server's modules folder (%s): put it somewhere else, "
                              "for example in Downloads, and run the installer from there" % M.root)
 
@@ -1287,7 +1330,10 @@ def run_module(M, args, settings):
     say()
     if state.strong():
         say("The module is present, in whole or in part: this run will REMOVE everything that is")
-        say("left of it: files, DBC rows and database data (players' data included).")
+        if M.server_module:
+            say("left of it: files, DBC rows and database data (players' data included).")
+        else:
+            say("left of it: game files, addons and DBC rows.")
         if state.server_conflicts or state.client_conflicts or state.file_conflicts:
             say("DBC rows and game files that carry its identifiers without being its own stay in place.")
         if interactive:
@@ -1329,9 +1375,13 @@ def run_module(M, args, settings):
     heading("Check")
     if missing:
         raise InstallerError("after installation, missing: %s" % "; ".join(missing))
-    say("  sources, configuration, scripts, DBC rows and game files in place, read back from disk")
+    say("  everything in place, read back from disk")
     say()
     say("Installation complete.")
+    if not M.server_module:
+        if any(d.server is not None for d in M.dbc):
+            say("The worldserver reads its DBC files when it starts.")
+        return 0
     print_build_steps(server)
     if server.updates_mask & 6 == 6:
         say("On first start, the core updater applies the module's SQL.")
@@ -1353,8 +1403,9 @@ def check_removal(M, server, client, dbs):
         print_conflicts(left)
     say()
     say("Uninstallation complete.")
-    print_build_steps(server)
-    say("Then the module is gone from the worldserver.")
+    if M.server_module:
+        print_build_steps(server)
+        say("Then the module is gone from the worldserver.")
     return 0
 
 
