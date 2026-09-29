@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+# the tools stay local: only the patcher is published
+/tools/*
+!/tools/patcher/
