@@ -310,6 +310,7 @@ function CreateFrame(kind, name, parent, template)
     function f:IsEnabled() if self.enabled == false then return 0 end return 1 end
     function f:SetDisabledFontObject(o) self.disabledFont = o end
     function f:EnableMouseWheel(v) self.wheelEnabled = (v ~= false) end
+    function f:EnableKeyboard(v) self.keyboardEnabled = (v ~= false) end
     function f:IsMouseOver() return self.souris == true end
     function f:SetMovable(v) self.movable = (v ~= false) end
     function f:IsMovable() return self.movable end
@@ -8290,6 +8291,95 @@ do
         TradeSkillFrame_Update()
     end
 
+    -- ------------------------------------------------ le coiffeur (a la demande)
+    -- Blizzard_BarbershopUI.xml / .lua de 3.3.5 : l'ecran (fond, quatre
+    -- selecteurs a fleches, argent, trois boutons), la banniere ; et les
+    -- fonctions du client. COIFFEUR : reglages[i] = { nom du choix, actuel }.
+    HAIR_NORMAL_STYLE, HAIR_NORMAL_COLOR, FACIAL_HAIR_NORMAL = "Hair Style", "Hair Color", "Facial Hair"
+    HAIR_HORNS_STYLE, HAIR_HORNS_COLOR, FACIAL_HAIR_TUSKS = "Horn Style", "Horn Color", "Tusks"
+    SKIN_COLOR, ACCEPT, RESET, BARBERSHOP = "Skin Color", "Accept", "Reset", "Barber Shop"
+    ErrorFont = ErrorFont or "ErrorFont"
+    GameFontNormalMed3 = GameFontNormalMed3 or CreateFont("GameFontNormalMed3")
+    GameFontHighlightMedium = GameFontHighlightMedium or CreateFont("GameFontHighlightMedium")
+    SystemFont_Shadow_Large = SystemFont_Shadow_Large or CreateFont("SystemFont_Shadow_Large")
+    COIFFEUR = { reglages = { { "Long", true }, { nil, true }, { "Bare", true } }, peau = false, cout = 0,
+                 appels = {}, cheveux = "NORMAL", pilosite = "NORMAL" }
+    function GetHairCustomization() return COIFFEUR.cheveux end
+    function GetFacialHairCustomization() return COIFFEUR.pilosite end
+    function CanAlterSkin() return COIFFEUR.peau and 1 or nil end
+    -- LE CLIENT PATCHE (tools/patcheur) : COIFFEUR.patche = { indices,
+    -- depart = { ... }, visage = v }. GetBarberShopStyleInfo rend en plus
+    -- l'indice du choix, et pour la peau (4) celui du visage ; le nom est
+    -- celui de COIFFEUR.nomsClient[i][indice] ; SetNextBarberShopStyle fait
+    -- tourner l'indice dans COIFFEUR.valides[i] (le moteur ; l'essai la tire
+    -- des donnees, a part de l'addon). Piece « noms » (COIFFEUR.parNumero) :
+    -- GetBarberShopStyleInfo(i, n) rend le SEUL nom du choix n, ou nil ; un
+    -- client patche avant elle ignore n.
+    function GetBarberShopStyleInfo(i, n)
+        local r = COIFFEUR.reglages[i]
+        if not r then return end
+        local p = COIFFEUR.patche
+        if not p then return r[1], nil, nil, r[2] and 1 or nil end
+        if n ~= nil and COIFFEUR.parNumero then
+            local noms = COIFFEUR.nomsClient and COIFFEUR.nomsClient[i]
+            return noms and noms[n] or nil
+        end
+        local v = p[i]
+        local noms = COIFFEUR.nomsClient and COIFFEUR.nomsClient[i]
+        local actuel = (v == p.depart[i]) and 1 or nil
+        if i == 4 then return noms and noms[v] or "", nil, nil, actuel, v, p.visage end
+        return noms and noms[v], nil, nil, actuel, v
+    end
+    function SetNextBarberShopStyle(i, arriere)
+        table.insert(COIFFEUR.appels, "suivant " .. i .. (arriere and " -" or " +"))
+        local p = COIFFEUR.patche
+        if p then
+            local l, k = COIFFEUR.valides[i], nil
+            for j, x in ipairs(l) do if x == p[i] then k = j end end
+            if arriere then k = (k - 2) % #l + 1 else k = k % #l + 1 end
+            p[i] = l[k]
+        else
+            COIFFEUR.reglages[i][2] = false
+        end
+        COIFFEUR.cout = COIFFEUR.cout + 1000
+    end
+    function GetBarberShopTotalCost() return COIFFEUR.cout end
+    function ApplyBarberShopStyle() table.insert(COIFFEUR.appels, "appliquer") end
+    function BarberShopReset()
+        table.insert(COIFFEUR.appels, "remettre")
+        for _, r in ipairs(COIFFEUR.reglages) do r[2] = true end
+        local p = COIFFEUR.patche
+        if p then for i, v in pairs(p.depart) do p[i] = v end end
+        COIFFEUR.cout = 0
+    end
+    function CancelBarberShop() table.insert(COIFFEUR.appels, "annuler") end
+    RACCOURCIS_CLAVIER = {}
+    function GetBindingAction(touche) return RACCOURCIS_CLAVIER[touche] end
+    function RunBinding(action) table.insert(COIFFEUR.appels, "raccourci " .. action) end
+    local function batirCoiffeur()
+        local f = CreateFrame("Frame", "BarberShopFrame", UIParent)
+        f:SetWidth(265) f:SetHeight(319)
+        f:SetPoint("RIGHT", UIParent, "RIGHT", -18, -54)
+        f:EnableMouse(true)
+        f:CreateTexture("BarberShopFrameBackground", "BACKGROUND")
+        for i = 1, 4 do
+            local s = CreateFrame("Frame", "BarberShopFrameSelector" .. i, f)
+            s:SetID(i)
+            s:SetWidth(175) s:SetHeight(32)
+            s:CreateFontString("BarberShopFrameSelector" .. i .. "Category", "BACKGROUND")
+            bouton("BarberShopFrameSelector" .. i .. "Prev", s, 32)
+            bouton("BarberShopFrameSelector" .. i .. "Next", s, 32)
+            if i == 4 then s:Hide() end
+        end
+        argent("BarberShopFrameMoneyFrame", f)
+        bouton("BarberShopFrameOkayButton", f, 80, "Okay")
+        bouton("BarberShopFrameCancelButton", f, 80, "Cancel")
+        bouton("BarberShopFrameResetButton", f, 80, "Reset")
+        f:Hide()
+        local b = CreateFrame("Frame", "BarberShopBannerFrame", UIParent)
+        b:SetWidth(381) b:SetHeight(210)
+        b:CreateFontString("BarberShopBannerFrameCaption", "OVERLAY")
+    end
     local prevenir = function(nom)
         for _, c in ipairs(FRAMES) do
             if c.events and c.events["ADDON_LOADED"] and c.scripts and c.scripts.OnEvent then
@@ -8309,6 +8399,10 @@ do
             return
         elseif nom == "Blizzard_TradeSkillUI" then
             batirMetiers()
+            prevenir(nom)
+            return
+        elseif nom == "Blizzard_BarbershopUI" then
+            batirCoiffeur()
             prevenir(nom)
             return
         end
@@ -8385,7 +8479,7 @@ def main():
              "TabardColors.lua", "BottomBar.lua", "StatusBars.lua", "Minimap.lua", "WorldMapInstances.lua", "WorldMap.lua", "WorldMapZoom.lua", "QuestLog.lua", "ObjectiveTracker.lua", "SpellBook.lua", "SpellBookSearch.lua", "TalentsData.lua", "Talents.lua", "TalentsSearch.lua", "Bags.lua",
              "CharacterFrame.lua", "EquipmentManager.lua", "ReputationTab.lua", "SkillsTab.lua", "PvPTab.lua", "PvPArena.lua", "PvPBattlegrounds.lua",
              "Titles.lua", "TokensTab.lua", "PetTab.lua", "IconPicker.lua", "Social.lua", "SocialWho.lua", "SocialGuild.lua", "SocialChat.lua", "SocialRaid.lua", "TabardFrame.lua", "GroupFinder.lua", "GroupFinderRaid.lua", "Chat.lua", "Buffs.lua", "Tooltips.lua", "Gabarits.lua", "GameMenu.lua", "Settings.lua", "Bindings.lua", "Macros.lua", "ChatConfig.lua", "ColorPicker.lua", "Tutorial.lua", "Achievements.lua", "TimeManager.lua", "ZoneMap.lua", "DressUp.lua", "Inspect.lua", "Merchant.lua", "Trade.lua", "Mail.lua", "Bank.lua", "GuildBank.lua", "AuctionHouse.lua", "NpcDialog.lua",
-             "Trainer.lua", "Taxi.lua", "Stable.lua", "Socketing.lua", "Dialogues.lua", "TradeSkill.lua", "ProfessionsBook.lua"]
+             "Trainer.lua", "Taxi.lua", "Stable.lua", "Socketing.lua", "Dialogues.lua", "TradeSkill.lua", "ProfessionsBook.lua", "BarberShopData.lua", "BarberShopColors.lua", "BarberShop.lua"]
 
     # l'ordre du .toc fait foi : on verifie qu'il correspond
     toc = io.open(os.path.join(ADDON, "ForeverUI.toc"), encoding="utf-8").read()
@@ -20031,6 +20125,274 @@ def main():
     print("   micro-bouton apres la feuille de personnage, livre 673 x 594 (panneau de gauche), cartes de camelot, rangs, sorts securises, oubli, combat, onglets lateraux")
 
     # ------------------------------------------------- LA TAILLE DES TEXTURES
+    print("\nle coiffeur :")
+    # l'ouverture : le client charge son ecran et le montre, puis
+    # BARBER_SHOP_OPEN ; l'interface se cache, l'ecran de camelot la remplace
+    lua.execute("""
+        UIParent:Show()
+        CHARGER_ADDON('Blizzard_BarbershopUI')
+        BarberShopFrame:Show()
+        ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'BARBER_SHOP_OPEN')
+    """)
+    rc = g.ForeverUIBarberShop
+    assert rc.shown and not g.UIParent.shown and rc.parent is None
+    assert pts(rc)[0][:3] == ["TOPLEFT", g.UIParent, "TOPLEFT"] or (pts(rc)[0][0] == "TOPLEFT" and req(pts(rc)[0][1], g.UIParent))
+    assert pts(rc)[1][0] == "BOTTOMRIGHT" and req(pts(rc)[1][1], g.UIParent) and rc.keyboardEnabled is not False
+    vh, vg, vd = rc.vignettes[1], rc.vignettes[2], rc.vignettes[3]
+    ev = g.ForeverUI.AtlasEntry("charactercreate-vignette-sides")
+    assert vh.height == 451 and [p[0] for p in pts(vh)] == ["TOPLEFT", "TOPRIGHT"] and vh.layer == "OVERLAY"
+    assert vg.width == 703 and [p[0] for p in pts(vg)] == ["TOPLEFT", "BOTTOMLEFT"]
+    assert vd.width == 703 and [p[0] for p in pts(vd)] == ["TOPRIGHT", "BOTTOMRIGHT"]
+    assert list(vd.texcoord.values()) == [ev[3], ev[2], ev[4], ev[5]], "la vignette de droite est retournee"
+    # le panneau : 360 de large a TOPRIGHT (0, -137), 80 + 3 lignes + 20 de
+    # haut (48 d'ecart, camelot) ; les reglages a (-10, -80), 300 de large
+    pn = rc.panneau
+    print("   panneau : %s x %s, lignes a %s" % (pn.width, pn.height, [pts(l)[0][4] for l in rc.lignes.values()]))
+    assert pts(pn)[0][2:] == ["TOPRIGHT", 0, -137] and (pn.width, pn.height) == (360, 80 + 3 * 38 + 2 * 48 + 20)
+    assert pts(rc.reglages)[0][2:] == ["TOPRIGHT", -10, -80] and rc.reglages.width == 300
+    l1, l2, l3 = rc.lignes[1], rc.lignes[2], rc.lignes[3]
+    assert (l1.width, l1.height) == (265, 38) and pts(l2)[0][2:] == ["TOPLEFT", 0, -84] and pts(l3)[0][2:] == ["TOPLEFT", 0, -168]
+    # la case (122 x 25 a 1,55) et ses fleches (26 x 25 a 1,7)
+    assert (l1.case.width, l1.case.height, l1.case.scale) == (122, 25, 1.55)
+    assert (l1.moins.width, l1.moins.height, l1.moins.scale) == (26, 25, 1.7)
+    assert req(pts(l1.moins)[0][1], l1.case) and pts(l1.moins)[0][2:] == ["LEFT", -5, 0] and pts(l1.plus)[0][2:] == ["RIGHT", 4, 0]
+    assert atlas_jeu(l1.moins.icone, "common-dropdown-icon-back") and atlas_jeu(l1.plus.fond, "common-dropdown-c-button")
+    # le nom du choix dans la case, celui du reglage au-dessus ; une couleur
+    # (sans nom) : le reglage dans la case, pas de titre
+    assert l1.texte.text == "Long" and l1.titre.text == "Hair Style" and l1.titre.shown
+    assert l2.texte.text == "Hair Color" and not l2.titre.shown
+    assert l3.texte.text == "Bare" and l3.titre.text == "Facial Hair" and pts(l3.titre)[0][2:] == ["TOPLEFT", 2, 4]
+    # les boutons : Annuler (30, 15), Reinitialiser au-dessus, Accepter (-30, 15)
+    an, ri, ac = rc.annuler, rc.reinitialiser, rc.accepter
+    assert (an.width, an.height) == (150, 40) and pts(an)[0][2:] == ["BOTTOMLEFT", 30, 15] and an.text == "Cancel"
+    assert req(pts(ri)[0][1], an) and pts(ri)[0][2:] == ["TOPLEFT", 0, 15] and ri.text == "Reset"
+    assert pts(ac)[0][2:] == ["BOTTOMRIGHT", -30, 15] and ac.text == "Accept" and an.foreverTrois
+    assert ac.enabled is False and ri.enabled is False, "rien de change : Accepter et Reinitialiser grises"
+    assert req(pts(rc.prix)[0][1], ac) and pts(rc.prix)[0][2:] == ["TOPRIGHT", 0, 8] and rc.prix.argent == 0
+    # les fleches font avancer le choix du client ; le prix et les boutons suivent
+    l1.plus.scripts.OnClick(l1.plus)
+    l2.moins.scripts.OnClick(l2.moins)
+    assert list(g.COIFFEUR.appels.values())[-2:] == ["suivant 1 +", "suivant 2 -"]
+    assert ac.enabled is not False and ri.enabled is not False and rc.prix.argent == 2000
+    ri.scripts.OnClick(ri)
+    assert list(g.COIFFEUR.appels.values())[-1] == "remettre" and ac.enabled is False and rc.prix.argent == 0
+    ac.scripts.OnClick(ac)
+    assert list(g.COIFFEUR.appels.values())[-1] == "appliquer"
+    # le clavier : Echap annule ; la capture d'ecran passe
+    lua.execute("RACCOURCIS_CLAVIER.PRINTSCREEN = 'SCREENSHOT' RACCOURCIS_CLAVIER.W = 'MOVEFORWARD'")
+    rc.scripts.OnKeyDown(rc, "PRINTSCREEN")
+    rc.scripts.OnKeyDown(rc, "W")
+    rc.scripts.OnKeyDown(rc, "ESCAPE")
+    assert list(g.COIFFEUR.appels.values())[-2:] == ["raccourci SCREENSHOT", "annuler"]
+    # les erreurs : leur ligne a nous, en haut
+    lua.execute("ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'UI_ERROR_MESSAGE', 'Not enough money')")
+    assert rc.erreur.shown and rc.erreur.text == "Not enough money" and pts(rc.erreur)[0][2:] == ["TOP", 0, -122]
+    # la peau (tauren) : un quatrieme reglage, sans nom de choix
+    lua.execute("""
+        COIFFEUR.peau = true COIFFEUR.cheveux = "HORNS" COIFFEUR.pilosite = "TUSKS"
+        table.insert(COIFFEUR.reglages, { nil, true })
+        ForeverUI.Coiffeur.Maj()
+    """)
+    l4 = rc.lignes[4]
+    assert l4.shown and l4.texte.text == "Skin Color" and l1.titre.text == "Horn Style" and l3.titre.text == "Tusks"
+    assert pn.height == 80 + 4 * 38 + 3 * 48 + 20
+    # l'apparence appliquee : le coiffeur se ferme (camelot)
+    lua.execute("ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'BARBER_SHOP_APPEARANCE_APPLIED')")
+    assert list(g.COIFFEUR.appels.values())[-1] == "annuler"
+    # la fermeture : l'ecran s'en va, l'interface revient, celui de 3.3.5 est ferme
+    lua.execute("ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'BARBER_SHOP_CLOSE')")
+    assert not rc.shown and g.UIParent.shown and not g.BarberShopFrame.shown
+    # le combat : l'interface revient, l'ecran de 3.3.5 reprend la main
+    lua.execute("""
+        BarberShopFrame:Show()
+        ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'BARBER_SHOP_OPEN')
+    """)
+    assert rc.shown and not g.UIParent.shown
+    lua.execute("ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'PLAYER_REGEN_DISABLED')")
+    assert not rc.shown and g.UIParent.shown and g.BarberShopFrame.shown
+    lua.execute("BarberShopFrame:Hide() COIFFEUR.peau = false table.remove(COIFFEUR.reglages, 4) COIFFEUR.cheveux, COIFFEUR.pilosite = 'NORMAL', 'NORMAL'")
+    print("   plein ecran (interface cachee), vignettes, panneau heavybronze, lignes a fleches, Annuler / Reinitialiser / Accepter, prix, Echap, erreurs, combat")
+
+    print("\nle coiffeur, client patche :")
+    # LES CHOIX VALIDES DU MOTEUR, calcules ici a part de l'addon, sur les
+    # donnees du client (BarberShopData.lua) : une case est bonne si son
+    # chiffre, divise par le poids (1, ou 2 pour le chevalier de la mort),
+    # est impair
+    def chaine_choix(race, sexe, section, var):
+        return g.ForeverUI.ChoixApparence[race][sexe][section][var] or ""
+    def bonnes(texte, poids):
+        return [c for c, x in enumerate(texte) if x != "." and (int(x) // poids) % 2 == 1]
+    def valides(race, sexe, poids, coiffure, poil, couleur, visage):
+        d = g.ForeverUI.ChoixApparence[race][sexe]
+        n3, n2 = d[3]["n"], d[2]["n"]
+        v = {1: [x for x in range(n3) if bonnes(chaine_choix(race, sexe, 3, x), poids)],
+             2: bonnes(chaine_choix(race, sexe, 3, coiffure), poids)}
+        if poil < n2 and couleur < len(chaine_choix(race, sexe, 2, poil)):
+            v[3] = [x for x in range(n2) if bonnes(chaine_choix(race, sexe, 2, x), poids)]
+        else:
+            v[3] = list(range(d["barbes"]))
+        peau = set(bonnes(chaine_choix(race, sexe, 0, 0), poids))
+        peau &= set(bonnes(chaine_choix(race, sexe, 1, visage), poids))
+        peau &= set(bonnes(chaine_choix(race, sexe, 4, 0), poids))
+        v[4] = sorted(peau)
+        return v
+    def poser_valides(v):
+        lua.execute("COIFFEUR.valides = {}")
+        for i, l in v.items():
+            lua.execute("COIFFEUR.valides[%d] = { %s }" % (i, ", ".join(str(x) for x in l)))
+    Gbc = g.ForeverUI.Gabarits
+    def art_c(t, nom):
+        e = Gbc.Art(nom)
+        return t.texture == e[1] and list(t.texcoord.values()) == [e[2], e[3], e[4], e[5]]
+    def derniers_appels(n):
+        return list(g.COIFFEUR.appels.values())[-n:]
+    def entree(k):
+        return g.ForeverUI.Coiffeur.entrees[k]
+    def teinte(t):
+        return [round(x, 3) for x in t.vertex.values()]
+    def couleur_de(c):
+        return [round(x, 3) for x in c.values()]
+    # un humain, pas chevalier de la mort, client anglais : coiffure 3
+    # (Monk), couleur 5, pilosite 2 (Duelist)
+    v = valides("HUMAN", 0, 1, 3, 2, 5, 0)
+    assert v[1] == list(range(12)) and v[2] == list(range(10)) and v[3] == list(range(9)), v
+    poser_valides(v)
+    lua.execute("""
+        AVANT_COIFFEUR = { classe = STATE.classToken, race = UnitRace }
+        STATE.classToken = "WARRIOR"
+        UnitRace = function(u) return "Human", "Human" end
+        -- les noms du client (BarberShopStyle.dbc, humain)
+        COIFFEUR.nomsClient = {
+            [1] = { [0] = "Bald", "Peasant", "Soldier", "Monk", "Barbarian", "Dashing", "Loose", "Courtier",
+                    "Scholar", "Rogue", "Fabulous", "Samson", "Prince" },
+            [3] = { [0] = "Bearded", "Colonel", "Duelist", "Goatee", "Wizard", "Chops", "Van Dyke", "Mustachioed", "Clean" },
+        }
+        COIFFEUR.parNumero = true
+        COIFFEUR.patche = { 3, 5, 2, depart = { 3, 5, 2 } }
+        COIFFEUR.cout = 0
+        BarberShopFrame:Show()
+        ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'BARBER_SHOP_OPEN')
+    """)
+    rc = g.ForeverUIBarberShop
+    l1, l2, l3 = rc.lignes[1], rc.lignes[2], rc.lignes[3]
+    cheveux = g.ForeverUI.CouleursApparence["HUMAN"][0]["cheveux"]
+    # les cases : le nom du client (coiffure, pilosite), l'echantillon
+    # (couleur), le nom du reglage au-dessus de chacune ; elles s'ouvrent
+    assert l1.texte.text == "Monk" and l1.texte.shown and l1.titre.text == "Hair Style" and not l1.numero.shown and l1.bouton.shown
+    assert l3.texte.text == "Duelist" and l3.titre.text == "Facial Hair" and not l3.echantillon.shown
+    assert not l2.texte.shown and l2.titre.shown and l2.titre.text == "Hair Color" and not l2.numero.shown
+    assert l2.echantillon.shown and l2.lueur.shown and l2.lueur.blend == "ADD" and art_c(l2.echantillon, "charactercreate-customize-palette")
+    assert teinte(l2.echantillon) == couleur_de(cheveux[5])
+    assert (l2.echantillon.width, l2.echantillon.height) == (42, 10) and pts(l2.echantillon)[0][2:] == ["CENTER", 0, 0]
+    assert rc.accepter.enabled is False, "rien de change"
+    # la liste des coiffures : 12 choix sur 2 colonnes (plus de 10), des noms
+    # (108 par colonne), le choix en cours dore
+    l1.bouton.scripts.OnClick(l1.bouton)
+    menu = rc.menu
+    assert menu.shown and rc.capteur.shown and menu.scale == 1.55 and menu.strata == "FULLSCREEN_DIALOG"
+    assert req(pts(menu)[0][1], l1.case) and pts(menu)[0][0] == "TOPRIGHT" and pts(menu)[0][2] == "BOTTOMRIGHT"
+    assert l1.fond.e[2] == Gbc.Art("common-dropdown-c-button-open")[2], "la case ouverte"
+    largeur = 14 + 108 + 14
+    assert (menu.width, menu.height) == (3 + 2 * largeur + 3, 6 + 6 * 20 + 7), (menu.width, menu.height)
+    assert all(entree(k).shown for k in range(1, 13)) and entree(1).numero.text == 1 and entree(12).numero.text == 12
+    assert entree(1).nom.text == "Bald" and entree(4).nom.text == "Monk" and entree(12).nom.text == "Samson"
+    assert entree(4).numero.textColor[1] == 1 and entree(1).numero.textColor[1] == 0.5 and entree(4).nom.textColor[1] == 1
+    assert all(entree(k).nom.width <= largeur - 27 for k in range(1, 13)) and not entree(1).echantillon.shown
+    assert pts(entree(7))[0][2:] == ["TOPLEFT", 3 + largeur, -6], "le 7e ouvre la seconde colonne"
+    # le survol : l'apercu apres un arret de 0,1 s (l'image du survol ne
+    # compte pas, une image au plus 0,05)
+    entree(6).scripts.OnEnter(entree(6))
+    for _ in range(2):
+        menu.scripts.OnUpdate(menu, 0.5)
+    assert g.COIFFEUR.patche[1] == 3, "trop tot : 0,05 par image"
+    menu.scripts.OnUpdate(menu, 0.5)
+    assert g.COIFFEUR.patche[1] == 5 and derniers_appels(2) == ["suivant 1 +", "suivant 1 +"]
+    assert rc.accepter.enabled is not False, "l'apercu met a jour le prix et les boutons"
+    # Echap : la liste se referme sur le choix en cours, le coiffeur reste
+    rc.scripts.OnKeyDown(rc, "ESCAPE")
+    assert not menu.shown and not rc.capteur.shown and g.COIFFEUR.patche[1] == 3
+    assert derniers_appels(2) == ["suivant 1 -", "suivant 1 -"], "Echap ferme la liste, pas le coiffeur"
+    # un clic choisit par le plus court chemin : de Monk (4e) a Bald (1er),
+    # trois crans en arriere
+    l1.bouton.scripts.OnClick(l1.bouton)
+    entree(1).scripts.OnClick(entree(1))
+    assert not menu.shown and g.COIFFEUR.patche[1] == 0 and derniers_appels(3) == ["suivant 1 -"] * 3
+    assert l1.texte.text == "Bald" and rc.accepter.enabled is not False
+    # la liste des couleurs : 10 choix sur une colonne (116), numero et
+    # echantillon, le lisere sur le choix en cours
+    l2.bouton.scripts.OnClick(l2.bouton)
+    assert (menu.width, menu.height) == (3 + 144 + 3, 6 + 10 * 20 + 7)
+    assert not entree(11).shown and not entree(1).nom.shown and entree(6).echantillon.shown
+    assert entree(6).choisi.shown and not entree(5).choisi.shown
+    assert teinte(entree(10).echantillon) == couleur_de(cheveux[9])
+    assert req(pts(entree(1).echantillon)[0][1], entree(1).numero) and pts(entree(1).echantillon)[0][2:] == ["RIGHT", 0, 0]
+    assert (entree(1).choisi.width, entree(1).choisi.height) == (51, 20) and pts(entree(1).choisi)[0][2:] == ["LEFT", -4, 0]
+    entree(10).scripts.OnClick(entree(10))
+    assert g.COIFFEUR.patche[2] == 9 and derniers_appels(4) == ["suivant 2 +"] * 4
+    assert teinte(l2.echantillon) == couleur_de(cheveux[9])
+    # un clic a cote : rien ne change
+    l3.bouton.scripts.OnClick(l3.bouton)
+    assert menu.shown and entree(3).numero.textColor[1] == 1
+    rc.capteur.scripts.OnClick(rc.capteur)
+    assert not menu.shown and g.COIFFEUR.patche[3] == 2
+    # la molette : vers le bas, le choix suivant
+    l3.bouton.scripts.OnMouseWheel(l3.bouton, -1)
+    assert g.COIFFEUR.patche[3] == 3 and derniers_appels(1) == ["suivant 3 +"] and l3.texte.text == "Goatee"
+    # la case : fleche au survol, details decales enfonces
+    l1.bouton.scripts.OnEnter(l1.bouton)
+    assert art_c(l1.survol, "common-dropdown-c-button-hover-arrow") and l1.survol.shown
+    l1.bouton.scripts.OnMouseDown(l1.bouton)
+    assert pts(l1.texte)[0][2:] == ["LEFT", 14, -1]
+    l1.bouton.scripts.OnMouseUp(l1.bouton)
+    l1.bouton.scripts.OnLeave(l1.bouton)
+    assert not l1.survol.shown and pts(l1.texte)[0][2:] == ["LEFT", 13, 0]
+    # un client patche avant la piece des noms ignore le numero et rend le
+    # choix en cours : la liste n'a alors que les numeros (42 par colonne)
+    lua.execute("COIFFEUR.parNumero = false")
+    l1.bouton.scripts.OnClick(l1.bouton)
+    assert not entree(1).nom.shown and not entree(4).nom.shown and menu.width == 3 + 2 * (14 + 42 + 14) + 3
+    rc.scripts.OnKeyDown(rc, "ESCAPE")
+    lua.execute("COIFFEUR.parNumero = true")
+    # un tauren chevalier de la mort : la peau se change, ses choix dependent
+    # du visage (visage 0 : peaux 19 a 21 ; visage 5 : 0 a 18)
+    lua.execute("""
+        UnitRace = function(u) return "Tauren", "Tauren" end
+        STATE.classToken = "DEATHKNIGHT"
+        COIFFEUR.peau, COIFFEUR.cheveux, COIFFEUR.pilosite = true, "HORNS", "TUSKS"
+        table.insert(COIFFEUR.reglages, { nil, true })
+        COIFFEUR.nomsClient = nil
+        COIFFEUR.patche = { 0, 0, 0, 20, depart = { 0, 0, 0, 20 }, visage = 0 }
+    """)
+    v = valides("TAUREN", 0, 2, 0, 0, 0, 0)
+    assert v[4] == [19, 20, 21], v[4]
+    poser_valides(v)
+    lua.execute("ForeverUI.Coiffeur.Maj()")
+    l4 = rc.lignes[4]
+    peaux = g.ForeverUI.CouleursApparence["TAUREN"][0]["peau"]
+    assert l4.titre.text == "Skin Color" and l4.echantillon.shown and not l4.texte.shown
+    assert teinte(l4.echantillon) == couleur_de(peaux[20])
+    l4.bouton.scripts.OnClick(l4.bouton)
+    assert (menu.width, menu.height) == (3 + 144 + 3, 6 + 3 * 20 + 7) and entree(2).choisi.shown and not entree(1).choisi.shown
+    rc.scripts.OnKeyDown(rc, "ESCAPE")
+    lua.execute("COIFFEUR.patche[4], COIFFEUR.patche.depart[4], COIFFEUR.patche.visage = 3, 3, 5")
+    v = valides("TAUREN", 0, 2, 0, 0, 0, 5)
+    assert v[4] == list(range(19)), v[4]
+    poser_valides(v)
+    lua.execute("ForeverUI.Coiffeur.Maj()")
+    assert teinte(l4.echantillon) == couleur_de(peaux[3])
+    # le coiffeur ferme avec une liste ouverte : elle s'efface, sans cran
+    l4.bouton.scripts.OnClick(l4.bouton)
+    n = len(g.COIFFEUR.appels)
+    lua.execute("ForeverUI.Coiffeur.veille.scripts.OnEvent(ForeverUI.Coiffeur.veille, 'BARBER_SHOP_CLOSE')")
+    assert not menu.shown and not rc.capteur.shown and len(g.COIFFEUR.appels) == n
+    lua.execute("""
+        UnitRace, STATE.classToken = AVANT_COIFFEUR.race, AVANT_COIFFEUR.classe
+        COIFFEUR.patche, COIFFEUR.valides, COIFFEUR.nomsClient, COIFFEUR.parNumero = nil, nil, nil, nil
+        BarberShopFrame:Hide() COIFFEUR.peau = false table.remove(COIFFEUR.reglages, 4)
+        COIFFEUR.cheveux, COIFFEUR.pilosite = 'NORMAL', 'NORMAL'
+    """)
+    print("   indice rendu par le client patche : cases (nom, echantillon), listes calculees (coiffure, couleur, pilosite, peau selon le visage), noms du client par numero, apercu, Echap, clic, molette, fermeture")
+
     # UNE TEXTURE SANS TAILLE SE DESSINE A LA TAILLE DE SA FEUILLE ENTIERE en
     # 3.3.5 : un morceau d'atlas pose par une seule ancre, ou par deux ancres
     # d'un seul axe, deborde (echange, banque de guilde, 28/09 -- SetAtlas(t,
@@ -20058,7 +20420,8 @@ def main():
                "GossipFrame", "QuestFrame", "QuestInfoFrame", "ItemTextFrame", "PetitionFrame", "GuildRegistrarFrame",
                "TaxiFrame", "PetStableFrame", "ClassTrainerFrame", "ItemSocketingFrame",
                "StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4", "TradeSkillFrame",
-               "ForeverUIProfessionsBook", "ForeverUIProfessionsTabs"}
+               "ForeverUIProfessionsBook", "ForeverUIProfessionsTabs",
+               "ForeverUIBarberShop"}
     def du_commerce(f):
         while f is not None:
             if f.name in racines:

@@ -38,11 +38,20 @@ present, bit 4 ou 16 present, bit 8 absent.
     cheveux) existe, les v qui ont une couleur au moins avec (2, v, c)
     bonne ; sinon tous les styles de CharacterFacialHairStyles.
 
+LE COIFFEUR (releve le 2026-09-29) fait avancer ses reglages par les memes
+routines (0x4F0490 coiffure, 0x4EB500 couleur, 0x4EBCA0 pilosite, 0x4EB150
+peau) : les memes regles valent chez lui.
+
 CE QU'IL FAIT. Ecrit data/glue/Interface/GlueXML/ForeverUIGlueChoix.lua :
   ForeverUIGlue.choix["FICHIER DE LA RACE"][sexe 0/1] = {
       [section] = { [variation] = "chaine" }, barbes = n }
 une chaine par variation, un caractere par couleur : "." pas de ligne,
 sinon 0 a 3 = 1 (bonne hors chevalier de la mort) + 2 (bonne pour lui).
+Et, pour le coiffeur en jeu (l'addon ne lit pas les ecrans d'accueil),
+data/addon/ForeverUI/BarberShopData.lua : la meme table en
+ForeverUI.ChoixApparence. (Les noms des choix, eux, viennent du client
+patche, dans sa langue.) Controle au passage que chaque coiffure valide a sa
+ligne dans BarberShopStyle.dbc : le coiffeur l'y cherche apres chaque cran.
 """
 import argparse
 import io
@@ -57,6 +66,7 @@ from foreverui import mpq  # noqa: E402
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLIENT_DEFAUT = r"E:\world of warcraft 3.3.5a hd"
 SORTIE = os.path.join(RACINE, "data", "glue", "Interface", "GlueXML", "ForeverUIGlueChoix.lua")
+SORTIE_ADDON = os.path.join(RACINE, "data", "addon", "ForeverUI", "BarberShopData.lua")
 BS = chr(92)
 JOUABLES = (1, 2, 3, 4, 5, 6, 7, 8, 10, 11)
 SECTIONS = 5
@@ -99,16 +109,14 @@ def main():
         if v[0] in fichier:
             barbes[(v[0], v[1])] += 1
 
-    lignes = [
+    entete = [
         "-- les choix valides de la personnalisation, par race, sexe, section,",
         "-- variation ; un caractere par couleur (\".\" pas de ligne, sinon 1 : bonne",
         "-- hors chevalier de la mort, + 2 : bonne pour lui)",
         "-- genere par tools/choix_personnalisation.py depuis CharSections.dbc et",
         "-- CharacterFacialHairStyles.dbc du client 3.3.5",
-        "",
-        "ForeverUIGlue = ForeverUIGlue or {}",
-        "ForeverUIGlue.choix = {",
     ]
+    lignes = []
     total = 0
     for race in sorted(fichier, key=lambda r: fichier[r]):
         lignes.append('\t["%s"] = {' % fichier[race])
@@ -131,9 +139,28 @@ def main():
             lignes.append("\t\t\tbarbes = %d," % barbes[(race, sexe)])
             lignes.append("\t\t},")
         lignes.append("\t},")
-    lignes += ["}", ""]
-    io.open(SORTIE, "w", encoding="utf-8", newline="\n").write("\n".join(lignes))
+    lignes.append("}")
+    io.open(SORTIE, "w", encoding="utf-8", newline="\n").write("\n".join(
+        entete + ["", "ForeverUIGlue = ForeverUIGlue or {}", "ForeverUIGlue.choix = {"] + lignes + [""]))
     print("choix : %d races, %d cases -> %s" % (len(fichier), total, os.path.relpath(SORTIE, RACINE)))
+
+    # le coiffeur en jeu : la meme table
+    io.open(SORTIE_ADDON, "w", encoding="utf-8", newline="\n").write("\n".join(
+        entete + ["-- (copie pour le coiffeur en jeu)", "",
+                  "ForeverUI = ForeverUI or {}", "ForeverUI.ChoixApparence = {"] + lignes + [""]))
+    print("coiffeur : -> %s" % os.path.relpath(SORTIE_ADDON, RACINE))
+    # controle : chaque coiffure valide a sa ligne dans BarberShopStyle (le
+    # coiffeur la cherche apres chaque cran, 0x52F760)
+    styles = lire_dbc(client, "BarberShopStyle.dbc")[0]
+    lignes_style = {(v[37], v[38], v[1], v[39]) for v in styles}
+    for race in sorted(fichier, key=lambda r: fichier[r]):
+        for sexe in (0, 1):
+            c = cases.get((race, sexe, 3), {})
+            for chevalier in (False, True):
+                valides = sorted({var for (var, col), dr in c.items() if bonne(dr, chevalier)})
+                sans = [s for s in valides if (race, sexe, 0, s) not in lignes_style]
+                if sans:
+                    print("   %s %d%s : coiffures sans ligne : %s" % (fichier[race], sexe, " (chevalier)" if chevalier else "", sans))
 
 
 if __name__ == "__main__":

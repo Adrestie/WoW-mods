@@ -99,3 +99,6 @@ Socketing.lua
 Dialogues.lua
 TradeSkill.lua
 ProfessionsBook.lua
+BarberShopData.lua
+BarberShopColors.lua
+BarberShop.lua

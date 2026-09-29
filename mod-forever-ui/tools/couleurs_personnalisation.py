@@ -41,6 +41,9 @@ Ecrit data/glue/Interface/GlueXML/ForeverUIGlueCouleurs.lua :
   ForeverUIGlue.couleurs["FICHIER DE LA RACE"][sexe 0/1].peau[indice]
   ForeverUIGlue.couleurs["FICHIER DE LA RACE"][sexe 0/1].cheveux[indice]
 = { r, g, b } ; l'indice est celui du moteur (ColorIndex de CharSections).
+Et la meme table en ForeverUI.CouleursApparence dans
+data/addon/ForeverUI/BarberShopColors.lua, pour le coiffeur en jeu (l'addon
+ne lit pas les ecrans d'accueil).
 """
 import argparse
 import io
@@ -58,6 +61,7 @@ from foreverui import mpq  # noqa: E402
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLIENT_DEFAUT = r"E:\world of warcraft 3.3.5a hd"
 SORTIE = os.path.join(RACINE, "data", "glue", "Interface", "GlueXML", "ForeverUIGlueCouleurs.lua")
+SORTIE_ADDON = os.path.join(RACINE, "data", "addon", "ForeverUI", "BarberShopColors.lua")
 BS = chr(92)
 # les races jouables du 3.3.5 (ChrRaces : le gobelin, 9, ne l'est pas)
 JOUABLES = (1, 2, 3, 4, 5, 6, 7, 8, 10, 11)
@@ -160,14 +164,12 @@ def main():
             if texture in t:
                 couleurs.setdefault(race, {}).setdefault(sexe, {}).setdefault(genre, {})[indice] = t[texture]
 
-    lignes = [
+    entete = [
         "-- les couleurs des echantillons de la personnalisation (peau, cheveux)",
         "-- genere par tools/couleurs_personnalisation.py : teinte de la texture que",
         "-- CharSections.dbc pose pour chaque choix du client 3.3.5",
-        "",
-        "ForeverUIGlue = ForeverUIGlue or {}",
-        "ForeverUIGlue.couleurs = {",
     ]
+    lignes = []
     for race in sorted(couleurs):
         lignes.append('\t["%s"] = {' % race)
         for sexe in sorted(couleurs[race]):
@@ -182,9 +184,14 @@ def main():
             lignes.append("\t\t},")
         lignes.append("\t},")
     lignes += ["}", ""]
-    io.open(SORTIE, "w", encoding="utf-8", newline="\n").write("\n".join(lignes))
+    io.open(SORTIE, "w", encoding="utf-8", newline="\n").write("\n".join(
+        entete + ["", "ForeverUIGlue = ForeverUIGlue or {}", "ForeverUIGlue.couleurs = {"] + lignes))
+    io.open(SORTIE_ADDON, "w", encoding="utf-8", newline="\n").write("\n".join(
+        entete + ["-- (copie pour le coiffeur en jeu)", "", "ForeverUI = ForeverUI or {}",
+                  "ForeverUI.CouleursApparence = {"] + lignes))
     total = sum(len(t) for r in couleurs.values() for s in r.values() for t in s.values())
-    print("couleurs : %d choix, %d textures lues -> %s" % (total, lues, os.path.relpath(SORTIE, RACINE)))
+    print("couleurs : %d choix, %d textures lues -> %s, %s" % (total, lues, os.path.relpath(SORTIE, RACINE),
+                                                              os.path.relpath(SORTIE_ADDON, RACINE)))
     for a in absentes:
         print("   sans echantillon : " + a)
 
