@@ -10,7 +10,7 @@ import json
 import os
 import re
 
-from core import InstallerError, MANIFEST_NAME, dbc_split, row_values, sql_list
+from core import InstallerError, MANIFEST_NAME, dbc_split, read_version, row_values, sql_list
 
 FORMAT = "wow-mods-installer/1"
 
@@ -94,10 +94,10 @@ def _reduced_dbc(path, fields, text, where):
         _error(where, "file missing from the package: %s" % path)
     with open(path, "rb") as f:
         raw = f.read()
-    n, recs, strings = dbc_split(raw, path)
+    n, size, recs, strings = dbc_split(raw, path)
     if n != fields:
         _error(where, "%s has %d fields, %d declared" % (path, n, fields))
-    return [row_values(r, strings, fields, text) for r in recs]
+    return [row_values(r, strings, text) for r in recs]
 
 
 def _dbc(root, entry, i):
@@ -193,6 +193,69 @@ def _addons(root, entry):
     return addons
 
 
+def _lua(root, entry, has_conf):
+    """The module's Lua scripts: {"folder", "files": {path under the folder: package path},
+    "config_path"}. `files` are copied flat into the folder, `sources` are package folders
+    whose tree is copied into it."""
+    lua = {"folder": entry.get("folder"), "files": {}, "anywhere": [], "config_path": None}
+    if not isinstance(lua["folder"], str) or not lua["folder"].strip("/\\") or \
+            any(c in lua["folder"] for c in "/\\:"):
+        _error("lua", '"folder": the name of the module\'s folder in the scripts folder')
+    found = []
+    for p in entry.get("files", []):
+        found.append((os.path.basename(p), os.path.join(root, p)))
+        lua["anywhere"].append(os.path.basename(p))
+    for source in entry.get("sources", []):
+        base = os.path.join(root, source)
+        if not os.path.isdir(base):
+            _error("lua", "folder missing from the package: %s" % source)
+        for d, _, names in os.walk(base):
+            found += [(os.path.relpath(os.path.join(d, n), base), os.path.join(d, n)) for n in names]
+    if not found:
+        _error("lua", '"files" or "sources": the scripts to copy')
+    for name, path in found:
+        if name.lower() in {k.lower() for k in lua["files"]}:
+            _error("lua", "%s provided twice" % name)
+        lua["files"][name] = path
+    if entry.get("config_path"):
+        cp = entry["config_path"]
+        lua["config_path"] = {"file": os.path.normpath(cp.get("file") or ""), "variable": cp.get("variable")}
+        if not has_conf:
+            _error("lua", '"config_path" needs a "configuration"')
+        if lua["config_path"]["file"].lower() not in {k.lower() for k in lua["files"]}:
+            _error("lua", '"config_path": %r is none of the module\'s scripts' % cp.get("file"))
+    return lua
+
+
+def _shared(root, M, entries):
+    """Components several modules carry (the workbench): [{"folder", "source", "version",
+    "provider_mark", "databases"}]. The folder goes into the scripts folder unless a copy of the same
+    or a newer version is there; it goes, with its database rows, with the last module that uses it."""
+    out = []
+    for k, e in enumerate(entries or []):
+        where = "shared[%d]" % k
+        if not isinstance(e, dict):
+            _error(where, "object expected")
+        folder, source, mark = e.get("folder"), e.get("source"), e.get("provider_mark")
+        if not isinstance(folder, str) or not folder or any(c in folder for c in "/\\:"):
+            _error(where, '"folder": the name of the component\'s folder in the scripts folder')
+        if M.lua and folder.lower() == M.lua["folder"].lower():
+            _error(where, "the component's folder is the module's own Lua folder")
+        if not isinstance(source, str) or not os.path.isdir(os.path.join(root, source)):
+            _error(where, '"source": a folder of the package (%r)' % source)
+        if not isinstance(mark, str) or not mark:
+            _error(where, '"provider_mark": the text a script of a module that uses the component holds')
+        version = e.get("version_file", "VERSION")
+        if read_version(os.path.join(root, source), version) is None:
+            _error(where, "%s/%s: a whole number expected" % (source, version))
+        dbs = _databases(root, M, e.get("database"))
+        if any(d["tables"] or d["before"] for d in dbs.values()):
+            _error(where, 'the component\'s "database" holds "rows" only')
+        out.append({"folder": folder, "source": os.path.join(root, source), "version_file": version,
+                    "provider_mark": mark, "databases": dbs})
+    return out
+
+
 def _substitute(text, M, root, where):
     """Replaces the {ids:File.dbc} and {sql_files:db-world} placeholders of a condition."""
     def one(m):
@@ -254,8 +317,8 @@ def load(root):
     if not isinstance(M.server_module, bool):
         _error("server_module", "true or false")
     if not M.server_module:
-        server_keys = [k for k in ("signature", "exclude_from_sources", "configuration", "lua", "database")
-                       if k in m]
+        server_keys = [k for k in ("signature", "exclude_from_sources", "configuration", "lua", "database",
+                                   "shared") if k in m]
         if server_keys:
             _error(server_keys[0], "a package without server module has no %s" % ", ".join(server_keys))
     M.signature = m.get("signature") or []
@@ -268,17 +331,7 @@ def load(root):
         M.conf = {"file": c.get("file"), "template": c.get("template"), "values": c.get("values", {})}
         if not M.conf["file"] or not M.conf["template"]:
             _error("configuration", '"file" and "template"')
-    M.lua = None
-    if m.get("lua"):
-        lua = m["lua"]
-        M.lua = {"folder": lua.get("folder"), "files": list(lua.get("files", [])), "config_path": None}
-        if not M.lua["folder"] or not M.lua["files"]:
-            _error("lua", '"folder" and "files"')
-        if lua.get("config_path"):
-            M.lua["config_path"] = {"file": lua["config_path"].get("file"),
-                                    "variable": lua["config_path"].get("variable")}
-            if not M.conf:
-                _error("lua", '"config_path" needs a "configuration"')
+    M.lua = _lua(M.root, m["lua"], bool(M.conf)) if m.get("lua") else None
     M.dbc = [_dbc(M.root, e, i) for i, e in enumerate(m.get("dbc", []))]
     if len({d.file.lower() for d in M.dbc}) != len(M.dbc):
         _error("dbc", "a DBC file declared twice")
@@ -287,8 +340,11 @@ def load(root):
     M.addons = _addons(M.root, m.get("addons"))
     M.backups = list(m.get("backups", []))
     M.databases = _databases(M.root, M, m.get("database"))
-    missing = [p for p in list(M.signature) + ([M.conf["template"]] if M.conf else []) +
-               (M.lua["files"] if M.lua else []) if not os.path.isfile(os.path.join(M.root, p))]
+    M.shared = _shared(M.root, M, m.get("shared"))
+    missing = [p for p in list(M.signature) + ([M.conf["template"]] if M.conf else [])
+               if not os.path.isfile(os.path.join(M.root, p))]
+    missing += [os.path.relpath(p, M.root) for p in (M.lua["files"].values() if M.lua else [])
+                if not os.path.isfile(p)]
     if missing:
         raise InstallerError("incomplete package (%s): %s missing" % (M.root, ", ".join(missing)))
     return M

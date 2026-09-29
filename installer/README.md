@@ -8,11 +8,17 @@ one.
 
 ## Usage
 
-Download `installer.exe` once, then run it and give it the module folder, the
-one that contains `installer.json`, or drop that folder on `installer.exe`.
-The first time, it also asks for the worldserver folder, the game folder and,
-if it cannot find it, `mysql.exe`; it remembers them in
-`%APPDATA%\WoW-mods\installer-settings.json`.
+Download `installer.exe` once, then run it, or drop a module folder (the one
+that contains `installer.json`) on it. Its window holds the module folder, the
+worldserver folder and the game folder; the AzerothCore sources and
+`mysql.exe` are found by themselves when left empty. Under each field, a line
+says what goes there and whether the path given is the expected one. It
+remembers them in
+`%APPDATA%\WoW-mods\installer-settings.json`. **Check** reads the server, the
+game archives and the database, then shows the module's state and the traces
+found, and the one button that fits: **Install**, **Remove** or **Remove
+leftovers**, each confirmed before anything is written. What the installer
+does goes to the log at the bottom of the window.
 
 - **No trace of the module**: it INSTALLS. It copies the module into the
   server sources (`modules/`), puts its configuration and Lua scripts in
@@ -34,8 +40,12 @@ if it cannot find it, `mysql.exe`; it remembers them in
   game file.
 
 It refuses to write anything while the worldserver or the game is running.
-A removal is confirmed by typing `YES`, a removal of leftovers by typing
-`LEFTOVERS`.
+
+With `--status` or `--yes`, it runs without window, in the console of the
+program that started it, and asks nothing: the paths come from the options or
+from the remembered ones. From a batch file, `start /wait installer.exe ...`
+waits for it and gets its exit code (0 done, 1 stopped or failed, 2
+unexpected error).
 
 | Option | Effect |
 |---|---|
@@ -45,11 +55,11 @@ A removal is confirmed by typing `YES`, a removal of leftovers by typing
 | `--client DIR` | game folder (the one that contains `Wow.exe` and `Data`) |
 | `--mysql FILE` | path of `mysql.exe` |
 | `--status` | show the current state, change nothing |
-| `--yes` | ask nothing (paths from the options or remembered) |
+| `--yes` | install or remove without window |
 | `--leftovers` | with `--yes`: the conflicting items are leftovers of the module, remove them |
 
 It also runs without being compiled: `python installer\installer.py [module]`
-(Python 3.12 or later, standard library only).
+(Python 3.12 or later, standard library only, tkinter included).
 
 ## Building installer.exe
 

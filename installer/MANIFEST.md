@@ -20,16 +20,19 @@ Paths inside the package are relative to the module folder, with `/`.
 | `exclude_from_sources` | no | package folders or files not copied into `modules/` (client data, for instance); `.git` and `__pycache__` never are |
 | `configuration` | no | the module's `.conf`, see below |
 | `lua` | no | the module's Lua scripts, see below |
+| `shared` | no | components several modules carry, such as the workbench, see below |
 | `dbc` | no | the module's DBC rows, see below |
 | `game_files` | no | files written into the game archives, see below |
 | `addons` | no | addon folders copied into the game's `Interface\AddOns`, see below |
 | `backups` | no | suffixes of backup files left by older tools (e.g. `".avant_item_upgrade"`), deleted on removal |
 | `database` | no | what the module leaves in the database, see below |
 
-The SQL files are not declared: they are the module's `data/sql/db-world` and
-`data/sql/db-characters` folders, applied by the core updater on the next
-start. When `Updates.EnableDatabases` in `worldserver.conf` disables the
-updater for a database, the installer applies them itself. The updater
+The SQL files are not declared: they are the `.sql` files under the folders
+of the module's `data/sql` whose name holds the database's name
+(`data/sql/db-world`, `data/sql/world`; `db-characters`, `characters`), which
+the core updater applies on the next start, sorted by file name. When
+`Updates.EnableDatabases` in `worldserver.conf` disables the updater for a
+database, the installer applies them itself, in the same order. The updater
 records files by name only: prefix every SQL file name with the module name.
 
 The AzerothCore module loader must be named after the folder:
@@ -64,8 +67,35 @@ of `mod_ale.conf` (or `Eluna.ScriptPath` of `mod_eluna.conf`), `lua_scripts`
 by default. With `config_path`, the line `local CONF = "..."` of that file
 receives the path of the module's `.conf`, relative to the worldserver folder.
 
-On removal, files with these names are removed wherever they are under
-`<scripts>`; the folder is removed if nothing else is left in it.
+`sources` (in place of `files`, or with them): package folders whose tree is
+copied into `<scripts>/<folder>` (`"sources": ["data/lua/SphereGrid"]`);
+`config_path` then names the file by its path in that tree.
+
+On removal, the files of `files` are removed wherever they are under
+`<scripts>`, those of `sources` at their place in the folder; the folder is
+removed if nothing else is left in it (the files a user saved there stay, and
+so does the folder).
+
+### shared
+
+```json
+"shared": [{
+  "folder": "Workbench",
+  "source": "data/lua/Workbench",
+  "version_file": "VERSION",
+  "provider_mark": "Workbench.Register(",
+  "database": { "world": { "rows": [{ "table": "gameobject_template", "where": "entry = 810000" }] } }
+}]
+```
+
+A component several modules ship as an identical copy. `source` is copied into
+`<scripts>/<folder>` unless the copy there has the same or a higher version
+(the whole number in `version_file`, `VERSION` by default); an older copy is
+replaced. The component is no trace of the module. On removal, once the
+module's own scripts are gone, it stays while a `.lua` or `.ext` file of the
+scripts folder, outside its own folder, holds `provider_mark`; otherwise its
+folder is deleted and its `database` rows too (`rows` only, same form as in
+`database`). A removal of leftovers never touches it.
 
 ### dbc
 
@@ -83,6 +113,11 @@ One entry per DBC file:
 `text_fields` must list **every** string field of the file, used by the
 module or not: rows are compared by content, strings as text, and a string
 field read as a number would never match.
+
+A few files hold byte fields besides 4-byte ones (`SpellChainEffects.dbc`: 48
+fields in 177 bytes). Their rows are read as 4-byte words followed by the
+bytes left over; `fields` is still the count of the file's header, the rows
+come from a reduced DBC, and a text field must be one of the words.
 
 On install, the server file gets the rows appended. On the game side, the file
 is read from the archive the game reads it from and rewritten, rows appended,
@@ -172,7 +207,7 @@ Placeholders in `where` and `sql`:
 | Placeholder | Becomes |
 |---|---|
 | `{ids:File.dbc}` | the identifiers of that `dbc` entry, client and server, comma-separated |
-| `{sql_files:db-world}` | the quoted names of every `.sql` file under `data/sql/db-world` (the names the updater records in `updates`); same for `db-characters` |
+| `{sql_files:db-world}` | the quoted names of every `.sql` file under `data/sql/db-world` (the names the updater records in `updates`); same for any folder of `data/sql` |
 
 An empty list becomes `NULL`.
 
