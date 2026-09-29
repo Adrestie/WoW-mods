@@ -39,7 +39,7 @@
  * ligne est prevenue par le coeur lui-meme.
  *
  * L'AURA NOMME LA LIGNE : `GetId()` est le `trigger:` que la ligne declare. Une
- * aura de TEMOIN (902700-902708), posee par l'instrument de mesure, ne reveille
+ * aura de TEMOIN (87700-87708), posee par l'instrument de mesure, ne reveille
  * aucune ligne : elle ne sert qu'a compter les occasions.
  */
 

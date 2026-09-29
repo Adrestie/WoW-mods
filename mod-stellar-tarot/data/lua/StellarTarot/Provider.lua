@@ -36,8 +36,8 @@ end
 
 -- The identifiers the module allocates (StellarTarotMgr.h): card N is item
 -- CARD_BASE + N, board B is item BOARD_BASE + B.
-local CARD_BASE = 902000
-local BOARD_BASE = 902500
+local CARD_BASE = 87000
+local BOARD_BASE = 87500
 
 -- Which entries exist, read once from the catalogue: a card added later
 -- needs a `.reload ale` to be known here.

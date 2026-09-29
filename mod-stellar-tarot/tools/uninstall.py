@@ -142,8 +142,10 @@ def other_providers(target):
     scripts = os.path.dirname(target.lua_dir)
     own = os.path.normcase(target.lua_dir)
     found = []
+    bench = os.path.normcase(os.path.join(scripts, "Workbench"))
     for base, folders, names in os.walk(scripts):
-        if os.path.normcase(base).startswith(own):
+        # The workbench's own files define `Workbench.Register(`; they are no provider.
+        if os.path.normcase(base).startswith(own) or os.path.normcase(base).startswith(bench):
             continue
         for name in names:
             if not name.endswith((".lua", ".ext")):
@@ -164,11 +166,11 @@ def remove_workbench(target, dry_run):
         return
     remove(os.path.join(os.path.dirname(target.lua_dir), "Workbench"), dry_run, "workbench")
     lines = [
-        "DELETE FROM `gameobject` WHERE `id` = 803700",
-        "DELETE FROM `gameobject_template_locale` WHERE `entry` = 803700",
-        "DELETE FROM `gameobject_template` WHERE `entry` = 803700",
+        "DELETE FROM `gameobject` WHERE `id` = 810000",
+        "DELETE FROM `gameobject_template_locale` WHERE `entry` = 810000",
+        "DELETE FROM `gameobject_template` WHERE `entry` = 810000",
     ]
-    print("  %-11s the object 803700 and its spawns, nobody else uses them" % "workbench")
+    print("  %-11s the object 810000 and its spawns, nobody else uses them" % "workbench")
     if dry_run:
         for line in lines:
             print("      %s" % line)

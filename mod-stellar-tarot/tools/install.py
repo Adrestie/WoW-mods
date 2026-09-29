@@ -242,13 +242,13 @@ def module_ids(family, root=None):
     rows carry the new numbers, and the checkout still carries the old.
     """
     import shift as shifting
-    low, high = shifting.current_ranges()[family]
+    ranges = shifting.current_ranges()[family]
     out = set()
     folder = os.path.join(root or MODULE, "data", "dbc")
     for mine, theirs in OURS.items():
         path = os.path.join(folder, mine)
         if theirs in shifting.FAMILIES[family]["tables"] and os.path.isfile(path):
-            out |= {i for i in dbc.read(path).ids() if low <= i <= high}
+            out |= {i for i in dbc.read(path).ids() if in_ranges(i, ranges)}
     # A FAMILY WITH NO DBC OF ITS OWN IS ITS WHOLE RANGE. The templates -- the
     # module's creatures and its objects -- live in the SQL and nowhere else,
     # so there is no file here to enumerate them from, and an empty answer
@@ -257,8 +257,16 @@ def module_ids(family, root=None):
     # wrote over it. The block is what the module allocated, and the block is
     # what has to be free.
     if not shifting.FAMILIES[family]["tables"]:
-        return set(range(low, high + 1))
+        return every_number(ranges)
     return out
+
+
+def in_ranges(value, ranges):
+    return any(low <= value <= high for low, high in ranges)
+
+
+def every_number(ranges):
+    return {i for low, high in ranges for i in range(low, high + 1)}
 
 
 def ours_in_database(target, table, ids):
@@ -324,15 +332,15 @@ def taken_in_database(target, family):
     """Which of the module's identifiers the world database already holds,
     NOT counting the rows the module itself wrote on an earlier install."""
     import shift as shifting
-    low, high = shifting.current_ranges()[family]
+    ranges = shifting.current_ranges()[family]
     out = {}
     present = target.existing_tables("world")
     for table, column in DB_KEYS.get(family, ()):
         if table not in present:
             continue
+        where = " OR ".join("`%s` BETWEEN %d AND %d" % (column, low, high) for low, high in ranges)
         rows = target.run_sql("world", statement=(
-            "SELECT `%s` FROM `%s` WHERE `%s` BETWEEN %d AND %d"
-            % (column, table, column, low, high)))
+            "SELECT `%s` FROM `%s` WHERE %s" % (column, table, where)))
         found = {int(v) for v in rows.split() if v.isdigit()}
         found -= ours_in_database(target, table, found & module_ids(family))
         if found:
@@ -579,8 +587,8 @@ def families_in_clash(clashes):
     ranges = shifting.current_ranges()
     for ids in clashes.values():
         for i in ids:
-            for family, (low, high) in ranges.items():
-                if low <= i <= high:
+            for family, family_ranges in ranges.items():
+                if in_ranges(i, family_ranges):
                     out.add(family)
     return out
 
@@ -591,8 +599,7 @@ def free_offset(family, taken_by, root=None):
     """
     import shift as shifting
     spec = shifting.FAMILIES[family]
-    low, high = shifting.current_ranges()[family]
-    mine = module_ids(family, root) or set(range(low, high + 1))
+    mine = module_ids(family, root) or every_number(shifting.current_ranges()[family])
     busy = set()
     for table in spec["tables"]:
         busy |= taken_by.get(table, set())
@@ -620,11 +627,11 @@ def shift_module(clashes, dry_run, root):
     print("  in %s" % root)
     for family in sorted(families_in_clash(clashes)):
         by = free_offset(family, taken_by, root)
-        low, high = shifting.current_ranges()[family]
-        print("  %-10s %d..%d is taken: moving by %+d"
-              % (family, low, high, by))
+        ranges = shifting.current_ranges()[family]
+        print("  %-10s %s is taken: moving by %+d"
+              % (family, ", ".join("%d..%d" % r for r in ranges), by))
         if not dry_run:
-            shifting.FAMILIES[family]["low"], shifting.FAMILIES[family]["high"] = low, high
+            shifting.FAMILIES[family]["ranges"] = ranges
             shifting.shift(family, by, dry_run=False)
     if not dry_run:
         print("  the copy now carries the new identifiers, and the module you "

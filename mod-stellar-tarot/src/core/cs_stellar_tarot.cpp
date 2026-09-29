@@ -200,7 +200,7 @@ public:
         return true;
     }
 
-    // One level of a card, in a word: "spell 903004", "gold_on_kill:1234", or both.
+    // One level of a card, in a word: "spell 88004", "gold_on_kill:1234", or both.
     static std::string Describe(StellarTarotEffect const& effect)
     {
         std::string out;

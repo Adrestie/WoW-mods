@@ -134,11 +134,11 @@ local function SetBinder(binder)
     local entries = {}
     for _, id in ipairs(binder.cards or {}) do
         S.known[id] = true
-        entries[902000 + id] = true
+        entries[87000 + id] = true
     end
     for _, id in ipairs(binder.boards or {}) do
         S.knownBoards[id] = true
-        entries[902500 + id] = true
+        entries[87500 + id] = true
     end
     STELLAR_TAROT_KNOWN = entries
 end
@@ -2208,7 +2208,7 @@ end
 -- Installed once per session, and reading the CURRENT state through a global.
 -- ---------------------------------------------------------------------------
 
-local BANNER_SPELL = 903002
+local BANNER_SPELL = 88002
 
 -- The effects in force, without their source, MERGED and GROUPED. Two
 -- effects that read the same but for their figure become one line with the
@@ -2627,7 +2627,7 @@ end
 -- sur LE COUP qui vient de porter, non sur la puissance d'attaque, et le
 -- client ne connait pas ce coup. Son infobulle dit « 2 % du coup », ce qui est
 -- deja vrai : elle n'est pas reecrite.
-local BLEED_SPELL = 903802      -- l'etabli : une part de la puissance d'attaque
+local BLEED_SPELL = 88802      -- l'etabli : une part de la puissance d'attaque
 local PARTS_DE_SAIGNEMENT
 local function PartDeSaignement(id, name)
     if not (S.cat and S.cat.cards) then return nil end

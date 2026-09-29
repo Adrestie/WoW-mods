@@ -77,32 +77,32 @@ def use(root):
 # whatever column list the INSERT declares), and a word in the name of a C++
 # constant (`constant`).
 FAMILIES = {
-    # ONE BLOCK, 902000..903999, and one number per asset: card N is item
-    # 902000 + N and wears item display 902000 + N; board B is item 902500 + B.
+    # ONE BLOCK, 87000..88999, and one number per asset: card N is item
+    # 87000 + N and wears item display 87000 + N; board B is item 87500 + B.
     # The items and the displays therefore share their numbers, and only one
     # of the two can be moved by sight: the displays are moved by POSITION --
     # the field of Item.dbc and the columns of the SQL that hold one -- so
     # that moving them never touches an item's entry.
-    "items": dict(ranges=((902000, 902699),), size=2000,
+    "items": dict(ranges=((87000, 87699),), size=2000,
                   tables=("Item.dbc",),
                   sql_tables=("item_template", "item_template_locale", "item_dbc")),
-    "displays": dict(ranges=((902000, 902699),), size=2000,
+    "displays": dict(ranges=((87000, 87699),), size=2000,
                      tables=("ItemDisplayInfo.dbc",), sql_tables=(),
                      by_position=dict(
                          fields={"Item.dbc": (5,)},          # DisplayInfoID
                          sql_columns=("displayid", "DisplayInfoID"),
                          constant="DISPLAY")),
-    # The spells own the thousand above -- 903000 studies a card, 903001 a
-    # board, and the aura of card N at level L is 903000 + 4 x N + (L - 1) --
-    # AND the end of the lower half, 902700..902999, which carries no item.
+    # The spells own the thousand above -- 88000 studies a card, 88001 a
+    # board, and the aura of card N at level L is 88000 + 4 x N + (L - 1) --
+    # AND the end of the lower half, 87700..87999, which carries no item.
     # Two ranges, one family: a number in either is a spell of ours.
-    "spells": dict(ranges=((902700, 902999), (903000, 903999)), size=2000,
+    "spells": dict(ranges=((87700, 87999), (88000, 88999)), size=2000,
                    tables=("Spell.dbc",),
                    sql_tables=("spell_dbc", "mod_stellar_tarot_card_effect")),
-    # The spell icons wear the numbers of the SPELLS' thousand (903000 + N, one
+    # The spell icons wear the numbers of the SPELLS' thousand (88000 + N, one
     # per card), not the items'. They are moved by POSITION -- the fields of
     # Spell.dbc that name one -- so that moving them never touches a spell.
-    "icons": dict(ranges=((903000, 903999),), size=2000,
+    "icons": dict(ranges=((88000, 88999),), size=2000,
                   tables=("SpellIcon.dbc",), sql_tables=(),
                   by_position=dict(
                       fields={"Spell.dbc": (133, 134)},   # SpellIconID, ActiveIconID
@@ -191,8 +191,8 @@ def shift_text(path, family, by):
     """Every number of the family, wherever it stands in the file.
 
     A NUMBER GLUED TO A LETTER IS NOT ONE OF OURS -- except after a `$`, which
-    is how a spell's tooltip names ANOTHER spell: `$8600097s1` reads that
-    spell's value, `$8600097d` its duration. Those move with the rest, or the
+    is how a spell's tooltip names ANOTHER spell: `$85097s1` reads that
+    spell's value, `$85097d` its duration. Those move with the rest, or the
     text would point at a spell that no longer exists and the client would
     show whatever it could make of it.
 
