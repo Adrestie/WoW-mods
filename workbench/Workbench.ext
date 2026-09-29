@@ -64,7 +64,7 @@ Workbench.VERSION = 2
 
 -- The object in the world: one template, shipped by every module that uses
 -- the bench (inserted only when absent), placed by hand with `.gobject add`.
-local WORKBENCH_ENTRY = 803700
+local WORKBENCH_ENTRY = 810000
 local GAMEOBJECT_EVENT_ON_USE = 14
 local LOCALE_FRFR = 2
 

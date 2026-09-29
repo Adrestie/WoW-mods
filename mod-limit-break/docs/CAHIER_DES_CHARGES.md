@@ -146,7 +146,8 @@ Répartition en couches :
 | Lua et AIO, ou addon dédié | HUD, barre segmentée, interface de sélection, bouton |
 | Patch client | finition seulement : nom, icône et infobulle des auras posées sur les alliés, lisibilité du journal de combat. Détachable et repoussable |
 
-Bloc d'identifiants de sorts : **10 000 000 et au-delà**.
+Identifiants : **tranche 90 du registre des plages, 90000-90999** (`ID_RANGES.md`, à la racine du dépôt),
+dans tous les espaces.
 
 ## 11. Sécurité du canal client
 
@@ -207,9 +208,8 @@ Deux contraintes de production relevées au passage :
 Piège de dimensionnement : les magasins DBC sont des tableaux plats dimensionnés
 par le plus grand identifiant (`DBCStore.h:69` et `:91`), et `SpellMgr` en alloue
 un second de même taille (`SpellMgr.cpp:3027`). Un identifiant à dix millions
-coûte de l'ordre de 80 Mo par magasin. Pour les sorts la dépense est déjà faite,
-les sorts d'armes existants montant à 8 340 210 ; il ne faut en revanche jamais
-placer un talent ou un objet dans cette plage.
+coûte de l'ordre de 80 Mo par magasin. C'est pourquoi le registre des plages
+range tous les modules sous 100 000.
 
 ## 13. Justification du custom
 
