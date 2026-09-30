@@ -8,7 +8,7 @@
  * Chaque soin direct declenche UN sort parmi trois, tire une seule fois :
  *   38 %  Chaine de soins des Anciens (84321, copie de Chain Heal a 5 cibles)
  *   57 %  Vague de soins des Anciens (84322, copie de Healing Wave rang 14)
- *    5 %  Protection des Anciens (84323), immunite aux degats de 5 s sur le
+ *    5 %  Protection des Anciens (84323), immunite aux degats de 3 s sur le
  *         raid dans 50 yards, avec un cooldown propre de 30 s
  *
  * Si la protection sort alors que son cooldown court, le proc n'est pas perdu :
