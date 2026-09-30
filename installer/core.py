@@ -43,14 +43,24 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 
 import mpq_archive
+import wow_exe
 
 # Package entries never copied into modules/.
 NEVER_COPIED = {".git", "__pycache__"}
 
 NEW_ARCHIVE_NAME = "patch-Z.MPQ"
+# The archives Wow.exe 12340 loads: in Data, and in the language folder (%s: its name);
+# "." stands for the "?" of patch-?.MPQ, one character.
+DATA_ARCHIVES = re.compile(r"^(common|common-2|expansion|lichking|patch|patch-.)\.mpq$", re.I)
+LOCALE_ARCHIVES = r"^((locale|speech|expansion-locale|lichking-locale|expansion-speech|lichking-speech)-%s" \
+                  r"|patch-%s(-.)?)\.mpq$"
+# Interface files Wow.exe checks against Blizzard's signature: (check, folder, what they are).
+INTERFACE_CHECKS = (("GlueXML", "interface\\gluexml\\", "login screen files (Interface\\GlueXML)"),
+                    ("FrameXML", "interface\\framexml\\", "in-game interface files (Interface\\FrameXML)"))
 MANIFEST_NAME = "installer.json"
 RECEIPT_FOLDER = "WoW-mods"
 CREATE_NO_WINDOW = 0x08000000
@@ -259,6 +269,7 @@ class Client(object):
         if not self.data or not any(n.lower().endswith(".mpq") for n in os.listdir(self.data)):
             raise InstallerError("no Data folder with .MPQ archives in %s" % self.folder)
         self.locale_dir = self._find_locale_dir()
+        self.wow_exe = wow_exe.find(self.folder)
         self._open = {}
         self.unreadable = []
 
@@ -277,15 +288,27 @@ class Client(object):
         return os.path.join(self.data, folders[0]) if len(folders) == 1 else None
 
     def archives(self):
-        """[(rank, path)] of every archive the game reads, from weakest to strongest."""
+        """[(rank, path)] of every archive the game loads, from weakest to strongest."""
         found = []
-        for folder in (self.data, self.locale_dir):
-            if folder:
-                for n in os.listdir(folder):
-                    p = os.path.join(folder, n)
-                    if n.lower().endswith(".mpq") and os.path.isfile(p):
-                        found.append((archive_rank(n)[0], p))
+        patterns = [(self.data, DATA_ARCHIVES)]
+        if self.locale_dir:
+            locale = re.escape(os.path.basename(self.locale_dir))
+            patterns.append((self.locale_dir, re.compile(LOCALE_ARCHIVES % (locale, locale), re.I)))
+        for folder, pattern in patterns:
+            for n in os.listdir(folder):
+                p = os.path.join(folder, n)
+                if pattern.match(n) and os.path.isfile(p):
+                    found.append((archive_rank(n)[0], p))
         return sorted(found)
+
+    def stray_archives(self):
+        """The .mpq files of Data and of its subfolders that the game does not load (a name it does
+        not look for, another language): never written into, only searched for what a module left."""
+        loaded = {os.path.normcase(p) for r, p in self.archives()}
+        folders = [self.data] + [os.path.join(self.data, n) for n in sorted(os.listdir(self.data))
+                                 if os.path.isdir(os.path.join(self.data, n))]
+        return [p for folder in folders for p in (os.path.join(folder, n) for n in sorted(os.listdir(folder)))
+                if p.lower().endswith(".mpq") and os.path.isfile(p) and os.path.normcase(p) not in loaded]
 
     def custom_archives(self):
         return [p for r, p in self.archives() if not archive_rank(os.path.basename(p))[1]]
@@ -305,9 +328,9 @@ class Client(object):
 
     def winner(self, name, below=None):
         """The archive the game reads this file from; below=path: the winner
-        among the archives read before that one."""
+        among the archives read before that one (all of them, for an archive the game does not load)."""
         paths = [p for r, p in self.archives()]
-        if below is not None:
+        if below is not None and below in paths:
             paths = paths[:paths.index(below)]
         for path in reversed(paths):
             a = self.open(path)
@@ -853,6 +876,19 @@ def game_files_target(M, client):
     return target
 
 
+def install_targets(M, client):
+    """The archives an install writes into, existing or to be created."""
+    targets = set()
+    for d in M.dbc:
+        if d.client is not None:
+            w = client.winner("DBFilesClient\\" + d.file)
+            if w:
+                targets.add(client.write_target(w))
+    if M.game_files:
+        targets.add(game_files_target(M, client))
+    return sorted(targets)
+
+
 def survey(M, server, client, dbs):
     """The State of the module on this server, game and databases."""
     s = State()
@@ -885,8 +921,10 @@ def survey(M, server, client, dbs):
             if others:
                 s.server_conflicts.append((p, d.file, others))
 
-    # Custom game archives: receipts, rows, files.
-    for path in client.custom_archives():
+    # Custom game archives: receipts, rows, files. In an archive the game does not load,
+    # other rows with the module's identifiers are no conflict.
+    strays = client.stray_archives()
+    for path in client.custom_archives() + strays:
         a = client.open(path)
         if a is None:
             continue
@@ -905,7 +943,7 @@ def survey(M, server, client, dbs):
             others = [i for i in others if i not in named]
             if mine:
                 s.client_dbc.append((path, d.file, mine))
-            if others:
+            if others and path not in strays:
                 s.client_conflicts.append((path, d.file, others))
         s.files += [(path, n) for n in module_files_in(M, a, receipt)]
 
@@ -944,6 +982,109 @@ def survey(M, server, client, dbs):
     return s
 
 
+# ------------------------------------------------------------------ Wow.exe and backups
+
+def interface_checks(M):
+    """The Wow.exe checks the module's game files go through (see INTERFACE_CHECKS)."""
+    names = [n.replace("/", "\\").lower() for n in M.game_files]
+    return [check for check, folder, _ in INTERFACE_CHECKS if any(n.startswith(folder) for n in names)]
+
+
+def wow_exe_refusals(M, client):
+    """[(check, state)] of the checks Wow.exe would fail on the module's files: state "original"
+    (the installer can turn the check off) or "unknown" (it cannot: no Wow.exe, or not the code of
+    build 12340 it knows). Empty if Wow.exe accepts them (patched, or WarcraftXL)."""
+    checks = interface_checks(M)
+    if not checks:
+        return []
+    exe = client.wow_exe
+    if exe and wow_exe.runs_warcraftxl(exe):
+        return []
+    states = [(check, wow_exe.check_state(exe, check) if exe else "unknown") for check in checks]
+    return [(check, state) for check, state in states if state != "patched"]
+
+
+def refusal_text(client, refusals):
+    """Why Wow.exe would stop the game with these files, for the user."""
+    what = {check: text for check, _, text in INTERFACE_CHECKS}
+    files = " and ".join(what[check] for check, _ in refusals)
+    unknown = [check for check, state in refusals if state != "original"]
+    if not client.wow_exe:
+        return "no Wow.exe in %s: the installer cannot tell whether the game accepts this module's changed %s" \
+               % (client.folder, files)
+    if unknown:
+        return ("%s is not the 3.3.5a build 12340 the installer knows where it checks the %s: the installer "
+                "can neither tell whether the game accepts this module's changed files nor patch it; installing "
+                "could make the game quit at start, saying its interface files are corrupt"
+                % (client.wow_exe, " and ".join(what[c] for c in unknown)))
+    return ("Wow.exe checks the %s against Blizzard's signature and quits at start, saying they are corrupt, when "
+            "they are changed; this module changes them. The installer can patch Wow.exe so it accepts them "
+            "(2 bytes per check, a copy kept as Wow.exe%s; removing the module puts them back)"
+            % (files, wow_exe.BACKUP_SUFFIX))
+
+
+def interface_files_loaded(client, check):
+    """The custom archives the game loads that hold files of this check's folder (or no listfile,
+    so that nothing proves they hold none)."""
+    folder = dict((c, f) for c, f, _ in INTERFACE_CHECKS)[check]
+    found = []
+    for path in client.custom_archives():
+        a = client.open(path)
+        if a is None:
+            continue
+        if not a.contains("(listfile)"):
+            found.append(path)
+            continue
+        names = a.read("(listfile)").decode("latin-1").replace(";", "\n").splitlines()
+        if any(n.strip().replace("/", "\\").lower().startswith(folder) for n in names):
+            found.append(path)
+    return found
+
+
+def size_text(n):
+    return "%.1f GB" % (n / 1e9) if n >= 1e9 else "%.0f MB" % max(1, n / 1e6)
+
+
+def archives_to_back_up(paths):
+    """[(path, size)] of the archives among paths that exist."""
+    return [(p, os.path.getsize(p)) for p in paths if os.path.isfile(p)]
+
+
+def back_up_archives(paths, written=0):
+    """Copies each existing archive of paths beside itself (<name>.backup-<date>-<time>) before it
+    changes, once each drive is known to hold the copies and the data about to be written
+    (written: bytes, counted on every drive that holds one of the archives)."""
+    archives = archives_to_back_up(paths)
+    if not archives:
+        return
+    need = {}
+    for p, size in archives:
+        drive = os.path.splitdrive(os.path.abspath(p))[0].lower()
+        need[drive] = need.get(drive, written) + size
+    for drive, n in sorted(need.items()):
+        folder = os.path.dirname(os.path.abspath(next(p for p, _ in archives
+                                                      if os.path.splitdrive(os.path.abspath(p))[0].lower() == drive)))
+        free = shutil.disk_usage(folder).free
+        if free < n:
+            raise InstallerError("not enough free space on %s to back up the archives about to change: %s needed "
+                                 "(the copies and the data to write), %s free. Free some space, or go on without "
+                                 "the backup" % (drive or folder, size_text(n), size_text(free)))
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    for p, size in archives:
+        copy = "%s.backup-%s" % (p, stamp)
+        k = 2
+        while os.path.exists(copy):
+            copy = "%s.backup-%s-%d" % (p, stamp, k)
+            k += 1
+        say("  backup: %s (%s)..." % (copy, size_text(size)))
+        try:
+            shutil.copyfile(p, copy)
+        except BaseException:
+            if os.path.exists(copy):
+                os.remove(copy)
+            raise
+
+
 # ------------------------------------------------------------------ removal
 
 def remove_tree(d):
@@ -979,13 +1120,34 @@ def archive_is_redundant(client, path):
     return True
 
 
-def remove(M, server, client, dbs, state, leftovers=False):
+def removal_plan(M, state, leftovers=False):
+    """{archive: ({DBC file: ids}, {file names})}: what a removal takes out of each game archive."""
+    plan = {}
+    for path, f, ids in state.client_dbc + [c for c in state.client_conflicts
+                                            if leftovers and not archive_rank(os.path.basename(c[0]))[1]]:
+        plan.setdefault(path, ({}, set()))[0].setdefault(f, set()).update(ids)
+    for path, name in state.files:
+        plan.setdefault(path, ({}, set()))[1].add(name)
+    for path, r in state.receipts:
+        plan.setdefault(path, ({}, set()))[1].add(receipt_name(M))
+    return plan
+
+
+def remove(M, server, client, dbs, state, leftovers=False, backup=True):
     """Removes everything that is the module's.
 
     state: the survey; leftovers: the user said the conflicting items are
     leftovers of the module, so DBC rows with its identifiers go too (never a
-    game file)."""
+    game file); backup: copy the game archives about to change first."""
     heading("Removal")
+    by_archive = removal_plan(M, state, leftovers)
+    if backup:
+        # What is written back: the DBC files that lose rows, at most their present size.
+        written = 0
+        for path, (rows, _) in by_archive.items():
+            a = client.open(path)
+            written += sum(a.size("DBFilesClient\\" + f) for f in rows if a.contains("DBFilesClient\\" + f))
+        back_up_archives(sorted(by_archive), written)
     # Database: characters first (what is taken back, such as talent points, is
     # taken back before the table that counts them is dropped), then world.
     for key in ("characters", "world"):
@@ -1021,14 +1183,6 @@ def remove(M, server, client, dbs, state, leftovers=False):
             say("  %s: %d row(s) removed" % (p, n))
 
     # Game archives: the module's rows, files and receipt, in each archive.
-    by_archive = {}
-    for path, f, ids in state.client_dbc + [c for c in state.client_conflicts
-                                            if leftovers and not archive_rank(os.path.basename(c[0]))[1]]:
-        by_archive.setdefault(path, ({}, set()))[0].setdefault(f, set()).update(ids)
-    for path, name in state.files:
-        by_archive.setdefault(path, ({}, set()))[1].add(name)
-    for path, r in state.receipts:
-        by_archive.setdefault(path, ({}, set()))[1].add(receipt_name(M))
     added_by = {path: {f.lower() for f in r.get("added", [])} for path, r in state.receipts}
     for path, (rows, names) in sorted(by_archive.items()):
         a = client.open(path)
@@ -1059,6 +1213,7 @@ def remove(M, server, client, dbs, state, leftovers=False):
                 client.forget(path)
                 os.remove(path)
                 say("  %s held nothing but unchanged copies: archive deleted" % path)
+    restore_wow_exe(M, client)
 
     # Server files.
     for d in state.sources:
@@ -1092,6 +1247,32 @@ def remove(M, server, client, dbs, state, leftovers=False):
     if not leftovers:
         for c in M.shared:
             remove_shared(c, server, dbs)
+
+
+def restore_wow_exe(M, client):
+    """Turns back on the Wow.exe checks the module's files needed turned off, once no archive the
+    game loads changes those files any more; then deletes the installer's copy of Wow.exe if
+    Wow.exe is the same again."""
+    exe = client.wow_exe
+    if not exe:
+        return
+    fresh = Client(client.folder)
+    for check in interface_checks(M):
+        if wow_exe.check_state(exe, check) != "patched":
+            continue
+        users = interface_files_loaded(fresh, check)
+        if users:
+            say("  Wow.exe: %s check left off, %s still changes those files" % (check, users[0]))
+            continue
+        wow_exe.restore(exe, [check])
+        say("  Wow.exe: %s check turned back on" % check)
+    copy = exe + wow_exe.BACKUP_SUFFIX
+    if os.path.isfile(copy):
+        with open(exe, "rb") as a, open(copy, "rb") as b:
+            same = a.read() == b.read()
+        if same:
+            os.remove(copy)
+            say("  deleted: %s (Wow.exe is the same again)" % copy)
 
 
 def remove_shared(component, server, dbs):
@@ -1129,7 +1310,11 @@ def configured_conf(M):
     return text
 
 
-def install(M, server, client, dbs):
+def install(M, server, client, dbs, patch_exe=False, backup=True, started=None):
+    """patch_exe: Wow.exe may be patched to accept the module's interface files; backup: copy the
+    existing game archives about to change first; started: a dict, given "changed" before the
+    first change to the game or the server."""
+    started = {} if started is None else started
     heading("Installation")
     # What must exist before the first write.
     for d in M.dbc:
@@ -1137,6 +1322,11 @@ def install(M, server, client, dbs):
             raise InstallerError("%s not found (DataDir of worldserver.conf)" % os.path.join(server.dbc, d.file))
         if d.client is not None and client.winner("DBFilesClient\\" + d.file) is None:
             raise InstallerError("no game archive contains DBFilesClient\\%s" % d.file)
+    refusals = wow_exe_refusals(M, client)
+    if any(state != "original" for _, state in refusals):
+        raise InstallerError(refusal_text(client, refusals))
+    if refusals and not patch_exe:
+        raise InstallerError(refusal_text(client, refusals) + ": allow it (--patch-wow-exe in the console)")
 
     # 1. Game: each DBC rewritten into the archive that provides it (or above),
     #    files into the last custom archive read (a new one if there is none);
@@ -1167,6 +1357,19 @@ def install(M, server, client, dbs):
             created.add(target)
         files, dbc, added = receipts.get(target, ([], {}, set()))
         writes[target][receipt_name(M)] = receipt_text(M, files, dbc, added)
+    # Every archive accepts its write (room in its hash table...) before anything is copied or written.
+    for target, files in writes.items():
+        if target not in created:
+            mpq_archive.write_into_archive(target, files, check_only=True)
+    if backup:
+        back_up_archives(sorted(t for t in writes if t not in created),
+                         sum(len(c) for files in writes.values() for c in files.values()))
+    started["changed"] = True
+    # Wow.exe before the archives: its files never reach a game that would refuse them.
+    if refusals:
+        copy = wow_exe.patch(client.wow_exe, [check for check, _ in refusals])
+        say("  Wow.exe: %s check(s) turned off (copy of the original: %s)"
+            % (", ".join(check for check, _ in refusals), copy))
     for target, files in writes.items():
         if target in created:
             mpq_archive.create_archive(target, files, hash_entries=max(1024, 1 << (2 * len(files) + 16).bit_length()))
@@ -1334,6 +1537,7 @@ def missing_after_install(M, server, client):
         with open(source, "rb") as f:
             if w is None or client.open(w).read(name) != f.read():
                 missing.append("%s in the archive the game reads" % name)
+    missing += ["Wow.exe: its %s check still on" % check for check, _ in wow_exe_refusals(M, client)]
     return missing
 
 
@@ -1409,14 +1613,18 @@ def refuse_while_running(server, client):
                              % ", ".join(p for n, p in game))
 
 
-def install_and_check(M, server, client, dbs):
+def install_and_check(M, server, client, dbs, patch_exe=False, backup=True):
     """Installs, then reads everything back from disk; says what is left to do."""
+    started = {}
     try:
-        install(M, server, client, dbs)
+        install(M, server, client, dbs, patch_exe, backup, started)
     except Exception:
         say()
-        say("The installation stopped midway. Run the installer again: it removes what was put")
-        say("in place; run it once more to install.")
+        if started:
+            say("The installation stopped midway. Run the installer again: it removes what was put")
+            say("in place; run it once more to install.")
+        else:
+            say("Nothing was changed: the installation stopped before its first write.")
         raise
     missing = missing_after_install(M, server, Client(client.folder))
     heading("Check")
@@ -1437,8 +1645,8 @@ def install_and_check(M, server, client, dbs):
         say("(Updates.EnableDatabases in worldserver.conf).")
 
 
-def remove_and_check(M, server, client, dbs, state, leftovers=False):
-    remove(M, server, client, dbs, state, leftovers)
+def remove_and_check(M, server, client, dbs, state, leftovers=False, backup=True):
+    remove(M, server, client, dbs, state, leftovers, backup)
     check_removal(M, server, client, dbs)
 
 
@@ -1484,23 +1692,28 @@ def run_console(M, args, settings):
         print_conflicts(state)
     for path, message in client.unreadable:
         say("  archive ignored, unreadable: %s (%s)" % (path, message))
+    if not state.strong() and not state.weak():
+        refusals = wow_exe_refusals(M, client)
+        if refusals:
+            say("  Wow.exe: %s" % refusal_text(client, refusals))
     if args.status:
         return 0
     refuse_while_running(server, client)
     say()
+    backup = not args.no_backup
     if state.strong():
         say("The module is present, in whole or in part: this run REMOVES everything that is left of it.")
-        remove_and_check(M, server, client, dbs, state)
+        remove_and_check(M, server, client, dbs, state, backup=backup)
         return 0
     if state.weak():
         say("CONFLICT: these items carry the module's identifiers, but nothing proves they are its own.")
         if not args.leftovers:
             say("Stopped: nothing was changed (--leftovers removes them, if they are leftovers of the module).")
             return 1
-        remove_and_check(M, server, client, dbs, state, leftovers=True)
+        remove_and_check(M, server, client, dbs, state, leftovers=True, backup=backup)
         return 0
     say("No trace of the module: this run INSTALLS it.")
-    install_and_check(M, server, client, dbs)
+    install_and_check(M, server, client, dbs, patch_exe=args.patch_wow_exe, backup=backup)
     return 0
 
 
@@ -1579,6 +1792,10 @@ def main(load_manifest):
                                                       "(paths from the options or remembered)")
     p.add_argument("--leftovers", action="store_true",
                    help="with --yes: the conflicting items are leftovers of the module, remove them")
+    p.add_argument("--patch-wow-exe", action="store_true",
+                   help="with --yes: patch Wow.exe when it would refuse the module's interface files")
+    p.add_argument("--no-backup", action="store_true",
+                   help="with --yes: do not copy the game archives about to change first")
     args = p.parse_args()
     settings = load_settings()
     if not (args.status or args.yes):

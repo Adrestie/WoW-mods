@@ -4,7 +4,7 @@ rem  Builds installer.exe, in this folder, from installer.py
 rem  (PyInstaller: python -m pip install pyinstaller).
 rem
 rem  Run again after any change to installer.py, core.py, manifest.py,
-rem  mpq_archive.py or window.py. A module's manifest (installer.json) is read at run time:
+rem  mpq_archive.py, window.py or wow_exe.py. A module's manifest (installer.json) is read at run time:
 rem  changing it needs no rebuild.
 rem
 rem  This file must stay pure ASCII with Windows line endings.

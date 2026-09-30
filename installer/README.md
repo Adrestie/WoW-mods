@@ -41,6 +41,23 @@ does goes to the log at the bottom of the window.
 
 It refuses to write anything while the worldserver or the game is running.
 
+Only the archives the game loads count: in `Data`, the base archives,
+`patch.MPQ` and `patch-?.MPQ` (one character); in the language folder, its base
+archives, `patch-xxXX.MPQ` and `patch-xxXX-?.MPQ`. Another `.mpq` file is never
+written into; what a module left in one is removed with the rest.
+
+Before a game archive changes, it offers to copy it beside itself
+(`<name>.backup-<date>-<time>`), ticked by default, once it has checked that the
+drive holds the copies and the data about to be written.
+
+A module that changes `Interface\GlueXML` or `Interface\FrameXML` needs a
+`Wow.exe` that does not check these files against Blizzard's signature:
+otherwise the game quits at start, saying its interface files are corrupt.
+When `Wow.exe` (3.3.5a, build 12340) still checks them and WarcraftXL does not
+load, the installer offers to patch it: 2 bytes per check, after a copy,
+`Wow.exe.wow-mods.bak`. Removal turns the check back on once no archive the
+game loads changes these files. It refuses a `Wow.exe` it does not know.
+
 With `--status` or `--yes`, it runs without window, in the console of the
 program that started it, and asks nothing: the paths come from the options or
 from the remembered ones. From a batch file, `start /wait installer.exe ...`
@@ -57,6 +74,8 @@ unexpected error).
 | `--status` | show the current state, change nothing |
 | `--yes` | install or remove without window |
 | `--leftovers` | with `--yes`: the conflicting items are leftovers of the module, remove them |
+| `--patch-wow-exe` | with `--yes`: patch `Wow.exe` when it would refuse the module's interface files |
+| `--no-backup` | with `--yes`: do not copy the game archives about to change |
 
 It also runs without being compiled: `python installer\installer.py [module]`
 (Python 3.12 or later, standard library only, tkinter included).
