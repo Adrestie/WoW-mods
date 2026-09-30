@@ -28,7 +28,9 @@
     and messages).
 
     The way in: a « Sphere grid » button on the talent window, /spheregrid,
-    .spheregrid show. Texts bilingual according to the client's language.
+    .spheregrid show. With ForeverUI, a button of its micro menu instead of the
+    tab, and Camelot's look (Camelot_Client.lua). Texts bilingual according to
+    the client's language.
 ------------------------------------------------------------------------------]]
 
 local AIO = AIO or require("AIO")
@@ -1040,12 +1042,18 @@ function ACT.OpenPicker(btn, n)
         local frame = CreateFrame("Frame", "SphereGridStonePicker", UI)
         frame:SetFrameStrata("DIALOG")
         frame:SetWidth(RC.PICK_W)
-        frame:SetBackdrop({
-            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 24,
-            insets = { left = 6, right = 6, top = 6, bottom = 6 },
-        })
+        -- With Camelot, the look of the game's dialog boxes and its red cross
+        local camelot = SphereGridCamelot and SphereGridCamelot.Available() and SphereGridCamelot
+        if camelot then
+            camelot.Dialog(frame)
+        else
+            frame:SetBackdrop({
+                bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+                edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                tile = true, tileSize = 32, edgeSize = 24,
+                insets = { left = 6, right = 6, top = 6, bottom = 6 },
+            })
+        end
         frame:EnableMouse(true)
         frame:EnableMouseWheel(true)
         frame:SetScript("OnMouseWheel", function(self, delta)
@@ -1058,10 +1066,15 @@ function ACT.OpenPicker(btn, n)
         title:SetPoint("TOPLEFT", RC.PICK_PAD + 2, -RC.PICK_PAD - 2)
         title:SetText(L.picker_title)
 
-        local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-        close:SetWidth(24)
-        close:SetHeight(24)
-        close:SetPoint("TOPRIGHT", -4, -4)
+        if camelot then
+            camelot.CloseButton(frame, camelot.DIALOG.close.x, camelot.DIALOG.close.y,
+                function() frame:Hide() end)
+        else
+            local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+            close:SetWidth(24)
+            close:SetHeight(24)
+            close:SetPoint("TOPRIGHT", -4, -4)
+        end
 
         frame.lines = {}
         for i = 1, RC.PICK_ROWS do
@@ -2631,8 +2644,15 @@ local function SetZoom(z)
 end
 
 local function BuildUI()
-    -- The game's own outline rather than a one-pixel hairline: it is the same as the
-    -- dialog boxes use, and therefore at home on screen.
+    -- With ForeverUI on the client, Camelot's frame and insets (Camelot_Client.lua).
+    -- Otherwise the game's own outline rather than a one-pixel hairline: it is the
+    -- same as the dialog boxes use, and therefore at home on screen.
+    local camelot = SphereGridCamelot and SphereGridCamelot.Available() and SphereGridCamelot
+    local K = camelot and camelot.WINDOW.content
+    local insetL = K and K.left or RC.INSET_L
+    local insetR = K and K.right or RC.INSET_R
+    local insetT = K and K.top or RC.INSET_T
+    local insetB = K and K.bottom or RC.INSET_B
     local backdrop = {
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -2648,21 +2668,29 @@ local function BuildUI()
     f:SetWidth(max(1000, min(1700, floor(screenW * 0.80))))
     f:SetHeight(max(680, min(1050, floor(screenH * 0.86))))
     f:SetPoint("CENTER")
-    f:SetBackdrop(backdrop)
-    -- No tint: the dialog boxes' border has colours of its own, and darkening it
-    -- amounted to rubbing it out.
-    f:SetBackdropColor(1, 1, 1, 1)
-    f:SetBackdropBorderColor(1, 1, 1, 1)
+    if camelot then
+        camelot.Window(f, L.title, function() f:Hide() end)
+    else
+        f:SetBackdrop(backdrop)
+        -- No tint: the dialog boxes' border has colours of its own, and darkening it
+        -- amounted to rubbing it out.
+        f:SetBackdropColor(1, 1, 1, 1)
+        f:SetBackdropBorderColor(1, 1, 1, 1)
+    end
     f:SetMovable(true)
     f:EnableMouse(true)
     f:SetToplevel(true)
     f:Hide()
     -- The picker list and the item in hand are satellites of the window: they do not
-    -- outlive it.
+    -- outlive it. With Camelot, the micro button stays pushed while it is open.
     f:SetScript("OnHide", function()
         ACT.ClosePicker()
         ACT.PutDown()
+        if camelot then camelot.UpdateMicro(false) end
     end)
+    if camelot then
+        f:SetScript("OnShow", function() camelot.UpdateMicro(true) end)
+    end
     -- Escape closes the window: the client empties `UISpecialFrames` on every press,
     -- and what is not listed there never leaves that way. The `OnHide` above does the
     -- tidying, so leaving by Escape is worth leaving by the button.
@@ -2676,60 +2704,84 @@ local function BuildUI()
 
     -- The custom spellbook's stone, under everything else: it replaces the flat grey
     -- and does not repeat, the sheet being 1024 on a side.
+    -- With Camelot, the title and the close button are the frame's: the header keeps
+    -- the banner and the points, on the stone.
     local header = CreateFrame("Frame", nil, f)
-    header:SetPoint("TOPLEFT", RC.INSET_L, -RC.INSET_T)
-    header:SetPoint("TOPRIGHT", -RC.INSET_R, -RC.INSET_T)
+    header:SetPoint("TOPLEFT", insetL, -insetT)
+    header:SetPoint("TOPRIGHT", -insetR, -insetT)
     header:SetHeight(RC.HEADER_H)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() f:StartMoving() end)
     header:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
-    local hBackground = header:CreateTexture(nil, "BACKGROUND")
-    hBackground:SetAllPoints()
-    hBackground:SetTexture(0.12, 0.12, 0.12, 1)
+    local title
+    if not camelot then
+        local hBackground = header:CreateTexture(nil, "BACKGROUND")
+        hBackground:SetAllPoints()
+        hBackground:SetTexture(0.12, 0.12, 0.12, 1)
 
-    local title = header:CreateFontString(nil, "OVERLAY", "GameTooltipHeaderText")
-    title:SetPoint("LEFT", 12, 0)
-    title:SetText(L.title)
-    title:SetTextColor(1, 0.82, 0)
+        title = header:CreateFontString(nil, "OVERLAY", "GameTooltipHeaderText")
+        title:SetPoint("LEFT", 12, 0)
+        title:SetText(L.title)
+        title:SetTextColor(1, 0.82, 0)
+    end
 
     UI.pointsLabel = header:CreateFontString(nil, "OVERLAY", "GameTooltipText")
-    UI.pointsLabel:SetPoint("RIGHT", -40, 0)
+    UI.pointsLabel:SetPoint("RIGHT", camelot and -4 or -40, 0)
 
     -- The banner for the item in hand: the cursor alone does not say WHAT is held.
     UI.bannerIcon = header:CreateTexture(nil, "OVERLAY")
     UI.bannerIcon:SetWidth(18)
     UI.bannerIcon:SetHeight(18)
-    UI.bannerIcon:SetPoint("LEFT", title, "RIGHT", 16, 0)
+    if title then
+        UI.bannerIcon:SetPoint("LEFT", title, "RIGHT", 16, 0)
+    else
+        UI.bannerIcon:SetPoint("LEFT", header, "LEFT", 4, 0)
+    end
     UI.bannerIcon:Hide()
 
     UI.banner = header:CreateFontString(nil, "OVERLAY", "GameTooltipText")
     UI.banner:SetPoint("LEFT", UI.bannerIcon, "RIGHT", 6, 0)
     UI.banner:SetTextColor(1, 0.82, 0)
 
-    local close = CreateFrame("Button", nil, header, "UIPanelCloseButton")
-    close:SetPoint("RIGHT", -4, 0)
-    close:SetScript("OnClick", function() f:Hide() end)
+    if not camelot then
+        local close = CreateFrame("Button", nil, header, "UIPanelCloseButton")
+        close:SetPoint("RIGHT", -4, 0)
+        close:SetScript("OnClick", function() f:Hide() end)
+    end
 
     -- ----------------------------------------------------------- summary
     -- One line per statistic in the catalogue: « earned / grid total ». Hovering a
     -- line lights every stone carrying that statistic.
     -- No border of its own: it would carry the dialog boxes' one, and the two panels
     -- would end up parted by a thick stroke and set back from the edges. They touch,
-    -- and a hairline separates them.
-    local summary = CreateFrame("Frame", nil, f)
-    summary:SetPoint("TOPLEFT", RC.INSET_L, -(RC.INSET_T + RC.HEADER_H))
-    summary:SetPoint("BOTTOMLEFT", RC.INSET_L, RC.INSET_B)
-    summary:SetWidth(RC.SUMMARY_W)
+    -- and a hairline separates them. With Camelot, each panel sits in an inset, the
+    -- two insets `gap` apart.
+    local summary, summaryInset
+    if camelot then
+        summaryInset = camelot.Inset(f)
+        summaryInset:SetPoint("TOPLEFT", insetL, -(insetT + RC.HEADER_H))
+        summaryInset:SetPoint("BOTTOMLEFT", insetL, insetB)
+        summaryInset:SetWidth(RC.SUMMARY_W + 2 * K.pad)
+        summary = CreateFrame("Frame", nil, summaryInset)
+        summary:SetPoint("TOPLEFT", K.pad, -K.pad)
+        summary:SetPoint("BOTTOMRIGHT", -K.pad, K.pad)
+    else
+        summary = CreateFrame("Frame", nil, f)
+        summary:SetPoint("TOPLEFT", RC.INSET_L, -(RC.INSET_T + RC.HEADER_H))
+        summary:SetPoint("BOTTOMLEFT", RC.INSET_L, RC.INSET_B)
+        summary:SetWidth(RC.SUMMARY_W)
+
+        local hairline = f:CreateTexture(nil, "OVERLAY")
+        hairline:SetPoint("TOPLEFT", summary, "TOPRIGHT", 0, 0)
+        hairline:SetPoint("BOTTOMLEFT", summary, "BOTTOMRIGHT", 0, 0)
+        hairline:SetWidth(RC.HAIRLINE)
+        hairline:SetTexture(RC.HAIRLINE_COLOR[1], RC.HAIRLINE_COLOR[2], RC.HAIRLINE_COLOR[3], 1)
+    end
 
     -- The current specialisation's backdrop, in four quarters. It is laid here and
     -- placed again on every change of size, its cut depending on the panel's
     -- proportions.
-    local hairline = f:CreateTexture(nil, "OVERLAY")
-    hairline:SetPoint("TOPLEFT", summary, "TOPRIGHT", 0, 0)
-    hairline:SetPoint("BOTTOMLEFT", summary, "BOTTOMRIGHT", 0, 0)
-    hairline:SetWidth(RC.HAIRLINE)
-    hairline:SetTexture(RC.HAIRLINE_COLOR[1], RC.HAIRLINE_COLOR[2], RC.HAIRLINE_COLOR[3], 1)
 
     UI.summaryFrame = summary
     UI.background = {}
@@ -2891,19 +2943,34 @@ local function BuildUI()
 
     -- THE RESET BUTTON, right at the foot of the panel: the summary fills from the
     -- top, so that corner stays free. Greyed out while nothing is bought -- there
-    -- would be nothing to hand back.
-    local reset = CreateFrame("Button", nil, summary, "UIPanelButtonTemplate")
+    -- would be nothing to hand back. With Camelot, the red button.
+    local reset
+    if camelot then
+        reset = camelot.RedButton(summary, L.reset_button)
+    else
+        reset = CreateFrame("Button", nil, summary, "UIPanelButtonTemplate")
+        reset:SetText(L.reset_button)
+    end
     reset:SetHeight(22)
     reset:SetPoint("BOTTOMLEFT", 8, 8)
     reset:SetPoint("BOTTOMRIGHT", -8, 8)
-    reset:SetText(L.reset_button)
     reset:SetScript("OnClick", function() StaticPopup_Show("SPHEREGRID_RESET") end)
     UI.reset = reset
 
-    local viewport = CreateFrame("ScrollFrame", "SphereGridPlayerViewport", f)
-    viewport:SetPoint("TOPLEFT", RC.INSET_L + RC.SUMMARY_W + RC.HAIRLINE,
-                      -(RC.INSET_T + RC.HEADER_H))
-    viewport:SetPoint("BOTTOMRIGHT", -RC.INSET_R, RC.INSET_B)
+    local viewport
+    if camelot then
+        local gridInset = camelot.Inset(f)
+        gridInset:SetPoint("TOPLEFT", summaryInset, "TOPRIGHT", K.gap, 0)
+        gridInset:SetPoint("BOTTOMRIGHT", -insetR, insetB)
+        viewport = CreateFrame("ScrollFrame", "SphereGridPlayerViewport", gridInset)
+        viewport:SetPoint("TOPLEFT", K.pad, -K.pad)
+        viewport:SetPoint("BOTTOMRIGHT", -K.pad, K.pad)
+    else
+        viewport = CreateFrame("ScrollFrame", "SphereGridPlayerViewport", f)
+        viewport:SetPoint("TOPLEFT", RC.INSET_L + RC.SUMMARY_W + RC.HAIRLINE,
+                          -(RC.INSET_T + RC.HEADER_H))
+        viewport:SetPoint("BOTTOMRIGHT", -RC.INSET_R, RC.INSET_B)
+    end
     viewport:EnableMouse(true)
     viewport:EnableMouseWheel(true)
     UI.viewport = viewport
@@ -3072,7 +3139,8 @@ function PlayerHandlers.Update(_, state)
 end
 
 -- ---------------------------------------------------------------------------
--- The way in: a button on the talent window, /spheregrid
+-- The way in: a button on the talent window (a button of ForeverUI's micro menu
+-- when ForeverUI is there), /spheregrid
 -- ---------------------------------------------------------------------------
 
 local function Toggle()
@@ -3116,12 +3184,21 @@ local function HookTalents()
     PlayerTalentFrame:HookScript("OnShow", function() AnchorTab(tab) end)
 end
 
+-- Decided on the next frame, once every file AIO sent has run: Camelot_Client.lua
+-- may come after this one.
 local ev = CreateFrame("Frame")
-ev:RegisterEvent("ADDON_LOADED")
-ev:SetScript("OnEvent", function(_, _, addon)
-    if addon == "Blizzard_TalentUI" then HookTalents() end
+ev:SetScript("OnUpdate", function(self)
+    self:SetScript("OnUpdate", nil)
+    if SphereGridCamelot and SphereGridCamelot.Available() then
+        SphereGridCamelot.AddMicroButton({ tooltip = L.title, onClick = Toggle })
+        return
+    end
+    self:RegisterEvent("ADDON_LOADED")
+    self:SetScript("OnEvent", function(_, _, addon)
+        if addon == "Blizzard_TalentUI" then HookTalents() end
+    end)
+    if IsAddOnLoaded and IsAddOnLoaded("Blizzard_TalentUI") then HookTalents() end
 end)
-if IsAddOnLoaded and IsAddOnLoaded("Blizzard_TalentUI") then HookTalents() end
 
 SLASH_SPHEREGRIDPLAYER1 = "/spheregrid"
 SlashCmdList["SPHEREGRIDPLAYER"] = Toggle
