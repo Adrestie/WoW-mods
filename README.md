@@ -15,10 +15,11 @@ needed, the tooling to patch the client. Follow the README inside the folder.
 | [mod-forever-ui](mod-forever-ui/) | The modern interface rebuilt for a 3.3.5a client: player and target frames, death knight runes, cast bar, action bar with its stance and pet bars, micro menu, bags, experience and reputation bars, the character sheet -- equipment manager and icon picker included -- and the skin every dropdown list in the game wears. Each piece is one the player can move. Not a server module but a client addon and the art it needs, read sheet by sheet from a modern client and served through texture coordinates, since 3.3.5 has no atlas. Original module, work in progress. **[What is known to be improvable](mod-forever-ui/docs/AMELIORATIONS.md)**, in French. |
 | [mod-artifact-weapons](mod-artifact-weapons/) | Artifact weapons, each bound to one class and carrying effects of its own: chain lightning, raid auras, summoned demons, stacking damage over time, a group resurrection and more. A weapon is earned through a book that drops in Icecrown Citadel and starts a quest. Texts in English and French, and a game master command that shows a character's damage and healing bonuses. Original module. |
 
-The `workbench/` folder is not a module but a component the modules share: one
+The workbench is not a module but a component the modules share: one
 object in the world and one window, to which each installed module brings its
 recipes. Every module that uses it ships an identical copy under
-`data/lua/Workbench/`; `workbench/` is where it is edited.
+`data/lua/Workbench/`, taken through `git subtree` from
+[WoW-mods-workbench](https://github.com/Adrestie/WoW-mods-workbench), where it is edited.
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).

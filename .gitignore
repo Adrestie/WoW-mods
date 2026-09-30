@@ -1,4 +1,5 @@
 # Separate repositories cloned here
+workbench/
 installer/
 mod-attriboost/
 __pycache__/
