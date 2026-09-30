@@ -1,3 +1,4 @@
-# Separate repository cloned here: WoW-mods-installer
+# Separate repositories cloned here
 installer/
+mod-attriboost/
 __pycache__/
