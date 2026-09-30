@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-
-# What the former installer of the module kept aside.
-Backups/
-
-# The author's own tooling: it names the origin server, and means nothing
-# anywhere else.
-tools/local/
