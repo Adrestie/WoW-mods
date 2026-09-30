@@ -35,6 +35,16 @@
  * .tarot xp [player]                   (SEC_GAMEMASTER)     what the cards make of 1000 experience
  * .tarot fuse <a> <b> <c>              (SEC_PLAYER)         the workbench: three cards, or three boards, become one
  * .tarot check [start|stop]           (SEC_GAMEMASTER)     measures the event lines and gives the verdict
+ * .tarot test card <player> <card> <level> [cumulative]  (SEC_GAMEMASTER)  one card level, test values armed
+ * .tarot test clear <player>                      (SEC_GAMEMASTER)  back to the board, everything released
+ * .tarot test force <player> <state> on|off|free  (SEC_GAMEMASTER)  a state held, failed or given back
+ * .tarot test hour <0-23|-1>                      (SEC_GAMEMASTER)  the hour every card reads
+ * .tarot test hp|mana <player> <pct>              (SEC_GAMEMASTER)  health or mana set to a share
+ * .tarot test trace <player> on|off               (SEC_GAMEMASTER)  the probes, in the log and the chat
+ * .tarot test status <player>                     (SEC_GAMEMASTER)  what the bench holds for a player
+ * .tarot test fire <player> <event> [n]          (SEC_GAMEMASTER)  an event of the game handed to the cards
+ * .tarot test snapshot <player>                   (SEC_GAMEMASTER)  what can be measured of the player
+ * .tarot test aura <player> <spell> [target] [n]  (SEC_GAMEMASTER)  an aura laid on the player or the target
  *
  * .tarot with no argument lists the subcommands (the core behaviour for a
  * parent command, filtered by security level). Each subcommand describes
@@ -52,7 +62,25 @@
 #include "Chat.h"
 #include "Log.h"
 #include <cmath>
+#include <map>
+#include <set>
+#include "CellImpl.h"
 #include "CommandScript.h"
+#include "Creature.h"
+#include "GameObject.h"
+#include "GameTime.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
+#include "Item.h"
+#include "LootMgr.h"
+#include "ObjectMgr.h"
+#include "Pet.h"
+#include "QuestDef.h"
+#include "SpellAuraEffects.h"
+#include "SpellAuras.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
+#include "TemporarySummon.h"
 #include "Player.h"
 #include "StellarTarotBinder.h"
 #include "StellarTarotEffects.h"
@@ -79,6 +107,23 @@ public:
             { "delete", HandlePresetDeleteCommand, SEC_PLAYER, Console::No },
         };
 
+        // The test bench: every subcommand names its player, so that it runs
+        // from the console as well.
+        static ChatCommandTable testTable =
+        {
+            { "card",   HandleTestCardCommand,   SEC_GAMEMASTER, Console::Yes },
+            { "clear",  HandleTestClearCommand,  SEC_GAMEMASTER, Console::Yes },
+            { "force",  HandleTestForceCommand,  SEC_GAMEMASTER, Console::Yes },
+            { "hour",   HandleTestHourCommand,   SEC_GAMEMASTER, Console::Yes },
+            { "hp",     HandleTestHealthCommand, SEC_GAMEMASTER, Console::Yes },
+            { "mana",   HandleTestManaCommand,   SEC_GAMEMASTER, Console::Yes },
+            { "trace",  HandleTestTraceCommand,  SEC_GAMEMASTER, Console::Yes },
+            { "status", HandleTestStatusCommand, SEC_GAMEMASTER, Console::Yes },
+            { "fire",   HandleTestFireCommand,   SEC_GAMEMASTER, Console::Yes },
+            { "snapshot", HandleTestSnapshotCommand, SEC_GAMEMASTER, Console::Yes },
+            { "aura",   HandleTestAuraCommand,   SEC_GAMEMASTER, Console::Yes },
+        };
+
         static ChatCommandTable tarotTable =
         {
             { "info",   HandleInfoCommand,   SEC_GAMEMASTER,    Console::Yes },
@@ -101,6 +146,7 @@ public:
             { "fuse",   HandleFuseCommand,   SEC_PLAYER,        Console::No  },
             { "sources", HandleSourcesCommand, SEC_GAMEMASTER,  Console::Yes },
             { "check",  HandleCheckCommand,  SEC_GAMEMASTER,    Console::No  },
+            { "test",   testTable },
         };
 
         static ChatCommandTable commandTable =
@@ -663,6 +709,893 @@ public:
         StellarTarotEffects::RefreshEveryone();
         Say(handler, STELLAR_TAROT_STR_RELOAD_OK,
             sStellarTarotMgr->Cards().size(), sStellarTarotMgr->Boards().size());
+        return true;
+    }
+
+    // ===================== THE TEST BENCH =====================
+
+    static Player* Tested(ChatHandler* handler, PlayerIdentifier& who)
+    {
+        if (!who.IsConnected())
+        {
+            Say(handler, STELLAR_TAROT_STR_PLAYER_NOT_FOUND);
+            return nullptr;
+        }
+        return who.GetConnectedPlayer();
+    }
+
+    // One card level alone, in place of the board, test values armed.
+    // cumulative: the levels below come too, when the card is cumulative.
+    static bool HandleTestCardCommand(ChatHandler* handler, PlayerIdentifier who, uint32 cardId, uint32 level,
+                                      Optional<std::string> mode)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        StellarTarotCard const* card = sStellarTarotMgr->Card(cardId);
+        if (!card || level < 1 || level > card->effects.size())
+        {
+            Say(handler, STELLAR_TAROT_STR_TEST_NO_LEVEL, cardId, level);
+            return true;
+        }
+        StellarTarotEffects::TestCard(player, cardId, uint8(level), mode && *mode == "cumulative");
+        Say(handler, STELLAR_TAROT_STR_TEST_CARD, player->GetName(), cardId, sStellarTarotMgr->CardName(cardId), level);
+        return true;
+    }
+
+    // Back to the board; the forced states, the hour and the probes go.
+    static bool HandleTestClearCommand(ChatHandler* handler, PlayerIdentifier who)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        StellarTarotEffects::TestClear(player);
+        StellarTarotEffects::ForceHour(-1);
+        Say(handler, STELLAR_TAROT_STR_TEST_CLEAR, player->GetName());
+        return true;
+    }
+
+    // A state word held (on), failed (off) or given back to the game (free).
+    static bool HandleTestForceCommand(ChatHandler* handler, PlayerIdentifier who, std::string word, std::string mode)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        static std::set<std::string> const words = {
+            "combat", "nocombat", "solo", "rested", "water", "indoors", "outdoors", "mounted", "walking",
+            "running", "still", "shield", "twohand", "dualwield", "unarmed", "heirloom", "stunned",
+            "controlled", "charmed", "slowed", "burning", "humanoid", "alone", "back" };
+        int8 const state = mode == "on" ? 1 : mode == "off" ? 0 : mode == "free" ? -1 : -2;
+        if (!words.count(word) || state == -2)
+        {
+            Say(handler, STELLAR_TAROT_STR_TEST_BAD_STATE, word, mode);
+            return true;
+        }
+        StellarTarotEffects::Force(player, word, state);
+        Say(handler, state == 1 ? STELLAR_TAROT_STR_TEST_HELD
+                   : state == 0 ? STELLAR_TAROT_STR_TEST_FAILED : STELLAR_TAROT_STR_TEST_FREED,
+            player->GetName(), word);
+        return true;
+    }
+
+    // The hour every card reads, 0 to 23; -1 gives back the server's clock.
+    static bool HandleTestHourCommand(ChatHandler* handler, int32 hour)
+    {
+        StellarTarotEffects::ForceHour(hour);
+        if (StellarTarotEffects::ForcedHour() >= 0)
+            Say(handler, STELLAR_TAROT_STR_TEST_HOUR, StellarTarotEffects::ForcedHour());
+        else
+            Say(handler, STELLAR_TAROT_STR_TEST_HOUR_OFF);
+        return true;
+    }
+
+    static bool HandleTestHealthCommand(ChatHandler* handler, PlayerIdentifier who, uint32 pct)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        pct = std::min<uint32>(100, std::max<uint32>(1, pct));
+        player->SetHealth(std::max<uint32>(1, player->CountPctFromMaxHealth(int32(pct))));
+        Say(handler, STELLAR_TAROT_STR_TEST_HEALTH, player->GetName(), pct);
+        return true;
+    }
+
+    static bool HandleTestManaCommand(ChatHandler* handler, PlayerIdentifier who, uint32 pct)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        pct = std::min<uint32>(100, pct);
+        player->SetPower(POWER_MANA, player->GetMaxPower(POWER_MANA) * pct / 100);
+        Say(handler, STELLAR_TAROT_STR_TEST_MANA, player->GetName(), pct);
+        return true;
+    }
+
+    // The probes: a log line and a chat line for every effect that fires.
+    static bool HandleTestTraceCommand(ChatHandler* handler, PlayerIdentifier who, std::string mode)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        if (mode != "on" && mode != "off")
+        {
+            Say(handler, STELLAR_TAROT_STR_TEST_BAD_STATE, "trace", mode);
+            return true;
+        }
+        StellarTarotEffects::Trace(player, mode == "on");
+        Say(handler, mode == "on" ? STELLAR_TAROT_STR_TEST_TRACE_ON : STELLAR_TAROT_STR_TEST_TRACE_OFF,
+            player->GetName());
+        return true;
+    }
+
+    static bool HandleTestStatusCommand(ChatHandler* handler, PlayerIdentifier who)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        uint32 cardId = 0;
+        uint8 level = 0;
+        StellarTarotEffects::TestCardOf(player, cardId, level);
+        std::string forced;
+        for (auto const& [word, state] : StellarTarotEffects::ForcedStates(player))
+            forced += (forced.empty() ? "" : ", ") + word + "=" + std::to_string(state);
+        Say(handler, STELLAR_TAROT_STR_TEST_STATUS, player->GetName(), cardId, uint32(level),
+            StellarTarotEffects::Tracing(player) ? 1 : 0, StellarTarotEffects::ForcedHour(),
+            forced.empty() ? "-" : forced);
+        return true;
+    }
+
+    // The creature the bench summons to be struck, to strike, to be healed: a
+    // plain level 70 humanoid, with no script and no immunity.
+    static constexpr uint32 BENCH_CREATURE = 5063;
+
+    // The bench's own target, per player, kept while it lives.
+    static std::map<ObjectGuid, ObjectGuid>& BenchTargets()
+    {
+        static std::map<ObjectGuid, ObjectGuid> targets;
+        return targets;
+    }
+
+    // A creature summoned around the player. angle: 0 in front, pi behind.
+    // hostile: faction 14, else the player's. hp: its maximum health, 0 to keep it.
+    static Creature* SummonAround(Player* player, uint32 entry, float dist, float angle, uint32 ms, bool hostile,
+                                  uint32 hp)
+    {
+        if (!sObjectMgr->GetCreatureTemplate(entry))
+            return nullptr;
+        Position const pos = player->GetNearPosition(dist, angle);
+        Creature* creature = player->SummonCreature(entry, pos, TEMPSUMMON_TIMED_DESPAWN, ms);
+        if (!creature)
+            return nullptr;
+        creature->SetFaction(hostile ? 14 : player->GetFaction());
+        // The player's own level: a lower one misses its spells on him.
+        creature->SetLevel(player->GetLevel());
+        creature->SetReactState(REACT_PASSIVE);
+        creature->SetRegeneratingHealth(false);
+        if (hp)
+        {
+            creature->SetMaxHealth(hp);
+            creature->SetFullHealth();
+        }
+        creature->SetFacingToObject(player);
+        return creature;
+    }
+
+    // The target of the test blows: the bench's creature, in front of the
+    // player, with health enough to take every blow of a run.
+    static Unit* TestTarget(Player* player)
+    {
+        auto it = BenchTargets().find(player->GetGUID());
+        if (it != BenchTargets().end())
+            if (Creature* kept = ObjectAccessor::GetCreature(*player, it->second))
+                if (kept->IsAlive() && kept->IsInWorld() && player->IsWithinDistInMap(kept, 30.0f))
+                    return kept;
+        Creature* target = SummonAround(player, BENCH_CREATURE, 4.0f, 0.0f, 3600000, true, 10000000);
+        if (!target)
+            return nullptr;
+        target->SetArmor(0);
+        BenchTargets()[player->GetGUID()] = target->GetGUID();
+        return target;
+    }
+
+    // Turns the player to the unit, server side: the facing checks of a cast
+    // read this orientation.
+    static void Face(Player* player, Unit* unit)
+    {
+        if (unit && unit != player)
+            player->SetOrientation(player->GetAngle(unit));
+    }
+
+    // A creature of that entry beside the player, hostile, killed by the player
+    // through the core (kill hooks, loot, nearby death). Tells its loot.
+    // The last creature the bench killed, per player: its corpse is read later.
+    static std::map<ObjectGuid, ObjectGuid>& LastKills()
+    {
+        static std::map<ObjectGuid, ObjectGuid> kills;
+        return kills;
+    }
+
+    static bool KillOne(Player* player, uint32 entry, std::string& loot)
+    {
+        Creature* creature = SummonAround(player, entry, 3.0f, 0.0f, 60000, true, 0);
+        if (!creature)
+            return false;
+        LastKills()[player->GetGUID()] = creature->GetGUID();
+        creature->LowerPlayerDamageReq(creature->GetMaxHealth());
+        creature->SetLootRecipient(player);
+        Unit::Kill(player, creature);
+        loot = "gold " + std::to_string(creature->loot.gold) + ", items";
+        for (LootItem const& item : creature->loot.items)
+            loot += " " + std::to_string(item.itemid) + "x" + std::to_string(item.count);
+        for (LootItem const& item : creature->loot.quest_items)
+            loot += " " + std::to_string(item.itemid) + "x" + std::to_string(item.count);
+        return true;
+    }
+
+    // An item in the bags, given when missing.
+    static Item* Carried(Player* player, uint32 entry)
+    {
+        Item* item = player->GetItemByEntry(entry);
+        if (!item && player->AddItem(entry, 1))
+            item = player->GetItemByEntry(entry);
+        return item;
+    }
+
+    // A cast as a player casts: not triggered, so that the cast hooks see it;
+    // cooldowns and the global cooldown cleared first.
+    static std::string CastAsPlayer(Player* player, Unit* target, uint32 spellId)
+    {
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId);
+        if (!info)
+            return "no such spell";
+        player->RemoveSpellCooldown(spellId, true);
+        player->GetGlobalCooldownMgr().CancelGlobalCooldown(info);
+        Unit* on = info->IsPositive() || !target ? player : target;
+        Face(player, on);
+        return "cast result " + std::to_string(uint32(player->CastSpell(on, spellId, TRIGGERED_NONE)));
+    }
+
+    // An event of the game, handed to the player's cards. Real when the core can
+    // play it (a blow, a cast, a heal, a kill, a death, an item used), through
+    // the module's own relay otherwise. n: an amount, a spell, a creature or an
+    // item entry, or a count, depending on the event.
+    static bool HandleTestFireCommand(ChatHandler* handler, PlayerIdentifier who, std::string what, Optional<uint32> n)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        uint32 const value = n ? *n : 0;
+        std::string result = "done";
+        Unit* target = TestTarget(player);
+        if (what == "swing")
+        {
+            if (!target)
+                result = "no target";
+            else
+            {
+                Face(player, target);
+                player->EngageWithTarget(target);
+                for (uint32 i = 0; i < std::max<uint32>(1, value); ++i)
+                    player->AttackerStateUpdate(target, BASE_ATTACK, false, true);
+            }
+        }
+        else if (what == "spell")
+        {
+            if (target)
+            {
+                Face(player, target);
+                player->CastSpell(target, value ? value : 133, true);
+            }
+            else
+                result = "no target";
+        }
+        // A cast as the player makes one: the cast hooks see it.
+        else if (what == "cast")
+            result = CastAsPlayer(player, target, value ? value : 42873);
+        // A spell on a unit far in front of the player: 25 yards.
+        else if (what == "far")
+        {
+            Creature* distant = SummonAround(player, BENCH_CREATURE, 25.0f, 0.0f, 30000, true, 1000000);
+            if (!distant)
+                result = "no far target";
+            else
+            {
+                Face(player, distant);
+                player->CastSpell(distant, value ? value : 133, true);
+                result = "distance " + std::to_string(uint32(player->GetDistance(distant)));
+            }
+        }
+        // Several hostile units around the player, for what strikes around.
+        else if (what == "mobs")
+        {
+            uint32 const count = std::max<uint32>(1, value ? value : 3);
+            for (uint32 i = 0; i < count; ++i)
+                SummonAround(player, BENCH_CREATURE, 3.0f, float(2 * M_PI) * float(i) / float(count), 60000, true, 1000000);
+            result = std::to_string(count) + " unit(s)";
+        }
+        // The bench's target killed by the player: what the player laid on it
+        // dies with it.
+        else if (what == "killtarget")
+        {
+            if (Creature* victim = target ? target->ToCreature() : nullptr)
+            {
+                victim->LowerPlayerDamageReq(victim->GetMaxHealth());
+                victim->SetLootRecipient(player);
+                Unit::Kill(player, victim);
+                BenchTargets().erase(player->GetGUID());
+            }
+            else
+                result = "no target";
+        }
+        // The bench's target at a single point of health: the next blow kills it.
+        else if (what == "targetone")
+        {
+            if (target)
+                target->SetHealth(1);
+        }
+        // The bench's target at n % health.
+        else if (what == "targethp")
+        {
+            if (target)
+                target->SetHealth(std::max<uint32>(1, target->CountPctFromMaxHealth(int32(value ? value : 100))));
+        }
+        // A fresh target: the one kept goes, the next blow summons another.
+        else if (what == "newtarget")
+        {
+            auto it = BenchTargets().find(player->GetGUID());
+            if (it != BenchTargets().end())
+            {
+                if (Creature* kept = ObjectAccessor::GetCreature(*player, it->second))
+                    kept->DespawnOrUnsummon();
+                BenchTargets().erase(it);
+            }
+        }
+        else if (what == "selfhit")
+            player->CastSpell(player, value ? value : 44998, true);
+        // Blows the player takes from a creature: in front, in the back, or
+        // certain to be critical (Recklessness on the striker).
+        else if (what == "struck" || what == "struckback" || what == "struckcrit")
+        {
+            Creature* striker = SummonAround(player, BENCH_CREATURE, 2.0f, what == "struckback" ? float(M_PI) : 0.0f,
+                                             20000, true, 1000000);
+            if (!striker)
+                result = "no striker";
+            else
+            {
+                if (what == "struckcrit")
+                    striker->AddAura(13847, striker);
+                uint32 const before = player->GetHealth();
+                for (uint32 i = 0; i < std::max<uint32>(1, value); ++i)
+                    striker->AttackerStateUpdate(player, BASE_ATTACK, false, true);
+                result = "health " + std::to_string(before) + " -> " + std::to_string(player->GetHealth());
+            }
+        }
+        // A spell the player takes from a creature.
+        else if (what == "struckspell")
+        {
+            Creature* caster = SummonAround(player, BENCH_CREATURE, 5.0f, 0.0f, 20000, true, 1000000);
+            if (!caster)
+                result = "no caster";
+            else
+            {
+                uint32 const before = player->GetHealth();
+                SpellCastResult const cast = caster->CastSpell(player, value ? value : 133, true);
+                result = "cast result " + std::to_string(uint32(cast)) + ", health " + std::to_string(before) +
+                         " -> " + std::to_string(player->GetHealth());
+            }
+        }
+        else if (what == "taken" || what == "takenspell")
+        {
+            uint32 damage = value ? value : 500;
+            if (target)
+                StellarTarotEffects::OnDamage(target, player, damage, what == "takenspell",
+                                              what == "takenspell" ? uint32(SPELL_SCHOOL_MASK_FIRE) : 1u, 0);
+            result = "damage " + std::to_string(value ? value : 500) + " -> " + std::to_string(damage);
+        }
+        else if (what == "dealt")
+        {
+            uint32 damage = value ? value : 500;
+            if (target)
+                StellarTarotEffects::OnDamage(player, target, damage, false);
+            result = "damage " + std::to_string(value ? value : 500) + " -> " + std::to_string(damage);
+        }
+        else if (what == "heal")
+            player->CastSpell(player, value ? value : 2061, true);
+        // A heal on a friendly creature beside the player, hurt (healother) or
+        // at full health (healfull).
+        else if (what == "healother" || what == "healfull")
+        {
+            Creature* ally = SummonAround(player, BENCH_CREATURE, 3.0f, float(M_PI) / 2.0f, 20000, false, 0);
+            if (!ally)
+                result = "no ally";
+            else
+            {
+                if (what == "healother")
+                    ally->SetHealth(ally->CountPctFromMaxHealth(50));
+                uint32 const before = ally->GetHealth();
+                SpellCastResult const cast = player->CastSpell(ally, value ? value : 2061, true);
+                result = "cast result " + std::to_string(uint32(cast)) + ", ally health " + std::to_string(before) +
+                         " -> " + std::to_string(ally->GetHealth()) + "/" + std::to_string(ally->GetMaxHealth());
+            }
+        }
+        // A friendly creature heals the player.
+        else if (what == "healedby")
+        {
+            Creature* healer = SummonAround(player, BENCH_CREATURE, 3.0f, float(M_PI) / 2.0f, 20000, false, 0);
+            if (!healer)
+                result = "no healer";
+            else
+            {
+                uint32 const before = player->GetHealth();
+                SpellCastResult const cast = healer->CastSpell(player, value ? value : 2061, true);
+                result = "cast result " + std::to_string(uint32(cast)) + ", health " + std::to_string(before) +
+                         " -> " + std::to_string(player->GetHealth());
+            }
+        }
+        // A friendly creature beside the player at n % health, for 20 seconds.
+        else if (what == "allylow")
+        {
+            Creature* ally = SummonAround(player, BENCH_CREATURE, 3.0f, float(M_PI) / 2.0f, 20000, false, 0);
+            if (!ally)
+                result = "no ally";
+            else
+            {
+                ally->SetHealth(std::max<uint32>(1, ally->CountPctFromMaxHealth(int32(value ? value : 10))));
+                result = "ally health " + std::to_string(ally->GetHealth()) + "/" + std::to_string(ally->GetMaxHealth());
+            }
+        }
+        else if (what == "healed")
+        {
+            uint32 gain = value ? value : 1000;
+            StellarTarotEffects::OnHeal(player, player, gain);
+            result = "heal " + std::to_string(value ? value : 1000) + " -> " + std::to_string(gain);
+        }
+        else if (what == "trigger")
+        {
+            std::vector<uint32> const triggers = StellarTarotEffects::TestTriggers(player);
+            for (uint32 aura : triggers)
+                StellarTarotEffects::OnProc(player, aura, target, value ? value : 1000);
+            result = std::to_string(triggers.size()) + " trigger(s)";
+        }
+        else if (what == "kill")
+        {
+            std::string loot;
+            result = KillOne(player, value ? value : BENCH_CREATURE, loot) ? "killed, loot " + loot : "no such creature";
+        }
+        // The corpse of the last kill, read again: what was added after the death.
+        else if (what == "corpse")
+        {
+            auto it = LastKills().find(player->GetGUID());
+            Creature* corps = it == LastKills().end() ? nullptr : ObjectAccessor::GetCreature(*player, it->second);
+            if (!corps)
+                result = "no corpse";
+            else
+            {
+                result = "gold " + std::to_string(corps->loot.gold) + ", lootable " +
+                         std::to_string(corps->HasDynamicFlag(UNIT_DYNFLAG_LOOTABLE) ? 1 : 0) + ", items";
+                for (LootItem const& item : corps->loot.items)
+                    result += " " + std::to_string(item.itemid) + "x" + std::to_string(item.count);
+            }
+        }
+        else if (what == "combat")
+        {
+            if (target)
+                player->EngageWithTarget(target);
+            StellarTarotEffects::OnEnterCombat(player);
+        }
+        // Out of combat, and standing: a seated player neither dodges nor
+        // parries, and every blow on him is critical.
+        else if (what == "leave")
+        {
+            player->CombatStop(true);
+            player->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_SEATED);
+            player->SetStandState(UNIT_STAND_STATE_STAND);
+            StellarTarotEffects::OnLeaveCombat(player);
+        }
+        else if (what == "xp")
+        {
+            uint32 amount = value ? value : 1000;
+            StellarTarotEffects::OnGiveXP(player, amount, 0);
+            result = "xp " + std::to_string(value ? value : 1000) + " -> " + std::to_string(amount);
+        }
+        // Experience from a quest, a discovery, a battleground.
+        else if (what == "xpquest" || what == "xpexplore" || what == "xpbg")
+        {
+            uint32 amount = value ? value : 1000;
+            uint8 const source = what == "xpquest" ? 1 : what == "xpexplore" ? 3 : 4;
+            StellarTarotEffects::OnGiveXP(player, amount, source);
+            result = "xp " + std::to_string(value ? value : 1000) + " -> " + std::to_string(amount);
+        }
+        else if (what == "repquest")
+        {
+            float amount = float(value ? value : 100);
+            StellarTarotEffects::OnGiveReputation(player, amount, uint8(REPUTATION_SOURCE_QUEST));
+            result = "rep " + std::to_string(value ? value : 100) + " -> " + std::to_string(amount);
+        }
+        else if (what == "rep")
+        {
+            float amount = float(value ? value : 100);
+            StellarTarotEffects::OnGiveReputation(player, amount, 0);
+            result = "rep " + std::to_string(value ? value : 100) + " -> " + std::to_string(amount);
+        }
+        else if (what == "money")
+        {
+            uint32 copper = value ? value : 10000;
+            StellarTarotEffects::OnLootMoney(player, copper);
+            result = "copper " + std::to_string(value ? value : 10000) + " -> " + std::to_string(copper);
+        }
+        else if (what == "quest")
+        {
+            Quest const* quest = sObjectMgr->GetQuestTemplate(value);
+            if (quest)
+                StellarTarotEffects::OnQuestComplete(player, quest);
+            else
+                result = "no such quest";
+        }
+        else if (what == "zone")
+            StellarTarotEffects::OnZone(player, player->GetZoneId(), player->GetAreaId());
+        // Out of a capital, then into Thunder Bluff.
+        else if (what == "capital")
+        {
+            StellarTarotEffects::OnZone(player, 215, 215);
+            StellarTarotEffects::OnZone(player, 1638, 1638);
+        }
+        // Half of the durability of every piece worn, lost; or all of it mended.
+        else if (what == "wear")
+            player->DurabilityLossAll(0.5, false);
+        else if (what == "repairall")
+            player->DurabilityRepairAll(false, 0.0f, false);
+        // An object of the world, opened: a chest, a herb, a vein. n: its entry.
+        else if (what == "lootgo")
+        {
+            GameObjectTemplate const* info = sObjectMgr->GetGameObjectTemplate(value);
+            GameObject* go = info ? player->SummonGameObject(value, player->GetPositionX() + 3.0f, player->GetPositionY(),
+                                                             player->GetPositionZ(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 30)
+                                  : nullptr;
+            if (!go)
+                result = "no such object";
+            else
+            {
+                go->loot.clear();
+                go->loot.FillLoot(info->GetLootId(), LootTemplates_Gameobject, player, true, true, LOOT_MODE_DEFAULT, go);
+                result = "object loot " + std::to_string(info->GetLootId()) + ", items";
+                for (LootItem const& item : go->loot.items)
+                    result += " " + std::to_string(item.itemid) + "x" + std::to_string(item.count);
+                go->DespawnOrUnsummon();
+            }
+        }
+        // A loot filled from one of the core's tables, as a fishing bobber, a
+        // skinned corpse or a prospected ore would fill it. n: the loot id.
+        else if (what == "lootfish" || what == "lootskin" || what == "lootprospect")
+        {
+            LootStore const& store = what == "lootfish" ? LootTemplates_Fishing
+                                   : what == "lootskin" ? LootTemplates_Skinning : LootTemplates_Prospecting;
+            Loot loot;
+            loot.FillLoot(value, store, player, true, true);
+            result = "gold " + std::to_string(loot.gold) + ", items";
+            for (LootItem const& item : loot.items)
+                result += " " + std::to_string(item.itemid) + "x" + std::to_string(item.count);
+            for (LootItem const& item : loot.quest_items)
+                result += " " + std::to_string(item.itemid) + "x" + std::to_string(item.count);
+        }
+        else if (what == "repair")
+        {
+            float mod = 1.0f;
+            StellarTarotEffects::OnRepairDiscount(player, ObjectGuid::Empty, mod);
+            StellarTarotEffects::OnSpend(player);
+            result = "repair price factor " + std::to_string(mod);
+        }
+        else if (what == "vendor")
+        {
+            float discount = 1.0f;
+            StellarTarotEffects::OnVendorDiscount(player, discount);
+            result = "vendor price factor " + std::to_string(discount);
+        }
+        // A purchase: the item lands in the bags, bought at its price.
+        else if (what == "buy")
+        {
+            uint32 const entry = value ? value : 4540;
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry);
+            uint32 const had = player->GetItemCount(entry);
+            Item* item = proto && player->AddItem(entry, 1) ? player->GetItemByEntry(entry) : nullptr;
+            if (!item)
+                result = "no such item";
+            else
+            {
+                uint64 const before = player->GetMoney();
+                StellarTarotEffects::OnVendorBuy(player, item, 1, proto->BuyPrice);
+                StellarTarotEffects::OnSpend(player);
+                result = "paid " + std::to_string(proto->BuyPrice) + ", money back " +
+                         std::to_string(int64(player->GetMoney()) - int64(before)) + ", count " +
+                         std::to_string(had) + " -> " + std::to_string(player->GetItemCount(entry));
+            }
+        }
+        // A sale: the item leaves the bags, and the vendor pays its price.
+        else if (what == "sell")
+        {
+            uint32 const entry = value ? value : 7428;
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry);
+            Item* item = proto ? Carried(player, entry) : nullptr;
+            if (!item)
+                result = "no such item";
+            else
+            {
+                uint64 const before = player->GetMoney();
+                StellarTarotEffects::OnSellItem(player, item);
+                player->DestroyItemCount(entry, 1, true);
+                player->ModifyMoney(int32(proto->SellPrice));
+                result = "price " + std::to_string(proto->SellPrice) + ", received " +
+                         std::to_string(int64(player->GetMoney()) - int64(before));
+            }
+        }
+        // An item that enters the bags, as loot does.
+        else if (what == "additem")
+        {
+            uint32 const entry = value ? value : 7428;
+            uint32 const before = player->GetItemCount(entry);
+            uint64 const money = player->GetMoney();
+            result = player->AddItem(entry, 1) ? "count " + std::to_string(before) + " -> " +
+                                                  std::to_string(player->GetItemCount(entry)) + ", money " +
+                                                  std::to_string(int64(player->GetMoney()) - int64(money))
+                                               : "no such item";
+        }
+        // An item used from the bags: a potion, a flask, food, a drink.
+        else if (what == "useitem")
+        {
+            Item* item = Carried(player, value);
+            if (!item)
+                result = "no such item";
+            else
+            {
+                SpellCastTargets targets;
+                targets.SetUnitTarget(player);
+                player->RemoveAllSpellCooldown();
+                player->SetLastPotionId(0);
+                player->CastItemUseSpell(item, targets, 1, 0);
+            }
+        }
+        else if (what == "sold")
+        {
+            int32 amount = int32(value ? value : 10000);
+            StellarTarotEffects::OnMoneyChanged(player, amount);
+            result = "sale " + std::to_string(value ? value : 10000) + " -> " + std::to_string(amount);
+        }
+        else if (what == "auction")
+        {
+            uint32 profit = value ? value : 10000;
+            StellarTarotEffects::OnAuctionSold(player, profit);
+            result = "profit " + std::to_string(value ? value : 10000) + " -> " + std::to_string(profit);
+        }
+        else if (what == "auctionpost")
+        {
+            uint64 const before = player->GetMoney();
+            StellarTarotEffects::OnSpend(player);
+            StellarTarotEffects::OnAuctionPosted(player, value ? value : 10000);
+            result = "money back " + std::to_string(int64(player->GetMoney()) - int64(before));
+        }
+        else if (what == "auctionwon")
+        {
+            uint64 const before = player->GetMoney();
+            StellarTarotEffects::OnSpend(player);
+            StellarTarotEffects::OnAuctionWon(player, value ? value : 10000);
+            result = "money back " + std::to_string(int64(player->GetMoney()) - int64(before));
+        }
+        else if (what == "jump")
+            StellarTarotEffects::OnJump(player);
+        // n full turns on the spot, to the left (the orientation grows) or to the right.
+        else if (what == "spinleft" || what == "spinright")
+        {
+            float const way = what == "spinleft" ? 1.0f : -1.0f;
+            float o = player->GetOrientation();
+            uint32 const steps = std::max<uint32>(1, value ? value : 1) * 16 + 1;
+            for (uint32 i = 0; i <= steps; ++i)
+            {
+                StellarTarotEffects::OnFacing(player, player->GetPositionX(), player->GetPositionY(),
+                                              Position::NormalizeOrientation(o), 0);
+                o += way * float(2 * M_PI) / 16.0f;
+            }
+        }
+        // Half a yard aside: the player has moved.
+        else if (what == "nudge")
+        {
+            float const step = (value % 2) ? -0.5f : 0.5f;
+            player->NearTeleportTo(player->GetPositionX() + step, player->GetPositionY(), player->GetPositionZ(),
+                                   player->GetOrientation());
+        }
+        else if (what == "mount")
+            player->CastSpell(player, value ? value : 580, true);
+        else if (what == "dismount")
+            player->RemoveAurasByType(SPELL_AURA_MOUNTED);
+        // The player's pet: summoned (the water elemental), striking, killed.
+        else if (what == "pet")
+        {
+            player->CastSpell(player, value ? value : 31687, true);
+            result = player->GetPet() ? "pet " + std::to_string(player->GetPet()->GetEntry()) : "no pet";
+        }
+        else if (what == "pethit")
+        {
+            Pet* pet = player->GetPet();
+            if (!pet || !target)
+                result = "no pet";
+            else
+                for (uint32 i = 0; i < std::max<uint32>(1, value); ++i)
+                    pet->AttackerStateUpdate(target, BASE_ATTACK, false, true);
+        }
+        // A heal on the player's pet: an ally a player may heal.
+        else if (what == "healpet")
+        {
+            Pet* pet = player->GetPet();
+            if (!pet)
+                result = "no pet";
+            else
+            {
+                uint32 const before = pet->GetHealth();
+                SpellCastResult const cast = player->CastSpell(pet, 2061, true);
+                result = "cast result " + std::to_string(uint32(cast)) + ", pet health " + std::to_string(before) +
+                         " -> " + std::to_string(pet->GetHealth()) + "/" + std::to_string(pet->GetMaxHealth());
+            }
+        }
+        else if (what == "pethp")
+        {
+            if (Pet* pet = player->GetPet())
+                pet->SetHealth(std::max<uint32>(1, pet->CountPctFromMaxHealth(int32(value ? value : 50))));
+            else
+                result = "no pet";
+        }
+        else if (what == "petdie")
+        {
+            if (Pet* pet = player->GetPet())
+                Unit::Kill(player, pet, false);
+            else
+                result = "no pet";
+        }
+        // A wand shot at the target, a wand worn first.
+        else if (what == "shoot")
+        {
+            if (!player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
+                player->EquipNewItem((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_RANGED, value ? value : 28783, true);
+            if (target)
+            {
+                Face(player, target);
+                player->CastSpell(target, 5019, true);
+            }
+            else
+                result = "no target";
+        }
+        else if (what == "death")
+            StellarTarotEffects::OnDeath(player);
+        else if (what == "resurrect")
+            StellarTarotEffects::OnResurrect(player);
+        // A true death and a true return.
+        else if (what == "die")
+        {
+            if (player->IsAlive())
+                Unit::Kill(player, player, false);
+        }
+        else if (what == "revive")
+        {
+            if (!player->IsAlive())
+            {
+                player->ResurrectPlayer(1.0f);
+                player->SpawnCorpseBones();
+            }
+        }
+        else if (what == "level")
+            StellarTarotEffects::OnLevelChanged(player);
+        else
+            result = "unknown event";
+        Say(handler, STELLAR_TAROT_STR_TEST_FIRED, player->GetName(), what, value, result);
+        return true;
+    }
+
+    // An aura laid on the player (self), or on the bench's target: what a card
+    // needs around it -- a critical strike, a dodge, a parry, the stacks another
+    // level would have built. A negative id removes it.
+    static bool HandleTestAuraCommand(ChatHandler* handler, PlayerIdentifier who, int32 spellId, Optional<std::string> on,
+                                      Optional<uint32> stacks)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        Unit* unit = on && *on == "target" ? TestTarget(player) : player;
+        if (!unit)
+            return true;
+        if (spellId < 0)
+            unit->RemoveAurasDueToSpell(uint32(-spellId));
+        else if (sSpellMgr->GetSpellInfo(uint32(spellId)))
+        {
+            // Laid by the player, as a card of his would lay it.
+            Aura* aura = unit->GetAura(uint32(spellId));
+            if (!aura)
+                aura = player->AddAura(uint32(spellId), unit);
+            if (aura && stacks && *stacks > 1)
+                aura->SetStackAmount(uint8(std::min<uint32>(*stacks, 255)));
+        }
+        Say(handler, STELLAR_TAROT_STR_TEST_FIRED, player->GetName(), "aura", spellId,
+            unit->HasAura(uint32(std::abs(spellId))) ? "present" : "absent");
+        return true;
+    }
+
+    // The auras of a unit the player cast, and those of the module, as
+    // id:stacks:amounts.
+    static std::string AurasOf(Unit* unit, Player* player)
+    {
+        std::string auras;
+        for (auto const& [spellId, application] : unit->GetAppliedAuras())
+        {
+            Aura const* aura = application->GetBase();
+            bool const module = spellId >= 87000 && spellId <= 89999;
+            bool const own = aura->GetCasterGUID() == player->GetGUID() && !aura->IsPassive();
+            if (!module && !own)
+                continue;
+            std::string amounts;
+            for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (AuraEffect const* effect = aura->GetEffect(i))
+                    amounts += (amounts.empty() ? "" : "/") + std::to_string(effect->GetAmount());
+            auras += (auras.empty() ? "" : " ") + std::to_string(spellId) + ":" +
+                     std::to_string(aura->GetStackAmount()) + ":" + (amounts.empty() ? "-" : amounts) + ":" +
+                     std::to_string(aura->GetDuration() / 1000);
+        }
+        return auras.empty() ? "-" : auras;
+    }
+
+    // What can be measured of the player: health, mana, money, combat, and the
+    // auras of the module (spell:stacks:amounts:seconds) and those the player
+    // cast; then the same of the bench's target and of the pet.
+    static bool HandleTestSnapshotCommand(ChatHandler* handler, PlayerIdentifier who)
+    {
+        Player* player = Tested(handler, who);
+        if (!player)
+            return true;
+        std::string extra = AurasOf(player, player);
+        auto it = BenchTargets().find(player->GetGUID());
+        if (it != BenchTargets().end())
+            if (Creature* target = ObjectAccessor::GetCreature(*player, it->second))
+                extra += " | target " + std::to_string(target->GetHealth()) + "/" + std::to_string(target->GetMaxHealth()) +
+                         " " + AurasOf(target, player);
+        if (Pet* pet = player->GetPet())
+            extra += " | pet " + std::to_string(pet->GetHealth()) + "/" + std::to_string(pet->GetMaxHealth()) +
+                     " " + AurasOf(pet, player);
+        std::string stats;
+        for (uint8 s = STAT_STRENGTH; s < MAX_STATS; ++s)
+            stats += (s ? "," : "") + std::to_string(int32(player->GetStat(Stats(s))));
+        std::string ratings;
+        for (uint8 cr = 0; cr < MAX_COMBAT_RATING; ++cr)
+            ratings += (cr ? "," : "") + std::to_string(player->GetUInt32Value(uint16(PLAYER_FIELD_COMBAT_RATING_1) + cr));
+        std::string resist;
+        for (uint8 r = SPELL_SCHOOL_HOLY; r < MAX_SPELL_SCHOOL; ++r)
+            resist += (r > SPELL_SCHOOL_HOLY ? "," : "") + std::to_string(player->GetResistance(SpellSchools(r)));
+        std::string cooldowns;
+        uint32 const now = GameTime::GetGameTimeMS().count();
+        for (auto const& [spellId, cd] : player->GetSpellCooldownMap())
+            if (cd.end > now)
+                cooldowns += (cooldowns.empty() ? "" : ",") + std::to_string(spellId) + ":" + std::to_string(cd.end - now);
+        extra += " | stats " + stats +
+                 " | sp " + std::to_string(player->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC)) +
+                 " heal " + std::to_string(player->SpellBaseHealingBonusDone(SPELL_SCHOOL_MASK_ALL)) +
+                 " | ap " + std::to_string(int32(player->GetTotalAttackPowerValue(BASE_ATTACK))) +
+                 " rap " + std::to_string(int32(player->GetTotalAttackPowerValue(RANGED_ATTACK))) +
+                 " | armor " + std::to_string(player->GetArmor()) + " resist " + resist +
+                 " | ratings " + ratings +
+                 " | speed " + std::to_string(int32(player->GetSpeedRate(MOVE_RUN) * 100.0f)) +
+                 " | cd " + (cooldowns.empty() ? "-" : cooldowns);
+        // The durability of what the player wears, summed.
+        uint32 usure = 0, usureMax = 0;
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            if (Item const* piece = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            {
+                usure += piece->GetUInt32Value(ITEM_FIELD_DURABILITY);
+                usureMax += piece->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+            }
+        extra += " | durability " + std::to_string(usure) + "/" + std::to_string(usureMax);
+        extra += " | cooldowns " + std::to_string(player->GetSpellCooldownMap().size()) +
+                 " | alive " + std::to_string(player->IsAlive() ? 1 : 0) +
+                 " | mounted " + std::to_string(player->IsMounted() ? 1 : 0) +
+                 " | pos " + std::to_string(int32(player->GetPositionX() * 10)) + "," +
+                 std::to_string(int32(player->GetPositionY() * 10));
+        Say(handler, STELLAR_TAROT_STR_TEST_SNAPSHOT, player->GetName(), player->GetHealth(), player->GetMaxHealth(),
+            player->GetPower(POWER_MANA), player->GetMaxPower(POWER_MANA), player->GetMoney(),
+            player->IsInCombat() ? 1 : 0, extra);
         return true;
     }
 };

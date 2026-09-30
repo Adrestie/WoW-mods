@@ -33,4 +33,22 @@ Says what the cards make of a reference experience: a thousand points are passed
 ('tarot fuse',          0, 'Syntax: .tarot fuse $item_entry $item_entry $item_entry\n\nThe workbench: three cards you carry, any of them, become one card drawn at random from the whole catalogue; three boards become one board. This is the path the shared workbench takes.'),
 ('tarot sources',       2, 'Syntax: .tarot sources
 
-Lists where cards and boards drop from, as loaded from mod_stellar_tarot_source: every source with what it drops, at what chance, from what -- and the three settings that govern the loot.');
+Lists where cards and boards drop from, as loaded from mod_stellar_tarot_source: every source with what it drops, at what chance, from what -- and the three settings that govern the loot.'),
+('tarot test',          2, 'Syntax: .tarot test card|clear|force|hour|hp|mana|trace|status|fire|snapshot|aura ...\n\nThe test bench: one card level alone on a character, test values armed, states and the hour forced, and probes that write every effect that fires. Held in memory only.'),
+('tarot test card',     2, 'Syntax: .tarot test card $player $card_id $level [cumulative]\n\nPuts one card level alone on the player, in place of the board, with the test values armed: no chance roll, no cooldown. With cumulative, the levels below come too when the card is cumulative, as the board gives them.'),
+('tarot test clear',    2, 'Syntax: .tarot test clear $player\n\nGives the player back the board, and releases the forced states, the forced hour and the probes.'),
+('tarot test force',    2, 'Syntax: .tarot test force $player $state on|off|free\n\nHolds a state (on) or fails it (off) whatever the game says, or gives it back to the game (free). States: combat, nocombat, solo, rested, water, indoors, outdoors, mounted, walking, running, still, shield, twohand, dualwield, unarmed, heirloom, stunned, controlled, charmed, slowed, burning, humanoid, alone, back.'),
+('tarot test hour',     2, 'Syntax: .tarot test hour $hour\n\nThe hour every card reads, 0 to 23, for the whole realm (night, day, dawn, hour). -1 gives back the server''s clock.'),
+('tarot test hp',       2, 'Syntax: .tarot test hp $player $percent\n\nSets the player''s health to a share of the maximum.'),
+('tarot test mana',     2, 'Syntax: .tarot test mana $player $percent\n\nSets the player''s mana to a share of the maximum.'),
+('tarot test trace',    2, 'Syntax: .tarot test trace $player on|off\n\nThe probes: every effect of the player that fires writes a line to the server log and to the player''s chat.'),
+('tarot test status',   2, 'Syntax: .tarot test status $player\n\nWhat the bench holds for the player: the card level under test, the probes, the forced hour and states.'),
+('tarot test fire',      2, 'Syntax: .tarot test fire $player $event [$n]
+
+Hands an event of the game to the player''s cards. Real, through the core: swing [count], spell [spell], cast [spell] (as the player casts, not triggered), far [spell] (on a unit 25 yards away), mobs [count], newtarget, targethp [percent], targetone, killtarget, selfhit [spell], struck|struckback|struckcrit [count] (blows taken in front, in the back, or critical), struckspell [spell], heal [spell], healother|healfull|healedby [spell], allylow [percent], kill [creature_entry], corpse, buy|sell|additem|useitem [item_entry], wear, repairall, lootgo [gameobject_entry], lootfish|lootskin|lootprospect [loot_id], mount [spell], dismount, pet [spell], pethit [count], pethp [percent], healpet, petdie, shoot [wand_entry], die, revive, nudge. Through the module''s relay: dealt|taken|takenspell [damage], healed [amount], trigger [amount], combat, leave, xp|xpquest|xpexplore|xpbg|rep|repquest|money|sold|auction|auctionpost|auctionwon [amount], quest $quest_id, zone, capital, repair, vendor, jump, spinleft|spinright [turns], death, resurrect, level.'),
+('tarot test snapshot',  2, 'Syntax: .tarot test snapshot $player
+
+What can be measured of the player: health, mana, money, combat, and the auras of the module and those the player cast (spell:stacks:amounts:seconds); then the same of the bench''s target and of the pet, the durability worn, the cooldowns, life, mount and position.'),
+('tarot test aura',      2, 'Syntax: .tarot test aura $player $spell [self|target] [$stacks]
+
+Lays an aura on the player (self), or on the bench''s target: what a card needs around it, a critical strike, a dodge, a parry, the stacks another level would have built. A negative spell removes it.');
