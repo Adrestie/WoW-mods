@@ -23,8 +23,10 @@ recipes. Every module that uses it ships an identical copy under
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
 
-The `installer/` folder is not a module either: one program that installs, and
-removes, any module carrying an `installer.json`. See its README.
+The installer is not a module either: one program that installs, and removes,
+any module carrying an `installer.json`. It has its own repository,
+[WoW-mods-installer](https://github.com/Adrestie/WoW-mods-installer), where
+`installer.exe` is released.
 
 Each module keeps the licence of the project it forks, or MIT when original; see
 the `LICENSE` file in its folder. mod-stellar-tarot and mod-limit-break are

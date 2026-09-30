@@ -1,4 +1,3 @@
-# Built by installer/build.cmd
-installer/installer.exe
-installer/build/
+# Separate repository cloned here: WoW-mods-installer
+installer/
 __pycache__/
