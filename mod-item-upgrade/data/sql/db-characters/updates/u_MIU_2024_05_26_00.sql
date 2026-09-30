@@ -1,1 +1,0 @@
-ALTER TABLE `mod_item_upgrade_stats_req` MODIFY `req_val1` FLOAT;

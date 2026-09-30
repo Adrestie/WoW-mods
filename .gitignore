@@ -1,4 +1,5 @@
 # Separate repositories cloned here
+mod-item-upgrade/
 workbench/
 installer/
 mod-attriboost/
