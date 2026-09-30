@@ -2,8 +2,8 @@
 
 AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 
-Each folder is a self-contained module: sources, configuration, SQL and, where
-needed, the tooling to patch the client. Follow the README inside the folder.
+Each module has its own repository: sources, configuration, SQL and, where
+needed, the tooling to patch the client. Follow the README of the module.
 
 | Module | What it does |
 |---|---|
@@ -30,6 +30,6 @@ any module carrying an `installer.json`. It has its own repository,
 `installer.exe` is released.
 
 Each module keeps the licence of the project it forks, or MIT when original; see
-the `LICENSE` file in its folder. mod-stellar-tarot and mod-limit-break are
+the `LICENSE` file of its repository. mod-stellar-tarot and mod-limit-break are
 GPL-2.0-or-later, the licence of AzerothCore they are compiled into; the others
 are MIT at the time of writing. AzerothCore itself is AGPL v3.
