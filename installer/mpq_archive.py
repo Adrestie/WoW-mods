@@ -207,6 +207,13 @@ class Archive(object):
     def contains(self, name):
         return self._hash_index(name) is not None
 
+    def size(self, name):
+        """Size of a file once read (uncompressed), in bytes."""
+        i = self._hash_index(name)
+        if i is None:
+            raise MpqError("%s is not in %s" % (name, self.path))
+        return self.block_table[self.hash_table[i][4]][2]
+
     def read(self, name):
         i = self._hash_index(name)
         if i is None:
@@ -325,13 +332,14 @@ def _updated_attributes(raw, blocks_before, blocks_after, written):
     return out
 
 
-def write_into_archive(path, files, remove=()):
+def write_into_archive(path, files, remove=(), check_only=False):
     """Writes files into the existing archive and removes others from it.
 
     files: {name: content}. remove: names to delete; their hash entry is
     marked deleted (a lookup goes on past it), their block entry cleared and
     their name dropped from (listfile). Everything is prepared and checked in
-    memory before the first write."""
+    memory before the first write; check_only: stop there, writing nothing
+    (an MpqError says the write would be refused)."""
     a = Archive(path)
     if a.signed:
         raise MpqError("%s carries a strong signature: changing it would invalidate it" % path)
@@ -409,6 +417,8 @@ def write_into_archive(path, files, remove=()):
         end += len(hi_blocks) * 2
     if a.version == 0 and end > M32:
         raise MpqError("%s: a v1 archive cannot exceed 4 GB" % path)
+    if check_only:
+        return len(files)
 
     # Data then tables after everything the file holds; the header last, so
     # that until then the archive described is still the old one.

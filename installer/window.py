@@ -273,6 +273,9 @@ class InstallerWindow(object):
         style.configure("CardBad.TLabel", background=CARD, foreground=BAD)
         style.configure("Dialog.TFrame", background=CARD)
         style.configure("Dialog.TLabel", background=CARD, foreground=TEXT)
+        style.configure("Dialog.TCheckbutton", background=CARD, foreground=TEXT, indicatorbackground=FIELD,
+                        indicatorforeground=TEXT, focuscolor=CARD)
+        style.map("Dialog.TCheckbutton", background=[("active", CARD)], indicatorbackground=[("active", BUTTON)])
         for name, colour in (("DialogInfo", ACCENT), ("DialogWarning", "#e0a040"), ("DialogError", BAD)):
             style.configure(name + ".TLabel", background=CARD, foreground=colour, font=("Segoe UI", 12, "bold"))
         style.configure("TEntry", fieldbackground=FIELD, foreground=TEXT, insertcolor=TEXT, padding=(6, 4))
@@ -318,9 +321,10 @@ class InstallerWindow(object):
         self.check_button.configure(state="disabled" if self.working else "normal")
         self.action_button.configure(state="normal" if self.action and not self.working else "disabled")
 
-    def dialog(self, title, text, buttons, kind="info", focus=0):
+    def dialog(self, title, text, buttons, kind="info", focus=0, option=None):
         """A modal dialog in the window's colours; buttons: [(label, value, style)], left to right, the one
-        at index focus has the focus. Returns the value of the button pressed, None if it is closed."""
+        at index focus has the focus. Returns the value of the button pressed, None if it is closed; with
+        option (the text of a box, ticked at first), returns (value, ticked)."""
         top = tk.Toplevel(self.root)
         top.withdraw()
         top.title(title)
@@ -333,6 +337,10 @@ class InstallerWindow(object):
         ttk.Label(body, text=title, style="Dialog%s.TLabel" % kind.capitalize()).pack(anchor="w")
         ttk.Label(body, text=text, style="Dialog.TLabel", wraplength=560, justify="left").pack(anchor="w",
                                                                                            pady=(8, 18))
+        ticked = tk.BooleanVar(value=True)
+        if option:
+            ttk.Checkbutton(body, text=option, variable=ticked, style="Dialog.TCheckbutton").pack(anchor="w",
+                                                                                                pady=(0, 16))
         row = ttk.Frame(body, style="Dialog.TFrame")
         row.pack(fill="x")
         widgets = []
@@ -352,7 +360,7 @@ class InstallerWindow(object):
         top.grab_set()
         widgets[focus].focus_set()
         self.root.wait_window(top)
-        return chosen["value"]
+        return (chosen["value"], ticked.get()) if option else chosen["value"]
 
     # -- fields ---------------------------------------------------------------
     def show_note(self, key):
@@ -549,23 +557,42 @@ class InstallerWindow(object):
         M, server, client, dbs, state = self.context
         action = self.action
         cancel = ("Cancel", False, "TButton")
+        refusals = core.wow_exe_refusals(M, client) if action == "install" else []
+        if any(s != "original" for _, s in refusals):
+            self.dialog("Cannot install %s" % M.title, core.refusal_text(client, refusals)[0].upper()
+                        + core.refusal_text(client, refusals)[1:] + ".", [("Close", None, "TButton")], kind="error")
+            return
+        # The existing archives about to change, offered for a backup.
+        changing = core.install_targets(M, client) if action == "install" \
+            else sorted(core.removal_plan(M, state, action == "leftovers"))
+        archives = core.archives_to_back_up(changing)
+        option = "Back up first the archive%s about to change: %s" % (
+            "s" if len(archives) > 1 else "",
+            ", ".join("%s (%s)" % (os.path.basename(p), core.size_text(n)) for p, n in archives)) \
+            if archives else None
         if action == "install":
             where = ("the server sources, its configuration and Lua scripts, the game archives (MPQ)"
                      + (" and the server DBC files" if any(d.server is not None for d in M.dbc) else "")
                      if M.server_module else "the game archives (MPQ) and Interface\\AddOns")
-            ok = self.dialog("Install %s?" % M.title, "The installer writes into %s.%s" % (
-                where, "\n\nThe server must be rebuilt afterwards." if M.server_module else ""),
-                [("Install", True, ACTIONS["install"][1]), cancel])
+            text = "The installer writes into %s.%s" % (
+                where, "\n\nThe server must be rebuilt afterwards." if M.server_module else "")
+            if refusals:
+                text += "\n\n%s." % core.refusal_text(client, refusals)
+            answer = self.dialog("Install %s?" % M.title, text,
+                                 [("Patch Wow.exe and install" if refusals else "Install", True,
+                                   ACTIONS["install"][1]), cancel], option=option)
         elif action == "remove":
-            ok = self.dialog("Remove %s?" % M.title, "Everything that is left of it goes: %s.\n\nThis cannot be "
-                             "undone." % ("files, DBC rows and database data, players' data included"
-                                          if M.server_module else "game files, addons and DBC rows"),
-                             [("Remove", True, ACTIONS["remove"][1]), cancel], kind="warning", focus=1)
+            answer = self.dialog("Remove %s?" % M.title, "Everything that is left of it goes: %s.\n\nThis cannot "
+                                 "be undone." % ("files, DBC rows and database data, players' data included"
+                                                 if M.server_module else "game files, addons and DBC rows"),
+                                 [("Remove", True, ACTIONS["remove"][1]), cancel], kind="warning", focus=1,
+                                 option=option)
         else:
-            ok = self.dialog("Remove the leftovers of %s?" % M.title, "The database rows and DBC rows listed as "
-                             "conflicts go; game files never do. Do it only if they are leftovers of this "
-                             "module.", [("Remove leftovers", True, ACTIONS["leftovers"][1]), cancel],
-                             kind="warning", focus=1)
+            answer = self.dialog("Remove the leftovers of %s?" % M.title, "The database rows and DBC rows listed "
+                                 "as conflicts go; game files never do. Do it only if they are leftovers of this "
+                                 "module.", [("Remove leftovers", True, ACTIONS["leftovers"][1]), cancel],
+                                 kind="warning", focus=1, option=option)
+        ok, backup = answer if option else (answer, False)
         if not ok:
             return
 
@@ -577,9 +604,10 @@ class InstallerWindow(object):
                 raise core.InstallerError("the state changed since the check: check again")
             core.refuse_while_running(server, client)
             if action == "install":
-                core.install_and_check(M, server, client, dbs)
+                core.install_and_check(M, server, client, dbs, patch_exe=bool(refusals), backup=backup)
             else:
-                core.remove_and_check(M, server, client, dbs, fresh, leftovers=action == "leftovers")
+                core.remove_and_check(M, server, client, dbs, fresh, leftovers=action == "leftovers",
+                                      backup=backup)
             return M, server, action
 
         self.pending_action = action
