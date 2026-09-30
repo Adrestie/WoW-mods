@@ -20,6 +20,7 @@
  */
 
 #include "StellarTarotEffects.h"
+#include "Chat.h"
 #include "Group.h"
 #include "GameTime.h"
 #include "Log.h"
@@ -27,6 +28,7 @@
 #include "StellarTarotLayout.h"
 #include "StellarTarotMgr.h"
 #include "StellarTarotScript.h"
+#include "StellarTarotStrings.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
 #include "SpellAuras.h"
@@ -60,7 +62,26 @@ namespace
         return everyone;
     }
 
-    uint32 Guid(Player* player) { return player->GetGUID().GetCounter(); }
+    uint32 Guid(Player const* player) { return player->GetGUID().GetCounter(); }
+
+    // THE TEST BENCH, per character: the card level that stands in for the
+    // board, the probes, the forced states. The hour is the realm's.
+    struct Bench
+    {
+        uint32 cardId = 0;
+        uint8 level = 0;
+        bool cumulative = false;        // the levels below come too
+        bool trace = false;
+        std::map<std::string, int8> forced;
+    };
+
+    std::map<uint32, Bench>& Benches()
+    {
+        static std::map<uint32, Bench> benches;
+        return benches;
+    }
+
+    int32 gForcedHour = -1;
 
     // CE QUE LES PLATEAUX GUETTENT. Par personnage, et l'union pour le
     // royaume. Relu du registre a chaque changement de plateau, de connexion
@@ -124,6 +145,27 @@ namespace
     std::vector<StellarTarotActiveEffect> Wanted(Player* player)
     {
         std::vector<StellarTarotActiveEffect> out;
+        // A card level under test stands in for the whole board.
+        auto bench = Benches().find(Guid(player));
+        if (bench != Benches().end() && bench->second.cardId)
+        {
+            StellarTarotCard const* card = sStellarTarotMgr->Card(bench->second.cardId);
+            uint8 const level = bench->second.level;
+            if (card && level >= 1 && level <= card->effects.size())
+            {
+                uint8 const first = (bench->second.cumulative && card->cumulative) ? 1 : level;
+                for (uint8 l = first; l <= level; ++l)
+                {
+                    StellarTarotActiveEffect active;
+                    active.cardId = card->id;
+                    active.level = l;
+                    active.spellId = card->effects[l - 1].spellId;
+                    active.script = card->effects[l - 1].script.text;
+                    out.push_back(active);
+                }
+            }
+            return out;
+        }
         StellarTarotLayout const layout = StellarTarotLayouts::Load(player);
         for (StellarTarotActivation const& a : StellarTarotLayouts::Activations(layout))
         {
@@ -168,7 +210,9 @@ namespace
             r.script->SetSpell(effect.spellId);
             r.script->Apply(player);
         }
+        bool const scripted = r.script != nullptr;
         running.push_back(std::move(r));
+        StellarTarotEffects::Probe(player, effect.spellId, scripted ? "started" : "aura applied");
     }
 
     void Stop(Player* player, Running& r, std::vector<Running> const& others)
@@ -306,6 +350,149 @@ std::vector<StellarTarotActiveEffect> StellarTarotEffects::Active(Player* player
     for (Running const& r : it->second)
         out.push_back(r.effect);
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// The test bench.
+// ---------------------------------------------------------------------------
+
+void StellarTarotEffects::TestCard(Player* player, uint32 cardId, uint8 level, bool cumulative)
+{
+    if (!player)
+        return;
+    Bench& bench = Benches()[Guid(player)];
+    bench.cardId = cardId;
+    bench.level = level;
+    bench.cumulative = cumulative;
+    Refresh(player);
+}
+
+void StellarTarotEffects::TestClear(Player* player)
+{
+    if (!player)
+        return;
+    Benches().erase(Guid(player));
+    Refresh(player);
+}
+
+bool StellarTarotEffects::TestCardOf(Player const* player, uint32& cardId, uint8& level)
+{
+    auto it = player ? Benches().find(Guid(player)) : Benches().end();
+    if (it == Benches().end() || !it->second.cardId)
+        return false;
+    cardId = it->second.cardId;
+    level = it->second.level;
+    return true;
+}
+
+bool StellarTarotEffects::Armed(Player const* player)
+{
+    uint32 cardId = 0;
+    uint8 level = 0;
+    return TestCardOf(player, cardId, level);
+}
+
+void StellarTarotEffects::Force(Player const* player, std::string const& word, int8 state)
+{
+    if (!player)
+        return;
+    std::map<std::string, int8>& forced = Benches()[Guid(player)].forced;
+    // combat and nocombat are one state read two ways
+    std::string const other = word == "combat" ? "nocombat" : word == "nocombat" ? "combat" : "";
+    if (state < 0)
+    {
+        forced.erase(word);
+        if (!other.empty())
+            forced.erase(other);
+        return;
+    }
+    forced[word] = state ? 1 : 0;
+    if (!other.empty())
+        forced[other] = state ? 0 : 1;
+}
+
+int8 StellarTarotEffects::Forced(Player const* player, std::string const& word)
+{
+    auto it = player ? Benches().find(Guid(player)) : Benches().end();
+    if (it == Benches().end())
+        return -1;
+    auto f = it->second.forced.find(word);
+    return f == it->second.forced.end() ? int8(-1) : f->second;
+}
+
+std::map<std::string, int8> StellarTarotEffects::ForcedStates(Player const* player)
+{
+    auto it = player ? Benches().find(Guid(player)) : Benches().end();
+    return it == Benches().end() ? std::map<std::string, int8>() : it->second.forced;
+}
+
+void StellarTarotEffects::ForceHour(int32 hour)
+{
+    gForcedHour = hour >= 0 && hour <= 23 ? hour : -1;
+}
+
+int32 StellarTarotEffects::ForcedHour()
+{
+    return gForcedHour;
+}
+
+void StellarTarotEffects::Trace(Player const* player, bool on)
+{
+    if (player)
+        Benches()[Guid(player)].trace = on;
+}
+
+bool StellarTarotEffects::Tracing(Player const* player)
+{
+    auto it = player ? Benches().find(Guid(player)) : Benches().end();
+    return it != Benches().end() && it->second.trace;
+}
+
+std::vector<uint32> StellarTarotEffects::TestTriggers(Player* player)
+{
+    std::vector<uint32> out;
+    auto it = player ? Everyone().find(Guid(player)) : Everyone().end();
+    if (it == Everyone().end())
+        return out;
+    for (Running const& r : it->second)
+        if (r.script && r.script->Trigger())
+            out.push_back(r.script->Trigger());
+    return out;
+}
+
+void StellarTarotEffects::Probe(Player const* player, uint32 spellId, std::string const& what)
+{
+    if (!Tracing(player))
+        return;
+    // The level that fired, by its spell: a sub-script shares its card's.
+    uint32 cardId = 0;
+    uint8 level = 0;
+    std::string family = "aura";
+    auto it = Everyone().find(Guid(player));
+    if (it != Everyone().end())
+        for (Running const& r : it->second)
+            if (r.effect.spellId == spellId)
+            {
+                cardId = r.effect.cardId;
+                level = r.effect.level;
+                if (!r.effect.script.empty())
+                    family = r.effect.script.substr(0, r.effect.script.find(':'));
+                break;
+            }
+    // A level still starting is not in force yet: its spell names it, 88000 + 4 x card + level - 1.
+    if (!cardId && spellId >= 88000 && spellId < 88800)
+    {
+        cardId = (spellId - 88000) / 4;
+        level = uint8((spellId - 88000) % 4 + 1);
+        if (StellarTarotCard const* card = sStellarTarotMgr->Card(cardId))
+            if (!card->effects[level - 1].script.name.empty())
+                family = card->effects[level - 1].script.name;
+    }
+    LOG_INFO("module", "StellarTarot PROBE {} card={} level={} family={} spell={}: {}",
+             player->GetName(), cardId, level, family, spellId, what);
+    if (WorldSession* session = player->GetSession())
+        ChatHandler(session).PSendModuleSysMessage(STELLAR_TAROT_MODULE, STELLAR_TAROT_STR_TEST_PROBE,
+                                                    cardId, level, family, spellId, what);
 }
 
 // ---------------------------------------------------------------------------
@@ -598,6 +785,14 @@ void StellarTarotEffects::OnDamage(Unit* attacker, Unit* victim, uint32& damage,
                 Each(master, [&](StellarTarotScript& s) { s.OnPetDamage(master, victim, damage); });
 }
 
+void StellarTarotEffects::OnFinalDamage(Unit* attacker, Unit* victim, uint32& damage)
+{
+    Player* const victime = victim ? victim->ToPlayer() : nullptr;
+    if (!victime || !damage)
+        return;
+    Each(victime, [&](StellarTarotScript& s) { s.OnFinalDamageTaken(victime, attacker, damage); });
+}
+
 void StellarTarotEffects::OnHeal(Unit* healer, Unit* receiver, uint32& gain)
 {
     if (Held(healer, receiver))
@@ -792,6 +987,19 @@ void StellarTarotEffects::OnProc(Player* player, uint32 auraId, Unit* other, uin
         CompteOccasion(player, auraId - STELLAR_TAROT_WITNESS_FIRST);
         return;
     }
+    // A line that names this aura as its trigger answers first: a level may
+    // carry its own proc (the Cackle's critical strike).
+    bool declenche = false;
+    Each(player, [&](StellarTarotScript& s)
+    {
+        if (s.Trigger() == auraId)
+        {
+            declenche = true;
+            s.OnTriggerProc(player, other, amount);
+        }
+    });
+    if (declenche)
+        return;
     // L'AURA D'UN NIVEAU qui part n'est pas une ligne qui se declenche : c'est
     // une PROMESSE que le coeur vient de consommer.
     bool promesse = false;
@@ -991,13 +1199,19 @@ void StellarTarotEffects::OnUnitDied(Unit* died, Unit* /*killer*/)
         Acore::AnyPlayerInObjectRangeCheck check(tombe, 100.0f);
         Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(tombe, autour, check);
         Cell::VisitObjects(tombe, searcher, 100.0f);
+        // An ally: a player friendly to the card's bearer, not any player who falls.
         for (Player* qui : autour)
-            if (qui && qui != tombe && qui->IsInWorld())
+            if (qui && qui != tombe && qui->IsInWorld() && qui->IsFriendlyTo(tombe))
                 Each(qui, [&](StellarTarotScript& s) { s.OnAllyDeath(qui, tombe); });
         return;
     }
     if (!died || !died->IsCreature())
         return;
+    // A player's pet: its master is told, whoever watches the deaths around.
+    if (died->IsPet())
+        if (Player* const maitre = died->GetCharmerOrOwnerPlayerOrPlayerItself())
+            if (maitre != died)
+                Each(maitre, [&](StellarTarotScript& s) { s.OnPetDeath(maitre); });
     // PERSONNE NE GUETTE : pas de recherche. C'est le cas ordinaire, et il
     // vaut pour chaque mort de creature du royaume.
     if (!(gGuetDuRoyaume & StellarTarotScript::GUET_MORT_ALENTOUR))

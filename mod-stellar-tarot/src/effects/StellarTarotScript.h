@@ -139,6 +139,11 @@ public:
     virtual void OnLeaveCombat(Player* /*player*/) { }
     virtual void OnLevelUp(Player* /*player*/) { }
     virtual void OnDeath(Player* /*player*/) { }
+    // The player's pet has just died.
+    virtual void OnPetDeath(Player* /*player*/) { }
+    // The damage the player is about to lose, final: after the roll, the
+    // critical strike, the armour and the absorbs (Unit::DealDamage).
+    virtual void OnFinalDamageTaken(Player* /*player*/, Unit* /*attacker*/, uint32& /*damage*/) { }
     // Une creature vient de mourir pres du joueur, tuee par n'importe qui --
     // lui compris. La distance est a la charge du script.
     virtual void OnNearbyDeath(Player* /*player*/, Unit* /*died*/) { }

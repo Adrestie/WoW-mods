@@ -140,3 +140,44 @@ DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id`
 INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
 ('mod-stellar-tarot', 1001, 'frFR', 'Chaque créature que vous tuez rapporte {} pièces de cuivre.'),
 ('mod-stellar-tarot', 1002, 'frFR', 'Chaque créature que vous tuez vous rend {} % de votre santé.');
+
+-- The test bench (.tarot test): ids 61 to 80.
+DELETE FROM `module_string` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 61 AND 80;
+INSERT INTO `module_string` (`module`, `id`, `string`) VALUES
+('mod-stellar-tarot', 61, 'Test: {} now has card {} ({}) at level {}, alone, in place of the board. Test values armed: no chance roll, no cooldown.'),
+('mod-stellar-tarot', 62, 'Test: {} is back to the board. Forced states, hour and probes released.'),
+('mod-stellar-tarot', 63, 'Test: card {} has no level {}.'),
+('mod-stellar-tarot', 64, 'Test: for {}, the state ''{}'' now holds.'),
+('mod-stellar-tarot', 65, 'Test: for {}, the state ''{}'' now fails.'),
+('mod-stellar-tarot', 66, 'Test: for {}, the state ''{}'' follows the game again.'),
+('mod-stellar-tarot', 67, 'Test: every card now reads {}h.'),
+('mod-stellar-tarot', 68, 'Test: the cards read the server''s clock again.'),
+('mod-stellar-tarot', 69, 'Test: {} set to {} % health.'),
+('mod-stellar-tarot', 70, 'Test: {} set to {} % mana.'),
+('mod-stellar-tarot', 71, 'Test: probes on for {}: every effect that fires is written to the log and here.'),
+('mod-stellar-tarot', 72, 'Test: probes off for {}.'),
+('mod-stellar-tarot', 73, 'Test: {}: card {} level {} (0 = the board), probes {} (1 = on), hour {} (-1 = the server''s clock), forced states: {}.'),
+('mod-stellar-tarot', 74, '[Tarot probe] card {} level {} {} (spell {}): {}'),
+('mod-stellar-tarot', 75, 'Test: ''{}'' is not a state word, or ''{}'' is not on, off or free.'),
+('mod-stellar-tarot', 76, 'Test: {} {} ({}): {}.'),
+('mod-stellar-tarot', 77, 'Test: {}: health {}/{}, mana {}/{}, money {}, combat {}, auras {}.');
+
+DELETE FROM `module_string_locale` WHERE `module` = 'mod-stellar-tarot' AND `id` BETWEEN 61 AND 80;
+INSERT INTO `module_string_locale` (`module`, `id`, `locale`, `string`) VALUES
+('mod-stellar-tarot', 61, 'frFR', 'Test : {} porte maintenant la carte {} ({}) au niveau {}, seule, à la place du plateau. Valeurs d''essai armées : ni dé de chance, ni recharge.'),
+('mod-stellar-tarot', 62, 'frFR', 'Test : {} retrouve son plateau. États forcés, heure et sondes libérés.'),
+('mod-stellar-tarot', 63, 'frFR', 'Test : la carte {} n''a pas de niveau {}.'),
+('mod-stellar-tarot', 64, 'frFR', 'Test : pour {}, l''état « {} » est maintenant tenu.'),
+('mod-stellar-tarot', 65, 'frFR', 'Test : pour {}, l''état « {} » n''est maintenant plus tenu.'),
+('mod-stellar-tarot', 66, 'frFR', 'Test : pour {}, l''état « {} » suit de nouveau le jeu.'),
+('mod-stellar-tarot', 67, 'frFR', 'Test : toutes les cartes lisent maintenant {} h.'),
+('mod-stellar-tarot', 68, 'frFR', 'Test : les cartes lisent de nouveau l''horloge du serveur.'),
+('mod-stellar-tarot', 69, 'frFR', 'Test : {} ramené à {} % de vie.'),
+('mod-stellar-tarot', 70, 'frFR', 'Test : {} ramené à {} % de mana.'),
+('mod-stellar-tarot', 71, 'frFR', 'Test : sondes activées pour {} : chaque effet qui se déclenche est écrit au journal et ici.'),
+('mod-stellar-tarot', 72, 'frFR', 'Test : sondes coupées pour {}.'),
+('mod-stellar-tarot', 73, 'frFR', 'Test : {} : carte {} niveau {} (0 = le plateau), sondes {} (1 = actives), heure {} (-1 = l''horloge du serveur), états forcés : {}.'),
+('mod-stellar-tarot', 74, 'frFR', '[Sonde du tarot] carte {} niveau {} {} (sort {}) : {}'),
+('mod-stellar-tarot', 75, 'frFR', 'Test : « {} » n''est pas un mot d''état, ou « {} » n''est ni on, ni off, ni free.'),
+('mod-stellar-tarot', 76, 'frFR', 'Test : {} {} ({}) : {}.'),
+('mod-stellar-tarot', 77, 'frFR', 'Test : {} : vie {}/{}, mana {}/{}, argent {}, combat {}, auras {}.');

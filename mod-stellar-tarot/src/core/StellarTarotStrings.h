@@ -102,6 +102,24 @@ enum StellarTarotStrings : uint32
     STELLAR_TAROT_STR_QUEST_GOLD        = 57,  // quest reward increased by {}g {}s {}c
     // What the cards make of a reference experience -- `.tarot xp`
     STELLAR_TAROT_STR_XP_BONUS          = 58,  // {}: 1000 experience becomes {} ({} %)
+    // The test bench -- `.tarot test`
+    STELLAR_TAROT_STR_TEST_CARD         = 61,  // {player} now has {card} ({name}) at level {} alone
+    STELLAR_TAROT_STR_TEST_CLEAR        = 62,  // {player} is back to the board
+    STELLAR_TAROT_STR_TEST_NO_LEVEL     = 63,  // card {} has no level {}
+    STELLAR_TAROT_STR_TEST_HELD         = 64,  // for {player}, the state '{}' holds
+    STELLAR_TAROT_STR_TEST_FAILED       = 65,  // for {player}, the state '{}' fails
+    STELLAR_TAROT_STR_TEST_FREED        = 66,  // for {player}, the state '{}' follows the game
+    STELLAR_TAROT_STR_TEST_HOUR         = 67,  // every card reads {}h
+    STELLAR_TAROT_STR_TEST_HOUR_OFF     = 68,  // the cards read the server's clock again
+    STELLAR_TAROT_STR_TEST_HEALTH       = 69,  // {player} set to {} % health
+    STELLAR_TAROT_STR_TEST_MANA         = 70,  // {player} set to {} % mana
+    STELLAR_TAROT_STR_TEST_TRACE_ON     = 71,  // probes on for {player}
+    STELLAR_TAROT_STR_TEST_TRACE_OFF    = 72,  // probes off for {player}
+    STELLAR_TAROT_STR_TEST_STATUS       = 73,  // {player}: card, level, probes, hour, forced states
+    STELLAR_TAROT_STR_TEST_PROBE        = 74,  // [probe] card {} level {} {family} (spell {}): {what}
+    STELLAR_TAROT_STR_TEST_BAD_STATE    = 75,  // '{}' is no state word, or '{}' is not on, off or free
+    STELLAR_TAROT_STR_TEST_FIRED        = 76,  // {player} {event} ({n}): {result}
+    STELLAR_TAROT_STR_TEST_SNAPSHOT     = 77,  // {player}: health, mana, money, combat, auras
     // 1001 and up: what each script says of itself (mod_stellar_tarot_script).
 };
 

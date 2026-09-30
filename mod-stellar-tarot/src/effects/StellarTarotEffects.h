@@ -133,6 +133,9 @@ namespace StellarTarotEffects
     // Un objet qui entre dans les sacs : le coeur le dit au porteur.
     void OnItemGained(Player* player, Item* item, uint32 count);
     void OnPeriodicTick(Unit* caster, Unit* other, uint32& amount, bool heal, uint32 spellId);
+    // The damage a unit is about to lose, final (Unit::DealDamage). Every blow of
+    // the world comes here: rendered at once when the victim bears no card.
+    void OnFinalDamage(Unit* attacker, Unit* victim, uint32& damage);
     void OnAuraApply(Unit* target, Aura* aura);
     // UNE AURA QUI S'EN VA : les revers qui ralentissent se recomptent sans
     // elle. Rendu au plus vite quand l'aura n'est pas du module.
@@ -202,6 +205,35 @@ namespace StellarTarotEffects
     // ligne a evenement.
     bool PromesseDe(Player* player, uint32 spellId, int32& chance, int32& icd,
                     bool& coreChance, bool& coreIcd);
+
+    // ===================== THE TEST BENCH (.tarot test ...) =====================
+    //
+    // One card level alone on a character, in place of its board, with the test
+    // values armed; states and the hour forced; every effect that fires written
+    // to the log. Held in memory only: a restart forgets it.
+    // cumulative: the levels below come too, as the board gives them.
+    void TestCard(Player* player, uint32 cardId, uint8 level, bool cumulative = false);
+    // Back to the board, the game's own states and hour, no probes.
+    void TestClear(Player* player);
+    // The card level under test, false when the board is in force.
+    bool TestCardOf(Player const* player, uint32& cardId, uint8& level);
+    // The test values: the character's lines skip their chance roll and cooldown.
+    bool Armed(Player const* player);
+    // A state word held (1) or failed (0) whatever the game says; -1 releases it.
+    // Forced() is -1 when the word follows the game.
+    void Force(Player const* player, std::string const& word, int8 state);
+    int8 Forced(Player const* player, std::string const& word);
+    std::map<std::string, int8> ForcedStates(Player const* player);
+    // The hour every card reads, for the whole realm; -1 gives back the clock.
+    void ForceHour(int32 hour);
+    int32 ForcedHour();
+    // The probes: one log line and one chat line each time an effect of the
+    // character fires, while they are on. spellId names the level that fired.
+    void Trace(Player const* player, bool on);
+    bool Tracing(Player const* player);
+    void Probe(Player const* player, uint32 spellId, std::string const& what);
+    // The proc auras the character's lines answer to, to send them an event.
+    std::vector<uint32> TestTriggers(Player* player);
 }
 
 #endif

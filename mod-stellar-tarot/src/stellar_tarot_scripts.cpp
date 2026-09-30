@@ -235,7 +235,8 @@ public:
             UNITHOOK_ON_AURA_REMOVE,
             UNITHOOK_ON_HEAL,
             UNITHOOK_ON_BEFORE_ROLL_MELEE_OUTCOME_AGAINST,
-            UNITHOOK_ON_UNIT_DEATH
+            UNITHOOK_ON_UNIT_DEATH,
+            UNITHOOK_ON_DAMAGE
         }) { }
 
     // LE DE DU COUP BLANC, avant qu'il ne tombe. Le coeur passe les cinq
@@ -257,6 +258,12 @@ public:
     void OnUnitDeath(Unit* unit, Unit* killer) override
     {
         StellarTarotEffects::OnUnitDied(unit, killer);
+    }
+
+    // The damage about to be lost, final: after the roll, the crit and the absorbs.
+    void OnDamage(Unit* attacker, Unit* victim, uint32& damage) override
+    {
+        StellarTarotEffects::OnFinalDamage(attacker, victim, damage);
     }
 
     void ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage) override
