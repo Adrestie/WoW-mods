@@ -338,6 +338,14 @@ class Client(object):
                 return path
         return None
 
+    def last_archive(self):
+        """Data\\patch-Z.MPQ, the archive the game reads last: the one there (any letter case), or the
+        path of the one to create."""
+        for r, p in self.archives():
+            if os.path.dirname(p) == self.data and os.path.basename(p).lower() == NEW_ARCHIVE_NAME.lower():
+                return p
+        return os.path.join(self.data, NEW_ARCHIVE_NAME)
+
     def write_target(self, winner):
         """Where to write a changed file: into its winning archive if that one is
         custom; otherwise into the last custom archive, if read after it;
@@ -876,17 +884,47 @@ def game_files_target(M, client):
     return target
 
 
+def install_plan(M, client):
+    """({file name: archive}, [full archives]): where an install writes each DBC and game file.
+    An existing archive without room left for its share (hash table full, a v1 archive past 4 GB)
+    gives way to Data\\patch-Z.MPQ, created if needed, which the game reads last; patch-Z itself
+    full is refused."""
+    last = client.last_archive()
+    full = []
+    while True:
+        where, sizes = {}, {}
+
+        def put(name, target, size):
+            target = last if target in full else target
+            where[name] = target
+            sizes.setdefault(target, {})[name] = size
+        for d in M.dbc:
+            if d.client is not None:
+                name = "DBFilesClient\\" + d.file
+                w = client.winner(name)
+                if w:
+                    put(name, client.write_target(w), client.open(w).size(name) + sum(
+                        4 * d.fields + sum(len(v.encode("utf-8")) + 1 if isinstance(v, str) else
+                                           len(v) if isinstance(v, bytes) else 0 for v in r) for r in d.client))
+        if M.game_files:
+            target = game_files_target(M, client)
+            for name, source in M.game_files.items():
+                put(name, target, os.path.getsize(source))
+        for target, names in sizes.items():
+            names[receipt_name(M)] = sum(len(n) + 8 for n in names) + 1024
+        now_full = [t for t in sizes if os.path.exists(t) and not mpq_archive.has_room(t, sizes[t])]
+        if not now_full:
+            return where, full
+        for t in now_full:
+            if os.path.normcase(t) == os.path.normcase(last):
+                raise InstallerError("%s has no room left for this module (hash table full, or a v1 archive "
+                                     "past 4 GB), and no archive is read after it" % t)
+        full += now_full
+
+
 def install_targets(M, client):
     """The archives an install writes into, existing or to be created."""
-    targets = set()
-    for d in M.dbc:
-        if d.client is not None:
-            w = client.winner("DBFilesClient\\" + d.file)
-            if w:
-                targets.add(client.write_target(w))
-    if M.game_files:
-        targets.add(game_files_target(M, client))
-    return sorted(targets)
+    return sorted(set(install_plan(M, client)[0].values()))
 
 
 def survey(M, server, client, dbs):
@@ -1329,21 +1367,24 @@ def install(M, server, client, dbs, patch_exe=False, backup=True, started=None):
         raise InstallerError(refusal_text(client, refusals) + ": allow it (--patch-wow-exe in the console)")
 
     # 1. Game: each DBC rewritten into the archive that provides it (or above),
-    #    files into the last custom archive read (a new one if there is none);
-    #    a receipt in each archive written.
+    #    files into the last custom archive read (a new one if there is none),
+    #    patch-Z for an archive without room left; a receipt in each archive written.
+    where, full = install_plan(M, client)
+    for path in full:
+        say("  %s has no room left for the module: it goes into %s" % (path, client.last_archive()))
     writes, created, receipts = {}, set(), {}
     for d in M.dbc:
         if d.client is None:
             continue
         name = "DBFilesClient\\" + d.file
         w = client.winner(name)
-        target = client.write_target(w)
+        target = where[name]
         writes.setdefault(target, {})[name] = dbc_add(client.open(w).read(name), name, d, d.client)
         receipts.setdefault(target, ([], {}, set()))[1][d.file] = d.client_ids
         if target != w:                         # the file is read from below: it is copied whole
             receipts[target][2].add(d.file)
     if M.game_files:
-        target = game_files_target(M, client)
+        target = where[next(iter(M.game_files))]
         a = client.open(target) if os.path.exists(target) else None
         for name, source in sorted(M.game_files.items()):
             # already in that archive (identical, or it would be a conflict): not ours

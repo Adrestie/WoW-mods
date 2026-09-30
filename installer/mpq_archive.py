@@ -332,6 +332,26 @@ def _updated_attributes(raw, blocks_before, blocks_after, written):
     return out
 
 
+def has_room(path, sizes):
+    """True if the archive can take these files without its hash table filling up or, for a v1
+    archive, going past 4 GB. sizes: {name: size in bytes}; the size stored is bounded from it."""
+    a = Archive(path)
+    new = [n for n in sizes if not a.contains(n)]
+    free = sum(1 for e in a.hash_table if e[4] in (HASH_ENTRY_EMPTY, HASH_ENTRY_DELETED))
+    # One entry always stays free (see write_into_archive).
+    if free - len(new) < 1:
+        return False
+    if a.version != 0:
+        return True
+    # Sector offsets, method bytes, the rewritten (listfile) and (attributes), the tables.
+    stored = sum(n + (n // a.sector_size + 2) * 5 for n in sizes.values())
+    for special, extra in (("(listfile)", sum(len(n) + 2 for n in new)), ("(attributes)", 28 * len(new))):
+        if a.contains(special):
+            stored += a.size(special) + extra + 64
+    end = max(a.file_size, a.offset + a.archive_size) - a.offset + stored +         (a.hash_count + a.block_count + len(new)) * 16
+    return end <= M32
+
+
 def write_into_archive(path, files, remove=(), check_only=False):
     """Writes files into the existing archive and removes others from it.
 
