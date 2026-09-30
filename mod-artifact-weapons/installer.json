@@ -62,6 +62,30 @@
           "where": "entry BETWEEN 84002 AND 84034 OR entry BETWEEN 84102 AND 84134"
         },
         {
+          "table": "item_template_locale",
+          "where": "ID BETWEEN 84002 AND 84034 OR ID BETWEEN 84102 AND 84134"
+        },
+        {
+          "table": "quest_template_locale",
+          "where": "ID BETWEEN 84002 AND 84034"
+        },
+        {
+          "table": "quest_offer_reward_locale",
+          "where": "ID BETWEEN 84002 AND 84034"
+        },
+        {
+          "table": "module_string",
+          "where": "module = 'mod-artifact-weapons'"
+        },
+        {
+          "table": "module_string_locale",
+          "where": "module = 'mod-artifact-weapons'"
+        },
+        {
+          "table": "command",
+          "where": "name = 'aw' OR name LIKE 'aw %'"
+        },
+        {
           "table": "spell_dbc",
           "where": "ID BETWEEN 84300 AND 84999"
         },
@@ -94,11 +118,19 @@
           "where": "entry BETWEEN 84002 AND 84034 OR entry BETWEEN 84200 AND 84204"
         },
         {
+          "table": "creature_template_locale",
+          "where": "entry BETWEEN 84002 AND 84034 OR entry BETWEEN 84200 AND 84204"
+        },
+        {
           "table": "creature_template_model",
           "where": "CreatureID BETWEEN 84002 AND 84034 OR CreatureID BETWEEN 84200 AND 84204"
         },
         {
           "table": "creature_text",
+          "where": "CreatureID BETWEEN 84002 AND 84034"
+        },
+        {
+          "table": "creature_text_locale",
           "where": "CreatureID BETWEEN 84002 AND 84034"
         },
         {
@@ -127,6 +159,10 @@
         },
         {
           "table": "gameobject_template",
+          "where": "entry BETWEEN 840000 AND 849999"
+        },
+        {
+          "table": "gameobject_template_locale",
           "where": "entry BETWEEN 840000 AND 849999"
         },
         {
