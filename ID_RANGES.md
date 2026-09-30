@@ -1,6 +1,6 @@
 # Identifier ranges
 
-Every module of this repository takes its identifiers from one window,
+Every WoW-mods module takes its identifiers from one window,
 **81000-99999**, cut into tranches of a thousand. A module keeps all its
 identifiers in its tranches, in every space at once: items, spells, creatures,
 quests, texts, reference loot, and every DBC file (item and creature displays,
