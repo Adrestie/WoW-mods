@@ -38,6 +38,7 @@
 #include "CellImpl.h"
 #include "Chat.h"
 #include "CombatManager.h"
+#include "Config.h"
 #include "Containers.h"
 #include "Creature.h"
 #include "GameObject.h"
@@ -64,6 +65,24 @@
 
 namespace
 {
+    // A summon fights with a share of its master's power, added to its own
+    // attack power: the core turns it into melee damage (attack power / 14) and
+    // into the bonus of the spells the creature casts. power: the master's
+    // power; key: the configuration's share (0.1234 until balanced); ranged:
+    // also added to its ranged attack power, which the core reads for the
+    // hunter-family spells the creature casts.
+    void InheritPower(Creature* me, float power, char const* key, bool ranged = false)
+    {
+        float const amount = std::max(0.0f, power * sConfigMgr->GetOption<float>(key, 0.1234f));
+        me->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER, TOTAL_VALUE, amount, true);
+        me->UpdateAttackPowerAndDamage();
+        if (ranged)
+        {
+            me->HandleStatFlatModifier(UNIT_MOD_ATTACK_POWER_RANGED, TOTAL_VALUE, amount, true);
+            me->UpdateAttackPowerAndDamage(true);
+        }
+    }
+
     // --- the leap ----------------------------------------------------------
     constexpr uint32 GUST = 85060;   // the shaman's leap
     constexpr float GUST_FACTOR = 1.5f;  // 30 m: twice the ordinary leap,
@@ -148,7 +167,6 @@ namespace
     constexpr uint32 SHIMMER_COOLDOWN = 20000;   // ms -- a mirror of the DBC
     constexpr uint32 SHIMMER = 85070;
     constexpr uint32 ORB_CREATURE = 85806;    // the visible orb (display 85158)
-    constexpr int32 ORB_DAMAGE = 750;          // a mirror of the DBC's $s1
     constexpr float ORB_RANGE = 30.0f;        // how far the orb runs
     constexpr float ORB_SPEED = 16.0f;       // m/s — speed d'origine
                                                 // RESTORED, the
@@ -611,9 +629,15 @@ namespace
                     SPELL_SCHOOL_MASK_ARCANE, chance, BASE_ATTACK, true);
                 bool crit = roll_chance_f(std::max(0.0f, chance));
 
+                // The DBC's $s1, then the mage's bonus and the victim's, as the
+                // core does for a spell's damage effect.
+                uint32 damage = uint32(std::max(0, info->Effects[EFFECT_0].CalcValue(mage)));
+                damage = mage->SpellDamageBonusDone(victim, info, damage, SPELL_DIRECT_DAMAGE, EFFECT_0);
+                damage = victim->SpellDamageBonusTaken(mage, info, damage, SPELL_DIRECT_DAMAGE);
+
                 SpellNonMeleeDamage strike(mage, victim, info,
                                            SPELL_SCHOOL_MASK_ARCANE);
-                mage->CalculateSpellDamageTaken(&strike, ORB_DAMAGE, info,
+                mage->CalculateSpellDamageTaken(&strike, damage, info,
                                                 BASE_ATTACK, crit);
                 Unit::DealDamageMods(strike.target, strike.damage,
                                      &strike.absorb);
@@ -636,20 +660,31 @@ namespace
     // =======================================================================
     // Ray of frost — the channel that builds up
     // =======================================================================
-    // The tick damage is base x the tick number: 100, 200, 300... over the
-    // seconds of the channel.
+    // The tick damage is the first tick's x the tick number: x1, x2, x3... over
+    // the seconds of the channel. The first tick's is the aura's amount as the
+    // core computes it, the mage's bonus included (the calculation hooks run
+    // after it).
     class spell_spheregrid_ray_of_frost : public AuraScript
     {
         PrepareAuraScript(spell_spheregrid_ray_of_frost);
 
+        int32 _first = 0;
+
+        void Keep(AuraEffect const* /*effect*/, int32& amount, bool& /*canBeRecalculated*/)
+        {
+            _first = amount;
+        }
+
         void Grow(AuraEffect* effect)
         {
-            effect->SetAmount((effect->GetBaseAmount() + 1)
-                             * int32(effect->GetTickNumber()));
+            effect->SetAmount(_first * int32(effect->GetTickNumber()));
         }
 
         void Register() override
         {
+            DoEffectCalcAmount += AuraEffectCalcAmountFn(
+                spell_spheregrid_ray_of_frost::Keep, EFFECT_0,
+                SPELL_AURA_PERIODIC_DAMAGE);
             OnEffectUpdatePeriodic += AuraEffectUpdatePeriodicFn(
                 spell_spheregrid_ray_of_frost::Grow, EFFECT_0,
                 SPELL_AURA_PERIODIC_DAMAGE);
@@ -803,6 +838,15 @@ namespace
             int32 const ragePct = rage / 10;   // internal tenths -> points shown
             amount += int32(float(blockShare + armourShare)
                             * float(ragePct) / 100.0f);
+            // The core adds no power to an absorption: the spell's
+            // spell_bonus_data row is applied here, healing power by
+            // direct_bonus (as for the game's shields), attack power by
+            // ap_bonus.
+            if (SpellBonusEntry const* bonus = sSpellMgr->GetSpellBonusData(GetId()))
+                amount += int32(bonus->direct_damage
+                                * float(caster->SpellBaseHealingBonusDone(GetSpellInfo()->GetSchoolMask()))
+                                + bonus->ap_bonus
+                                * caster->GetTotalAttackPowerValue(BASE_ATTACK));
         }
 
         // THE RAGE GOES, ALL OF IT. Nothing is said in the chat: the amount is
@@ -1262,16 +1306,25 @@ namespace
             return howMany;
         }
 
+        // The poison's amount as the core computes it, the rogue's bonus
+        // included (the calculation hooks run after it).
+        int32 _base = 0;
+
+        void Keep(AuraEffect const* /*effect*/, int32& amount, bool& /*canBeRecalculated*/)
+        {
+            _base = amount;
+        }
+
         void Worsen(AuraEffect const* effect)
         {
             Unit const* target = GetTarget();
             if (!target)
                 return;
 
-            // The base value is read back from the spell. Overwriting it
-            // without reading it again would compound the increase on itself,
+            // The base value is the one kept at the calculation. Overwriting it
+            // with the current amount would compound the increase on itself,
             // and the poison would run away tick after tick.
-            int32 const base = GetSpellInfo()->Effects[EFFECT_1].CalcValue(GetCaster());
+            int32 const base = _base;
             uint32 const poisons = CountPoisons(target);
             int32 const amount = base + int32(base) * int32(poisons) / 4;
 
@@ -1285,6 +1338,8 @@ namespace
             // strike, the second the poison. A binding that does not match the
             // DBC is not a compilation error — the core refuses it at startup
             // and the hook never runs.
+            DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_spheregrid_bane_of_kings::Keep,
+                                                         EFFECT_1, SPELL_AURA_PERIODIC_DAMAGE);
             OnEffectPeriodic += AuraEffectPeriodicFn(spell_spheregrid_bane_of_kings::Worsen,
                                                      EFFECT_1, SPELL_AURA_PERIODIC_DAMAGE);
         }
@@ -1722,6 +1777,9 @@ namespace
             // time instead of rewriting it — so the template keeps its reference
             // cadence.
             me->ApplyAttackTimePercentMod(BASE_ATTACK, GHOUL_HASTE, true);
+            // Its blows follow the death knight's attack power.
+            InheritPower(me, master->GetTotalAttackPowerValue(BASE_ATTACK),
+                         "SphereGrid.Summon.Ghoul.AttackPowerShare");
             // It comes out of the ground before biting. The dash margin
             // again: an emote played at the very tick of the summon is thrown
             // away, the client not having the creature yet.
@@ -1841,7 +1899,11 @@ namespace
                     continue;
                 SpellNonMeleeDamage blow(dk, prey, info,
                                          SPELL_SCHOOL_MASK_SHADOW);
-                blow.damage = uint32(std::max(1, effect->GetAmount()));
+                // The aura's amount, then the death knight's bonus and the
+                // victim's, as the core does for a spell's damage effect.
+                uint32 damage = uint32(std::max(1, effect->GetAmount()));
+                damage = dk->SpellDamageBonusDone(prey, info, damage, SPELL_DIRECT_DAMAGE, EFFECT_0);
+                blow.damage = prey->SpellDamageBonusTaken(dk, info, damage, SPELL_DIRECT_DAMAGE);
                 dk->SendSpellNonMeleeDamageLog(&blow);
                 dk->DealSpellDamage(&blow, false);
                 ++torn;
@@ -2565,9 +2627,14 @@ namespace
         // ghoul.
         void IsSummonedBy(WorldObject* summoner) override
         {
-            if (summoner && summoner->IsPlayer())
-                if (Unit* victim = summoner->ToPlayer()->GetVictim())
-                    _target = victim->GetGUID();
+            if (!summoner || !summoner->IsPlayer())
+                return;
+            Player* warlock = summoner->ToPlayer();
+            if (Unit* victim = warlock->GetVictim())
+                _target = victim->GetGUID();
+            // Its blows follow the warlock's shadow spell power.
+            InheritPower(me, float(warlock->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_SHADOW)),
+                         "SphereGrid.Summon.Tyrant.SpellPowerShare");
         }
 
         void UpdateAI(uint32 diff) override
@@ -3283,12 +3350,19 @@ namespace
                 _points = std::min<uint8>(player->GetComboPoints(), 5);
         }
 
+        // The tier's blow replaces the DBC value BEFORE the damage effect runs:
+        // the core then adds the druid's bonus to it, as to any damage spell.
+        void Aim(SpellEffIndex /*index*/)
+        {
+            if (_points)
+                SetEffectValue(FRENZY_TIERS[_points - 1].blow);
+        }
+
         void Strike(SpellEffIndex /*index*/)
         {
             if (!_points)
                 return;
             FrenzyTier const& palier = FRENZY_TIERS[_points - 1];
-            SetHitDamage(palier.blow);
 
             Unit* caster = GetCaster();
             Unit* target = GetHitUnit();
@@ -3324,6 +3398,9 @@ namespace
         {
             OnCheckCast += SpellCheckCastFn(spell_spheregrid_frenzy::CheckCast);
             BeforeCast += SpellCastFn(spell_spheregrid_frenzy::Count);
+            OnEffectLaunchTarget += SpellEffectFn(spell_spheregrid_frenzy::Aim,
+                                                  EFFECT_0,
+                                                  SPELL_EFFECT_SCHOOL_DAMAGE);
             OnEffectHitTarget += SpellEffectFn(spell_spheregrid_frenzy::Strike,
                                                EFFECT_0,
                                                SPELL_EFFECT_SCHOOL_DAMAGE);
@@ -4161,6 +4238,10 @@ namespace
                             / RUSH_DIVISOR);
                     me->UpdateDamagePhysical(BASE_ATTACK);
                 }
+            // Its blows, and the bleed it applies, follow the hunter's ranged
+            // attack power.
+            InheritPower(me, master->GetTotalAttackPowerValue(RANGED_ATTACK),
+                         "SphereGrid.Summon.Pack.RangedAttackPowerShare", true);
             // The blows will apply the stacking bleed.
             DoCast(me, RUSH_FRENZY, true);
             me->SetReactState(REACT_AGGRESSIVE);

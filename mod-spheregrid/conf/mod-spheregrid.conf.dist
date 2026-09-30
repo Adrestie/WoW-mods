@@ -390,3 +390,22 @@ SphereGrid.Cost.Cap = 2500
 # How many identical runes may be socketed in one grid. Beyond that, the extra
 # rune grants nothing.
 SphereGrid.Runes.PerSpell = 3
+
+###############################################################################
+#
+#    SUMMONS
+#
+#    The creatures the class spells call up fight with a share of their
+#    master's power, added to their own attack power: the game turns it into
+#    melee damage (attack power / 14 per second of attack time) and adds it to
+#    the spells they cast. Read at every summon.
+#
+
+# Apocalypse's ghouls: share of the death knight's attack power.
+SphereGrid.Summon.Ghoul.AttackPowerShare = 0.75
+
+# The demonic tyrant: share of the warlock's shadow spell power.
+SphereGrid.Summon.Tyrant.SpellPowerShare = 2
+
+# Stampede's beasts: share of the hunter's ranged attack power.
+SphereGrid.Summon.Pack.RangedAttackPowerShare = 0.125
