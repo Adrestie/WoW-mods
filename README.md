@@ -16,7 +16,7 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-limit-break](https://github.com/Adrestie/mod-limit-break) | A Limit Break gauge shared by the group, after Final Fantasy XIV. Specification only. |
 | [mod-forever-ui](https://github.com/Adrestie/mod-forever-ui) | A modern user interface for the 3.3.5a client. |
 | [mod-artifact-weapons](https://github.com/Adrestie/mod-artifact-weapons) | Class-bound artifact weapons with effects of their own. |
-| [dynamicloot](https://github.com/Adrestie/WoW-mods-dynamicloot) | A shared loot extension: modules spread their drops across the game without editing loot tables. Specification only. |
+| [dynamicloot](https://github.com/Adrestie/WoW-mods-dynamicloot) | A shared loot extension: modules spread their drops across the game without editing loot tables. In progress. |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
