@@ -8,4 +8,5 @@ mod-item-upgrade/
 workbench/
 installer/
 mod-attriboost/
+dynamicloot/
 __pycache__/
