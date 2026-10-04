@@ -38,7 +38,7 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 84 | 84000-84999 | mod-artifact-weapons |
 | 85-86 | 85000-86999 | mod-spheregrid |
 | 87-88 | 87000-88999 | mod-stellar-tarot |
-| 89 | 89000-89999 | reserved, for mod-stellar-tarot to grow |
+| 89 | 89000-89999 | mod-stellar-tarot (levels of cards 198 and up) |
 | 90 | 90000-90999 | mod-limit-break |
 | 91-99 | 91000-99999 | free |
 
