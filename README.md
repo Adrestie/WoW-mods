@@ -16,14 +16,17 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-limit-break](https://github.com/Adrestie/mod-limit-break) | A Limit Break gauge shared by the group, after Final Fantasy XIV. Specification only. |
 | [mod-forever-ui](https://github.com/Adrestie/mod-forever-ui) | A modern user interface for the 3.3.5a client. |
 | [mod-artifact-weapons](https://github.com/Adrestie/mod-artifact-weapons) | Class-bound artifact weapons with effects of their own. |
+| [mod-acp-fix](https://github.com/Adrestie/mod-acp-fix) | Fixes the Addon Control Panel of the HD client packs, whose window stays empty in six of its languages. |
 | [dynamicloot](https://github.com/Adrestie/WoW-mods-dynamicloot) | A shared loot extension: modules spread their drops across the game without editing loot tables. In progress. |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
 
 Each module has its licence in its repository: mod-attriboost and
-mod-item-upgrade are MIT, like the projects they fork; the other modules are
-GPL-2.0-or-later, the licence of AzerothCore.
+mod-item-upgrade are MIT, like the projects they fork; mod-acp-fix is MIT for
+its own files and its changes, the files of ACP it carries staying under their
+authors' terms; the other modules are GPL-2.0-or-later, the licence of
+AzerothCore.
 
 ## Installer
 
