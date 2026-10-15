@@ -18,6 +18,12 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-artifact-weapons](https://github.com/Adrestie/mod-artifact-weapons) | Class-bound artifact weapons with effects of their own. |
 | [mod-acp-fix](https://github.com/Adrestie/mod-acp-fix) | Fixes the Addon Control Panel of the HD client packs, whose window stays empty in six of its languages. |
 | [dynamicloot](https://github.com/Adrestie/WoW-mods-dynamicloot) | A shared loot extension: modules spread their drops across the game without editing loot tables. In progress. |
+| [UniWoW](https://github.com/Adrestie/UniWoW) | A multipurpose WoW editor (map, quest, DB, WMO, etc.) |
+| [mod-wow-fates](https://github.com/Adrestie/mod-wow-fates) | A dynamic world map event mod with level scaling and rewards |
+| [mod-guild-level](https://github.com/Adrestie/mod-guild-level) | a full guild level + housing integration with perk, talents and customizations |
+| [mod-aoe-loot](https://github.com/Adrestie/mod-aoe-loot) | my aoe loot implementation |
+| [mod-profession-xp](https://github.com/Adrestie/mod-profession-xp) | professions gives experience points |
+| [mod-companion-mount](https://github.com/Adrestie/mod-companion-mount) | have any mounts as a pet with talents and equipments |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
