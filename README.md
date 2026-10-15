@@ -19,11 +19,12 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-acp-fix](https://github.com/Adrestie/mod-acp-fix) | Fixes the Addon Control Panel of the HD client packs, whose window stays empty in six of its languages. |
 | [dynamicloot](https://github.com/Adrestie/WoW-mods-dynamicloot) | A shared loot extension: modules spread their drops across the game without editing loot tables. In progress. |
 | [UniWoW](https://github.com/Adrestie/UniWoW) | A multipurpose WoW editor (map, quest, DB, WMO, etc.) |
-| [mod-wow-fates](https://github.com/Adrestie/mod-wow-fates) | A dynamic world map event mod with level scaling and rewards |
-| [mod-guild-level](https://github.com/Adrestie/mod-guild-level) | a full guild level + housing integration with perk, talents and customizations |
-| [mod-aoe-loot](https://github.com/Adrestie/mod-aoe-loot) | my aoe loot implementation |
-| [mod-profession-xp](https://github.com/Adrestie/mod-profession-xp) | professions gives experience points |
-| [mod-companion-mount](https://github.com/Adrestie/mod-companion-mount) | have any mounts as a pet with talents and equipments |
+| [mod-wow-fates](https://github.com/Adrestie/mod-wow-fates) | Expeditions: events that appear on the world map, with objectives, rewards by level and a debuff that brings overpowered players down to the event's level. |
+| [mod-guild-level](https://github.com/Adrestie/mod-guild-level) | Guild levels after Cataclysm: guild experience earned together, 25 levels of perks, then a Paragon progression with a guild house to furnish. |
+| [mod-aoe-loot](https://github.com/Adrestie/mod-aoe-loot) | Area loot: looting one corpse loots every nearby corpse in a single window, without changing loot rules or rolls. |
+| [mod-profession-xp](https://github.com/Adrestie/mod-profession-xp) | Experience from gathering and crafting, by difficulty and for each first time; Spherite at maximum level with mod-spheregrid. |
+| [mod-companion-mount](https://github.com/Adrestie/mod-companion-mount) | The player's mount as a companion that fights and loots, levels up, and has its own talents, spells and inventory. |
+| [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) | The PvP titles of mod-pvp-titles, with an addon channel and a Dishonored state for players who kill too many civilians. |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
@@ -31,7 +32,8 @@ Every module takes its identifiers from the registry in
 Each module has its licence in its repository: mod-attriboost and
 mod-item-upgrade are MIT, like the projects they fork; mod-acp-fix is MIT for
 its own files and its changes, the files of ACP it carries staying under their
-authors' terms; the other modules are GPL-2.0-or-later, the licence of
+authors' terms; mod-pvp-titles-ext is AGPL-3.0, like mod-pvp-titles, which it
+forks; the other modules are GPL-2.0-or-later, the licence of
 AzerothCore.
 
 ## Installer
