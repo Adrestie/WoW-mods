@@ -40,7 +40,9 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 87-88 | 87000-88999 | mod-stellar-tarot |
 | 89 | 89000-89999 | mod-stellar-tarot (levels of cards 198 and up) |
 | 90 | 90000-90999 | mod-limit-break |
-| 91-99 | 91000-99999 | free |
+| 91 | 91000-91999 | mod-companion-mount (creature 91000) |
+| 92-93 | 92000-93999 | mod-guild-level |
+| 94-99 | 94000-99999 | free |
 
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
