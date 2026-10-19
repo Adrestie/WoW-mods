@@ -26,6 +26,7 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-companion-mount](https://github.com/Adrestie/mod-companion-mount) | The player's mount as a companion that fights and loots, levels up, and has its own talents, spells and inventory. |
 | [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) | The PvP titles of mod-pvp-titles, with an addon channel and a Dishonored state for players who kill too many civilians. |
 | [mod-claude-mcp](https://github.com/Adrestie/mod-claude-mcp) | Lets an assistant such as Claude act on the worldserver beside SOAP: every GM command as any character, characters logged in without a client, answers in JSON, through an MCP server. |
+| [mod-find-resources](https://github.com/Adrestie/mod-find-resources) | Find Resources: one tracking spell that shows herbs, mineral veins and schools of fish on the minimap at once. |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
