@@ -42,7 +42,9 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 90 | 90000-90999 | mod-limit-break |
 | 91 | 91000-91999 | mod-companion-mount (creature 91000) |
 | 92-93 | 92000-93999 | mod-guild-level |
-| 94-99 | 94000-99999 | free |
+| 94 | 94000-94999 | free |
+| 95 | 95000-95999 | mod-find-resources |
+| 96-99 | 96000-99999 | free |
 
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
