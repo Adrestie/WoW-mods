@@ -28,6 +28,7 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) | The PvP titles of mod-pvp-titles, with an addon channel and a Dishonored state for players who kill too many civilians. |
 | [mod-claude-mcp](https://github.com/Adrestie/mod-claude-mcp) | Lets an assistant such as Claude act on the worldserver beside SOAP: every GM command as any character, characters logged in without a client, answers in JSON, through an MCP server. |
 | [mod-find-resources](https://github.com/Adrestie/mod-find-resources) | Find Resources: one tracking spell that shows herbs, mineral veins and schools of fish on the minimap at once, learned by a quest from the gathering trainers of the capitals. |
+| [mod-arac](https://github.com/Adrestie/mod-arac) | All Races, All Classes: every playable race with every playable class, generated from the game's own files, so that the classes and races other mods add get every pair too. |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
@@ -37,7 +38,8 @@ mod-item-upgrade and mod-craft-speed are MIT, like the projects they are
 based on; mod-acp-fix is MIT for
 its own files and its changes, the files of ACP it carries staying under their
 authors' terms; mod-pvp-titles-ext is AGPL-3.0, like mod-pvp-titles, which it
-forks; the other modules are GPL-2.0-or-later, the licence of
+forks; mod-arac is AGPL-3.0, like heyitsbench/mod-arac, after which it is made;
+the other modules are GPL-2.0-or-later, the licence of
 AzerothCore.
 
 ## Installer
