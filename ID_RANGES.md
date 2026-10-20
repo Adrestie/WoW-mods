@@ -49,7 +49,7 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 92000-92199 | mod-guild-level |
 | 94000-94099 | mod-dungeon-quests (creature 94000) |
 | 95000-95099 | mod-find-resources (spells 95000-95001, quests 95000-95002) |
-| 96000-96099 | mod-wow-fates (aura Synced 96000) |
+| 96000-96399 | mod-wow-fates (spells 96000-96004, creatures 96100-96300, gameobjects 960000-960100) |
 | 97000-97099 | mod-transmog-retail (creature 97000, npc_text 97000) |
 | 98000-98299 | mod-arac (CharStartOutfit and SkillRaceClassInfo rows) |
 | 99000-99599 | mod-custom-classes (CharStartOutfit rows: 99000 + class × 32 + race × 2 + sex) |
