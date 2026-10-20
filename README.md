@@ -28,6 +28,7 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) | The PvP titles of mod-pvp-titles, with an addon channel and a Dishonored state for players who kill too many civilians. |
 | [mod-claude-mcp](https://github.com/Adrestie/mod-claude-mcp) | Lets an assistant such as Claude act on the worldserver beside SOAP: every GM command as any character, characters logged in without a client, answers in JSON, through an MCP server. |
 | [mod-find-resources](https://github.com/Adrestie/mod-find-resources) | Find Resources: one tracking spell that shows herbs, mineral veins and schools of fish on the minimap at once, learned by a quest from the gathering trainers of the capitals. |
+| [mod-dungeon-quests](https://github.com/Adrestie/mod-dungeon-quests) | A neutral quest giver at the entrance and at the end of every 5-player dungeon: it gives and takes back the dungeon's quests, whatever the race, the faction or the chain. |
 | [mod-arac](https://github.com/Adrestie/mod-arac) | All Races, All Classes: every playable race with every playable class, generated from the game's own files, so that the classes and races other mods add get every pair too. |
 | [mod-custom-classes](https://github.com/Adrestie/mod-custom-classes) | Five new playable classes: Monk, Demon Hunter, Evoker, Mercenary and Sage. For now a client mock-up: each class copies a Blizzard class. |
 
