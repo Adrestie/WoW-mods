@@ -51,3 +51,8 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
 64301-64321), above the game's own.
+
+mod-arac has a second exception, for `SkillLineAbility.dbc` only: from
+100000 up. It copies there the rows a class mod widens (one copy per row,
+holding only the added classes: 1046 for mod-custom-classes), more than a
+tranche holds.
