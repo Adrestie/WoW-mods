@@ -42,11 +42,12 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 90 | 90000-90999 | mod-limit-break |
 | 91 | 91000-91999 | mod-companion-mount (creature 91000) |
 | 92-93 | 92000-93999 | mod-guild-level |
-| 94 | 94000-94999 | free |
+| 94 | 94000-94999 | mod-dungeon-quests (creature 94000) |
 | 95 | 95000-95999 | mod-find-resources (spells 95000-95001, quests 95000-95002) |
-| 96-97 | 96000-97999 | free |
+| 96 | 96000-96999 | mod-wow-fates (aura Synced 96000) |
+| 97 | 97000-97999 | mod-transmog-retail (creature 97000, npc_text 97000) |
 | 98 | 98000-98999 | mod-arac (CharStartOutfit and SkillRaceClassInfo rows) |
-| 99 | 99000-99999 | free |
+| 99 | 99000-99999 | mod-custom-classes (CharStartOutfit rows) |
 
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
