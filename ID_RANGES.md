@@ -44,7 +44,9 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 92-93 | 92000-93999 | mod-guild-level |
 | 94 | 94000-94999 | free |
 | 95 | 95000-95999 | mod-find-resources |
-| 96-99 | 96000-99999 | free |
+| 96 | 96000-96999 | free |
+| 97 | 97000-97999 | mod-transmog-retail (creature 97000, npc_text 97000) |
+| 98-99 | 98000-99999 | free |
 
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
