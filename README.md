@@ -23,6 +23,7 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-guild-level](https://github.com/Adrestie/mod-guild-level) | Guild levels after Cataclysm: guild experience earned together, 25 levels of perks, then a Paragon progression with a guild house to furnish. |
 | [mod-aoe-loot](https://github.com/Adrestie/mod-aoe-loot) | Area loot: looting one corpse loots every nearby corpse in a single window, without changing loot rules or rolls. |
 | [mod-profession-xp](https://github.com/Adrestie/mod-profession-xp) | Experience from gathering and crafting, by difficulty and for each first time; Spherite at maximum level with mod-spheregrid. |
+| [mod-craft-speed](https://github.com/Adrestie/mod-craft-speed) | Crafting speed for each profession: the cast time of every craft multiplied by a value set per profession. |
 | [mod-companion-mount](https://github.com/Adrestie/mod-companion-mount) | The player's mount as a companion that fights and loots, levels up, and has its own talents, spells and inventory. |
 | [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) | The PvP titles of mod-pvp-titles, with an addon channel and a Dishonored state for players who kill too many civilians. |
 | [mod-claude-mcp](https://github.com/Adrestie/mod-claude-mcp) | Lets an assistant such as Claude act on the worldserver beside SOAP: every GM command as any character, characters logged in without a client, answers in JSON, through an MCP server. |
@@ -31,8 +32,9 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
 
-Each module has its licence in its repository: mod-attriboost and
-mod-item-upgrade are MIT, like the projects they fork; mod-acp-fix is MIT for
+Each module has its licence in its repository: mod-attriboost,
+mod-item-upgrade and mod-craft-speed are MIT, like the projects they are
+based on; mod-acp-fix is MIT for
 its own files and its changes, the files of ACP it carries staying under their
 authors' terms; mod-pvp-titles-ext is AGPL-3.0, like mod-pvp-titles, which it
 forks; the other modules are GPL-2.0-or-later, the licence of
