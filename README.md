@@ -23,20 +23,27 @@ AzerothCore modules for World of Warcraft 3.3.5a (Wrath of the Lich King).
 | [mod-guild-level](https://github.com/Adrestie/mod-guild-level) | Guild levels after Cataclysm: guild experience earned together, 25 levels of perks, then a Paragon progression with a guild house to furnish. |
 | [mod-aoe-loot](https://github.com/Adrestie/mod-aoe-loot) | Area loot: looting one corpse loots every nearby corpse in a single window, without changing loot rules or rolls. |
 | [mod-profession-xp](https://github.com/Adrestie/mod-profession-xp) | Experience from gathering and crafting, by difficulty and for each first time; Spherite at maximum level with mod-spheregrid. |
+| [mod-craft-speed](https://github.com/Adrestie/mod-craft-speed) | Crafting speed for each profession: the cast time of every craft multiplied by a value set per profession. |
 | [mod-companion-mount](https://github.com/Adrestie/mod-companion-mount) | The player's mount as a companion that fights and loots, levels up, and has its own talents, spells and inventory. |
 | [mod-pvp-titles-ext](https://github.com/Adrestie/mod-pvp-titles-ext) | The PvP titles of mod-pvp-titles, with an addon channel and a Dishonored state for players who kill too many civilians. |
 | [mod-claude-mcp](https://github.com/Adrestie/mod-claude-mcp) | Lets an assistant such as Claude act on the worldserver beside SOAP: every GM command as any character, characters logged in without a client, answers in JSON, through an MCP server. |
-| [mod-find-resources](https://github.com/Adrestie/mod-find-resources) | Find Resources: herbs, mineral veins and schools of fish on the minimap at once, a tracker granted with Herbalism, Mining or Fishing. |
-| [mod-transmog-retail](https://github.com/Adrestie/mod-transmog-retail) | Transmogrification as in the modern game: appearances collected for the whole account, a Collections window with items and sets, a transmogrifier window with outfits, hidden slots and weapon illusions. In progress. |
+| [mod-find-resources](https://github.com/Adrestie/mod-find-resources) | Find Resources: one tracking spell that shows herbs, mineral veins and schools of fish on the minimap at once, learned by a quest from the gathering trainers of the capitals. |
+| [mod-dungeon-quests](https://github.com/Adrestie/mod-dungeon-quests) | A neutral quest giver at the entrance and at the end of every 5-player dungeon: it gives and takes back the dungeon's quests, whatever the race, the faction or the chain. |
+| [mod-arac](https://github.com/Adrestie/mod-arac) | All Races, All Classes: every playable race with every playable class, generated from the game's own files, so that the classes and races other mods add get every pair too. |
+| [mod-custom-classes](https://github.com/Adrestie/mod-custom-classes) | Five new playable classes: Monk, Demon Hunter, Evoker, Mercenary and Sage. For now a client mock-up: each class copies a Blizzard class. |
+| [mod-shared-professions](https://github.com/Adrestie/mod-shared-professions) | No limit of two primary professions, and professions shared across the account: each character gets the best skill and every recipe it could learn from the others. |
+| [mod-transmog-retail](https://github.com/Adrestie/mod-transmog-retail) | Transmogrification as in the modern game: appearances collected for the whole account, a Collections window with items and sets, a transmogrifier window with outfits, hidden slots and weapon illusions. |
 
 Every module takes its identifiers from the registry in
 [ID_RANGES.md](ID_RANGES.md).
 
-Each module has its licence in its repository: mod-attriboost and
-mod-item-upgrade are MIT, like the projects they fork; mod-acp-fix is MIT for
+Each module has its licence in its repository: mod-attriboost,
+mod-item-upgrade and mod-craft-speed are MIT, like the projects they are
+based on; mod-acp-fix is MIT for
 its own files and its changes, the files of ACP it carries staying under their
 authors' terms; mod-pvp-titles-ext is AGPL-3.0, like mod-pvp-titles, which it
-forks; the other modules are GPL-2.0-or-later, the licence of
+forks; mod-arac is AGPL-3.0, like heyitsbench/mod-arac, after which it is made;
+the other modules are GPL-2.0-or-later, the licence of
 AzerothCore.
 
 ## Installer
