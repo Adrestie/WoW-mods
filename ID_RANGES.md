@@ -38,7 +38,10 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | Numbers | Owner |
 |---|---|
 | 81000-81099 | shared components: the workbench (gameobject 810000) |
+| 81100-81999 | mod-custom-classes (the Monk: spells and DBC rows 81100-81699, 81700-81999 reserved for its next spells) |
 | 82000-82099 | mod-attriboost |
+| 82100-82199 | UniWoW editor (quests created in the editor, mod-uniwow-content) |
+| 82200-82899 | mod-guild-level (décor de la maison, objets 1900 et plus) |
 | 83000-83099 | mod-item-upgrade |
 | 84000-84999 | mod-artifact-weapons |
 | 85000-86999 | mod-spheregrid |
@@ -46,7 +49,7 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 89000-89999 | mod-stellar-tarot (levels of cards 198 and up) |
 | 90000-90299 | mod-limit-break |
 | 91000-91099 | mod-companion-mount (creature 91000) |
-| 92000-92199 | mod-guild-level |
+| 92000-93999 | mod-guild-level |
 | 94000-94099 | mod-dungeon-quests (creature 94000) |
 | 95000-95099 | mod-find-resources (spells 95000-95001, quests 95000-95002) |
 | 96000-96399 | mod-wow-fates (spells 96000-96004, creatures 96100-96300, gameobjects 960000-960100) |
