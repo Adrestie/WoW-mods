@@ -57,6 +57,7 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 81000-81099 | shared components: the workbench (gameobject 810000) |
 | 82000-82099 | mod-attriboost |
 | 82100-82199 | UniWoW editor (quests created in the editor, mod-uniwow-content) |
+| 82800-82999 | UniWoW, prefabs PNJ (creature_template and the tables keyed by its entry) |
 | 83000-83099 | mod-item-upgrade |
 | 84000-84999 | mod-artifact-weapons |
 | 85000-86999 | mod-spheregrid |
