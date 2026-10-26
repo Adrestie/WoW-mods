@@ -57,6 +57,7 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 81000-81099 | shared components: the workbench (gameobject 810000) |
 | 82000-82099 | mod-attriboost |
 | 82100-82199 | UniWoW editor (quests created in the editor, mod-uniwow-content) |
+| 82700-82799 | vfx-lab (the spell effects of the effects lab, tools/vfx) |
 | 82800-82999 | UniWoW, prefabs PNJ (creature_template and the tables keyed by its entry) |
 | 83000-83099 | mod-item-upgrade |
 | 84000-84999 | mod-artifact-weapons |
@@ -78,6 +79,18 @@ blocks it needs and adds its line here.
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
 64301-64321), above the game's own.
+
+UniWoW has two spaces of its own beside its blocks, for what the window
+cannot hold:
+
+- `game_event.eventEntry` is a `tinyint unsigned` (1-255; the core reads the
+  highest with `Get<uint8>`, GameEventMgr.cpp): the editor's events take
+  **246-255**, given from 255 down. The game's own reach 190.
+- The paths of `waypoint_data` take the guid of the spawn walking them times
+  ten, as AzerothCore names them: the editor's spawns (8280000-8299999) give
+  **82800000-82999990**, the next free of a spawn's ten when its own is taken;
+  a creature out of the block (of the game, of another mod) takes the first
+  free path of that range, ten apart.
 
 mod-arac has a second exception, for `SkillLineAbility.dbc` only: from
 100000 up. It copies there the rows a class mod widens (one copy per row,
