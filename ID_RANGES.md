@@ -55,10 +55,8 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | Numbers | Owner |
 |---|---|
 | 81000-81099 | shared components: the workbench (gameobject 810000) |
-| 81100-81999 | mod-custom-classes (the Monk: spells and DBC rows; full, continued in 82200-82699) |
 | 82000-82099 | mod-attriboost |
 | 82100-82199 | UniWoW editor (quests created in the editor, mod-uniwow-content) |
-| 82200-82699 | mod-custom-classes (the Monk, continued: spells 82200-82646, creatures 82200-82205) |
 | 83000-83099 | mod-item-upgrade |
 | 84000-84999 | mod-artifact-weapons |
 | 85000-86999 | mod-spheregrid |
@@ -72,7 +70,6 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 96000-96399 | mod-wow-fates (spells 96000-96004, creatures 96100-96300, gameobjects 960000-960100) |
 | 97000-97099 | mod-transmog-retail (creature 97000, npc_text 97000) |
 | 98000-98299 | mod-arac (CharStartOutfit and SkillRaceClassInfo rows) |
-| 99000-99599 | mod-custom-classes (CharStartOutfit rows: 99000 + class × 32 + race × 2 + sex) |
 
 Every other block of the window is free: a new module takes the first free
 blocks it needs and adds its line here.
@@ -80,12 +77,6 @@ blocks it needs and adds its line here.
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
 64301-64321), above the game's own.
-
-mod-custom-classes has rows outside the window too: `SkillLine.dbc` 800-803
-(the class's skill lines) and `AnimationData.dbc` 660-774 (the animation
-numbers of the Mists of Pandaria models it uses, which the models expect as
-they are). In 16 bits (see above), its talents and glyphs take 21100-21999 and
-22200-22699 (talents 21100-21177 and glyphs 21100-21122 today).
 
 mod-arac has a second exception, for `SkillLineAbility.dbc` only: from
 100000 up. It copies there the rows a class mod widens (one copy per row,
