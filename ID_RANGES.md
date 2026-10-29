@@ -76,6 +76,14 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 Every other block of the window is free: a new module takes the first free
 blocks it needs and adds its line here.
 
+mod-coa-classes is not in the window either: the Conquest of Azeroth classes keep CoA's own numbers (CoA uses
+81000-99999 itself, and CoA content comes first: a mod it collides with moves, see IDS_DEPLACES_COA.md). What the
+module adds that CoA does not have takes numbers CoA does not use, in the window planned for the mods' move:
+
+- creature entries **2362000-2362099** (2362000, 2362001: Barbarian trainers of Sunstrider Isle and Ammen Vale);
+- spawn guids **9900000-9900199** (9900000-9900099: CoA's trainer spawns, renumbered; 9900100 and up: its own);
+- SkillLineAbility rows from **770000** up (CoA rows given to the class only, beside ours).
+
 mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
 64301-64321), above the game's own.
