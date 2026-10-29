@@ -141,6 +141,11 @@ block. Every move is written here.
 | 2026-10-29 | UniWoW | Achievement_Criteria.dbc, achievement_criteria_dbc | 22800-22999 | 38600-38799 | CoA's criteria fill 22800-22999 (16 bits: 98600-98799 less 60000) |
 | 2026-10-29 | UniWoW | TaxiNodes.dbc, taxinodes_dbc | 406-437 | 422-437 | CoA takes 406-421 |
 | 2026-10-29 | UniWoW | CharTitles bits (Mask_ID) | 182-191, provisional | 172-181, provisional | CoA uses 182-190; Maitre to choose |
+| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83050 | 2364050 | Shard of Power; CoA's Item.dbc holds 83050 |
+| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83051 | 2364051 | Fragment of Power; CoA's Item.dbc holds 83051 |
+| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83052 | 2364052 | Core of Power; CoA's Item.dbc holds 83052 |
+| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83053 | 2364053 | Gem of Power; CoA's Item.dbc holds 83053 |
+| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83054 | 2364054 | Crown of Power; CoA's Item.dbc holds 83054 |
 
 Checked on 2026-10-28 for the Barbarian (class 12): its trainer NPCs (50295, 502950-502953,
 602950-602953, 650295) collide with no mod and no stock creature (50295 is free in our world; the core update that
