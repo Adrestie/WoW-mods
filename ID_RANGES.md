@@ -78,7 +78,7 @@ Every other block of the window is free: a new module takes the first free
 blocks it needs and adds its line here.
 
 mod-coa-classes is not in the window either: the Conquest of Azeroth classes keep CoA's own numbers (CoA uses
-81000-99999 itself, and CoA content comes first: a mod it collides with moves, see IDS_DEPLACES_COA.md). What the
+81000-99999 itself, and CoA content comes first: a mod it collides with moves, see "Moved because of CoA" below). What the
 module adds that CoA does not have takes numbers CoA does not use, in the window planned for the mods' move:
 
 - creature entries **2362000-2362099** (2362000, 2362001: Barbarian trainers of Sunstrider Isle and Ammen Vale);
@@ -92,7 +92,7 @@ of the client they come from (Achievement 6137-64300, Achievement_Criteria
 UniWoW has spaces of its own beside its blocks, for what the window
 cannot hold:
 
-- What Conquest of Azeroth has in its blocks moved, as IDS_DEPLACES_COA.md lists: its items
+- What Conquest of Azeroth has in its blocks moved, as "Moved because of CoA" below lists: its items
   (`item_template`, `Item.dbc`), spells and their icons, displays of items, creatures and game
   objects, and sounds take **2363800-2363999** (82800-82999 + 2281000; 2362100-2362199 for
   82100-82199 should it need it); its achievements' criteria **38600-38799** (block
@@ -114,7 +114,7 @@ cannot hold:
 - The nodes of flight (`TaxiNodes.dbc`) are known to a player by a mask of
   14 words of 32 bits (`TaxiMaskSize`, DBCStructure.h): their ids stay below
   448. The editor's take **422-437**, the first free going up (the game's own
-  reach 440; Conquest of Azeroth takes 406-421, IDS_DEPLACES_COA.md). Its paths
+  reach 440; Conquest of Azeroth takes 406-421, "Moved because of CoA" below). Its paths
   (`TaxiPath.dbc`) take its block (82800-82999), the points of a path
   (`TaxiPathNode.dbc`) the path's id times a hundred and their place
   (8280000-8299999, a hundred points a path at most).
@@ -123,3 +123,25 @@ mod-arac has a second exception, for `SkillLineAbility.dbc` only: from
 100000 up. It copies there the rows a class mod widens (one copy per row,
 holding only the added classes: 1046 for mod-custom-classes), more than a
 block holds.
+
+## Moved because of CoA
+
+Conquest of Azeroth content keeps its own numbers; a mod identifier it collides with moves inside the mod's own
+block. Every move is written here.
+
+| Date | Mod | Kind | Old | New | Reason |
+|---|---|---|---|---|---|
+| 2026-10-29 | UniWoW | item_template, Item.dbc | 82800-82999 | 2363800-2363999 | CoA's Item.dbc fills 82800-82999 |
+| 2026-10-29 | UniWoW | ItemDisplayInfo.dbc, itemdisplayinfo_dbc | 82800-82999 | 2363800-2363999 | CoA has 191 rows there |
+| 2026-10-29 | UniWoW | Spell.dbc, spell_dbc | 82800-82999 | 2363800-2363999 | CoA's Spell.dbc fills 82800-82999 |
+| 2026-10-29 | UniWoW | SpellIcon.dbc | 82800-82999 | 2363800-2363999 | CoA has 82810-82961 (5 rows) |
+| 2026-10-29 | UniWoW | CreatureDisplayInfo.dbc, creaturedisplayinfo_dbc, creature_model_info | 82800-82999 | 2363800-2363999 | CoA has 9 rows there |
+| 2026-10-29 | UniWoW | GameObjectDisplayInfo.dbc, gameobjectdisplayinfo_dbc | 82800-82999 | 2363800-2363999 | CoA has 82997 |
+| 2026-10-29 | UniWoW | SoundEntries.dbc, soundentries_dbc | 82800-82999 | 2363800-2363999 | CoA has 82966 |
+| 2026-10-29 | UniWoW | Achievement_Criteria.dbc, achievement_criteria_dbc | 22800-22999 | 38600-38799 | CoA's criteria fill 22800-22999 (16 bits: 98600-98799 less 60000) |
+| 2026-10-29 | UniWoW | TaxiNodes.dbc, taxinodes_dbc | 406-437 | 422-437 | CoA takes 406-421 |
+| 2026-10-29 | UniWoW | CharTitles bits (Mask_ID) | 182-191, provisional | 172-181, provisional | CoA uses 182-190; Maitre to choose |
+
+Checked on 2026-10-28 for the Barbarian (class 12): its trainer NPCs (50295, 502950-502953,
+602950-602953, 650295) collide with no mod and no stock creature (50295 is free in our world; the core update that
+mentions 50295 is about an item's koKR name).
