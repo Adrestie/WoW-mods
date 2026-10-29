@@ -72,7 +72,6 @@ tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
 | 96000-96399 | mod-wow-fates (spells 96000-96004, creatures 96100-96300, gameobjects 960000-960100) |
 | 97000-97099 | mod-transmog-retail (creature 97000, npc_text 97000) |
 | 98000-98299 | mod-arac (CharStartOutfit and SkillRaceClassInfo rows) |
-| 98600-98799 | UniWoW, achievements' criteria alone, held at 38600-38799 (16 bits) |
 
 Every other block of the window is free: a new module takes the first free
 blocks it needs and adds its line here.
@@ -89,20 +88,9 @@ mod-forever-ui is not in the window: the statistics it adds keep the numbers
 of the client they come from (Achievement 6137-64300, Achievement_Criteria
 64301-64321), above the game's own.
 
-UniWoW has spaces of its own beside its blocks, for what the window
+UniWoW has two spaces of its own beside its blocks, for what the window
 cannot hold:
 
-- What Conquest of Azeroth has in its blocks moved, as "Moved because of CoA" below lists: its items
-  (`item_template`, `Item.dbc`), spells and their icons, displays of items, creatures and game
-  objects, and sounds take **2363800-2363999** (82800-82999 + 2281000; 2362100-2362199 for
-  82100-82199 should it need it); its achievements' criteria **38600-38799** (block
-  98600-98799, reserved to it for this 16-bit use alone); the bits of its titles 172-181,
-  provisional.
-- In the 16-bit spaces (82800-82999 less 60000, **22800-22999**): its factions and their
-  templates, achievements, areas (`AreaTable`), the ids of its buildings (`MOHD.wmoID`, keyed
-  by an int16 of it); its maps in **22800-22899** alone (`mmaps_generator` finds a map's tiles
-  by the prefix of their names: map 229's would take 22900-22999's). Its places in the list of
-  reputations: 120-127.
 - `game_event.eventEntry` is a `tinyint unsigned` (1-255; the core reads the
   highest with `Get<uint8>`, GameEventMgr.cpp): the editor's events take
   **246-255**, given from 255 down. The game's own reach 190.
@@ -111,13 +99,6 @@ cannot hold:
   **82800000-82999990**, the next free of a spawn's ten when its own is taken;
   a creature out of the block (of the game, of another mod) takes the first
   free path of that range, ten apart.
-- The nodes of flight (`TaxiNodes.dbc`) are known to a player by a mask of
-  14 words of 32 bits (`TaxiMaskSize`, DBCStructure.h): their ids stay below
-  448. The editor's take **422-437**, the first free going up (the game's own
-  reach 440; Conquest of Azeroth takes 406-421, "Moved because of CoA" below). Its paths
-  (`TaxiPath.dbc`) take its block (82800-82999), the points of a path
-  (`TaxiPathNode.dbc`) the path's id times a hundred and their place
-  (8280000-8299999, a hundred points a path at most).
 
 mod-arac has a second exception, for `SkillLineAbility.dbc` only: from
 100000 up. It copies there the rows a class mod widens (one copy per row,
@@ -131,22 +112,7 @@ block. Every move is written here.
 
 | Date | Mod | Kind | Old | New | Reason |
 |---|---|---|---|---|---|
-| 2026-10-29 | UniWoW | item_template, Item.dbc | 82800-82999 | 2363800-2363999 | CoA's Item.dbc fills 82800-82999 |
-| 2026-10-29 | UniWoW | ItemDisplayInfo.dbc, itemdisplayinfo_dbc | 82800-82999 | 2363800-2363999 | CoA has 191 rows there |
-| 2026-10-29 | UniWoW | Spell.dbc, spell_dbc | 82800-82999 | 2363800-2363999 | CoA's Spell.dbc fills 82800-82999 |
-| 2026-10-29 | UniWoW | SpellIcon.dbc | 82800-82999 | 2363800-2363999 | CoA has 82810-82961 (5 rows) |
-| 2026-10-29 | UniWoW | CreatureDisplayInfo.dbc, creaturedisplayinfo_dbc, creature_model_info | 82800-82999 | 2363800-2363999 | CoA has 9 rows there |
-| 2026-10-29 | UniWoW | GameObjectDisplayInfo.dbc, gameobjectdisplayinfo_dbc | 82800-82999 | 2363800-2363999 | CoA has 82997 |
-| 2026-10-29 | UniWoW | SoundEntries.dbc, soundentries_dbc | 82800-82999 | 2363800-2363999 | CoA has 82966 |
-| 2026-10-29 | UniWoW | Achievement_Criteria.dbc, achievement_criteria_dbc | 22800-22999 | 38600-38799 | CoA's criteria fill 22800-22999 (16 bits: 98600-98799 less 60000) |
-| 2026-10-29 | UniWoW | TaxiNodes.dbc, taxinodes_dbc | 406-437 | 422-437 | CoA takes 406-421 |
-| 2026-10-29 | UniWoW | CharTitles bits (Mask_ID) | 182-191, provisional | 172-181, provisional | CoA uses 182-190; Maitre to choose |
-| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83050 | 2364050 | Shard of Power; CoA's Item.dbc holds 83050 |
-| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83051 | 2364051 | Fragment of Power; CoA's Item.dbc holds 83051 |
-| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83052 | 2364052 | Core of Power; CoA's Item.dbc holds 83052 |
-| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83053 | 2364053 | Gem of Power; CoA's Item.dbc holds 83053 |
-| 2026-10-29 | mod-item-upgrade | Item.dbc, item_template, item_template_locale, item_dbc | 83054 | 2364054 | Crown of Power; CoA's Item.dbc holds 83054 |
 
-Checked on 2026-10-28 for the Barbarian (class 12): its trainer NPCs (50295, 502950-502953,
+None so far. Checked on 2026-10-28 for the Barbarian (class 12): its trainer NPCs (50295, 502950-502953,
 602950-602953, 650295) collide with no mod and no stock creature (50295 is free in our world; the core update that
 mentions 50295 is about an item's koKR name).
