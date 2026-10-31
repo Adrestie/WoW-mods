@@ -1,118 +1,68 @@
 # Identifier ranges
 
-Every WoW-mods module takes its identifiers from one window,
-**81000-99999**, cut into blocks of a hundred. A module gets as many blocks
-as it needs, side by side, and keeps all its identifiers in them, in every
-space at once: items, spells, creatures, quests, texts, reference loot, and
-every DBC file (item and creature displays, spell icons, visuals, kits, effect
-names, model attachments, sounds, durations, skill lines...). The same number
-may therefore be an item and a spell of the same module.
+_Registry in force since 31/10/2026 (chosen by Maitre on 30/10/2026). The modules were renumbered from the old registry (81 000-99 999, kept in `_analyse_ids_coa/ID_RANGES_ancien.md`); the map of every old identifier to its new one is `_analyse_ids_coa/csv/mods_ancien_vers_nouveau.csv`._
 
-The window sits just above the game's highest numbers (spells 80864, items
-56806, item displays 68742, broadcast texts 77865), and stays low on purpose:
-the core and the client size their DBC stores by the highest identifier they
-hold, so a spell numbered in the millions costs tens of megabytes of memory.
+Every WoW-mods module takes its identifiers from one window, **580 000-879 999**, cut into **30 blocks of 10 000**. A module gets one block (more if it ever needs them) and keeps all its identifiers in it, in every space at once: items, spells, creatures, quests, texts, reference loot, and every DBC file. The same number may therefore be an item and a spell of the same module.
 
-Two exceptions, for database tables where the game already uses the window.
-The core keeps these in maps, so a larger number costs nothing. For a module
-holding A-B:
+The window sits just above the Conquest of Azeroth blocks: in every family, the game's numbers come first, then Conquest of Azeroth's block (consecutive, in the order of CoA's own numbers; items reach 579 690), then the modules.
 
-| Space | Numbers | Block 94000-94099, for instance |
+## Derived spaces
+
+| Space | Numbers | Module in block k (start S = 580 000 + k × 10 000) |
 |---|---|---|
-| gameobject templates, gossip menus, pools | A × 10 to B × 10 + 9 | 940000-940999 |
-| creature and gameobject spawns (guid) | A × 100 to B × 100 + 99 | 9400000-9409999 |
+| everything else (items, spells, creatures, quests, texts, loot, DBC rows…) | n | S to S + 9 999 |
+| gameobject templates, gossip menus, pools | n × 10 (+ 0-9) | S × 10 to S × 10 + 99 999 |
+| creature and gameobject spawns (guid) | 6 000 000 + k × 100 000 + rank | 6 000 000 + k × 100 000, 100 000 guids |
+| waypoint_data paths | guid × 10 + point | the module's guids × 10 |
+| limited spaces (see below) | base + k × 100 + (n − S), only for n − S < 100 | 100 numbers |
 
-One more exception, the other way, for the spaces the game holds in 16 bits
-(at most 65535): they take the module's numbers **minus 60000**, so the window
-81000-99999 becomes 21000-39999, above the game's own (talents up to 2285).
+The guids no longer take n × 100: from 580 000 up, n × 100 would pass the 24-bit guid counter (16 777 215). A module numbers its spawns by rank inside its own 100 000 guids.
 
-| Space | Numbers | Block 94000-94099, for instance |
-|---|---|---|
-| `Talent.dbc` rows, `GlyphProperties.dbc` rows | A − 60000 to B − 60000 | 34000-34099 |
+### Limited spaces
 
-Why: the core keeps a talent's row ID in 16 bits (azerothcore
-`DBCStructure.h:2272`, `TalentSpellPos::talent_id` is a `uint16`): a talent
-numbered 81140 is looked up as 15604, finds no row, and is never kept
-(`Player::addTalent`), though the player was told it was learned and paid its
-points. A glyph's `GlyphProperties` ID goes in 16 bits to the client
-(`SMSG_TALENTS_INFO`) and to the database (`character_glyphs.glyph1-6`,
-`smallint unsigned`). Talent tabs (`TalentTab.dbc`) stay in the window: the
-core holds them in 32 bits.
+Spaces the client or the database holds in 16 bits or less. A module uses only the first 100 numbers of its block there (n from S to S + 99), mapped as below. Talent, achievements, criteria, factions, faction templates and maps can be widened to 32 bits on the server side (Conquest of Azeroth already did it for talents and achievements); once widened, they take n like every other space.
 
-A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`)
-stop at the end of its own blocks, never at the end of a thousand: past that
-end lie another module's rows.
+| Space | Base | Range | Why limited |
+|---|---|---|---|
+| SkillLine | 2 000 | 2 000-4 999 | client (PLAYER_SKILL_INFO, 16 bits) |
+| GlyphProperties | 1 000 | 1 000-3 999 | client (talent packet, uint16) |
+| Talent | 4 000 | 4 000-6 999 | core type uint16 (widenable) |
+| Achievement | 26 000 | 26 000-28 999 | character DB smallint (widenable) |
+| Achievement_Criteria | 40 000 | 40 000-42 999 | character DB smallint (widenable) |
+| Faction | 3 000 | 3 000-5 999 | DB smallint (widenable); the client lists 128 reputations, CoA uses 118 |
+| FactionTemplate | 3 000 | 3 000-5 999 | DB smallint (widenable) |
+| Map | 5 000 | 5 000-7 999 | DB smallint (widenable) |
 
-Game files go in folders of the module's own (`Interface\<Module>\...`); a
-file that has to sit in a shared folder, such as `Spells\`, carries a prefix
-of the module in its name.
+`game_event` (1-255, tinyint) stays outside the scheme: UniWoW's events take 246-255, from 255 down; widening it is possible on the server side. TaxiNodes (448), titles (bit < 192) and explored zones (bit < 4 096) are full or nearly full and have no module range.
 
-Not concerned: `module_string` (keyed by the module's name), a module's own
-tables (`mod_<module>_*`), and the SQL file names (prefixed by the module).
+A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`) stop at the end of its own block.
 
 ## Blocks
 
-| Numbers | Owner |
-|---|---|
-| 81000-81099 | shared components: the workbench (gameobject 810000) |
-| 82000-82099 | mod-attriboost |
-| 82100-82199 | UniWoW editor (quests created in the editor, mod-uniwow-content) |
-| 82700-82799 | vfx-lab (the spell effects of the effects lab, tools/vfx) |
-| 82800-82999 | UniWoW, prefabs PNJ (creature_template and the tables keyed by its entry) |
-| 83000-83099 | mod-item-upgrade |
-| 84000-84999 | mod-artifact-weapons |
-| 85000-86999 | mod-spheregrid |
-| 87000-88999 | mod-stellar-tarot |
-| 89000-89999 | mod-stellar-tarot (levels of cards 198 and up) |
-| 90000-90299 | mod-limit-break |
-| 91000-91099 | mod-companion-mount (creature 91000) |
-| 92000-94599 | mod-guild-level |
-| 94600-94699 | mod-dungeon-quests (creature 94600) |
-| 95000-95099 | mod-find-resources (spells 95000-95001, quests 95000-95002) |
-| 96000-96399 | mod-wow-fates (spells 96000-96004, creatures 96100-96300, gameobjects 960000-960100) |
-| 97000-97099 | mod-transmog-retail (creature 97000, npc_text 97000) |
-| 98000-98299 | mod-arac (CharStartOutfit and SkillRaceClassInfo rows) |
+| Numbers | Block k | Owner | Old numbers |
+|---|---|---|---|
+| 580 000-589 999 | 0 | shared components | 81000-81099 |
+| 590 000-599 999 | 1 | mod-attriboost | 82000-82099 |
+| 600 000-609 999 | 2 | UniWoW editor | 82100-82199 |
+| 610 000-619 999 | 3 | vfx-lab | 82700-82799 |
+| 620 000-629 999 | 4 | UniWoW, prefabs PNJ | 82800-82999 |
+| 630 000-639 999 | 5 | mod-item-upgrade | 83000-83099 |
+| 640 000-649 999 | 6 | mod-artifact-weapons | 84000-84999 |
+| 650 000-659 999 | 7 | mod-spheregrid | 85000-86999 |
+| 660 000-669 999 | 8 | mod-stellar-tarot | 87000-89999 |
+| 670 000-679 999 | 9 | mod-limit-break | 90000-90299 |
+| 680 000-689 999 | 10 | mod-companion-mount | 91000-91099 |
+| 690 000-699 999 | 11 | mod-guild-level | 92000-94599 |
+| 700 000-709 999 | 12 | mod-dungeon-quests | 94600-94699 |
+| 710 000-719 999 | 13 | mod-find-resources | 95000-95099 |
+| 730 000-739 999 | 15 | mod-wow-fates | 96000-96399 |
+| 740 000-749 999 | 16 | mod-transmog-retail | 97000-97099 |
+| 750 000-759 999 | 17 | mod-arac | 98000-98299 |
+| 760 000-769 999 | 18 | mod-coa-classes (ajouts propres) | outside the old window |
+| 770 000-779 999 | 19 | mod-forever-ui | outside the old window |
+| 720 000-729 999 | 14 | **left empty**: AzerothCore's npc_text 724001-724006 lie in it | |
+| free | 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 | every other block | |
 
-Every other block of the window is free: a new module takes the first free
-blocks it needs and adds its line here.
+mod-forever-ui moves into its block: its statistics (achievements 6137-64300, criteria 64301-64321) collided with Conquest of Azeroth's achievement block (4 825-25 611); they take the limited-space rule (or n once widened).
 
-mod-coa-classes is not in the window either: the Conquest of Azeroth classes keep CoA's own numbers (CoA uses
-81000-99999 itself, and CoA content comes first: a mod it collides with moves, see "Moved because of CoA" below). What the
-module adds that CoA does not have takes numbers CoA does not use, in the window planned for the mods' move:
-
-- creature entries **2362000-2362099** (2362000, 2362001: Barbarian trainers of Sunstrider Isle and Ammen Vale);
-- spawn guids **9900000-9900199** (9900000-9900099: CoA's trainer spawns, renumbered; 9900100 and up: its own);
-- SkillLineAbility rows from **770000** up (CoA rows given to the class only, beside ours).
-
-mod-forever-ui is not in the window: the statistics it adds keep the numbers
-of the client they come from (Achievement 6137-64300, Achievement_Criteria
-64301-64321), above the game's own.
-
-UniWoW has two spaces of its own beside its blocks, for what the window
-cannot hold:
-
-- `game_event.eventEntry` is a `tinyint unsigned` (1-255; the core reads the
-  highest with `Get<uint8>`, GameEventMgr.cpp): the editor's events take
-  **246-255**, given from 255 down. The game's own reach 190.
-- The paths of `waypoint_data` take the guid of the spawn walking them times
-  ten, as AzerothCore names them: the editor's spawns (8280000-8299999) give
-  **82800000-82999990**, the next free of a spawn's ten when its own is taken;
-  a creature out of the block (of the game, of another mod) takes the first
-  free path of that range, ten apart.
-
-mod-arac has a second exception, for `SkillLineAbility.dbc` only: from
-100000 up. It copies there the rows a class mod widens (one copy per row,
-holding only the added classes: 1046 for mod-custom-classes), more than a
-block holds.
-
-## Moved because of CoA
-
-Conquest of Azeroth content keeps its own numbers; a mod identifier it collides with moves inside the mod's own
-block. Every move is written here.
-
-| Date | Mod | Kind | Old | New | Reason |
-|---|---|---|---|---|---|
-
-None so far. Checked on 2026-10-28 for the Barbarian (class 12): its trainer NPCs (50295, 502950-502953,
-602950-602953, 650295) collide with no mod and no stock creature (50295 is free in our world; the core update that
-mentions 50295 is about an item's koKR name).
+mod-coa-classes keeps Conquest of Azeroth's numbers for CoA content (renumbered in CoA's blocks); what the module adds itself (trainers 2362000-2362001, spawns 9900000-9900199, SkillLineAbility 770000+) moves into its block.
