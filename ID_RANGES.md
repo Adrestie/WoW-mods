@@ -35,6 +35,8 @@ Spaces the client or the database holds in 16 bits or less. A module uses only t
 
 `game_event` (1-255, tinyint) stays outside the scheme: UniWoW's events take 246-255, from 255 down; widening it is possible on the server side. TaxiNodes (448), titles (bit < 192) and explored zones (bit < 4 096) are full or nearly full and have no module range.
 
+TaxiNodes: no block, the nodes are taken one by one among the free ones (1-448, 47 free beside Conquest of Azeroth's). UniWoW's nodes: 365-374 and 385-390 (moved on 31/10/2026 from 406-421, which Conquest of Azeroth uses: 406→365 … 415→374, 416→385 … 421→390) and 422-437 (unchanged). Still free: 345, 347, 349, 351, 356, 362, 391, 396, 400-403, 441, 446, 447.
+
 A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`) stop at the end of its own block.
 
 ## Blocks
