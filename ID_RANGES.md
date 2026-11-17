@@ -45,6 +45,8 @@ Sources of the last three rows and of the three rules below: `_analyse_ids_coa/r
 
 `game_event` (1-255, tinyint) stays outside the scheme: UniWoW's events take 246-255, from 255 down; widening it is possible on the server side. TaxiNodes (448), titles (bit < 192) and explored zones (bit < 4 096) are full or nearly full and have no module range.
 
+Decision of Maitre (17/11/2026): the modules get no titles and no explorable zones (no title bit, no AreaBit); UniWoW alone may take some, case by case.
+
 TaxiNodes: no block, the nodes are taken one by one among the free ones (1-448, 47 free beside Conquest of Azeroth's). UniWoW's nodes: 365-374 and 385-390 (moved on 31/10/2026 from 406-421, which Conquest of Azeroth uses: 406→365 … 415→374, 416→385 … 421→390) and 422-437 (unchanged). Still free: 345, 347, 349, 351, 356, 362, 391, 396, 400-403, 441, 446, 447.
 
 A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`) stop at the end of its own block.
@@ -78,3 +80,5 @@ A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`) stop 
 mod-forever-ui moves into its block: its statistics (achievements 6137-64300, criteria 64301-64321) collided with Conquest of Azeroth's achievement block (4 825-25 611); they take the limited-space rule (or n once widened).
 
 mod-coa-classes keeps Conquest of Azeroth's numbers for CoA content (renumbered in CoA's blocks); what the module adds itself (trainers 2362000-2362001, spawns 9900000-9900199, SkillLineAbility 770000+) moves into its block.
+
+CharacterAdvancement, ChrSpecs and CharacterAdvancementClassTypes keep Conquest of Azeroth's numbers (decision of Maitre, 17/11/2026): the game has no such tables, so nothing of Blizzard's lies in them.
