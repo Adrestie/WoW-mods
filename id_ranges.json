@@ -31,12 +31,15 @@
       "TaxiNodes (one by one among the free ones)",
       "titles",
       "explored zones"
-    ]
+    ],
+    "modules": "the names of the modules (installer.json \"module\") entitled to the block; a module may be named in several blocks; \"shared\": true opens the block to every module"
   },
   "blocks": [
     {
       "k": 0,
       "owner": "shared components",
+      "shared": true,
+      "modules": [],
       "status": "assigned",
       "old_numbers": "81000-81099",
       "start": 580000,
@@ -107,6 +110,9 @@
     {
       "k": 1,
       "owner": "mod-attriboost",
+      "modules": [
+        "mod-attriboost"
+      ],
       "status": "assigned",
       "old_numbers": "82000-82099",
       "start": 590000,
@@ -177,6 +183,10 @@
     {
       "k": 2,
       "owner": "UniWoW editor",
+      "modules": [
+        "mod-uniwow-content",
+        "mod-uniwow-content-test"
+      ],
       "status": "assigned",
       "old_numbers": "82100-82199",
       "start": 600000,
@@ -317,6 +327,10 @@
     {
       "k": 4,
       "owner": "UniWoW, prefabs PNJ",
+      "modules": [
+        "mod-uniwow-content",
+        "mod-uniwow-content-test"
+      ],
       "status": "assigned",
       "old_numbers": "82800-82999",
       "start": 620000,
@@ -387,6 +401,9 @@
     {
       "k": 5,
       "owner": "mod-item-upgrade",
+      "modules": [
+        "mod-item-upgrade"
+      ],
       "status": "assigned",
       "old_numbers": "83000-83099",
       "start": 630000,
@@ -457,6 +474,9 @@
     {
       "k": 6,
       "owner": "mod-artifact-weapons",
+      "modules": [
+        "mod-artifact-weapons"
+      ],
       "status": "assigned",
       "old_numbers": "84000-84999",
       "start": 640000,
@@ -527,6 +547,9 @@
     {
       "k": 7,
       "owner": "mod-spheregrid",
+      "modules": [
+        "mod-spheregrid"
+      ],
       "status": "assigned",
       "old_numbers": "85000-86999",
       "start": 650000,
@@ -597,6 +620,9 @@
     {
       "k": 8,
       "owner": "mod-stellar-tarot",
+      "modules": [
+        "mod-stellar-tarot"
+      ],
       "status": "assigned",
       "old_numbers": "87000-89999",
       "start": 660000,
@@ -667,6 +693,9 @@
     {
       "k": 9,
       "owner": "mod-limit-break",
+      "modules": [
+        "mod-limit-break"
+      ],
       "status": "assigned",
       "old_numbers": "90000-90299",
       "start": 670000,
@@ -737,6 +766,9 @@
     {
       "k": 10,
       "owner": "mod-companion-mount",
+      "modules": [
+        "mod-companion-mount"
+      ],
       "status": "assigned",
       "old_numbers": "91000-91099",
       "start": 680000,
@@ -807,6 +839,9 @@
     {
       "k": 11,
       "owner": "mod-guild-level",
+      "modules": [
+        "mod-guild-level"
+      ],
       "status": "assigned",
       "old_numbers": "92000-94599",
       "start": 690000,
@@ -877,6 +912,9 @@
     {
       "k": 12,
       "owner": "mod-dungeon-quests",
+      "modules": [
+        "mod-dungeon-quests"
+      ],
       "status": "assigned",
       "old_numbers": "94600-94699",
       "start": 700000,
@@ -947,6 +985,9 @@
     {
       "k": 13,
       "owner": "mod-find-resources",
+      "modules": [
+        "mod-find-resources"
+      ],
       "status": "assigned",
       "old_numbers": "95000-95099",
       "start": 710000,
@@ -1087,6 +1128,9 @@
     {
       "k": 15,
       "owner": "mod-wow-fates",
+      "modules": [
+        "mod-wow-fates"
+      ],
       "status": "assigned",
       "old_numbers": "96000-96399",
       "start": 730000,
@@ -1157,6 +1201,9 @@
     {
       "k": 16,
       "owner": "mod-transmog-retail",
+      "modules": [
+        "mod-transmog-retail"
+      ],
       "status": "assigned",
       "old_numbers": "97000-97099",
       "start": 740000,
@@ -1227,6 +1274,9 @@
     {
       "k": 17,
       "owner": "mod-arac",
+      "modules": [
+        "mod-arac"
+      ],
       "status": "assigned",
       "old_numbers": "98000-98299",
       "start": 750000,
@@ -1297,6 +1347,9 @@
     {
       "k": 18,
       "owner": "mod-coa-classes (ajouts propres)",
+      "modules": [
+        "mod-coa-classes"
+      ],
       "status": "assigned",
       "old_numbers": "outside the old window",
       "start": 760000,
@@ -1367,6 +1420,9 @@
     {
       "k": 19,
       "owner": "mod-forever-ui",
+      "modules": [
+        "mod-forever-ui"
+      ],
       "status": "assigned",
       "old_numbers": "outside the old window",
       "start": 770000,

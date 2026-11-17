@@ -77,6 +77,8 @@ A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`) stop 
 | 720 000-729 999 | 14 | **left empty**: AzerothCore's npc_text 724001-724006 lie in it | |
 | free | 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 | every other block | |
 
+`id_ranges.json` also names, for each block, the modules entitled to it (`modules`, the `module` name of their `installer.json`: a module may be named in several blocks, as mod-uniwow-content and mod-uniwow-content-test in blocks 2 and 4), and marks block 0 `shared`: its numbers are open to every module; the installer's `--check-ids` reads both.
+
 mod-forever-ui moves into its block: its statistics (achievements 6137-64300, criteria 64301-64321) collided with Conquest of Azeroth's achievement block (4 825-25 611); they take the limited-space rule (or n once widened).
 
 mod-coa-classes keeps Conquest of Azeroth's numbers for CoA content (renumbered in CoA's blocks); what the module adds itself (trainers 2362000-2362001, spawns 9900000-9900199, SkillLineAbility 770000+) moves into its block.
