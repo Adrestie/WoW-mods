@@ -15,6 +15,7 @@ The window sits just above the Conquest of Azeroth blocks: in every family, the 
 | creature and gameobject spawns (guid) | 6 000 000 + k × 100 000 + rank | 6 000 000 + k × 100 000, 100 000 guids |
 | waypoint_data paths | guid × 10 + point | the module's guids × 10 |
 | limited spaces (see below) | base + k × 100 + (n − S), only for n − S < 100 | 100 numbers |
+| TaxiPathNode rows | 50 000 + k × 1 000 + rank | 50 000 + k × 1 000, 1 000 rows |
 
 The guids no longer take n × 100: from 580 000 up, n × 100 would pass the 24-bit guid counter (16 777 215). A module numbers its spawns by rank inside its own 100 000 guids.
 
@@ -32,6 +33,15 @@ Spaces the client or the database holds in 16 bits or less. A module uses only t
 | Faction | 3 000 | 3 000-5 999 | DB smallint (widenable); the client lists 128 reputations, CoA uses 118 |
 | FactionTemplate | 3 000 | 3 000-5 999 | DB smallint (widenable) |
 | Map | 5 000 | 5 000-7 999 | DB smallint (widenable) |
+| LFGDungeons | 14 000 | 14 000-16 999 | DB smallint (`instance_encounters.lastEncounterDungeon`) |
+| AreaTable (ID) | 16 000 | 16 000-18 999 | DB smallint (zoneId, areaId; `quest_template.QuestSortID` is signed, so a zone stays ≤ 32 767) |
+| wmoID (WMOAreaTable.WMOID, MOHD) | 30 000 | 30 000-32 999 | server key int16 (widenable: wmoID then takes n) |
+
+Sources of the last three rows and of the three rules below: `_analyse_ids_coa/reponses_uniwow.md` (31/10/2026), points 1 (LFGDungeons), 7 (AreaTable), 2 (wmoID), 4 (TaxiPathNode) and 9 (WorldMapArea, WorldMapOverlay).
+
+- LFGDungeons, AreaTable and wmoID follow the limited-space rule, base + k × 100. For wmoID, blocks 27 to 29 reach past 32 767 (32 768-32 999), the last value of a signed 16-bit key.
+- TaxiPathNode: a row's ID does not encode its path (neither the client nor the server reads the path from it; the path is field 1, the order field 2). The rows are numbered 50 000 + k × 1 000 + rank, 1 000 rows per module (50 000-79 999). With path × 100 + index the index by ID would cost the client about 252 MB. The rows of one path stay contiguous and in order.
+- WorldMapArea and WorldMapOverlay take n, like most spaces (32 bits on the client and on the server). `WorldMapArea.AreaID` names an AreaTable row, which follows the AreaTable rule above.
 
 `game_event` (1-255, tinyint) stays outside the scheme: UniWoW's events take 246-255, from 255 down; widening it is possible on the server side. TaxiNodes (448), titles (bit < 192) and explored zones (bit < 4 096) are full or nearly full and have no module range.
 

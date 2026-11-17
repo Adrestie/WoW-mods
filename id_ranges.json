@@ -1,0 +1,2138 @@
+{
+  "_about": "Machine-readable copy of ID_RANGES.md (the registry in force). ID_RANGES.md is the source; this file is derived from it, line for line.",
+  "window": {
+    "start": 580000,
+    "end": 879999,
+    "block_size": 10000,
+    "blocks": 30
+  },
+  "rules": {
+    "n": "S = 580000 + k * 10000 ; S to S + 9999 (items, spells, creatures, quests, texts, loot, DBC rows, WorldMapArea, WorldMapOverlay)",
+    "x10": "n * 10 (+ 0-9) for gameobject_template, gossip_menu, pool_template : S * 10 to S * 10 + 99999",
+    "guid": "6000000 + k * 100000 + rank for creature and gameobject spawns (100000 guids)",
+    "waypoint": "guid * 10 + point for waypoint_data",
+    "limited": "base + k * 100 + (n - S), only for n - S < 100 (100 numbers)",
+    "limited_bases": {
+      "SkillLine": 2000,
+      "GlyphProperties": 1000,
+      "Talent": 4000,
+      "Achievement": 26000,
+      "Achievement_Criteria": 40000,
+      "Faction": 3000,
+      "FactionTemplate": 3000,
+      "Map": 5000,
+      "LFGDungeons": 14000,
+      "AreaTable": 16000,
+      "wmoID": 30000
+    },
+    "taxi_path_node": "50000 + k * 1000 + rank (1000 rows)",
+    "no_module_range": [
+      "game_event (UniWoW 246-255)",
+      "TaxiNodes (one by one among the free ones)",
+      "titles",
+      "explored zones"
+    ]
+  },
+  "blocks": [
+    {
+      "k": 0,
+      "owner": "shared components",
+      "status": "assigned",
+      "old_numbers": "81000-81099",
+      "start": 580000,
+      "end": 589999,
+      "x10": [
+        5800000,
+        5899999
+      ],
+      "guid": [
+        6000000,
+        6099999
+      ],
+      "waypoint": [
+        60000000,
+        60999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2000,
+          2099
+        ],
+        "GlyphProperties": [
+          1000,
+          1099
+        ],
+        "Talent": [
+          4000,
+          4099
+        ],
+        "Achievement": [
+          26000,
+          26099
+        ],
+        "Achievement_Criteria": [
+          40000,
+          40099
+        ],
+        "Faction": [
+          3000,
+          3099
+        ],
+        "FactionTemplate": [
+          3000,
+          3099
+        ],
+        "Map": [
+          5000,
+          5099
+        ],
+        "LFGDungeons": [
+          14000,
+          14099
+        ],
+        "AreaTable": [
+          16000,
+          16099
+        ],
+        "wmoID": [
+          30000,
+          30099
+        ]
+      },
+      "taxi_path_node": [
+        50000,
+        50999
+      ]
+    },
+    {
+      "k": 1,
+      "owner": "mod-attriboost",
+      "status": "assigned",
+      "old_numbers": "82000-82099",
+      "start": 590000,
+      "end": 599999,
+      "x10": [
+        5900000,
+        5999999
+      ],
+      "guid": [
+        6100000,
+        6199999
+      ],
+      "waypoint": [
+        61000000,
+        61999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2100,
+          2199
+        ],
+        "GlyphProperties": [
+          1100,
+          1199
+        ],
+        "Talent": [
+          4100,
+          4199
+        ],
+        "Achievement": [
+          26100,
+          26199
+        ],
+        "Achievement_Criteria": [
+          40100,
+          40199
+        ],
+        "Faction": [
+          3100,
+          3199
+        ],
+        "FactionTemplate": [
+          3100,
+          3199
+        ],
+        "Map": [
+          5100,
+          5199
+        ],
+        "LFGDungeons": [
+          14100,
+          14199
+        ],
+        "AreaTable": [
+          16100,
+          16199
+        ],
+        "wmoID": [
+          30100,
+          30199
+        ]
+      },
+      "taxi_path_node": [
+        51000,
+        51999
+      ]
+    },
+    {
+      "k": 2,
+      "owner": "UniWoW editor",
+      "status": "assigned",
+      "old_numbers": "82100-82199",
+      "start": 600000,
+      "end": 609999,
+      "x10": [
+        6000000,
+        6099999
+      ],
+      "guid": [
+        6200000,
+        6299999
+      ],
+      "waypoint": [
+        62000000,
+        62999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2200,
+          2299
+        ],
+        "GlyphProperties": [
+          1200,
+          1299
+        ],
+        "Talent": [
+          4200,
+          4299
+        ],
+        "Achievement": [
+          26200,
+          26299
+        ],
+        "Achievement_Criteria": [
+          40200,
+          40299
+        ],
+        "Faction": [
+          3200,
+          3299
+        ],
+        "FactionTemplate": [
+          3200,
+          3299
+        ],
+        "Map": [
+          5200,
+          5299
+        ],
+        "LFGDungeons": [
+          14200,
+          14299
+        ],
+        "AreaTable": [
+          16200,
+          16299
+        ],
+        "wmoID": [
+          30200,
+          30299
+        ]
+      },
+      "taxi_path_node": [
+        52000,
+        52999
+      ]
+    },
+    {
+      "k": 3,
+      "owner": "vfx-lab",
+      "status": "assigned",
+      "old_numbers": "82700-82799",
+      "start": 610000,
+      "end": 619999,
+      "x10": [
+        6100000,
+        6199999
+      ],
+      "guid": [
+        6300000,
+        6399999
+      ],
+      "waypoint": [
+        63000000,
+        63999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2300,
+          2399
+        ],
+        "GlyphProperties": [
+          1300,
+          1399
+        ],
+        "Talent": [
+          4300,
+          4399
+        ],
+        "Achievement": [
+          26300,
+          26399
+        ],
+        "Achievement_Criteria": [
+          40300,
+          40399
+        ],
+        "Faction": [
+          3300,
+          3399
+        ],
+        "FactionTemplate": [
+          3300,
+          3399
+        ],
+        "Map": [
+          5300,
+          5399
+        ],
+        "LFGDungeons": [
+          14300,
+          14399
+        ],
+        "AreaTable": [
+          16300,
+          16399
+        ],
+        "wmoID": [
+          30300,
+          30399
+        ]
+      },
+      "taxi_path_node": [
+        53000,
+        53999
+      ]
+    },
+    {
+      "k": 4,
+      "owner": "UniWoW, prefabs PNJ",
+      "status": "assigned",
+      "old_numbers": "82800-82999",
+      "start": 620000,
+      "end": 629999,
+      "x10": [
+        6200000,
+        6299999
+      ],
+      "guid": [
+        6400000,
+        6499999
+      ],
+      "waypoint": [
+        64000000,
+        64999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2400,
+          2499
+        ],
+        "GlyphProperties": [
+          1400,
+          1499
+        ],
+        "Talent": [
+          4400,
+          4499
+        ],
+        "Achievement": [
+          26400,
+          26499
+        ],
+        "Achievement_Criteria": [
+          40400,
+          40499
+        ],
+        "Faction": [
+          3400,
+          3499
+        ],
+        "FactionTemplate": [
+          3400,
+          3499
+        ],
+        "Map": [
+          5400,
+          5499
+        ],
+        "LFGDungeons": [
+          14400,
+          14499
+        ],
+        "AreaTable": [
+          16400,
+          16499
+        ],
+        "wmoID": [
+          30400,
+          30499
+        ]
+      },
+      "taxi_path_node": [
+        54000,
+        54999
+      ]
+    },
+    {
+      "k": 5,
+      "owner": "mod-item-upgrade",
+      "status": "assigned",
+      "old_numbers": "83000-83099",
+      "start": 630000,
+      "end": 639999,
+      "x10": [
+        6300000,
+        6399999
+      ],
+      "guid": [
+        6500000,
+        6599999
+      ],
+      "waypoint": [
+        65000000,
+        65999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2500,
+          2599
+        ],
+        "GlyphProperties": [
+          1500,
+          1599
+        ],
+        "Talent": [
+          4500,
+          4599
+        ],
+        "Achievement": [
+          26500,
+          26599
+        ],
+        "Achievement_Criteria": [
+          40500,
+          40599
+        ],
+        "Faction": [
+          3500,
+          3599
+        ],
+        "FactionTemplate": [
+          3500,
+          3599
+        ],
+        "Map": [
+          5500,
+          5599
+        ],
+        "LFGDungeons": [
+          14500,
+          14599
+        ],
+        "AreaTable": [
+          16500,
+          16599
+        ],
+        "wmoID": [
+          30500,
+          30599
+        ]
+      },
+      "taxi_path_node": [
+        55000,
+        55999
+      ]
+    },
+    {
+      "k": 6,
+      "owner": "mod-artifact-weapons",
+      "status": "assigned",
+      "old_numbers": "84000-84999",
+      "start": 640000,
+      "end": 649999,
+      "x10": [
+        6400000,
+        6499999
+      ],
+      "guid": [
+        6600000,
+        6699999
+      ],
+      "waypoint": [
+        66000000,
+        66999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2600,
+          2699
+        ],
+        "GlyphProperties": [
+          1600,
+          1699
+        ],
+        "Talent": [
+          4600,
+          4699
+        ],
+        "Achievement": [
+          26600,
+          26699
+        ],
+        "Achievement_Criteria": [
+          40600,
+          40699
+        ],
+        "Faction": [
+          3600,
+          3699
+        ],
+        "FactionTemplate": [
+          3600,
+          3699
+        ],
+        "Map": [
+          5600,
+          5699
+        ],
+        "LFGDungeons": [
+          14600,
+          14699
+        ],
+        "AreaTable": [
+          16600,
+          16699
+        ],
+        "wmoID": [
+          30600,
+          30699
+        ]
+      },
+      "taxi_path_node": [
+        56000,
+        56999
+      ]
+    },
+    {
+      "k": 7,
+      "owner": "mod-spheregrid",
+      "status": "assigned",
+      "old_numbers": "85000-86999",
+      "start": 650000,
+      "end": 659999,
+      "x10": [
+        6500000,
+        6599999
+      ],
+      "guid": [
+        6700000,
+        6799999
+      ],
+      "waypoint": [
+        67000000,
+        67999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2700,
+          2799
+        ],
+        "GlyphProperties": [
+          1700,
+          1799
+        ],
+        "Talent": [
+          4700,
+          4799
+        ],
+        "Achievement": [
+          26700,
+          26799
+        ],
+        "Achievement_Criteria": [
+          40700,
+          40799
+        ],
+        "Faction": [
+          3700,
+          3799
+        ],
+        "FactionTemplate": [
+          3700,
+          3799
+        ],
+        "Map": [
+          5700,
+          5799
+        ],
+        "LFGDungeons": [
+          14700,
+          14799
+        ],
+        "AreaTable": [
+          16700,
+          16799
+        ],
+        "wmoID": [
+          30700,
+          30799
+        ]
+      },
+      "taxi_path_node": [
+        57000,
+        57999
+      ]
+    },
+    {
+      "k": 8,
+      "owner": "mod-stellar-tarot",
+      "status": "assigned",
+      "old_numbers": "87000-89999",
+      "start": 660000,
+      "end": 669999,
+      "x10": [
+        6600000,
+        6699999
+      ],
+      "guid": [
+        6800000,
+        6899999
+      ],
+      "waypoint": [
+        68000000,
+        68999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2800,
+          2899
+        ],
+        "GlyphProperties": [
+          1800,
+          1899
+        ],
+        "Talent": [
+          4800,
+          4899
+        ],
+        "Achievement": [
+          26800,
+          26899
+        ],
+        "Achievement_Criteria": [
+          40800,
+          40899
+        ],
+        "Faction": [
+          3800,
+          3899
+        ],
+        "FactionTemplate": [
+          3800,
+          3899
+        ],
+        "Map": [
+          5800,
+          5899
+        ],
+        "LFGDungeons": [
+          14800,
+          14899
+        ],
+        "AreaTable": [
+          16800,
+          16899
+        ],
+        "wmoID": [
+          30800,
+          30899
+        ]
+      },
+      "taxi_path_node": [
+        58000,
+        58999
+      ]
+    },
+    {
+      "k": 9,
+      "owner": "mod-limit-break",
+      "status": "assigned",
+      "old_numbers": "90000-90299",
+      "start": 670000,
+      "end": 679999,
+      "x10": [
+        6700000,
+        6799999
+      ],
+      "guid": [
+        6900000,
+        6999999
+      ],
+      "waypoint": [
+        69000000,
+        69999999
+      ],
+      "limited": {
+        "SkillLine": [
+          2900,
+          2999
+        ],
+        "GlyphProperties": [
+          1900,
+          1999
+        ],
+        "Talent": [
+          4900,
+          4999
+        ],
+        "Achievement": [
+          26900,
+          26999
+        ],
+        "Achievement_Criteria": [
+          40900,
+          40999
+        ],
+        "Faction": [
+          3900,
+          3999
+        ],
+        "FactionTemplate": [
+          3900,
+          3999
+        ],
+        "Map": [
+          5900,
+          5999
+        ],
+        "LFGDungeons": [
+          14900,
+          14999
+        ],
+        "AreaTable": [
+          16900,
+          16999
+        ],
+        "wmoID": [
+          30900,
+          30999
+        ]
+      },
+      "taxi_path_node": [
+        59000,
+        59999
+      ]
+    },
+    {
+      "k": 10,
+      "owner": "mod-companion-mount",
+      "status": "assigned",
+      "old_numbers": "91000-91099",
+      "start": 680000,
+      "end": 689999,
+      "x10": [
+        6800000,
+        6899999
+      ],
+      "guid": [
+        7000000,
+        7099999
+      ],
+      "waypoint": [
+        70000000,
+        70999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3000,
+          3099
+        ],
+        "GlyphProperties": [
+          2000,
+          2099
+        ],
+        "Talent": [
+          5000,
+          5099
+        ],
+        "Achievement": [
+          27000,
+          27099
+        ],
+        "Achievement_Criteria": [
+          41000,
+          41099
+        ],
+        "Faction": [
+          4000,
+          4099
+        ],
+        "FactionTemplate": [
+          4000,
+          4099
+        ],
+        "Map": [
+          6000,
+          6099
+        ],
+        "LFGDungeons": [
+          15000,
+          15099
+        ],
+        "AreaTable": [
+          17000,
+          17099
+        ],
+        "wmoID": [
+          31000,
+          31099
+        ]
+      },
+      "taxi_path_node": [
+        60000,
+        60999
+      ]
+    },
+    {
+      "k": 11,
+      "owner": "mod-guild-level",
+      "status": "assigned",
+      "old_numbers": "92000-94599",
+      "start": 690000,
+      "end": 699999,
+      "x10": [
+        6900000,
+        6999999
+      ],
+      "guid": [
+        7100000,
+        7199999
+      ],
+      "waypoint": [
+        71000000,
+        71999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3100,
+          3199
+        ],
+        "GlyphProperties": [
+          2100,
+          2199
+        ],
+        "Talent": [
+          5100,
+          5199
+        ],
+        "Achievement": [
+          27100,
+          27199
+        ],
+        "Achievement_Criteria": [
+          41100,
+          41199
+        ],
+        "Faction": [
+          4100,
+          4199
+        ],
+        "FactionTemplate": [
+          4100,
+          4199
+        ],
+        "Map": [
+          6100,
+          6199
+        ],
+        "LFGDungeons": [
+          15100,
+          15199
+        ],
+        "AreaTable": [
+          17100,
+          17199
+        ],
+        "wmoID": [
+          31100,
+          31199
+        ]
+      },
+      "taxi_path_node": [
+        61000,
+        61999
+      ]
+    },
+    {
+      "k": 12,
+      "owner": "mod-dungeon-quests",
+      "status": "assigned",
+      "old_numbers": "94600-94699",
+      "start": 700000,
+      "end": 709999,
+      "x10": [
+        7000000,
+        7099999
+      ],
+      "guid": [
+        7200000,
+        7299999
+      ],
+      "waypoint": [
+        72000000,
+        72999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3200,
+          3299
+        ],
+        "GlyphProperties": [
+          2200,
+          2299
+        ],
+        "Talent": [
+          5200,
+          5299
+        ],
+        "Achievement": [
+          27200,
+          27299
+        ],
+        "Achievement_Criteria": [
+          41200,
+          41299
+        ],
+        "Faction": [
+          4200,
+          4299
+        ],
+        "FactionTemplate": [
+          4200,
+          4299
+        ],
+        "Map": [
+          6200,
+          6299
+        ],
+        "LFGDungeons": [
+          15200,
+          15299
+        ],
+        "AreaTable": [
+          17200,
+          17299
+        ],
+        "wmoID": [
+          31200,
+          31299
+        ]
+      },
+      "taxi_path_node": [
+        62000,
+        62999
+      ]
+    },
+    {
+      "k": 13,
+      "owner": "mod-find-resources",
+      "status": "assigned",
+      "old_numbers": "95000-95099",
+      "start": 710000,
+      "end": 719999,
+      "x10": [
+        7100000,
+        7199999
+      ],
+      "guid": [
+        7300000,
+        7399999
+      ],
+      "waypoint": [
+        73000000,
+        73999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3300,
+          3399
+        ],
+        "GlyphProperties": [
+          2300,
+          2399
+        ],
+        "Talent": [
+          5300,
+          5399
+        ],
+        "Achievement": [
+          27300,
+          27399
+        ],
+        "Achievement_Criteria": [
+          41300,
+          41399
+        ],
+        "Faction": [
+          4300,
+          4399
+        ],
+        "FactionTemplate": [
+          4300,
+          4399
+        ],
+        "Map": [
+          6300,
+          6399
+        ],
+        "LFGDungeons": [
+          15300,
+          15399
+        ],
+        "AreaTable": [
+          17300,
+          17399
+        ],
+        "wmoID": [
+          31300,
+          31399
+        ]
+      },
+      "taxi_path_node": [
+        63000,
+        63999
+      ]
+    },
+    {
+      "k": 14,
+      "owner": "left empty: AzerothCore's npc_text 724001-724006 lie in it",
+      "status": "left empty",
+      "old_numbers": null,
+      "start": 720000,
+      "end": 729999,
+      "x10": [
+        7200000,
+        7299999
+      ],
+      "guid": [
+        7400000,
+        7499999
+      ],
+      "waypoint": [
+        74000000,
+        74999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3400,
+          3499
+        ],
+        "GlyphProperties": [
+          2400,
+          2499
+        ],
+        "Talent": [
+          5400,
+          5499
+        ],
+        "Achievement": [
+          27400,
+          27499
+        ],
+        "Achievement_Criteria": [
+          41400,
+          41499
+        ],
+        "Faction": [
+          4400,
+          4499
+        ],
+        "FactionTemplate": [
+          4400,
+          4499
+        ],
+        "Map": [
+          6400,
+          6499
+        ],
+        "LFGDungeons": [
+          15400,
+          15499
+        ],
+        "AreaTable": [
+          17400,
+          17499
+        ],
+        "wmoID": [
+          31400,
+          31499
+        ]
+      },
+      "taxi_path_node": [
+        64000,
+        64999
+      ]
+    },
+    {
+      "k": 15,
+      "owner": "mod-wow-fates",
+      "status": "assigned",
+      "old_numbers": "96000-96399",
+      "start": 730000,
+      "end": 739999,
+      "x10": [
+        7300000,
+        7399999
+      ],
+      "guid": [
+        7500000,
+        7599999
+      ],
+      "waypoint": [
+        75000000,
+        75999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3500,
+          3599
+        ],
+        "GlyphProperties": [
+          2500,
+          2599
+        ],
+        "Talent": [
+          5500,
+          5599
+        ],
+        "Achievement": [
+          27500,
+          27599
+        ],
+        "Achievement_Criteria": [
+          41500,
+          41599
+        ],
+        "Faction": [
+          4500,
+          4599
+        ],
+        "FactionTemplate": [
+          4500,
+          4599
+        ],
+        "Map": [
+          6500,
+          6599
+        ],
+        "LFGDungeons": [
+          15500,
+          15599
+        ],
+        "AreaTable": [
+          17500,
+          17599
+        ],
+        "wmoID": [
+          31500,
+          31599
+        ]
+      },
+      "taxi_path_node": [
+        65000,
+        65999
+      ]
+    },
+    {
+      "k": 16,
+      "owner": "mod-transmog-retail",
+      "status": "assigned",
+      "old_numbers": "97000-97099",
+      "start": 740000,
+      "end": 749999,
+      "x10": [
+        7400000,
+        7499999
+      ],
+      "guid": [
+        7600000,
+        7699999
+      ],
+      "waypoint": [
+        76000000,
+        76999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3600,
+          3699
+        ],
+        "GlyphProperties": [
+          2600,
+          2699
+        ],
+        "Talent": [
+          5600,
+          5699
+        ],
+        "Achievement": [
+          27600,
+          27699
+        ],
+        "Achievement_Criteria": [
+          41600,
+          41699
+        ],
+        "Faction": [
+          4600,
+          4699
+        ],
+        "FactionTemplate": [
+          4600,
+          4699
+        ],
+        "Map": [
+          6600,
+          6699
+        ],
+        "LFGDungeons": [
+          15600,
+          15699
+        ],
+        "AreaTable": [
+          17600,
+          17699
+        ],
+        "wmoID": [
+          31600,
+          31699
+        ]
+      },
+      "taxi_path_node": [
+        66000,
+        66999
+      ]
+    },
+    {
+      "k": 17,
+      "owner": "mod-arac",
+      "status": "assigned",
+      "old_numbers": "98000-98299",
+      "start": 750000,
+      "end": 759999,
+      "x10": [
+        7500000,
+        7599999
+      ],
+      "guid": [
+        7700000,
+        7799999
+      ],
+      "waypoint": [
+        77000000,
+        77999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3700,
+          3799
+        ],
+        "GlyphProperties": [
+          2700,
+          2799
+        ],
+        "Talent": [
+          5700,
+          5799
+        ],
+        "Achievement": [
+          27700,
+          27799
+        ],
+        "Achievement_Criteria": [
+          41700,
+          41799
+        ],
+        "Faction": [
+          4700,
+          4799
+        ],
+        "FactionTemplate": [
+          4700,
+          4799
+        ],
+        "Map": [
+          6700,
+          6799
+        ],
+        "LFGDungeons": [
+          15700,
+          15799
+        ],
+        "AreaTable": [
+          17700,
+          17799
+        ],
+        "wmoID": [
+          31700,
+          31799
+        ]
+      },
+      "taxi_path_node": [
+        67000,
+        67999
+      ]
+    },
+    {
+      "k": 18,
+      "owner": "mod-coa-classes (ajouts propres)",
+      "status": "assigned",
+      "old_numbers": "outside the old window",
+      "start": 760000,
+      "end": 769999,
+      "x10": [
+        7600000,
+        7699999
+      ],
+      "guid": [
+        7800000,
+        7899999
+      ],
+      "waypoint": [
+        78000000,
+        78999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3800,
+          3899
+        ],
+        "GlyphProperties": [
+          2800,
+          2899
+        ],
+        "Talent": [
+          5800,
+          5899
+        ],
+        "Achievement": [
+          27800,
+          27899
+        ],
+        "Achievement_Criteria": [
+          41800,
+          41899
+        ],
+        "Faction": [
+          4800,
+          4899
+        ],
+        "FactionTemplate": [
+          4800,
+          4899
+        ],
+        "Map": [
+          6800,
+          6899
+        ],
+        "LFGDungeons": [
+          15800,
+          15899
+        ],
+        "AreaTable": [
+          17800,
+          17899
+        ],
+        "wmoID": [
+          31800,
+          31899
+        ]
+      },
+      "taxi_path_node": [
+        68000,
+        68999
+      ]
+    },
+    {
+      "k": 19,
+      "owner": "mod-forever-ui",
+      "status": "assigned",
+      "old_numbers": "outside the old window",
+      "start": 770000,
+      "end": 779999,
+      "x10": [
+        7700000,
+        7799999
+      ],
+      "guid": [
+        7900000,
+        7999999
+      ],
+      "waypoint": [
+        79000000,
+        79999999
+      ],
+      "limited": {
+        "SkillLine": [
+          3900,
+          3999
+        ],
+        "GlyphProperties": [
+          2900,
+          2999
+        ],
+        "Talent": [
+          5900,
+          5999
+        ],
+        "Achievement": [
+          27900,
+          27999
+        ],
+        "Achievement_Criteria": [
+          41900,
+          41999
+        ],
+        "Faction": [
+          4900,
+          4999
+        ],
+        "FactionTemplate": [
+          4900,
+          4999
+        ],
+        "Map": [
+          6900,
+          6999
+        ],
+        "LFGDungeons": [
+          15900,
+          15999
+        ],
+        "AreaTable": [
+          17900,
+          17999
+        ],
+        "wmoID": [
+          31900,
+          31999
+        ]
+      },
+      "taxi_path_node": [
+        69000,
+        69999
+      ]
+    },
+    {
+      "k": 20,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 780000,
+      "end": 789999,
+      "x10": [
+        7800000,
+        7899999
+      ],
+      "guid": [
+        8000000,
+        8099999
+      ],
+      "waypoint": [
+        80000000,
+        80999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4000,
+          4099
+        ],
+        "GlyphProperties": [
+          3000,
+          3099
+        ],
+        "Talent": [
+          6000,
+          6099
+        ],
+        "Achievement": [
+          28000,
+          28099
+        ],
+        "Achievement_Criteria": [
+          42000,
+          42099
+        ],
+        "Faction": [
+          5000,
+          5099
+        ],
+        "FactionTemplate": [
+          5000,
+          5099
+        ],
+        "Map": [
+          7000,
+          7099
+        ],
+        "LFGDungeons": [
+          16000,
+          16099
+        ],
+        "AreaTable": [
+          18000,
+          18099
+        ],
+        "wmoID": [
+          32000,
+          32099
+        ]
+      },
+      "taxi_path_node": [
+        70000,
+        70999
+      ]
+    },
+    {
+      "k": 21,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 790000,
+      "end": 799999,
+      "x10": [
+        7900000,
+        7999999
+      ],
+      "guid": [
+        8100000,
+        8199999
+      ],
+      "waypoint": [
+        81000000,
+        81999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4100,
+          4199
+        ],
+        "GlyphProperties": [
+          3100,
+          3199
+        ],
+        "Talent": [
+          6100,
+          6199
+        ],
+        "Achievement": [
+          28100,
+          28199
+        ],
+        "Achievement_Criteria": [
+          42100,
+          42199
+        ],
+        "Faction": [
+          5100,
+          5199
+        ],
+        "FactionTemplate": [
+          5100,
+          5199
+        ],
+        "Map": [
+          7100,
+          7199
+        ],
+        "LFGDungeons": [
+          16100,
+          16199
+        ],
+        "AreaTable": [
+          18100,
+          18199
+        ],
+        "wmoID": [
+          32100,
+          32199
+        ]
+      },
+      "taxi_path_node": [
+        71000,
+        71999
+      ]
+    },
+    {
+      "k": 22,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 800000,
+      "end": 809999,
+      "x10": [
+        8000000,
+        8099999
+      ],
+      "guid": [
+        8200000,
+        8299999
+      ],
+      "waypoint": [
+        82000000,
+        82999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4200,
+          4299
+        ],
+        "GlyphProperties": [
+          3200,
+          3299
+        ],
+        "Talent": [
+          6200,
+          6299
+        ],
+        "Achievement": [
+          28200,
+          28299
+        ],
+        "Achievement_Criteria": [
+          42200,
+          42299
+        ],
+        "Faction": [
+          5200,
+          5299
+        ],
+        "FactionTemplate": [
+          5200,
+          5299
+        ],
+        "Map": [
+          7200,
+          7299
+        ],
+        "LFGDungeons": [
+          16200,
+          16299
+        ],
+        "AreaTable": [
+          18200,
+          18299
+        ],
+        "wmoID": [
+          32200,
+          32299
+        ]
+      },
+      "taxi_path_node": [
+        72000,
+        72999
+      ]
+    },
+    {
+      "k": 23,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 810000,
+      "end": 819999,
+      "x10": [
+        8100000,
+        8199999
+      ],
+      "guid": [
+        8300000,
+        8399999
+      ],
+      "waypoint": [
+        83000000,
+        83999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4300,
+          4399
+        ],
+        "GlyphProperties": [
+          3300,
+          3399
+        ],
+        "Talent": [
+          6300,
+          6399
+        ],
+        "Achievement": [
+          28300,
+          28399
+        ],
+        "Achievement_Criteria": [
+          42300,
+          42399
+        ],
+        "Faction": [
+          5300,
+          5399
+        ],
+        "FactionTemplate": [
+          5300,
+          5399
+        ],
+        "Map": [
+          7300,
+          7399
+        ],
+        "LFGDungeons": [
+          16300,
+          16399
+        ],
+        "AreaTable": [
+          18300,
+          18399
+        ],
+        "wmoID": [
+          32300,
+          32399
+        ]
+      },
+      "taxi_path_node": [
+        73000,
+        73999
+      ]
+    },
+    {
+      "k": 24,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 820000,
+      "end": 829999,
+      "x10": [
+        8200000,
+        8299999
+      ],
+      "guid": [
+        8400000,
+        8499999
+      ],
+      "waypoint": [
+        84000000,
+        84999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4400,
+          4499
+        ],
+        "GlyphProperties": [
+          3400,
+          3499
+        ],
+        "Talent": [
+          6400,
+          6499
+        ],
+        "Achievement": [
+          28400,
+          28499
+        ],
+        "Achievement_Criteria": [
+          42400,
+          42499
+        ],
+        "Faction": [
+          5400,
+          5499
+        ],
+        "FactionTemplate": [
+          5400,
+          5499
+        ],
+        "Map": [
+          7400,
+          7499
+        ],
+        "LFGDungeons": [
+          16400,
+          16499
+        ],
+        "AreaTable": [
+          18400,
+          18499
+        ],
+        "wmoID": [
+          32400,
+          32499
+        ]
+      },
+      "taxi_path_node": [
+        74000,
+        74999
+      ]
+    },
+    {
+      "k": 25,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 830000,
+      "end": 839999,
+      "x10": [
+        8300000,
+        8399999
+      ],
+      "guid": [
+        8500000,
+        8599999
+      ],
+      "waypoint": [
+        85000000,
+        85999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4500,
+          4599
+        ],
+        "GlyphProperties": [
+          3500,
+          3599
+        ],
+        "Talent": [
+          6500,
+          6599
+        ],
+        "Achievement": [
+          28500,
+          28599
+        ],
+        "Achievement_Criteria": [
+          42500,
+          42599
+        ],
+        "Faction": [
+          5500,
+          5599
+        ],
+        "FactionTemplate": [
+          5500,
+          5599
+        ],
+        "Map": [
+          7500,
+          7599
+        ],
+        "LFGDungeons": [
+          16500,
+          16599
+        ],
+        "AreaTable": [
+          18500,
+          18599
+        ],
+        "wmoID": [
+          32500,
+          32599
+        ]
+      },
+      "taxi_path_node": [
+        75000,
+        75999
+      ]
+    },
+    {
+      "k": 26,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 840000,
+      "end": 849999,
+      "x10": [
+        8400000,
+        8499999
+      ],
+      "guid": [
+        8600000,
+        8699999
+      ],
+      "waypoint": [
+        86000000,
+        86999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4600,
+          4699
+        ],
+        "GlyphProperties": [
+          3600,
+          3699
+        ],
+        "Talent": [
+          6600,
+          6699
+        ],
+        "Achievement": [
+          28600,
+          28699
+        ],
+        "Achievement_Criteria": [
+          42600,
+          42699
+        ],
+        "Faction": [
+          5600,
+          5699
+        ],
+        "FactionTemplate": [
+          5600,
+          5699
+        ],
+        "Map": [
+          7600,
+          7699
+        ],
+        "LFGDungeons": [
+          16600,
+          16699
+        ],
+        "AreaTable": [
+          18600,
+          18699
+        ],
+        "wmoID": [
+          32600,
+          32699
+        ]
+      },
+      "taxi_path_node": [
+        76000,
+        76999
+      ]
+    },
+    {
+      "k": 27,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 850000,
+      "end": 859999,
+      "x10": [
+        8500000,
+        8599999
+      ],
+      "guid": [
+        8700000,
+        8799999
+      ],
+      "waypoint": [
+        87000000,
+        87999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4700,
+          4799
+        ],
+        "GlyphProperties": [
+          3700,
+          3799
+        ],
+        "Talent": [
+          6700,
+          6799
+        ],
+        "Achievement": [
+          28700,
+          28799
+        ],
+        "Achievement_Criteria": [
+          42700,
+          42799
+        ],
+        "Faction": [
+          5700,
+          5799
+        ],
+        "FactionTemplate": [
+          5700,
+          5799
+        ],
+        "Map": [
+          7700,
+          7799
+        ],
+        "LFGDungeons": [
+          16700,
+          16799
+        ],
+        "AreaTable": [
+          18700,
+          18799
+        ],
+        "wmoID": [
+          32700,
+          32799
+        ]
+      },
+      "taxi_path_node": [
+        77000,
+        77999
+      ]
+    },
+    {
+      "k": 28,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 860000,
+      "end": 869999,
+      "x10": [
+        8600000,
+        8699999
+      ],
+      "guid": [
+        8800000,
+        8899999
+      ],
+      "waypoint": [
+        88000000,
+        88999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4800,
+          4899
+        ],
+        "GlyphProperties": [
+          3800,
+          3899
+        ],
+        "Talent": [
+          6800,
+          6899
+        ],
+        "Achievement": [
+          28800,
+          28899
+        ],
+        "Achievement_Criteria": [
+          42800,
+          42899
+        ],
+        "Faction": [
+          5800,
+          5899
+        ],
+        "FactionTemplate": [
+          5800,
+          5899
+        ],
+        "Map": [
+          7800,
+          7899
+        ],
+        "LFGDungeons": [
+          16800,
+          16899
+        ],
+        "AreaTable": [
+          18800,
+          18899
+        ],
+        "wmoID": [
+          32800,
+          32899
+        ]
+      },
+      "taxi_path_node": [
+        78000,
+        78999
+      ]
+    },
+    {
+      "k": 29,
+      "owner": null,
+      "status": "free",
+      "old_numbers": null,
+      "start": 870000,
+      "end": 879999,
+      "x10": [
+        8700000,
+        8799999
+      ],
+      "guid": [
+        8900000,
+        8999999
+      ],
+      "waypoint": [
+        89000000,
+        89999999
+      ],
+      "limited": {
+        "SkillLine": [
+          4900,
+          4999
+        ],
+        "GlyphProperties": [
+          3900,
+          3999
+        ],
+        "Talent": [
+          6900,
+          6999
+        ],
+        "Achievement": [
+          28900,
+          28999
+        ],
+        "Achievement_Criteria": [
+          42900,
+          42999
+        ],
+        "Faction": [
+          5900,
+          5999
+        ],
+        "FactionTemplate": [
+          5900,
+          5999
+        ],
+        "Map": [
+          7900,
+          7999
+        ],
+        "LFGDungeons": [
+          16900,
+          16999
+        ],
+        "AreaTable": [
+          18900,
+          18999
+        ],
+        "wmoID": [
+          32900,
+          32999
+        ]
+      },
+      "taxi_path_node": [
+        79000,
+        79999
+      ]
+    }
+  ]
+}
