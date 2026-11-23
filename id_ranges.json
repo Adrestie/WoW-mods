@@ -32,7 +32,8 @@
       "titles",
       "explored zones"
     ],
-    "modules": "the names of the modules (installer.json \"module\") entitled to the block; a module may be named in several blocks; \"shared\": true opens the block to every module"
+    "modules": "the names of the modules (installer.json \"module\") entitled to the block; a module may be named in several blocks; \"shared\": true opens the block to every module",
+    "series": "numbers outside the window that a block keeps because they were installed before the rule (a frozen number does not move): [{first, last, what}] of the block; nobody else may take them"
   },
   "blocks": [
     {
@@ -1352,6 +1353,18 @@
       ],
       "status": "assigned",
       "old_numbers": "outside the old window",
+      "series": [
+        {
+          "first": 2362000,
+          "last": 2362999,
+          "what": "creature_template: the trainers the module adds (2362000-2362010 installed since 18/11/2026)"
+        },
+        {
+          "first": 9900000,
+          "last": 9920999,
+          "what": "creature spawns (guid): 9900000 + (class - 12) x 1000, classes 12 to 32 (9900000-9914009 installed)"
+        }
+      ],
       "start": 760000,
       "end": 769999,
       "x10": [
@@ -1419,12 +1432,13 @@
     },
     {
       "k": 19,
-      "owner": "mod-forever-ui",
+      "owner": "mod-coa-classes (series installed before 23/11/2026)",
       "modules": [
-        "mod-forever-ui"
+        "mod-coa-classes"
       ],
       "status": "assigned",
       "old_numbers": "outside the old window",
+      "note": "SkillLineAbility rows 770000 and up (770000-772722 installed) and the game object spawns kept at Conquest of Azeroth's guids 7912100-7912699 (7912102 installed); mod-forever-ui, which used no number of the block, moved to block 20 on 23/11/2026",
       "start": 770000,
       "end": 779999,
       "x10": [
@@ -1492,9 +1506,12 @@
     },
     {
       "k": 20,
-      "owner": null,
-      "status": "free",
-      "old_numbers": null,
+      "owner": "mod-forever-ui",
+      "modules": [
+        "mod-forever-ui"
+      ],
+      "status": "assigned",
+      "old_numbers": "outside the old window",
       "start": 780000,
       "end": 789999,
       "x10": [

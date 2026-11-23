@@ -73,14 +73,26 @@ A module's cleanup clauses (`DELETE ... BETWEEN`, the installer's `where`) stop 
 | 740 000-749 999 | 16 | mod-transmog-retail | 97000-97099 |
 | 750 000-759 999 | 17 | mod-arac | 98000-98299 |
 | 760 000-769 999 | 18 | mod-coa-classes (ajouts propres) | outside the old window |
-| 770 000-779 999 | 19 | mod-forever-ui | outside the old window |
+| 770 000-779 999 | 19 | mod-coa-classes (series installed before 23/11/2026) | outside the old window |
+| 780 000-789 999 | 20 | mod-forever-ui | outside the old window |
 | 720 000-729 999 | 14 | **left empty**: AzerothCore's npc_text 724001-724006 lie in it | |
-| free | 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 | every other block | |
+| free | 21, 22, 23, 24, 25, 26, 27, 28, 29 | every other block | |
 
 `id_ranges.json` also names, for each block, the modules entitled to it (`modules`, the `module` name of their `installer.json`: a module may be named in several blocks, as mod-uniwow-content and mod-uniwow-content-test in blocks 2 and 4), and marks block 0 `shared`: its numbers are open to every module; the installer's `--check-ids` reads both.
 
 mod-forever-ui moves into its block: its statistics (achievements 6137-64300, criteria 64301-64321) collided with Conquest of Azeroth's achievement block (4 825-25 611); they take the limited-space rule (or n once widened).
 
-mod-coa-classes keeps Conquest of Azeroth's numbers for CoA content (renumbered in CoA's blocks); what the module adds itself (trainers 2362000-2362001, spawns 9900000-9900199, SkillLineAbility 770000+) moves into its block.
+mod-coa-classes keeps Conquest of Azeroth's numbers for CoA content (renumbered in CoA's blocks). What the module adds itself from 23/11/2026 on takes block 18 (760 000-769 999, game object templates 7 600 000-7 699 999, spawn guids 7 800 000-7 899 999). What it added before that date is installed and does not move (a frozen number is never changed, additions only): the registry reserves these series to it (23/11/2026).
+
+| Series kept by mod-coa-classes | Numbers | Installed on 23/11/2026 | Where in `id_ranges.json` |
+|---|---|---|---|
+| trainers the module adds (creature_template) | 2 362 000-2 362 999 | 2362000-2362010 | block 18, `series` |
+| creature spawns (guid), 9 900 000 + (class − 12) × 1 000, classes 12 to 32 | 9 900 000-9 920 999 | 9900000-9914009 | block 18, `series` |
+| SkillLineAbility rows | 770 000-779 999 | 770000-772722 | block 19 |
+| game object spawns kept at Conquest of Azeroth's guids | 7 912 100-7 912 699 (in 7 900 000-7 999 999) | 7912102 | block 19 |
+
+Block 19 was mod-forever-ui's; that module used no number of it (read on 23/11/2026: its achievements and criteria are 6137-64321, its other numbers are texture file names) and takes block 20. A `series` is a range outside the window that a block keeps: `--check-ids` holds it as the block's own, and as another owner's for everyone else.
+
+Conquest of Azeroth's game object templates have no family in the frozen table and keep CoA's own numbers (9000140-9000149, 9301101-9301352): above the window, free in the stock game.
 
 CharacterAdvancement, ChrSpecs and CharacterAdvancementClassTypes keep Conquest of Azeroth's numbers (decision of Maitre, 17/11/2026): the game has no such tables, so nothing of Blizzard's lies in them.
