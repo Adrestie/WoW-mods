@@ -4,7 +4,9 @@ _Registry in force since 31/10/2026 (chosen by Maitre on 30/10/2026). The module
 
 Every WoW-mods module takes its identifiers from one window, **580 000-879 999**, cut into **30 blocks of 10 000**. A module gets one block (more if it ever needs them) and keeps all its identifiers in it, in every space at once: items, spells, creatures, quests, texts, reference loot, and every DBC file. The same number may therefore be an item and a spell of the same module.
 
-The window sits just above the Conquest of Azeroth blocks: in every family, the game's numbers come first, then Conquest of Azeroth's block (consecutive, in the order of CoA's own numbers; items reach 579 690), then the modules.
+The window sits just above the Conquest of Azeroth blocks: in every family, the game's numbers come first, then Conquest of Azeroth's block (consecutive, in the order of CoA's own numbers), then the modules.
+
+**Items are the exception, read on 23/11/2026:** Conquest of Azeroth's item block of the frozen table (mod-coa-classes, `data/id_table/ids_Item`, frozen on 18/11/2026) runs from 72 000 to **594 886**, not to 579 690 as this page said: 14 887 of CoA's items have a number inside the window (580 000-589 999, the shared block 0, and 590 000-594 886, in block 1). The frozen table does not change. The modules' item window is to be reviewed when the renumbering of the mods is taken up again (its own thread); until then `--check-ids` on mod-coa-classes reports the numbers of its class files that fall in block 1 (2400 on 23/11/2026: preventive deletes of the evolving legendary items, not ported), known and left visible.
 
 ## Derived spaces
 
